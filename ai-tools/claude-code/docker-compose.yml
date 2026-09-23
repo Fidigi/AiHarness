@@ -1,0 +1,34 @@
+name: claude-code
+
+networks:
+  ia_net:
+    external: true
+
+services:
+  claude-code:
+    build:
+      context: .
+      args:
+        - GIT_USER_NAME=${GIT_USER_NAME}
+        - GIT_USER_EMAIL=${GIT_USER_EMAIL}
+        - WSL_UID=${WSL_UID}
+        - WSL_GID=${WSL_GID}
+        - DOCKER_GID=${DOCKER_GID}
+    container_name: claude-code
+    restart: unless-stopped
+    environment:
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL}
+      - CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=${CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC}
+      - NODE_ENV=${NODE_ENV}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - claude-code-data:/home/ubuntu
+      - ../../:/app
+    network_mode: host
+    stdin_open: true
+    tty: true
+
+volumes:
+  claude-code-data:

@@ -1,0 +1,42 @@
+name: llm
+
+networks:
+  ia_net:
+    external: true
+
+services:
+  qwen-moe:
+    build:
+      context: .
+    container_name: qwen-moe
+    restart: unless-stopped
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./models:/models
+    networks:
+      - ia_net
+    gpus: all
+    command: >
+      /app/llama.cpp/build/bin/llama-server
+      -m /models/Qwen3.6-35B-A3B-UD-IQ4_XS.gguf
+      -c 131072
+      -ngl 99
+      --n-cpu-moe 26
+      -fa on
+      -b 768 
+      -ub 384 
+      --host 0.0.0.0
+      --port 8888
+      --threads 16
+      --temp 0.45
+      --top-p 0.92
+      --top-k 40
+      --repeat_penalty 1.12
+      --presence-penalty 0.0
+      --frequency-penalty 0.0
+      --mirostat 0
+      --jinja
