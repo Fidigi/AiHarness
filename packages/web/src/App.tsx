@@ -7,17 +7,23 @@ import { Routes, Route } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
 import SettingsView from './components/SettingsView';
+import { useI18n } from './hooks/useI18n';
 import { useSessionStore } from './store/session-store';
 
 function App() {
   const [sidebarOpen] = useState(true);
   const hydrateSessions = useSessionStore(state => state.hydrateSessions);
   const hydrateProviders = useSessionStore(state => state.hydrateProviders);
+  const { t } = useI18n();
 
   useEffect(() => {
     void hydrateSessions();
     void hydrateProviders();
   }, [hydrateSessions, hydrateProviders]);
+
+  useEffect(() => {
+    document.title = t('app.documentTitle');
+  }, [t]);
 
   return (
     <div className="app">

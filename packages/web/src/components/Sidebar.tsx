@@ -3,7 +3,9 @@
 // ============================================================
 
 import { useNavigate } from 'react-router-dom';
+import { useI18n } from '../hooks/useI18n';
 import { useSessionStore } from '../store/session-store';
+import LanguageSelector from './LanguageSelector';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -13,6 +15,7 @@ function Sidebar({ isOpen }: SidebarProps) {
   const navigate = useNavigate();
   const sessions = useSessionStore((state) => state.sessions);
   const createRemoteSession = useSessionStore((state) => state.createRemoteSession);
+  const { t } = useI18n();
 
   const handleCreate = async () => {
     const id = await createRemoteSession();
@@ -23,9 +26,16 @@ function Sidebar({ isOpen }: SidebarProps) {
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-header">
         <h1>AiHarness</h1>
-        <button onClick={() => void handleCreate()} title="New chat" aria-label="New chat">
-          +
-        </button>
+        <div className="sidebar-actions">
+          <LanguageSelector />
+          <button
+            onClick={() => void handleCreate()}
+            title={t('sidebar.newChat')}
+            aria-label={t('sidebar.newChat')}
+          >
+            +
+          </button>
+        </div>
       </div>
 
       <nav className="sidebar-nav">
@@ -33,7 +43,7 @@ function Sidebar({ isOpen }: SidebarProps) {
           {sessions.map((session) => (
             <li key={session.id}>
               <button onClick={() => navigate(`/chat/${session.id}`)}>
-                {session.title || 'Untitled'}
+                {session.title || t('sidebar.untitled')}
               </button>
             </li>
           ))}
@@ -41,7 +51,7 @@ function Sidebar({ isOpen }: SidebarProps) {
       </nav>
 
       <div className="sidebar-footer">
-        <button onClick={() => navigate('/settings')}>⚙ Settings</button>
+        <button onClick={() => navigate('/settings')}>⚙ {t('common.settings')}</button>
       </div>
     </aside>
   );

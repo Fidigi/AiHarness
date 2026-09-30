@@ -539,7 +539,7 @@ export class AiProxyServer {
         onChunk(chunk);
       }
 
-      return { content: fullContent, model: options?.model };
+      return { content: fullContent, model: options?.model, usage: finalUsage };
     }
 
     // Non-streaming mode

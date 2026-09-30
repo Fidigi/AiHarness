@@ -311,6 +311,31 @@ describe('Proxy with mocked fetch', () => {
     ).resolves.toHaveProperty('stream');
   });
 
+  it('returns final usage from streaming chat calls', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: createMockReadableStream([
+        'data: {"type":"message_start","message":{"usage":{"input_tokens":12}}}\n',
+        'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello"}}\n',
+        'data: {"type":"message_delta","usage":{"output_tokens":3}}\n',
+      ]),
+    } as Response);
+    const proxy = new AiProxyServer();
+    proxy.setApiKey('anthropic', 'sk-ant-test');
+
+    const result = await proxy.sendChat(
+      'anthropic',
+      [{ id: 'm1', role: 'user', content: 'Hi', timestamp: new Date() }],
+      undefined,
+      vi.fn(),
+    );
+
+    expect(result).toMatchObject({
+      content: 'Hello',
+      usage: { prompt_tokens: 12, completion_tokens: 3 },
+    });
+  });
+
   it('should handle API errors gracefully in streaming', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,

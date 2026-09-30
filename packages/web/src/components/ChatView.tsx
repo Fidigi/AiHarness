@@ -6,6 +6,7 @@ import { Fragment, useState, useRef, useEffect } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import type { ProviderType } from '@ai-harness/core';
 import { useParams } from 'react-router-dom';
+import { useI18n } from '../hooks/useI18n';
 import { useSessionStore } from '../store/session-store';
 import { appendSessionMessage, streamChat } from '../services/api';
 
@@ -20,6 +21,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   );
   const addMessage = useSessionStore((state) => state.addMessage);
   const upsertAssistantMessage = useSessionStore((state) => state.upsertAssistantMessage);
+  const { t } = useI18n();
 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -52,7 +54,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       if (!providerConfig?.apiKey && requiresApiKey) {
         // Fall back to mock response for unconfigured hosted providers
         await new Promise((resolve) => setTimeout(resolve, 500));
-        const content = '[Demo mode] This is a placeholder response. Configure your API key in Settings.';
+        const content = t('chat.demoResponse');
         addMessage(id, { role: 'assistant', content });
         await appendSessionMessage(id, { role: 'assistant', content });
       } else if (activeProviderType === 'mock') {
@@ -63,8 +65,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         if (content) await appendSessionMessage(id, { role: 'assistant', content });
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
-      const content = `Error: ${errorMessage}`;
+      const errorMessage = error instanceof Error ? error.message : t('chat.unexpectedError');
+      const content = t('chat.error', { message: errorMessage });
       addMessage(id, { role: 'assistant', content });
       await appendSessionMessage(id, { role: 'assistant', content });
     } finally {
@@ -75,20 +77,15 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   /** Simulate mock streaming response for testing */
   const simulateMockStreaming = async (userMessage: string): Promise<string> => {
     // Mock responses based on input patterns
-    let mockResponse = `This is a simulated AI response to your message. In production, this would be streamed in real-time from the ${activeProviderType} API.`;
+    let mockResponse = t('chat.mock.generic', { provider: activeProviderType });
+    const normalizedMessage = userMessage.toLocaleLowerCase();
 
-    if (userMessage.toLowerCase().includes('hello') || userMessage.toLowerCase().includes('hi')) {
-      mockResponse = 'Hello! How can I help you today?';
-    } else if (userMessage.toLowerCase().includes('help')) {
-      mockResponse = `I can help you with:
-- Answering questions
-- Writing code
-- Explaining concepts
-- Creative writing
-
-Just ask me anything!`;
-    } else if (userMessage.toLowerCase().includes('test')) {
-      mockResponse = '✅ Test passed! The streaming response system is working correctly.';
+    if (['hello', 'hi', 'bonjour', 'salut'].some(greeting => normalizedMessage.includes(greeting))) {
+      mockResponse = t('chat.mock.hello');
+    } else if (['help', 'aide'].some(keyword => normalizedMessage.includes(keyword))) {
+      mockResponse = t('chat.mock.help');
+    } else if (normalizedMessage.includes('test')) {
+      mockResponse = t('chat.mock.test');
     }
 
     // Keep one stable assistant message while chunks arrive.
@@ -127,9 +124,10 @@ Just ask me anything!`;
         onStreamingUpdate?.(streamedContent);
       } else if (event.type === 'message_end') {
         const finalContent = event.content || streamedContent;
+        streamedContent = finalContent;
         if (finalContent) upsertAssistantMessage(sessionId, messageId, finalContent);
       } else if (event.type === 'error') {
-        throw new Error(event.content || 'Unknown streaming error');
+        throw new Error(event.content || t('chat.unknownStreamingError'));
       }
     }
     return streamedContent;
@@ -143,8 +141,8 @@ Just ask me anything!`;
   if (!currentSession) {
     return (
       <div className="chat-empty">
-        <h2>Welcome to AiHarness</h2>
-        <p>Select a conversation or create a new one.</p>
+        <h2>{t('chat.welcome')}</h2>
+        <p>{t('chat.selectOrCreate')}</p>
       </div>
     );
   }
@@ -154,7 +152,9 @@ Just ask me anything!`;
       <div className="messages-container">
         {currentSession.messages.map((msg) => (
           <div key={msg.id} className={`message ${msg.role}`}>
-            <div className="message-role">{msg.role === 'user' ? '👤 You' : '🤖 Assistant'}</div>
+            <div className="message-role">
+              {msg.role === 'user' ? `👤 ${t('chat.role.user')}` : `🤖 ${t('chat.role.assistant')}`}
+            </div>
             <div className="message-content">
               {/* Support basic markdown-like rendering */}
               {renderMessageContent(msg.content)}
@@ -164,8 +164,8 @@ Just ask me anything!`;
 
         {/* Loading indicator for streaming responses */}
         {isLoading && (
-          <div className="message assistant loading">
-            <div className="message-role">🤖 Assistant</div>
+          <div className="message assistant loading" role="status" aria-label={t('chat.loading')}>
+            <div className="message-role">🤖 {t('chat.role.assistant')}</div>
             <div className="typing-indicator">
               <span></span><span></span><span></span>
             </div>
@@ -180,21 +180,21 @@ Just ask me anything!`;
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={`Type your message... (Provider: ${activeProviderType})`}
+          placeholder={t('chat.inputPlaceholder', { provider: activeProviderType })}
           autoFocus
           disabled={isLoading}
         />
         <button type="submit" disabled={!input.trim() || isLoading}>
-          {isLoading ? '⏳' : 'Send'}
+          {isLoading ? '⏳' : t('chat.send')}
         </button>
       </form>
 
       {/* Provider status indicator */}
       {!currentSession.messages.some(m => m.role === 'assistant') && (
         <div className="provider-status">
-          Using provider: <strong>{activeProviderType}</strong>
+          {t('chat.usingProvider')} <strong>{activeProviderType}</strong>
           {activeProviderType !== 'mock' && !useSessionStore.getState().providers.available[activeProviderType]?.apiKey && (
-            <span className="warning">(Demo mode - configure API key in Settings)</span>
+            <span className="warning">{t('chat.demoModeWarning')}</span>
           )}
         </div>
       )}

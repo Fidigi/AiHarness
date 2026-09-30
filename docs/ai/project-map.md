@@ -69,10 +69,8 @@ Development ports differ from the combined launcher:
 | `playwright.config.ts` | Browser test configuration; starts Vite only |
 | `Makefile` | Authoritative Docker build and validation workflow |
 | `.docker/` | Test, production, and lockfile Dockerfiles |
-| `e2e/examples.spec.ts` | Playwright Web UI journeys with intercepted API calls |
+| `e2e/*.spec.ts`, `e2e/fixtures/` | Playwright Web UI journeys split by feature, with reusable intercepted API fixtures |
 | `docs/` | User, architecture, extension, container, and agent documentation |
-| `scripts/run-tests.sh` | Docker fallback when `make` is unavailable |
-| `scripts/test.sh` | Legacy Docker Compose runner; its external compose path is not part of this repository, so do not use it as the default workflow |
 
 Use npm from the repository root so workspace packages are linked consistently. Treat `package-lock.json` as authoritative for dependency changes.
 
@@ -145,6 +143,7 @@ The server has adapter/proxy code in addition to the provider implementations in
 | Chat | `src/components/ChatView.tsx` | Input, streaming updates, persistence, client-side mock/demo behavior |
 | Navigation | `src/components/Sidebar.tsx` | Session creation and selection |
 | Settings | `src/components/SettingsView.tsx` | Provider credentials, auth token, transport, theme |
+| Internationalization | `src/hooks/useI18n.tsx`, `src/i18n/`, `src/components/LanguageSelector.tsx` | Browser locale detection, English fallback, registered language packages, persisted locale selection |
 | Styling | `src/index.css` | Global layout, themes, responsive behavior |
 | Tooling | `vite.config.ts`, `vitest.config.ts` | Source aliases, development proxy, package test settings |
 
@@ -257,6 +256,7 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 | `docs/architecture.md` | French | Concise architecture overview; useful orientation, not an exhaustive contract |
 | `docs/user-guide.md` | French | Main end-user guide for installation, providers, CLI, Web, files, and security |
 | `docs/extensions.md` | French | CLI extension authoring and lifecycle guide |
+| `docs/i18n.md` | French | Web translation architecture, message conventions, and language-package contribution guide |
 | `docs/containerization.md` | French | Container runtime guidance |
 | `CHANGELOG.md` | English | Historical scaffold; its “Planned” list is stale and includes features already implemented, so it is not a roadmap or source of current behavior |
 
@@ -284,7 +284,7 @@ make test-coverage   # Optional full coverage run
 make build-prod      # Build the complete production image
 ```
 
-Use `./scripts/run-tests.sh` only as the documented fallback when `make` is unavailable. Use `make lockfile` after an intentional dependency or package metadata change; it regenerates `package-lock.json` in Docker.
+Use `make lockfile` after an intentional dependency or package metadata change; it regenerates `package-lock.json` in Docker.
 
 For a focused test during iteration, use `make shell` and run the relevant npm/Vitest command inside that container. The final validation should still use the standard targets below.
 
@@ -300,7 +300,7 @@ For a focused test during iteration, use `make shell` and run the relevant npm/V
 | Cross-package streaming or session flow | `make typecheck`, `make test`, and `make test-e2e` |
 | Launcher, build scripts, dependencies, Docker, static asset serving | Relevant tests plus `make build-prod` |
 
-Playwright starts only the Vite development server and mocks API requests in `e2e/examples.spec.ts`. Passing E2E tests does not validate Express routes, authentication, credential storage, JSONL persistence, or real provider streaming. Use/add server integration tests for those behaviors.
+Playwright starts only the Vite development server and mocks API requests through `e2e/fixtures/mock-api.ts`. Passing E2E tests does not validate Express routes, authentication, credential storage, JSONL persistence, or real provider streaming. Use/add server integration tests for those behaviors.
 
 ### Before finishing
 

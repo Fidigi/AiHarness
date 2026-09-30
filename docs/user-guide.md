@@ -436,11 +436,23 @@ Pour un provider local, Azure, Vertex ou Bedrock, préférez les variables d’e
 
 Le token d’authentification Web est conservé dans `sessionStorage` : il est isolé par onglet. Le choix SSE/WebSocket est conservé dans `localStorage`.
 
+### Langue de l’interface
+
+L’interface est fournie en anglais et en français. Lors de la première visite,
+AiHarness sélectionne la première langue compatible déclarée par le navigateur,
+puis revient à l’anglais si nécessaire. Le sélecteur 🌐 dans l’en-tête de la
+barre latérale permet de changer de langue immédiatement. Ce choix est conservé
+dans `localStorage` sous la clé `ai-harness-locale`.
+
+Pour ajouter un paquet de traduction ou modifier un texte d’interface, consultez
+le [guide d’internationalisation](i18n.md).
+
 ### Utilisation quotidienne
 
 - **+** crée une session persistante ;
 - la barre latérale sélectionne une session existante ;
 - **Settings** configure provider, authentification, transport et apparence ;
+- le sélecteur **🌐** choisit la langue de l’interface ;
 - **Send** envoie le message ;
 - le message assistant est mis à jour en place pendant le streaming.
 

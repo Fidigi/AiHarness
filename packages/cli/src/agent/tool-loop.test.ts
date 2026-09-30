@@ -65,6 +65,29 @@ describe('runToolLoop', () => {
     ]);
   });
 
+  it('includes the latest compaction summary in the provider context', async () => {
+    const { sessionManager, session, extensionRegistry } = await setup();
+    await sessionManager.applyCompaction(session.id, 'Earlier decisions', session.messages[0].id);
+    const streamTurn = vi.fn(async messages => {
+      expect(messages[0]).toMatchObject({
+        role: 'system',
+        content: '[Context Summary] Earlier decisions',
+      });
+      expect(messages[1]).toMatchObject({ role: 'user', content: 'Additionne 2 et 3' });
+      return { content: 'Réponse finale' };
+    });
+
+    await runToolLoop({
+      sessionManager,
+      sessionId: session.id,
+      extensionRegistry,
+      toolContext: { sessionManager, currentSessionId: session.id, notify: vi.fn() },
+      streamTurn,
+    });
+
+    expect(streamTurn).toHaveBeenCalledOnce();
+  });
+
   it('returns tool failures to the model as error results', async () => {
     const { sessionManager, session, extensionRegistry } = await setup();
     const streamTurn = vi.fn()

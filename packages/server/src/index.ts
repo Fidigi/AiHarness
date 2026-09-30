@@ -253,6 +253,34 @@ export function createApp(config?: ServerConfig): express.Application {
     }
   });
 
+  /** GET /api/sessions/tree - Get session tree structure */
+  app.get('/api/sessions/tree', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { branchId } = req.query as { branchId?: string };
+      const sm = await getSessionManager();
+      const tree = sm.getSessionTree(branchId);
+
+      const enrichedTree = tree.map(node => {
+        const session = sm.get(node.id);
+        return {
+          id: node.id,
+          title: node.title,
+          parentId: node.parentId,
+          depth: node.depth,
+          messageCount: session?.messages.length || 0,
+        };
+      });
+
+      res.json(enrichedTree);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error('[Server] Session tree error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to get session tree' });
+      }
+    }
+  });
+
   /** GET /api/sessions/:id - Get a specific session */
   app.get('/api/sessions/:id', async (req: Request, res: Response): Promise<void> => {
     try {
@@ -344,7 +372,7 @@ export function createApp(config?: ServerConfig): express.Application {
       const sm = await getSessionManager();
       
       // Delete with all forks
-      const deletedCount = await (sm as any).deleteWithForks(id);
+      const deletedCount = await sm.deleteWithForks(id);
       
       res.json({ success: true, deletedCount });
     } catch (error) {
@@ -373,7 +401,7 @@ export function createApp(config?: ServerConfig): express.Application {
         return;
       }
 
-      const forked = await (sm as any).forkSession(id, messageIndex, title);
+      const forked = await sm.forkSession(id, messageIndex, title);
 
       if (!forked) {
         res.status(500).json({ error: 'Fork failed' });
@@ -412,7 +440,7 @@ export function createApp(config?: ServerConfig): express.Application {
         return;
       }
 
-      const cloned = await (sm as any).cloneSession(id, title);
+      const cloned = await sm.cloneSession(id, title);
 
       if (!cloned) {
         res.status(500).json({ error: 'Clone failed' });
@@ -430,36 +458,6 @@ export function createApp(config?: ServerConfig): express.Application {
       console.error('[Server] Clone session error:', err);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Failed to clone session' });
-      }
-    }
-  });
-
-  /** GET /api/sessions/tree - Get session tree structure */
-  app.get('/api/sessions/tree', async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { branchId } = req.query as { branchId?: string };
-      
-      const sm = await getSessionManager();
-      const tree = (sm as any).getSessionTree(branchId);
-
-      // Enrich with message counts from actual sessions
-      const enrichedTree = tree.map((node: any) => {
-        const session = sm.get(node.id);
-        return {
-          id: node.id,
-          title: node.title,
-          parentId: node.parentId,
-          depth: node.depth,
-          messageCount: session?.messages.length || 0,
-        };
-      });
-
-      res.json(enrichedTree);
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      console.error('[Server] Session tree error:', err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Failed to get session tree' });
       }
     }
   });
