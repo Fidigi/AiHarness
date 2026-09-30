@@ -15,13 +15,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@ai-harness/core": "workspace:*",
-    "chalk": "^5.3.0"
+    "@ai-harness/core": "*",
+    "chalk": "^6.0.1"
   },
   "devDependencies": {
-    "@types/node": "^20.11.5",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.3",
-    "vitest": "^1.2.1"
+    "@types/node": "^26.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
   }
 }

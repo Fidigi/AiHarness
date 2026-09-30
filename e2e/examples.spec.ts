@@ -1,158 +1,79 @@
-// ============================================================
-// E2E Tests - Example Flow
-// ============================================================
+import { test, expect, type Page } from '@playwright/test';
 
-import { test, expect } from '@playwright/test';
-
-test.describe('AiHarness Web', () => {
-  // Test page load
-  test('should load the application', async ({ page }) => {
-    await page.goto('/');
-    
-    // Check that the app loads (adjust selectors based on actual implementation)
-    const heading = page.locator('h1, h2').first();
-    expect(heading).toBeDefined();
-  });
-
-  // Test navigation to settings
-  test('should navigate to settings', async ({ page }) => {
-    await page.goto('/');
-    
-    // Click on settings button (adjust selector based on implementation)
-    const settingsBtn = page.locator('button').filter({ hasText: /settings/i });
-    if (await settingsBtn.count()) {
-      await settingsBtn.click();
-      
-      // Check that we're on the settings page
-      const settingsHeading = page.locator('h2').filter({ hasText: /settings/i });
-      expect(settingsHeading).toBeDefined();
+async function mockApi(page: Page): Promise<void> {
+  let sessions: any[] = [];
+  await page.route('**/api/providers', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify([{ type: 'mock', configured: true }]),
+  }));
+  await page.route('**/api/sessions', async route => {
+    if (route.request().method() === 'POST') {
+      const session = { id: 'e2e-session', title: 'New Conversation', messages: [], createdAt: new Date(), updatedAt: new Date() };
+      sessions = [session, ...sessions];
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(session) });
+    } else {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(sessions) });
     }
   });
+  await page.route('**/api/sessions/**', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ success: true }),
+  }));
+}
 
-  // Test sidebar interactions (if implemented)
-  test.describe('Sidebar', () => {
-    test('should create a new session from sidebar', async ({ page }) => {
-      await page.goto('/');
-      
-      // Click the "+" button to create new session
-      const newChatBtn = page.locator('[aria-label="New chat"], button').first();
-      if (await newChatBtn.count()) {
-        await newChatBtn.click();
-        
-        // Verify sidebar updated or new conversation is shown
-        expect(page.url()).toContain('/chat/');
-      }
-    });
+test.beforeEach(async ({ page }) => mockApi(page));
+
+test.describe('AiHarness Web', () => {
+  test('charge l’application et sa page vide', async ({ page }) => {
+    await page.goto('/');
+    await expect(page).toHaveTitle(/AiHarness/i);
+    await expect(page.getByRole('heading', { name: 'AiHarness', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome to AiHarness' })).toBeVisible();
   });
 
-  // Test chat input and message sending
-  test.describe('Chat', () => {
-    test('should display empty state when no messages', async ({ page }) => {
-      await page.goto('/');
-      
-      const emptyState = page.locator('.chat-empty, text=Welcome to AiHarness');
-      expect(emptyState).toBeDefined();
-    });
-
-    test.skip('should send a message (requires backend)', async ({ page }) => {
-      // This test requires the full stack to be running with AI provider configured
-      await page.goto('/');
-      
-      const input = page.locator('input[type="text"]');
-      await input.fill('Hello, world!');
-      
-      const sendBtn = page.locator('button').filter({ hasText: /send/i });
-      if (await sendBtn.count()) {
-        await sendBtn.click();
-        
-        // Wait for message to appear
-        const message = page.locator('.message.user').first();
-        expect(message).toContainText('Hello, world!');
-      }
-    });
+  test('navigue vers les réglages', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: /settings/i }).click();
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page.getByRole('heading', { name: /settings/i })).toBeVisible();
   });
 
-  // Test responsive design
-  test.describe('Responsive Design', () => {
-    test('should render on mobile viewport', async ({ browser }) => {
-      const context = await browser.newContext({
-        viewport: { width: 375, height: 667 },
-      });
-      const page = await context.newPage();
-      
-      await page.goto('/');
-      
-      // Check that the app renders without horizontal scroll
-      const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
-      expect(bodyWidth).toBeLessThanOrEqual(375 + 10); // Allow small margin
-      
-      await context.close();
-    });
+  test('crée une session et envoie un message de bout en bout', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'New chat' }).click();
+    await expect(page).toHaveURL(/\/chat\/e2e-session$/);
 
-    test('should render on tablet viewport', async ({ browser }) => {
-      const context = await browser.newContext({
-        viewport: { width: 768, height: 1024 },
-      });
-      const page = await context.newPage();
-      
-      await page.goto('/');
-      
-      expect(page.url()).toBe('http://localhost:3000/');
-      
-      await context.close();
-    });
+    await page.getByPlaceholder(/Type your message/).fill('Hello from Playwright');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    await expect(page.locator('.message.user')).toContainText('Hello from Playwright');
+    await expect(page.locator('.message.assistant').first()).toContainText('Hello! How can I help you today?', { timeout: 10_000 });
   });
 
-  // Test accessibility basics
-  test.describe('Accessibility', () => {
-    test('should have proper document title', async ({ page }) => {
-      await page.goto('/');
-      
-      const title = page.locator('title');
-      expect(title).toBeDefined();
-    });
-
-    test.skip('should not have critical accessibility issues (axe-core)', async ({ page }) => {
-      // Requires axe-playwright or similar
-      // This is a placeholder for future implementation
-      await page.goto('/');
-      
-      // TODO: Implement axe accessibility checks
-      expect(true).toBe(true);
-    });
+  test('reste utilisable lorsque l’API est indisponible', async ({ page }) => {
+    await page.route('**/api/**', route => route.abort('failed'));
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'AiHarness', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New chat' })).toBeEnabled();
   });
 
-  // Test error handling
-  test.describe('Error Handling', () => {
-    test('should handle invalid routes gracefully', async ({ page }) => {
-      await page.goto('/invalid-route-that-does-not-exist');
-      
-      // Should not crash - should show 404 or redirect
-      expect(page.url()).toContain('localhost:3000');
-    });
-
-    test('should handle network errors gracefully', async ({ page }) => {
+  for (const viewport of [{ width: 375, height: 667 }, { width: 768, height: 1024 }]) {
+    test(`s’affiche dans un viewport ${viewport.width}x${viewport.height}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
       await page.goto('/');
-      
-      // Simulate network error by blocking API calls (if any)
-      await page.route('**/api/**', (route) => route.abort('failed'));
-      
-      // App should still be functional
-      expect(page.url()).toContain('localhost:3000');
+      await expect(page.locator('body')).toBeVisible();
+      const width = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(width).toBeLessThanOrEqual(viewport.width + 10);
     });
+  }
+
+  test('gère une route inconnue sans planter', async ({ page }) => {
+    await page.goto('/route-inconnue');
+    await expect(page.getByRole('heading', { name: 'AiHarness', exact: true })).toBeVisible();
   });
 
-  // Test performance basics
-  test.describe('Performance', () => {
-    test('should load within acceptable time', async ({ page }) => {
-      const startTime = Date.now();
-      
-      await page.goto('/');
-      
-      const loadTime = Date.now() - startTime;
-      expect(loadTime).toBeLessThan(5000); // 5 second timeout
-      
-      console.log(`Page loaded in ${loadTime}ms`);
-    });
+  test('respecte les bases d’accessibilité', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('navigation')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New chat' })).toBeVisible();
+    await expect(page.locator('main')).toBeVisible();
   });
 });

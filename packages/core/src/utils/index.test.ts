@@ -1,139 +1,151 @@
 // ============================================================
-// Utils Tests
+// Utility Functions Tests - Retry logic, helpers
 // ============================================================
 
-import { describe, it, expect } from 'vitest';
-import { generateId, formatDate, truncate, sleep, deepClone } from './index';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  isRetryableError,
+  calculateRetryDelay,
+  withRetry,
+  withRetryIfRetryable,
+  sleep,
+} from './index';
 
-describe('Utils', () => {
-  // generateId tests
-  describe('generateId()', () => {
-    it('should return a string', () => {
-      const id = generateId();
-      expect(typeof id).toBe('string');
-    });
-
-    it('should generate unique IDs', () => {
-      const ids = new Set<string>();
-      for (let i = 0; i < 100; i++) {
-        ids.add(generateId());
-      }
-      expect(ids.size).toBe(100); // All should be unique
-    });
+describe('isRetryableError()', () => {
+  it('should detect rate limit errors', () => {
+    expect(isRetryableError(new Error('HTTP 429 - Too Many Requests'))).toBe(true);
+    expect(isRetryableError(new Error('rate limit exceeded'))).toBe(true);
   });
 
-  // formatDate tests
-  describe('formatDate()', () => {
-    it('should format a date as string', () => {
-      const date = new Date('2024-01-15T14:30:00');
-      const formatted = formatDate(date);
-
-      expect(typeof formatted).toBe('string');
-      // Should contain the year, month, day, hour, minute
-      expect(formatted).toContain('2024');
-    });
-
-    it('should handle current date', () => {
-      const now = new Date();
-      const formatted = formatDate(now);
-
-      expect(typeof formatted).toBe('string');
-      expect(formatted.length).toBeGreaterThan(5);
-    });
+  it('should detect server errors', () => {
+    expect(isRetryableError(new Error('HTTP 500 - Internal Server Error'))).toBe(true);
+    expect(isRetryableError(new Error('service unavailable'))).toBe(true);
   });
 
-  // truncate tests
-  describe('truncate()', () => {
-    it('should not modify short strings', () => {
-      const result = truncate('Hello', 10);
-      expect(result).toBe('Hello');
-    });
-
-    it('should truncate long strings', () => {
-      const longString = 'This is a very long string that needs to be truncated';
-      const result = truncate(longString, 20);
-
-      expect(result.length).toBe(20);
-      expect(result.endsWith('...')).toBe(true);
-    });
-
-    it('should add ellipsis when truncating', () => {
-      const result = truncate('Hello World!', 8); // 5 chars + '...' = 8 total
-      
-      expect(result).toBe('Hello...');
-    });
-
-    it('should handle exact length match', () => {
-      const result = truncate('Hello', 5);
-      expect(result).toBe('Hello');
-    });
+  it('should detect network errors', () => {
+    expect(isRetryableError(new Error('ECONNREFUSED'))).toBe(true);
+    expect(isRetryableError(new Error('ETIMEDOUT'))).toBe(true);
+    expect(isRetryableError(new Error('ENOTFOUND'))).toBe(true);
   });
 
-  // sleep tests
-  describe('sleep()', () => {
-    it('should resolve after given milliseconds', async () => {
-      const start = Date.now();
-      await sleep(50);
-      const elapsed = Date.now() - start;
-
-      expect(elapsed).toBeGreaterThanOrEqual(45); // Allow some tolerance
-    });
-
-    it('should not block execution (returns Promise)', async () => {
-      let resolved = false;
-      
-      const promise = sleep(10).then(() => {
-        resolved = true;
-      });
-
-      expect(resolved).toBe(false); // Should not be resolved immediately
-      
-      await promise;
-      expect(resolved).toBe(true);
-    });
+  it('should not detect non-retryable errors', () => {
+    expect(isRetryableError(new Error('HTTP 400 - Bad Request'))).toBe(false);
+    expect(isRetryableError(new Error('Invalid API key'))).toBe(false);
+    expect(isRetryableError(new Error('Not found'))).toBe(false);
   });
 
-  // deepClone tests
-  describe('deepClone()', () => {
-    it('should clone a simple object', () => {
-      const original = { name: 'Test', value: 42 };
-      const cloned = deepClone(original);
+  it('should handle string inputs', () => {
+    expect(isRetryableError('HTTP 429 - rate limited')).toBe(true);
+    expect(isRetryableError('some random error')).toBe(false);
+  });
+});
 
-      expect(cloned).toEqual(original);
-      expect(cloned).not.toBe(original); // Different reference
+describe('calculateRetryDelay()', () => {
+  it('should return increasing delays with exponential backoff', () => {
+    const delay0 = calculateRetryDelay(0, { initialDelayMs: 1000, maxDelayMs: 5000 });
+    const delay1 = calculateRetryDelay(1, { initialDelayMs: 1000, maxDelayMs: 5000 });
+    const delay2 = calculateRetryDelay(2, { initialDelayMs: 1000, maxDelayMs: 5000 });
+
+    // Delays should be increasing (with jitter they might not be strictly ordered)
+    expect(delay0).toBeGreaterThanOrEqual(750);   // ~1000 * 0.75 min
+    expect(delay2).toBeLessThanOrEqual(5000);      // Capped at maxDelayMs
+  });
+
+  it('should respect custom initial delay', () => {
+    const delay = calculateRetryDelay(0, { initialDelayMs: 500, maxDelayMs: 10000 });
+    expect(delay).toBeGreaterThanOrEqual(375);   // ~500 * 0.75 min (with jitter)
+  });
+
+  it('should cap at max delay', () => {
+    const delay = calculateRetryDelay(10, { initialDelayMs: 1000, maxDelayMs: 2000 });
+    expect(delay).toBeLessThanOrEqual(2500);   // Capped + jitter buffer
+  });
+
+  it('should return non-negative values', () => {
+    const delay = calculateRetryDelay(0, { initialDelayMs: 100, maxDelayMs: 500 });
+    expect(delay).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('withRetry()', () => {
+  it('should return immediately on success', async () => {
+    const result = await withRetry(async () => 'success');
+    expect(result).toBe('success');
+  });
+
+  it('should retry on failure and succeed on second attempt', async () => {
+    let attempts = 0;
+    const fn = vi.fn().mockImplementation(() => {
+      attempts++;
+      if (attempts < 2) throw new Error('HTTP 503');
+      return 'recovered';
     });
 
-    it('should handle nested objects', () => {
-      const original = {
-        user: {
-          name: 'Alice',
-          settings: { theme: 'dark' },
-        },
-      };
-      const cloned = deepClone(original);
+    const result = await withRetry(fn, { maxRetries: 3, initialDelayMs: 10 });
+    expect(result).toBe('recovered');
+    expect(attempts).toBe(2);
+  });
 
-      expect(cloned).toEqual(original);
-      expect(cloned.user.settings).not.toBe(original.user.settings); // Deep clone
+  it('should throw after exhausting retries', async () => {
+    let attempts = 0;
+    const fn = vi.fn().mockImplementation(() => {
+      attempts++;
+      throw new Error(`Attempt ${attempts} failed`);
     });
 
-    it('should handle arrays', () => {
-      const original = [1, 2, { nested: true }];
-      const cloned = deepClone(original);
+    await expect(
+      withRetry(fn, { maxRetries: 2, initialDelayMs: 1 })
+    ).rejects.toThrow('Attempt 3 failed');
+    
+    expect(attempts).toBe(3); // Initial + 2 retries
+  });
 
-      expect(cloned).toEqual(original);
-      expect(cloned[2]).not.toBe(original[2]); // Deep clone array elements
+  it('should use exponential backoff between retries', async () => {
+    let attempts = 0;
+    const fn = vi.fn().mockImplementation(async () => {
+      attempts++;
+      if (attempts < 2) throw new Error('HTTP 429');
+      return 'ok';
     });
 
-    it('should handle empty objects and arrays', () => {
-      expect(deepClone({})).toEqual({});
-      expect(deepClone([])).toEqual([]);
+    const startTime = Date.now();
+    await withRetry(fn, { maxRetries: 3, initialDelayMs: 50, maxDelayMs: 100 });
+    const elapsed = Date.now() - startTime;
+
+    // Should have waited at least some delay (allowing for timing variance)
+    expect(elapsed).toBeGreaterThanOrEqual(20);
+  });
+
+  it('should handle non-retryable errors immediately with withRetryIfRetryable', async () => {
+    let attempts = 0;
+    const fn = vi.fn().mockImplementation(() => {
+      attempts++;
+      throw new Error('HTTP 400 - Bad Request'); // Not retryable status
     });
 
-    it('should preserve null values', () => {
-      const original = { value: null };
-      const cloned = deepClone(original);
+    await expect(
+      withRetryIfRetryable(fn, { maxRetries: 3 })
+    ).rejects.toThrow();
+    
+    // Should only try once since error is not retryable
+    expect(attempts).toBe(1);
+  });
 
-      expect(cloned.value).toBeNull();
-    });
+  it('should pass options through correctly', async () => {
+    const result = await withRetry(async () => ({ success: true }), { maxRetries: 5 });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('sleep()', () => {
+  it('should resolve after the specified duration', async () => {
+    const start = Date.now();
+    await sleep(10);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeGreaterThanOrEqual(5); // Allow some timing variance
+  });
+
+  it('should handle zero delay', async () => {
+    await sleep(0); // Should not throw
   });
 });

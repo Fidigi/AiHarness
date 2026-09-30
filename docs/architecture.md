@@ -1,129 +1,99 @@
-# Architecture Documentation
+# Architecture AiHarness
 
-## Overview
+## Vue d’ensemble
 
-AiHarness is built as a **monorepo** with three main packages:
+AiHarness est un monorepo npm workspaces composé de quatre packages :
 
-```
+```text
 packages/
-├── core/     # Shared library (types, providers, utils)
-├── cli/      # Terminal interface
-└── web/      # Web application
+├── core/       # Types, providers, sessions, extensions et utilitaires partagés
+├── cli/        # Commande ai-harness et interfaces terminal
+├── server/     # API HTTP, SSE/WebSocket, credentials et lanceur Web
+└── web/        # Application React/Vite
 ```
 
-## Package Dependencies
+Dépendances principales :
 
-```
-cli ──→ core
-web ──→ core
-```
+```text
+cli ─────┐
+server ──┼──> core
+web ─────┘
 
-Both `cli` and `web` depend on `core`, but they don't depend on each other. This allows:
-- Independent development of CLI and Web interfaces
-- Shared types and logic across both platforms
-- Easy testing with proper isolation
-
-## Core Package Structure
-
-### Types (`src/types/`)
-Centralized TypeScript definitions used across all packages:
-- `Message` - Conversation message structure
-- `Session` - Session/conversation management
-- `ProviderConfig` - AI provider configuration
-- `AppConfig` - Application-wide settings
-
-### Providers (`src/providers/`)
-Abstract interface for AI providers with concrete implementations:
-```typescript
-abstract class AiProvider {
-  abstract chat(messages: Message[]): Promise<string>;
-  abstract streamChat(...): Promise<void>;
-}
+ai-harness-web ──> server + bundle web
 ```
 
-Supported providers (to be implemented):
-- OpenAI (GPT-4, GPT-3.5)
-- Anthropic (Claude)
-- Google (Gemini)
-- Local models (Ollama, llama.cpp)
+Le CLI et le serveur utilisent le même format JSONL dans `~/.ai-harness/sessions/`. Le Web accède aux sessions et aux providers par l’API du serveur.
 
-### Sessions (`src/sessions/`)
-Session management with in-memory storage:
-```typescript
-class SessionManager {
-  create(options?): Session;
-  get(id: string): Session | undefined;
-  list(): Session[];
-  addMessage(sessionId, message);
-  delete(id: boolean);
-}
+## Core (`packages/core`)
+
+Le package `@ai-harness/core` contient :
+
+- les types `Message`, `Session`, `ProviderConfig` et les structures de tool calls ;
+- `SessionManager` et `JsonlSessionStore`, avec persistance, branches, clonage, résumés et compaction ;
+- les providers OpenAI, Anthropic, Google Gemini, Azure OpenAI, Vertex AI, AWS Bedrock, local compatible OpenAI et mock ;
+- `ProviderFactory`, notamment utilisé par les providers enregistrés dynamiquement ;
+- le registre d’extensions, ses commandes, outils, providers, panneaux UI, événements et hooks ;
+- les utilitaires de retry, d’événements et de comptage.
+
+## CLI (`packages/cli`)
+
+Le binaire `ai-harness` propose deux interfaces :
+
+- terminal classique basé sur `readline` ;
+- plein écran avec transcript, historique, complétion et panneaux d’extensions.
+
+Il orchestre les commandes de session, le streaming provider, les tool calls, les skills, les prompts, les extensions, la confiance des projets et le mode RPC JSONL. Les sessions sont persistées sauf avec `--no-session`.
+
+Le point d’entrée est `packages/cli/src/index.ts` et le routeur de commandes se trouve dans `packages/cli/src/commands/handler.ts`.
+
+## Serveur (`packages/server`)
+
+Le serveur Express fournit :
+
+- les routes `/api` pour le chat, les providers, la configuration et les sessions ;
+- le streaming Server-Sent Events et WebSocket ;
+- la persistance JSONL partagée avec le CLI ;
+- des liens temporaires `/share/<token>` ;
+- une authentification Bearer facultative ;
+- le stockage facultatif des credentials chiffrés ;
+- le service du bundle React et le fallback SPA en production.
+
+`ai-harness-web` démarre ce serveur et le bundle Web sur un seul port. En développement, Vite utilise le port 3080 et relaie `/api` et les WebSockets vers le serveur sur le port 3099.
+
+## Web (`packages/web`)
+
+L’application React utilise Zustand pour l’état des sessions et providers. Elle comprend :
+
+- `Sidebar` pour créer et sélectionner les sessions ;
+- `ChatView` pour le chat et le streaming ;
+- `SettingsView` pour les providers, les tokens, le transport et le thème ;
+- `services/api.ts` pour les appels HTTP, SSE et WebSocket.
+
+Les sessions restent la source de vérité du serveur et sont rechargées au démarrage de l’interface.
+
+## Extensions
+
+Les extensions JavaScript du CLI peuvent enregistrer :
+
+- des commandes ;
+- des outils appelables manuellement ou par un modèle ;
+- des providers ;
+- des panneaux texte pour le mode plein écran ;
+- des listeners de cycle de vie et des hooks `before:agent`, `before:provider` et `before:tool`.
+
+Les extensions Web ne sont pas encore chargées côté serveur. Voir [extensions.md](extensions.md).
+
+## Validation
+
+Les tests Vitest couvrent les quatre packages. Les tests Playwright valident l’interface Web et ses principaux parcours.
+
+Commandes habituelles :
+
+```bash
+npm run typecheck
+npm test
+npm run test:e2e
+npm run build
 ```
 
-### Utils (`src/utils/`)
-Shared utility functions:
-- `generateId()` - UUID generation
-- `formatDate()` - Date formatting
-- `truncate()` - Text truncation
-- `sleep()` - Promise-based delay
-
-## CLI Package Structure
-
-### Commands (`src/commands/`)
-Command handler with extensible command system:
-```typescript
-interface CommandEntry {
-  name: string;
-  description: string;
-  usage?: string;
-  handler: (args, sessionManager) => Promise<string>;
-}
-```
-
-Built-in commands:
-- `/help` - Show available commands
-- `/new [title]` - Create new conversation
-- `/list` - List all conversations
-- `/switch <id>` - Switch to different conversation
-- `/delete <id>` - Delete a conversation
-- `/clear` - Clear current conversation
-- `/provider` - Show/change AI provider
-- `/model` - List available models
-- `/config` - View configuration
-- `/export [format]` - Export conversation
-- `/quit` or `/exit` - Exit application
-
-### TUI (`src/tui/`)
-Terminal UI components for display and interaction:
-```typescript
-class TerminalUI {
-  welcome();
-  displayUserMessage(content);
-  displayAssistantMessage(content, stream?);
-  displayCommand(name, output);
-  showError(message);
-  showHelp();
-}
-```
-
-## Web Package Structure
-
-### Components (`src/components/`)
-React components:
-- `Sidebar` - Session list and navigation
-- `ChatView` - Main chat interface
-- `SettingsView` - Application settings
-
-### Store (`src/store/`)
-Zustand state management for sessions and providers.
-
-## Testing Strategy
-
-### Unit Tests (Vitest)
-- Run across all packages
-- Fast execution with in-memory mocks
-- Coverage reporting
-
-### E2E Tests (Playwright)
-- Cross-browser testing (Chrome, Firefox, Safari)
-- Component interaction tests
-- Responsive design verification
+Les cibles Docker équivalentes sont disponibles dans le `Makefile`.

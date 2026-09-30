@@ -1,0 +1,61 @@
+# =============================================================================
+# Dockerfile de production - AiHarness
+# Les arguments par défaut valident l'application avec Node.js 26 et npm 12.1.
+# =============================================================================
+
+ARG NODE_VERSION=26
+ARG NPM_VERSION=12.1.0
+FROM node:${NODE_VERSION}-bookworm-slim AS builder
+ARG NPM_VERSION
+RUN npm install --global npm@${NPM_VERSION}
+WORKDIR /app
+
+# npm workspaces utilise un lockfile unique à la racine.
+COPY package.json package-lock.json .npmrc ./
+COPY packages/core/package.json packages/core/
+COPY packages/cli/package.json packages/cli/
+COPY packages/server/package.json packages/server/
+COPY packages/web/package.json packages/web/
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+# =============================================================================
+# Image d'exécution minimale
+# =============================================================================
+FROM node:${NODE_VERSION}-bookworm-slim AS prod
+ARG NPM_VERSION
+RUN npm install --global npm@${NPM_VERSION}
+
+RUN groupadd -r aiharness && useradd -r -g aiharness -d /app -s /sbin/nologin aiharness
+WORKDIR /app
+
+COPY package.json package-lock.json .npmrc ./
+COPY packages/core/package.json packages/core/
+COPY packages/cli/package.json packages/cli/
+COPY packages/server/package.json packages/server/
+COPY packages/web/package.json packages/web/
+RUN npm ci --omit=dev --ignore-scripts
+
+COPY --from=builder /app/packages/core/dist ./packages/core/dist
+COPY --from=builder /app/packages/cli/dist ./packages/cli/dist
+COPY --from=builder /app/packages/server/dist ./packages/server/dist
+COPY --from=builder /app/packages/web/dist ./packages/web/dist
+
+RUN chmod +x /app/packages/server/dist/web-cli.js \
+    && ln -s /app/packages/server/dist/web-cli.js /usr/local/bin/ai-harness-web \
+    && chown -R aiharness:aiharness /app
+
+USER aiharness
+
+ENV AI_HARNESS_WEB_HOSTNAME=0.0.0.0 \
+    AI_HARNESS_WEB_PORT=3080 \
+    AI_HARNESS_WEB_NO_OPEN=1
+
+EXPOSE 3080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "fetch('http://127.0.0.1:' + process.env.AI_HARNESS_WEB_PORT + '/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+
+CMD ["sh", "-c", "exec ai-harness-web --hostname \"$AI_HARNESS_WEB_HOSTNAME\" --port \"$AI_HARNESS_WEB_PORT\""]

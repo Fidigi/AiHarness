@@ -1,0 +1,17 @@
+ARG NODE_VERSION=26
+ARG NPM_VERSION=12.1.0
+FROM node:${NODE_VERSION}-bookworm-slim AS generator
+ARG NPM_VERSION
+RUN npm install --global npm@${NPM_VERSION}
+WORKDIR /app
+
+COPY package.json package-lock.json .npmrc ./
+COPY packages/core/package.json packages/core/
+COPY packages/cli/package.json packages/cli/
+COPY packages/web/package.json packages/web/
+COPY packages/server/package.json packages/server/
+
+RUN npm install --package-lock-only --ignore-scripts
+
+FROM scratch AS export
+COPY --from=generator /app/package-lock.json /package-lock.json

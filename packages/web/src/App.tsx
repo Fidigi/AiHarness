@@ -2,19 +2,27 @@
 // Web App - Main Component
 // ============================================================
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
 import SettingsView from './components/SettingsView';
+import { useSessionStore } from './store/session-store';
 
 function App() {
   const [sidebarOpen] = useState(true);
+  const hydrateSessions = useSessionStore(state => state.hydrateSessions);
+  const hydrateProviders = useSessionStore(state => state.hydrateProviders);
+
+  useEffect(() => {
+    void hydrateSessions();
+    void hydrateProviders();
+  }, [hydrateSessions, hydrateProviders]);
 
   return (
     <div className="app">
       <Sidebar isOpen={sidebarOpen} />
-      <main className="main-content" style={{ marginLeft: sidebarOpen ? '280px' : '0', transition: 'margin-left 0.3s' }}>
+      <main className="main-content">
         <Routes>
           <Route path="/" element={<ChatView />} />
           <Route path="/chat/:id" element={<ChatView />} />
