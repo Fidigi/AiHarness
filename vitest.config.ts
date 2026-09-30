@@ -30,6 +30,12 @@ export default defineConfig({
         '**/*.mock.ts',
         '**/tests/**',
       ],
+      thresholds: {
+        statements: 68,
+        branches: 55,
+        functions: 70,
+        lines: 70,
+      },
     },
   },
   resolve: {

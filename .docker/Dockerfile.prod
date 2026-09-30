@@ -43,7 +43,8 @@ COPY --from=builder /app/packages/cli/dist ./packages/cli/dist
 COPY --from=builder /app/packages/server/dist ./packages/server/dist
 COPY --from=builder /app/packages/web/dist ./packages/web/dist
 
-RUN chmod +x /app/packages/server/dist/web-cli.js \
+RUN mkdir -p /app/.ai-harness \
+    && chmod +x /app/packages/server/dist/web-cli.js \
     && ln -s /app/packages/server/dist/web-cli.js /usr/local/bin/ai-harness-web \
     && chown -R aiharness:aiharness /app
 

@@ -40,6 +40,7 @@ Le [guide utilisateur complet](docs/user-guide.md) décrit l’installation, la 
 Documentation complémentaire :
 
 - [Extensions](docs/extensions.md)
+- [Internationalisation Web](docs/i18n.md)
 - [Conteneurisation](docs/containerization.md)
 - [Architecture](docs/architecture.md)
 

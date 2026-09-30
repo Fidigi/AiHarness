@@ -41,7 +41,19 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
     description: tool.description,
     parameters: tool.parameters ?? { type: 'object', properties: {} },
   }));
-  let messages = options.sessionManager.get(options.sessionId)?.messages.map(message => ({ ...message })) ?? [];
+  const effectiveMessages = (): Message[] => options.sessionManager.getEffectiveContext(options.sessionId)
+    .filter(entry => entry.type === 'message')
+    .map(entry => ({
+      id: entry.id,
+      role: entry.role,
+      content: entry.content,
+      timestamp: new Date(entry.timestamp),
+      toolCalls: entry.toolCalls,
+      toolCallId: entry.toolCallId,
+      name: entry.name,
+      isError: entry.isError,
+    }));
+  let messages = effectiveMessages();
 
   const throwIfAborted = (): void => {
     if (options.signal?.aborted) throw new Error("Exécution de l'agent interrompue.");
@@ -103,7 +115,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       options.onToolResult?.({ call, content, isError });
     }
 
-    messages = options.sessionManager.get(options.sessionId)?.messages.map(message => ({ ...message })) ?? messages;
+    messages = effectiveMessages();
   }
 
   throw new Error(`Limite de ${maxToolRounds} tours d'outils atteinte.`);

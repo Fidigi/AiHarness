@@ -9,6 +9,11 @@ PROJECT_NAME       := ai-harness
 IMAGE_TEST         := $(PROJECT_NAME):test-latest
 IMAGE_PROD         := $(PROJECT_NAME):prod-latest
 CONTAINER_PREFIX   := aiharness-test
+PROD_CONTAINER     ?= $(PROJECT_NAME)-prod
+PROD_DATA_VOLUME   ?= $(PROJECT_NAME)-data
+PROD_BIND_ADDRESS  ?= 127.0.0.1
+PROD_PORT          ?= 3080
+PROD_DOCKER_ARGS   ?=
 
 # Couleurs pour le terminal
 GREEN  := \033[0;32m
@@ -39,9 +44,13 @@ help: ## Afficher cette aide
 	@echo "    make build-prod        Construire l'image de production"
 	@echo "    make build             Construire toutes les images"
 	@echo ""
+	@echo "  $(GREEN)Production$(NC)"
+	@echo "    make run-prod          Construire et lancer le conteneur de production"
+	@echo "    make shell-prod        Ouvrir Bash dans le conteneur de production"
+	@echo ""
 	@echo "  $(GREEN)Nettoyage$(NC)"
 	@echo "    make clean-images      Supprimer les images Docker"
-	@echo "    make clean-containers  Supprimer les conteneurs arrêtés"
+	@echo "    make clean-containers  Supprimer les conteneurs du projet"
 	@echo "    make clean             Nettoyage complet (images + conteneurs)"
 	@echo ""
 	@echo "  $(GREEN)Utilitaires$(NC)"
@@ -53,7 +62,7 @@ help: ## Afficher cette aide
 # IMAGES DOCKER
 # =============================================================================
 
-.PHONY: build-test build-prod build clean-images clean-containers clean
+.PHONY: build-test build-prod build run-prod shell-prod clean-images clean-containers clean
 
 build-test: ## Construire l'image de test
 	@printf "$(YELLOW)[BUILD] Construction de l'image de test...$(NC)\n"
@@ -71,13 +80,31 @@ build-prod: ## Construire l'image de production
 
 build: build-test build-prod ## Construire toutes les images
 
+run-prod: build-prod ## Construire et lancer le conteneur de production en arrière-plan
+	@printf "$(GREEN)[PROD] Lancement du conteneur de production...$(NC)\n"
+	@docker rm -f $(PROD_CONTAINER) >/dev/null 2>&1 || true
+	docker run --rm --detach \
+		--name $(PROD_CONTAINER) \
+		--publish $(PROD_BIND_ADDRESS):$(PROD_PORT):3080 \
+		--volume $(PROD_DATA_VOLUME):/app/.ai-harness $(PROD_DOCKER_ARGS) \
+		$(IMAGE_PROD)
+	@printf "$(GREEN)[PROD] Application disponible sur http://$(PROD_BIND_ADDRESS):$(PROD_PORT)$(NC)\n"
+
+shell-prod: ## Ouvrir Bash dans le conteneur de production en cours d'exécution
+	@if [ "$$(docker inspect --format '{{.State.Running}}' $(PROD_CONTAINER) 2>/dev/null)" != "true" ]; then \
+		printf "$(RED)[ERREUR] Le conteneur $(PROD_CONTAINER) n'est pas en cours d'exécution. Lancez d'abord 'make run-prod'.$(NC)\n"; \
+		exit 1; \
+	fi
+	docker exec -it $(PROD_CONTAINER) bash
+
 clean-images: ## Supprimer les images Docker du projet
 	@printf "$(YELLOW)[CLEAN] Suppression des images...$(NC)\n"
 	-docker rmi $(IMAGE_TEST) 2>/dev/null || true
 	-docker rmi $(IMAGE_PROD) 2>/dev/null || true
 
-clean-containers: ## Supprimer les conteneurs de test arrêtés
-	@printf "$(YELLOW)[CLEAN] Suppression des conteneurs arrêtés...$(NC)\n"
+clean-containers: ## Supprimer les conteneurs du projet
+	@printf "$(YELLOW)[CLEAN] Suppression des conteneurs...$(NC)\n"
+	docker rm -f $(PROD_CONTAINER) 2>/dev/null || true
 	docker rm -f $$(docker ps -aq --filter "ancestor=$(IMAGE_TEST)" 2>/dev/null) || true
 
 clean: clean-containers clean-images ## Nettoyage complet (images + conteneurs)
@@ -189,6 +216,9 @@ info: ## Informations sur l'environnement Docker
 	@printf "  Buildx           : " && docker buildx version || echo "(Buildx non disponible)"
 	@printf "  Image test       : $(IMAGE_TEST)\n"
 	@printf "  Image prod       : $(IMAGE_PROD)\n"
+	@printf "  Conteneur prod   : $(PROD_CONTAINER)\n"
+	@printf "  Port prod        : $(PROD_BIND_ADDRESS):$(PROD_PORT)\n"
+	@printf "  Volume prod      : $(PROD_DATA_VOLUME)\n"
 	@echo ""
 	@if [ -f ".docker/Dockerfile.test" ]; then \
 		printf "$(GREEN)  Dockerfile test  : OK$(NC)\n"; \

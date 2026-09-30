@@ -187,11 +187,38 @@ describe('JsonlSessionStore', () => {
 
     it('should skip malformed JSONL lines gracefully', async () => {
       const filePath = path.join(tempDir, 'malformed.jsonl');
-      await fs.writeFile(filePath, '{ valid: json }\n{ "id": "msg-1", "type": "message" }\nthis is not json\n');
+      await fs.writeFile(filePath, [
+        '{ valid: json }',
+        JSON.stringify({ id: 'msg-1', type: 'message', role: 'user', content: 'Valid', timestamp: Date.now() }),
+        JSON.stringify({ id: 'incomplete', type: 'message' }),
+        'null',
+      ].join('\n'));
 
-      // The store should handle this by skipping invalid lines during loadSession
+      // The store should handle this by skipping syntactically and structurally invalid lines.
       const entries = await store.getRawEntries('malformed');
-      expect(entries.length).toBe(1); // Only the valid JSON line
+      expect(entries).toHaveLength(1);
+    });
+
+    it('derives dates from legacy files without metadata', async () => {
+      await fs.writeFile(path.join(tempDir, 'legacy.jsonl'), [
+        JSON.stringify({ id: 'old', type: 'message', role: 'user', content: 'Old', timestamp: 1_700_000_000_000 }),
+        JSON.stringify({ id: 'new', type: 'message', role: 'assistant', content: 'New', timestamp: 1_700_000_100_000 }),
+      ].join('\n'));
+
+      const loaded = await store.loadSession('legacy');
+
+      expect(loaded?.createdAt.getTime()).toBe(1_700_000_000_000);
+      expect(loaded?.updatedAt.getTime()).toBe(1_700_000_100_000);
+    });
+
+    it('rejects session IDs that could escape the sessions directory', async () => {
+      await expect(store.saveSession({
+        id: '../escaped',
+        messages: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })).rejects.toThrow('Invalid session ID');
+      await expect(store.loadSession('../escaped')).rejects.toThrow('Invalid session ID');
     });
   });
 
@@ -524,14 +551,18 @@ describe('SessionManager with JSONL Persistence', () => {
       expect(cloned!.parentId).toBe(session.id); // Linked to original
     });
 
-    it('should get session tree structure', async () => {
+    it('should get session tree structure with correct nested depths', async () => {
       const session = await manager.create({ title: 'Root' });
-      
-      const forked1 = await (manager as any).forkSession(session.id);
-      const forked2 = await (manager as any).forkSession(session.id);
+      const forked1 = await manager.forkSession(session.id);
+      const forked2 = await manager.forkSession(session.id);
+      const nestedFork = await manager.forkSession(forked1!.id);
 
-      const tree = (manager as any).getSessionTree();
-      expect(tree.length).toBe(3); // Root + 2 forks
+      const tree = manager.getSessionTree();
+      expect(tree).toHaveLength(4);
+      expect(tree.find(node => node.id === session.id)?.depth).toBe(0);
+      expect(tree.find(node => node.id === forked1!.id)?.depth).toBe(1);
+      expect(tree.find(node => node.id === forked2!.id)?.depth).toBe(1);
+      expect(tree.find(node => node.id === nestedFork!.id)?.depth).toBe(2);
     });
 
     it('should get branch sessions', async () => {
@@ -704,6 +735,28 @@ describe('SessionManager with JSONL Persistence', () => {
       const entries = await store.getRawEntries(session.id);
       const hasCompactionEntry = entries.some(e => e.type === 'compaction');
       expect(hasCompactionEntry).toBe(true);
+
+      const reloaded = await store.loadSession(session.id);
+      expect(reloaded?.messages).toHaveLength(1);
+      expect(reloaded?.messages[0].id).toBe(firstKeptId);
+
+      const freshManager = new SessionManager();
+      freshManager.setStore(store);
+      await freshManager.loadFromStore(session.id);
+      expect(freshManager.getEffectiveContext(session.id)[0]).toMatchObject({
+        role: 'system',
+        content: '[Context Summary] Summary of the conversation about testing.',
+      });
+    });
+
+    it('does not discard history when the compaction boundary is invalid', async () => {
+      const session = await manager.create();
+      await manager.addMessage(session.id, { role: 'user', content: 'Keep me' });
+
+      await manager.applyCompaction(session.id, 'Bad summary', 'missing-message');
+
+      expect(session.messages.map(message => message.content)).toEqual(['Keep me']);
+      expect(session.metadata?.lastCompacted).toBeUndefined();
     });
 
     it('should handle non-existent session gracefully', async () => {

@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { decodeWebSocketFrame, encodeWebSocketFrame } from './websocket';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { IncomingMessage } from 'node:http';
+import { Duplex } from 'node:stream';
+import { decodeWebSocketFrame, encodeWebSocketFrame, handleWebSocketUpgrade } from './websocket';
 
 function maskedFrame(payload: string): Buffer {
   const content = Buffer.from(payload);
@@ -11,7 +13,21 @@ function maskedFrame(payload: string): Buffer {
   return Buffer.concat([header, mask, masked]);
 }
 
+function captureSocket(): { socket: Duplex; output: string[] } {
+  const output: string[] = [];
+  const socket = new Duplex({
+    read() {},
+    write(chunk, _encoding, callback) {
+      output.push(Buffer.from(chunk).toString());
+      callback();
+    },
+  });
+  return { socket, output };
+}
+
 describe('transport WebSocket', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   it('encode les frames serveur RFC 6455', () => {
     const decoded = decodeWebSocketFrame(encodeWebSocketFrame('bonjour'));
     expect(decoded).toMatchObject({ payload: 'bonjour', opcode: 1 });
@@ -26,5 +42,35 @@ describe('transport WebSocket', () => {
   it('gère les payloads étendus', () => {
     const payload = 'x'.repeat(70_000);
     expect(decodeWebSocketFrame(encodeWebSocketFrame(payload))?.payload).toBe(payload);
+  });
+
+  it('protège aussi les upgrades quand seul le jeton administrateur est configuré', () => {
+    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', '');
+    vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'admin-secret');
+    const { socket, output } = captureSocket();
+    const request = {
+      url: '/api/chat/ws',
+      headers: { host: 'localhost', 'sec-websocket-key': 'test-key' },
+    } as IncomingMessage;
+
+    handleWebSocketUpgrade(request, socket, {} as never);
+
+    expect(output.join('')).toContain('401 Unauthorized');
+    expect(socket.destroyed).toBe(true);
+  });
+
+  it('accepte le jeton administrateur comme les routes HTTP', () => {
+    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'user-secret');
+    vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'admin-secret');
+    const { socket, output } = captureSocket();
+    const request = {
+      url: '/api/chat/ws?token=admin-secret',
+      headers: { host: 'localhost', 'sec-websocket-key': 'test-key' },
+    } as IncomingMessage;
+
+    handleWebSocketUpgrade(request, socket, {} as never);
+
+    expect(output.join('')).toContain('101 Switching Protocols');
+    socket.destroy();
   });
 });

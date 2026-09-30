@@ -94,17 +94,23 @@ export async function* streamChat(
     let buffer = '';
     let currentEvent = 'message';
 
-    while (true) {
+    let streamDone = false;
+    while (!streamDone) {
       const { done, value } = await reader.read();
-      if (done) break;
+      streamDone = done;
+      if (value) buffer += decoder.decode(value, { stream: !done });
+      if (done) buffer += decoder.decode();
 
-      buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+      buffer = done ? '' : lines.pop() || '';
 
-      for (const line of lines) {
+      for (const rawLine of lines) {
+        const line = rawLine.replace(/\r$/, '');
         // Parse SSE format: "event: <type>\ndata: <json>"
-        if (!line.trim()) continue;
+        if (!line) {
+          currentEvent = 'message';
+          continue;
+        }
 
         if (line.startsWith('data: ')) {
           try {
@@ -396,7 +402,7 @@ export async function setProviderApiKey(
 /** Check if the backend server is running */
 export async function healthCheck(): Promise<boolean> {
   try {
-    const response = await apiFetch(`${API_BASE}/health`);
+    const response = await apiFetch('/health');
     return response.ok;
   } catch {
     return false;

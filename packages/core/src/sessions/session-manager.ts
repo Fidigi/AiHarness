@@ -58,6 +58,29 @@ export interface SessionMetadataEntry extends SessionEntryBase {
 
 export type SessionEntry = MessageEntry | CompactionEntry | BranchSummaryEntry | SessionMetadataEntry;
 
+function isSessionEntry(value: unknown): value is SessionEntry {
+  if (!value || typeof value !== 'object') return false;
+  const entry = value as Record<string, unknown>;
+  if (typeof entry.id !== 'string' || !entry.id || typeof entry.timestamp !== 'number' || !Number.isFinite(entry.timestamp)) {
+    return false;
+  }
+
+  switch (entry.type) {
+    case 'message':
+      return ['user', 'assistant', 'system', 'tool'].includes(String(entry.role))
+        && typeof entry.content === 'string';
+    case 'compaction':
+      return typeof entry.summary === 'string' && typeof entry.firstKeptEntryId === 'string';
+    case 'branch_summary':
+      return typeof entry.branchName === 'string' && typeof entry.summary === 'string';
+    case 'metadata':
+      return typeof entry.createdAt === 'number' && Number.isFinite(entry.createdAt)
+        && typeof entry.updatedAt === 'number' && Number.isFinite(entry.updatedAt);
+    default:
+      return false;
+  }
+}
+
 // ===================================================================
 // JSONL File-based session store
 // ===================================================================
@@ -76,9 +99,18 @@ export class JsonlSessionStore {
     await fs.mkdir(this.sessionsDir, { recursive: true });
   }
 
-  /** Get the session file path for a given session ID */
+  /** Get the session file path for a given session ID. Session files are always flat. */
   private getFilePath(sessionId: string): string {
-    return path.join(this.sessionsDir, `${sessionId}.jsonl`);
+    if (!sessionId || sessionId.includes('/') || sessionId.includes('\\') || sessionId.includes('\0')) {
+      throw new Error(`Invalid session ID: ${sessionId}`);
+    }
+
+    const sessionsRoot = path.resolve(this.sessionsDir);
+    const filePath = path.resolve(sessionsRoot, `${sessionId}.jsonl`);
+    if (!filePath.startsWith(`${sessionsRoot}${path.sep}`)) {
+      throw new Error(`Invalid session ID: ${sessionId}`);
+    }
+    return filePath;
   }
 
   /** List all session IDs (from .jsonl files) */
@@ -128,28 +160,39 @@ export class JsonlSessionStore {
     const entries: SessionEntry[] = [];
     for (const line of content.split('\n').filter(l => l.trim())) {
       try {
-        entries.push(JSON.parse(line));
+        const entry: unknown = JSON.parse(line);
+        if (isSessionEntry(entry)) entries.push(entry);
       } catch {
         // Skip malformed lines
       }
     }
 
-    const messages: Message[] = [];
+    let messages: Message[] = [];
     let title: string | undefined;
-    let createdAt: Date = new Date();
-    let updatedAt: Date = new Date();
+    let createdAt: Date | undefined;
+    let updatedAt: Date | undefined;
     let parentId: string | undefined;
     let branchId: string | undefined;
     let providerConfig: Session['providerConfig'];
     let metadata: Record<string, unknown> | undefined;
+    let latestCompaction: CompactionEntry | undefined;
+
+    const includeTimestamp = (value: number): void => {
+      const timestamp = new Date(value);
+      if (Number.isNaN(timestamp.getTime())) return;
+      if (!createdAt || timestamp < createdAt) createdAt = timestamp;
+      if (!updatedAt || timestamp > updatedAt) updatedAt = timestamp;
+    };
 
     for (const entry of entries) {
       if (entry.type === 'message') {
+        const timestamp = new Date(entry.timestamp);
+        if (Number.isNaN(timestamp.getTime())) continue;
         const msg: Message = {
           id: entry.id,
           role: entry.role,
           content: entry.content,
-          timestamp: new Date(entry.timestamp),
+          timestamp,
           toolCalls: entry.toolCalls,
           toolCallId: entry.toolCallId,
           name: entry.name,
@@ -162,30 +205,40 @@ export class JsonlSessionStore {
         }
       } else if (entry.type === 'metadata') {
         title = entry.title ?? title;
-        createdAt = new Date(entry.createdAt);
-        updatedAt = new Date(entry.updatedAt);
+        const metadataCreatedAt = new Date(entry.createdAt);
+        const metadataUpdatedAt = new Date(entry.updatedAt);
+        if (!Number.isNaN(metadataCreatedAt.getTime())) createdAt = metadataCreatedAt;
+        if (!Number.isNaN(metadataUpdatedAt.getTime())) updatedAt = metadataUpdatedAt;
         parentId = entry.parentId;
         branchId = entry.branchId;
         providerConfig = entry.providerConfig;
         metadata = entry.metadata;
-      } else if (entry.type === 'compaction' || entry.type === 'branch_summary') {
-        const ts = new Date(entry.timestamp);
-        if (ts > updatedAt) updatedAt = ts;
+      } else if (entry.type === 'compaction') {
+        latestCompaction = entry;
       }
 
-      // Track earliest timestamp for createdAt
-      const ts = new Date(entry.timestamp);
-      if (!createdAt || ts < createdAt) {
-        createdAt = ts;
-      }
+      includeTimestamp(entry.timestamp);
     }
 
+    if (latestCompaction) {
+      const firstKeptIndex = messages.findIndex(message => message.id === latestCompaction!.firstKeptEntryId);
+      if (firstKeptIndex >= 0) messages = messages.slice(firstKeptIndex);
+      const compactedAt = new Date(latestCompaction.timestamp);
+      metadata = {
+        ...metadata,
+        ...(Number.isNaN(compactedAt.getTime()) ? {} : { lastCompacted: compactedAt.toISOString() }),
+        compactionSummary: latestCompaction.summary,
+        compactionEntryId: latestCompaction.id,
+      };
+    }
+
+    const now = new Date();
     return {
       id: sessionId,
       title,
       messages,
-      createdAt,
-      updatedAt,
+      createdAt: createdAt ?? now,
+      updatedAt: updatedAt ?? now,
       parentId,
       branchId,
       providerConfig,
@@ -292,8 +345,9 @@ export class JsonlSessionStore {
     tokenEstimate?: number,
   ): Promise<void> {
     if (!this.enabled) return;
+    await this.ensureDir();
     const line = JSON.stringify({
-      id: `compaction-${Date.now()}`,
+      id: `compaction-${crypto.randomUUID()}`,
       type: 'compaction',
       summary,
       firstKeptEntryId,
@@ -340,7 +394,8 @@ export class JsonlSessionStore {
 
       for (const line of content.split('\n').filter(l => l.trim())) {
         try {
-          entries.push(JSON.parse(line));
+          const entry: unknown = JSON.parse(line);
+          if (isSessionEntry(entry)) entries.push(entry);
         } catch {
           // Skip malformed lines
         }
@@ -652,35 +707,13 @@ export class SessionManager {
     const session = this.sessions.get(sessionId);
     if (!session) return 0;
 
-    // Filter out compaction/branch_summary entries from token calculation
-    const messagesOnly: SessionEntry[] = session.messages.map(m => ({
-      ...m,
-      type: 'message' as const,
-      timestamp: m.timestamp.getTime(),
-    }));
-    return TokenEstimator.totalMessages(messagesOnly);
+    return TokenEstimator.totalMessages(this.getEffectiveContext(sessionId));
   }
 
   /** Get the effective context for a session (after applying any compactions) */
   getEffectiveContext(sessionId: string): SessionEntry[] {
-    // For now, just return all messages
-    // In a full implementation, this would apply compaction entries to build the actual prompt
     const session = this.sessions.get(sessionId);
     if (!session) return [];
-
-    return session.messages.map(m => ({
-      id: m.id,
-      type: 'message' as const,
-      role: m.role,
-      content: m.content,
-      timestamp: m.timestamp.getTime(),
-    }));
-  }
-
-  /** Request compaction for a session (returns the entries to be compacted) */
-  requestCompaction(sessionId: string): { toCompact: SessionEntry[]; keptEntries: SessionEntry[] } | null {
-    const session = this.sessions.get(sessionId);
-    if (!session || !this.compactionSettings.enabled) return null;
 
     const entries: SessionEntry[] = session.messages.map(m => ({
       id: m.id,
@@ -688,7 +721,34 @@ export class SessionManager {
       role: m.role,
       content: m.content,
       timestamp: m.timestamp.getTime(),
+      toolCalls: m.toolCalls,
+      toolCallId: m.toolCallId,
+      name: m.name,
+      isError: m.isError,
     }));
+    const summary = session.metadata?.compactionSummary;
+    if (typeof summary !== 'string' || !summary) return entries;
+
+    const compactedAt = typeof session.metadata?.lastCompacted === 'string'
+      ? new Date(session.metadata.lastCompacted).getTime()
+      : session.updatedAt.getTime();
+    return [{
+      id: typeof session.metadata?.compactionEntryId === 'string'
+        ? session.metadata.compactionEntryId
+        : `compaction-summary-${session.id}`,
+      type: 'message',
+      role: 'system',
+      content: `[Context Summary] ${summary}`,
+      timestamp: Number.isNaN(compactedAt) ? session.updatedAt.getTime() : compactedAt,
+    }, ...entries];
+  }
+
+  /** Request compaction for a session (returns the entries to be compacted) */
+  requestCompaction(sessionId: string): { toCompact: SessionEntry[]; keptEntries: SessionEntry[] } | null {
+    const session = this.sessions.get(sessionId);
+    if (!session || !this.compactionSettings.enabled) return null;
+
+    const entries = this.getEffectiveContext(sessionId);
 
     if (entries.length < 4) return null; // Need at least a few messages to compact
 
@@ -723,22 +783,12 @@ export class SessionManager {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
-    // Find the index of the first kept entry
+    // Refuse an invalid boundary rather than silently dropping almost all history.
     const firstKeptIndex = session.messages.findIndex(m => m.id === firstKeptEntryId);
-    
-    if (firstKeptIndex >= 0) {
-      // Keep only messages from the first kept entry onwards
-      session.messages = session.messages.slice(firstKeptIndex);
-    } else {
-      // If we can't find it, keep just the last message as fallback
-      session.messages = [session.messages[session.messages.length - 1]];
-    }
+    if (firstKeptIndex < 0) return;
 
-    // Add compaction metadata
-    session.metadata = { ...session.metadata, lastCompacted: new Date().toISOString() };
+    session.messages = session.messages.slice(firstKeptIndex);
     session.updatedAt = new Date();
-
-    await this.persistSession(session);
 
     if (this.store) {
       const totalTokens = TokenEstimator.totalMessages(
@@ -749,8 +799,25 @@ export class SessionManager {
         })),
       );
       await this.store.appendCompaction(sessionId, summary, firstKeptEntryId, totalTokens);
+      const rawEntries = await this.store.getRawEntries(sessionId);
+      const compactionEntry = [...rawEntries].reverse().find(
+        (entry): entry is CompactionEntry => entry.type === 'compaction',
+      );
+      session.metadata = {
+        ...session.metadata,
+        lastCompacted: new Date(compactionEntry?.timestamp ?? session.updatedAt.getTime()).toISOString(),
+        compactionSummary: summary,
+        ...(compactionEntry ? { compactionEntryId: compactionEntry.id } : {}),
+      };
+    } else {
+      session.metadata = {
+        ...session.metadata,
+        lastCompacted: session.updatedAt.toISOString(),
+        compactionSummary: summary,
+      };
     }
 
+    await this.persistSession(session);
     this.onSessionUpdate?.(sessionId);
   }
 
@@ -905,23 +972,22 @@ export class SessionManager {
   }
 
   /** Recursively calculate depth in the tree */
-  private _calculateDepth(sessionId: string, depth: number, sessionMap: Map<string, any>): void {
-    const entry = sessionMap.get(sessionId);
-    if (entry) {
-      entry.depth = depth;
-    }
+  private _calculateDepth(
+    sessionId: string,
+    depth: number,
+    sessionMap: Map<string, any>,
+    visited: Set<string> = new Set(),
+  ): void {
+    if (visited.has(sessionId)) return;
+    visited.add(sessionId);
 
-    // Find children
-    for (const [id, s] of this.sessions.entries()) {
-      if (s.parentId === sessionId && !sessionMap.has(id)) {
-        sessionMap.set(id, {
-          id,
-          title: s.title || 'Untitled',
-          parentId: sessionId,
-          depth: 0,
-          messages: s.messages.length,
-        });
-        this._calculateDepth(id, depth + 1, sessionMap);
+    const entry = sessionMap.get(sessionId);
+    if (!entry) return;
+    entry.depth = depth;
+
+    for (const [id, session] of this.sessions.entries()) {
+      if (session.parentId === sessionId && sessionMap.has(id)) {
+        this._calculateDepth(id, depth + 1, sessionMap, visited);
       }
     }
   }

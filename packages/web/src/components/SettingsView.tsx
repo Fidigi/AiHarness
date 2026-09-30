@@ -4,16 +4,23 @@
 
 import { useState } from 'react';
 import { useSessionStore } from '../store/session-store';
+import { useI18n } from '../hooks/useI18n';
 import type { ProviderType } from '@ai-harness/core';
+import type { TranslationFunction } from '../i18n/types';
 import { getChatTransport, setAuthToken, setChatTransport, setProviderApiKey } from '../services/api';
+
+type SaveStatus =
+  | { key: string; provider?: ProviderType }
+  | { detail: string };
 
 function SettingsView() {
   const providers = useSessionStore(state => state.providers);
   const setProvider = useSessionStore(state => state.setProvider);
   const updateApiKey = useSessionStore(state => state.updateApiKey);
   const sessionCount = useSessionStore(state => state.sessions.length);
+  const { t } = useI18n();
   const [authToken, updateAuthToken] = useState('');
-  const [saveStatus, setSaveStatus] = useState('');
+  const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
   const [transport, updateTransport] = useState<'sse' | 'websocket'>(() => getChatTransport());
 
   // Local state for API key input (not committed until saved)
@@ -40,90 +47,118 @@ function SettingsView() {
       if (result.success) {
         updateApiKey(type as ProviderType, 'configured');
         setApikeyInputs(previous => ({ ...previous, [type]: '••••••••' }));
-        setSaveStatus(`${getTypeLabel(type as ProviderType)} configuré côté serveur.`);
+        setSaveStatus({
+          key: 'settings.providerConfiguredOnServer',
+          provider: type as ProviderType,
+        });
       } else {
-        setSaveStatus(result.error || 'Échec de la configuration.');
+        setSaveStatus(result.error
+          ? { detail: result.error }
+          : { key: 'settings.configurationFailed' });
       }
     }
   };
 
   return (
     <div className="settings-view">
-      <h2>Settings</h2>
+      <h2>{t('settings.title')}</h2>
 
       <section className="settings-section">
-        <h3>Authentification serveur</h3>
+        <h3>{t('settings.serverAuthentication')}</h3>
         <div className="api-key-input-group">
           <input
             type="password"
             value={authToken}
-            placeholder="Bearer token"
+            placeholder={t('settings.bearerToken')}
+            aria-label={t('settings.bearerToken')}
             onChange={event => updateAuthToken(event.target.value)}
           />
-          <button onClick={() => { setAuthToken(authToken); setSaveStatus('Token appliqué pour cet onglet.'); }}>
-            Appliquer
+          <button onClick={() => {
+            setAuthToken(authToken);
+            setSaveStatus({ key: 'settings.tokenApplied' });
+          }}>
+            {t('settings.apply')}
           </button>
         </div>
-        {saveStatus && <p>{saveStatus}</p>}
+        {saveStatus && (
+          <p>{'detail' in saveStatus
+            ? saveStatus.detail
+            : t(saveStatus.key, saveStatus.provider
+              ? { provider: getTypeLabel(saveStatus.provider, t) }
+              : undefined)}</p>
+        )}
       </section>
 
       {/* AI Provider Configuration */}
       <section className="settings-section">
-        <h3>AI Provider</h3>
-        <select value={providers.active} onChange={handleProviderChange}>
-          {Object.keys(providers.available).map((type) => (
+        <h3>{t('settings.aiProvider')}</h3>
+        <select
+          value={providers.active}
+          aria-label={t('settings.selectProvider')}
+          onChange={handleProviderChange}
+        >
+          {Object.keys(providers.available).map(type => (
             <option key={type} value={type}>
-              {{
-                openai: 'OpenAI (GPT-4, GPT-3.5)',
-                anthropic: 'Anthropic (Claude)',
-                google: 'Google AI (Gemini)',
-                local: 'Local Model (Ollama, etc.)',
-                mock: 'Mock (Testing Only)',
-                custom: 'Custom Provider',
-              }[type] || type}
+              {getProviderOptionLabel(type as ProviderType, t)}
             </option>
           ))}
         </select>
 
         {/* API Key Configuration */}
         <div className="api-key-section">
-          {Object.keys(providers.available).map((type) => (
-            <div key={type} className={`api-key-row ${providers.active === type ? 'active' : ''}`}>
-              <label>{getTypeLabel(type as ProviderType)}</label>
-              <div className="api-key-input-group">
-                <input
-                  type="password"
-                  placeholder={`${getTypeEnvVar(type as ProviderType)} (optional)`}
-                  value={apiKeyInputs[type] || ''}
-                  onChange={(e) => handleApiKeyChange(type, e.target.value)}
-                />
-                <button onClick={() => saveApiKey(type)}>Save</button>
+          {Object.keys(providers.available).map(type => {
+            const providerType = type as ProviderType;
+            const providerLabel = getTypeLabel(providerType, t);
+            const environmentVariable = getTypeEnvVar(providerType);
+            return (
+              <div key={type} className={`api-key-row ${providers.active === type ? 'active' : ''}`}>
+                <label>{providerLabel}</label>
+                <div className="api-key-input-group">
+                  <input
+                    type="password"
+                    aria-label={t('settings.apiKeyForProvider', { provider: providerLabel })}
+                    placeholder={environmentVariable
+                      ? t('settings.apiKeyOptional', { variable: environmentVariable })
+                      : t('settings.apiKeyOptionalGeneric')}
+                    value={apiKeyInputs[type] || ''}
+                    onChange={event => handleApiKeyChange(type, event.target.value)}
+                  />
+                  <button onClick={() => void saveApiKey(type)}>{t('common.save')}</button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Active provider status */}
         <div className="provider-status">
           {providers.active === 'mock' ? (
-            <span className="status-info">🔧 Using Mock Provider (no API key needed)</span>
+            <span className="status-info">{t('settings.usingMockProvider')}</span>
           ) : providers.active === 'local' ? (
-            <span className="status-success">✅ Local OpenAI-compatible provider configured</span>
+            <span className="status-success">{t('settings.localProviderConfigured')}</span>
           ) : providers.available[providers.active]?.apiKey ? (
-            <span className="status-success">✅ {getTypeLabel(providers.active)} configured</span>
+            <span className="status-success">
+              {t('settings.providerConfigured', { provider: getTypeLabel(providers.active, t) })}
+            </span>
           ) : (
-            <span className="status-warning">⚠️ No API key set for {getTypeLabel(providers.active)}</span>
+            <span className="status-warning">
+              {t('settings.noApiKey', { provider: getTypeLabel(providers.active, t) })}
+            </span>
           )}
         </div>
       </section>
 
       <section className="settings-section">
-        <h3>Transport temps réel</h3>
-        <select value={transport} onChange={event => {
-          const value = event.target.value as 'sse' | 'websocket';
-          updateTransport(value);
-          setChatTransport(value);
-        }}>
+        <h3>{t('settings.realtimeTransport')}</h3>
+        <select
+          value={transport}
+          aria-label={t('settings.selectTransport')}
+          onChange={event => {
+            const value = event.target.value as 'sse' | 'websocket';
+            updateTransport(value);
+            setChatTransport(value);
+          }}
+        >
           <option value="sse">Server-Sent Events (SSE)</option>
           <option value="websocket">WebSocket</option>
         </select>
@@ -131,9 +166,12 @@ function SettingsView() {
 
       {/* Model Selection */}
       <section className="settings-section">
-        <h3>Model</h3>
-        <select disabled={!providers.available[providers.active]?.model}>
-          {getModelOptions(providers.active).map(model => (
+        <h3>{t('settings.model')}</h3>
+        <select
+          aria-label={t('settings.selectModel')}
+          disabled={!providers.available[providers.active]?.model}
+        >
+          {getModelOptions(providers.active, t).map(model => (
             <option key={model.value} value={model.value}>{model.label}</option>
           ))}
         </select>
@@ -141,47 +179,78 @@ function SettingsView() {
 
       {/* Appearance */}
       <section className="settings-section">
-        <h3>Appearance</h3>
+        <h3>{t('settings.appearance')}</h3>
         <div className="theme-toggle">
-          <button onClick={() => document.documentElement.classList.add('dark')}>🌙 Dark Mode</button>
-          <button onClick={() => document.documentElement.classList.remove('dark')}>☀️ Light Mode</button>
+          <button onClick={() => document.documentElement.classList.add('dark')}>
+            🌙 {t('settings.darkMode')}
+          </button>
+          <button onClick={() => document.documentElement.classList.remove('dark')}>
+            ☀️ {t('settings.lightMode')}
+          </button>
         </div>
       </section>
 
       {/* Session Management */}
       <section className="settings-section">
-        <h3>Sessions</h3>
-        <p>Total sessions: {sessionCount}</p>
-        <small>Persisted as JSONL files in ~/.ai-harness/sessions/</small>
+        <h3>{t('settings.sessions')}</h3>
+        <p>{t('settings.totalSessions', { count: sessionCount })}</p>
+        <small>{t('settings.sessionsLocation')}</small>
       </section>
 
       {/* About */}
       <section className="settings-section about">
-        <h3>About</h3>
-        <p>AiHarness v0.1.0 - Unified AI Agent Platform</p>
+        <h3>{t('settings.about')}</h3>
+        <p>{t('settings.aboutDescription')}</p>
         <div className="about-links">
-          <a href="#" onClick={(e) => { e.preventDefault(); alert('Documentation coming soon!'); }}>📖 Documentation</a>
+          <a href="#" onClick={event => {
+            event.preventDefault();
+            alert(t('settings.documentationComingSoon'));
+          }}>
+            📖 {t('settings.documentation')}
+          </a>
           <span>•</span>
-          <a href="#" onClick={(e) => { e.preventDefault(); alert('GitHub repository link'); }}>⭐ Star on GitHub</a>
+          <a href="#" onClick={event => {
+            event.preventDefault();
+            alert(t('settings.githubRepositoryLink'));
+          }}>
+            ⭐ {t('settings.starOnGitHub')}
+          </a>
         </div>
       </section>
     </div>
   );
 }
 
-/** Get human-readable label for provider type */
-function getTypeLabel(type: ProviderType): string {
-  return {
-    openai: 'OpenAI',
-    anthropic: 'Anthropic',
-    google: 'Google AI',
-    azure: 'Azure OpenAI',
-    bedrock: 'AWS Bedrock',
-    vertex: 'Google Vertex AI',
-    local: 'Local Model',
-    mock: 'Mock (Testing)',
-    custom: 'Custom',
-  }[type] || type;
+/** Get the translated short label for a provider type. */
+function getTypeLabel(type: ProviderType, t: TranslationFunction): string {
+  const key = {
+    openai: 'provider.label.openai',
+    anthropic: 'provider.label.anthropic',
+    google: 'provider.label.google',
+    azure: 'provider.label.azure',
+    bedrock: 'provider.label.bedrock',
+    vertex: 'provider.label.vertex',
+    local: 'provider.label.local',
+    mock: 'provider.label.mock',
+    custom: 'provider.label.custom',
+  }[type];
+  return key ? t(key) : type;
+}
+
+/** Get the translated provider selector label. */
+function getProviderOptionLabel(type: ProviderType, t: TranslationFunction): string {
+  const key = {
+    openai: 'provider.option.openai',
+    anthropic: 'provider.option.anthropic',
+    google: 'provider.option.google',
+    azure: 'provider.option.azure',
+    bedrock: 'provider.option.bedrock',
+    vertex: 'provider.option.vertex',
+    local: 'provider.option.local',
+    mock: 'provider.option.mock',
+    custom: 'provider.option.custom',
+  }[type];
+  return key ? t(key) : type;
 }
 
 /** Get environment variable name for provider */
@@ -199,20 +268,23 @@ function getTypeEnvVar(type: ProviderType): string {
   }[type] || '';
 }
 
-/** Get model options for a provider */
-function getModelOptions(type: ProviderType): Array<{ value: string; label: string }> {
+/** Get model options for a provider. */
+function getModelOptions(
+  type: ProviderType,
+  t: TranslationFunction,
+): Array<{ value: string; label: string }> {
   switch (type) {
     case 'openai':
       return [
-        { value: 'gpt-4o', label: 'GPT-4o (Recommended)' },
+        { value: 'gpt-4o', label: t('model.recommended') },
         { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
         { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
       ];
     case 'anthropic':
       return [
-        { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus (Most Capable)' },
-        { value: 'claude-3-sonnet-20240229', label: 'Claude 3 Sonnet (Balanced)' },
-        { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku (Fastest)' },
+        { value: 'claude-3-opus-20240229', label: t('model.mostCapable') },
+        { value: 'claude-3-sonnet-20240229', label: t('model.balanced') },
+        { value: 'claude-3-haiku-20240307', label: t('model.fastest') },
       ];
     case 'google':
     case 'vertex':
@@ -221,13 +293,13 @@ function getModelOptions(type: ProviderType): Array<{ value: string; label: stri
         { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
       ];
     case 'azure':
-      return [{ value: 'gpt-4o', label: 'Azure OpenAI deployment' }];
+      return [{ value: 'gpt-4o', label: t('model.azureDeployment') }];
     case 'bedrock':
       return [{ value: 'anthropic.claude-3-haiku-20240307-v1:0', label: 'Claude 3 Haiku' }];
     case 'local':
-      return [{ value: 'local-model', label: 'Local server model' }];
+      return [{ value: 'local-model', label: t('model.localServer') }];
     default:
-      return [{ value: '', label: 'Default model' }];
+      return [{ value: '', label: t('model.default') }];
   }
 }
 

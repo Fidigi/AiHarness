@@ -55,9 +55,12 @@ export function handleWebSocketUpgrade(request: IncomingMessage, socket: Duplex,
     socket.destroy();
     return;
   }
-  const expectedToken = process.env.AI_HARNESS_AUTH_TOKEN;
+  const userToken = process.env.AI_HARNESS_AUTH_TOKEN;
+  const adminToken = process.env.AI_HARNESS_ADMIN_TOKEN || userToken;
   const authorization = request.headers.authorization?.replace(/^Bearer\s+/i, '');
-  if (expectedToken && authorization !== expectedToken && url.searchParams.get('token') !== expectedToken) {
+  const queryToken = url.searchParams.get('token') ?? undefined;
+  const acceptedTokens = new Set([userToken, adminToken].filter((token): token is string => Boolean(token)));
+  if (acceptedTokens.size > 0 && !acceptedTokens.has(authorization ?? '') && !acceptedTokens.has(queryToken ?? '')) {
     socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
     socket.destroy();
     return;
