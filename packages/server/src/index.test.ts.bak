@@ -1,0 +1,313 @@
+// ============================================================
+// Server Integration Tests - Session Management & API Routes
+// Tests Express endpoints using native http module (no extra deps)
+// ============================================================
+
+import { describe, it, expect, beforeEach } from 'vitest';
+import express from 'express';
+import http from 'http';
+import { createApp, getSessionManager } from './index';
+import { SessionManager, JsonlSessionStore } from '@ai-harness/core';
+
+/** Helper to make HTTP requests without supertest */
+function makeRequest(
+  app: express.Application,
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<{ status: number; body: any }> {
+  return new Promise((resolve) => {
+    const server = http.createServer(app);
+    
+    server.listen(0, async () => {
+      const port = (server.address() as any).port;
+      
+      const options: any = {
+        hostname: 'localhost',
+        port,
+        path,
+        method,
+        headers: { 'Content-Type': 'application/json' },
+      };
+
+      if (body) {
+        const postData = JSON.stringify(body);
+        options.headers['Content-Length'] = Buffer.byteLength(postData);
+      }
+
+      const req = http.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk: string | Buffer) => {
+          data += chunk;
+        });
+        res.on('end', () => {
+          server.close();
+          try {
+            resolve({ status: res.statusCode || 0, body: JSON.parse(data) });
+          } catch {
+            resolve({ status: res.statusCode || 0, body: data });
+          }
+        });
+      });
+
+      req.on('error', (err) => {
+        server.close();
+        resolve({ status: 500, body: { error: err.message } });
+      });
+
+      if (body) {
+        req.write(JSON.stringify(body));
+      }
+      req.end();
+    });
+  });
+}
+
+describe('Server API Routes', () => {
+  let app: express.Application;
+  let sessionManager: SessionManager;
+  let store: JsonlSessionStore;
+
+  beforeEach(async () => {
+    // Create a fresh app and session manager for each test
+    const originalEnv = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    
+    app = createApp({ port: 0 });
+    
+    // Initialize session management
+    store = new JsonlSessionStore();
+    sessionManager = new SessionManager();
+    sessionManager.setStore(store);
+    await sessionManager.loadAllSessions();
+  });
+
+  describe('GET /api/sessions', () => {
+    it('should return empty array when no sessions exist', async () => {
+      const response = await makeRequest(app, 'GET', '/api/sessions');
+      
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBe(0);
+    });
+
+    it('should return sessions after creating one', async () => {
+      // Create a session via the manager directly
+      await sessionManager.create({ title: 'Test Session' });
+      
+      const response = await makeRequest(app, 'GET', '/api/sessions');
+      
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('POST /api/sessions', () => {
+    it('should create a new session with title', async () => {
+      const response = await makeRequest(app, 'POST', '/api/sessions', { title: 'New Session' });
+      
+      expect(response.status).toBe(201);
+      expect(response.body.id).toBeDefined();
+      expect(response.body.title).toBe('New Session');
+    });
+
+    it('should create a session without title', async () => {
+      const response = await makeRequest(app, 'POST', '/api/sessions', {});
+      
+      expect(response.status).toBe(201);
+      expect(response.body.id).toBeDefined();
+    });
+  });
+
+  describe('GET /api/sessions/:id', () => {
+    it('should return a specific session by ID', async () => {
+      // Create a session first
+      const createResponse = await makeRequest(app, 'POST', '/api/sessions', { title: 'Get Test' });
+
+      const response = await makeRequest(app, 'GET', `/api/sessions/${createResponse.body.id}`);
+      
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(createResponse.body.id);
+    });
+
+    it('should return 404 for non-existent session', async () => {
+      const response = await makeRequest(app, 'GET', '/api/sessions/non-existent-id');
+      
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('Session not found');
+    });
+  });
+
+  describe('DELETE /api/sessions/:id', () => {
+    it('should delete a session and return count', async () => {
+      // Create a session first
+      const createResponse = await makeRequest(app, 'POST', '/api/sessions', { title: 'Delete Test' });
+
+      const response = await makeRequest(app, 'DELETE', `/api/sessions/${createResponse.body.id}`);
+      
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.deletedCount).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('POST /api/sessions/:id/fork', () => {
+    it('should fork a session and return new ID', async () => {
+      // Create a session with messages first
+      const createResponse = await makeRequest(app, 'POST', '/api/sessions', { title: 'Fork Test' });
+
+      // Add some messages via the manager directly
+      await sessionManager.addMessage(createResponse.body.id, { 
+        role: 'user', 
+        content: 'Hello' 
+      });
+      await sessionManager.addMessage(createResponse.body.id, { 
+        role: 'assistant', 
+        content: 'Hi there!' 
+      });
+
+      const response = await makeRequest(app, 'POST', `/api/sessions/${createResponse.body.id}/fork`, { title: 'Forked Session' });
+      
+      expect(response.status).toBe(201);
+      expect(response.body.id).toBeDefined();
+      expect(response.body.title).toBe('Forked Session');
+    });
+
+    it('should return 404 for non-existent session', async () => {
+      const response = await makeRequest(app, 'POST', '/api/sessions/non-existent/fork', {});
+      
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('Session not found');
+    });
+  });
+
+  describe('POST /api/sessions/:id/clone', () => {
+    it('should clone a session and return new ID', async () => {
+      // Create a session first
+      const createResponse = await makeRequest(app, 'POST', '/api/sessions', { title: 'Clone Test' });
+
+      const response = await makeRequest(app, 'POST', `/api/sessions/${createResponse.body.id}/clone`, { title: 'Cloned Session' });
+      
+      expect(response.status).toBe(201);
+      expect(response.body.id).toBeDefined();
+      expect(response.body.title).toBe('Cloned Session');
+    });
+
+    it('should return 404 for non-existent session', async () => {
+      const response = await makeRequest(app, 'POST', '/api/sessions/non-existent/clone', {});
+      
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('Session not found');
+    });
+  });
+
+  describe('GET /api/sessions/tree', () => {
+    it('should return session tree structure', async () => {
+      // Create a root session and some forks
+      const createResponse = await makeRequest(app, 'POST', '/api/sessions', { title: 'Root Session' });
+
+      await makeRequest(app, 'POST', `/api/sessions/${createResponse.body.id}/fork`, {});
+
+      const response = await makeRequest(app, 'GET', '/api/sessions/tree');
+      
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+    });
+  });
+
+  describe('POST /api/chat/stream', () => {
+    it('should return error when provider is not configured', async () => {
+      const response = await makeRequest(app, 'POST', '/api/chat/stream', {
+        provider: 'openai',
+        messages: [{ role: 'user', content: 'Hello' }],
+      });
+
+      // Should return 400 since OpenAI is not configured (no API key)
+      expect(response.status).toBe(400);
+    });
+
+    it('should accept valid request format even without provider configured', async () => {
+      const response = await makeRequest(app, 'POST', '/api/chat/stream', {
+        provider: 'mock',
+        messages: [{ role: 'user', content: 'Hello' }],
+      });
+
+      // Mock provider won't be configured either, so expect 400
+      expect(response.status).toBe(400);
+    });
+  });
+
+  describe('POST /api/chat (non-streaming)', () => {
+    it('should return error when provider is not configured', async () => {
+      const response = await makeRequest(app, 'POST', '/api/chat', {
+        provider: 'openai',
+        messages: [{ role: 'user', content: 'Hello' }],
+      });
+
+      expect(response.status).toBe(400);
+    });
+  });
+
+  describe('GET /api/providers', () => {
+    it('should return configured providers list', async () => {
+      const response = await makeRequest(app, 'GET', '/api/providers');
+      
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      // Should have at least openai and anthropic entries
+      const providerTypes = response.body.map((p: any) => p.type);
+      expect(providerTypes).toContain('openai');
+      expect(providerTypes).toContain('anthropic');
+    });
+  });
+
+  describe('POST /api/config', () => {
+    it('should configure a provider with API key', async () => {
+      const response = await makeRequest(app, 'POST', '/api/config', { type: 'openai', apiKey: 'test-key-123' });
+      
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+    });
+
+    it('should return error for invalid provider type', async () => {
+      const response = await makeRequest(app, 'POST', '/api/config', { type: 'invalid', apiKey: 'test' });
+      
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid provider');
+    });
+
+    it('should return error for missing fields', async () => {
+      const response = await makeRequest(app, 'POST', '/api/config', { type: 'openai' }); // Missing apiKey
+      
+      expect(response.status).toBe(400);
+    });
+  });
+
+  describe('GET /health', () => {
+    it('should return health status', async () => {
+      const response = await makeRequest(app, 'GET', '/health');
+      
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('ok');
+      expect(response.body.timestamp).toBeDefined();
+    });
+  });
+
+  describe('Session persistence integration', () => {
+    it('should persist sessions to JSONL store', async () => {
+      // Create a session with messages via API
+      const createResponse = await makeRequest(app, 'POST', '/api/sessions', { title: 'Persistence Test' });
+
+      // Add message directly (simulating chat flow)
+      await sessionManager.addMessage(createResponse.body.id, { 
+        role: 'user', 
+        content: 'Test message for persistence' 
+      });
+
+      // Verify session exists in store
+      const sessions = await makeRequest(app, 'GET', '/api/sessions');
+      expect(sessions.status).toBe(200);
+    });
+  });
+});

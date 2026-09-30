@@ -97,6 +97,7 @@ body {
 /* Main Content */
 .main-content {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background-color: #1a1a2e;
@@ -231,4 +232,22 @@ body {
 .theme-toggle {
   display: flex;
   gap: 0.5rem;
+}
+
+@media (max-width: 600px) {
+  .app { flex-direction: column; }
+  .sidebar {
+    width: 100%;
+    height: 64px;
+    flex: 0 0 64px;
+    flex-direction: row;
+    border-right: 0;
+    border-bottom: 1px solid #0f3460;
+  }
+  .sidebar-header { flex: 1; border-bottom: 0; }
+  .sidebar-nav { display: none; }
+  .sidebar-footer { border-top: 0; padding: 0.75rem; }
+  .messages-container { padding: 1rem; }
+  .input-container { padding: 0.75rem; }
+  .input-container button { padding: 0.75rem; }
 }

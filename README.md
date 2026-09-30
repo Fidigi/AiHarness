@@ -5,6 +5,7 @@
 ## 📋 Table of Contents
 
 - [Features](#features)
+- [Documentation](#documentation)
 - [Architecture](#architecture)
 - [Getting Started](#getting-started)
 - [Development](#development)
@@ -21,7 +22,7 @@
 - **Shared Core** — Common types, providers, and utilities across both interfaces
 
 ### AI Integration
-- Multi-provider support (OpenAI, Anthropic, Google, Local)
+- Multi-provider support (OpenAI, Anthropic, Google, Azure OpenAI, Vertex AI, AWS Bedrock, Local)
 - Streaming responses
 - Session management
 - Model selection
@@ -32,6 +33,16 @@
 - Prompt templates
 - Configurable keybindings (CLI) & themes (Web)
 
+## 📖 Documentation
+
+Le [guide utilisateur complet](docs/user-guide.md) décrit l’installation, la configuration des providers, le CLI, l’interface Web, la persistance et la sécurité.
+
+Documentation complémentaire :
+
+- [Extensions](docs/extensions.md)
+- [Conteneurisation](docs/containerization.md)
+- [Architecture](docs/architecture.md)
+
 ## 🏗 Architecture
 
 ```
@@ -39,6 +50,7 @@ AiHarness/
 ├── packages/
 │   ├── core/           # Shared types, providers, utilities
 │   ├── cli/            # Terminal interface package
+│   ├── server/         # API, sessions, credentials, SSE/WebSocket
 │   └── web/            # Web interface package
 ├── e2e/                # End-to-end tests (Playwright)
 ├── docs/               # Documentation
@@ -51,14 +63,15 @@ AiHarness/
 |---------|-------------|
 | `@ai-harness/core` | Shared types, AI providers, session management, utilities |
 | `@ai-harness/cli` | CLI interface with command system and TUI components |
+| `@ai-harness/server` | Express API, persistent sessions, SSE and WebSocket transport |
 | `@ai-harness/web` | React web application with Zustand state management |
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js >= 18.0.0
-- pnpm (recommended) or npm/yarn
+- Node.js 22.22.2+, 24.15.0+ or 26+
+- npm 12.1.0+
 
 ### Installation
 
@@ -68,10 +81,14 @@ git clone https://github.com/Fidigi/AiHarness.git
 cd AiHarness
 
 # Install dependencies
-pnpm install
+npm install
 
-# Build all packages
-pnpm build
+# Build and link both commands globally from this checkout
+npm run link:global
+
+# Start the terminal or Web application
+ai-harness
+ai-harness-web
 ```
 
 ## 💻 Development
@@ -79,19 +96,40 @@ pnpm build
 ### Start CLI in development mode
 
 ```bash
-pnpm dev:cli
+npm run dev:cli
 ```
 
-### Start Web interface in development mode
+### Start the complete Web application
 
 ```bash
-pnpm dev:web
+ai-harness-web
 ```
 
-### Run both simultaneously
+This serves both the API and Web UI, then opens <http://127.0.0.1:3080>. Command-line options override their environment equivalents.
+
+| Option or environment variable | Purpose | Default |
+|---|---|---|
+| `--help`, `-h` | Print startup help and exit | — |
+| `--port <port>`, `-p <port>` or `AI_HARNESS_WEB_PORT` | HTTP port (`PORT` and `WEB_PORT` are aliases) | `3080` |
+| `--hostname <host>`, `-H <host>` or `AI_HARNESS_WEB_HOSTNAME` | Listening address (`WEB_HOSTNAME` is an alias) | `127.0.0.1` |
+| `--no-open` or `AI_HARNESS_WEB_NO_OPEN=1` | Do not open a browser | Browser opens |
+
+Example: `ai-harness-web -p 8080 -H 0.0.0.0 --no-open`. Before listening on a non-loopback address, configure `AI_HARNESS_AUTH_TOKEN` and use a trusted HTTPS reverse proxy or VPN.
+
+Without the global link, run `npm run web` from the repository root.
+
+For server hot reload during development:
 
 ```bash
-pnpm dev
+npm run dev:web
+```
+
+See the [user guide](docs/user-guide.md#utiliser-linterface-web) for provider and production configuration.
+
+### Run CLI and Web simultaneously
+
+```bash
+npm run dev
 ```
 
 ## 🧪 Testing
@@ -103,19 +141,19 @@ AiHarness uses a comprehensive testing strategy:
 Run all unit tests across packages:
 
 ```bash
-pnpm test
+npm test
 ```
 
 Watch mode for continuous testing:
 
 ```bash
-pnpm test:watch
+npm run test:watch
 ```
 
 With coverage report:
 
 ```bash
-pnpm test:coverage
+npm run test:coverage
 ```
 
 ### End-to-End Tests (Playwright)
@@ -123,7 +161,7 @@ pnpm test:coverage
 Run E2E tests:
 
 ```bash
-pnpm test:e2e
+npm run test:e2e
 ```
 
 Open Playwright reporter:
@@ -136,16 +174,10 @@ npx playwright show-report
 
 ```
 packages/
-├── core/src/
-│   ├── types/index.test.ts       # Type validation tests
-│   ├── providers/index.test.ts   # Provider implementation tests
-│   ├── sessions/session-manager.test.ts  # Session management tests
-│   └── utils/index.test.ts       # Utility function tests
-├── cli/src/
-│   ├── commands/handler.test.ts  # Command handler tests
-│   └── tui/terminal-ui.test.ts   # Terminal UI tests
-└── web/src/
-    └── store/session-store.test.ts  # State management logic tests
+├── core/src/       # Providers, sessions, extensions and utility tests
+├── cli/src/        # Commands, TUI, resources, RPC and security tests
+├── server/src/     # API, WebSocket, credentials and Web launcher tests
+└── web/src/        # Store and API integration tests
 
 e2e/
 └── examples.spec.ts              # Playwright E2E test suite
@@ -156,14 +188,22 @@ e2e/
 ### Core Package (`packages/core`)
 
 - **Types** — Shared TypeScript interfaces and enums
-- **Providers** — AI provider implementations (OpenAI, Anthropic)
-- **Sessions** — Session/conversation management
+- **Providers** — OpenAI, Anthropic, Gemini, Azure, Vertex, Bedrock, local and mock
+- **Sessions** — Persistent JSONL sessions, branches, summaries and compaction
 - **Utils** — Helper functions (ID generation, formatting, etc.)
 
 ### CLI Package (`packages/cli`)
 
-- **Commands** — Command handler with built-in commands (/help, /new, /list, etc.)
-- **TUI** — Terminal UI components for display and interaction
+- **Commands** — Session, provider, model, branch, import/export and extension commands
+- **TUI** — Regular and fullscreen terminal interfaces
+- **Resources** — Skills, prompt templates, extensions and project trust
+- **Automation** — JSONL RPC mode and model tool loop
+
+### Server Package (`packages/server`)
+
+- **API** — Chat, provider configuration and persistent sessions
+- **Streaming** — SSE and WebSocket transports
+- **Launcher** — `ai-harness-web` serves the API and production Web bundle together
 
 ### Web Package (`packages/web`)
 

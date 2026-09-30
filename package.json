@@ -4,11 +4,17 @@
   "private": true,
   "description": "Unified AI agent platform combining CLI and Web interfaces",
   "type": "module",
+  "packageManager": "npm@12.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "dev:cli": "pnpm --filter @ai-harness/cli dev",
-    "dev:web": "pnpm --filter @ai-harness/web dev",
-    "dev": "concurrently \"pnpm dev:cli\" \"pnpm dev:web\"",
-    "build": "pnpm -r build",
+    "dev:cli": "npm run build --workspace @ai-harness/core && npm run dev --workspace @ai-harness/cli",
+    "dev:web": "npm run build --workspace @ai-harness/core && concurrently --kill-others --names api,web \"npm run dev --workspace @ai-harness/server\" \"npm run dev --workspace @ai-harness/web\"",
+    "dev": "npm run build --workspace @ai-harness/core && concurrently --kill-others --names cli,api,web \"npm run dev --workspace @ai-harness/cli\" \"npm run dev --workspace @ai-harness/server\" \"npm run dev --workspace @ai-harness/web\"",
+    "web": "npm run build --workspace @ai-harness/core && concurrently --kill-others --names api,web \"npm run start --workspace @ai-harness/server\" \"npm run dev --workspace @ai-harness/web\"",
+    "build": "npm run build --workspace @ai-harness/core && npm run build --workspace @ai-harness/cli && npm run build --workspace @ai-harness/server && npm run build --workspace @ai-harness/web",
+    "link:global": "npm run build && (cd packages/cli && npm link) && (cd packages/server && npm link)",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -16,20 +22,27 @@
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write \"**/*.{ts,tsx,json,yml}\"",
-    "typecheck": "pnpm -r typecheck",
-    "clean": "pnpm -r clean && rm -rf node_modules dist .turbo"
+    "typecheck": "npm run build --workspace @ai-harness/core && npm run typecheck --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present && rm -rf node_modules dist .turbo"
   },
   "devDependencies": {
-    "@playwright/test": "^1.40.1",
-    "@types/node": "^20.11.5",
-    "@vitest/coverage-v8": "^1.2.1",
-    "concurrently": "^8.2.2",
-    "eslint": "^8.56.0",
-    "prettier": "^3.2.4",
-    "typescript": "^5.3.3",
-    "vitest": "^1.2.1"
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.71.0",
+    "@typescript-eslint/parser": "^8.71.0",
+    "@vitest/coverage-v8": "^5.0.3",
+    "concurrently": "^10.0.5",
+    "eslint": "^8.57.1",
+    "prettier": "^3.9.9",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0",
+    "npm": ">=12.1.0"
+  },
+  "allowScripts": {
+    "@swc/core@1.16.13": true,
+    "esbuild@0.28.2": true
   }
 }

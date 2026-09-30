@@ -18,9 +18,9 @@ describe('Types', () => {
 
   describe('Role type', () => {
     it('should accept valid roles', () => {
-      const roles: Role[] = ['user', 'assistant', 'system'];
+      const roles: Role[] = ['user', 'assistant', 'system', 'tool'];
       roles.forEach((role) => {
-        expect(['user', 'assistant', 'system']).toContain(role);
+        expect(['user', 'assistant', 'system', 'tool']).toContain(role);
       });
     });
   });

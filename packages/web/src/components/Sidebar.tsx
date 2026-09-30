@@ -12,13 +12,18 @@ interface SidebarProps {
 function Sidebar({ isOpen }: SidebarProps) {
   const navigate = useNavigate();
   const sessions = useSessionStore((state) => state.sessions);
-  const createSession = useSessionStore((state) => state.createSession);
+  const createRemoteSession = useSessionStore((state) => state.createRemoteSession);
+
+  const handleCreate = async () => {
+    const id = await createRemoteSession();
+    if (id) navigate(`/chat/${id}`);
+  };
 
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-header">
         <h1>AiHarness</h1>
-        <button onClick={() => createSession()} title="New chat" aria-label="New chat">
+        <button onClick={() => void handleCreate()} title="New chat" aria-label="New chat">
           +
         </button>
       </div>

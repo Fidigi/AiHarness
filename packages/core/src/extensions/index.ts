@@ -1,0 +1,22 @@
+export { ExtensionRegistry } from './extension-registry.js';
+export type {
+  BeforeAgentData,
+  BeforeHookExecution,
+  BeforeHookHandler,
+  BeforeHookMap,
+  BeforeHookResult,
+  BeforeProviderData,
+  BeforeToolData,
+  ExtensionAPI,
+  ExtensionCommand,
+  ExtensionFactory,
+  ExtensionInfo,
+  ExtensionLogLevel,
+  ExtensionProvider,
+  ExtensionRuntimeContext,
+  ExtensionTool,
+  ExtensionToolResult,
+  ExtensionUIComponent,
+  ExtensionUIContext,
+  HookCancellation,
+} from './extension-registry.js';

@@ -3,7 +3,7 @@
 // Copy CLI assets during build
 // ============================================================
 
-import { copyFileSync, existsSync, mkdirSync } from 'fs';
+import { chmodSync, existsSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { join } from 'path';
@@ -16,6 +16,11 @@ const rootDir = join(__dirname, '../../..');
 const distDir = join(rootDir, 'packages/cli/dist');
 if (!existsSync(distDir)) {
   mkdirSync(distDir, { recursive: true });
+}
+
+const entryPoint = join(distDir, 'index.js');
+if (existsSync(entryPoint)) {
+  chmodSync(entryPoint, 0o755);
 }
 
 console.log('✅ CLI assets copied successfully');

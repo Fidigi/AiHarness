@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import path from 'path';
 
 export default defineConfig({
   test: {
@@ -6,6 +7,7 @@ export default defineConfig({
     include: [
       'packages/core/src/**/*.test.ts',
       'packages/cli/src/**/*.test.ts',
+      'packages/server/src/**/*.test.ts',
       'packages/web/src/**/*.test.ts',
     ],
     exclude: [
@@ -20,6 +22,7 @@ export default defineConfig({
       include: [
         'packages/core/src/**/*.ts',
         'packages/cli/src/**/*.ts',
+        'packages/server/src/**/*.ts',
         'packages/web/src/**/*.ts',
       ],
       exclude: [
@@ -27,6 +30,13 @@ export default defineConfig({
         '**/*.mock.ts',
         '**/tests/**',
       ],
+    },
+  },
+  resolve: {
+    alias: {
+      '@ai-harness/core': path.resolve(import.meta.dirname, 'packages/core/src/index.ts'),
+      '@ai-harness/cli': path.resolve(import.meta.dirname, 'packages/cli/src/index.ts'),
+      '@ai-harness/server': path.resolve(import.meta.dirname, 'packages/server/src/index.ts'),
     },
   },
 });
