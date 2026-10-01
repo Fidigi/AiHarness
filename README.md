@@ -1,5 +1,7 @@
 # 🚀 AiHarness
 
+[![CI](https://github.com/Fidigi/AiHarness/actions/workflows/ci.yml/badge.svg)](https://github.com/Fidigi/AiHarness/actions/workflows/ci.yml)
+
 **Unified AI Agent Platform** — Combining the power of a CLI terminal agent and a modern web interface in one cohesive tool.
 
 ## 📋 Table of Contents

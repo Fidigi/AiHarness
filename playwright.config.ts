@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+import os from 'node:os';
+import path from 'node:path';
+
+const liveDataDir = path.join(os.tmpdir(), `aiharness-playwright-${process.pid}`);
 
 /**
  * Read environment variables from file.
@@ -21,7 +25,7 @@ export default defineConfig({
   /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
+  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'html',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
@@ -65,10 +69,24 @@ export default defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'npm run dev --workspace @ai-harness/web',
-    url: 'http://localhost:3080',
-    reuseExisting: false,
-    timeout: 120 * 1000,
-  },
+  webServer: [
+    {
+      command: 'npm run build --workspace @ai-harness/core && npm run start --workspace @ai-harness/server -- --port 3099',
+      url: 'http://127.0.0.1:3099/health',
+      reuseExisting: false,
+      timeout: 120 * 1000,
+      env: {
+        AI_HARNESS_DATA_DIR: liveDataDir,
+        AI_HARNESS_DEFAULT_CWD: process.cwd(),
+        AI_HARNESS_ALLOWED_ROOTS: process.cwd(),
+        AI_HARNESS_ALLOWED_ORIGINS: 'http://localhost:3080',
+      },
+    },
+    {
+      command: 'npm run dev --workspace @ai-harness/web',
+      url: 'http://localhost:3080',
+      reuseExisting: false,
+      timeout: 120 * 1000,
+    },
+  ],
 });
