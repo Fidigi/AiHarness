@@ -6,15 +6,15 @@
 
 ## 📋 Table of Contents
 
-- [Features](#features)
-- [Documentation](#documentation)
-- [Architecture](#architecture)
-- [Getting Started](#getting-started)
-- [Development](#development)
-- [Testing](#testing)
-- [Project Structure](#project-structure)
-- [Contributing](#contributing)
-- [License](#license)
+- [Features](#-features)
+- [Documentation](#-documentation)
+- [Architecture](#-architecture)
+- [Getting Started](#-getting-started)
+- [Development](#-development)
+- [Testing](#-testing)
+- [Project Structure](#-project-structure)
+- [Contributing](#-contributing)
+- [License](#-license)
 
 ## ✨ Features
 
@@ -37,14 +37,15 @@
 
 ## 📖 Documentation
 
-Le [guide utilisateur complet](docs/user-guide.md) décrit l’installation, la configuration des providers, le CLI, l’interface Web, la persistance et la sécurité.
+Le [guide utilisateur complet](docs/users/fr/user-guide.md) décrit l’installation, la configuration des providers, le CLI, l’interface Web, la persistance et la sécurité.
 
 Documentation complémentaire :
 
-- [Extensions](docs/extensions.md)
-- [Internationalisation Web](docs/i18n.md)
-- [Conteneurisation](docs/containerization.md)
-- [Architecture](docs/architecture.md)
+- [Extensions CLI](docs/contributors/fr/extensions-cli.md)
+- [Extensions Web](docs/contributors/fr/extensions-web.md)
+- [Internationalisation Web](docs/contributors/fr/i18n.md)
+- [Conteneurisation](docs/users/fr/containerization.md)
+- [Architecture](docs/contributors/fr/architecture-overview.md)
 
 ## 🏗 Architecture
 
@@ -127,7 +128,7 @@ For server hot reload during development:
 npm run dev:web
 ```
 
-See the [user guide](docs/user-guide.md#utiliser-linterface-web) for provider and production configuration.
+See the [English user guide](docs/users/en/user-guide.md#using-the-web-interface) for provider and production configuration.
 
 ### Run CLI and Web simultaneously
 

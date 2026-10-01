@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import type { AiProxyServer } from './proxy.js';
+import { authenticateUpgrade } from '../security/request-security.js';
 
 export function encodeWebSocketFrame(payload: string, opcode = 0x1): Buffer {
   const content = Buffer.from(payload);
@@ -55,12 +56,7 @@ export function handleWebSocketUpgrade(request: IncomingMessage, socket: Duplex,
     socket.destroy();
     return;
   }
-  const userToken = process.env.AI_HARNESS_AUTH_TOKEN;
-  const adminToken = process.env.AI_HARNESS_ADMIN_TOKEN || userToken;
-  const authorization = request.headers.authorization?.replace(/^Bearer\s+/i, '');
-  const queryToken = url.searchParams.get('token') ?? undefined;
-  const acceptedTokens = new Set([userToken, adminToken].filter((token): token is string => Boolean(token)));
-  if (acceptedTokens.size > 0 && !acceptedTokens.has(authorization ?? '') && !acceptedTokens.has(queryToken ?? '')) {
+  if (!authenticateUpgrade(request)) {
     socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
     socket.destroy();
     return;
@@ -71,11 +67,15 @@ export function handleWebSocketUpgrade(request: IncomingMessage, socket: Duplex,
     return;
   }
   const accept = createHash('sha1').update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64');
+  const requestedProtocols = String(request.headers['sec-websocket-protocol'] ?? '')
+    .split(',').map(value => value.trim());
+  const authProtocol = requestedProtocols.find(value => value.startsWith('aih.bearer.'));
   socket.write([
     'HTTP/1.1 101 Switching Protocols',
     'Upgrade: websocket',
     'Connection: Upgrade',
     `Sec-WebSocket-Accept: ${accept}`,
+    ...(authProtocol ? [`Sec-WebSocket-Protocol: ${authProtocol}`] : []),
     '\r\n',
   ].join('\r\n'));
 
@@ -83,6 +83,10 @@ export function handleWebSocketUpgrade(request: IncomingMessage, socket: Duplex,
   let running = false;
   socket.on('data', chunk => {
     pending = Buffer.concat([pending, Buffer.from(chunk)]);
+    if (pending.length > 10 * 1024 * 1024) {
+      socket.end(encodeWebSocketFrame('Message too large', 0x8));
+      return;
+    }
     while (!running) {
       const decoded = decodeWebSocketFrame(pending);
       if (!decoded) return;

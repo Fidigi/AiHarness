@@ -14,6 +14,7 @@
     "dev": "npm run build --workspace @ai-harness/core && concurrently --kill-others --names cli,api,web \"npm run dev --workspace @ai-harness/cli\" \"npm run dev --workspace @ai-harness/server\" \"npm run dev --workspace @ai-harness/web\"",
     "web": "npm run build --workspace @ai-harness/core && concurrently --kill-others --names api,web \"npm run start --workspace @ai-harness/server\" \"npm run dev --workspace @ai-harness/web\"",
     "build": "npm run build --workspace @ai-harness/core && npm run build --workspace @ai-harness/cli && npm run build --workspace @ai-harness/server && npm run build --workspace @ai-harness/web",
+    "postbuild": "npm rebuild",
     "link:global": "npm run build && (cd packages/cli && npm link) && (cd packages/server && npm link)",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -26,6 +27,7 @@
     "clean": "npm run clean --workspaces --if-present && rm -rf node_modules dist .turbo"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
     "@types/node": "^26.0.0",
     "@typescript-eslint/eslint-plugin": "^8.71.0",
@@ -43,6 +45,7 @@
   },
   "allowScripts": {
     "@swc/core@1.16.13": true,
-    "esbuild@0.28.2": true
+    "esbuild@0.28.2": true,
+    "node-pty@1.1.0": true
   }
 }

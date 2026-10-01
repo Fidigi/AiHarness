@@ -12,14 +12,40 @@ import { fetchWithRetry, RetryOptions } from '../utils/index.js';
 // ===================================================================
 
 export interface StreamEvent {
-  type: 'text_delta' | 'tool_call' | 'message_start' | 'message_end' | 'error' | 'done';
+  type: 'text_delta' | 'reasoning_delta' | 'tool_call' | 'message_start' | 'message_end' | 'error' | 'done';
   data?: unknown;
+}
+
+function messageImages(message: Message): Array<Extract<NonNullable<Message['blocks']>[number], { type: 'image' }>> {
+  return (message.blocks ?? []).filter((block): block is Extract<NonNullable<Message['blocks']>[number], { type: 'image' }> => block.type === 'image');
+}
+
+function parseDataImage(url: string): { mediaType: string; data: string } | undefined {
+  const match = url.match(/^data:([^;,]+);base64,(.+)$/s);
+  return match ? { mediaType: match[1], data: match[2] } : undefined;
+}
+
+function configuredHeaders(config: ProviderConfig): Record<string, string> {
+  if (!config.customHeaders || typeof config.customHeaders !== 'object' || Array.isArray(config.customHeaders)) return {};
+  return Object.fromEntries(Object.entries(config.customHeaders as Record<string, unknown>).flatMap(([name, value]) =>
+    /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$/.test(name)
+      && typeof value === 'string' && value.length <= 8_000 && !/[\r\n]/.test(value)
+      ? [[name, value]] : []));
 }
 
 export interface ChatResponse {
   content: string;
+  /** Provider-supplied visible reasoning summary/process text, when available. */
+  reasoning?: string;
   model?: string;
-  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+    totalTokens: number;
+    costUsd?: number;
+  };
   toolCalls?: ToolCall[];
 }
 
@@ -50,9 +76,16 @@ export abstract class AiProvider {
   /** Validate provider configuration */
   abstract validateConfig(): boolean;
 
-  /** Get the list of available models (if supported) */
-  async getAvailableModels?(): Promise<string[]> {
-    return undefined as unknown as string[];
+  /** Get the list of available models when the provider exposes discovery. */
+  async getAvailableModels(): Promise<string[]> {
+    return [];
+  }
+
+  /** Expose only the configured model identifier; provider credentials stay private. */
+  getConfiguredModel(): string | undefined {
+    return typeof this.config.model === 'string' && this.config.model.trim()
+      ? this.config.model.trim()
+      : undefined;
   }
 }
 
@@ -172,13 +205,26 @@ export class OpenAiProvider extends AiProvider {
   }
 
   private getHeaders(): Record<string, string> {
-    return this.azure
-      ? { 'Content-Type': 'application/json', 'api-key': String(this.config.apiKey) }
-      : { 'Content-Type': 'application/json', Authorization: `Bearer ${this.config.apiKey}` };
+    return {
+      ...(this.azure
+        ? { 'Content-Type': 'application/json', 'api-key': String(this.config.apiKey) }
+        : { 'Content-Type': 'application/json', Authorization: `Bearer ${this.config.apiKey}` }),
+      ...configuredHeaders(this.config),
+    };
   }
 
   validateConfig(): boolean {
     return !!this.config.apiKey;
+  }
+
+  async getAvailableModels(): Promise<string[]> {
+    if (this.azure) return [];
+    const response = await fetch(`${this.baseUrl}/models`, {
+      headers: this.getHeaders(), signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) throw new Error(`Model discovery failed (${response.status}).`);
+    const data = await response.json() as { data?: Array<{ id?: unknown }> };
+    return (data.data ?? []).flatMap(model => typeof model.id === 'string' ? [model.id] : []);
   }
 
   private buildMessages(messages: Message[]): Array<Record<string, unknown>> {
@@ -202,7 +248,14 @@ export class OpenAiProvider extends AiProvider {
           })),
         };
       }
-      return { role: message.role, content: message.content };
+      const images = messageImages(message);
+      return {
+        role: message.role,
+        content: images.length ? [
+          ...(message.content ? [{ type: 'text', text: message.content }] : []),
+          ...images.map(image => ({ type: 'image_url', image_url: { url: image.url } })),
+        ] : message.content,
+      };
     });
   }
 
@@ -284,10 +337,13 @@ export class OpenAiProvider extends AiProvider {
 
     return {
       content: choice.message.content || '',
+      ...(choice.message.reasoning_content || choice.message.reasoning_summary
+        ? { reasoning: choice.message.reasoning_content || choice.message.reasoning_summary } : {}),
       model: data.model,
       usage: data.usage ? {
         promptTokens: data.usage.prompt_tokens ?? 0,
         completionTokens: data.usage.completion_tokens ?? 0,
+        cacheReadTokens: data.usage.prompt_tokens_details?.cached_tokens ?? 0,
         totalTokens: data.usage.total_tokens ?? 0,
       } : undefined,
       toolCalls: this.parseToolCalls(choice.message.tool_calls),
@@ -320,6 +376,7 @@ export class OpenAiProvider extends AiProvider {
       model,
       messages: this.buildMessages(messages),
       stream: true,
+      ...(String(this.config.type) !== 'local' && !this.azure ? { stream_options: { include_usage: true } } : {}),
     };
 
     if (options?.temperature !== undefined) body.temperature = options.temperature;
@@ -360,7 +417,9 @@ export class OpenAiProvider extends AiProvider {
       if (!response.body) throw new Error('OpenAI streaming response has no body');
 
       let fullContent = '';
-      let totalTokens = 0;
+      let fullReasoning = '';
+      let streamModel = model;
+      let usage: ChatResponse['usage'];
       const toolCallFragments = new Map<number, OpenAiToolCall>();
       const collectToolCalls = (): ToolCall[] | undefined =>
         this.parseToolCalls([...toolCallFragments.entries()].sort(([a], [b]) => a - b).map(([, call]) => call));
@@ -386,7 +445,9 @@ export class OpenAiProvider extends AiProvider {
             for (const call of toolCalls ?? []) onChunk('', { type: 'tool_call', data: call });
             onComplete?.({
               content: fullContent,
-              usage: totalTokens > 0 ? { promptTokens: 0, completionTokens: totalTokens, totalTokens } : undefined,
+              ...(fullReasoning ? { reasoning: fullReasoning } : {}),
+              model: streamModel,
+              usage,
               toolCalls,
             });
             return;
@@ -398,6 +459,10 @@ export class OpenAiProvider extends AiProvider {
             if (delta?.content) {
               fullContent += delta.content;
               onChunk(delta.content, { type: 'text_delta', data });
+            }
+            if (delta?.reasoning_content) {
+              fullReasoning += delta.reasoning_content;
+              onChunk('', { type: 'reasoning_delta', data: { content: delta.reasoning_content } });
             }
             for (const fragment of delta?.tool_calls ?? []) {
               const existing = toolCallFragments.get(fragment.index) ?? {
@@ -411,10 +476,14 @@ export class OpenAiProvider extends AiProvider {
               toolCallFragments.set(fragment.index, existing);
             }
 
-            // Track token usage from the last chunk
-            if (data.usage) {
-              totalTokens = data.usage.completion_tokens ?? 0;
-            }
+            if (data.model) streamModel = data.model;
+            // OpenAI emits usage in a final empty-choices chunk when include_usage is enabled.
+            if (data.usage) usage = {
+              promptTokens: data.usage.prompt_tokens ?? 0,
+              completionTokens: data.usage.completion_tokens ?? 0,
+              cacheReadTokens: data.usage.prompt_tokens_details?.cached_tokens ?? 0,
+              totalTokens: data.usage.total_tokens ?? 0,
+            };
           } catch {
             // Skip malformed JSON lines
           }
@@ -425,7 +494,9 @@ export class OpenAiProvider extends AiProvider {
       for (const call of toolCalls ?? []) onChunk('', { type: 'tool_call', data: call });
       onComplete?.({
         content: fullContent,
-        usage: totalTokens > 0 ? { promptTokens: 0, completionTokens: totalTokens, totalTokens } : undefined,
+        ...(fullReasoning ? { reasoning: fullReasoning } : {}),
+        model: streamModel,
+        usage,
         toolCalls,
       });
     } catch (error) {
@@ -466,25 +537,21 @@ export class LocalProvider extends OpenAiProvider {
 
   /** Query the OpenAI-compatible model catalogue when exposed by the server. */
   async getAvailableModels(): Promise<string[]> {
-    try {
-      const response = await fetch(`${this.localBaseUrl}/models`, {
-        headers: { Authorization: `Bearer ${this.config.apiKey || 'local'}` },
-        signal: AbortSignal.timeout(3000),
-      });
-      if (!response.ok) return [];
+    const response = await fetch(`${this.localBaseUrl}/models`, {
+      headers: { Authorization: `Bearer ${this.config.apiKey || 'local'}` },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) throw new Error(`Model discovery failed with HTTP ${response.status}`);
 
-      const payload = await response.json() as {
-        data?: Array<{ id?: string }>;
-        models?: Array<{ name?: string; model?: string }>;
-      };
-      const openAiModels = payload.data?.map(item => item.id).filter((id): id is string => Boolean(id)) ?? [];
-      const ollamaModels = payload.models
-        ?.map(item => item.name || item.model)
-        .filter((id): id is string => Boolean(id)) ?? [];
-      return [...new Set([...openAiModels, ...ollamaModels])];
-    } catch {
-      return [];
-    }
+    const payload = await response.json() as {
+      data?: Array<{ id?: string }>;
+      models?: Array<{ name?: string; model?: string }>;
+    };
+    const openAiModels = payload.data?.map(item => item.id).filter((id): id is string => Boolean(id)) ?? [];
+    const ollamaModels = payload.models
+      ?.map(item => item.name || item.model)
+      .filter((id): id is string => Boolean(id)) ?? [];
+    return [...new Set([...openAiModels, ...ollamaModels])];
   }
 
   private static normalizeBaseUrl(baseUrl: string): string {
@@ -501,10 +568,21 @@ interface OpenAiResponse {
   model?: string;
   choices?: Array<{
     index: number;
-    message: { role: string; content: string | null; tool_calls?: OpenAiToolCall[] };
+    message: {
+      role: string;
+      content: string | null;
+      reasoning_content?: string;
+      reasoning_summary?: string;
+      tool_calls?: OpenAiToolCall[];
+    };
     finish_reason?: string;
   }>;
-  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+  };
 }
 
 interface OpenAiToolCall {
@@ -527,10 +605,15 @@ interface OpenAiStreamChunk {
   model?: string;
   choices?: Array<{
     index: number;
-    delta: { role?: string; content?: string; tool_calls?: OpenAiStreamToolCallFragment[] };
+    delta: { role?: string; content?: string; reasoning_content?: string; tool_calls?: OpenAiStreamToolCallFragment[] };
     finish_reason?: string | null;
   }>;
-  usage?: { completion_tokens?: number };
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+  };
 }
 
 // ===================================================================
@@ -548,6 +631,7 @@ interface GeminiResponse {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
     totalTokenCount?: number;
+    cachedContentTokenCount?: number;
   };
   error?: { message?: string };
 }
@@ -565,6 +649,17 @@ export class GeminiProvider extends AiProvider {
     return Boolean(this.config.apiKey);
   }
 
+  async getAvailableModels(): Promise<string[]> {
+    const response = await fetch(`${this.baseUrl}/models?key=${encodeURIComponent(String(this.config.apiKey || ''))}`, {
+      headers: this.requestHeaders(), signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) throw new Error(`Model discovery failed (${response.status}).`);
+    const data = await response.json() as { models?: Array<{ name?: unknown; supportedGenerationMethods?: unknown }> };
+    return (data.models ?? []).flatMap(model => typeof model.name === 'string'
+      && (!Array.isArray(model.supportedGenerationMethods) || model.supportedGenerationMethods.includes('generateContent'))
+      ? [model.name.replace(/^models\//, '')] : []);
+  }
+
   protected endpoint(method: 'generateContent' | 'streamGenerateContent'): string {
     const model = String(this.config.model || 'gemini-2.0-flash').replace(/^models\//, '');
     const suffix = method === 'streamGenerateContent' ? '?alt=sse&' : '?';
@@ -572,7 +667,7 @@ export class GeminiProvider extends AiProvider {
   }
 
   protected requestHeaders(): Record<string, string> {
-    return { 'Content-Type': 'application/json' };
+    return { 'Content-Type': 'application/json', ...configuredHeaders(this.config) };
   }
 
   private buildBody(messages: Message[], options?: ChatOptions): Record<string, unknown> {
@@ -592,6 +687,10 @@ export class GeminiProvider extends AiProvider {
       }
       const parts: Array<Record<string, unknown>> = [];
       if (message.content) parts.push({ text: message.content });
+      for (const image of messageImages(message)) {
+        const data = parseDataImage(image.url);
+        if (data) parts.push({ inlineData: { mimeType: data.mediaType, data: data.data } });
+      }
       for (const call of message.toolCalls ?? []) {
         parts.push({ functionCall: { name: call.name, args: call.input } });
       }
@@ -635,6 +734,7 @@ export class GeminiProvider extends AiProvider {
       usage: usage ? {
         promptTokens: usage.promptTokenCount ?? 0,
         completionTokens: usage.candidatesTokenCount ?? 0,
+        cacheReadTokens: usage.cachedContentTokenCount ?? 0,
         totalTokens: usage.totalTokenCount ?? (usage.promptTokenCount ?? 0) + (usage.candidatesTokenCount ?? 0),
       } : undefined,
       toolCalls: toolCalls.length ? toolCalls : undefined,
@@ -883,6 +983,20 @@ export class AnthropicProvider extends AiProvider {
     return !!this.config.apiKey;
   }
 
+  async getAvailableModels(): Promise<string[]> {
+    const response = await fetch(`${this.baseUrl}/v1/models`, {
+      headers: {
+        'x-api-key': String(this.config.apiKey),
+        'anthropic-version': AnthropicProvider.API_VERSION,
+        ...configuredHeaders(this.config),
+      },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) throw new Error(`Model discovery failed (${response.status}).`);
+    const data = await response.json() as { data?: Array<{ id?: unknown }> };
+    return (data.data ?? []).flatMap(model => typeof model.id === 'string' ? [model.id] : []);
+  }
+
   private buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
     return messages.filter(message => message.role !== 'system').map(message => {
       if (message.role === 'tool') {
@@ -907,9 +1021,16 @@ export class AnthropicProvider extends AiProvider {
           ],
         };
       }
+      const images = messageImages(message).flatMap(image => {
+        const data = parseDataImage(image.url);
+        return data ? [{ type: 'image', source: { type: 'base64', media_type: data.mediaType, data: data.data } }] : [];
+      });
       return {
         role: message.role === 'assistant' ? 'assistant' : 'user',
-        content: message.content,
+        content: images.length ? [
+          ...(message.content ? [{ type: 'text', text: message.content }] : []),
+          ...images,
+        ] : message.content,
       };
     });
   }
@@ -973,6 +1094,7 @@ export class AnthropicProvider extends AiProvider {
           'Content-Type': 'application/json',
           'x-api-key': this.config.apiKey as string,
           'anthropic-version': AnthropicProvider.API_VERSION,
+          ...configuredHeaders(this.config),
         },
         body: JSON.stringify(body),
         signal: options?.signal,
@@ -987,6 +1109,10 @@ export class AnthropicProvider extends AiProvider {
 
     const data = await response.json() as AnthropicResponse;
     const contentBlock = data.content?.find(c => c.type === 'text') as AnthropicTextContent | undefined;
+    const reasoning = data.content
+      ?.filter((block): block is AnthropicThinkingContent => block.type === 'thinking')
+      .map(block => block.thinking ?? '')
+      .join('');
     const toolCalls = data.content
       ?.filter((block): block is AnthropicToolUseContent => block.type === 'tool_use')
       .map(block => ({ id: block.id, name: block.name, input: block.input }));
@@ -996,11 +1122,19 @@ export class AnthropicProvider extends AiProvider {
 
     return {
       content: contentBlock?.text || '',
+      ...(reasoning ? { reasoning } : {}),
       model: data.model,
       usage: data.usage ? {
-        promptTokens: data.usage.input_tokens ?? 0,
+        promptTokens: (data.usage.input_tokens ?? 0)
+          + (data.usage.cache_read_input_tokens ?? 0)
+          + (data.usage.cache_creation_input_tokens ?? 0),
         completionTokens: data.usage.output_tokens ?? 0,
-        totalTokens: (data.usage.input_tokens ?? 0) + (data.usage.output_tokens ?? 0),
+        cacheReadTokens: data.usage.cache_read_input_tokens ?? 0,
+        cacheWriteTokens: data.usage.cache_creation_input_tokens ?? 0,
+        totalTokens: (data.usage.input_tokens ?? 0)
+          + (data.usage.cache_read_input_tokens ?? 0)
+          + (data.usage.cache_creation_input_tokens ?? 0)
+          + (data.usage.output_tokens ?? 0),
       } : undefined,
       toolCalls,
     };
@@ -1057,6 +1191,7 @@ export class AnthropicProvider extends AiProvider {
           'Content-Type': 'application/json',
           'x-api-key': this.config.apiKey as string,
           'anthropic-version': AnthropicProvider.API_VERSION,
+          ...configuredHeaders(this.config),
         },
         body: JSON.stringify(body),
         signal: options?.signal,
@@ -1068,8 +1203,11 @@ export class AnthropicProvider extends AiProvider {
       }
 
       let fullContent = '';
+      let fullReasoning = '';
       let inputTokens = 0;
       let outputTokens = 0;
+      let cacheReadTokens = 0;
+      let cacheWriteTokens = 0;
       const toolCallFragments = new Map<number, { id: string; name: string; json: string }>();
 
       if (!response.body) throw new Error('Anthropic streaming response has no body');
@@ -1112,6 +1250,9 @@ export class AnthropicProvider extends AiProvider {
                 if (delta.type === 'text_delta' && delta.text) {
                   fullContent += delta.text;
                   onChunk(delta.text, { type: 'text_delta', data: eventData });
+                } else if (delta.type === 'thinking_delta' && delta.thinking) {
+                  fullReasoning += delta.thinking;
+                  onChunk('', { type: 'reasoning_delta', data: { content: delta.thinking } });
                 } else if (delta.type === 'input_json_delta') {
                   const fragment = toolCallFragments.get(eventData.index);
                   if (fragment) fragment.json += delta.partial_json;
@@ -1121,7 +1262,9 @@ export class AnthropicProvider extends AiProvider {
               case 'message_start': {
                 const msgStart = eventData.message as AnthropicStreamMessage | undefined;
                 if (msgStart?.usage) {
-                  inputTokens = msgStart.usage.input_tokens ?? 0;
+                  cacheReadTokens = msgStart.usage.cache_read_input_tokens ?? 0;
+                  cacheWriteTokens = msgStart.usage.cache_creation_input_tokens ?? 0;
+                  inputTokens = (msgStart.usage.input_tokens ?? 0) + cacheReadTokens + cacheWriteTokens;
                 }
                 onChunk('', { type: 'message_start', data: eventData });
                 break;
@@ -1156,9 +1299,13 @@ export class AnthropicProvider extends AiProvider {
       for (const call of toolCalls) onChunk('', { type: 'tool_call', data: call });
       onComplete?.({
         content: fullContent,
+        ...(fullReasoning ? { reasoning: fullReasoning } : {}),
+        model,
         usage: inputTokens > 0 || outputTokens > 0 ? {
           promptTokens: inputTokens,
           completionTokens: outputTokens,
+          cacheReadTokens,
+          cacheWriteTokens,
           totalTokens: inputTokens + outputTokens,
         } : undefined,
         toolCalls: toolCalls.length ? toolCalls : undefined,
@@ -1174,14 +1321,24 @@ interface AnthropicResponse {
   id?: string;
   type?: string;
   model?: string;
-  content?: Array<AnthropicTextContent | AnthropicToolUseContent>;
+  content?: Array<AnthropicTextContent | AnthropicThinkingContent | AnthropicToolUseContent>;
   stop_reason?: string;
-  usage?: { input_tokens?: number; output_tokens?: number };
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
 }
 
 interface AnthropicTextContent {
   type: 'text';
   text?: string;
+}
+
+interface AnthropicThinkingContent {
+  type: 'thinking';
+  thinking?: string;
 }
 
 interface AnthropicToolUseContent {
@@ -1205,19 +1362,27 @@ interface AnthropicStreamMessage {
   content?: Array<{ type: string; text?: string }>;
   model?: string;
   stop_reason?: string | null;
-  usage?: { input_tokens?: number };
+  usage?: {
+    input_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
 }
 
 interface AnthropicContentBlockStart {
   type: 'content_block_start';
   index: number;
-  content_block: AnthropicToolUseContent | AnthropicTextContent;
+  content_block: AnthropicToolUseContent | AnthropicTextContent | AnthropicThinkingContent;
 }
 
 interface AnthropicContentDelta {
   type: 'content_block_delta';
   index: number;
-  delta: { type: 'text_delta'; text: string } | { type: 'input_json_delta'; partial_json: string };
+  delta:
+    | { type: 'text_delta'; text: string }
+    | { type: 'thinking_delta'; thinking: string }
+    | { type: 'signature_delta'; signature: string }
+    | { type: 'input_json_delta'; partial_json: string };
 }
 
 interface AnthropicMessageDelta {

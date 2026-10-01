@@ -1,0 +1,106 @@
+.workspace-panel { position: relative; flex: 0 0 320px; min-width: 230px; max-width: min(1200px, 65vw); display: flex; flex-direction: column; border-left: 1px solid #0f3460; background: #131d37; }
+.workspace-panel.viewer-open { min-width: 360px; }
+.workspace-panel.viewer-expanded { position: fixed; z-index: 45; inset: 0; width: 100vw !important; max-width: none; }
+.panel-resizer { position: absolute; z-index: 12; top: 0; bottom: 0; left: -4px; width: 8px; cursor: col-resize; touch-action: none; }
+.panel-resizer::after { position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; content: ''; background: #30466e; }
+.workspace-panel.collapsed { flex-basis: 34px; min-width: 34px; }
+.workspace-panel.collapsed > button { height: 100%; border: 0; color: #8fa0c0; background: #131d37; cursor: pointer; }
+.workspace-panel > header, .file-viewer > header { display: flex; align-items: center; justify-content: space-between; min-height: 46px; padding: .45rem; border-bottom: 1px solid #30466e; }
+.workspace-panel > header > button, .file-viewer > header button { border: 0; color: #aab6cd; background: transparent; cursor: pointer; }
+.file-viewer > header > div { display: flex; align-items: center; gap: .25rem; }
+.file-viewer > header button { min-width: 32px; min-height: 32px; }
+.panel-tabs { display: flex; gap: .2rem; }
+.panel-tabs button, .file-viewer nav button { padding: .4rem .55rem; border: 0; border-radius: 4px; color: #b3bfd4; background: transparent; cursor: pointer; }
+.panel-tabs button.active, .file-viewer nav button.active { color: #fff; background: #2a3a60; }
+.file-toolbar { display: flex; gap: .3rem; padding: .45rem; }
+.file-toolbar input { min-width: 0; flex: 1; padding: .4rem; border: 1px solid #30466e; border-radius: 4px; color: #fff; background: #0f172d; }
+.file-toolbar button, .file-toolbar label { display: grid; place-items: center; width: 30px; border: 1px solid #30466e; border-radius: 4px; color: #ccd4e3; background: #1c2949; cursor: pointer; }
+.file-toolbar label input { display: none; }
+.file-toolbar label[aria-disabled="true"] { cursor: wait; opacity: .6; }
+.hidden-toggle { padding: 0 .55rem .4rem; color: #8997b1; font-size: .72rem; }
+.upload-options { display: flex; align-items: center; gap: .5rem; padding: 0 .45rem .35rem; color: #b4bfd2; font-size: .68rem; }
+.upload-options label { display: flex; min-width: 0; align-items: center; gap: .35rem; }
+.upload-options select { min-width: 0; padding: .2rem; border: 1px solid #30466e; border-radius: 3px; color: #ccd4e3; background: #0f172d; }
+.upload-options progress { min-width: 0; flex: 1; accent-color: #e94560; }
+.upload-progress { display: grid; min-width: 0; flex: 1; grid-template-columns: minmax(3rem, 1fr) minmax(7rem, auto) auto; align-items: center; gap: .35rem; }
+.upload-progress span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload-progress button { padding: .15rem .35rem; border: 1px solid #52668f; border-radius: 3px; color: inherit; background: transparent; cursor: pointer; }
+.file-tree { flex: 1; overflow: auto; padding: .25rem; }
+.file-tree ul { list-style: none; }
+.file-node > div, .file-tree > ul > li { display: flex; min-width: 0; align-items: center; }
+.file-name, .file-tree > ul > li > button:first-child { min-width: 0; flex: 1; overflow: hidden; padding: .35rem; border: 0; border-radius: 3px; color: #cbd3e2; background: transparent; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.git-badge { float: right; min-width: 1.1rem; margin-left: .3rem; color: #f1c967; font: 600 .68rem ui-monospace, monospace; text-align: center; }
+.git-badge.added, .git-badge.untracked { color: #62d998; }
+.git-badge.deleted, .git-badge.conflict { color: #ff768d; }
+.file-name:hover, .file-tree > ul > li > button:first-child:hover { background: #243354; }
+.file-mention, .file-tree > ul > li > button:last-child { opacity: 0; padding: .25rem; border: 0; color: #ff8ca1; background: transparent; cursor: pointer; }
+.file-node > div:hover .file-mention, .file-tree > ul > li:hover > button:last-child { opacity: 1; }
+.file-node > small { display: block; padding-left: 1rem; color: #ff879b; }
+.panel-empty, .panel-error { padding: 1rem; color: #8391ab; }
+.panel-error { color: #ff879b; }
+.git-summary { display: flex; gap: .8rem; padding: .4rem .6rem; color: #8e9db9; }
+.git-summary span:first-child { color: #62d998; }
+.git-summary span:last-child { color: #ff768d; }
+.change-group > h3 { padding: .5rem .45rem .2rem; color: #71809c; font-size: .68rem; font-weight: 500; text-transform: uppercase; }
+.change-row b { display: inline-block; width: 1rem; flex: 0 0 auto; color: #f1c967; }
+.change-row > button:first-child { display: flex; align-items: center; gap: .25rem; }
+.change-row > button:first-child span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.change-row small { display: flex; gap: .25rem; font-size: .65rem; }
+.change-row small i { color: #62d998; font-style: normal; }
+.change-row small em { color: #ff768d; font-style: normal; }
+.file-viewer { position: absolute; z-index: 10; inset: 0; display: flex; flex-direction: column; background: #111a31; }
+.file-viewer > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viewer-meta { padding: .35rem .6rem; color: #7e8da9; font-size: .72rem; }
+.file-viewer nav { display: flex; padding: 0 .4rem .35rem; border-bottom: 1px solid #30466e; }
+.viewer-content { flex: 1; overflow: auto; }
+.source-view { min-width: max-content; padding: .5rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; }
+.source-view > span { display: block; min-height: 1.2rem; }
+.source-view i { display: inline-block; width: 3.5rem; padding-right: .8rem; color: #56647f; text-align: right; user-select: none; }
+.source-view code { white-space: pre; }
+.source-view .target-line { background: #e9456033; box-shadow: inset 3px 0 #e94560; }
+.syntax-comment { color: #7f8da8; font-style: italic; }
+.syntax-string { color: #9fdb9f; }
+.syntax-number { color: #e8b97a; }
+.syntax-keyword { color: #8eb7ff; font-weight: 600; }
+.diff-view { min-width: max-content; padding: .5rem; font-size: .76rem; }
+.diff-view span { display: block; white-space: pre; }
+.diff-view .added { color: #8fe1ab; background: #1d543944; }
+.diff-view .removed { color: #ff9aa9; background: #632f3944; }
+.diff-view .hunk { color: #91b9ff; }
+.file-viewer footer { display: flex; gap: .4rem; padding: .5rem; border-top: 1px solid #30466e; }
+.file-viewer footer button, .file-viewer footer a { padding: .4rem; border: 1px solid #30466e; border-radius: 4px; color: #ccd6e9; background: #1c2949; text-decoration: none; cursor: pointer; }
+.text-preview, .markdown-preview { padding: 1rem; line-height: 1.5; }
+.frontmatter-card { margin-bottom: .8rem; border: 1px solid #40527b; border-radius: 5px; color: #aab6cd; }
+.frontmatter-card summary { padding: .45rem; cursor: pointer; }
+.frontmatter-card pre { padding: .55rem; overflow: auto; border-top: 1px solid #40527b; white-space: pre-wrap; }
+.viewer-content img, .viewer-content video { display: block; max-width: 100%; max-height: 100%; margin: auto; }
+.viewer-content audio { width: calc(100% - 2rem); margin: 1rem; }
+
+html[data-theme="light"] .workspace-panel, html[data-theme="light"] .file-viewer { color: #172033; background: #fff; border-color: #c5cede; }
+html[data-theme="light"] .workspace-panel > header, html[data-theme="light"] .file-viewer > header,
+html[data-theme="light"] .file-viewer nav, html[data-theme="light"] .file-viewer footer { border-color: #c5cede; }
+html[data-theme="light"] .file-toolbar input { color: #172033; background: #f8f9fc; border-color: #9eabc1; }
+html[data-theme="light"] .file-toolbar button, html[data-theme="light"] .file-toolbar label,
+html[data-theme="light"] .file-viewer footer button, html[data-theme="light"] .file-viewer footer a {
+  color: #26344e; background: #eef2f8; border-color: #9eabc1;
+}
+html[data-theme="light"] .file-name, html[data-theme="light"] .file-tree > ul > li > button:first-child { color: #26344e; }
+html[data-theme="light"] .file-name:hover, html[data-theme="light"] .file-tree > ul > li > button:first-child:hover { background: #eef2f8; }
+html[data-theme="light"] .panel-empty, html[data-theme="light"] .hidden-toggle,
+html[data-theme="light"] .viewer-meta, html[data-theme="light"] .git-summary,
+html[data-theme="light"] .panel-tabs button, html[data-theme="light"] .file-viewer nav button,
+html[data-theme="light"] .upload-options { color: #52627b; }
+html[data-theme="light"] .panel-tabs button.active,
+html[data-theme="light"] .file-viewer nav button.active { color: #fff; background: #2a3a60; }
+
+@media (max-width: 1100px) {
+  .workspace-panel { flex-basis: 260px; }
+}
+@media (max-width: 959px) {
+  .workspace-panel { display: none; }
+  .workspace-panel.panel-open { position: fixed; z-index: 38; top: 0; right: 0; bottom: 0; width: min(560px, calc(100vw - 48px)) !important; min-width: 0; max-width: 100vw; display: flex; box-shadow: -12px 0 36px #0009; }
+  .panel-resizer { display: none; }
+}
+@media (max-width: 640px) {
+  .workspace-panel.panel-open { left: 0; width: 100vw !important; }
+}

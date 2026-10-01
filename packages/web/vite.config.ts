@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react-swc';
+import react from '@vitejs/plugin-react';
 import path from 'path';
 
 export default defineConfig({
@@ -9,6 +9,10 @@ export default defineConfig({
       '@': path.resolve(import.meta.dirname, './src'),
       '@ai-harness/core': path.resolve(import.meta.dirname, '../core/src/index.ts'),
     },
+  },
+  build: {
+    // Large Markdown diagrams are isolated in an on-demand chunk and governed by check-bundle-budget.mjs.
+    chunkSizeWarningLimit: 1_600,
   },
   server: {
     port: 3080,

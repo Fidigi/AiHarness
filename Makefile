@@ -8,6 +8,9 @@
 PROJECT_NAME       := ai-harness
 IMAGE_TEST         := $(PROJECT_NAME):test-latest
 IMAGE_PROD         := $(PROJECT_NAME):prod-latest
+RUN_ID             := $(shell date +%s%N)
+IMAGE_TEST_RUN     := $(IMAGE_TEST)-run-$(RUN_ID)
+IMAGE_TYPECHECK    := $(IMAGE_TEST)-typecheck-$(RUN_ID)
 CONTAINER_PREFIX   := aiharness-test
 PROD_CONTAINER     ?= $(PROJECT_NAME)-prod
 PROD_DATA_VOLUME   ?= $(PROJECT_NAME)-data
@@ -57,6 +60,8 @@ help: ## Afficher cette aide
 	@echo "    make shell             Ouvrir un shell interactif (rebuild inclus)"
 	@echo "    make lockfile          Régénérer package-lock.json dans Docker"
 	@echo "    make info              Informations sur l'environnement Docker"
+	@echo "    make lint-docs         Vérifier cibles, ancres et frontières de versioning des docs"
+	@echo "    make sync-doc-screenshots  Copier les baselines visuelles documentées"
 
 # =============================================================================
 # IMAGES DOCKER
@@ -119,48 +124,48 @@ typecheck: ## Vérifier les types TypeScript dans Docker (rebuild inclus)
 	@printf "$(GREEN)[TYPECHECK] Build de l'image + vérification TypeScript...$(NC)\n"
 	docker build -f .docker/Dockerfile.test \
 		--target test-runner \
-		-t $(IMAGE_TEST)-typecheck \
+		-t $(IMAGE_TYPECHECK) \
 		.
 	docker run --rm \
-		--name $(CONTAINER_PREFIX)-typecheck-$$RANDOM \
+		--name $(CONTAINER_PREFIX)-typecheck-$(RUN_ID) \
 		-e CI=true \
-		$(IMAGE_TEST)-typecheck \
+		$(IMAGE_TYPECHECK) \
 		npm run typecheck
 
 test: ## Lancer tous les tests unitaires dans Docker (rebuild inclus)
 	@printf "$(GREEN)[TEST] Build de l'image + exécution des tests...$(NC)\n"
 	docker build -f .docker/Dockerfile.test \
 		--target test-runner \
-		-t $(IMAGE_TEST)-run-$$RANDOM \
+		-t $(IMAGE_TEST_RUN) \
 		.
 	docker run --rm \
-		--name $(CONTAINER_PREFIX)-unit-$$RANDOM \
+		--name $(CONTAINER_PREFIX)-unit-$(RUN_ID) \
 		-e CI=true \
-		$(IMAGE_TEST)-run-$$RANDOM \
+		$(IMAGE_TEST_RUN) \
 		npm test
 
 test-watch: ## Lancer les tests en mode watch dans Docker (rebuild inclus)
 	@printf "$(GREEN)[TEST] Mode watch...$(NC)\n"
 	docker build -f .docker/Dockerfile.test \
 		--target test-runner \
-		-t $(IMAGE_TEST)-run-$$RANDOM \
+		-t $(IMAGE_TEST_RUN) \
 		.
 	docker run --rm -it \
-		--name $(CONTAINER_PREFIX)-unit-watch-$$RANDOM \
+		--name $(CONTAINER_PREFIX)-unit-watch-$(RUN_ID) \
 		-e CI=true \
-		$(IMAGE_TEST)-run-$$RANDOM \
+		$(IMAGE_TEST_RUN) \
 		npm run test:watch
 
 test-coverage: ## Lancer les tests avec couverture dans Docker (rebuild inclus)
 	@printf "$(GREEN)[TEST] Tests avec couverture...$(NC)\n"
 	docker build -f .docker/Dockerfile.test \
 		--target test-runner \
-		-t $(IMAGE_TEST)-run-$$RANDOM \
+		-t $(IMAGE_TEST_RUN) \
 		.
 	docker run --rm \
-		--name $(CONTAINER_PREFIX)-unit-cov-$$RANDOM \
+		--name $(CONTAINER_PREFIX)-unit-cov-$(RUN_ID) \
 		-e CI=true \
-		$(IMAGE_TEST)-run-$$RANDOM \
+		$(IMAGE_TEST_RUN) \
 		npm run test:coverage
 
 # =============================================================================
@@ -171,15 +176,34 @@ test-coverage: ## Lancer les tests avec couverture dans Docker (rebuild inclus)
 
 test-e2e: ## Lancer les tests e2e Playwright dans Docker (rebuild inclus)
 	@printf "$(GREEN)[TEST] Exécution des tests e2e...$(NC)\n"
-	docker build -f .docker/Dockerfile.test \
-		--target test-runner \
-		-t $(IMAGE_TEST)-run-$$RANDOM \
-		.
-	docker run --rm \
-		--name $(CONTAINER_PREFIX)-e2e-$$RANDOM \
-		-e CI=true \
-		$(IMAGE_TEST)-run-$$RANDOM \
-		npm run test:e2e
+	@set -eu; \
+		run_id=$$$$; \
+		image="$(IMAGE_TEST)-run-$$run_id"; \
+		container="$(CONTAINER_PREFIX)-e2e-$$run_id"; \
+		cleanup() { \
+			status=$$?; \
+			trap - EXIT; \
+			mkdir -p playwright-report test-results e2e/visual.spec.ts-snapshots; \
+			docker cp "$${container}:/app/playwright-report/." playwright-report/ 2>/dev/null || true; \
+			docker cp "$${container}:/app/test-results/." test-results/ 2>/dev/null || true; \
+			docker cp "$${container}:/app/e2e/visual.spec.ts-snapshots/." e2e/visual.spec.ts-snapshots/ 2>/dev/null || true; \
+			docker rm -f "$$container" >/dev/null 2>&1 || true; \
+			docker image rm "$$image" >/dev/null 2>&1 || true; \
+			exit $$status; \
+		}; \
+		trap cleanup EXIT; \
+		rm -rf playwright-report test-results; \
+		mkdir -p playwright-report test-results; \
+		docker build -f .docker/Dockerfile.test \
+			--target test-runner \
+			-t "$$image" \
+			.; \
+		docker create \
+			--name "$$container" \
+			-e CI=true \
+			"$$image" \
+			npm run test:e2e -- $(E2E_ARGS) >/dev/null; \
+		docker start --attach "$$container"
 
 # =============================================================================
 # UTILITAIRES
@@ -201,12 +225,12 @@ shell: ## Ouvrir un shell interactif dans le conteneur (rebuild inclus)
 	@printf "$(GREEN)[SHELL] Ouverture d'un shell interactif...$(NC)\n"
 	docker build -f .docker/Dockerfile.test \
 		--target test-runner \
-		-t $(IMAGE_TEST)-run-$$RANDOM \
+		-t $(IMAGE_TEST_RUN) \
 		.
 	docker run --rm -it \
-		--name $(CONTAINER_PREFIX)-shell-$$RANDOM \
+		--name $(CONTAINER_PREFIX)-shell-$(RUN_ID) \
 		-e CI=true \
-		$(IMAGE_TEST)-run-$$RANDOM \
+		$(IMAGE_TEST_RUN) \
 		bash
 
 info: ## Informations sur l'environnement Docker
@@ -230,3 +254,15 @@ info: ## Informations sur l'environnement Docker
 	else \
 		printf "$(RED)  Dockerfile prod  : MISSING$(NC)\n"; \
 	fi
+
+# =============================================================================
+# DOCUMENTATION VALIDATION
+# =============================================================================
+
+.PHONY: lint-docs sync-doc-screenshots
+lint-docs: ## Vérifier les cibles, ancres et frontières de versioning de la documentation
+	@bash scripts/check-doc-versioning.sh docs --predictive || \
+		(echo ""; echo "Fix documentation violations before committing."; exit 1)
+
+sync-doc-screenshots: ## Copier les baselines Playwright utilisées par la documentation
+	@bash scripts/sync-doc-screenshots.sh

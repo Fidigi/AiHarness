@@ -42,6 +42,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxss1 \
     libxtst6 \
     ca-certificates \
+    g++ \
+    git \
+    make \
+    python3 \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
@@ -55,6 +59,10 @@ COPY packages/server/package.json packages/server/
 RUN npm ci
 
 COPY . .
+
+# Server/CLI tests import the package export (dist), not Core's TS source.
+# Always rebuild it so a stale local dist cannot affect reproducibility.
+RUN npm run build --workspace @ai-harness/core
 
 FROM base AS test-runner
 ENV PLAYWRIGHT_BROWSERS_PATH=/usr

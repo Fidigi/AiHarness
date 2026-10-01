@@ -3,13 +3,27 @@
 // ============================================================
 
 import { Request, Response } from 'express';
-import { BedrockProvider, GeminiProvider, OpenAiProvider as CoreOpenAiProvider, VertexGeminiProvider, Message, ChatOptions } from '@ai-harness/core';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import {
+  AnthropicProvider as CoreAnthropicProvider,
+  BedrockProvider,
+  GeminiProvider,
+  LocalProvider,
+  MockProvider,
+  OpenAiProvider as CoreOpenAiProvider,
+  ProviderType,
+  VertexGeminiProvider,
+} from '@ai-harness/core';
+import type { Message, ChatOptions, ProviderConfig, ModelPricing } from '@ai-harness/core';
 import type { AiProvider } from '@ai-harness/core';
 
 /** Configuration for the proxy server */
 export interface ProxyServerConfig {
   /** Default timeout in milliseconds */
   timeout?: number;
+  /** Explicit opt-in for the deterministic, credential-free test/demo provider. */
+  enableMockProvider?: boolean;
 }
 
 type ProxyChatOptions = ChatOptions & { stream?: boolean };
@@ -369,6 +383,29 @@ class CoreProviderProxy implements ProviderProxy {
 // Proxy Server - Main controller
 // ===================================================================
 
+type ProviderUsageMetrics = {
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  totalTokens: number;
+  costUsd: number;
+};
+
+type RecordedUsage = {
+  promptTokens?: number;
+  completionTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  totalTokens?: number;
+  costUsd?: number;
+};
+
+function safeMetric(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
 export class AiProxyServer {
   private openaiProxy?: OpenAiProxy;
   private anthropicProxy?: AnthropicProxy;
@@ -377,16 +414,32 @@ export class AiProxyServer {
   private azureProxy?: CoreProviderProxy;
   private vertexProxy?: CoreProviderProxy;
   private bedrockProxy?: CoreProviderProxy;
-  private readonly config: Required<ProxyServerConfig>;
+  private mockProxy?: CoreProviderProxy;
+  private readonly customProxies = new Map<string, CoreProviderProxy>();
+  private readonly agentProviders = new Map<string, AiProvider>();
+  private readonly usage = new Map<string, ProviderUsageMetrics>();
+  private usageFile?: string;
+  private usageWrite: Promise<void> = Promise.resolve();
+  private pricingFor?: (provider: string, model: string | undefined) => ModelPricing | undefined;
+  private readonly config: { timeout: number; enableMockProvider: boolean };
 
   constructor(config?: ProxyServerConfig) {
-    this.config = { timeout: config?.timeout ?? DEFAULT_TIMEOUT };
+    this.config = {
+      timeout: config?.timeout ?? DEFAULT_TIMEOUT,
+      enableMockProvider: config?.enableMockProvider
+        ?? process.env.AI_HARNESS_ENABLE_MOCK_PROVIDER === '1',
+    };
 
     // Initialize proxies from environment variables if available
     const openaiKey = process.env.OPENAI_API_KEY;
     if (openaiKey) {
       try {
         this.openaiProxy = new OpenAiProxy(openaiKey);
+        this.agentProviders.set('openai', new CoreOpenAiProvider({
+          type: ProviderType.OPENAI,
+          apiKey: openaiKey,
+          model: process.env.OPENAI_MODEL || 'gpt-4o',
+        }));
       } catch { /* Skip initialization */ }
     }
 
@@ -394,97 +447,254 @@ export class AiProxyServer {
     if (anthropicKey) {
       try {
         this.anthropicProxy = new AnthropicProxy(anthropicKey);
+        this.agentProviders.set('anthropic', new CoreAnthropicProvider({
+          type: ProviderType.ANTHROPIC,
+          apiKey: anthropicKey,
+          model: process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307',
+        }));
       } catch { /* Skip initialization */ }
     }
 
     const googleKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     if (googleKey) {
-      this.googleProxy = new CoreProviderProxy(new GeminiProvider({
-        type: 'google' as any,
+      const provider = new GeminiProvider({
+        type: ProviderType.GOOGLE,
         apiKey: googleKey,
         model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
-      }));
+      });
+      this.googleProxy = new CoreProviderProxy(provider);
+      this.agentProviders.set('google', provider);
     }
 
     if (process.env.AZURE_OPENAI_API_KEY && process.env.AZURE_OPENAI_ENDPOINT) {
-      this.azureProxy = new CoreProviderProxy(new CoreOpenAiProvider({
-        type: 'azure' as any,
+      const provider = new CoreOpenAiProvider({
+        type: ProviderType.AZURE,
         apiKey: process.env.AZURE_OPENAI_API_KEY,
         baseUrl: process.env.AZURE_OPENAI_ENDPOINT,
         deployment: process.env.AZURE_OPENAI_DEPLOYMENT,
         model: process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o',
-      }));
+      });
+      this.azureProxy = new CoreProviderProxy(provider);
+      this.agentProviders.set('azure', provider);
     }
     if (process.env.GOOGLE_VERTEX_ACCESS_TOKEN && process.env.GOOGLE_CLOUD_PROJECT) {
-      this.vertexProxy = new CoreProviderProxy(new VertexGeminiProvider({
-        type: 'vertex' as any,
+      const provider = new VertexGeminiProvider({
+        type: ProviderType.VERTEX,
         apiKey: process.env.GOOGLE_VERTEX_ACCESS_TOKEN,
         project: process.env.GOOGLE_CLOUD_PROJECT,
         location: process.env.GOOGLE_CLOUD_LOCATION,
-      }));
+      });
+      this.vertexProxy = new CoreProviderProxy(provider);
+      this.agentProviders.set('vertex', provider);
     }
     if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
-      this.bedrockProxy = new CoreProviderProxy(new BedrockProvider({
-        type: 'bedrock' as any,
+      const provider = new BedrockProvider({
+        type: ProviderType.BEDROCK,
         region: process.env.AWS_REGION,
         model: process.env.BEDROCK_MODEL,
-      }));
+      });
+      this.bedrockProxy = new CoreProviderProxy(provider);
+      this.agentProviders.set('bedrock', provider);
     }
 
     const localBaseUrl = process.env.LOCAL_BASE_URL || process.env.LLAMA_BASE_URL;
     if (localBaseUrl) {
       try {
-        this.localProxy = new OpenAiProxy(
-          process.env.LOCAL_API_KEY || process.env.LLAMA_API_KEY || 'local',
-          normalizeLocalBaseUrl(localBaseUrl),
-          process.env.LOCAL_MODEL || process.env.LLAMA_MODEL || 'local-model',
-        );
+        const apiKey = process.env.LOCAL_API_KEY || process.env.LLAMA_API_KEY || 'local';
+        const baseUrl = normalizeLocalBaseUrl(localBaseUrl);
+        const model = process.env.LOCAL_MODEL || process.env.LLAMA_MODEL || 'local-model';
+        this.localProxy = new OpenAiProxy(apiKey, baseUrl, model);
+        this.agentProviders.set('local', new LocalProvider({
+          type: ProviderType.LOCAL,
+          apiKey,
+          baseUrl,
+          model,
+        }));
       } catch { /* Skip initialization */ }
+    }
+
+    if (this.config.enableMockProvider) {
+      const provider = new MockProvider({ type: ProviderType.MOCK });
+      this.mockProxy = new CoreProviderProxy(provider);
+      this.agentProviders.set('mock', provider);
     }
   }
 
-  /** Set provider API keys dynamically */
+  /** Set provider API keys dynamically and refresh both chat and agent adapters. */
   setApiKey(type: 'openai' | 'anthropic' | 'google' | 'azure' | 'vertex' | 'bedrock' | 'local', apiKey: string, baseUrl?: string, model?: string): void {
+    let provider: AiProvider;
     if (type === 'openai') {
-      this.openaiProxy = new OpenAiProxy(apiKey, baseUrl);
+      this.openaiProxy = new OpenAiProxy(apiKey, baseUrl, model);
+      provider = new CoreOpenAiProvider({ type: ProviderType.OPENAI, apiKey, baseUrl, model });
     } else if (type === 'anthropic') {
       this.anthropicProxy = new AnthropicProxy(apiKey, baseUrl);
+      provider = new CoreAnthropicProvider({ type: ProviderType.ANTHROPIC, apiKey, baseUrl, model });
     } else if (type === 'google') {
-      this.googleProxy = new CoreProviderProxy(new GeminiProvider({
-        type: 'google' as any,
+      provider = new GeminiProvider({
+        type: ProviderType.GOOGLE,
         apiKey,
         baseUrl,
         model: model || 'gemini-2.0-flash',
-      }));
+      });
+      this.googleProxy = new CoreProviderProxy(provider);
     } else if (type === 'azure') {
-      this.azureProxy = new CoreProviderProxy(new CoreOpenAiProvider({
-        type: 'azure' as any, apiKey, baseUrl, model: model || 'gpt-4o', deployment: model,
-      }));
+      provider = new CoreOpenAiProvider({
+        type: ProviderType.AZURE, apiKey, baseUrl, model: model || 'gpt-4o', deployment: model,
+      });
+      this.azureProxy = new CoreProviderProxy(provider);
     } else if (type === 'vertex') {
-      this.vertexProxy = new CoreProviderProxy(new VertexGeminiProvider({
-        type: 'vertex' as any, apiKey, baseUrl, model: model || 'gemini-2.0-flash',
-      }));
+      provider = new VertexGeminiProvider({
+        type: ProviderType.VERTEX, apiKey, baseUrl, model: model || 'gemini-2.0-flash',
+      });
+      this.vertexProxy = new CoreProviderProxy(provider);
     } else if (type === 'bedrock') {
       const [accessKeyId, secretAccessKey, sessionToken] = apiKey.split(':');
-      this.bedrockProxy = new CoreProviderProxy(new BedrockProvider({
-        type: 'bedrock' as any,
+      const config: ProviderConfig = {
+        type: ProviderType.BEDROCK,
         accessKeyId,
         secretAccessKey: baseUrl || secretAccessKey,
         sessionToken,
         model,
-      }));
-    } else if (type === 'local') {
-      this.localProxy = new OpenAiProxy(
-        apiKey || 'local',
-        normalizeLocalBaseUrl(baseUrl || 'http://localhost:11434/v1'),
-        model || 'local-model',
-      );
+      };
+      provider = new BedrockProvider(config);
+      this.bedrockProxy = new CoreProviderProxy(provider);
+    } else {
+      const normalizedBaseUrl = normalizeLocalBaseUrl(baseUrl || 'http://localhost:11434/v1');
+      const selectedModel = model || 'local-model';
+      this.localProxy = new OpenAiProxy(apiKey || 'local', normalizedBaseUrl, selectedModel);
+      provider = new LocalProvider({
+        type: ProviderType.LOCAL,
+        apiKey: apiKey || 'local',
+        baseUrl: normalizedBaseUrl,
+        model: selectedModel,
+      });
     }
+    this.agentProviders.set(type, provider);
+  }
+
+  /** Register or atomically replace an operator-defined provider adapter. */
+  setCustomProvider(type: string, provider: AiProvider): void {
+    const normalized = type.trim().toLowerCase();
+    if (!/^[a-z][a-z0-9_-]{1,63}$/.test(normalized)
+      || ['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local', 'mock'].includes(normalized)) {
+      throw new Error(`Invalid custom provider id: ${type}`);
+    }
+    this.agentProviders.set(normalized, provider);
+    this.customProxies.set(normalized, new CoreProviderProxy(provider));
+  }
+
+  removeProvider(type: string): boolean {
+    const normalized = type.toLowerCase();
+    const custom = this.customProxies.delete(normalized);
+    this.agentProviders.delete(normalized);
+    if (custom) return true;
+    switch (normalized) {
+      case 'openai': this.openaiProxy = undefined; break;
+      case 'anthropic': this.anthropicProxy = undefined; break;
+      case 'google': this.googleProxy = undefined; break;
+      case 'azure': this.azureProxy = undefined; break;
+      case 'vertex': this.vertexProxy = undefined; break;
+      case 'bedrock': this.bedrockProxy = undefined; break;
+      case 'local': this.localProxy = undefined; break;
+      default: return false;
+    }
+    return true;
+  }
+
+  /** Provider instance used by the detached multi-turn runtime. */
+  getAgentProvider(type: string): AiProvider | undefined {
+    return this.agentProviders.get(type.toLowerCase());
+  }
+
+  /** Restore process-independent provider metrics and configure model-price lookup. */
+  async initializeUsage(
+    filePath: string,
+    pricingFor: (provider: string, model: string | undefined) => ModelPricing | undefined,
+  ): Promise<void> {
+    this.usageFile = filePath;
+    this.pricingFor = pricingFor;
+    this.usage.clear();
+    try {
+      const parsed = JSON.parse(await readFile(filePath, 'utf8')) as { providers?: Record<string, Partial<ProviderUsageMetrics>> };
+      for (const [provider, value] of Object.entries(parsed.providers ?? {})) {
+        if (!/^[a-z][a-z0-9_-]{1,63}$/.test(provider) || !value || typeof value !== 'object') continue;
+        this.usage.set(provider, {
+          requests: safeMetric(value.requests),
+          inputTokens: safeMetric(value.inputTokens),
+          outputTokens: safeMetric(value.outputTokens),
+          cacheReadTokens: safeMetric(value.cacheReadTokens),
+          cacheWriteTokens: safeMetric(value.cacheWriteTokens),
+          totalTokens: safeMetric(value.totalTokens),
+          costUsd: safeMetric(value.costUsd),
+        });
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error(`[UsageMetrics] Unable to load ${filePath}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
+
+  /** Record every provider turn, including intermediate tool-call turns, and return its calculated cost. */
+  recordUsage(type: string, model: string | undefined, usage: RecordedUsage): number | undefined {
+    const key = type.toLowerCase();
+    const inputTokens = safeMetric(usage.promptTokens);
+    const outputTokens = safeMetric(usage.completionTokens);
+    const cacheReadTokens = safeMetric(usage.cacheReadTokens);
+    const cacheWriteTokens = safeMetric(usage.cacheWriteTokens);
+    const totalTokens = safeMetric(usage.totalTokens) || inputTokens + outputTokens;
+    const pricing = this.pricingFor?.(key, model);
+    const uncachedInputTokens = Math.max(0, inputTokens - cacheReadTokens - cacheWriteTokens);
+    const calculatedCost = pricing ? (
+      uncachedInputTokens * safeMetric(pricing.inputPerMillion)
+      + outputTokens * safeMetric(pricing.outputPerMillion)
+      + cacheReadTokens * safeMetric(pricing.cacheReadPerMillion ?? pricing.inputPerMillion)
+      + cacheWriteTokens * safeMetric(pricing.cacheWritePerMillion ?? pricing.inputPerMillion)
+    ) / 1_000_000 : undefined;
+    const costUsd = typeof usage.costUsd === 'number' && Number.isFinite(usage.costUsd) && usage.costUsd >= 0
+      ? usage.costUsd : calculatedCost;
+    const current = this.usage.get(key) ?? {
+      requests: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0,
+      cacheWriteTokens: 0, totalTokens: 0, costUsd: 0,
+    };
+    current.requests++;
+    current.inputTokens += inputTokens;
+    current.outputTokens += outputTokens;
+    current.cacheReadTokens += cacheReadTokens;
+    current.cacheWriteTokens += cacheWriteTokens;
+    current.totalTokens += totalTokens;
+    current.costUsd += costUsd ?? 0;
+    this.usage.set(key, current);
+    this.queueUsageWrite();
+    return costUsd;
+  }
+
+  getUsage(type: string): ProviderUsageMetrics | undefined {
+    const usage = this.usage.get(type.toLowerCase());
+    return usage ? { ...usage } : undefined;
+  }
+
+  async flushUsage(): Promise<void> {
+    await this.usageWrite;
+  }
+
+  private queueUsageWrite(): void {
+    if (!this.usageFile) return;
+    this.usageWrite = this.usageWrite.catch(() => undefined).then(async () => {
+      const filePath = this.usageFile!;
+      await mkdir(path.dirname(filePath), { recursive: true });
+      const temporary = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+      const providers = Object.fromEntries([...this.usage].sort(([left], [right]) => left.localeCompare(right)));
+      await writeFile(temporary, `${JSON.stringify({ version: 1, providers }, null, 2)}\n`, { mode: 0o600 });
+      await rename(temporary, filePath);
+    }).catch(error => {
+      console.error(`[UsageMetrics] Unable to persist metrics: ${error instanceof Error ? error.message : String(error)}`);
+    });
   }
 
   /** Check if a provider is configured */
   isConfigured(type: string): boolean {
-    switch (type) {
+    switch (type.toLowerCase()) {
       case 'openai': return !!this.openaiProxy;
       case 'anthropic': return !!this.anthropicProxy;
       case 'google': return !!this.googleProxy;
@@ -492,11 +702,12 @@ export class AiProxyServer {
       case 'vertex': return !!this.vertexProxy;
       case 'bedrock': return !!this.bedrockProxy;
       case 'local': return !!this.localProxy;
-      default: return false;
+      case 'mock': return !!this.mockProxy;
+      default: return this.customProxies.has(type.toLowerCase());
     }
   }
 
-  /** Get configured providers list */
+  /** Get configured providers list without exposing credentials. */
   getProviders(): Array<{ type: string; configured: boolean }> {
     return [
       { type: 'openai', configured: !!this.openaiProxy },
@@ -506,6 +717,8 @@ export class AiProxyServer {
       { type: 'vertex', configured: !!this.vertexProxy },
       { type: 'bedrock', configured: !!this.bedrockProxy },
       { type: 'local', configured: !!this.localProxy },
+      ...(this.config.enableMockProvider ? [{ type: 'mock', configured: true }] : []),
+      ...[...this.customProxies.keys()].sort().map(type => ({ type, configured: true })),
     ];
   }
 
@@ -539,12 +752,25 @@ export class AiProxyServer {
         onChunk(chunk);
       }
 
+      if (finalUsage) this.recordProxyUsage(providerType, options?.model, finalUsage);
       return { content: fullContent, model: options?.model, usage: finalUsage };
     }
 
     // Non-streaming mode
     const result = await provider.chat(messages, options);
+    if (result.usage) this.recordProxyUsage(providerType, result.model ?? options?.model, result.usage);
     return result;
+  }
+
+  private recordProxyUsage(provider: string, model: string | undefined, usage: Record<string, number>): void {
+    this.recordUsage(provider, model, {
+      promptTokens: usage.promptTokens ?? usage.prompt_tokens ?? usage.input_tokens,
+      completionTokens: usage.completionTokens ?? usage.completion_tokens ?? usage.output_tokens,
+      cacheReadTokens: usage.cacheReadTokens ?? usage.cache_read_tokens,
+      cacheWriteTokens: usage.cacheWriteTokens ?? usage.cache_write_tokens,
+      totalTokens: usage.totalTokens ?? usage.total_tokens,
+      costUsd: usage.costUsd ?? usage.cost_usd,
+    });
   }
 
   /** Send a chat request with SSE streaming (returns ReadableStream for SSE) */
@@ -562,6 +788,7 @@ export class AiProxyServer {
     }
 
     try {
+      const server = this;
       const stream = new ReadableStream({
         async start(controller) {
           let fullContent = '';
@@ -581,6 +808,7 @@ export class AiProxyServer {
               }
             }
 
+            if (finalUsage) server.recordProxyUsage(providerType, options?.model, finalUsage);
             // Send message_end event with usage
             controller.enqueue(textToSSE('message_end', {
               content: fullContent,
@@ -611,7 +839,8 @@ export class AiProxyServer {
       case 'vertex': return this.vertexProxy ?? null;
       case 'bedrock': return this.bedrockProxy ?? null;
       case 'local': return this.localProxy ?? null;
-      default: return null;
+      case 'mock': return this.mockProxy ?? null;
+      default: return this.customProxies.get(type.toLowerCase()) ?? null;
     }
   }
 }

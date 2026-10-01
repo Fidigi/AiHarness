@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises';
+import { mkdtemp, mkdir, rm, symlink, truncate, writeFile } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -36,6 +36,24 @@ describe('ExtensionLoader', () => {
       path.join(directory, 'hello.mjs'),
       path.join(directory, 'package', 'index.js'),
     ]);
+  });
+
+  it('refuses symbolic links and oversized files inside extension directories', async () => {
+    const directory = await tempDirectory();
+    const target = path.join(directory, 'target.mjs');
+    const linked = path.join(directory, 'linked.mjs');
+    const oversized = path.join(directory, 'oversized.mjs');
+    await writeFile(target, 'export default () => {};');
+    await symlink(target, linked);
+    await writeFile(oversized, '');
+    await truncate(oversized, 5 * 1024 * 1024 + 1);
+    const loader = new ExtensionLoader(new ExtensionRegistry(), {
+      cwd: directory,
+      homeDir: path.join(directory, 'home'),
+      paths: [directory],
+    });
+
+    expect(await loader.discover()).toEqual([target]);
   });
 
   it('loads command factories and reloads changed modules', async () => {
@@ -80,9 +98,8 @@ describe('ExtensionLoader', () => {
     expect(registry.getCommand('project')).toBeUndefined();
   });
 
-  it('reports invalid modules without aborting all loading', async () => {
+  it('keeps the previous atomic generation when any replacement module is invalid', async () => {
     const directory = await tempDirectory();
-    await writeFile(path.join(directory, 'invalid.mjs'), 'export const value = 1;');
     await writeFile(path.join(directory, 'valid.mjs'), `export default api => api.registerCommand('valid', {
       description: 'Valid', handler: () => 'ok'
     });`);
@@ -92,10 +109,14 @@ describe('ExtensionLoader', () => {
       homeDir: path.join(directory, 'home'),
       paths: [directory],
     });
+    const first = await loader.loadAll();
+    expect(first.committed).toBe(true);
+    await writeFile(path.join(directory, 'invalid.mjs'), 'export const value = 1;');
 
-    const result = await loader.loadAll();
+    const result = await loader.reload();
 
-    expect(result.loaded).toHaveLength(1);
+    expect(result.committed).toBe(false);
+    expect(result.loaded).toEqual(first.loaded);
     expect(result.errors).toHaveLength(1);
     expect(registry.getCommand('valid')).toBeDefined();
   });
