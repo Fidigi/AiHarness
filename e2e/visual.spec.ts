@@ -462,7 +462,7 @@ test.describe('Régression visuelle des métadonnées de message', () => {
       };
       session.messages[1]!.blocks = [
         { type: 'text', text: session.messages[1]!.content },
-        { type: 'tool_call', id: 'visual-write', name: 'write_file', input: { path: 'src/generated.ts', content: 'export {};' } },
+        { type: 'tool_call', id: 'visual-write', name: 'write', input: { path: 'src/generated.ts', content: 'export {};' } },
       ];
       await installMockApi(page, { sessions: [session], providers: [{ type: 'openai', configured: true }] });
 

@@ -85,6 +85,7 @@ Start at `packages/core/src/index.ts`, which defines the public package exports.
 | Session persistence | `src/sessions/session-manager.ts`, `src/sessions/serialization.ts` | `SessionManager`, v2 JSONL/wire format, commands, branches, cloning, summaries, per-session setting overrides, effective context and secret redaction |
 | Compaction | `src/sessions/compaction.ts`, `src/sessions/session-manager.ts` | Token estimation, target selection, summary prompts, inherited automatic policy, metrics and cancellation-safe application |
 | Detached agent | `src/agent/runtime.ts`, `src/agent/tool-loop.ts`, `src/agent/events.ts` | Shared model/tool loop, runs, stop/retry/queues, full bounded tool outputs, extension interactions and sequenced journal |
+| Coding tools | `src/tools/` | Shared CLI/Web `read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls` implementations, bounded output, exact edits and trust gates |
 | Workspace security | `src/security/` | Canonical allowed roots, symlink boundary, trust persistence, Git/worktree operations |
 | Extension API/loader | `src/extensions/{extension-registry,module-loader}.ts` | Owned commands/tools/providers/plain-text UI, hooks/listeners, bounded symlink-free discovery and atomic managed generations |
 | Utilities | `src/utils/index.ts`, `src/utils/event-emitter.ts` | IDs, formatting, retry helpers, typed event infrastructure |
@@ -99,7 +100,7 @@ Session files are versioned JSONL (current schema: v2). Entry types include `met
 |---|---|---|
 | Composition root | `src/index.ts` | Startup, argument modes, session loading, resources, trust, extensions, input dispatch, hooks, streaming, shutdown |
 | Command router | `src/commands/handler.ts` | Built-in slash commands, provider initialization, model/session operations, import/export/share/login |
-| Agent tool loop | `src/agent/tool-loop.ts` | Backward-compatible re-export of Core `runToolLoop` and its types |
+| Agent tool loop | `src/agent/tool-loop.ts` | Backward-compatible re-export of Core `runToolLoop` and its types; startup registers Core's workspace coding tools for the current cwd |
 | Regular TUI | `src/tui/terminal-ui.ts` | Readline-oriented output, help, transcript, streaming writer |
 | Fullscreen TUI | `src/tui/fullscreen-ui.ts`, `src/tui/fullscreen-input.ts` | Alternate-screen rendering, input/history/completion, scrolling, extension panels |
 | Mode and themes | `src/tui/mode.ts`, `src/tui/theme-manager.ts` | Terminal mode selection and built-in/custom themes |
@@ -121,10 +122,10 @@ Project extensions are executable code. User extensions are loaded from `~/.ai-h
 | Detached execution | `src/api/agent-routes.ts`, `src/runtime/command-runtime.ts` | Agent state/SSE/queues/stop, effective setting overrides, exact preset capabilities, shell command output/replay/cancel, manual and automatic compaction |
 | Interactive terminals | `src/api/terminal-routes.ts`, `src/runtime/terminal-runtime.ts` | Owned `node-pty` processes, bounded ANSI replay by UTF-8 offset, input/resize/exit, instance limits and shutdown |
 | Session windows | `src/api/session-pagination.ts`, `src/index.ts` | Metadata-only lists, bounded tail/before/around pages, stable message cursors, full server-side export, provider title generation and recursive cascade guard |
-| Workspaces and files | `src/api/workspace-routes.ts`, `src/api/file-routes.ts`, `src/agent/workspace-tools.ts` | Trust, browse/Git/worktrees, bounded file tools, fuzzy index, collision-aware upload, source/media download, Git stats/diffs and file-watch SSE |
+| Workspaces and files | `src/api/workspace-routes.ts`, `src/api/file-routes.ts`, Core `src/tools/` | Trust, browse/Git/worktrees, shared bounded coding tools, fuzzy index, collision-aware upload, source/media download, Git stats/diffs and file-watch SSE |
 | Scoped configuration | `src/api/config-routes.ts`, `src/config/{config-store,effective-configuration}.ts` | Validated nullable global/project/session values, runtime/environment precedence, provenance and atomic non-secret storage |
 | Providers/models | `src/api/{model,provider-registry}-routes.ts`, `src/runtime/{model-catalog,provider-registry,provider-oauth}.ts` | Published/discovered/custom models, custom dialect providers, OAuth Device Flow, capabilities/prices, activation and encrypted-or-volatile secrets |
-| Tools | `src/api/tool-routes.ts`, `src/agent/workspace-tools.ts`, `src/runtime/services.ts` | Effective registry inventory, scoped presets/enabled tools, model capability filtering and Windows-only opt-in PowerShell |
+| Tools | `src/api/tool-routes.ts`, `src/runtime/services.ts`, Core `src/tools/` | Effective registry inventory, shared coding-tool registration, scoped presets/enabled tools, model capability filtering and Windows-only opt-in PowerShell |
 | Plugin packages | `src/api/plugin-routes.ts`, `src/runtime/plugin-service.ts`, `src/runtime/services.ts` | Explicit npm/Git/path administration, bounded metadata inventory, trust/scopes, transactional updates/checks and executable generation reload |
 | Skills | `src/api/skill-routes.ts`, `src/runtime/{skill-catalog,skill-registry}.ts` | Metadata-only discovery/invocation plus HTTPS/SHA-256 registry installs and updates by trusted global/project scope |
 | Web Push | `src/api/push-routes.ts`, `src/runtime/push-service.ts` | VAPID lifecycle, public-endpoint validation, encrypted-or-volatile subscriptions, categories and stale cleanup |

@@ -6,7 +6,7 @@
 
 `ai-harness` has two interactive terminal renderers plus a separate JSONL RPC entry path. The regular and fullscreen renderers share input dispatch, commands, resources, extensions, sessions, and the Core tool loop; RPC owns a smaller method dispatcher and provider setup.
 
-Conversation persistence follows [`sessions.md`](./sessions.md), while extension hooks and tools follow [`extensions.md`](./extensions.md).
+Conversation persistence follows [`sessions.md`](./sessions.md), while extension hooks follow [`extensions.md`](./extensions.md). The built-in workspace tools are implemented once in Core and registered by both CLI and server startup.
 
 ## Architecture
 
@@ -24,6 +24,7 @@ packages/cli/src/index.ts
 | `packages/cli/src/index.ts` | Startup, arguments, sessions, trust, resources, hooks, streaming and shutdown |
 | `packages/cli/src/commands/handler.ts` | Built-in command registry and execution context |
 | `packages/cli/src/agent/tool-loop.ts` | Backward-compatible re-export of the Core tool loop |
+| `packages/core/src/tools/workspace-tools.ts` | Shared, workspace-bounded coding tools used by CLI and Web execution |
 | `packages/cli/src/tui/terminal-ui.ts` | Regular readline output, help and streaming writer |
 | `packages/cli/src/tui/fullscreen-{ui,input}.ts` | Alternate-screen rendering and raw-mode line editor |
 | `packages/cli/src/tui/{mode,theme-manager}.ts` | Mode precedence and built-in/custom themes |
@@ -69,6 +70,8 @@ input -> prompt/resource expansion or built-in/extension command
 ```
 
 An `AbortController` must reach provider and active tool work. Fullscreen and regular input must share cancellation and shutdown semantics; RPC chat must return one terminal response without corrupting JSONL framing.
+
+Interactive startup and the Web server register the same `read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls` tools from Core, plus `powershell` on Windows. Reads and searches are canonicalized inside the active workspace. `bash`, `edit`, and `write` additionally require explicit project trust; command output, file reads, directory listings, and search results are bounded.
 
 ## Persistence, Trust, and Extensions
 

@@ -73,6 +73,9 @@ export type {
   QueuedAgentMessage,
 } from './agent/events.js';
 
+// Shared coding tools
+export * from './tools/index.js';
+
 // Extensions
 export * from './extensions/index.js';
 

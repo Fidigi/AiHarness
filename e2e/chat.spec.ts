@@ -248,12 +248,12 @@ test.describe('Conversation detached agent', () => {
 
     api.setRunPhase('phase-session', 'tool', {
       activeTool: {
-        id: 'tool-1', name: 'write_file', input: { path: 'src/generated.ts' },
+        id: 'tool-1', name: 'write', input: { path: 'src/generated.ts' },
         startedAt: '2026-10-01T12:00:01.000Z',
       },
     });
     await expect(retry).toBeHidden();
-    await expect(page.getByRole('status').filter({ hasText: 'Running tool: write_file' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Running tool: write' })).toBeVisible();
     await page.getByRole('button', { name: 'Stop tool' }).click();
     await expect.poll(() => api.requests.some(request => request.method === 'POST' && request.path.endsWith('/stop'))).toBe(true);
     await expect(page.getByRole('button', { name: 'Stop tool' })).toBeHidden();
@@ -310,8 +310,8 @@ test.describe('Conversation detached agent', () => {
       capabilities: {
         systemPrompt: 'Respect the workspace instructions.',
         tools: [
-          { name: 'read_file', description: 'Read a file', parameters: { type: 'object', required: ['path'] }, extensionId: 'workspace' },
-          { name: 'write_file', description: 'Write a file', parameters: { type: 'object', required: ['path', 'content'] }, extensionId: 'workspace' },
+          { name: 'read', description: 'Read a file', parameters: { type: 'object', required: ['path'] }, extensionId: 'builtin:workspace-tools' },
+          { name: 'write', description: 'Write a file', parameters: { type: 'object', required: ['path', 'content'] }, extensionId: 'builtin:workspace-tools' },
         ],
       },
     });
@@ -320,7 +320,7 @@ test.describe('Conversation detached agent', () => {
     const panel = page.locator('.capabilities-panel');
     await expect(panel).toContainText('Respect the workspace instructions.');
     await expect(panel).toContainText('2 active tools');
-    await panel.getByText('read_file', { exact: true }).click();
+    await panel.getByText('read', { exact: true }).click();
     await expect(panel.getByText('Read a file')).toBeVisible();
     await expect(panel.locator('pre').last()).toContainText('required');
 
@@ -672,7 +672,7 @@ test.describe('Conversation detached agent', () => {
     session.messages[0]!.blocks = [
       { type: 'reasoning', text: 'Résumé du raisonnement' },
       { type: 'text', text: session.messages[0]!.content },
-      { type: 'tool_call', id: 'tool-1', name: 'write_file', input: { path: 'src/generated.ts', content: 'export {};' } },
+      { type: 'tool_call', id: 'tool-1', name: 'write', input: { path: 'src/generated.ts', content: 'export {};' } },
     ];
     await installMockApi(page, {
       sessions: [session],
@@ -700,7 +700,7 @@ test.describe('Conversation detached agent', () => {
     await expect(page.locator('.message-content script')).toHaveCount(0);
     await expect(page.locator('.message-content')).not.toContainText('alert(1)');
     await expect(page.locator('details.reasoning-block')).toContainText('Résumé du raisonnement');
-    await expect(page.locator('details.tool-block')).toContainText('write_file');
+    await expect(page.locator('details.tool-block')).toContainText('write');
 
     const message = page.locator('.message.assistant');
     await expect(message.locator('time')).toHaveAttribute('datetime', '2025-01-01T12:00:00.000Z');

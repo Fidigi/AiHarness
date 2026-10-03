@@ -6,12 +6,12 @@ import {
   ExtensionRegistry,
   JsonlSessionStore,
   ProjectTrustManager,
+  registerWorkspaceTools,
   SessionManager,
   WorkspaceManager,
 } from '@ai-harness/core';
 import type { AiProvider, ChatResponse } from '@ai-harness/core';
 import type { AiProxyServer } from '../api/proxy.js';
-import { registerWorkspaceTools } from '../agent/workspace-tools.js';
 import { ConfigurationStore } from '../config/config-store.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { CommandRuntime } from './command-runtime.js';

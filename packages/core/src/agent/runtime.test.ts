@@ -170,14 +170,14 @@ describe('AgentRuntime', () => {
   it('exposes the exact tools selected by each preset', async () => {
     const { runtime, extensionRegistry } = await setup(new MockProvider({ type: 'mock' as never }, ['ok']));
     await extensionRegistry.load('workspace', api => {
-      for (const name of ['read_file', 'write_file', 'custom_tool']) {
+      for (const name of ['read', 'write', 'custom_tool']) {
         api.registerTool({ name, description: name, execute: () => ({ content: 'ok' }) });
       }
     });
 
     expect(runtime.getTools('chat-only')).toEqual([]);
-    expect(runtime.getTools('read-only').map(tool => tool.name)).toEqual(['read_file']);
-    expect(runtime.getTools('full').map(tool => tool.name)).toEqual(['read_file', 'write_file', 'custom_tool']);
+    expect(runtime.getTools('read-only').map(tool => tool.name)).toEqual(['read']);
+    expect(runtime.getTools('full').map(tool => tool.name)).toEqual(['read', 'write', 'custom_tool']);
   });
 
   it('keeps queued follow-ups in snapshots and consumes them after the active response', async () => {

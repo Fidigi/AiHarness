@@ -238,8 +238,8 @@ ${chalk.bold('Files, resources and sharing')}
 
 ${chalk.bold('Extensions and application')}
   ${chalk.cyan('/extensions')}                   List loaded extensions
-  ${chalk.cyan('/tools')}                        List extension tools
-  ${chalk.cyan('/tool <name> [json]')}           Run an extension tool
+  ${chalk.cyan('/tools')}                        List built-in and extension tools
+  ${chalk.cyan('/tool <name> [json]')}           Run a registered tool
   ${chalk.cyan('/trust [status|add|remove|list]')} Manage project trust
   ${chalk.cyan('/reload')}                       Reload resources and extensions
   ${chalk.cyan('/config')}                       Show storage configuration
