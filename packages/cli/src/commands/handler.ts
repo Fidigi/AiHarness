@@ -34,6 +34,13 @@ export interface CommandContext {
   extensionProviderNames: Set<string>;
   thinkingLevel: ThinkingLevel;
   trustManager?: ProjectTrustManager;
+  cwd: string;
+  workspaceId?: string;
+}
+
+export interface CommandWorkspaceContext {
+  cwd: string;
+  workspaceId?: string;
 }
 
 function createExtensionContext(ctx: CommandContext): ExtensionRuntimeContext {
@@ -41,6 +48,10 @@ function createExtensionContext(ctx: CommandContext): ExtensionRuntimeContext {
     sessionManager: ctx.sessionManager,
     currentSessionId: ctx.currentSessionId,
     provider: ctx.provider,
+    providerName: String((ctx.provider as unknown as { config?: { type?: string } } | undefined)?.config?.type ?? 'unknown'),
+    cwd: ctx.cwd,
+    workspaceId: ctx.workspaceId,
+    projectTrusted: ctx.trustManager?.isTrustedSync(ctx.cwd) ?? false,
     notify: (message, level = 'info') => {
       if (level === 'error') ctx.terminal.showError(message);
       else if (typeof ctx.terminal.writeOutput === 'function') ctx.terminal.writeOutput(message);
@@ -82,7 +93,11 @@ const commands: CommandEntry[] = [
     usage: '/new [title]',
     handler: async (args, ctx) => {
       const title = args.length > 0 ? args.join(' ') : `Conversation ${ctx.sessionManager.list().length + 1}`;
-      const session = await ctx.sessionManager.create({ title });
+      const session = await ctx.sessionManager.create({
+        title,
+        cwd: ctx.cwd,
+        workspaceId: ctx.workspaceId,
+      });
       // Switch to the newly created session
       ctx.currentSessionId = session.id;
       return `Created: ${chalk.cyan(session.id)} - ${chalk.dim(title)}`;
@@ -936,16 +951,16 @@ const commands: CommandEntry[] = [
   },
   {
     name: 'tools',
-    description: 'List tools registered by extensions',
+    description: 'List built-in and extension tools',
     handler: async (_args, ctx) => {
       const tools = ctx.extensionRegistry?.getTools() ?? [];
-      if (tools.length === 0) return chalk.yellow('No extension tools registered.');
+      if (tools.length === 0) return chalk.yellow('No tools registered.');
       return tools.map(tool => `${chalk.green('●')} ${chalk.cyan(tool.name)} — ${tool.description}`).join('\n');
     },
   },
   {
     name: 'tool',
-    description: 'Execute an extension tool manually',
+    description: 'Execute a registered tool manually',
     usage: '/tool <name> [json-input]',
     handler: async (args, ctx) => {
       if (!ctx.extensionRegistry || !args[0]) return chalk.red('Usage: /tool <name> [json-input]');
@@ -977,15 +992,15 @@ const commands: CommandEntry[] = [
         return projects.length ? projects.join('\n') : 'Aucun projet approuvé.';
       }
       if (action === 'add') {
-        const trusted = await ctx.trustManager.trust(process.cwd());
+        const trusted = await ctx.trustManager.trust(ctx.cwd);
         return chalk.green(`Projet approuvé : ${trusted}. Utilisez /reload pour charger ses extensions.`);
       }
       if (action === 'remove') {
-        const removed = await ctx.trustManager.untrust(process.cwd());
+        const removed = await ctx.trustManager.untrust(ctx.cwd);
         return chalk.yellow(`Confiance retirée : ${removed}. Utilisez /reload.`);
       }
       if (action !== 'status') return chalk.red('Usage: /trust [status|add|remove|list]');
-      return await ctx.trustManager.isTrusted(process.cwd())
+      return await ctx.trustManager.isTrusted(ctx.cwd)
         ? chalk.green('Le projet courant est approuvé.')
         : chalk.yellow('Le projet courant n’est pas approuvé ; ses extensions sont ignorées.');
     },
@@ -1017,6 +1032,7 @@ export class CommandHandler {
     terminal: TerminalUI,
     extensionRegistry?: ExtensionRegistry,
     trustManager?: ProjectTrustManager,
+    workspace: CommandWorkspaceContext = { cwd: process.cwd() },
   ) {
     // Initialize providers
     const providers = new Map<string, AiProvider>();
@@ -1106,6 +1122,8 @@ export class CommandHandler {
       extensionProviderNames: new Set(),
       thinkingLevel: 'off',
       trustManager,
+      cwd: workspace.cwd,
+      workspaceId: workspace.workspaceId,
     };
     syncExtensionProviders(this.ctx);
   }

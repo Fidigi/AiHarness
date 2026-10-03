@@ -14,6 +14,7 @@ Review [`server-api.md`](./server-api.md) for route guards and [`extensions.md`]
 |---|---|
 | `packages/core/src/security/workspace-manager.ts` | Allowed roots, realpath boundary, file kind and Git/worktree operations |
 | `packages/core/src/security/project-trust.ts` | Canonical project allow-list in `~/.ai-harness/trust.json` |
+| `packages/core/src/tools/workspace-tools.ts` | Shared CLI/Web path resolution, mutation trust gates, exact edits, bounded searches and command execution |
 | `packages/server/src/security/request-security.ts` | Roles, capabilities, Origin checks, limits, WebSocket auth and safe errors |
 | `packages/server/src/security/credential-store.ts` | Optional AES-GCM encrypted credential persistence |
 | `packages/server/src/runtime/provider-registry.ts` | Separation of custom-provider metadata and secrets |
@@ -45,7 +46,7 @@ browser/CLI path
 
 Trust is a global canonical-path allow-list stored atomically in `~/.ai-harness/trust.json`; it is not a project marker such as `.ai-harness/trusted`. Symlinks may not escape allowed roots. Never pass a browser-supplied path directly to `fs`, Git, a shell, PTY, package installer, or AgentRuntime.
 
-Read-only workspace browsing still requires `workspace:read`; dangerous writes/execution additionally require admin capabilities and, where applicable, project trust.
+Read-only workspace browsing still requires `workspace:read`; dangerous writes/execution additionally require admin capabilities and, where applicable, project trust. In the CLI, the same Core tools are rooted at the startup cwd: `read`, `grep`, `find`, and `ls` remain read-only, while `bash`, `edit`, and `write` require the current canonical workspace to be trusted.
 
 ## Secret Storage
 

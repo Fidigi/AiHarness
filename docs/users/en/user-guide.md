@@ -220,6 +220,31 @@ export AI_HARNESS_OAUTH_OPENAI_SCOPE='...' # optional
 
 The prefix follows the form `AI_HARNESS_OAUTH_<PROVIDER>_*`.
 
+### Built-in Coding Tools
+
+The CLI and Web agent use the same tool implementations from the Core package:
+
+| Tool | Purpose |
+|---|---|
+| `read` | reads a text-file window with `offset` and `limit` |
+| `grep` | searches files for a regular expression or literal string |
+| `find` | finds files by glob |
+| `ls` | lists a directory |
+| `edit` | applies exact, unique, non-overlapping text replacements |
+| `write` | creates or completely rewrites a file |
+| `bash` | runs a bounded shell command in the workspace |
+| `powershell` | Windows equivalent, available only on that OS |
+
+Every path is canonicalized inside the directory from which the CLI started; escaping symlinks and traversal are rejected. Reads and searches do not execute code. `bash`, `edit`, and `write` require explicit trust:
+
+```text
+/trust add
+/tools
+/tool read {"path":"README.md","offset":1,"limit":80}
+```
+
+File reads, searches, listings, and command output are bounded so they cannot exhaust the model context. Image delivery through the CLI `read` tool is not implemented yet; use Web attachments for multimodal input for now.
+
 ### Branches and Context
 
 | Command | Description |

@@ -220,6 +220,31 @@ export AI_HARNESS_OAUTH_OPENAI_SCOPE='...' # facultatif
 
 Le préfixe suit la forme `AI_HARNESS_OAUTH_<PROVIDER>_*`.
 
+### Outils de code intégrés
+
+Le CLI et l’agent Web utilisent les mêmes implémentations d’outils fournies par le package Core :
+
+| Outil | Usage |
+|---|---|
+| `read` | lit une fenêtre de fichier texte avec `offset` et `limit` |
+| `grep` | recherche une expression régulière ou une chaîne dans les fichiers |
+| `find` | recherche des fichiers par glob |
+| `ls` | liste un répertoire |
+| `edit` | applique des remplacements textuels exacts, uniques et non chevauchants |
+| `write` | crée ou réécrit complètement un fichier |
+| `bash` | exécute une commande shell bornée dans le workspace |
+| `powershell` | équivalent Windows, disponible uniquement sur cet OS |
+
+Tous les chemins sont canonicalisés dans le dossier depuis lequel le CLI a démarré ; les liens symboliques sortants et les traversées sont refusés. Les lectures et recherches sont disponibles sans exécuter de code. `bash`, `edit` et `write` exigent une approbation explicite :
+
+```text
+/trust add
+/tools
+/tool read {"path":"README.md","offset":1,"limit":80}
+```
+
+Les sorties de lecture, recherche, listing et commande sont limitées afin de ne pas saturer le contexte du modèle. Le support des images par l’outil CLI `read` reste à venir ; utilisez pour l’instant les pièces jointes de l’interface Web pour les entrées multimodales.
+
 ### Branches et contexte
 
 | Commande | Description |

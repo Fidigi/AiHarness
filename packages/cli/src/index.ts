@@ -3,7 +3,13 @@
 // AiHarness CLI - Regular readline and fullscreen TUI entry point
 // ============================================================
 
-import { ExtensionRegistry, SessionManager, JsonlSessionStore } from '@ai-harness/core';
+import {
+  ExtensionRegistry,
+  JsonlSessionStore,
+  registerWorkspaceTools,
+  SessionManager,
+  WorkspaceManager,
+} from '@ai-harness/core';
 import type { ChatResponse } from '@ai-harness/core';
 import readline from 'readline';
 import chalk from 'chalk';
@@ -69,11 +75,23 @@ async function main(): Promise<void> {
   const resourceLoadResult = await resourceManager.loadAll();
   for (const error of resourceLoadResult.errors) terminal.showError(`Ressource : ${error.message}`);
 
+  const workspaceManager = new WorkspaceManager({
+    allowedRoots: [process.cwd()],
+    defaultCwd: process.cwd(),
+  });
+  await workspaceManager.initialize();
+  const workspaceCwd = await workspaceManager.getDefaultCwd();
+  const workspaceDescriptor = await workspaceManager.describe(
+    workspaceCwd,
+    await trustManager.isTrusted(workspaceCwd),
+  );
+
   const extensionRegistry = new ExtensionRegistry();
   extensionRegistry.attachSessionManager(sessionManager);
+  await registerWorkspaceTools(extensionRegistry, workspaceManager);
   const extensionLoader = new ExtensionLoader(extensionRegistry, {
     paths: getExtensionPaths(process.argv.slice(2)),
-    isProjectTrusted: () => trustManager.isTrustedSync(process.cwd()),
+    isProjectTrusted: () => trustManager.isTrustedSync(workspaceCwd),
   });
   const registerSkillTool = async (): Promise<void> => {
     const skills = resourceManager.getModelInvocableSkills();
@@ -113,7 +131,14 @@ async function main(): Promise<void> {
   }
   await registerSkillTool();
 
-  const commandHandler = new CommandHandler(sessionManager, store, terminal, extensionRegistry, trustManager);
+  const commandHandler = new CommandHandler(
+    sessionManager,
+    store,
+    terminal,
+    extensionRegistry,
+    trustManager,
+    { cwd: workspaceCwd, workspaceId: workspaceDescriptor.id },
+  );
   const keyBindings = new KeyBindingManager();
   const helpAction = {
     description: 'Afficher l’aide',
@@ -137,7 +162,11 @@ async function main(): Promise<void> {
   if (existingSessions.length > 0) {
     currentSessionId = existingSessions[0].id;
   } else {
-    currentSessionId = (await sessionManager.create({ title: 'Nouvelle conversation' })).id;
+    currentSessionId = (await sessionManager.create({
+      title: 'Nouvelle conversation',
+      cwd: workspaceCwd,
+      workspaceId: workspaceDescriptor.id,
+    })).id;
   }
 
   let ctx = commandHandler.getContext();
@@ -308,6 +337,10 @@ async function main(): Promise<void> {
           sessionManager,
           currentSessionId,
           provider,
+          providerName,
+          cwd: workspaceCwd,
+          workspaceId: workspaceDescriptor.id,
+          projectTrusted: await trustManager.isTrusted(workspaceCwd),
           notify: (message, level = 'info') => {
             if (level === 'error') terminal.showError(message);
             else terminal.writeOutput(message);

@@ -7,6 +7,7 @@ import type {
 } from '../extensions/extension-registry.js';
 import type { Message, MessageContentBlock, Session } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
+import { READ_ONLY_CODING_TOOL_NAMES } from '../tools/workspace-tools.js';
 import { AgentAbortError, runToolLoop } from './tool-loop.js';
 import {
   AgentEventJournal,
@@ -635,7 +636,8 @@ export class AgentRuntime {
   ): ReturnType<ExtensionRegistry['getTools']> {
     if (preset === 'chat-only') return [];
     const readOnly = new Set([
-      'read_file', 'list_files', 'search_files', 'git_status', 'git_diff', 'load_skill', 'spawn_subagent',
+      ...READ_ONLY_CODING_TOOL_NAMES,
+      'load_skill', 'spawn_subagent',
     ]);
     const toolAllowlist = allowedTools === undefined ? undefined : new Set(allowedTools);
     const extensionAllowlist = allowedExtensions === undefined ? undefined : new Set(allowedExtensions);

@@ -6,7 +6,7 @@ test.describe('Explorer, Git et viewer', () => {
     const session = mockSession('files', 'Files', [{ role: 'assistant', content: '[Open implementation](file:src/app.ts#L2)' }]);
     session.messages[0]!.blocks = [
       { type: 'text', text: session.messages[0]!.content },
-      { type: 'tool_call', id: 'write-1', name: 'write_file', input: { path: 'src/generated.ts', content: 'export {}' } },
+      { type: 'tool_call', id: 'write-1', name: 'write', input: { path: 'src/generated.ts', content: 'export {}' } },
     ];
     const api = await installMockApi(page, {
       sessions: [session],

@@ -113,7 +113,14 @@ describe('combined Web server', () => {
 
     const workspace = await fetch(`${baseUrl}/api/workspaces/default`).then(response => response.json()) as { id: string };
     const tools = await fetch(`${baseUrl}/api/tools?cwd=${encodeURIComponent(webRoot)}&projectId=${workspace.id}`)
-      .then(response => response.json()) as { tools: Array<{ name: string }> };
+      .then(response => response.json()) as { tools: Array<{ name: string; extensionId: string }> };
+    expect(tools.tools
+      .filter(tool => tool.extensionId === 'builtin:workspace-tools')
+      .map(tool => tool.name))
+      .toEqual([
+        'read', 'write', 'edit', 'ls', 'find', 'grep', 'bash',
+        ...(process.platform === 'win32' ? ['powershell'] : []),
+      ]);
     const toolUpdate = await fetch(`${baseUrl}/api/tools`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -353,7 +360,7 @@ describe('combined Web server', () => {
         profile: {
           id: 'http-review', name: 'HTTP review', description: 'Review through HTTP',
           instructions: 'Return a concise review.', kind: 'custom', enabled: true,
-          tools: ['read_file'], skills: [], extensions: [], maxTurns: 4,
+          tools: ['read'], skills: [], extensions: [], maxTurns: 4,
           inheritContext: true, background: true,
         },
       }),
@@ -589,9 +596,11 @@ describe('combined Web server', () => {
     });
     const readOnly = await fetch(`${baseUrl}/api/agent/sessions/${created.id}/capabilities`).then(response => response.json()) as { tools: Array<{ name: string }> };
     expect(readOnly.tools.map(tool => tool.name)).toEqual(expect.arrayContaining([
-      'list_files', 'read_file', 'git_status', 'git_diff', 'load_skill',
+      'read', 'grep', 'find', 'ls', 'load_skill',
     ]));
-    expect(readOnly.tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['write_file', 'bash']));
+    expect(readOnly.tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining([
+      'edit', 'write', 'bash',
+    ]));
     await fetch(`${baseUrl}/api/sessions/${created.id}`, { method: 'DELETE' });
   });
 
