@@ -44,7 +44,7 @@ Primary runtime entry points:
 
 | Runtime | Source entry point | Built command/output |
 |---|---|---|
-| Interactive CLI and JSONL RPC | `packages/cli/src/index.ts` | `ai-harness`, `packages/cli/dist/index.js` |
+| Interactive, print, JSON event, and JSONL RPC CLI | `packages/cli/src/index.ts` | `ai-harness`, `packages/cli/dist/index.js` |
 | API server | `packages/server/src/index.ts` | `packages/server/dist/index.js` |
 | Combined production Web launcher | `packages/server/src/web-cli.ts` | `ai-harness-web`, `packages/server/dist/web-cli.js` |
 | React application | `packages/web/src/index.tsx` | `packages/web/dist/` |
@@ -81,36 +81,44 @@ Start at `packages/core/src/index.ts`, which defines the public package exports.
 | Area | Files | Responsibility |
 |---|---|---|
 | Shared contracts | `src/types/index.ts` | `Message`, `Session`, provider/model metadata and pricing, OAuth/custom providers, tools, skill registry, plugins/sub-agents, extension interactions and run snapshots |
-| Provider abstraction | `src/providers/index.ts` | `AiProvider`, factory/built-ins, streaming/reasoning, retries, discovery and usage/cache normalization |
+| Provider abstraction | `src/providers/index.ts`, `src/providers/model-metadata.ts` | `AiProvider`, factory/built-ins, streaming/reasoning, retries, discovery, usage/cache normalization and shared non-secret published model metadata |
+| Model catalogue | `src/providers/model-catalog.ts` | Shared published/configured/discovered/custom assembly, bounded discovery, exact/fuzzy/full-ID-first lookup, ordered scopes and non-secret protocol descriptors |
 | Session persistence | `src/sessions/session-manager.ts`, `src/sessions/serialization.ts` | `SessionManager`, v2 JSONL/wire format, commands, branches, cloning, summaries, per-session setting overrides, effective context and secret redaction |
 | Compaction | `src/sessions/compaction.ts`, `src/sessions/session-manager.ts` | Token estimation, target selection, summary prompts, inherited automatic policy, metrics and cancellation-safe application |
-| Detached agent | `src/agent/runtime.ts`, `src/agent/tool-loop.ts`, `src/agent/events.ts` | Shared model/tool loop, runs, stop/retry/queues, full bounded tool outputs, extension interactions and sequenced journal |
-| Coding tools | `src/tools/` | Shared CLI/Web `read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls` implementations, bounded output, exact edits and trust gates |
+| Detached agent | `src/agent/runtime.ts`, `src/agent/tool-loop.ts`, `src/agent/provider-turn.ts`, `src/agent/events.ts` | Shared model/tool loop, provider hooks/stream retry, runs, stop/queues, full bounded tool outputs, extension interactions and sequenced journal |
+| Coding tools and commands | `src/tools/` | Shared CLI/Web `read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`; browser-safe `!`/`!!` parsing; detached direct-shell runtime; bounded/backpressured process execution, filtered environments, tree cancellation, private output retention, exact edits, trust gates and common active-tool selection |
+| Prompt inputs and instructions | `src/prompts/{prompt-input,instruction-context}.ts` | Canonical bounded `@path` UTF-8/image loading plus shared CLI/Web agent-directory, trusted project-context and system-prompt discovery/composition; regular files, aggregate limits and source precedence are enforced once in Core |
+| Pi settings | `src/config/pi-settings.ts` | Bounded `settings.json` loading, schema diagnostics, legacy migration, trusted global/project merge, global-only fields, provenance, resource paths, and tool/model/thinking/compaction resolution |
 | Workspace security | `src/security/` | Canonical allowed roots, symlink boundary, trust persistence, Git/worktree operations |
 | Extension API/loader | `src/extensions/{extension-registry,module-loader}.ts` | Owned commands/tools/providers/plain-text UI, hooks/listeners, bounded symlink-free discovery and atomic managed generations |
 | Utilities | `src/utils/index.ts`, `src/utils/event-emitter.ts` | IDs, formatting, retry helpers, typed event infrastructure |
 
-Provider implementations currently include OpenAI, Anthropic, Google Gemini, Azure OpenAI, Vertex Gemini, AWS Bedrock, local OpenAI-compatible servers, and mock. OpenAI/Anthropic/Gemini expose bounded model discovery where their APIs permit it; reasoning deltas and input/output/cache usage are normalized. Server's `src/runtime/model-catalog.ts` owns the versioned published capabilities, context/output limits, compatibility and cache-aware prices. Public Core additions must be re-exported from `src/index.ts`.
+Provider implementations currently include OpenAI, Anthropic, Google Gemini, Azure OpenAI, Vertex Gemini, AWS Bedrock, local OpenAI-compatible servers, and mock. OpenAI/Anthropic/Gemini expose bounded model discovery where their APIs permit it; reasoning deltas and input/output/cache usage are normalized. Core's `src/providers/model-metadata.ts` owns versioned non-secret published capabilities, context/output limits and cache-aware prices. `src/providers/model-catalog.ts` merges those with configured, bounded/deduplicated live and custom definitions, then supplies the full-ID-safe resolver, thinking suffixes, fuzzy filtering, glob scopes and RPC descriptors reused by CLI and Server. Public Core additions must be re-exported from `src/index.ts`.
 
-Session files are versioned JSONL (current schema: v2). Entry types include `metadata`, `message`, `command`, `compaction`, and `branch_summary`; old unversioned message-only files remain readable. Runtime timestamps are `Date` objects, API dates are ISO strings, and persisted entry timestamps are Unix milliseconds. Rich message blocks, usage/cost, agent/workspace metadata and branch relationships must round-trip. Provider secrets must be redacted before API or disk serialization. Update loading, saving, appending, exports/imports, API hydration and compatibility tests together.
+Session files are versioned JSONL (current schema: v2). Entry types include `metadata`, `message`, `command`, `compaction`, and `branch_summary`; old unversioned message-only files remain readable. New messages track their active parent, command/message leaves advance together, clones remap internal IDs, and `SessionManager.getRawEntries()` retains persisted pre-compaction history for projections. Runtime timestamps are `Date` objects, API dates are ISO strings, and persisted entry timestamps are Unix milliseconds. Rich message blocks, usage/cost, agent/workspace metadata and branch relationships must round-trip. Provider secrets must be redacted before API or disk serialization. Update loading, saving, appending, exports/imports, API hydration and compatibility tests together.
 
 ### `packages/cli`: terminal product and automation
 
 | Area | Files | Responsibility |
 |---|---|---|
-| Composition root | `src/index.ts` | Startup, argument modes, session loading, resources, trust, extensions, input dispatch, hooks, streaming, shutdown |
+| Composition root | `src/index.ts` | Strict startup arguments, interactive/print/JSON/RPC modes, session loading, resources, trust, extensions, input dispatch, hooks, streaming, shutdown |
 | Command router | `src/commands/handler.ts` | Built-in slash commands, provider initialization, model/session operations, import/export/share/login |
-| Agent tool loop | `src/agent/tool-loop.ts` | Backward-compatible re-export of Core `runToolLoop` and its types; startup registers Core's workspace coding tools for the current cwd |
+| Startup sessions | `src/sessions/startup-session.ts` | New/continue/resume/open/fork/exact-ID/name selection and storage-directory precedence |
+| Agent execution adapters | `src/agent/{tool-loop,provider-turn}.ts` | Backward-compatible re-exports of Core execution primitives; startup registers Core's workspace coding tools for the current cwd |
 | Regular TUI | `src/tui/terminal-ui.ts` | Readline-oriented output, help, transcript, streaming writer |
 | Fullscreen TUI | `src/tui/fullscreen-ui.ts`, `src/tui/fullscreen-input.ts` | Alternate-screen rendering, input/history/completion, scrolling, extension panels |
 | Mode and themes | `src/tui/mode.ts`, `src/tui/theme-manager.ts` | Terminal mode selection and built-in/custom themes |
 | Extensions | `src/extensions/extension-loader.ts` | JavaScript extension discovery, dynamic import, reload |
 | Skills/prompts | `src/resources/resource-manager.ts` | Markdown front matter, discovery, prompt expansion, model-invocable skills |
 | Trust and OAuth | `src/security/` | Project trust file and provider OAuth device flow |
-| Headless RPC | `src/rpc/rpc-server.ts` | JSONL stdin/stdout protocol and RPC provider/session setup |
+| Direct shell | `src/cli/shell-controller.ts` | Trust-aware interactive `!`/`!!` adapter over Core's CLI/Web shell runtime, with regular/fullscreen streaming and abort |
+| Models | `src/cli/model-list.ts`, `src/providers/configured-providers.ts` | Configured-provider listing, shared startup exact/fuzzy/scope resolution, settings defaults/scopes, ephemeral API-key override and mode-independent provider construction |
+| Pi settings and resources | `src/index.ts`, `src/resources/resource-manager.ts` | Global/trusted-project settings integration, safe ordered skill/prompt discovery, startup precedence, `/settings`, and interactive reload |
+| Headless JSON | `src/cli/json-output.ts` | Pi-shaped session/lifecycle/retry/compaction JSONL encoding plus serialized backpressure-aware stdout isolation over the shared Core loop |
+| Headless RPC | `src/rpc/{rpc-server,pi-rpc-server,rpc-extension-ui}.ts` | Strict LF-framed Pi command/response/events, next-turn steering/follow-up, cached/scoped models, usage-aware raw session trees, bounded provider and shell streaming, expiring retained output, extension dialogs, and deprecated method/params compatibility |
 | Integration helpers | `src/utils/` | Keybindings, exports, clipboard, external editor |
 
-The CLI has regular, fullscreen, and RPC paths. A change to shared conversation behavior may need coverage in more than one path. Built-in command metadata lives in `commands/handler.ts`, while user-visible help also exists in both TUI implementations.
+The CLI has regular, fullscreen, print, one-shot JSON event, and RPC paths. A change to shared conversation behavior may need coverage in more than one path. All paths resolve Core's same model, instruction, and Pi settings contracts: startup model/scopes, thinking, tools, compaction/retry, session directory, resources, shell behavior, and supported TUI preferences use explicit CLI → environment → trusted project → agent-setting precedence where applicable. Pi-compatible context filenames and replace/append flags feed every provider turn; `/settings` reports effective source scopes and `/reload` refreshes settings, instructions, resources, extensions, tools, and shell callbacks for interactive runs. Startup-only session/model/TUI values still require a restart. `/model` and RPC cycle against the shared ordered scope, and `--list-models` reports settings diagnostics but exits before session/resource startup. Built-in command metadata lives in `commands/handler.ts`, while user-visible help also exists in both TUI implementations.
 
 Project extensions are executable code. User extensions are loaded from `~/.ai-harness/extensions`; project extensions under `.ai-harness/extensions` require project trust. CLI discovery/orchestration remains in `cli/src/extensions`, while the bounded `ExtensionModuleLoader` implementation is shared from Core. The server also uses it only during explicit startup/reload to atomically host enabled standalone/package extensions and their declarative Web surfaces; catalogue GETs and install operations never execute extension code.
 
@@ -119,7 +127,7 @@ Project extensions are executable code. User extensions are loaded from `~/.ai-h
 | Area | Files | Responsibility |
 |---|---|---|
 | Server composition | `src/index.ts`, `src/runtime/services.ts` | Express app, shared runtime services, middleware, route mounting, sharing, static Web assets, lifecycle |
-| Detached execution | `src/api/agent-routes.ts`, `src/runtime/command-runtime.ts` | Agent state/SSE/queues/stop, effective setting overrides, exact preset capabilities, shell command output/replay/cancel, manual and automatic compaction |
+| Detached execution | `src/api/agent-routes.ts`, `src/runtime/command-runtime.ts` | Agent state/SSE/queues/stop, effective setting overrides, Core-resolved trusted instruction prompts, exact preset capabilities, Core-backed shell command output/replay/cancel, manual and automatic compaction; `command-runtime.ts` is a compatibility re-export |
 | Interactive terminals | `src/api/terminal-routes.ts`, `src/runtime/terminal-runtime.ts` | Owned `node-pty` processes, bounded ANSI replay by UTF-8 offset, input/resize/exit, instance limits and shutdown |
 | Session windows | `src/api/session-pagination.ts`, `src/index.ts` | Metadata-only lists, bounded tail/before/around pages, stable message cursors, full server-side export, provider title generation and recursive cascade guard |
 | Workspaces and files | `src/api/workspace-routes.ts`, `src/api/file-routes.ts`, Core `src/tools/` | Trust, browse/Git/worktrees, shared bounded coding tools, fuzzy index, collision-aware upload, source/media download, Git stats/diffs and file-watch SSE |
@@ -129,7 +137,7 @@ Project extensions are executable code. User extensions are loaded from `~/.ai-h
 | Plugin packages | `src/api/plugin-routes.ts`, `src/runtime/plugin-service.ts`, `src/runtime/services.ts` | Explicit npm/Git/path administration, bounded metadata inventory, trust/scopes, transactional updates/checks and executable generation reload |
 | Skills | `src/api/skill-routes.ts`, `src/runtime/{skill-catalog,skill-registry}.ts` | Metadata-only discovery/invocation plus HTTPS/SHA-256 registry installs and updates by trusted global/project scope |
 | Web Push | `src/api/push-routes.ts`, `src/runtime/push-service.ts` | VAPID lifecycle, public-endpoint validation, encrypted-or-volatile subscriptions, categories and stale cleanup |
-| Child agents | `src/api/subagent-routes.ts`, `src/runtime/{subagent-service,subagent-runtime}.ts`, `src/runtime/services.ts` | Atomic global/project profiles, `spawn_subagent`, bounded linked child sessions, concurrency/depth, lifecycle and parent journal events |
+| Child agents | `src/api/subagent-routes.ts`, `src/runtime/{subagent-service,subagent-runtime}.ts`, `src/runtime/services.ts` | Atomic global/project profiles, `spawn_subagent`, bounded linked child sessions, shared trusted instruction composition, concurrency/depth, lifecycle and parent journal events |
 | Release status | `src/runtime/app-update.ts` | Bounded Web/agent versions, timed and cached release lookup, safe diagnostics without automatic installation |
 | Request security | `src/security/request-security.ts` | Cookie/Bearer roles and capabilities, Origin checks, rate limits, safe errors, WebSocket auth context |
 | Provider proxy/usage | `src/api/proxy.ts` | Built-in/custom provider setup, credentials, persistent cache-aware usage/cost, legacy chat/compaction and SSE |
@@ -188,20 +196,24 @@ The Web uses the server's real mock provider; there is no client-side demo respo
 ### CLI conversation
 
 ```text
-CLI input
-  -> resource expansion or CommandHandler
-  -> before:agent extension hook
-  -> SessionManager.addMessage(user)
-  -> runToolLoop
-       -> before:provider hook
-       -> AiProvider.streamChat
-       -> optional tool calls -> before:tool hook -> extension tool
-       -> persist tool call/result and continue provider turns
-  -> persist final assistant message
-  -> lifecycle events and TUI updates
+CLI positional/@file/piped input or interactive input
+  -> strict mode/tool selection and bounded Core prompt-file loading
+  |-> interactive ! / !! -> trust check -> Core ShellCommandRuntime
+  |      -> filtered process + bounded stream/tree cancellation
+  |      -> parented command persistence, optional model context and private full output
+  `-> resource expansion or CommandHandler
+       -> before:agent extension hook
+       -> SessionManager.addMessage(user)
+       -> runToolLoop
+            -> before:provider hook
+            -> AiProvider.streamChat
+            -> optional tool calls -> before:tool hook -> extension tool
+            -> persist tool call/result and continue provider turns
+       -> persist final assistant message
+       -> lifecycle events and TUI updates
 ```
 
-Cancellation must propagate through `AbortSignal` to provider and active tool work. Do not add a provider call path that bypasses hooks, persistence, or cancellation without an explicit reason.
+Cancellation must propagate through `AbortSignal` to provider, active tool work and direct shell process trees. Interactive, final-text-only print, one-shot JSON event, Pi-style RPC prompting, and the detached Web runtime use the same Core tool loop and provider-turn hooks; interactive CLI and Web direct commands separately share Core's `ShellCommandRuntime` and `parseShellCommandInput`. Provider implementations must await each stream callback; Core serializes delivery and bounds pending bytes/events so a non-cooperative extension cannot create an unbounded queue. JSON mode writes its version-3 session header and lifecycle records through `cli/json-output.ts`; RPC reuses that event encoder without the header. Do not add a provider or shell process path that bypasses hooks/persistence where applicable, retry, backpressure, environment filtering or cancellation without an explicit reason.
 
 ### Web detached conversation
 
@@ -275,11 +287,11 @@ Only an active run may request interaction. Keep widget content plain text and c
 
 ### Session persistence
 
-Both CLI and server default to `~/.ai-harness/sessions/<session-id>.jsonl`, so they can share conversations when running as the same OS user. `--no-session` disables CLI persistence. RPC can override the directory with `AI_HARNESS_SESSIONS_DIR`.
+Both CLI and server default to `~/.ai-harness/sessions/<session-id>.jsonl`, so they can share conversations when running as the same OS user. The custom v2 journal retains parent-linked active and abandoned entries; RPC fork moves the active leaf in place, while `--no-session` keeps an equivalent process-local journal. CLI and RPC resolve path-selected sessions first, then `--session-dir`, `PI_CODING_AGENT_SESSION_DIR`, legacy `AI_HARNESS_SESSIONS_DIR`, and Pi `sessionDir`; interactive-only `--resume` is rejected in RPC in favor of `--session`. This is not yet Pi v3 file interoperability.
 
 Server state under `AI_HARNESS_DATA_DIR` includes atomic `config.json`, `providers.json`, `usage-metrics.json`, `plugins.json`, `subagents.json` and trust/session files. `credentials.enc`, `provider-secrets.enc` and `push.enc` exist only when `AI_HARNESS_MASTER_KEY` enables encrypted persistence; their corresponding secrets/subscriptions otherwise remain process-memory only. Never put secrets into the non-secret JSON stores, fixtures, API status objects or browser persistence.
 
-Use `SessionManager` for domain operations, `JsonlSessionStore` for storage behavior, and `serializeSession`/`deserializeSession` at JSON boundaries. Avoid direct mutation of manager internals. Every write is asynchronous and should be awaited before reporting success. A clone is an independent root (`metadata.clonedFromSessionId`); a fork alone keeps `parentId`/branch lineage.
+Use `SessionManager` for domain operations, `JsonlSessionStore` for storage behavior, and `serializeSession`/`deserializeSession` at JSON boundaries. Avoid direct mutation of manager internals. Every write is asynchronous and should be awaited before reporting success. Session files must be regular, non-symlink and owner-only. A clone is an independent root (`metadata.clonedFromSessionId`); RPC in-place fork retains descendants in one journal, while startup/copy forks keep related-session lineage.
 
 ## 5. Cross-Package Change Guides
 
@@ -288,9 +300,9 @@ Use `SessionManager` for domain operations, `JsonlSessionStore` for storage beha
 Review all of the following, not only the core implementation:
 
 1. `core/src/types/index.ts`: provider/config/model metadata, capabilities, compatibility and pricing contracts.
-2. `core/src/providers/index.ts`: implementation, validation, discovery, defaults, factory, streaming/reasoning/tools and usage normalization.
+2. `core/src/providers/{index,model-metadata,model-catalog}.ts`: implementation, validation, bounded discovery, catalogue assembly/resolution, defaults, factory, streaming/reasoning/tools and usage normalization.
 3. `core/src/index.ts`: public exports.
-4. `cli/src/commands/handler.ts` and `rpc/rpc-server.ts`: environment and headless support.
+4. `cli/src/{commands/handler,providers/configured-providers,cli/model-list}.ts` and `rpc/rpc-server.ts`: environment, startup/listing, interactive and headless support.
 5. `server/src/api/proxy.ts`: built-ins/adapters, usage persistence and all non-agent provider call paths.
 6. `server/src/runtime/{model-catalog,provider-registry,provider-oauth}.ts` plus matching routes: custom lifecycle, secrets, discovery and OAuth.
 7. `web/src/store/session-store.ts`, `services/api.ts` and `components/{SettingsView,EcosystemSettings}.tsx`: catalogue/defaults/admin UI.
@@ -344,7 +356,7 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 | `docs/ai/topics/providers.md` | English | Agents | Versioned | Provider execution, catalogue, registry and OAuth |
 | `docs/ai/topics/sessions.md` | English | Agents | Versioned | JSONL v2, serialization, compaction, pagination and branches |
 | `docs/ai/topics/extensions.md` | English | Agents | Versioned | JavaScript extensions, packages, reload and declarative interactions |
-| `docs/ai/topics/cli-reference.md` | English | Agents | Versioned | Regular/fullscreen CLI and JSONL RPC |
+| `docs/ai/topics/cli-reference.md` | English | Agents | Versioned | Regular/fullscreen/print CLI, JSON events, and JSONL RPC |
 | `docs/ai/topics/server-api.md` | English | Agents | Versioned | REST, SSE, WebSocket and detached runtime contracts |
 | `docs/ai/topics/web-app-architecture.md` | English | Agents | Versioned | React stores/components, browser persistence, PWA and validation |
 | `docs/ai/topics/security.md` | English | Agents | Versioned | Workspace trust, auth, secrets and executable-code boundaries |
@@ -385,7 +397,7 @@ make build-prod      # Build the complete production image
 
 Use `make lockfile` after an intentional dependency or package metadata change; it regenerates `package-lock.json` in Docker.
 
-For a focused Playwright test during iteration, pass arguments through the Makefile, for example `make test-e2e E2E_ARGS='e2e/performance.spec.ts -g "virtualise" --retries=0'`. For focused Vitest work, use `make shell` and run the relevant npm command inside that container. Final validation should still use the standard targets below.
+For a focused Playwright test during iteration, pass arguments through the Makefile, for example `make test-e2e E2E_ARGS='e2e/performance.spec.ts -g "virtualise" --retries=0'`. The E2E container receives a 1 GiB shared-memory ceiling by default to prevent Chromium worker crashes; override `E2E_DOCKER_ARGS` only for a runner-specific need. For focused Vitest work, use `make shell` and run the relevant npm command inside that container. Final validation should still use the standard targets below.
 
 ### Validation matrix
 

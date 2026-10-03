@@ -1,5 +1,11 @@
 import { Router, type Request, type Response } from 'express';
-import type { AgentEvent, ExtensionInteractionRequest, MessageContentBlock, Session } from '@ai-harness/core';
+import {
+  resolveInstructionPrompt,
+  type AgentEvent,
+  type ExtensionInteractionRequest,
+  type MessageContentBlock,
+  type Session,
+} from '@ai-harness/core';
 import type { RuntimeServices } from '../runtime/services.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { boundedMessageLimit, serializeSessionPage } from './session-pagination.js';
@@ -354,6 +360,13 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       });
       const selectedProvider = stringValue(body.provider, 'provider', { max: 100 })!;
       const selectedModel = effective.values.model ?? requestedModel;
+      const configuredSystemPrompt = stringValue(body.systemPrompt, 'systemPrompt', { optional: true, max: 200_000 })
+        ?? effective.values.systemPrompt;
+      const instructions = await resolveInstructionPrompt({
+        cwd,
+        projectTrusted: trusted,
+        systemPromptText: configuredSystemPrompt,
+      });
       const modelSupportsTools = services.modelCatalog.getCapabilities(selectedProvider, selectedModel)?.toolCalls !== false;
       const run = await services.agentRuntime.start({
         sessionId: session.id,
@@ -366,8 +379,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         thinking: effective.values.thinking,
         toolPreset: effective.values.toolPreset,
         persistSettings: false,
-        systemPrompt: stringValue(body.systemPrompt, 'systemPrompt', { optional: true, max: 200_000 })
-          ?? effective.values.systemPrompt,
+        systemPrompt: instructions.systemPrompt,
         maxRetries: integerValue(body.maxRetries, 2, 0, 5),
         maxToolRounds: integerValue(body.maxToolRounds, 8, 1, 32),
         allowedTools: modelSupportsTools

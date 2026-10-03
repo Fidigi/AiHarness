@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { lstat, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import nodePath from 'node:path';
 import type {
@@ -14,9 +13,15 @@ import {
   formatToolBytes,
   truncateToolHead,
   truncateToolLine,
-  truncateToolTail,
   type ToolTruncation,
 } from './truncation.js';
+import {
+  executeProcess,
+  executeShellCommand,
+  formatProcessOutput as processOutput,
+  ProcessAbortedError,
+  type ProcessExecutionResult as ProcessResult,
+} from './process-execution.js';
 
 const MAX_INPUT_PATH = 20_000;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -25,9 +30,8 @@ const MAX_SEARCH_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_SEARCH_FILES = 100_000;
 const MAX_PROCESS_CAPTURE = 10 * 1024 * 1024;
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
-const PROCESS_KILL_GRACE_MS = 500;
 
-/** Pi-compatible default names. grep/find/ls are registered but are not part of this default selection. */
+/** Default tool names. grep/find/ls are registered but are not part of this default selection. */
 export const DEFAULT_CODING_TOOL_NAMES = ['read', 'bash', 'edit', 'write'] as const;
 export const READ_ONLY_CODING_TOOL_NAMES = ['read', 'grep', 'find', 'ls'] as const;
 
@@ -36,14 +40,9 @@ export interface WorkspaceToolOptions {
   extensionId?: string;
   /** Safety ceiling applied even when a model omits the optional shell timeout. */
   commandTimeoutMs?: number;
-}
-
-interface ProcessResult {
-  output: string;
-  exitCode: number;
-  durationMs: number;
-  captureTruncated: boolean;
-  timedOut: boolean;
+  /** Pi-compatible shell settings; callbacks allow a host reload to update them safely. */
+  shellPath?: string | (() => string | undefined);
+  shellCommandPrefix?: string | (() => string | undefined);
 }
 
 interface SearchFile {
@@ -157,127 +156,6 @@ async function withMutationQueue<T>(filePath: string, operation: () => Promise<T
   }
 }
 
-function terminateProcess(child: ReturnType<typeof spawn>, detached: boolean): NodeJS.Timeout | undefined {
-  if (child.exitCode !== null || child.signalCode !== null) return undefined;
-  try {
-    if (detached && child.pid) process.kill(-child.pid, 'SIGTERM');
-    else child.kill('SIGTERM');
-  } catch {
-    try { child.kill('SIGTERM'); } catch { /* Process already exited. */ }
-  }
-  const force = setTimeout(() => {
-    try {
-      if (detached && child.pid) process.kill(-child.pid, 'SIGKILL');
-      else child.kill('SIGKILL');
-    } catch { /* Process already exited. */ }
-  }, PROCESS_KILL_GRACE_MS);
-  force.unref();
-  return force;
-}
-
-async function executeProcess(input: {
-  executable: string;
-  args: string[];
-  cwd: string;
-  signal?: AbortSignal;
-  timeoutMs: number;
-  detached?: boolean;
-  maxCapture?: number;
-}): Promise<ProcessResult> {
-  throwIfAborted(input.signal);
-  const startedAt = Date.now();
-  const maxCapture = input.maxCapture ?? MAX_PROCESS_CAPTURE;
-  return new Promise((resolve, reject) => {
-    const detached = Boolean(input.detached && process.platform !== 'win32');
-    const child = spawn(input.executable, input.args, {
-      cwd: input.cwd,
-      detached,
-      windowsHide: true,
-      env: { ...process.env, AI_HARNESS_AGENT: '1' },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let output = '';
-    let captureTruncated = false;
-    let timedOut = false;
-    let aborted = false;
-    let settled = false;
-    let forceKill: NodeJS.Timeout | undefined;
-
-    const append = (chunk: Buffer | string): void => {
-      output += chunk.toString();
-      if (output.length > maxCapture) {
-        output = output.slice(-maxCapture);
-        captureTruncated = true;
-      }
-    };
-    const cleanup = (): void => {
-      clearTimeout(timeout);
-      if (forceKill) clearTimeout(forceKill);
-      input.signal?.removeEventListener('abort', abort);
-    };
-    const abort = (): void => {
-      aborted = true;
-      forceKill ??= terminateProcess(child, detached);
-    };
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      forceKill ??= terminateProcess(child, detached);
-    }, input.timeoutMs);
-    timeout.unref();
-    input.signal?.addEventListener('abort', abort, { once: true });
-    child.stdout?.on('data', append);
-    child.stderr?.on('data', append);
-    child.once('error', error => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(error);
-    });
-    child.once('close', code => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      if (aborted) {
-        reject(new Error('Operation aborted.'));
-        return;
-      }
-      resolve({
-        output,
-        exitCode: timedOut ? 124 : code ?? 1,
-        durationMs: Date.now() - startedAt,
-        captureTruncated,
-        timedOut,
-      });
-    });
-  });
-}
-
-function processOutput(result: ProcessResult, empty = '(no output)'): {
-  content: string;
-  details: Record<string, unknown>;
-} {
-  const truncation = truncateToolTail(result.output);
-  let content = truncation.content || empty;
-  const notices: string[] = [];
-  if (result.captureTruncated) notices.push('Process output exceeded the capture limit; the beginning was discarded');
-  if (truncation.truncated) {
-    notices.push(`Showing the last ${truncation.outputLines} of ${truncation.totalLines} lines (${formatToolBytes(DEFAULT_TOOL_MAX_BYTES)} limit)`);
-  }
-  if (result.timedOut) notices.push('Command timed out');
-  if (result.exitCode !== 0 && !result.timedOut) notices.push(`Command exited with code ${result.exitCode}`);
-  if (notices.length) content += `\n\n[${notices.join('. ')}]`;
-  return {
-    content,
-    details: {
-      exitCode: result.exitCode,
-      durationMs: result.durationMs,
-      truncated: result.captureTruncated || truncation.truncated,
-      ...(truncation.truncated ? { truncation } : {}),
-      ...(result.timedOut ? { timedOut: true } : {}),
-    },
-  };
-}
-
 function headOutput(content: string): { content: string; truncation?: ToolTruncation } {
   const truncation = truncateToolHead(content);
   if (!truncation.truncated) return { content };
@@ -304,7 +182,7 @@ async function gitAwareFiles(
       cwd: root,
       signal,
       timeoutMs: 10_000,
-      maxCapture: MAX_PROCESS_CAPTURE,
+      maxCaptureBytes: MAX_PROCESS_CAPTURE,
     });
     if (result.exitCode !== 0 || result.captureTruncated) return undefined;
     const files: SearchFile[] = [];
@@ -759,6 +637,7 @@ export async function registerWorkspaceTools(
       properties: {
         command: { type: 'string', description: 'Shell command to execute.' },
         timeout: { type: 'number', description: `Optional timeout in seconds (maximum ${commandTimeoutMs / 1_000}).` },
+        excludeFromContext: { type: 'boolean', description: 'Store the command output without adding it to later model context.' },
       },
       required: ['command'],
       additionalProperties: false,
@@ -767,6 +646,7 @@ export async function registerWorkspaceTools(
       requireTrust(context);
       const input = objectInput(raw);
       const command = stringInput(input, 'command', { max: 100_000 });
+      const excludedFromContext = input.excludeFromContext !== false;
       const requestedTimeout = input.timeout === undefined
         ? commandTimeoutMs
         : Number(input.timeout) * 1_000;
@@ -774,34 +654,60 @@ export async function registerWorkspaceTools(
         throw new Error(`Tool parameter "timeout" must be greater than zero and at most ${commandTimeoutMs / 1_000} seconds.`);
       }
       const cwd = await workspaceRoot(workspaceManager, context);
-      const powershell = shell === 'powershell' || process.platform === 'win32';
+      const configuredShellPath = typeof options.shellPath === 'function'
+        ? options.shellPath() : options.shellPath;
+      const commandPrefix = typeof options.shellCommandPrefix === 'function'
+        ? options.shellCommandPrefix() : options.shellCommandPrefix;
+      const powershell = shell === 'powershell' || (process.platform === 'win32' && !configuredShellPath);
       const startedAt = Date.now();
       let result: ProcessResult;
       try {
-        result = await executeProcess({
-          executable: powershell ? 'powershell.exe' : '/bin/sh',
-          args: powershell
-            ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command]
-            : ['-lc', command],
-          cwd,
-          signal,
-          timeoutMs: requestedTimeout,
-          detached: true,
-        });
+        result = powershell
+          ? await executeProcess({
+            executable: 'powershell.exe',
+            args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command],
+            cwd,
+            signal,
+            timeoutMs: requestedTimeout,
+            detached: true,
+            onOutput: context.onProcessOutput,
+            agentEnvironment: true,
+          })
+          : await executeShellCommand({
+            command,
+            commandPrefix,
+            shellPath: configuredShellPath,
+            cwd,
+            signal,
+            timeoutMs: requestedTimeout,
+            onOutput: context.onProcessOutput,
+            agentEnvironment: true,
+          });
       } catch (error) {
+        const abortedResult = error instanceof ProcessAbortedError ? error.result : undefined;
+        const partial = abortedResult ? processOutput(abortedResult) : undefined;
+        const fullOutputPath = partial?.details.truncated && context.processOutputPath
+          ? context.processOutputPath
+          : undefined;
         if (context.currentSessionId) {
           await context.sessionManager.addCommand(context.currentSessionId, {
             command,
             cwd,
             status: signal?.aborted ? 'cancelled' : 'failed',
-            output: error instanceof Error ? error.message : String(error),
-            durationMs: Date.now() - startedAt,
-            excludedFromContext: true,
+            output: partial?.content ?? (error instanceof Error ? error.message : String(error)),
+            ...(abortedResult ? { exitCode: abortedResult.exitCode } : {}),
+            durationMs: abortedResult?.durationMs ?? Date.now() - startedAt,
+            excludedFromContext,
+            ...(partial ? { truncated: Boolean(partial.details.truncated) } : {}),
+            ...(fullOutputPath ? { downloadPath: fullOutputPath } : {}),
           });
         }
         throw error;
       }
       const formatted = processOutput(result);
+      const fullOutputPath = formatted.details.truncated && context.processOutputPath
+        ? context.processOutputPath
+        : undefined;
       if (context.currentSessionId) {
         await context.sessionManager.addCommand(context.currentSessionId, {
           command,
@@ -810,14 +716,18 @@ export async function registerWorkspaceTools(
           output: formatted.content,
           exitCode: result.exitCode,
           durationMs: result.durationMs,
-          excludedFromContext: true,
+          excludedFromContext,
           truncated: Boolean(formatted.details.truncated),
+          ...(fullOutputPath ? { downloadPath: fullOutputPath } : {}),
         });
       }
       return {
         content: formatted.content,
         isError: result.exitCode !== 0,
-        details: formatted.details,
+        details: {
+          ...formatted.details,
+          ...(fullOutputPath ? { fullOutputPath } : {}),
+        },
       };
     };
     const executeBash = shellExecutor('default');

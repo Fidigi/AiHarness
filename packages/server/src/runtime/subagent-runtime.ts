@@ -9,6 +9,8 @@ import type {
 } from '@ai-harness/core';
 import type { SubagentService } from './subagent-service.js';
 
+type SubagentSystemPromptResolver = (input: { cwd: string; basePrompt: string }) => Promise<string>;
+
 export interface StartSubagentRequest {
   parentSessionId: string;
   profileId: string;
@@ -57,6 +59,7 @@ export class SubagentRuntime {
     private readonly profiles: SubagentService,
     private readonly agentRuntime: AgentRuntime,
     private readonly sessionManager: SessionManager,
+    private readonly resolveSystemPrompt: SubagentSystemPromptResolver = async input => input.basePrompt,
   ) {}
 
   async start(request: StartSubagentRequest): Promise<SubagentRunSnapshot> {
@@ -202,6 +205,10 @@ export class SubagentRuntime {
     this.unsubscribers.set(id, unsubscribe);
     let agentRun: AgentRunSnapshot;
     try {
+      const systemPrompt = await this.resolveSystemPrompt({
+        cwd: parent.cwd,
+        basePrompt: this.systemPrompt(profile),
+      });
       agentRun = await this.agentRuntime.start({
         sessionId: child.id,
         cwd: parent.cwd,
@@ -212,7 +219,7 @@ export class SubagentRuntime {
         thinking: profile.thinking ?? parent.thinking,
         toolPreset: request.parentToolPreset ?? parent.toolPreset ?? 'default',
         persistSettings: false,
-        systemPrompt: this.systemPrompt(profile),
+        systemPrompt,
         maxToolRounds: profile.maxTurns,
         agentId: id,
         allowedTools: this.allowedTools(profile, parentDepth + 1),

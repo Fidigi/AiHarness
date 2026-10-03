@@ -12,6 +12,7 @@ import {
   BedrockProvider,
   LocalProvider,
   MockProvider,
+  normalizeProviderUsage,
   ProviderFactory,
 } from './index';
 import type { Message, ProviderConfig } from '../types';
@@ -32,6 +33,25 @@ function createMessage(role: 'user' | 'assistant', content: string): Message {
 // ===================================================================
 // MockProvider Tests (no external dependencies needed)
 // ===================================================================
+
+describe('provider usage normalization', () => {
+  it('bounds malformed values and preserves unpriced usage', () => {
+    expect(normalizeProviderUsage({
+      promptTokens: -10,
+      completionTokens: 4,
+      cacheReadTokens: Number.NaN,
+      cacheWriteTokens: 2,
+      totalTokens: 1,
+      costUsd: Number.POSITIVE_INFINITY,
+    })).toEqual({
+      inputTokens: 0,
+      outputTokens: 4,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 2,
+      totalTokens: 6,
+    });
+  });
+});
 
 describe('MockProvider', () => {
   let provider: MockProvider;
@@ -426,6 +446,29 @@ describe('OpenAiProvider', () => {
 
       expect(result.content).toBe('Hello! How can I help you?');
       expect(result.model).toBe('gpt-4o');
+    });
+
+    it('normalizes cache tokens out of OpenAI input usage', async () => {
+      global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        model: 'o3',
+        choices: [{ message: { role: 'assistant', content: 'Done' } }],
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 20,
+          total_tokens: 120,
+          prompt_tokens_details: { cached_tokens: 40, cache_write_tokens: 10 },
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+      await expect(provider.chat([createMessage('user', 'Hello')])).resolves.toMatchObject({
+        usage: {
+          promptTokens: 50,
+          completionTokens: 20,
+          cacheReadTokens: 40,
+          cacheWriteTokens: 10,
+          totalTokens: 120,
+        },
+      });
     });
 
     it('should handle API errors', async () => {

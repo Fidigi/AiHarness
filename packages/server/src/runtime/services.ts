@@ -5,8 +5,10 @@ import {
   ExtensionModuleLoader,
   ExtensionRegistry,
   JsonlSessionStore,
+  normalizeProviderUsage,
   ProjectTrustManager,
   registerWorkspaceTools,
+  resolveInstructionPrompt,
   SessionManager,
   WorkspaceManager,
 } from '@ai-harness/core';
@@ -187,7 +189,16 @@ export async function createRuntimeServices(
       });
     },
   });
-  const subagentRuntime = new SubagentRuntime(subagentService, agentRuntime, sessionManager);
+  const subagentRuntime = new SubagentRuntime(
+    subagentService,
+    agentRuntime,
+    sessionManager,
+    async ({ cwd, basePrompt }) => (await resolveInstructionPrompt({
+      cwd,
+      projectTrusted: await trustManager.isTrusted(cwd),
+      systemPromptText: basePrompt,
+    })).systemPrompt,
+  );
   await extensionRegistry.load('builtin:subagents', api => {
     api.registerTool({
       name: 'spawn_subagent',
@@ -344,7 +355,12 @@ export async function createRuntimeServices(
         signal,
       });
     if (response.usage) proxy.recordUsage(providerName, response.model ?? requestedModel, response.usage);
-    return response.content;
+    return {
+      summary: response.content,
+      provider: providerName,
+      model: response.model ?? requestedModel,
+      usage: normalizeProviderUsage(response.usage),
+    };
   });
 
   return {

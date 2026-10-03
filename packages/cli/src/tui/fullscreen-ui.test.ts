@@ -69,6 +69,21 @@ describe('FullscreenUI', () => {
     expect(chunks.at(-1)).not.toContain('\u001b[31m');
   });
 
+  it('updates one shell command entry while output streams', () => {
+    const { screen, chunks } = createScreen(80, 16);
+    const ui = new FullscreenUI({ output: screen });
+    ui.enter();
+
+    const command = ui.startShellCommand('printf test', false);
+    command.write('te');
+    command.write('st');
+    expect(chunks.at(-1)).toContain('Commande: $ printf test');
+    expect(chunks.at(-1)).toContain('test');
+
+    command.finish({ status: 'completed', exitCode: 0, truncated: false });
+    expect(chunks.at(-1)).toContain('[code 0]');
+  });
+
   it('detects terminal support from both streams', () => {
     const input = { isTTY: true, setRawMode: vi.fn() };
     expect(FullscreenUI.isSupported(input as never, { isTTY: true })).toBe(true);

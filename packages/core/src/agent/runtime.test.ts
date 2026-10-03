@@ -53,6 +53,15 @@ class RetryProvider extends AiProvider {
   }
 }
 
+class CapturingProvider extends MockProvider {
+  systemPrompt?: string;
+
+  override async streamChat(...args: Parameters<MockProvider['streamChat']>): Promise<void> {
+    this.systemPrompt = args[4]?.systemPrompt;
+    await super.streamChat(...args);
+  }
+}
+
 class BlockingProvider extends AiProvider {
   constructor() { super({ type: 'mock' as never }); }
   validateConfig(): boolean { return true; }
@@ -230,6 +239,23 @@ describe('AgentRuntime', () => {
     expect(runtime.getTools('default', undefined, ['extension-beta']).map(tool => tool.name))
       .toEqual(['beta_tool']);
     expect(runtime.getTools('read-only')).toEqual([]);
+  });
+
+  it('forwards ephemeral resolved instructions without persisting their contents', async () => {
+    const provider = new CapturingProvider({ type: 'mock' as never }, ['ok']);
+    const { runtime, sessionManager, session } = await setup(provider);
+    const started = await runtime.start({
+      sessionId: session.id,
+      cwd: process.cwd(),
+      provider: 'mock',
+      input: 'prompt',
+      systemPrompt: 'resolved instructions including local context',
+      persistSettings: false,
+    });
+    await runtime.wait(started.id);
+
+    expect(provider.systemPrompt).toBe('resolved instructions including local context');
+    expect(sessionManager.get(session.id)?.metadata?.systemPrompt).toBeUndefined();
   });
 
   it('stops a detached provider request and requires explicit project trust', async () => {

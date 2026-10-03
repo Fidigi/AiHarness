@@ -544,6 +544,7 @@ describe('/export command', () => {
       (ctx.provider as any)['config'] = { type: 'mock', model: null };
       
       await modelHandler.execute('/model cycle');
+      expect(ctx.provider?.getConfiguredModel()).toBe('mock-model');
       expect(modelHandler.isExiting()).toBe(false);
     });
 
@@ -558,6 +559,7 @@ describe('/export command', () => {
       (ctx.provider as any)['config'] = { type: 'mock', model: null };
       
       await modelHandler.execute('/model mock-model-v1');
+      expect(ctx.provider?.getConfiguredModel()).toBe('mock-model-v1');
       expect(modelHandler.isExiting()).toBe(false);
     });
 
@@ -603,6 +605,19 @@ describe('/export command', () => {
     it('should not exit on config', async () => {
       await handler.execute('/config');
       expect(handler.isExiting()).toBe(false);
+    });
+
+    it('shows the host-provided effective Pi settings summary', async () => {
+      const settingsHandler = new CommandHandler(
+        manager,
+        store,
+        terminal as any,
+        undefined,
+        undefined,
+        { cwd: process.cwd(), settingsInfo: () => 'theme: dark [global]' },
+      );
+      const output = await captureOutput(() => settingsHandler.execute('/settings'));
+      expect(output).toContain('theme: dark [global]');
     });
   });
 

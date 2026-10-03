@@ -71,6 +71,8 @@ export interface ShellCommandRecord {
   cwd: string;
   timestamp: Date;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  /** Previous durable session entry, when known. */
+  parentEntryId?: string;
   output?: string;
   exitCode?: number;
   durationMs?: number;
@@ -446,7 +448,7 @@ export interface Session {
   workspaceId?: string;
   gitBranch?: string;
   model?: string;
-  thinking?: 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   toolPreset?: 'configured' | 'chat-only' | 'read-only' | 'default' | 'full';
   /** Explicit per-session override. Undefined inherits the effective scoped policy. */
   autoCompaction?: boolean;

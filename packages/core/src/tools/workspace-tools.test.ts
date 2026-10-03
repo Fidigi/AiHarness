@@ -12,7 +12,7 @@ import { registerWorkspaceTools } from './workspace-tools.js';
 const execFileAsync = promisify(execFile);
 const temporaryDirectories: string[] = [];
 
-async function setup(): Promise<{
+async function setup(options: Parameters<typeof registerWorkspaceTools>[2] = {}): Promise<{
   root: string;
   registry: ExtensionRegistry;
   sessions: SessionManager;
@@ -25,7 +25,7 @@ async function setup(): Promise<{
   const sessions = new SessionManager();
   const registry = new ExtensionRegistry();
   registry.attachSessionManager(sessions);
-  await registerWorkspaceTools(registry, workspaceManager);
+  await registerWorkspaceTools(registry, workspaceManager, options);
   return {
     root,
     registry,
@@ -136,14 +136,93 @@ describe('shared workspace tools', () => {
     const session = await sessions.create({ title: 'Tools', cwd: root });
     context.currentSessionId = session.id;
     context.projectTrusted = true;
+    const outputChunks: string[] = [];
+    context.onProcessOutput = chunk => outputChunks.push(chunk);
     const command = process.platform === 'win32' ? 'Write-Output shared-output' : 'printf shared-output';
 
     const result = await registry.executeTool('bash', { command, timeout: 2 }, context);
 
     expect(result).toMatchObject({ content: 'shared-output', isError: false });
+    expect(outputChunks.join('')).toContain('shared-output');
     expect(sessions.get(session.id)?.commands).toEqual([
       expect.objectContaining({ command, cwd: root, status: 'completed', exitCode: 0, excludedFromContext: true }),
     ]);
+  });
+
+  it('applies Pi shell path and prefix settings to the model bash tool', async () => {
+    if (process.platform === 'win32') return;
+    const { registry, context } = await setup({
+      shellPath: '/bin/bash',
+      shellCommandPrefix: 'export AIH_WORKSPACE_PREFIX=configured',
+    });
+    context.projectTrusted = true;
+    await expect(registry.executeTool('bash', {
+      command: 'printf %s "$AIH_WORKSPACE_PREFIX"', timeout: 2,
+    }, context)).resolves.toMatchObject({ content: 'configured', isError: false });
+  });
+
+  it('persists the host full-output path for truncated shell results', async () => {
+    const { root, registry, sessions, context } = await setup();
+    const session = await sessions.create({ title: 'Truncated shell', cwd: root });
+    context.currentSessionId = session.id;
+    context.projectTrusted = true;
+    context.processOutputPath = path.join(root, 'full-output.log');
+    const executable = process.execPath.replace(/"/g, '\\"');
+    const command = process.platform === 'win32'
+      ? `& "${executable}" -e "process.stdout.write('x'.repeat(60000))"`
+      : `"${executable}" -e "process.stdout.write('x'.repeat(60000))"`;
+
+    const result = await registry.executeTool('bash', { command, timeout: 2 }, context);
+
+    expect(result.details).toMatchObject({ truncated: true, fullOutputPath: context.processOutputPath });
+    expect(sessions.get(session.id)?.commands?.at(-1)).toMatchObject({
+      truncated: true, downloadPath: context.processOutputPath,
+    });
+  });
+
+  it('waits for asynchronous process-output sinks before completing shell commands', async () => {
+    const { registry, context } = await setup();
+    context.projectTrusted = true;
+    let releaseOutput!: () => void;
+    let markOutputStarted!: () => void;
+    const outputStarted = new Promise<void>(resolve => { markOutputStarted = resolve; });
+    const outputGate = new Promise<void>(resolve => { releaseOutput = resolve; });
+    context.onProcessOutput = async () => {
+      markOutputStarted();
+      await outputGate;
+    };
+    const command = process.platform === 'win32' ? 'Write-Output backpressure' : 'printf backpressure';
+    const execution = registry.executeTool('bash', { command, timeout: 2 }, context);
+
+    await outputStarted;
+    const state = await Promise.race([
+      execution.then(() => 'completed'),
+      new Promise<'blocked'>(resolve => setTimeout(() => resolve('blocked'), 20)),
+    ]);
+    expect(state).toBe('blocked');
+    releaseOutput();
+    await expect(execution).resolves.toMatchObject({ isError: false });
+  });
+
+  it('does not expose credential-like parent environment variables to shell commands', async () => {
+    const { registry, context } = await setup();
+    context.projectTrusted = true;
+    const previousSecret = process.env.AI_HARNESS_TEST_SECRET;
+    const previousAccessKey = process.env.AWS_ACCESS_KEY_ID;
+    process.env.AI_HARNESS_TEST_SECRET = 'must-not-leak';
+    process.env.AWS_ACCESS_KEY_ID = 'must-not-leak-either';
+    try {
+      const command = process.platform === 'win32'
+        ? 'Write-Output "$env:AI_HARNESS_TEST_SECRET$env:AWS_ACCESS_KEY_ID"'
+        : 'printf %s "$AI_HARNESS_TEST_SECRET$AWS_ACCESS_KEY_ID"';
+      const result = await registry.executeTool('bash', { command, timeout: 2 }, context);
+      expect(result.content).not.toContain('must-not-leak');
+    } finally {
+      if (previousSecret === undefined) delete process.env.AI_HARNESS_TEST_SECRET;
+      else process.env.AI_HARNESS_TEST_SECRET = previousSecret;
+      if (previousAccessKey === undefined) delete process.env.AWS_ACCESS_KEY_ID;
+      else process.env.AWS_ACCESS_KEY_ID = previousAccessKey;
+    }
   });
 
   it('propagates cancellation to the active shell process and persists its status', async () => {
@@ -152,13 +231,18 @@ describe('shared workspace tools', () => {
     context.currentSessionId = session.id;
     context.projectTrusted = true;
     const controller = new AbortController();
-    const command = process.platform === 'win32' ? 'Start-Sleep -Seconds 5' : 'sleep 5';
+    const command = process.platform === 'win32'
+      ? 'Write-Output partial; Start-Sleep -Seconds 5'
+      : 'printf partial; sleep 5';
     const execution = registry.executeTool('bash', { command, timeout: 10 }, context, controller.signal);
     setTimeout(() => controller.abort(), 25);
 
     await expect(execution).rejects.toThrow(/aborted/i);
     expect(sessions.get(session.id)?.commands).toEqual([
-      expect.objectContaining({ command, status: 'cancelled', excludedFromContext: true }),
+      expect.objectContaining({
+        command, status: 'cancelled', output: expect.stringContaining('partial'), exitCode: 130,
+        excludedFromContext: true,
+      }),
     ]);
   });
 });

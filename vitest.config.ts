@@ -39,10 +39,11 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      '@ai-harness/core': path.resolve(import.meta.dirname, 'packages/core/src/index.ts'),
-      '@ai-harness/cli': path.resolve(import.meta.dirname, 'packages/cli/src/index.ts'),
-      '@ai-harness/server': path.resolve(import.meta.dirname, 'packages/server/src/index.ts'),
-    },
+    alias: [
+      { find: '@ai-harness/core/shell-input', replacement: path.resolve(import.meta.dirname, 'packages/core/src/tools/shell-input.ts') },
+      { find: '@ai-harness/core', replacement: path.resolve(import.meta.dirname, 'packages/core/src/index.ts') },
+      { find: '@ai-harness/cli', replacement: path.resolve(import.meta.dirname, 'packages/cli/src/index.ts') },
+      { find: '@ai-harness/server', replacement: path.resolve(import.meta.dirname, 'packages/server/src/index.ts') },
+    ],
   },
 });

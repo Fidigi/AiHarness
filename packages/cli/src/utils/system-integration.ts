@@ -35,16 +35,20 @@ export async function copyToClipboard(text: string): Promise<string | undefined>
   return undefined;
 }
 
-/** Opens $VISUAL/$EDITOR with a temporary markdown draft and returns its content. */
-export async function editInExternalEditor(initialContent = ''): Promise<string | undefined> {
-  const editor = process.env.VISUAL || process.env.EDITOR;
-  if (!editor) throw new Error('Définissez $VISUAL ou $EDITOR pour utiliser l’éditeur externe.');
+/** Opens a configured editor, then $VISUAL/$EDITOR, with a temporary markdown draft. */
+export async function editInExternalEditor(
+  initialContent = '',
+  configuredEditor?: string,
+): Promise<string | undefined> {
+  const editor = configuredEditor?.trim() || process.env.VISUAL || process.env.EDITOR;
+  if (!editor) throw new Error('Configurez externalEditor, $VISUAL ou $EDITOR pour utiliser l’éditeur externe.');
   const directory = await mkdtemp(path.join(os.tmpdir(), 'ai-harness-editor-'));
   const filePath = path.join(directory, 'message.md');
   await writeFile(filePath, initialContent, { mode: 0o600 });
 
   try {
     const [command, ...args] = splitCommand(editor);
+    if (!command) throw new Error('La commande de l’éditeur externe est vide.');
     const exitCode = await new Promise<number | null>((resolve, reject) => {
       const child = spawn(command, [...args, filePath], { stdio: 'inherit' });
       child.once('error', reject);
