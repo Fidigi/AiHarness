@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IncomingMessage } from 'node:http';
 import { Duplex } from 'node:stream';
 import { decodeWebSocketFrame, encodeWebSocketFrame, handleWebSocketUpgrade } from './websocket';
+import { createWebSession } from '../security/request-security';
 
 function maskedFrame(payload: string): Buffer {
   const content = Buffer.from(payload);
@@ -57,6 +58,21 @@ describe('transport WebSocket', () => {
 
     expect(output.join('')).toContain('401 Unauthorized');
     expect(socket.destroyed).toBe(true);
+  });
+
+  it('accepte le cookie opaque de la session Web', () => {
+    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'user-secret');
+    const session = createWebSession('user-secret')!;
+    const { socket, output } = captureSocket();
+    const request = {
+      url: '/api/chat/ws',
+      headers: { host: 'localhost', cookie: `aih_session=${session.token}`, 'sec-websocket-key': 'test-key' },
+    } as IncomingMessage;
+
+    handleWebSocketUpgrade(request, socket, {} as never);
+
+    expect(output.join('')).toContain('101 Switching Protocols');
+    socket.destroy();
   });
 
   it('accepte le jeton administrateur comme les routes HTTP', () => {

@@ -2,7 +2,10 @@
 // AI Proxy Server Tests - Mock API calls with real streaming logic
 // ============================================================
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { AiProxyServer } from './proxy';
 
 // ===================================================================
@@ -309,6 +312,30 @@ describe('Proxy with mocked fetch', () => {
     await expect(
       proxy.sendChatSSE('anthropic', [{ id: 'm1', role: 'user' as const, content: 'Hi', timestamp: new Date() }]),
     ).resolves.toHaveProperty('stream');
+  });
+
+  it('calculates cache-aware model cost and restores atomically persisted metrics', async () => {
+    const proxy = new AiProxyServer();
+    const root = await mkdtemp(path.join(os.tmpdir(), 'ai-harness-usage-'));
+    const file = path.join(root, 'usage.json');
+    try {
+      await proxy.initializeUsage(file, () => ({
+        inputPerMillion: 2, outputPerMillion: 8, cacheReadPerMillion: 1,
+      }));
+      expect(proxy.recordUsage('openai', 'priced-model', {
+        promptTokens: 100, completionTokens: 10, cacheReadTokens: 20, totalTokens: 110,
+      })).toBeCloseTo(0.00026);
+      await proxy.flushUsage();
+
+      const restored = new AiProxyServer();
+      await restored.initializeUsage(file, () => undefined);
+      expect(restored.getUsage('openai')).toMatchObject({
+        requests: 1, inputTokens: 100, outputTokens: 10, cacheReadTokens: 20,
+        cacheWriteTokens: 0, totalTokens: 110, costUsd: 0.00026,
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('returns final usage from streaming chat calls', async () => {

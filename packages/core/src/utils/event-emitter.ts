@@ -11,9 +11,16 @@ export interface EventMap {
   'session:switch': { fromId?: string; toId: string };
   'message:add': { sessionId: string; role: string; contentLength: number };
   'message:clear': { sessionId: string };
-  'compaction:start': { sessionId: string };
-  'compaction:end': { sessionId: string; summaryLength: number };
-  'compaction:error': { sessionId: string; error: string };
+  'compaction:start': { sessionId: string; automatic?: boolean; tokensBefore?: number };
+  'compaction:end': {
+    sessionId: string;
+    summaryLength: number;
+    automatic?: boolean;
+    tokensBefore?: number;
+    tokensAfter?: number;
+    tokensSaved?: number;
+  };
+  'compaction:error': { sessionId: string; error: string; automatic?: boolean; cancelled?: boolean };
   'agent:start': { sessionId: string; provider: string };
   'agent:end': { sessionId: string; contentLength: number };
   'agent:error': { sessionId: string; error: string };

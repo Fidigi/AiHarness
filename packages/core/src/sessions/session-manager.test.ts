@@ -548,7 +548,20 @@ describe('SessionManager with JSONL Persistence', () => {
       expect(cloned).toBeTruthy();
       expect(cloned!.id).not.toBe(session.id); // Different session ID
       expect(cloned!.messages.length).toBe(2); // Same number of messages
-      expect(cloned!.parentId).toBe(session.id); // Linked to original
+      expect(cloned!.parentId).toBeUndefined(); // Independent root, unlike a fork
+      expect(cloned!.metadata?.clonedFromSessionId).toBe(session.id);
+    });
+
+    it('should clone an independent session through a specific message', async () => {
+      const session = await manager.create({ title: 'Original' });
+      await manager.addMessage(session.id, { role: 'user', content: 'First' });
+      await manager.addMessage(session.id, { role: 'assistant', content: 'Second' });
+
+      const cloned = await manager.cloneSession(session.id, 'Partial', 0);
+
+      expect(cloned).toMatchObject({ title: 'Partial' });
+      expect(cloned?.parentId).toBeUndefined();
+      expect(cloned?.messages.map(message => message.content)).toEqual(['First']);
     });
 
     it('should get session tree structure with correct nested depths', async () => {
@@ -879,6 +892,84 @@ describe('Auto-Compaction', () => {
       // Without a callback, checkAndTriggerCompaction should return false
       const result = await manager.checkAndTriggerCompaction(session.id);
       expect(result).toBe(false); // No callback means no compaction performed
+    });
+
+    it('honors a disabled per-session policy before calling the summarizer', async () => {
+      let callbackCalls = 0;
+      manager.setAutoCompactionCallback(async () => {
+        callbackCalls++;
+        return 'This summary must not be generated';
+      });
+      manager.setCompactionSettings({ enabled: true, reserveTokens: 10, keepRecentTokens: 20 });
+      const session = await manager.create({ autoCompaction: false });
+
+      for (let i = 0; i < 10; i++) {
+        await manager.addMessage(session.id, { role: 'user', content: `Long message ${i} ${'x'.repeat(40)}` });
+      }
+
+      expect(callbackCalls).toBe(0);
+      expect(manager.get(session.id)?.metadata?.compactionSummary).toBeUndefined();
+    });
+
+    it('propagates run cancellation to automatic summarization without applying a partial summary', async () => {
+      const session = await manager.create({ autoCompaction: false });
+      manager.setCompactionSettings({ enabled: true, reserveTokens: 10, keepRecentTokens: 20 });
+      for (let i = 0; i < 4; i++) {
+        await manager.addMessage(session.id, { role: 'user', content: `Seed ${i} ${'x'.repeat(80)}` });
+      }
+      await manager.update(session.id, { autoCompaction: true });
+      let startSummarization!: () => void;
+      const started = new Promise<void>(resolve => { startSummarization = resolve; });
+      manager.setAutoCompactionCallback(async (_sessionId, _toCompact, _kept, signal) => {
+        startSummarization();
+        return new Promise<string>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+        });
+      });
+      let failure: { cancelled?: boolean } | undefined;
+      manager.on('compaction:error', event => { failure = event; });
+      const controller = new AbortController();
+      const addition = manager.addMessage(session.id, {
+        role: 'assistant', content: `Final ${'y'.repeat(80)}`,
+      }, { signal: controller.signal });
+      await started;
+      controller.abort();
+      await addition;
+
+      expect(failure).toMatchObject({ cancelled: true });
+      expect(manager.get(session.id)?.metadata?.compactionSummary).toBeUndefined();
+    });
+
+    it('publishes automatic compaction statistics after applying the summary', async () => {
+      let completed: { tokensBefore?: number; tokensAfter?: number; tokensSaved?: number } | undefined;
+      manager.setAutoCompactionCallback(async () => 'Short automatic summary');
+      manager.on('compaction:end', event => { completed = event; });
+      manager.setCompactionSettings({ enabled: true, reserveTokens: 10, keepRecentTokens: 20 });
+      const session = await manager.create({ autoCompaction: true });
+
+      for (let i = 0; i < 8 && !completed; i++) {
+        await manager.addMessage(session.id, { role: 'user', content: `Long message ${i} ${'x'.repeat(80)}` });
+      }
+
+      expect(completed).toMatchObject({
+        tokensBefore: expect.any(Number),
+        tokensAfter: expect.any(Number),
+        tokensSaved: expect.any(Number),
+      });
+      expect(manager.get(session.id)?.metadata?.compactionStats).toMatchObject({
+        tokensBefore: completed?.tokensBefore,
+        tokensAfter: completed?.tokensAfter,
+      });
+      const context = manager.getEffectiveContext(session.id);
+      expect(context[0]).toMatchObject({ role: 'system' });
+      expect('content' in context[0]! ? context[0].content : '').toContain('[Context Summary] Short automatic summary');
+      expect(context.some(entry => 'content' in entry && entry.content.includes('Long message 0'))).toBe(false);
+
+      const reloaded = new SessionManager();
+      reloaded.setStore(store);
+      await reloaded.loadAllSessions();
+      expect(reloaded.getEffectiveContext(session.id).map(entry => 'content' in entry ? entry.content : ''))
+        .toEqual(context.map(entry => 'content' in entry ? entry.content : ''));
     });
 
     it('should trigger compaction when threshold exceeded and callback is set', async () => {

@@ -207,6 +207,61 @@ describe('MockProvider', () => {
 });
 
 // ===================================================================
+// Reasoning normalization
+// ===================================================================
+
+describe('provider reasoning normalization', () => {
+  it('preserves explicit OpenAI-compatible reasoning summaries in chat responses', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      model: 'reasoner', choices: [{ index: 0, message: { role: 'assistant', content: 'Answer', reasoning_content: 'Safe summary' } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const provider = new OpenAiProvider({ type: 'openai', apiKey: 'test' });
+      await expect(provider.chat([createMessage('user', 'Question')])).resolves.toMatchObject({
+        content: 'Answer', reasoning: 'Safe summary', model: 'reasoner',
+      });
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('streams OpenAI and Anthropic reasoning deltas separately from answer text', async () => {
+    const openAiBody = [
+      'data: {"choices":[{"delta":{"reasoning_content":"Plan "}}]}',
+      'data: {"choices":[{"delta":{"content":"Answer"}}]}',
+      'data: [DONE]', '',
+    ].join('\n');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(openAiBody, { status: 200 })));
+    const openAiEvents: string[] = [];
+    let openAiComplete: unknown;
+    await new OpenAiProvider({ type: 'openai', apiKey: 'test' }).streamChat(
+      [createMessage('user', 'Question')],
+      (chunk, event) => openAiEvents.push(`${event?.type}:${chunk || (event?.data as { content?: string })?.content || ''}`),
+      response => { openAiComplete = response; },
+    );
+    expect(openAiEvents).toEqual(['reasoning_delta:Plan ', 'text_delta:Answer']);
+    expect(openAiComplete).toMatchObject({ content: 'Answer', reasoning: 'Plan ' });
+
+    const anthropicBody = [
+      'event: content_block_delta',
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Check "}}',
+      'event: content_block_delta',
+      'data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Done"}}', '',
+    ].join('\n');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(anthropicBody, { status: 200 })));
+    const anthropicEvents: string[] = [];
+    let anthropicComplete: unknown;
+    await new AnthropicProvider({ type: 'anthropic', apiKey: 'test' }).streamChat(
+      [createMessage('user', 'Question')],
+      (chunk, event) => anthropicEvents.push(`${event?.type}:${chunk || (event?.data as { content?: string })?.content || ''}`),
+      response => { anthropicComplete = response; },
+    );
+    expect(anthropicEvents).toEqual(['reasoning_delta:Check ', 'text_delta:Done']);
+    expect(anthropicComplete).toMatchObject({ content: 'Done', reasoning: 'Check ' });
+    vi.unstubAllGlobals();
+  });
+});
+
+// ===================================================================
 // ProviderFactory Tests
 // ===================================================================
 
@@ -259,6 +314,55 @@ describe('ProviderFactory', () => {
     it('should return local-model for local type', () => {
       expect(ProviderFactory.getDefaultModel('local')).toBe('local-model');
     });
+  });
+});
+
+describe('multimodal provider adapters', () => {
+  const imageMessage: Message = {
+    id: 'image-message',
+    role: 'user',
+    content: 'Describe this image',
+    timestamp: new Date(),
+    blocks: [
+      { type: 'text', text: 'Describe this image' },
+      { type: 'image', mediaType: 'image/png', name: 'pixel.png', size: 3, url: 'data:image/png;base64,AQID' },
+    ],
+  };
+
+  it('maps image blocks to OpenAI image_url content', async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      model: 'gpt-4o', choices: [{ message: { role: 'assistant', content: 'image' } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    await new OpenAiProvider({ type: 'openai', apiKey: 'key' }).chat([imageMessage]);
+    const request = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(request.body)).messages[0].content).toEqual([
+      { type: 'text', text: 'Describe this image' },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,AQID' } },
+    ]);
+  });
+
+  it('maps image blocks to Anthropic base64 sources', async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      model: 'claude', content: [{ type: 'text', text: 'image' }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    await new AnthropicProvider({ type: 'anthropic', apiKey: 'key' }).chat([imageMessage]);
+    const request = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(request.body)).messages[0].content).toEqual([
+      { type: 'text', text: 'Describe this image' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AQID' } },
+    ]);
+  });
+
+  it('maps image blocks to Gemini inlineData parts', async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: 'image' }] } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    await new GeminiProvider({ type: 'google', apiKey: 'key', model: 'gemini-2.0-flash' }).chat([imageMessage]);
+    const request = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(request.body)).contents[0].parts).toEqual([
+      { text: 'Describe this image' },
+      { inlineData: { mimeType: 'image/png', data: 'AQID' } },
+    ]);
   });
 });
 

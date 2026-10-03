@@ -1,0 +1,71 @@
+/* Settings route styles are loaded with the lazy SettingsView chunk. */
+.shortcut-grid { display: grid; gap: .55rem; margin: .75rem 0 1rem; }
+.shortcut-grid label { display: grid; grid-template-columns: minmax(10rem, 1fr) minmax(10rem, 14rem); align-items: center; gap: .5rem; }
+.shortcut-grid input { padding: .5rem; border: 1px solid #40527b; border-radius: 4px; color: #dce6f8; background: #10182d; font-family: ui-monospace, monospace; text-align: center; cursor: pointer; }
+.shortcut-grid label.conflict input { border-color: #ff768d; }
+.shortcut-grid small { grid-column: 2; color: #ff9aad; }
+.settings-help { color: #98a6bd; font-size: .84rem; }
+.model-catalog { margin-top: 1rem; border-top: 1px solid #30466e; padding-top: .8rem; }
+.model-catalog > summary { color: #dce6f8; font-weight: 600; cursor: pointer; }
+.model-catalog-toolbar { display: grid; gap: .65rem; margin: .8rem 0; }
+.model-catalog-toolbar > label { display: grid; gap: .3rem; color: #aebad0; font-size: .8rem; }
+.model-catalog-toolbar input[type="search"] { width: 100%; padding: .55rem .65rem; border: 1px solid #40527b; border-radius: 4px; color: #eef3fc; background: #10182d; }
+.model-catalog-toolbar > div { display: flex; flex-wrap: wrap; gap: .45rem; }
+.model-catalog-meta { color: #98a6bd; font-size: .72rem; }
+.model-catalog-groups, .skill-catalog-groups { display: grid; gap: .75rem; margin-top: .75rem; }
+.model-catalog-groups fieldset, .skill-catalog-groups fieldset { min-width: 0; padding: .55rem; border: 1px solid #40527b; border-radius: 6px; }
+.model-catalog-groups legend, .skill-catalog-groups legend { padding: 0 .35rem; color: #e9eef8; font-weight: 600; }
+.model-catalog-groups legend span { margin-left: .5rem; font-size: .68rem; font-weight: 400; }
+.model-catalog-row, .skill-catalog-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .55rem; padding: .5rem .35rem; border-radius: 4px; }
+.model-catalog-row + .model-catalog-row, .skill-catalog-row + .skill-catalog-row { border-top: 1px solid #273958; }
+.model-catalog-identity, .skill-catalog-identity { min-width: 0; display: grid; gap: .15rem; }
+.model-catalog-identity strong, .model-catalog-identity code,
+.skill-catalog-identity strong, .skill-catalog-identity span, .skill-catalog-identity code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-catalog-identity code, .skill-catalog-identity code { color: #9eabc1; font-size: .7rem; }
+.skill-catalog-identity span { color: #b5c0d3; font-size: .78rem; }
+.provider-lifecycle-list, .settings-resource-list { display: grid; gap: .55rem; margin: .75rem 0; }
+.oauth-device-flow { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem 1rem; margin: .75rem 0; padding: .7rem; border: 1px solid #536b9e; border-radius: 6px; background: #10182f; }
+.oauth-device-flow p { margin: 0; }
+.settings-resource-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .45rem .75rem; align-items: center; padding: .65rem; border: 1px solid #40527b; border-radius: 6px; background: #10182f; }
+.settings-resource-card > div:first-child { min-width: 0; display: grid; gap: .2rem; }
+.settings-resource-card code, .settings-resource-card small, .settings-resource-card span { overflow-wrap: anywhere; }
+.settings-resource-card > div:last-child { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; }
+.custom-resource-editor, .skill-registry { margin-top: .8rem; padding-top: .65rem; border-top: 1px solid #30466e; }
+.custom-resource-editor > summary, .skill-registry > summary { color: #dce6f8; font-weight: 600; cursor: pointer; }
+.custom-resource-editor form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin: .75rem 0; }
+.custom-resource-editor form > label { min-width: 0; display: grid; gap: .25rem; font-size: .78rem; }
+.custom-resource-editor form input, .custom-resource-editor form select, .custom-resource-editor form textarea,
+#defaults input, #defaults select, #tools select { width: 100%; min-height: 2.2rem; }
+.custom-resource-editor form > div { grid-column: 1 / -1; display: flex; gap: .4rem; }
+.tool-settings-list { display: grid; gap: .35rem; margin: .7rem 0; }
+.tool-settings-list > label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: .5rem; padding: .45rem; border-bottom: 1px solid #30405f; }
+.tool-settings-list span { display: grid; gap: .15rem; }
+.tool-settings-list small { color: #98a6bd; }
+
+html[data-theme="light"] .settings-help, html[data-theme="light"] .model-catalog-meta { color: #52627b; }
+html[data-theme="light"] .custom-resource-editor > summary, html[data-theme="light"] .skill-registry > summary { color: #26344e; }
+html[data-theme="light"] .settings-resource-card, html[data-theme="light"] .oauth-device-flow { color: #172033; background: #f8f9fc; border-color: #b8c3d4; }
+html[data-theme="light"] .custom-resource-editor, html[data-theme="light"] .skill-registry,
+html[data-theme="light"] .tool-settings-list > label { border-color: #d8dee9; }
+html[data-theme="light"] .tool-settings-list small { color: #52627b; }
+html[data-theme="light"] .model-catalog { border-color: #c5cede; }
+html[data-theme="light"] .model-catalog > summary, html[data-theme="light"] .model-catalog-groups legend,
+html[data-theme="light"] .skill-catalog-groups legend { color: #26344e; }
+html[data-theme="light"] .model-catalog-toolbar > label { color: #52627b; }
+html[data-theme="light"] .model-catalog-toolbar input[type="search"] { color: #172033; background: #fff; border-color: #aeb9ca; }
+html[data-theme="light"] .model-catalog-groups fieldset, html[data-theme="light"] .skill-catalog-groups fieldset { border-color: #b8c3d4; }
+html[data-theme="light"] .model-catalog-row + .model-catalog-row,
+html[data-theme="light"] .skill-catalog-row + .skill-catalog-row { border-color: #d8dee9; }
+html[data-theme="light"] .model-catalog-identity code, html[data-theme="light"] .skill-catalog-identity code,
+html[data-theme="light"] .skill-catalog-identity span { color: #52627b; }
+html[data-theme="light"] .model-capabilities small { color: #244d8f; border-color: #9eabc1; }
+html[data-theme="light"] .model-capabilities small.unavailable { color: #7a4b08; border-color: #c59a5b; }
+
+@media (max-width: 560px) {
+  .shortcut-grid label { grid-template-columns: 1fr; }
+  .shortcut-grid small { grid-column: 1; }
+  .model-catalog-row, .skill-catalog-row { grid-template-columns: auto minmax(0, 1fr); }
+  .settings-resource-card, .custom-resource-editor form { grid-template-columns: 1fr; }
+  .settings-resource-card > div:last-child { justify-content: flex-start; }
+  .model-capabilities { grid-column: 2; justify-content: flex-start; }
+}

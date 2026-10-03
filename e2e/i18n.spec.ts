@@ -43,7 +43,7 @@ test.describe('Internationalisation', () => {
 
     await page.goto('/settings');
 
-    await expect(page.getByRole('heading', { name: 'Réglages' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Réglages', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Authentification du serveur' })).toBeVisible();
     await expect(page.getByText('Nombre total de sessions : 0')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Enregistrer' }).first()).toBeVisible();

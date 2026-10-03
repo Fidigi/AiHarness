@@ -1,16 +1,59 @@
 import type { AiProvider, ChatOptions } from '../providers/index.js';
 import { ProviderFactory } from '../providers/index.js';
-import type { Message, ProviderConfig } from '../types/index.js';
+import type { Message, ProviderConfig, Session } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import { EventEmitter, type EventHandler, type EventMap } from '../utils/event-emitter.js';
 
 export type ExtensionLogLevel = 'info' | 'success' | 'warning' | 'error';
 
+export type ExtensionInteractionKind = 'confirm' | 'input' | 'select' | 'editor' | 'custom';
+
+export interface ExtensionInteractionOption {
+  value: string;
+  label: string;
+  description?: string;
+}
+
+export interface ExtensionInteractionField {
+  name: string;
+  label: string;
+  type: 'text' | 'textarea' | 'select' | 'checkbox';
+  required?: boolean;
+  placeholder?: string;
+  options?: ExtensionInteractionOption[];
+}
+
+/** Declarative interaction contract. It intentionally has no HTML or executable client payload. */
+export interface ExtensionInteractionRequest {
+  kind: ExtensionInteractionKind;
+  title: string;
+  message?: string;
+  placeholder?: string;
+  options?: ExtensionInteractionOption[];
+  fields?: ExtensionInteractionField[];
+  output?: string;
+  ansi?: boolean;
+}
+
+export interface ExtensionInteractionResponse {
+  cancelled: boolean;
+  value?: unknown;
+}
+
 export interface ExtensionRuntimeContext {
   sessionManager: SessionManager;
   currentSessionId?: string;
   provider?: AiProvider;
+  providerName?: string;
+  toolPreset?: Session['toolPreset'];
+  /** Optional profile restrictions inherited by child-agent tools. */
+  allowedSkills?: string[];
+  /** Explicit canonical workspace context for server-hosted tools. */
+  cwd?: string;
+  workspaceId?: string;
+  projectTrusted?: boolean;
   notify(message: string, level?: ExtensionLogLevel): void;
+  requestInteraction?(request: ExtensionInteractionRequest): Promise<ExtensionInteractionResponse>;
 }
 
 export interface ExtensionCommand {
@@ -49,6 +92,7 @@ export interface ExtensionUIContext {
 export interface ExtensionUIComponent {
   name: string;
   placement?: 'header' | 'status';
+  /** Plain text only. Browser clients must never interpret this value as markup. */
   render(context: ExtensionUIContext): string;
 }
 
@@ -119,6 +163,7 @@ interface Owned<T> {
 
 interface LoadedExtension {
   id: string;
+  factory: ExtensionFactory;
   cleanups: Array<() => void | Promise<void>>;
 }
 
@@ -154,7 +199,7 @@ export class ExtensionRegistry {
     if (!normalizedId) throw new Error('Extension id is required');
     if (this.loaded.has(normalizedId)) throw new Error(`Extension already loaded: ${normalizedId}`);
 
-    const extension: LoadedExtension = { id: normalizedId, cleanups: [] };
+    const extension: LoadedExtension = { id: normalizedId, factory, cleanups: [] };
     this.loaded.set(normalizedId, extension);
     const api = this.createApi(extension);
 
@@ -185,6 +230,44 @@ export class ExtensionRegistry {
   async unloadAll(): Promise<void> {
     for (const id of [...this.loaded.keys()].reverse()) await this.unload(id);
     this.events.clear();
+  }
+
+  /**
+   * Replace a loader-owned set transactionally. If any candidate fails, every
+   * partial registration is removed and the previous factories are restored.
+   */
+  async replaceManaged(
+    previousIds: Iterable<string>,
+    candidates: Array<{ id: string; factory: ExtensionFactory }>,
+  ): Promise<void> {
+    const previous = [...new Set(previousIds)]
+      .map(id => this.loaded.get(id))
+      .filter((item): item is LoadedExtension => Boolean(item))
+      .map(item => ({ id: item.id, factory: item.factory }));
+    const candidateIds = new Set(candidates.map(candidate => candidate.id));
+    if (candidateIds.size !== candidates.length) throw new Error('Duplicate extension module id in reload candidate');
+
+    for (const item of [...previous].reverse()) await this.unload(item.id);
+    const loadedCandidates: string[] = [];
+    try {
+      for (const candidate of candidates) {
+        await this.load(candidate.id, candidate.factory);
+        loadedCandidates.push(candidate.id);
+      }
+    } catch (error) {
+      for (const id of loadedCandidates.reverse()) await this.unload(id);
+      const restoreErrors: string[] = [];
+      for (const item of previous) {
+        try { await this.load(item.id, item.factory); }
+        catch (restoreError) {
+          restoreErrors.push(`${item.id}: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`);
+        }
+      }
+      if (restoreErrors.length) {
+        throw new AggregateError([error], `Extension reload failed and rollback was incomplete: ${restoreErrors.join('; ')}`);
+      }
+      throw error;
+    }
   }
 
   getCommand(name: string): ExtensionCommand | undefined {

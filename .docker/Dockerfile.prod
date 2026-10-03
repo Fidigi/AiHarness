@@ -7,7 +7,10 @@ ARG NODE_VERSION=26
 ARG NPM_VERSION=12.1.0
 FROM node:${NODE_VERSION}-bookworm-slim AS builder
 ARG NPM_VERSION
-RUN npm install --global npm@${NPM_VERSION}
+RUN npm install --global npm@${NPM_VERSION} \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends g++ make python3 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # npm workspaces utilise un lockfile unique à la racine.
@@ -26,7 +29,10 @@ RUN npm run build
 # =============================================================================
 FROM node:${NODE_VERSION}-bookworm-slim AS prod
 ARG NPM_VERSION
-RUN npm install --global npm@${NPM_VERSION}
+RUN npm install --global npm@${NPM_VERSION} \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends g++ make python3 \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r aiharness && useradd -r -g aiharness -d /app -s /sbin/nologin aiharness
 WORKDIR /app
@@ -36,7 +42,9 @@ COPY packages/core/package.json packages/core/
 COPY packages/cli/package.json packages/cli/
 COPY packages/server/package.json packages/server/
 COPY packages/web/package.json packages/web/
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm ci --omit=dev \
+    && apt-get purge -y --auto-remove g++ make python3 \
+    && rm -rf /var/lib/apt/lists/* /root/.npm
 
 COPY --from=builder /app/packages/core/dist ./packages/core/dist
 COPY --from=builder /app/packages/cli/dist ./packages/cli/dist

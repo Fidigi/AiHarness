@@ -3,7 +3,13 @@
 // Features: Event system for lifecycle hooks and extensions
 // ============================================================
 
-import { Message, Session } from '../types/index.js';
+import {
+  SESSION_SCHEMA_VERSION,
+  type Message,
+  type ProviderConfig,
+  type Session,
+  type ShellCommandRecord,
+} from '../types/index.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { EventEmitter, EventHandler, EventMap } from '../utils/event-emitter.js';
@@ -15,8 +21,10 @@ import { EventEmitter, EventHandler, EventMap } from '../utils/event-emitter.js'
 /** Base entry stored in the JSONL file */
 export interface SessionEntryBase {
   id: string;
-  type: 'message' | 'compaction' | 'branch_summary' | 'metadata';
+  type: 'message' | 'command' | 'compaction' | 'branch_summary' | 'metadata';
   timestamp: number; // Unix timestamp (ms)
+  /** Missing on legacy entries. */
+  version?: typeof SESSION_SCHEMA_VERSION;
 }
 
 /** Regular message entry */
@@ -24,10 +32,32 @@ export interface MessageEntry extends SessionEntryBase {
   type: 'message';
   role: Message['role'];
   content: string;
+  blocks?: Message['blocks'];
   toolCalls?: Message['toolCalls'];
   toolCallId?: string;
   name?: string;
   isError?: boolean;
+  provider?: string;
+  model?: string;
+  usage?: Message['usage'];
+  durationMs?: number;
+  parentMessageId?: string;
+  agentId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/** Shell command entry, kept separate so exclusion from model context is explicit. */
+export interface CommandEntry extends SessionEntryBase {
+  type: 'command';
+  command: string;
+  cwd: string;
+  status: ShellCommandRecord['status'];
+  output?: string;
+  exitCode?: number;
+  durationMs?: number;
+  excludedFromContext?: boolean;
+  truncated?: boolean;
+  downloadPath?: string;
 }
 
 /** Compaction summary entry */
@@ -36,6 +66,9 @@ export interface CompactionEntry extends SessionEntryBase {
   summary: string;
   firstKeptEntryId: string; // ID of the first message kept after compaction
   tokenEstimate?: number;
+  instruction?: string;
+  tokensBefore?: number;
+  tokensAfter?: number;
 }
 
 /** Branch summary entry (when navigating tree) */
@@ -47,16 +80,28 @@ export interface BranchSummaryEntry extends SessionEntryBase {
 
 export interface SessionMetadataEntry extends SessionEntryBase {
   type: 'metadata';
+  schemaVersion?: typeof SESSION_SCHEMA_VERSION;
   title?: string;
   createdAt: number;
   updatedAt: number;
   parentId?: string;
   branchId?: string;
+  activeLeafId?: string;
+  parentAgentId?: string;
+  agentId?: string;
+  cwd?: string;
+  workspaceId?: string;
+  gitBranch?: string;
+  model?: string;
+  thinking?: Session['thinking'];
+  toolPreset?: Session['toolPreset'];
+  autoCompaction?: boolean;
+  usage?: Session['usage'];
   providerConfig?: Session['providerConfig'];
   metadata?: Record<string, unknown>;
 }
 
-export type SessionEntry = MessageEntry | CompactionEntry | BranchSummaryEntry | SessionMetadataEntry;
+export type SessionEntry = MessageEntry | CommandEntry | CompactionEntry | BranchSummaryEntry | SessionMetadataEntry;
 
 function isSessionEntry(value: unknown): value is SessionEntry {
   if (!value || typeof value !== 'object') return false;
@@ -64,11 +109,17 @@ function isSessionEntry(value: unknown): value is SessionEntry {
   if (typeof entry.id !== 'string' || !entry.id || typeof entry.timestamp !== 'number' || !Number.isFinite(entry.timestamp)) {
     return false;
   }
+  if (entry.version !== undefined && entry.version !== SESSION_SCHEMA_VERSION) return false;
 
   switch (entry.type) {
     case 'message':
       return ['user', 'assistant', 'system', 'tool'].includes(String(entry.role))
-        && typeof entry.content === 'string';
+        && typeof entry.content === 'string'
+        && (entry.blocks === undefined || Array.isArray(entry.blocks));
+    case 'command':
+      return typeof entry.command === 'string'
+        && typeof entry.cwd === 'string'
+        && ['queued', 'running', 'completed', 'failed', 'cancelled'].includes(String(entry.status));
     case 'compaction':
       return typeof entry.summary === 'string' && typeof entry.firstKeptEntryId === 'string';
     case 'branch_summary':
@@ -79,6 +130,37 @@ function isSessionEntry(value: unknown): value is SessionEntry {
     default:
       return false;
   }
+}
+
+const SECRET_CONFIG_KEYS = /^(?:api[-_]?key|secret(?:access)?key|access[-_]?token|session[-_]?token|authorization|password)$/i;
+
+/** Provider identity may be stored with a session, credentials never are. */
+function sanitizeProviderConfig(config: ProviderConfig | undefined): ProviderConfig | undefined {
+  if (!config) return undefined;
+  return Object.fromEntries(Object.entries(config).filter(([key]) => !SECRET_CONFIG_KEYS.test(key))) as ProviderConfig;
+}
+
+function messageToEntry(message: Message): MessageEntry {
+  return {
+    id: message.id,
+    type: 'message',
+    version: SESSION_SCHEMA_VERSION,
+    role: message.role,
+    content: message.content,
+    timestamp: message.timestamp.getTime(),
+    ...(message.blocks ? { blocks: message.blocks } : {}),
+    ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
+    ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
+    ...(message.name ? { name: message.name } : {}),
+    ...(message.isError !== undefined ? { isError: message.isError } : {}),
+    ...(message.provider ? { provider: message.provider } : {}),
+    ...(message.model ? { model: message.model } : {}),
+    ...(message.usage ? { usage: message.usage } : {}),
+    ...(message.durationMs !== undefined ? { durationMs: message.durationMs } : {}),
+    ...(message.parentMessageId ? { parentMessageId: message.parentMessageId } : {}),
+    ...(message.agentId ? { agentId: message.agentId } : {}),
+    ...(message.metadata ? { metadata: message.metadata } : {}),
+  };
 }
 
 // ===================================================================
@@ -154,7 +236,13 @@ export class JsonlSessionStore {
 
     const content = await fs.readFile(filePath, 'utf-8');
     if (!content.trim()) {
-      return { id: sessionId, messages: [], createdAt: new Date(), updatedAt: new Date() };
+      return {
+        id: sessionId,
+        schemaVersion: SESSION_SCHEMA_VERSION,
+        messages: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
     }
 
     const entries: SessionEntry[] = [];
@@ -168,11 +256,23 @@ export class JsonlSessionStore {
     }
 
     let messages: Message[] = [];
+    const commands: ShellCommandRecord[] = [];
     let title: string | undefined;
     let createdAt: Date | undefined;
     let updatedAt: Date | undefined;
     let parentId: string | undefined;
     let branchId: string | undefined;
+    let activeLeafId: string | undefined;
+    let parentAgentId: string | undefined;
+    let agentId: string | undefined;
+    let cwd: string | undefined;
+    let workspaceId: string | undefined;
+    let gitBranch: string | undefined;
+    let model: string | undefined;
+    let thinking: Session['thinking'];
+    let toolPreset: Session['toolPreset'];
+    let autoCompaction: boolean | undefined;
+    let usage: Session['usage'];
     let providerConfig: Session['providerConfig'];
     let metadata: Record<string, unknown> | undefined;
     let latestCompaction: CompactionEntry | undefined;
@@ -193,15 +293,40 @@ export class JsonlSessionStore {
           role: entry.role,
           content: entry.content,
           timestamp,
+          blocks: entry.blocks,
           toolCalls: entry.toolCalls,
           toolCallId: entry.toolCallId,
           name: entry.name,
           isError: entry.isError,
+          provider: entry.provider,
+          model: entry.model,
+          usage: entry.usage,
+          durationMs: entry.durationMs,
+          parentMessageId: entry.parentMessageId,
+          agentId: entry.agentId,
+          metadata: entry.metadata,
         };
         messages.push(msg);
 
         if (!title && entry.role === 'user') {
           title = entry.content.slice(0, 50) + (entry.content.length > 50 ? '...' : '');
+        }
+      } else if (entry.type === 'command') {
+        const timestamp = new Date(entry.timestamp);
+        if (!Number.isNaN(timestamp.getTime())) {
+          commands.push({
+            id: entry.id,
+            command: entry.command,
+            cwd: entry.cwd,
+            timestamp,
+            status: entry.status,
+            output: entry.output,
+            exitCode: entry.exitCode,
+            durationMs: entry.durationMs,
+            excludedFromContext: entry.excludedFromContext,
+            truncated: entry.truncated,
+            downloadPath: entry.downloadPath,
+          });
         }
       } else if (entry.type === 'metadata') {
         title = entry.title ?? title;
@@ -211,7 +336,18 @@ export class JsonlSessionStore {
         if (!Number.isNaN(metadataUpdatedAt.getTime())) updatedAt = metadataUpdatedAt;
         parentId = entry.parentId;
         branchId = entry.branchId;
-        providerConfig = entry.providerConfig;
+        activeLeafId = entry.activeLeafId;
+        parentAgentId = entry.parentAgentId;
+        agentId = entry.agentId;
+        cwd = entry.cwd;
+        workspaceId = entry.workspaceId;
+        gitBranch = entry.gitBranch;
+        model = entry.model;
+        thinking = entry.thinking;
+        toolPreset = entry.toolPreset;
+        autoCompaction = entry.autoCompaction;
+        usage = entry.usage;
+        providerConfig = sanitizeProviderConfig(entry.providerConfig);
         metadata = entry.metadata;
       } else if (entry.type === 'compaction') {
         latestCompaction = entry;
@@ -235,12 +371,25 @@ export class JsonlSessionStore {
     const now = new Date();
     return {
       id: sessionId,
+      schemaVersion: SESSION_SCHEMA_VERSION,
       title,
       messages,
+      ...(commands.length ? { commands } : {}),
       createdAt: createdAt ?? now,
       updatedAt: updatedAt ?? now,
       parentId,
       branchId,
+      activeLeafId,
+      parentAgentId,
+      agentId,
+      cwd,
+      workspaceId,
+      gitBranch,
+      model,
+      thinking,
+      toolPreset,
+      autoCompaction,
+      usage,
       providerConfig,
       metadata,
     };
@@ -277,35 +426,45 @@ export class JsonlSessionStore {
     const metadataEntry: SessionMetadataEntry = {
       id: 'session-metadata',
       type: 'metadata',
+      version: SESSION_SCHEMA_VERSION,
+      schemaVersion: SESSION_SCHEMA_VERSION,
       timestamp: session.updatedAt.getTime(),
       title: session.title,
       createdAt: session.createdAt.getTime(),
       updatedAt: session.updatedAt.getTime(),
       parentId: session.parentId,
       branchId: session.branchId,
-      providerConfig: session.providerConfig,
+      activeLeafId: session.activeLeafId,
+      parentAgentId: session.parentAgentId,
+      agentId: session.agentId,
+      cwd: session.cwd,
+      workspaceId: session.workspaceId,
+      gitBranch: session.gitBranch,
+      model: session.model,
+      thinking: session.thinking,
+      toolPreset: session.toolPreset,
+      autoCompaction: session.autoCompaction,
+      usage: session.usage,
+      providerConfig: sanitizeProviderConfig(session.providerConfig),
       metadata: session.metadata,
     };
     lines.unshift(JSON.stringify(metadataEntry));
 
-    for (const msg of session.messages) {
-      if (!existingIds.has(msg.id)) {
-        const entry: MessageEntry = {
-          id: msg.id,
-          type: 'message',
-          role: msg.role,
-          content: msg.content,
-          timestamp: msg.timestamp.getTime(),
-          ...(msg.toolCalls ? { toolCalls: msg.toolCalls } : {}),
-          ...(msg.toolCallId ? { toolCallId: msg.toolCallId } : {}),
-          ...(msg.name ? { name: msg.name } : {}),
-          ...(msg.isError !== undefined ? { isError: msg.isError } : {}),
-        };
-        lines.push(JSON.stringify(entry));
-      }
+    for (const message of session.messages) {
+      if (!existingIds.has(message.id)) lines.push(JSON.stringify(messageToEntry(message)));
+    }
+    for (const command of session.commands ?? []) {
+      if (existingIds.has(command.id)) continue;
+      const entry: CommandEntry = {
+        ...command,
+        type: 'command',
+        version: SESSION_SCHEMA_VERSION,
+        timestamp: command.timestamp.getTime(),
+      };
+      lines.push(JSON.stringify(entry));
     }
 
-    await fs.writeFile(filePath, lines.join('\n') + '\n');
+    await fs.writeFile(filePath, `${lines.join('\n')}\n`, { mode: 0o600 });
   }
 
   /** Append a message entry to the session file */
@@ -313,28 +472,47 @@ export class JsonlSessionStore {
     sessionId: string,
     role: Message['role'],
     content: string,
-    metadata: Pick<Message, 'toolCalls' | 'toolCallId' | 'name' | 'isError'> = {},
+    metadata: Omit<Message, 'id' | 'timestamp' | 'role' | 'content'> = {},
   ): Promise<string> {
-    const msgId = crypto.randomUUID();
-    if (!this.enabled) return msgId;
-    const timestamp = Date.now();
-
-    const line = JSON.stringify({
-      id: msgId,
-      type: 'message',
+    const message: Message = {
+      id: crypto.randomUUID(),
       role,
       content,
-      timestamp,
-      ...(metadata.toolCalls ? { toolCalls: metadata.toolCalls } : {}),
-      ...(metadata.toolCallId ? { toolCallId: metadata.toolCallId } : {}),
-      ...(metadata.name ? { name: metadata.name } : {}),
-      ...(metadata.isError !== undefined ? { isError: metadata.isError } : {}),
-    });
+      timestamp: new Date(),
+      ...metadata,
+    };
+    if (!this.enabled) return message.id;
 
     await this.ensureDir();
-    await fs.appendFile(this.getFilePath(sessionId), line + '\n');
+    await fs.appendFile(
+      this.getFilePath(sessionId),
+      `${JSON.stringify(messageToEntry(message))}\n`,
+      { mode: 0o600 },
+    );
 
-    return msgId;
+    return message.id;
+  }
+
+  /** Append a shell command without implicitly adding it to model context. */
+  async appendCommand(
+    sessionId: string,
+    command: Omit<ShellCommandRecord, 'id' | 'timestamp'> & Partial<Pick<ShellCommandRecord, 'id' | 'timestamp'>>,
+  ): Promise<ShellCommandRecord> {
+    const record: ShellCommandRecord = {
+      ...command,
+      id: command.id ?? `command-${crypto.randomUUID()}`,
+      timestamp: command.timestamp ? new Date(command.timestamp) : new Date(),
+    };
+    if (!this.enabled) return record;
+    const entry: CommandEntry = {
+      ...record,
+      type: 'command',
+      version: SESSION_SCHEMA_VERSION,
+      timestamp: record.timestamp.getTime(),
+    };
+    await this.ensureDir();
+    await fs.appendFile(this.getFilePath(sessionId), `${JSON.stringify(entry)}\n`, { mode: 0o600 });
+    return record;
   }
 
   /** Append a compaction entry to the session file */
@@ -343,19 +521,24 @@ export class JsonlSessionStore {
     summary: string,
     firstKeptEntryId: string,
     tokenEstimate?: number,
+    details: Pick<CompactionEntry, 'instruction' | 'tokensBefore' | 'tokensAfter'> = {},
   ): Promise<void> {
     if (!this.enabled) return;
     await this.ensureDir();
     const line = JSON.stringify({
       id: `compaction-${crypto.randomUUID()}`,
       type: 'compaction',
+      version: SESSION_SCHEMA_VERSION,
       summary,
       firstKeptEntryId,
       timestamp: Date.now(),
       ...(tokenEstimate !== undefined ? { tokenEstimate } : {}),
+      ...(details.instruction ? { instruction: details.instruction } : {}),
+      ...(details.tokensBefore !== undefined ? { tokensBefore: details.tokensBefore } : {}),
+      ...(details.tokensAfter !== undefined ? { tokensAfter: details.tokensAfter } : {}),
     });
 
-    await fs.appendFile(this.getFilePath(sessionId), line + '\n');
+    await fs.appendFile(this.getFilePath(sessionId), `${line}\n`, { mode: 0o600 });
   }
 
   /** Append a summary describing an abandoned or completed branch. */
@@ -364,12 +547,13 @@ export class JsonlSessionStore {
     const entry: BranchSummaryEntry = {
       id: `branch-summary-${crypto.randomUUID()}`,
       type: 'branch_summary',
+      version: SESSION_SCHEMA_VERSION,
       branchName,
       summary,
       timestamp: Date.now(),
     };
     await this.ensureDir();
-    await fs.appendFile(this.getFilePath(sessionId), `${JSON.stringify(entry)}\n`);
+    await fs.appendFile(this.getFilePath(sessionId), `${JSON.stringify(entry)}\n`, { mode: 0o600 });
   }
 
   /** Delete a session file */
@@ -427,6 +611,50 @@ const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
   keepRecentTokens: 20000,
 };
 
+export type CreateSessionOptions = Partial<Pick<Session,
+  | 'id'
+  | 'title'
+  | 'messages'
+  | 'commands'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'providerConfig'
+  | 'metadata'
+  | 'parentId'
+  | 'branchId'
+  | 'activeLeafId'
+  | 'parentAgentId'
+  | 'agentId'
+  | 'cwd'
+  | 'workspaceId'
+  | 'gitBranch'
+  | 'model'
+  | 'thinking'
+  | 'toolPreset'
+  | 'autoCompaction'
+  | 'usage'
+>>;
+
+export type MutableSessionFields = Pick<Session,
+  | 'title'
+  | 'metadata'
+  | 'providerConfig'
+  | 'activeLeafId'
+  | 'agentId'
+  | 'cwd'
+  | 'workspaceId'
+  | 'gitBranch'
+  | 'model'
+  | 'thinking'
+  | 'toolPreset'
+  | 'autoCompaction'
+  | 'usage'
+>;
+
+export type MutableSessionChanges = {
+  [K in keyof MutableSessionFields]?: MutableSessionFields[K] | null;
+};
+
 /** Token estimation helpers (simplified) */
 class TokenEstimator {
   /** Rough token count estimation (chars / 4 for English text is a common heuristic) */
@@ -454,7 +682,11 @@ export type AutoCompactionCallback = (
   sessionId: string,
   toCompact: SessionEntry[],
   keptEntries: SessionEntry[],
+  signal?: AbortSignal,
 ) => Promise<string>;
+
+/** Optional host policy used to resolve global/project/session inheritance. */
+export type AutoCompactionPolicy = (session: Readonly<Session>) => boolean | Promise<boolean>;
 
 /** Main session manager with in-memory storage and optional JSONL persistence */
 export class SessionManager {
@@ -463,6 +695,7 @@ export class SessionManager {
   private store: JsonlSessionStore | null = null;
   private compactionSettings: CompactionSettings = DEFAULT_COMPACTION_SETTINGS;
   private autoCompactionCallback?: AutoCompactionCallback;
+  private autoCompactionPolicy?: AutoCompactionPolicy;
   
   // Event system for lifecycle hooks and extensions
   private emitter = new EventEmitter<EventMap>();
@@ -486,38 +719,60 @@ export class SessionManager {
     this.autoCompactionCallback = callback;
   }
 
-  /** Check if a session needs compaction and trigger it automatically */
-  async checkAndTriggerCompaction(sessionId: string): Promise<boolean> {
+  /** Let the host resolve inherited auto-compaction policy without coupling Core to its config store. */
+  setAutoCompactionPolicy(policy: AutoCompactionPolicy): void {
+    this.autoCompactionPolicy = policy;
+  }
+
+  /** Check if a session needs compaction and trigger it automatically. */
+  async checkAndTriggerCompaction(sessionId: string, signal?: AbortSignal): Promise<boolean> {
+    const session = this.sessions.get(sessionId);
+    if (!session || !this.compactionSettings.enabled || !this.autoCompactionCallback || signal?.aborted) return false;
+    if (session.autoCompaction === false) return false;
+    if (this.autoCompactionPolicy && !await this.autoCompactionPolicy(session)) return false;
+
     const result = this.requestCompaction(sessionId);
     if (!result) return false;
-
-    // Auto-compaction requires both an enabled policy and a summarization callback.
-    if (!this.compactionSettings.enabled || !this.autoCompactionCallback) return false;
+    const firstKeptMessage = result.keptEntries.find(entry => entry.type === 'message');
+    if (!firstKeptMessage) return false;
+    const tokensBefore = TokenEstimator.totalMessages([
+      ...result.toCompact,
+      ...result.keptEntries,
+    ]);
 
     try {
-      // Emit compaction:start event
-      await this.emitter.emit('compaction:start', { sessionId });
-      
-      const summary = await this.autoCompactionCallback!(
+      await this.emitter.emit('compaction:start', { sessionId, automatic: true, tokensBefore });
+      const summary = await this.autoCompactionCallback(
         sessionId,
         result.toCompact,
         result.keptEntries,
+        signal,
       );
-
-      // Apply the compaction - keep only the last kept entry and add summary
-      if (result.keptEntries.length > 0) {
-        const firstKeptEntryId = result.keptEntries[0].id;
-        await this.applyCompaction(sessionId, summary, firstKeptEntryId);
-      }
-
-      // Emit compaction:end event
-      await this.emitter.emit('compaction:end', { sessionId, summaryLength: summary.length });
+      const tokensAfter = TokenEstimator.estimateTokens(summary)
+        + TokenEstimator.totalMessages(result.keptEntries);
+      await this.applyCompaction(sessionId, summary, firstKeptMessage.id, {
+        tokensBefore,
+        tokensAfter,
+      });
+      await this.emitter.emit('compaction:end', {
+        sessionId,
+        summaryLength: summary.length,
+        automatic: true,
+        tokensBefore,
+        tokensAfter,
+        tokensSaved: Math.max(0, tokensBefore - tokensAfter),
+      });
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[SessionManager] Auto-compaction failed:', error);
-      await this.emitter.emit('compaction:error', { sessionId, error: errorMessage });
-      // Don't throw - just log and continue
+      const cancelled = signal?.aborted || (error instanceof Error && error.name === 'AbortError');
+      const errorMessage = cancelled
+        ? 'Compaction cancelled'
+        : error instanceof Error ? error.message : 'Unknown error';
+      if (!cancelled) console.error('[SessionManager] Auto-compaction failed:', error);
+      await this.emitter.emit('compaction:error', {
+        sessionId, error: errorMessage, automatic: true, cancelled,
+      });
+      // A failed summary must not prevent the conversation from continuing.
       return false;
     }
   }
@@ -566,17 +821,38 @@ export class SessionManager {
     this.onSessionUpdate = listener;
   }
 
-  /** Create a new session and optionally persist imported messages. */
-  async create(options?: { id?: string; title?: string; messages?: Message[] }): Promise<Session> {
+  /** Create a new session and optionally persist imported rich data. */
+  async create(options: CreateSessionOptions = {}): Promise<Session> {
+    const now = new Date();
     const session: Session = {
-      id: options?.id ?? crypto.randomUUID(),
-      title: options?.title,
-      messages: options?.messages?.map(message => ({
+      id: options.id ?? crypto.randomUUID(),
+      schemaVersion: SESSION_SCHEMA_VERSION,
+      title: options.title,
+      messages: options.messages?.map(message => ({
         ...message,
         timestamp: new Date(message.timestamp),
       })) ?? [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      commands: options.commands?.map(command => ({
+        ...command,
+        timestamp: new Date(command.timestamp),
+      })),
+      createdAt: options.createdAt ? new Date(options.createdAt) : now,
+      updatedAt: options.updatedAt ? new Date(options.updatedAt) : now,
+      providerConfig: sanitizeProviderConfig(options.providerConfig),
+      metadata: options.metadata,
+      parentId: options.parentId,
+      branchId: options.branchId,
+      activeLeafId: options.activeLeafId,
+      parentAgentId: options.parentAgentId,
+      agentId: options.agentId,
+      cwd: options.cwd,
+      workspaceId: options.workspaceId,
+      gitBranch: options.gitBranch,
+      model: options.model,
+      thinking: options.thinking,
+      toolPreset: options.toolPreset,
+      autoCompaction: options.autoCompaction,
+      usage: options.usage,
     };
 
     this.sessions.set(session.id, session);
@@ -602,19 +878,19 @@ export class SessionManager {
   }
 
   /** Add a message to a session and persist it */
-  async addMessage(sessionId: string, message: Omit<Message, 'id' | 'timestamp'>): Promise<Session | null> {
+  async addMessage(
+    sessionId: string,
+    message: Omit<Message, 'id' | 'timestamp'>,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<Session | null> {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
 
     // Persist to JSONL first (for streaming scenarios where we don't have the full message object yet)
     let msgId: string;
     if (this.store) {
-      msgId = await this.store.appendMessage(sessionId, message.role, message.content, {
-        toolCalls: message.toolCalls,
-        toolCallId: message.toolCallId,
-        name: message.name,
-        isError: message.isError,
-      });
+      const { role: _role, content: _content, ...metadata } = message;
+      msgId = await this.store.appendMessage(sessionId, message.role, message.content, metadata);
     } else {
       msgId = crypto.randomUUID();
     }
@@ -627,6 +903,18 @@ export class SessionManager {
 
     session.messages.push(fullMessage);
     session.updatedAt = new Date();
+    if (message.usage) {
+      const previous = session.usage ?? {};
+      session.usage = {
+        inputTokens: (previous.inputTokens ?? 0) + (message.usage.inputTokens ?? 0),
+        outputTokens: (previous.outputTokens ?? 0) + (message.usage.outputTokens ?? 0),
+        cacheReadTokens: (previous.cacheReadTokens ?? 0) + (message.usage.cacheReadTokens ?? 0),
+        cacheWriteTokens: (previous.cacheWriteTokens ?? 0) + (message.usage.cacheWriteTokens ?? 0),
+        totalTokens: (previous.totalTokens ?? 0) + (message.usage.totalTokens
+          ?? (message.usage.inputTokens ?? 0) + (message.usage.outputTokens ?? 0)),
+        costUsd: (previous.costUsd ?? 0) + (message.usage.costUsd ?? 0),
+      };
+    }
 
     // Auto-generate title from first user message
     if (!session.title && message.role === 'user') {
@@ -649,22 +937,53 @@ export class SessionManager {
     
     // Auto-compact if enabled and we have enough messages with significant context
     if (this.compactionSettings.enabled && session.messages.length >= 4) {
-      await this.checkAndTriggerCompaction(session.id);
+      await this.checkAndTriggerCompaction(session.id, options.signal);
     }
 
     return session;
   }
 
+  /** Persist a shell command and keep its context policy explicit. */
+  async addCommand(
+    sessionId: string,
+    command: Omit<ShellCommandRecord, 'id' | 'timestamp'> & Partial<Pick<ShellCommandRecord, 'id' | 'timestamp'>>,
+  ): Promise<ShellCommandRecord | null> {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    const record = this.store
+      ? await this.store.appendCommand(sessionId, command)
+      : {
+          ...command,
+          id: command.id ?? `command-${crypto.randomUUID()}`,
+          timestamp: command.timestamp ? new Date(command.timestamp) : new Date(),
+        };
+    session.commands = [...(session.commands ?? []), record];
+    session.updatedAt = new Date();
+    await this.persistSession(session);
+    this.onSessionUpdate?.(sessionId);
+    return record;
+  }
+
   /** Update mutable session metadata and persist it. */
   async update(
     id: string,
-    changes: Partial<Pick<Session, 'title' | 'metadata' | 'providerConfig'>>,
+    changes: MutableSessionChanges,
   ): Promise<Session | null> {
     const session = this.sessions.get(id);
     if (!session) return null;
-    if (changes.title !== undefined) session.title = changes.title;
-    if (changes.metadata !== undefined) session.metadata = changes.metadata;
-    if (changes.providerConfig !== undefined) session.providerConfig = changes.providerConfig;
+    const fields: Array<keyof MutableSessionFields> = [
+      'title', 'metadata', 'providerConfig', 'activeLeafId', 'agentId', 'cwd',
+      'workspaceId', 'gitBranch', 'model', 'thinking', 'toolPreset', 'autoCompaction', 'usage',
+    ];
+    for (const field of fields) {
+      const value = changes[field];
+      if (value === null) Object.assign(session, { [field]: undefined });
+      else if (value !== undefined) Object.assign(session, {
+        [field]: field === 'providerConfig'
+          ? sanitizeProviderConfig(changes.providerConfig ?? undefined)
+          : value,
+      });
+    }
     session.updatedAt = new Date();
     await this.persistSession(session);
     this.onSessionUpdate?.(id);
@@ -715,17 +1034,31 @@ export class SessionManager {
     const session = this.sessions.get(sessionId);
     if (!session) return [];
 
-    const entries: SessionEntry[] = session.messages.map(m => ({
-      id: m.id,
-      type: 'message' as const,
-      role: m.role,
-      content: m.content,
-      timestamp: m.timestamp.getTime(),
-      toolCalls: m.toolCalls,
-      toolCallId: m.toolCallId,
-      name: m.name,
-      isError: m.isError,
-    }));
+    const entries: SessionEntry[] = [
+      ...session.messages.map(messageToEntry),
+      ...(session.commands ?? [])
+        .filter(command => !command.excludedFromContext && command.status !== 'queued' && command.status !== 'running')
+        .map(command => ({
+          id: `context-${command.id}`,
+          type: 'message' as const,
+          version: SESSION_SCHEMA_VERSION,
+          role: 'user' as const,
+          content: `[Shell command]\n$ ${command.command}\n${command.output ?? ''}\n[exit ${command.exitCode ?? 'unknown'}]`,
+          timestamp: command.timestamp.getTime(),
+          blocks: [{
+            type: 'command' as const,
+            command: command.command,
+            cwd: command.cwd,
+            output: command.output,
+            status: command.status,
+            exitCode: command.exitCode,
+            durationMs: command.durationMs,
+            excludedFromContext: false,
+            truncated: command.truncated,
+          }],
+          metadata: { sourceCommandId: command.id },
+        })),
+    ].sort((left, right) => left.timestamp - right.timestamp);
     const summary = session.metadata?.compactionSummary;
     if (typeof summary !== 'string' || !summary) return entries;
 
@@ -779,6 +1112,7 @@ export class SessionManager {
     sessionId: string,
     summary: string,
     firstKeptEntryId: string,
+    details: { instruction?: string; tokensBefore?: number; tokensAfter?: number } = {},
   ): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) return;
@@ -791,14 +1125,8 @@ export class SessionManager {
     session.updatedAt = new Date();
 
     if (this.store) {
-      const totalTokens = TokenEstimator.totalMessages(
-        session.messages.map(m => ({
-          ...m,
-          type: 'message' as const,
-          timestamp: m.timestamp.getTime(),
-        })),
-      );
-      await this.store.appendCompaction(sessionId, summary, firstKeptEntryId, totalTokens);
+      const totalTokens = TokenEstimator.totalMessages(session.messages.map(messageToEntry));
+      await this.store.appendCompaction(sessionId, summary, firstKeptEntryId, totalTokens, details);
       const rawEntries = await this.store.getRawEntries(sessionId);
       const compactionEntry = [...rawEntries].reverse().find(
         (entry): entry is CompactionEntry => entry.type === 'compaction',
@@ -807,6 +1135,7 @@ export class SessionManager {
         ...session.metadata,
         lastCompacted: new Date(compactionEntry?.timestamp ?? session.updatedAt.getTime()).toISOString(),
         compactionSummary: summary,
+        compactionStats: details,
         ...(compactionEntry ? { compactionEntryId: compactionEntry.id } : {}),
       };
     } else {
@@ -814,6 +1143,7 @@ export class SessionManager {
         ...session.metadata,
         lastCompacted: session.updatedAt.toISOString(),
         compactionSummary: summary,
+        compactionStats: details,
       };
     }
 
@@ -842,6 +1172,7 @@ export class SessionManager {
     const entry: BranchSummaryEntry = {
       id: `branch-summary-${crypto.randomUUID()}`,
       type: 'branch_summary',
+      version: SESSION_SCHEMA_VERSION,
       branchName: branchName || session.title || session.id,
       summary: summary.trim(),
       timestamp: Date.now(),
@@ -888,23 +1219,35 @@ export class SessionManager {
     const original = this.sessions.get(sessionId);
     if (!original) return null;
 
-    // Determine which messages to include in the fork (up to fromMessageIndex)
-    let messagesToCopy: Message[];
-    if (fromMessageIndex !== undefined && fromMessageIndex >= 0 && fromMessageIndex < original.messages.length) {
-      messagesToCopy = original.messages.slice(0, fromMessageIndex + 1);
-    } else {
-      // Fork from the beginning
-      messagesToCopy = [...original.messages];
-    }
+    const sourceMessages = fromMessageIndex !== undefined
+      && fromMessageIndex >= 0
+      && fromMessageIndex < original.messages.length
+      ? original.messages.slice(0, fromMessageIndex + 1)
+      : original.messages;
+    const messagesToCopy = structuredClone(sourceMessages).map(message => ({
+      ...message,
+      timestamp: new Date(message.timestamp),
+    }));
 
     const forkedSession: Session = {
       id: crypto.randomUUID(),
+      schemaVersion: SESSION_SCHEMA_VERSION,
       title: newTitle || `${original.title || 'Fork'} (fork)`,
       messages: messagesToCopy,
       createdAt: new Date(),
       updatedAt: new Date(),
       parentId: sessionId,
       branchId: original.branchId || sessionId, // Group forks under the same branch
+      activeLeafId: messagesToCopy.at(-1)?.id,
+      cwd: original.cwd,
+      workspaceId: original.workspaceId,
+      gitBranch: original.gitBranch,
+      model: original.model,
+      thinking: original.thinking,
+      toolPreset: original.toolPreset,
+      autoCompaction: original.autoCompaction,
+      providerConfig: sanitizeProviderConfig(original.providerConfig),
+      metadata: original.metadata ? structuredClone(original.metadata) : undefined,
     };
 
     this.sessions.set(forkedSession.id, forkedSession);
@@ -914,24 +1257,47 @@ export class SessionManager {
     return forkedSession;
   }
 
-  /** Clone a session (full copy with all messages) */
-  async cloneSession(sessionId: string, newTitle?: string): Promise<Session | null> {
+  /** Clone a session as an independent root, optionally through one message. */
+  async cloneSession(sessionId: string, newTitle?: string, throughMessageIndex?: number): Promise<Session | null> {
     const original = this.sessions.get(sessionId);
     if (!original) return null;
+    const sourceMessages = throughMessageIndex === undefined
+      ? original.messages
+      : original.messages.slice(0, Math.max(0, Math.min(original.messages.length, throughMessageIndex + 1)));
 
-    // Deep clone the messages array to avoid shared references
-    const clonedMessages = original.messages.map(m => ({
-      ...m,
-      id: crypto.randomUUID(), // New IDs for cloned messages
+    // Deep clone entries and identifiers so edits cannot mutate or branch the source.
+    const clonedMessages = structuredClone(sourceMessages).map(message => ({
+      ...message,
+      id: crypto.randomUUID(),
+      timestamp: new Date(message.timestamp),
     }));
 
     const clonedSession: Session = {
       id: crypto.randomUUID(),
+      schemaVersion: SESSION_SCHEMA_VERSION,
       title: newTitle || `${original.title || 'Clone'} (clone)`,
       messages: clonedMessages,
+      commands: throughMessageIndex === undefined && original.commands ? structuredClone(original.commands).map(command => ({
+        ...command,
+        id: `command-${crypto.randomUUID()}`,
+        timestamp: new Date(command.timestamp),
+      })) : undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
-      parentId: sessionId,
+      activeLeafId: clonedMessages.at(-1)?.id,
+      cwd: original.cwd,
+      workspaceId: original.workspaceId,
+      gitBranch: original.gitBranch,
+      model: original.model,
+      thinking: original.thinking,
+      toolPreset: original.toolPreset,
+      autoCompaction: original.autoCompaction,
+      providerConfig: sanitizeProviderConfig(original.providerConfig),
+      metadata: {
+        ...(original.metadata ? structuredClone(original.metadata) : {}),
+        clonedFromSessionId: sessionId,
+      },
+      usage: throughMessageIndex === undefined && original.usage ? { ...original.usage } : undefined,
     };
 
     this.sessions.set(clonedSession.id, clonedSession);

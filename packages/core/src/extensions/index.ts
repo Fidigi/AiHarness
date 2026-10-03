@@ -1,4 +1,10 @@
 export { ExtensionRegistry } from './extension-registry.js';
+export { ExtensionModuleLoader } from './module-loader.js';
+export type {
+  ExtensionModuleLoaderOptions,
+  ExtensionModuleLoadError,
+  ExtensionModuleLoadResult,
+} from './module-loader.js';
 export type {
   BeforeAgentData,
   BeforeHookExecution,
@@ -11,6 +17,11 @@ export type {
   ExtensionCommand,
   ExtensionFactory,
   ExtensionInfo,
+  ExtensionInteractionField,
+  ExtensionInteractionKind,
+  ExtensionInteractionOption,
+  ExtensionInteractionRequest,
+  ExtensionInteractionResponse,
   ExtensionLogLevel,
   ExtensionProvider,
   ExtensionRuntimeContext,
