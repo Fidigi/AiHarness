@@ -40,7 +40,7 @@ export interface WorkspaceToolOptions {
   extensionId?: string;
   /** Safety ceiling applied even when a model omits the optional shell timeout. */
   commandTimeoutMs?: number;
-  /** Pi-compatible shell settings; callbacks allow a host reload to update them safely. */
+  /** Reloadable shell settings supplied by the host runtime. */
   shellPath?: string | (() => string | undefined);
   shellCommandPrefix?: string | (() => string | undefined);
 }

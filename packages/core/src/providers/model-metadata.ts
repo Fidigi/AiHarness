@@ -135,7 +135,7 @@ export function getSupportedThinkingLevels(
   return ordered.length > 0 ? ordered : ['off'];
 }
 
-/** Clamp like Pi: first search upward from the request, then downward. */
+/** Clamp by searching upward from the request first, then downward. */
 export function clampPublishedThinkingLevel(
   level: PublishedThinkingLevel,
   available: readonly PublishedThinkingLevel[],

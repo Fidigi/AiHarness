@@ -36,7 +36,7 @@ export interface InstructionDiagnostic {
 
 export interface ResolveInstructionPromptOptions {
   cwd: string;
-  /** Defaults to PI_CODING_AGENT_DIR, then ~/.pi/agent. */
+  /** Optional user-level agent directory; the shared resolver supplies the compatibility default. */
   agentDir?: string;
   /** Gates all project/ancestor instruction sources; user-level agent-directory files remain independent. */
   projectTrusted?: boolean;
@@ -83,8 +83,8 @@ function expandHome(input: string, homeDir = os.homedir()): string {
   return input;
 }
 
-/** Resolve Pi's agent-directory convention without creating or mutating it. */
-export function resolvePiAgentDirectory(
+/** Resolve the configured agent directory without creating or mutating it. */
+export function resolveAgentDirectory(
   configured = process.env.PI_CODING_AGENT_DIR,
   homeDir = os.homedir(),
 ): string {
@@ -274,8 +274,8 @@ export function composeInstructionSystemPrompt(input: {
 }
 
 /**
- * Resolve Pi-compatible context and system-prompt inputs through one bounded,
- * non-secret contract shared by CLI and server runtimes.
+ * Resolve context and system-prompt inputs through one bounded, non-secret
+ * contract shared by CLI and server runtimes.
  */
 export async function resolveInstructionPrompt(
   options: ResolveInstructionPromptOptions,
@@ -291,7 +291,7 @@ export async function resolveInstructionPrompt(
   const maxTotalBytes = positiveLimit(options.maxTotalBytes, DEFAULT_MAX_TOTAL_BYTES, 'maxTotalBytes');
   const maxContextFiles = positiveLimit(options.maxContextFiles, DEFAULT_MAX_CONTEXT_FILES, 'maxContextFiles');
   const cwd = path.resolve(options.cwd);
-  const agentDir = resolvePiAgentDirectory(options.agentDir);
+  const agentDir = resolveAgentDirectory(options.agentDir);
   const diagnostics: InstructionDiagnostic[] = [];
   const contextFiles = options.noContextFiles
     ? []

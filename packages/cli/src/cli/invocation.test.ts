@@ -157,7 +157,7 @@ describe('CLI invocation contract', () => {
     expect(await readFile(capture, 'utf8')).toContain('RPC base');
   });
 
-  it('applies Pi settings to model scope, thinking, queues, tools, and session storage', async () => {
+  it('applies agent settings to model scope, thinking, queues, tools, and session storage', async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-settings-'));
     temporaryDirectories.push(cwd);
     const agentDir = path.join(cwd, 'agent');
@@ -254,7 +254,7 @@ describe('CLI invocation contract', () => {
     expect(invalidProvider.stderr).not.toContain('rpc extension stdout noise');
   });
 
-  it('accepts Pi RPC envelopes, strict LF framing, and startup session selectors', async () => {
+  it('accepts RPC command envelopes, strict LF framing, and startup session selectors', async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-rpc-'));
     temporaryDirectories.push(cwd);
     const sessionDir = path.join(cwd, 'sessions');

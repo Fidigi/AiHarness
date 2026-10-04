@@ -16,7 +16,7 @@ Review [`server-api.md`](./server-api.md) for route guards and [`extensions.md`]
 | `packages/core/src/security/project-trust.ts` | Canonical project allow-list in `~/.ai-harness/trust.json` |
 | `packages/core/src/tools/workspace-tools.ts` | Shared CLI/Web path resolution, mutation trust gates, exact edits, bounded searches and command execution |
 | `packages/core/src/prompts/instruction-context.ts` | Shared trust-separated, bounded, regular-file-only instruction and system-prompt resolution |
-| `packages/core/src/config/pi-settings.ts` | Bounded no-follow settings reads, schema filtering, trust-gated layers, global-only policy and value-free diagnostics |
+| `packages/core/src/config/agent-settings.ts` | Bounded no-follow settings reads, schema filtering, trust-gated layers, global-only policy and value-free diagnostics |
 | `packages/server/src/security/request-security.ts` | Roles, capabilities, Origin checks, limits, WebSocket auth and safe errors |
 | `packages/server/src/security/credential-store.ts` | Optional AES-GCM encrypted credential persistence |
 | `packages/server/src/runtime/provider-registry.ts` | Separation of custom-provider metadata and secrets |
@@ -52,7 +52,7 @@ Read-only workspace browsing still requires `workspace:read`; dangerous writes/e
 
 Instruction text is executable only in the model-policy sense, but it is still untrusted input sent to a provider. Core separates user-owned files under `PI_CODING_AGENT_DIR` or `~/.pi/agent` from project sources: ancestor context files and `<cwd>/.pi/{SYSTEM,APPEND_SYSTEM}.md` are not inspected until the canonical workspace is trusted. Explicit CLI text-or-file flags are an intentional user read, while Web configuration values are always literal and cannot turn into arbitrary server file reads. Every discovered file must be a nonsymlink regular UTF-8 file and is subject to per-file, file-count and aggregate limits plus an open/stat identity check. Resolved disk contents are ephemeral provider options and are not copied into session metadata. Do not move project discovery before the trust check or expose resolved bodies through capabilities/catalogue APIs.
 
-Pi settings use the same source boundary: agent-directory `settings.json` is user-controlled, while project `.pi/settings.json` is ignored until canonical project trust. The sole pre-trust exception is a schema-validated `sessionDir`, matching Pi's need to locate startup sessions; no project extension, resource, command prefix, model, proxy, or tool setting crosses that boundary. Reads are capped at 256 KiB and reject links, non-files, invalid UTF-8/JSON, NULs, and identity/timestamp races. Validation keeps valid fields while omitting unknown or invalid values, and diagnostics never include setting values. `/settings` intentionally omits proxy and opaque telemetry identifiers.
+Agent settings use the same source boundary: agent-directory `settings.json` is user-controlled, while the compatibility project `.pi/settings.json` is ignored until canonical project trust. The sole pre-trust exception is a schema-validated `sessionDir` needed to locate startup sessions; no project extension, resource, command prefix, model, proxy, or tool setting crosses that boundary. Reads are capped at 256 KiB and reject links, non-files, invalid UTF-8/JSON, NULs, and identity/timestamp races. Validation keeps valid fields while omitting unknown or invalid values, and diagnostics never include setting values. `/settings` intentionally omits proxy and opaque telemetry identifiers.
 
 CLI skill and prompt discovery loads project roots only after trust, does not traverse symbolic links, caps selection at 10,000 files, and opens each Markdown resource with no-follow identity/race checks and a 1 MiB limit. Settings resource exclusions operate on resolved paths; local extension code still passes the extension loader's separate regular-file, size and trust checks.
 
@@ -97,14 +97,14 @@ The launcher binds to `127.0.0.1` by default. A non-loopback bind without authen
 
 ## Associated Tests
 
-- `packages/core/src/security/workspace-manager.test.ts`, `packages/core/src/config/pi-settings.test.ts`, `packages/core/src/prompts/instruction-context.test.ts`, and `packages/core/src/tools/{workspace-tools,shell-command-runtime}.test.ts` — roots, settings/instruction trust/precedence/bounds, realpath, symlinks, shared shell persistence/cancellation/backpressure, retention and child-environment filtering
+- `packages/core/src/security/workspace-manager.test.ts`, `packages/core/src/config/agent-settings.test.ts`, `packages/core/src/prompts/instruction-context.test.ts`, and `packages/core/src/tools/{workspace-tools,shell-command-runtime}.test.ts` — roots, settings/instruction trust/precedence/bounds, realpath, symlinks, shared shell persistence/cancellation/backpressure, retention and child-environment filtering
 - `packages/cli/src/resources/resource-manager.test.ts` — trusted roots, ordered selectors, no-follow resource loading and project precedence
 - `packages/cli/src/security/project-trust.test.ts` and `packages/cli/src/cli/shell-controller.test.ts` — persisted trust and interactive shell gating/abort behavior
 - `packages/cli/src/security/oauth-device.test.ts` — bounded OAuth polling and cancellation
 - `packages/server/src/security/request-security.test.ts` — tokens, cookies, capabilities, Origin, limits and upgrades
 - `packages/server/src/security/credential-store.test.ts` — encryption, permissions and memory-only fallback
 - `packages/server/src/web-cli.test.ts` — bind/auth launcher policy
-- `packages/core/src/sessions/session-manager.test.ts` and `packages/cli/src/rpc/pi-rpc-server.test.ts` — session-file symlinks, retained output permissions/expiry, protocol purity and bounded shell output
+- `packages/core/src/sessions/session-manager.test.ts` and `packages/cli/src/rpc/rpc-controller.test.ts` — session-file symlinks, retained output permissions/expiry, protocol purity and bounded shell output
 - `packages/server/src/web-server.test.ts` and `e2e/live-server.spec.ts` — end-to-end route/workspace/secret boundaries
 
 ## Common Changes

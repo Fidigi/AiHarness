@@ -3,26 +3,26 @@ import { lstat, open } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { ThinkingLevel } from '../providers/index.js';
-import { resolvePiAgentDirectory } from '../prompts/instruction-context.js';
+import { resolveAgentDirectory } from '../prompts/instruction-context.js';
 
-export type PiSettingsScope = 'global' | 'project';
-export type PiTuiMode = 'regular' | 'fullscreen';
-export type PiQueueMode = 'all' | 'one-at-a-time';
-export type PiCacheWarmingMode = 'off' | 'streaming' | 'idle';
+export type AgentSettingsScope = 'global' | 'project';
+export type AgentTuiMode = 'regular' | 'fullscreen';
+export type AgentQueueMode = 'all' | 'one-at-a-time';
+export type AgentCacheWarmingMode = 'off' | 'streaming' | 'idle';
 
-export interface PiCompactionModelOverride {
+export interface AgentCompactionModelOverride {
   reserveTokens?: number;
   keepRecentTokens?: number;
 }
 
-export interface PiCompactionSettings {
+export interface AgentCompactionSettings {
   enabled?: boolean;
   reserveTokens?: number;
   keepRecentTokens?: number;
-  modelOverrides?: Record<string, PiCompactionModelOverride>;
+  modelOverrides?: Record<string, AgentCompactionModelOverride>;
 }
 
-export interface PiRetrySettings {
+export interface AgentRetrySettings {
   enabled?: boolean;
   maxRetries?: number;
   baseDelayMs?: number;
@@ -34,7 +34,7 @@ export interface PiRetrySettings {
   };
 }
 
-export interface PiPackageSourceObject {
+export interface AgentPackageSourceObject {
   source: string;
   autoload?: boolean;
   extensions?: string[];
@@ -43,10 +43,10 @@ export interface PiPackageSourceObject {
   themes?: string[];
 }
 
-export type PiPackageSource = string | PiPackageSourceObject;
+export type AgentPackageSource = string | AgentPackageSourceObject;
 
-/** Validated subset of Pi 1.0 settings.json, including all documented settings. */
-export interface PiSettings {
+/** Validated agent settings consumed by AiHarness runtimes. */
+export interface AgentSettings {
   lastChangelogVersion?: string;
   defaultProvider?: string;
   defaultModel?: string;
@@ -56,9 +56,9 @@ export interface PiSettings {
   enabledModels?: string[];
   hideThinkingBlock?: boolean;
   showCacheMissNotices?: boolean;
-  cacheWarming?: PiCacheWarmingMode;
-  steeringMode?: PiQueueMode;
-  followUpMode?: PiQueueMode;
+  cacheWarming?: AgentCacheWarmingMode;
+  steeringMode?: AgentQueueMode;
+  followUpMode?: AgentQueueMode;
   externalEditor?: string;
   doubleEscapeAction?: 'tree' | 'fork' | 'none';
   treeFilterMode?: 'default' | 'no-tools' | 'user-only' | 'labeled-only' | 'all';
@@ -66,11 +66,11 @@ export interface PiSettings {
   defaultTools?: string[];
   codemode?: { mode?: 'on' | 'only'; inlineBudget?: number };
   sessionDir?: string;
-  compaction?: PiCompactionSettings;
+  compaction?: AgentCompactionSettings;
   branchSummary?: { reserveTokens?: number; skipPrompt?: boolean };
   theme?: string;
   quietStartup?: boolean | 'header';
-  tuiMode?: PiTuiMode;
+  tuiMode?: AgentTuiMode;
   fullscreenExitOutput?: 'transcript' | 'resume-hint';
   fullscreenScrollbar?: 'auto' | 'always' | 'hidden';
   fullscreenCopyOnSelect?: boolean;
@@ -94,11 +94,11 @@ export interface PiSettings {
   httpProxy?: string;
   httpIdleTimeoutMs?: number;
   websocketConnectTimeoutMs?: number;
-  retry?: PiRetrySettings;
+  retry?: AgentRetrySettings;
   shellPath?: string;
   shellCommandPrefix?: string;
   npmCommand?: string[];
-  packages?: PiPackageSource[];
+  packages?: AgentPackageSource[];
   extensions?: string[];
   skills?: string[];
   prompts?: string[];
@@ -112,37 +112,39 @@ export interface PiSettings {
   warnings?: { anthropicExtraUsage?: boolean };
 }
 
-export interface PiSettingsDiagnostic {
-  scope: PiSettingsScope;
+export interface AgentSettingsDiagnostic {
+  scope: AgentSettingsScope;
   path: string;
   setting?: string;
   message: string;
 }
 
-export interface PiSettingProvenance {
-  scopes: PiSettingsScope[];
+export interface AgentSettingProvenance {
+  scopes: AgentSettingsScope[];
   paths: string[];
 }
 
-export interface ResolvedPiSettings {
+export interface ResolvedAgentSettings {
   agentDir: string;
   cwd: string;
   projectTrusted: boolean;
-  paths: Record<PiSettingsScope, string>;
-  globalSettings: PiSettings;
-  projectSettings: PiSettings;
-  settings: PiSettings;
+  paths: Record<AgentSettingsScope, string>;
+  globalSettings: AgentSettings;
+  projectSettings: AgentSettings;
+  settings: AgentSettings;
   /** Effective leaf setting to contributing files. Keys use dotted paths. */
-  provenance: Record<string, PiSettingProvenance>;
-  diagnostics: PiSettingsDiagnostic[];
+  provenance: Record<string, AgentSettingProvenance>;
+  diagnostics: AgentSettingsDiagnostic[];
 }
 
-export interface LoadPiSettingsOptions {
+export interface LoadAgentSettingsOptions {
   cwd: string;
   agentDir?: string;
   homeDir?: string;
   projectTrusted?: boolean;
-  /** Pi reads project sessionDir before trust so it can locate sessions. */
+  /** Defaults to `<cwd>/.ai-harness/settings.json`. */
+  projectSettingsPath?: string;
+  /** Allow only sessionDir to be resolved before project trust. */
   includeUntrustedProjectSessionDir?: boolean;
   maxFileBytes?: number;
 }
@@ -314,8 +316,8 @@ function schemaDescription(schema: Schema): string {
 }
 
 function addDiagnostic(
-  diagnostics: PiSettingsDiagnostic[],
-  diagnostic: PiSettingsDiagnostic,
+  diagnostics: AgentSettingsDiagnostic[],
+  diagnostic: AgentSettingsDiagnostic,
 ): void {
   if (diagnostics.length < MAX_DIAGNOSTICS) diagnostics.push(diagnostic);
 }
@@ -324,9 +326,9 @@ function validateValue(
   value: unknown,
   schema: Schema,
   setting: string,
-  scope: PiSettingsScope,
+  scope: AgentSettingsScope,
   filePath: string,
-  diagnostics: PiSettingsDiagnostic[],
+  diagnostics: AgentSettingsDiagnostic[],
 ): unknown | typeof INVALID {
   const invalid = (): typeof INVALID => {
     addDiagnostic(diagnostics, {
@@ -418,13 +420,13 @@ function migrateSettings(input: Record<string, unknown>): Record<string, unknown
 
 function validateSettings(
   input: Record<string, unknown>,
-  scope: PiSettingsScope,
+  scope: AgentSettingsScope,
   filePath: string,
-  diagnostics: PiSettingsDiagnostic[],
-): PiSettings {
+  diagnostics: AgentSettingsDiagnostic[],
+): AgentSettings {
   const migrated = migrateSettings(input);
   const validated = validateValue(migrated, settingsSchema, '', scope, filePath, diagnostics);
-  return validated === INVALID ? {} : validated as PiSettings;
+  return validated === INVALID ? {} : validated as AgentSettings;
 }
 
 async function readBoundedSettingsFile(filePath: string, maxBytes: number): Promise<Record<string, unknown> | undefined> {
@@ -484,11 +486,11 @@ async function readBoundedSettingsFile(filePath: string, maxBytes: number): Prom
 }
 
 async function loadLayer(
-  scope: PiSettingsScope,
+  scope: AgentSettingsScope,
   filePath: string,
   maxBytes: number,
-  diagnostics: PiSettingsDiagnostic[],
-): Promise<PiSettings> {
+  diagnostics: AgentSettingsDiagnostic[],
+): Promise<AgentSettings> {
   try {
     const parsed = await readBoundedSettingsFile(filePath, maxBytes);
     return parsed ? validateSettings(parsed, scope, filePath, diagnostics) : {};
@@ -526,12 +528,12 @@ function onlyToolModifiers(entries: readonly string[]): boolean {
   return entries.every(entry => entry.startsWith('+') || entry.startsWith('-'));
 }
 
-/** Merge validated global/project layers using Pi object and resource-list rules. */
-export function mergePiSettings(globalSettings: PiSettings, projectSettings: PiSettings): PiSettings {
+/** Merge validated global/project layers using the agent object and resource-list rules. */
+export function mergeAgentSettings(globalSettings: AgentSettings, projectSettings: AgentSettings): AgentSettings {
   const merged = deepMerge(
     globalSettings as Record<string, unknown>,
     projectSettings as Record<string, unknown>,
-  ) as PiSettings;
+  ) as AgentSettings;
   for (const field of RESOURCE_FIELDS) {
     const globalValue = globalSettings[field];
     const projectValue = projectSettings[field];
@@ -566,21 +568,21 @@ function collectLeafPaths(value: unknown, prefix: string[] = [], output: string[
 }
 
 function buildProvenance(
-  settings: PiSettings,
-  globalSettings: PiSettings,
-  projectSettings: PiSettings,
-  paths: Record<PiSettingsScope, string>,
-): Record<string, PiSettingProvenance> {
-  const provenance: Record<string, PiSettingProvenance> = {};
+  settings: AgentSettings,
+  globalSettings: AgentSettings,
+  projectSettings: AgentSettings,
+  paths: Record<AgentSettingsScope, string>,
+): Record<string, AgentSettingProvenance> {
+  const provenance: Record<string, AgentSettingProvenance> = {};
   for (const segments of collectLeafPaths(settings)) {
     if (!segments.length) continue;
-    const top = segments[0]! as keyof PiSettings;
+    const top = segments[0]! as keyof AgentSettings;
     const global = hasOwnPath(globalSettings, segments);
     const project = hasOwnPath(projectSettings, segments);
     const mergedList = (RESOURCE_FIELDS as readonly string[]).includes(top)
       || (top === 'defaultTools' && projectSettings.defaultTools !== undefined
         && onlyToolModifiers(projectSettings.defaultTools));
-    const scopes: PiSettingsScope[] = mergedList
+    const scopes: AgentSettingsScope[] = mergedList
       ? [...(global ? ['global' as const] : []), ...(project ? ['project' as const] : [])]
       : project ? ['project'] : global ? ['global'] : [];
     if (scopes.length) {
@@ -591,13 +593,13 @@ function buildProvenance(
 }
 
 /**
- * Load bounded Pi settings without creating files. Project values are trust-gated,
- * except sessionDir, which Pi needs before selecting the session and resolving trust.
+ * Load bounded agent settings without creating files. Project values are trust-gated,
+ * except an optional sessionDir used to select startup storage before trust.
  */
-export async function loadPiSettings(options: LoadPiSettingsOptions): Promise<ResolvedPiSettings> {
+export async function loadAgentSettings(options: LoadAgentSettingsOptions): Promise<ResolvedAgentSettings> {
   const cwd = path.resolve(options.cwd);
   const homeDir = options.homeDir ?? os.homedir();
-  const agentDir = resolvePiAgentDirectory(options.agentDir, homeDir);
+  const agentDir = resolveAgentDirectory(options.agentDir, homeDir);
   const projectTrusted = options.projectTrusted === true;
   const maxBytes = options.maxFileBytes ?? DEFAULT_MAX_SETTINGS_BYTES;
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
@@ -605,11 +607,13 @@ export async function loadPiSettings(options: LoadPiSettingsOptions): Promise<Re
   }
   const paths = {
     global: path.join(agentDir, 'settings.json'),
-    project: path.join(cwd, '.pi', 'settings.json'),
+    project: options.projectSettingsPath === undefined
+      ? path.join(cwd, '.ai-harness', 'settings.json')
+      : resolveAgentSettingsPath(options.projectSettingsPath, cwd, homeDir),
   };
-  const diagnostics: PiSettingsDiagnostic[] = [];
+  const diagnostics: AgentSettingsDiagnostic[] = [];
   const globalSettings = await loadLayer('global', paths.global, maxBytes, diagnostics);
-  let projectSettings: PiSettings = {};
+  let projectSettings: AgentSettings = {};
   if (projectTrusted) {
     projectSettings = await loadLayer('project', paths.project, maxBytes, diagnostics);
     for (const field of GLOBAL_ONLY_FIELDS) {
@@ -639,7 +643,7 @@ export async function loadPiSettings(options: LoadPiSettingsOptions): Promise<Re
       });
     }
   }
-  const settings = mergePiSettings(globalSettings, projectSettings);
+  const settings = mergeAgentSettings(globalSettings, projectSettings);
   return {
     agentDir,
     cwd,
@@ -653,8 +657,8 @@ export async function loadPiSettings(options: LoadPiSettingsOptions): Promise<Re
   };
 }
 
-/** Resolve Pi defaultTools modifiers against the built-in default declaration. */
-export function resolvePiDefaultTools(
+/** Resolve defaultTools modifiers against the built-in default declaration. */
+export function resolveAgentDefaultTools(
   entries: readonly string[] | undefined,
   defaults: readonly string[],
 ): string[] | undefined {
@@ -673,8 +677,8 @@ export function resolvePiDefaultTools(
   return selected;
 }
 
-export function resolvePiCompactionSettings(
-  settings: PiSettings,
+export function resolveAgentCompactionSettings(
+  settings: AgentSettings,
   provider?: string,
   model?: string,
 ): { enabled: boolean; reserveTokens: number; keepRecentTokens: number } {
@@ -686,8 +690,8 @@ export function resolvePiCompactionSettings(
   };
 }
 
-export function resolvePiThinkingLevel(
-  settings: PiSettings,
+export function resolveAgentThinkingLevel(
+  settings: AgentSettings,
   provider?: string,
   model?: string,
 ): ThinkingLevel | undefined {
@@ -701,12 +705,12 @@ function expandHome(value: string, homeDir: string): string {
   return value;
 }
 
-/** Resolve one configured session directory relative to cwd, as Pi documents. */
-export function resolvePiSettingsPath(value: string, cwd: string, homeDir = os.homedir()): string {
+/** Resolve one configured path relative to the working directory. */
+export function resolveAgentSettingsPath(value: string, cwd: string, homeDir = os.homedir()): string {
   return path.resolve(cwd, expandHome(value, homeDir));
 }
 
-export type PiResourcePathField = 'extensions' | 'skills' | 'prompts' | 'themes';
+export type AgentResourcePathField = 'extensions' | 'skills' | 'prompts' | 'themes';
 
 function resolveResourceEntry(entry: string, base: string, homeDir: string): string {
   const marker = entry[0] === '+' || entry[0] === '-' || entry[0] === '!' ? entry[0] : '';
@@ -716,8 +720,8 @@ function resolveResourceEntry(entry: string, base: string, homeDir: string): str
   return `${marker}${resolved}`;
 }
 
-/** Apply Pi's ordered exact/glob exclusions to already resolved resource entries. */
-export function selectPiResourcePaths(entries: readonly string[]): string[] {
+/** Apply ordered exact/glob exclusions to already resolved resource entries. */
+export function selectAgentResourcePaths(entries: readonly string[]): string[] {
   const selected: string[] = [];
   for (const entry of entries) {
     const marker = entry[0] === '+' || entry[0] === '-' || entry[0] === '!' ? entry[0] : '';
@@ -741,18 +745,18 @@ export function selectPiResourcePaths(entries: readonly string[]): string[] {
 }
 
 /** Resolve resource paths from their layer-specific base directories without crossing trust. */
-export function resolvePiResourcePaths(
-  resolved: ResolvedPiSettings,
-  field: PiResourcePathField,
+export function resolveAgentResourcePaths(
+  resolved: ResolvedAgentSettings,
+  field: AgentResourcePathField,
   homeDir = os.homedir(),
-  scope: PiSettingsScope | 'all' = 'all',
+  scope: AgentSettingsScope | 'all' = 'all',
 ): string[] {
   return [
     ...(scope !== 'project' ? (resolved.globalSettings[field] ?? []).map(entry => (
       resolveResourceEntry(entry, resolved.agentDir, homeDir)
     )) : []),
     ...(scope !== 'global' && resolved.projectTrusted ? (resolved.projectSettings[field] ?? []).map(entry => (
-      resolveResourceEntry(entry, path.join(resolved.cwd, '.pi'), homeDir)
+      resolveResourceEntry(entry, path.dirname(resolved.paths.project), homeDir)
     )) : []),
   ];
 }

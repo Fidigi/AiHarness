@@ -5,7 +5,7 @@ export {
   DEFAULT_CODING_SYSTEM_PROMPT,
   composeInstructionSystemPrompt,
   resolveInstructionPrompt,
-  resolvePiAgentDirectory,
+  resolveAgentDirectory,
 } from './instruction-context.js';
 export type {
   InstructionDiagnostic,

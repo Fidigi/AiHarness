@@ -189,9 +189,9 @@ Without a session selector, each invocation starts a new session. `--resume` req
 
 The `AI_HARNESS_TUI_MODE=regular|fullscreen` variable also sets the mode. The command-line option takes priority over settings.
 
-### Pi Settings
+### Agent Settings
 
-The CLI and RPC read user settings from `<agent-directory>/settings.json` (`PI_CODING_AGENT_DIR`, otherwise `~/.pi/agent`) and, after explicit project trust, overlay `<workspace>/.pi/settings.json`. The only project value read before trust is `sessionDir`. Files must be regular nonsymlink UTF-8 JSON and are capped at 256 KiB; invalid or unknown fields produce a warning without printing their values. Settings are read-only: AiHarness never rewrites them.
+The CLI and RPC use AiHarness's Core settings resolver. They read user settings from `<agent-directory>/settings.json` (`PI_CODING_AGENT_DIR`, otherwise `~/.pi/agent`) and, after explicit project trust, overlay the compatibility source `<workspace>/.pi/settings.json`. The only project value read before trust is `sessionDir`. Files must be regular nonsymlink UTF-8 JSON and are capped at 256 KiB; invalid or unknown fields produce a warning without printing their values. Settings are read-only: AiHarness never rewrites them.
 
 A useful starting file is:
 
@@ -291,7 +291,7 @@ Prefix input with `!` to run a command directly in the trusted workspace. Its pr
 | `/thinking [off\|minimal\|low\|medium\|high\|xhigh\|max]` | displays or changes thinking level |
 | `/login <provider>` | starts an OAuth Device Flow if configured |
 | `/config` | displays session location |
-| `/settings` | displays effective Pi settings and source scopes |
+| `/settings` | displays effective agent settings and source scopes |
 
 Actual support for a thinking level depends on the provider and model.
 
@@ -321,7 +321,7 @@ The CLI and Web agent use the same tool implementations from the Core package:
 | `bash` | runs a bounded shell command in the workspace |
 | `powershell` | Windows equivalent, available only on that OS |
 
-By default the model receives `read`, `bash`, `edit`, and `write`, plus loaded extension tools; `grep`, `find`, and `ls` are opt-in. Pi `defaultTools` can replace or modify that list. `--tools <names>` replaces the selection, `--exclude-tools <names>` removes names afterward, `--no-builtin-tools` keeps only extension tools, and `--no-tools` disables all defaults. `/tools` marks inactive tools, and `/reload` reapplies the policy to the new extension generation. Pi `shellPath` and `shellCommandPrefix` affect both this `bash` tool and direct `!`/`!!` commands.
+By default the model receives `read`, `bash`, `edit`, and `write`, plus loaded extension tools; `grep`, `find`, and `ls` are opt-in. The `defaultTools` agent setting can replace or modify that list. `--tools <names>` replaces the selection, `--exclude-tools <names>` removes names afterward, `--no-builtin-tools` keeps only extension tools, and `--no-tools` disables all defaults. `/tools` marks inactive tools, and `/reload` reapplies the policy to the new extension generation. Agent settings `shellPath` and `shellCommandPrefix` affect both this `bash` tool and direct `!`/`!!` commands.
 
 Every path is canonicalized inside the directory from which the CLI started; escaping symlinks and traversal are rejected. Reads and searches do not execute code. `bash`, `edit`, and `write` require explicit trust:
 
@@ -470,7 +470,7 @@ The first record is a version-3 session header. It is followed by agent, turn, m
 
 ### RPC Mode
 
-RPC mode reads strict LF-delimited JSON requests from stdin and writes Pi-style correlated responses plus asynchronous events to stdout:
+RPC mode reads strict LF-delimited JSON requests from stdin and writes correlated responses plus asynchronous events to stdout:
 
 ```bash
 ai-harness --mode rpc --models 'openai/o*,anthropic/claude*' --session-id automation-run --name "Automation run"
@@ -486,7 +486,7 @@ Canonical requests use `type` and an optional string `id`:
 
 Responses use `type: "response"`, repeat the command and ID, and contain `success` plus either `data` or `error`. Prompting streams the same agent/turn/message/tool events as JSON mode but without a session header. RPC also supports prompt images and discovered prompt/skill expansion; immediate extension commands; next-turn steering, later follow-ups and abort; bounded cached configured-provider model listing/switching and ordered exact/fuzzy/glob `--models` cycling with per-entry capability-clamped thinking; session creation, switching, in-place forks, clones and nested raw-history projections; cache-aware message/compaction usage without invented unknown-model prices; provider/summarization retry events; trusted bash with incremental correlated output and a private `fullOutputPath` when truncated; HTML export; and extension dialog request/response records. Read stdout continuously and split only on LF; protocol writes and built-in provider chunks are awaited, and non-cooperative extension streams are bounded.
 
-Normal startup selectors such as `--continue`, `--session`, `--session-id`, `--fork`, `--session-dir`, `--name`, and `--no-session` apply, as do Pi startup settings for models, thinking, tools, resources, queues, retry and compaction. `--resume` is interactive-only, so use `--session` in RPC. The former `{id,method,params}` requests remain accepted for migration. Diagnostics always use stderr, trusted shell children do not inherit credential-like environment variables, and retained full-output files are private and expire after 24 hours by default.
+Normal startup selectors such as `--continue`, `--session`, `--session-id`, `--fork`, `--session-dir`, `--name`, and `--no-session` apply, as do agent settings for models, thinking, tools, resources, queues, retry and compaction. `--resume` is interactive-only, so use `--session` in RPC. The former `{id,method,params}` requests remain accepted for migration. Diagnostics always use stderr, trusted shell children do not inherit credential-like environment variables, and retained full-output files are private and expire after 24 hours by default.
 
 ## Using the Web Interface
 

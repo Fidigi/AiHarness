@@ -189,9 +189,9 @@ Sans sélecteur de session, chaque invocation démarre une nouvelle session. `--
 
 La variable `AI_HARNESS_TUI_MODE=regular|fullscreen` permet aussi de définir le mode. L’option en ligne de commande reste prioritaire sur les réglages.
 
-### Réglages Pi
+### Réglages de l’agent
 
-Le CLI et RPC lisent les réglages utilisateur dans `<répertoire-agent>/settings.json` (`PI_CODING_AGENT_DIR`, sinon `~/.pi/agent`), puis superposent `<workspace>/.pi/settings.json` après approbation explicite du projet. La seule valeur projet lue avant cette approbation est `sessionDir`. Les sources doivent être des fichiers JSON UTF-8 réguliers, non symboliques, de 256 Kio au plus ; un champ invalide ou inconnu produit un avertissement sans afficher sa valeur. Ces réglages sont en lecture seule : AiHarness ne réécrit jamais les fichiers.
+Le CLI et RPC utilisent le résolveur de réglages du Core AiHarness. Ils lisent les réglages utilisateur dans `<répertoire-agent>/settings.json` (`PI_CODING_AGENT_DIR`, sinon `~/.pi/agent`), puis superposent la source de compatibilité `<workspace>/.pi/settings.json` après approbation explicite du projet. La seule valeur projet lue avant cette approbation est `sessionDir`. Les sources doivent être des fichiers JSON UTF-8 réguliers, non symboliques, de 256 Kio au plus ; un champ invalide ou inconnu produit un avertissement sans afficher sa valeur. Ces réglages sont en lecture seule : AiHarness ne réécrit jamais les fichiers.
 
 Voici un point de départ :
 
@@ -291,7 +291,7 @@ Pour exécuter directement une commande dans le workspace approuvé, préfixez-l
 | `/thinking [off|minimal|low|medium|high|xhigh|max]` | affiche ou change le niveau de raisonnement |
 | `/login <provider>` | lance un flux OAuth Device configuré |
 | `/config` | affiche l’emplacement des sessions |
-| `/settings` | affiche les réglages Pi effectifs et leurs sources |
+| `/settings` | affiche les réglages effectifs de l’agent et leurs sources |
 
 Le support réel d’un niveau de raisonnement dépend du provider et du modèle.
 
@@ -321,7 +321,7 @@ Le CLI et l’agent Web utilisent les mêmes implémentations d’outils fournie
 | `bash` | exécute une commande shell bornée dans le workspace |
 | `powershell` | équivalent Windows, disponible uniquement sur cet OS |
 
-Par défaut, le modèle reçoit `read`, `bash`, `edit` et `write`, ainsi que les outils des extensions chargées ; `grep`, `find` et `ls` sont optionnels. Le réglage Pi `defaultTools` peut remplacer ou modifier cette liste. `--tools <noms>` remplace la sélection, `--exclude-tools <noms>` en retire ensuite certains, `--no-builtin-tools` ne garde que les outils d’extension et `--no-tools` désactive tous les outils par défaut. `/tools` signale les outils inactifs et `/reload` réapplique la politique à la nouvelle génération d’extensions. `shellPath` et `shellCommandPrefix` affectent cet outil `bash` comme les commandes directes `!`/`!!`.
+Par défaut, le modèle reçoit `read`, `bash`, `edit` et `write`, ainsi que les outils des extensions chargées ; `grep`, `find` et `ls` sont optionnels. Le réglage agent `defaultTools` peut remplacer ou modifier cette liste. `--tools <noms>` remplace la sélection, `--exclude-tools <noms>` en retire ensuite certains, `--no-builtin-tools` ne garde que les outils d’extension et `--no-tools` désactive tous les outils par défaut. `/tools` signale les outils inactifs et `/reload` réapplique la politique à la nouvelle génération d’extensions. `shellPath` et `shellCommandPrefix` affectent cet outil `bash` comme les commandes directes `!`/`!!`.
 
 Tous les chemins sont canonicalisés dans le dossier depuis lequel le CLI a démarré ; les liens symboliques sortants et les traversées sont refusés. Les lectures et recherches sont disponibles sans exécuter de code. `bash`, `edit` et `write` exigent une approbation explicite :
 
@@ -470,7 +470,7 @@ Le premier enregistrement est un en-tête de session en version 3. Il est suivi
 
 ### Mode RPC
 
-Le mode RPC lit des requêtes JSON strictement délimitées par LF sur stdin et écrit sur stdout des réponses corrélées de forme Pi ainsi que des événements asynchrones :
+Le mode RPC lit des requêtes JSON strictement délimitées par LF sur stdin et écrit sur stdout des réponses corrélées ainsi que des événements asynchrones :
 
 ```bash
 ai-harness --mode rpc --models 'openai/o*,anthropic/claude*' --session-id automation-run --name "Exécution automatisée"
@@ -486,7 +486,7 @@ Les requêtes canoniques utilisent `type` et un `id` chaîne facultatif :
 
 Les réponses utilisent `type: "response"`, répètent la commande et l’ID, puis contiennent `success` avec `data` ou `error`. Un prompt diffuse les mêmes événements agent/tour/message/outil que le mode JSON, sans en-tête de session. RPC prend aussi en charge les images et l’expansion des prompts/skills découverts ; les commandes d’extension immédiates ; le steering avant le prochain tour modèle, les follow-ups ultérieurs et l’arrêt ; la liste et le changement bornés/mis en cache des modèles configurés ainsi que le cycle ordonné des références exactes/floues/globs `--models`, avec niveau par entrée borné par ses capacités ; la création, le changement, le fork dans le journal courant, le clone et les projections imbriquées de l’historique brut ; l’usage cache-aware des messages/compactions sans prix inventé pour un modèle inconnu ; les événements de retry provider/résumé ; le bash de confiance avec sortie incrémentale corrélée et `fullOutputPath` privé en cas de troncature ; l’export HTML ; et les dialogues d’extension. Lisez stdout en continu et séparez uniquement sur LF ; les écritures du protocole et les chunks des providers intégrés sont attendus, tandis qu’une extension non coopérative est bornée.
 
-Les sélecteurs de démarrage usuels (`--continue`, `--session`, `--session-id`, `--fork`, `--session-dir`, `--name`, `--no-session`) s’appliquent, de même que les réglages Pi de modèles, raisonnement, outils, ressources, files, retries et compaction. `--resume` est réservé au terminal interactif : utilisez `--session` en RPC. Les anciennes requêtes `{id,method,params}` restent acceptées pour migration. Les diagnostics utilisent toujours stderr, les processus shell de confiance n’héritent pas des variables d’environnement dont le nom ressemble à un credential, et les sorties complètes conservées sont privées et expirent par défaut après 24 heures.
+Les sélecteurs de démarrage usuels (`--continue`, `--session`, `--session-id`, `--fork`, `--session-dir`, `--name`, `--no-session`) s’appliquent, de même que les réglages agent de modèles, raisonnement, outils, ressources, files, retries et compaction. `--resume` est réservé au terminal interactif : utilisez `--session` en RPC. Les anciennes requêtes `{id,method,params}` restent acceptées pour migration. Les diagnostics utilisent toujours stderr, les processus shell de confiance n’héritent pas des variables d’environnement dont le nom ressemble à un credential, et les sorties complètes conservées sont privées et expirent par défaut après 24 heures.
 
 ## Utiliser l’interface Web
 

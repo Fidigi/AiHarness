@@ -9,15 +9,15 @@ import {
   ExtensionRegistry,
   getSupportedThinkingLevels,
   JsonlSessionStore,
-  loadPiSettings,
+  loadAgentSettings,
   loadPromptFiles,
   normalizeProviderUsage,
   resolveInstructionPrompt,
-  resolvePiCompactionSettings,
-  resolvePiDefaultTools,
-  resolvePiResourcePaths,
-  resolvePiThinkingLevel,
-  selectPiResourcePaths,
+  resolveAgentCompactionSettings,
+  resolveAgentDefaultTools,
+  resolveAgentResourcePaths,
+  resolveAgentThinkingLevel,
+  selectAgentResourcePaths,
   registerWorkspaceTools,
   selectRegisteredTools,
   SessionManager,
@@ -29,12 +29,13 @@ import {
 import type {
   Message,
   MessageContentBlock,
-  ResolvedPiSettings,
+  ResolvedAgentSettings,
   Session,
   SessionEntry,
   ThinkingLevel,
   ToolCall,
 } from '@ai-harness/core';
+import path from 'node:path';
 import readline from 'readline';
 import chalk from 'chalk';
 import { CommandHandler } from './commands/handler.js';
@@ -61,7 +62,7 @@ import {
   type CliThinkingLevel,
 } from './cli/args.js';
 import {
-  applyPiModelSettings,
+  applyAgentModelSettings,
   createConfiguredProviders,
   resolveStartupProvider,
 } from './providers/configured-providers.js';
@@ -105,7 +106,7 @@ function coreThinkingLevel(level: CliThinkingLevel | undefined): ThinkingLevel |
   return level;
 }
 
-function reportPiSettingsDiagnostics(settings: ResolvedPiSettings): void {
+function reportAgentSettingsDiagnostics(settings: ResolvedAgentSettings): void {
   for (const diagnostic of settings.diagnostics) {
     const field = diagnostic.setting ? ` [${diagnostic.setting}]` : '';
     process.stderr.write(`Warning: Settings ignored (${diagnostic.path})${field}: ${diagnostic.message}\n`);
@@ -114,21 +115,21 @@ function reportPiSettingsDiagnostics(settings: ResolvedPiSettings): void {
 
 function configuredExtensionPaths(
   cliPaths: readonly string[],
-  settings: ResolvedPiSettings,
+  settings: ResolvedAgentSettings,
 ): string[] {
-  const configured = selectPiResourcePaths(resolvePiResourcePaths(settings, 'extensions'))
+  const configured = selectAgentResourcePaths(resolveAgentResourcePaths(settings, 'extensions'))
     .filter(entry => !entry.includes('builtin:'));
   return [...cliPaths, ...configured];
 }
 
-function formatPiSettingsSummary(resolved: ResolvedPiSettings): string {
+function formatAgentSettingsSummary(resolved: ResolvedAgentSettings): string {
   const source = (field: string): string => resolved.provenance[field]?.scopes.join('+') ?? 'default';
   const values: Array<[string, unknown, string]> = [
     ['defaultProvider', resolved.settings.defaultProvider ?? 'automatic', 'defaultProvider'],
     ['defaultModel', resolved.settings.defaultModel ?? 'automatic', 'defaultModel'],
     ['defaultThinkingLevel', resolved.settings.defaultThinkingLevel ?? 'medium', 'defaultThinkingLevel'],
     ['enabledModels', resolved.settings.enabledModels ?? 'all available', 'enabledModels'],
-    ['defaultTools', resolvePiDefaultTools(resolved.settings.defaultTools, DEFAULT_CODING_TOOL_NAMES)
+    ['defaultTools', resolveAgentDefaultTools(resolved.settings.defaultTools, DEFAULT_CODING_TOOL_NAMES)
       ?? DEFAULT_CODING_TOOL_NAMES, 'defaultTools'],
     ['steeringMode', resolved.settings.steeringMode ?? 'one-at-a-time', 'steeringMode'],
     ['followUpMode', resolved.settings.followUpMode ?? 'one-at-a-time', 'followUpMode'],
@@ -194,8 +195,9 @@ async function main(): Promise<void> {
       const trustManager = new ProjectTrustManager();
       await trustManager.load();
       const cwd = process.cwd();
-      reportPiSettingsDiagnostics(await loadPiSettings({
+      reportAgentSettingsDiagnostics(await loadAgentSettings({
         cwd,
+        projectSettingsPath: path.join(cwd, '.pi', 'settings.json'),
         projectTrusted: await trustManager.isTrusted(cwd),
       }));
       const search = typeof cliArguments.listModels === 'string' ? cliArguments.listModels : undefined;
@@ -257,17 +259,19 @@ async function main(): Promise<void> {
   const workspaceCwd = await workspaceManager.getDefaultCwd();
   const trustManager = new ProjectTrustManager();
   await trustManager.load();
-  let settingsResolution = await loadPiSettings({
+  let settingsResolution = await loadAgentSettings({
     cwd: workspaceCwd,
+    projectSettingsPath: path.join(workspaceCwd, '.pi', 'settings.json'),
     projectTrusted: await trustManager.isTrusted(workspaceCwd),
   });
-  reportPiSettingsDiagnostics(settingsResolution);
-  const reloadPiSettings = async (): Promise<void> => {
-    settingsResolution = await loadPiSettings({
+  reportAgentSettingsDiagnostics(settingsResolution);
+  const reloadAgentSettings = async (): Promise<void> => {
+    settingsResolution = await loadAgentSettings({
       cwd: workspaceCwd,
+      projectSettingsPath: path.join(workspaceCwd, '.pi', 'settings.json'),
       projectTrusted: await trustManager.isTrusted(workspaceCwd),
     });
-    reportPiSettingsDiagnostics(settingsResolution);
+    reportAgentSettingsDiagnostics(settingsResolution);
   };
   const sessionDirectory = resolveStartupSessionDirectory(
     cliArguments,
@@ -278,7 +282,7 @@ async function main(): Promise<void> {
   );
   const store = new JsonlSessionStore(sessionDirectory, !cliArguments.noSession);
   const sessionManager = new SessionManager();
-  sessionManager.setCompactionSettings(resolvePiCompactionSettings(settingsResolution.settings));
+  sessionManager.setCompactionSettings(resolveAgentCompactionSettings(settingsResolution.settings));
   if (!cliArguments.noSession) {
     sessionManager.setStore(store);
     await sessionManager.loadAllSessions();
@@ -322,10 +326,10 @@ async function main(): Promise<void> {
     cwd: workspaceCwd,
     agentDir: settingsResolution.agentDir,
     projectTrusted: settingsResolution.projectTrusted,
-    globalSkillPaths: resolvePiResourcePaths(settingsResolution, 'skills', undefined, 'global'),
-    projectSkillPaths: resolvePiResourcePaths(settingsResolution, 'skills', undefined, 'project'),
-    globalPromptPaths: resolvePiResourcePaths(settingsResolution, 'prompts', undefined, 'global'),
-    projectPromptPaths: resolvePiResourcePaths(settingsResolution, 'prompts', undefined, 'project'),
+    globalSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'global'),
+    projectSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'project'),
+    globalPromptPaths: resolveAgentResourcePaths(settingsResolution, 'prompts', undefined, 'global'),
+    projectPromptPaths: resolveAgentResourcePaths(settingsResolution, 'prompts', undefined, 'project'),
   });
   let resourceManager = createResourceManager();
   const resourceLoadResult = await resourceManager.loadAll();
@@ -396,7 +400,7 @@ async function main(): Promise<void> {
   };
 
   extensionRegistry.setReloadHandler(async () => {
-    await reloadPiSettings();
+    await reloadAgentSettings();
     await reloadInstructionPrompt();
     resourceManager = createResourceManager();
     const resources = await resourceManager.loadAll();
@@ -417,7 +421,7 @@ async function main(): Promise<void> {
     const registered = extensionRegistry.getTools();
     const unknown = unknownToolNames(registered, cliArguments.tools, cliArguments.excludeTools);
     if (unknown.length) throw new Error(`Unknown tool name(s): ${unknown.join(', ')}.`);
-    const configuredDefaults = resolvePiDefaultTools(
+    const configuredDefaults = resolveAgentDefaultTools(
       settingsResolution.settings.defaultTools,
       DEFAULT_CODING_TOOL_NAMES,
     );
@@ -440,7 +444,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const effectiveModelSettings = applyPiModelSettings({
+  const effectiveModelSettings = applyAgentModelSettings({
     provider: cliArguments.provider,
     model: cliArguments.model,
     models: cliArguments.models,
@@ -458,7 +462,7 @@ async function main(): Promise<void> {
       workspaceId: workspaceDescriptor.id,
       enabledToolNames: () => selectedTools().map(tool => tool.name),
       modelPatterns: effectiveModelSettings.modelPatterns,
-      settingsInfo: () => formatPiSettingsSummary(settingsResolution),
+      settingsInfo: () => formatAgentSettingsSummary(settingsResolution),
     },
   );
   let ctx = commandHandler.getContext();
@@ -468,13 +472,13 @@ async function main(): Promise<void> {
     const startupModel = startup.model ?? startup.provider.getConfiguredModel();
     const requestedThinking = coreThinkingLevel(cliArguments.thinking)
       ?? startup.thinkingLevel
-      ?? resolvePiThinkingLevel(settingsResolution.settings, startup.providerName, startupModel)
+      ?? resolveAgentThinkingLevel(settingsResolution.settings, startup.providerName, startupModel)
       ?? ctx.thinkingLevel;
     ctx.thinkingLevel = clampPublishedThinkingLevel(
       requestedThinking,
       getSupportedThinkingLevels(startup.providerName, startupModel),
     );
-    sessionManager.setCompactionSettings(resolvePiCompactionSettings(
+    sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
       settingsResolution.settings,
       startup.providerName,
       startupModel,

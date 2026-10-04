@@ -33,7 +33,7 @@ describe('shared model metadata', () => {
     expect(getPublishedModels('missing')).toEqual([]);
   });
 
-  it('applies explicit thinking maps and Pi upward-then-downward clamping', () => {
+  it('applies explicit thinking maps and upward-then-downward clamping', () => {
     const o3 = getSupportedThinkingLevels('openai', 'o3');
     expect(o3).toEqual(['low', 'medium', 'high']);
     expect(clampPublishedThinkingLevel('minimal', o3)).toBe('low');

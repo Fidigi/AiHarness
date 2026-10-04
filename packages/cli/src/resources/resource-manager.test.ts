@@ -73,11 +73,11 @@ describe('ResourceManager', () => {
     expect(manager.expandPrompt('explain', [])).toContain('défaut=aucun');
   });
 
-  it('loads Pi agent resources while trust-gating project resource directories', async () => {
+  it('loads agent resources while trust-gating project resource directories', async () => {
     const root = await temporaryDirectory();
     const home = path.join(root, 'home');
     const cwd = path.join(root, 'project');
-    const agentDir = path.join(root, 'pi-agent');
+    const agentDir = path.join(root, 'agent');
     await mkdir(path.join(agentDir, 'skills', 'user'), { recursive: true });
     await mkdir(path.join(cwd, '.pi', 'skills', 'project'), { recursive: true });
     await writeFile(path.join(agentDir, 'skills', 'user', 'SKILL.md'), '---\nname: user\n---\nUser instructions');
@@ -92,7 +92,7 @@ describe('ResourceManager', () => {
     expect(trusted.listSkills().map(skill => skill.name)).toEqual(['project', 'user']);
   });
 
-  it('applies ordered Pi resource globs, exclusions, and project precedence', async () => {
+  it('applies ordered resource globs, exclusions, and project precedence', async () => {
     const root = await temporaryDirectory();
     const globalPrompts = path.join(root, 'configured-prompts');
     const globalSkills = path.join(root, 'global-skills');

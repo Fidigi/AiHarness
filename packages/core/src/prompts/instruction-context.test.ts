@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   composeInstructionSystemPrompt,
   resolveInstructionPrompt,
-  resolvePiAgentDirectory,
+  resolveAgentDirectory,
 } from './instruction-context.js';
 
 const temporaryDirectories: string[] = [];
@@ -158,8 +158,8 @@ describe('instruction context', () => {
 
   it('escapes source paths and resolves the conventional agent directory', () => {
     const home = path.join(path.sep, 'home', 'tester');
-    expect(resolvePiAgentDirectory(undefined, home)).toBe(path.join(home, '.pi', 'agent'));
-    expect(resolvePiAgentDirectory('~/custom-agent', home)).toBe(path.join(home, 'custom-agent'));
+    expect(resolveAgentDirectory(undefined, home)).toBe(path.join(home, '.pi', 'agent'));
+    expect(resolveAgentDirectory('~/custom-agent', home)).toBe(path.join(home, 'custom-agent'));
     expect(composeInstructionSystemPrompt({
       cwd: home,
       contextFiles: [{ path: '/tmp/a&"b.md', content: 'instructions' }],

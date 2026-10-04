@@ -142,9 +142,9 @@ const commands: CommandEntry[] = [
   },
   {
     name: 'settings',
-    description: 'Show effective Pi settings and their source scopes',
+    description: 'Show effective agent settings and their source scopes',
     handler: async (_args, ctx) => ctx.settingsInfo?.()
-      ?? chalk.yellow('Pi settings are not configured for this runtime.'),
+      ?? chalk.yellow('Agent settings are not configured for this runtime.'),
   },
   {
     name: 'new',

@@ -21,7 +21,7 @@ describe('resolveTerminalMode', () => {
     expect(resolveTerminalMode(['--', '--regular'], {}, true)).toBe('fullscreen');
   });
 
-  it('supports environment and Pi settings with environment precedence', () => {
+  it('supports environment and agent settings with environment precedence', () => {
     expect(resolveTerminalMode([], { AI_HARNESS_TUI_MODE: 'regular' }, true, 'fullscreen')).toBe('regular');
     expect(resolveTerminalMode([], { AI_HARNESS_TUI_MODE: 'fullscreen' }, true, 'regular')).toBe('fullscreen');
     expect(resolveTerminalMode([], {}, true, 'regular')).toBe('regular');

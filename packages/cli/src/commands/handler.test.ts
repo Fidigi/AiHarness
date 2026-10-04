@@ -607,7 +607,7 @@ describe('/export command', () => {
       expect(handler.isExiting()).toBe(false);
     });
 
-    it('shows the host-provided effective Pi settings summary', async () => {
+    it('shows the host-provided effective agent settings summary', async () => {
       const settingsHandler = new CommandHandler(
         manager,
         store,

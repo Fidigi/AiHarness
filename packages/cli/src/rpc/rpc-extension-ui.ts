@@ -12,7 +12,7 @@ interface PendingInteraction {
   abort?: () => void;
 }
 
-/** Bridge Core's declarative extension interactions onto Pi's RPC UI subprotocol. */
+/** Bridge Core's declarative extension interactions onto the RPC UI subprotocol. */
 export class RpcExtensionUiBridge {
   private readonly pending = new Map<string, PendingInteraction>();
 

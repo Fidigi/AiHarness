@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MockProvider } from '@ai-harness/core';
 import {
-  applyPiModelSettings,
+  applyAgentModelSettings,
   createConfiguredProviders,
   resolveStartupProvider,
 } from './configured-providers.js';
@@ -60,7 +60,7 @@ describe('configured CLI providers', () => {
   });
 
   it('applies model settings below explicit CLI selections', () => {
-    expect(applyPiModelSettings({}, {
+    expect(applyAgentModelSettings({}, {
       defaultProvider: 'mock',
       defaultModel: 'mock-model',
       enabledModels: ['mock/*'],
@@ -72,7 +72,7 @@ describe('configured CLI providers', () => {
       },
       modelPatterns: ['mock/*'],
     });
-    expect(applyPiModelSettings({ model: 'explicit', provider: 'mock' }, {
+    expect(applyAgentModelSettings({ model: 'explicit', provider: 'mock' }, {
       defaultProvider: 'other', defaultModel: 'saved', enabledModels: ['mock/*'],
     })).toMatchObject({ selection: { model: 'explicit', provider: 'mock' } });
   });

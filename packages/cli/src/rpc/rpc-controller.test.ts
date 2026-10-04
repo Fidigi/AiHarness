@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { ExtensionRegistry, MockProvider, SessionManager } from '@ai-harness/core';
 import { ResourceManager } from '../resources/resource-manager';
-import { PiRpcController, type PiRpcContext } from './pi-rpc-server';
+import { RpcController, type RpcControllerContext } from './rpc-controller';
 
 class CapturingProvider extends MockProvider {
   systemPrompt?: string;
@@ -16,15 +16,15 @@ class CapturingProvider extends MockProvider {
 }
 
 function createController(responses = ['RPC response']): {
-  controller: PiRpcController;
-  context: PiRpcContext;
+  controller: RpcController;
+  context: RpcControllerContext;
   records: Array<Record<string, unknown>>;
 } {
   const sessionManager = new SessionManager();
   const extensionRegistry = new ExtensionRegistry();
   extensionRegistry.attachSessionManager(sessionManager);
   const provider = new MockProvider({ type: 'mock' as any, model: 'mock-model' }, responses);
-  const context: PiRpcContext = {
+  const context: RpcControllerContext = {
     provider,
     sessionManager,
     sessionId: 'rpc-test-session',
@@ -44,10 +44,10 @@ function createController(responses = ['RPC response']): {
     },
   };
   const records: Array<Record<string, unknown>> = [];
-  return { controller: new PiRpcController(context, record => records.push(record)), context, records };
+  return { controller: new RpcController(context, record => records.push(record)), context, records };
 }
 
-describe('Pi RPC controller', () => {
+describe('RPC command controller', () => {
   it('scavenges expired private bash output directories without following symlinks', async () => {
     const stale = await mkdtemp(path.join(os.tmpdir(), 'ai-harness-bash-'));
     const target = await mkdtemp(path.join(os.tmpdir(), 'aih-rpc-retention-target-'));
@@ -70,7 +70,7 @@ describe('Pi RPC controller', () => {
     }
   });
 
-  it('returns correlated Pi response envelopes and mutable state', async () => {
+  it('returns correlated response envelopes and mutable state', async () => {
     const { controller } = createController();
     await controller.initialize();
 
@@ -101,7 +101,7 @@ describe('Pi RPC controller', () => {
     });
   });
 
-  it('forwards the resolved system prompt to Pi protocol turns', async () => {
+  it('forwards the resolved system prompt to protocol turns', async () => {
     const { controller, context, records } = createController(['done']);
     const provider = new CapturingProvider({ type: 'mock' as any, model: 'mock-model' }, ['done']);
     context.provider = provider;
@@ -203,7 +203,7 @@ describe('Pi RPC controller', () => {
     });
   });
 
-  it('accepts prompts before asynchronously streaming the Pi lifecycle', async () => {
+  it('accepts prompts before asynchronously streaming the lifecycle', async () => {
     const { controller, context, records } = createController(['Hello']);
     await controller.initialize();
 
@@ -255,7 +255,7 @@ describe('Pi RPC controller', () => {
     let deliveryStarted = false;
     let deliveriesInFlight = 0;
     let maximumDeliveriesInFlight = 0;
-    const controller = new PiRpcController(context, async record => {
+    const controller = new RpcController(context, async record => {
       deliveriesInFlight++;
       maximumDeliveriesInFlight = Math.max(maximumDeliveriesInFlight, deliveriesInFlight);
       deliveryStarted = true;
@@ -289,7 +289,7 @@ describe('Pi RPC controller', () => {
   it('makes an asynchronous event delivery failure terminal', async () => {
     const { context } = createController(['Hello']);
     let deliveryFailed = false;
-    const controller = new PiRpcController(context, async record => {
+    const controller = new RpcController(context, async record => {
       await Promise.resolve();
       if (record.type === 'message_update') {
         deliveryFailed = true;
@@ -386,7 +386,7 @@ describe('Pi RPC controller', () => {
     }));
   });
 
-  it('retries failed summarization with the Pi retry lifecycle', async () => {
+  it('retries failed summarization with the RPC retry lifecycle', async () => {
     const { controller, context, records } = createController();
     context.summarizationRetryDelayMs = 1;
     const chat = vi.spyOn(context.provider, 'chat')
@@ -408,7 +408,7 @@ describe('Pi RPC controller', () => {
     expect(records).toContainEqual({ type: 'summarization_retry_finished' });
   });
 
-  it('compacts a session and emits the Pi compaction lifecycle', async () => {
+  it('compacts a session and emits the RPC compaction lifecycle', async () => {
     const { controller, context, records } = createController(['Summary']);
     await controller.initialize();
     await context.sessionManager.addMessage('rpc-test-session', { role: 'user', content: 'one' });
@@ -526,7 +526,7 @@ describe('Pi RPC controller', () => {
     await rm(path.dirname(data.fullOutputPath), { recursive: true, force: true });
   });
 
-  it('exposes direct shell records as Pi bash execution messages', async () => {
+  it('exposes direct shell records as RPC bash execution messages', async () => {
     const { controller, context } = createController();
     await controller.initialize();
     await context.sessionManager.addCommand('rpc-test-session', {

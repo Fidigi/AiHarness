@@ -42,7 +42,7 @@ export interface ExecuteShellCommandOptions {
   signal?: AbortSignal;
   timeoutMs: number;
   maxCaptureBytes?: number;
-  /** Optional Pi-compatible shell executable override. */
+  /** Optional shell executable override. */
   shellPath?: string;
   /** Trusted prefix evaluated by the shell before the requested command. */
   commandPrefix?: string;

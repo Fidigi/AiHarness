@@ -80,7 +80,7 @@ describe('ShellCommandRuntime', () => {
     ))).toBe(false);
   });
 
-  it('applies reloadable Pi shell path and command-prefix settings', async () => {
+  it('applies reloadable shell path and command-prefix settings', async () => {
     let prefix = 'export AIH_SETTINGS_PREFIX=first';
     const { cwd, session, runtime } = await setup({
       shellPath: '/bin/bash',

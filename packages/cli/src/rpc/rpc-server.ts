@@ -5,38 +5,38 @@ import {
   DEFAULT_CODING_TOOL_NAMES,
   ExtensionRegistry,
   JsonlSessionStore,
-  loadPiSettings,
+  loadAgentSettings,
   normalizeProviderUsage,
   ProjectTrustManager,
   SessionManager,
   WorkspaceManager,
   registerWorkspaceTools,
   resolveInstructionPrompt,
-  resolvePiCompactionSettings,
-  resolvePiDefaultTools,
-  resolvePiResourcePaths,
-  resolvePiThinkingLevel,
-  selectPiResourcePaths,
+  resolveAgentCompactionSettings,
+  resolveAgentDefaultTools,
+  resolveAgentResourcePaths,
+  resolveAgentThinkingLevel,
+  selectAgentResourcePaths,
   selectRegisteredTools,
   toChatToolDefinitions,
   unknownToolNames,
   type AiProvider,
   type ChatResponse,
   type Message,
-  type ResolvedPiSettings,
+  type ResolvedAgentSettings,
   type ThinkingLevel,
 } from '@ai-harness/core';
 import { reserveProcessStdoutForJsonLines } from '../cli/json-output.js';
 import { ExtensionLoader } from '../extensions/extension-loader.js';
 import {
-  applyPiModelSettings,
+  applyAgentModelSettings,
   createConfiguredProviders,
   resolveStartupProvider,
 } from '../providers/configured-providers.js';
 import { resolveStartupSession, resolveStartupSessionDirectory } from '../sessions/startup-session.js';
 import { ResourceManager } from '../resources/resource-manager.js';
 import { RpcExtensionUiBridge } from './rpc-extension-ui.js';
-import { isPiRpcRequest, PiRpcController, piRpcParseError } from './pi-rpc-server.js';
+import { isRpcCommandRequest, RpcController, rpcParseError } from './rpc-controller.js';
 
 const MAX_PENDING_RPC_REQUESTS = 256;
 
@@ -181,22 +181,25 @@ async function* jsonLines(input: Readable): AsyncGenerator<string> {
   if (buffer) yield buffer.endsWith('\r') ? buffer.slice(0, -1) : buffer;
 }
 
-function reportSettingsDiagnostics(settings: ResolvedPiSettings): void {
+function reportSettingsDiagnostics(settings: ResolvedAgentSettings): void {
   for (const diagnostic of settings.diagnostics) {
     const field = diagnostic.setting ? ` [${diagnostic.setting}]` : '';
     process.stderr.write(`Warning: Settings ignored (${diagnostic.path})${field}: ${diagnostic.message}\n`);
   }
 }
 
-function rpcExtensionPaths(paths: readonly string[], settings: ResolvedPiSettings): string[] {
+function rpcExtensionPaths(paths: readonly string[], settings: ResolvedAgentSettings): string[] {
   return [
     ...paths,
-    ...selectPiResourcePaths(resolvePiResourcePaths(settings, 'extensions'))
+    ...selectAgentResourcePaths(resolveAgentResourcePaths(settings, 'extensions'))
       .filter(entry => !entry.includes('builtin:')),
   ];
 }
 
-/** JSONL stdin/stdout RPC mode for headless integrations. */
+/**
+ * JSONL stdin/stdout composition root for headless integrations. This module
+ * owns framing and startup; RpcController owns stateful command execution.
+ */
 export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void> {
   const reservedOutput = options.output ? undefined : reserveProcessStdoutForJsonLines();
   const outputSink = options.output ?? reservedOutput!.write;
@@ -218,7 +221,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
   const extensionUi = new RpcExtensionUiBridge(output);
   const sessionManager = new SessionManager();
   const extensionRegistry = new ExtensionRegistry();
-  let controller: PiRpcController | undefined;
+  let controller: RpcController | undefined;
   const stopForSignal = (): void => {
     if (controller) void controller.close().catch(() => undefined);
     input.destroy();
@@ -239,7 +242,11 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     const trustManager = new ProjectTrustManager();
     await trustManager.load();
     const projectTrusted = await trustManager.isTrusted(canonicalCwd);
-    const settingsResolution = await loadPiSettings({ cwd: canonicalCwd, projectTrusted });
+    const settingsResolution = await loadAgentSettings({
+      cwd: canonicalCwd,
+      projectSettingsPath: path.join(canonicalCwd, '.pi', 'settings.json'),
+      projectTrusted,
+    });
     reportSettingsDiagnostics(settingsResolution);
     const sessionDirectory = resolveStartupSessionDirectory(
       {
@@ -270,10 +277,10 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       cwd: canonicalCwd,
       agentDir: settingsResolution.agentDir,
       projectTrusted,
-      globalSkillPaths: resolvePiResourcePaths(settingsResolution, 'skills', undefined, 'global'),
-      projectSkillPaths: resolvePiResourcePaths(settingsResolution, 'skills', undefined, 'project'),
-      globalPromptPaths: resolvePiResourcePaths(settingsResolution, 'prompts', undefined, 'global'),
-      projectPromptPaths: resolvePiResourcePaths(settingsResolution, 'prompts', undefined, 'project'),
+      globalSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'global'),
+      projectSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'project'),
+      globalPromptPaths: resolveAgentResourcePaths(settingsResolution, 'prompts', undefined, 'global'),
+      projectPromptPaths: resolveAgentResourcePaths(settingsResolution, 'prompts', undefined, 'project'),
     });
     const resourceLoadResult = await resourceManager.loadAll();
     for (const failure of resourceLoadResult.errors) {
@@ -284,7 +291,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       shellCommandPrefix: settingsResolution.settings.shellCommandPrefix,
     });
     const providers = createConfiguredProviders();
-    const effectiveModels = applyPiModelSettings({
+    const effectiveModels = applyAgentModelSettings({
       provider: options.provider,
       model: options.model,
       models: options.models,
@@ -294,8 +301,8 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     const startupModel = startup.model ?? startup.provider.getConfiguredModel();
     const startupThinking = options.thinking
       ?? startup.thinkingLevel
-      ?? resolvePiThinkingLevel(settingsResolution.settings, startup.providerName, startupModel);
-    sessionManager.setCompactionSettings(resolvePiCompactionSettings(
+      ?? resolveAgentThinkingLevel(settingsResolution.settings, startup.providerName, startupModel);
+    sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
       settingsResolution.settings,
       startup.providerName,
       startupModel,
@@ -311,7 +318,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     const registeredTools = extensionRegistry.getTools();
     const unknownTools = unknownToolNames(registeredTools, options.tools, options.excludeTools);
     if (unknownTools.length) throw new Error(`Unknown tool name(s): ${unknownTools.join(', ')}.`);
-    const configuredDefaults = resolvePiDefaultTools(
+    const configuredDefaults = resolveAgentDefaultTools(
       settingsResolution.settings.defaultTools,
       DEFAULT_CODING_TOOL_NAMES,
     );
@@ -349,7 +356,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       systemPrompt: instructions.systemPrompt,
       emit: response => output(response as Record<string, unknown>),
     };
-    controller = new PiRpcController({
+    controller = new RpcController({
       provider: startup.provider,
       providers,
       sessionManager,
@@ -391,13 +398,13 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       try {
         parsed = JSON.parse(line);
       } catch (error) {
-        await output(piRpcParseError(error) as unknown as Record<string, unknown>);
+        await output(rpcParseError(error) as unknown as Record<string, unknown>);
         return;
       }
 
       if (extensionUi.handleResponse(parsed)) return;
 
-      if (isPiRpcRequest(parsed)) {
+      if (isRpcCommandRequest(parsed)) {
         const response = await controller!.handle(parsed);
         if (response) await output(response as unknown as Record<string, unknown>);
         return;

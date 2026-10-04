@@ -37,7 +37,7 @@ import { JsonEventStream, toJsonProtocolMessage } from '../cli/json-output.js';
 import { renderSessionHtml, sanitizeFilename } from '../utils/session-export.js';
 import type { ResourceManager } from '../resources/resource-manager.js';
 
-export interface PiRpcContext {
+export interface RpcControllerContext {
   provider: AiProvider;
   /** Configured providers available to model-list and model-switch RPC commands. */
   providers?: Map<string, AiProvider>;
@@ -72,13 +72,13 @@ export interface PiRpcContext {
   scopedModelPatterns?: string[];
 }
 
-export interface PiRpcRequest {
+export interface RpcCommandRequest {
   type: string;
   id?: string;
   [key: string]: unknown;
 }
 
-export interface PiRpcResponse {
+export interface RpcCommandResponse {
   id?: string;
   type: 'response';
   command: string;
@@ -122,7 +122,7 @@ const MAX_RPC_BASH_CAPTURE_BYTES = 10 * 1024 * 1024;
 const DEFAULT_FULL_OUTPUT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const BASH_OUTPUT_DIRECTORY_PREFIX = 'ai-harness-bash-';
 const THINKING_LEVELS: RpcThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
-function fullOutputRetentionMs(context: PiRpcContext): number {
+function fullOutputRetentionMs(context: RpcControllerContext): number {
   const retentionMs = context.fullOutputRetentionMs ?? DEFAULT_FULL_OUTPUT_RETENTION_MS;
   if (!Number.isSafeInteger(retentionMs) || retentionMs < 1) {
     throw new Error('fullOutputRetentionMs must be a positive safe integer.');
@@ -130,7 +130,7 @@ function fullOutputRetentionMs(context: PiRpcContext): number {
   return retentionMs;
 }
 
-function success(id: string | undefined, command: string, data?: unknown): PiRpcResponse {
+function success(id: string | undefined, command: string, data?: unknown): RpcCommandResponse {
   return {
     ...(id === undefined ? {} : { id }),
     type: 'response',
@@ -140,7 +140,7 @@ function success(id: string | undefined, command: string, data?: unknown): PiRpc
   };
 }
 
-function failure(id: string | undefined, command: string, error: string): PiRpcResponse {
+function failure(id: string | undefined, command: string, error: string): RpcCommandResponse {
   return {
     ...(id === undefined ? {} : { id }),
     type: 'response',
@@ -299,11 +299,11 @@ function waitForRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * Stateful Pi-compatible RPC adapter. It keeps protocol and queue concerns in
- * the CLI while delegating provider calls, persistence, tools, and hooks to the
+ * Stateful RPC command controller. It keeps protocol and queue concerns in the
+ * CLI while delegating provider calls, persistence, tools, and hooks to the
  * same runtime primitives used by interactive and JSON modes.
  */
-export class PiRpcController {
+export class RpcController {
   private readonly events: JsonEventStream;
   private currentSessionId: string;
   private model: string | undefined;
@@ -328,7 +328,7 @@ export class PiRpcController {
   private eventFailure: unknown;
 
   constructor(
-    private readonly context: PiRpcContext,
+    private readonly context: RpcControllerContext,
     private readonly emitRaw: (record: Record<string, unknown>) => void | Promise<void>,
   ) {
     this.currentSessionId = context.sessionId;
@@ -446,7 +446,7 @@ export class PiRpcController {
     if (this.eventFailure) throw this.eventFailure;
   }
 
-  async handle(request: PiRpcRequest): Promise<PiRpcResponse | undefined> {
+  async handle(request: RpcCommandRequest): Promise<RpcCommandResponse | undefined> {
     const id = typeof request.id === 'string' ? request.id : undefined;
     const command = request.type;
     try {
@@ -1567,11 +1567,11 @@ export class PiRpcController {
   }
 }
 
-export function isPiRpcRequest(value: unknown): value is PiRpcRequest {
+export function isRpcCommandRequest(value: unknown): value is RpcCommandRequest {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value)
     && typeof (value as { type?: unknown }).type === 'string');
 }
 
-export function piRpcParseError(error: unknown): PiRpcResponse {
+export function rpcParseError(error: unknown): RpcCommandResponse {
   return failure(undefined, 'parse', `Failed to parse command: ${error instanceof Error ? error.message : String(error)}`);
 }

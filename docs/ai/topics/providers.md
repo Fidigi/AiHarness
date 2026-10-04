@@ -24,7 +24,7 @@ CLI/Web runtime -> streamChat -> normalized response and usage
 |---|---|
 | `packages/core/src/providers/index.ts` | `AiProvider`, factory, built-ins, discovery, streaming, retry, usage normalization |
 | `packages/core/src/providers/model-metadata.ts` | Versioned shared published capabilities, context/output limits, prices and conservative inference |
-| `packages/core/src/config/pi-settings.ts` | Pi startup model/scope/thinking and compaction/retry setting resolution |
+| `packages/core/src/config/agent-settings.ts` | Agent startup model/scope/thinking and compaction/retry setting resolution |
 | `packages/core/src/types/index.ts` | `ProviderConfig`, shared model/custom-provider contracts and capabilities |
 | `packages/server/src/api/proxy.ts` | Built-in configuration, legacy chat paths, usage/cost persistence |
 | `packages/server/src/runtime/model-catalog.ts` | Merge of Core published metadata, discovery and custom model definitions |
@@ -43,7 +43,7 @@ CLI/Web runtime -> streamChat -> normalized response and usage
 
 Published non-secret metadata lives in Core so CLI and Web use the same descriptors. Explicit thinking maps define supported levels (`null` means unsupported), while unknown models use conservative capabilities and remain unpriced. RPC caches and deduplicates live model discovery briefly, and can resolve CLI model-scope globs for cycling. Server alone merges live/custom state and owns credentials. Provider secrets stay in `CredentialStore`, encrypted custom-provider storage, or process memory; catalogue and RPC model objects are non-secret.
 
-CLI and RPC layer explicit flags over Pi `defaultProvider`, `defaultModel`, `enabledModels`, `defaultThinkingLevel`, and exact `modelThinkingLevels["provider/model"]`. A saved default inside the enabled scope is preferred; scope suffixes and explicit flags remain stronger, and the final level is capability-clamped. Pi agent-level retry settings configure shared turn retries. Provider transport, proxy, idle timeout and `retry.provider` values are validated and diagnosed but are not yet wired to provider clients.
+CLI and RPC layer explicit flags over agent settings `defaultProvider`, `defaultModel`, `enabledModels`, `defaultThinkingLevel`, and exact `modelThinkingLevels["provider/model"]`. A saved default inside the enabled scope is preferred; scope suffixes and explicit flags remain stronger, and the final level is capability-clamped. Agent-level retry settings configure shared turn retries. Provider transport, proxy, idle timeout and `retry.provider` values are validated and diagnosed but are not yet wired to provider clients.
 
 ## Critical Flows
 

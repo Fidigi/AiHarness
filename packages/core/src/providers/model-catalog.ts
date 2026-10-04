@@ -513,7 +513,7 @@ function fuzzyScore(query: string, text: string): number | undefined {
   return swappedScore === undefined ? undefined : swappedScore + 5;
 }
 
-/** Deterministic Pi-compatible subsequence filtering used by --list-models. */
+/** Deterministic subsequence filtering used by --list-models. */
 export function filterModels<T extends ModelIdentity>(models: readonly T[], search?: string): T[] {
   const terms = search?.trim().split(/[\s/]+/).filter(Boolean) ?? [];
   if (!terms.length) return [...models];
@@ -532,7 +532,7 @@ export function filterModels<T extends ModelIdentity>(models: readonly T[], sear
     || left.model.id.localeCompare(right.model.id)).map(item => item.model);
 }
 
-/** Convert shared catalogue metadata to Pi-shaped RPC model metadata. */
+/** Convert shared catalogue metadata to the RPC model descriptor. */
 export function toProtocolModelDescriptor(
   model: Pick<ModelCatalogEntry, 'provider' | 'id' | 'name' | 'capabilities' | 'contextWindow' | 'maxOutputTokens' | 'pricing'>,
 ): ProtocolModelDescriptor {

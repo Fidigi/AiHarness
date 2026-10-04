@@ -3,24 +3,24 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  loadPiSettings,
-  resolvePiCompactionSettings,
-  resolvePiDefaultTools,
-  resolvePiResourcePaths,
-  resolvePiSettingsPath,
-  resolvePiThinkingLevel,
-  selectPiResourcePaths,
-} from './pi-settings.js';
+  loadAgentSettings,
+  resolveAgentCompactionSettings,
+  resolveAgentDefaultTools,
+  resolveAgentResourcePaths,
+  resolveAgentSettingsPath,
+  resolveAgentThinkingLevel,
+  selectAgentResourcePaths,
+} from './agent-settings.js';
 
 const temporaryDirectories: string[] = [];
 
 async function fixture(): Promise<{ root: string; cwd: string; agentDir: string }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'aih-pi-settings-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'aih-agent-settings-'));
   temporaryDirectories.push(root);
   const cwd = path.join(root, 'project');
   const agentDir = path.join(root, 'agent');
   await Promise.all([
-    mkdir(path.join(cwd, '.pi'), { recursive: true }),
+    mkdir(path.join(cwd, '.ai-harness'), { recursive: true }),
     mkdir(agentDir, { recursive: true }),
   ]);
   return { root, cwd, agentDir };
@@ -30,7 +30,7 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map(directory => rm(directory, { recursive: true, force: true })));
 });
 
-describe('Pi settings resolution', () => {
+describe('agent settings resolution', () => {
   it('deep-merges trusted layers, combines resources/modifiers, and reports provenance', async () => {
     const { cwd, agentDir } = await fixture();
     await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({
@@ -44,7 +44,7 @@ describe('Pi settings resolution', () => {
       defaultProjectTrust: 'always',
       httpProxy: 'http://127.0.0.1:3128',
     }));
-    await writeFile(path.join(cwd, '.pi', 'settings.json'), JSON.stringify({
+    await writeFile(path.join(cwd, '.ai-harness', 'settings.json'), JSON.stringify({
       theme: 'light',
       compaction: { keepRecentTokens: 50 },
       extensions: ['./project.mjs'],
@@ -54,7 +54,7 @@ describe('Pi settings resolution', () => {
       httpProxy: 'http://project.invalid',
     }));
 
-    const result = await loadPiSettings({ cwd, agentDir, projectTrusted: true });
+    const result = await loadAgentSettings({ cwd, agentDir, projectTrusted: true });
 
     expect(result.settings).toMatchObject({
       defaultProvider: 'mock',
@@ -67,7 +67,7 @@ describe('Pi settings resolution', () => {
       defaultProjectTrust: 'always',
       httpProxy: 'http://127.0.0.1:3128',
     });
-    expect(resolvePiDefaultTools(result.settings.defaultTools, ['read', 'bash', 'edit', 'write']))
+    expect(resolveAgentDefaultTools(result.settings.defaultTools, ['read', 'bash', 'edit', 'write']))
       .toEqual(['read', 'grep']);
     expect(result.diagnostics.map(diagnostic => diagnostic.setting)).toEqual(expect.arrayContaining([
       'cacheWarming', 'defaultProjectTrust', 'httpProxy',
@@ -86,19 +86,19 @@ describe('Pi settings resolution', () => {
   it('reads only project sessionDir before trust and never exposes other project settings', async () => {
     const { cwd, agentDir } = await fixture();
     await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({ theme: 'dark', sessionDir: 'global-sessions' }));
-    await writeFile(path.join(cwd, '.pi', 'settings.json'), JSON.stringify({
+    await writeFile(path.join(cwd, '.ai-harness', 'settings.json'), JSON.stringify({
       theme: 'light',
       sessionDir: 'project-sessions',
       extensions: ['./untrusted.mjs'],
     }));
 
-    const untrusted = await loadPiSettings({ cwd, agentDir, projectTrusted: false });
+    const untrusted = await loadAgentSettings({ cwd, agentDir, projectTrusted: false });
     expect(untrusted.projectSettings).toEqual({ sessionDir: 'project-sessions' });
     expect(untrusted.settings).toMatchObject({ theme: 'dark', sessionDir: 'project-sessions' });
     expect(untrusted.settings.extensions).toBeUndefined();
-    expect(resolvePiResourcePaths(untrusted, 'extensions')).toEqual([]);
+    expect(resolveAgentResourcePaths(untrusted, 'extensions')).toEqual([]);
 
-    const strict = await loadPiSettings({
+    const strict = await loadAgentSettings({
       cwd, agentDir, projectTrusted: false, includeUntrustedProjectSessionDir: false,
     });
     expect(strict.settings.sessionDir).toBe('global-sessions');
@@ -115,7 +115,7 @@ describe('Pi settings resolution', () => {
       mysterySetting: true,
     })}`);
 
-    const result = await loadPiSettings({ cwd, agentDir, projectTrusted: true });
+    const result = await loadAgentSettings({ cwd, agentDir, projectTrusted: true });
 
     expect(result.settings).toMatchObject({
       steeringMode: 'all',
@@ -138,9 +138,9 @@ describe('Pi settings resolution', () => {
     const target = path.join(root, 'target.json');
     await writeFile(target, JSON.stringify({ theme: 'light' }));
     await symlink(target, path.join(agentDir, 'settings.json'));
-    await writeFile(path.join(cwd, '.pi', 'settings.json'), '[');
+    await writeFile(path.join(cwd, '.ai-harness', 'settings.json'), '[');
 
-    const unsafe = await loadPiSettings({ cwd, agentDir, projectTrusted: true });
+    const unsafe = await loadAgentSettings({ cwd, agentDir, projectTrusted: true });
     expect(unsafe.settings).toEqual({});
     expect(unsafe.diagnostics.map(item => item.message)).toEqual(expect.arrayContaining([
       'Settings source must be a regular file and cannot be a symbolic link.',
@@ -149,7 +149,7 @@ describe('Pi settings resolution', () => {
 
     await rm(path.join(agentDir, 'settings.json'));
     await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({ theme: 'x'.repeat(100) }));
-    const bounded = await loadPiSettings({ cwd, agentDir, projectTrusted: false, maxFileBytes: 32 });
+    const bounded = await loadAgentSettings({ cwd, agentDir, projectTrusted: false, maxFileBytes: 32 });
     expect(bounded.diagnostics[0]?.message).toBe('Settings source exceeds the 32 byte limit.');
   });
 
@@ -166,23 +166,23 @@ describe('Pi settings resolution', () => {
       },
       prompts: ['./prompts/*.md', '!./prompts/private.md'],
     }));
-    await writeFile(path.join(cwd, '.pi', 'settings.json'), JSON.stringify({ prompts: ['+./team.md'] }));
-    const result = await loadPiSettings({ cwd, agentDir, projectTrusted: true, homeDir: root });
+    await writeFile(path.join(cwd, '.ai-harness', 'settings.json'), JSON.stringify({ prompts: ['+./team.md'] }));
+    const result = await loadAgentSettings({ cwd, agentDir, projectTrusted: true, homeDir: root });
 
-    expect(resolvePiThinkingLevel(result.settings, 'mock', 'mock-model-v1')).toBe('high');
-    expect(resolvePiThinkingLevel(result.settings, 'mock', 'other')).toBe('low');
-    expect(resolvePiCompactionSettings(result.settings, 'mock', 'mock-model-v1')).toEqual({
+    expect(resolveAgentThinkingLevel(result.settings, 'mock', 'mock-model-v1')).toBe('high');
+    expect(resolveAgentThinkingLevel(result.settings, 'mock', 'other')).toBe('low');
+    expect(resolveAgentCompactionSettings(result.settings, 'mock', 'mock-model-v1')).toEqual({
       enabled: false, reserveTokens: 5, keepRecentTokens: 200,
     });
-    expect(resolvePiResourcePaths(result, 'prompts', root)).toEqual([
+    expect(resolveAgentResourcePaths(result, 'prompts', root)).toEqual([
       path.join(agentDir, 'prompts', '*.md'),
       `!${path.join(agentDir, 'prompts', 'private.md')}`,
-      `+${path.join(cwd, '.pi', 'team.md')}`,
+      `+${path.join(cwd, '.ai-harness', 'team.md')}`,
     ]);
-    expect(resolvePiSettingsPath('~/sessions', cwd, root)).toBe(path.join(root, 'sessions'));
-    expect(selectPiResourcePaths([
+    expect(resolveAgentSettingsPath('~/sessions', cwd, root)).toBe(path.join(root, 'sessions'));
+    expect(selectAgentResourcePaths([
       '/one.mjs', '/two.mjs', '-/one.mjs', '!/t*.mjs', '+/three.mjs', '+/three.mjs',
     ])).toEqual(['/three.mjs']);
-    expect(resolvePiSettingsPath('./sessions', cwd, root)).toBe(path.join(cwd, 'sessions'));
+    expect(resolveAgentSettingsPath('./sessions', cwd, root)).toBe(path.join(cwd, 'sessions'));
   });
 });

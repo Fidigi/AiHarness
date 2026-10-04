@@ -43,7 +43,7 @@ function table(models: readonly ModelCatalogEntry[]): string {
   ].join('  ').trimEnd()).join('\n');
 }
 
-/** Produce Pi-style --list-models output from the same catalogue used by RPC and Web. */
+/** Produce --list-models output from the same catalogue used by RPC and Web. */
 export async function formatConfiguredModelList(
   providers: ReadonlyMap<string, AiProvider>,
   search?: string,

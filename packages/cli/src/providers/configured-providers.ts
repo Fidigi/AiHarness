@@ -8,7 +8,7 @@ import {
   resolveModelReference,
   resolveModelScope,
   type AiProvider,
-  type PiSettings,
+  type AgentSettings,
   type ProviderConfig,
   type ThinkingLevel,
 } from '@ai-harness/core';
@@ -29,9 +29,9 @@ export interface EffectiveStartupProviderSelection {
 }
 
 /** Apply settings below explicit CLI values without turning a saved default into an invocation override. */
-export function applyPiModelSettings(
+export function applyAgentModelSettings(
   selection: StartupProviderSelection,
-  settings: PiSettings,
+  settings: AgentSettings,
 ): EffectiveStartupProviderSelection {
   const modelPatterns = selection.models ?? settings.enabledModels;
   if (selection.model) return { selection: { ...selection, models: modelPatterns }, modelPatterns };

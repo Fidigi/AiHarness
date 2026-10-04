@@ -282,7 +282,7 @@ ${chalk.bold('Extensions and application')}
   ${chalk.cyan('/tool <name> [json]')}           Run a registered tool
   ${chalk.cyan('/trust [status|add|remove|list]')} Manage project trust
   ${chalk.cyan('/reload')}                       Reload settings, resources and extensions
-  ${chalk.cyan('/settings')}                     Show effective Pi settings and sources
+  ${chalk.cyan('/settings')}                     Show effective agent settings and sources
   ${chalk.cyan('/config')}                       Show storage configuration
   ${chalk.cyan('/help')}                         Show this help
   ${chalk.cyan('/quit')} or ${chalk.cyan('/exit')}                  Exit AiHarness

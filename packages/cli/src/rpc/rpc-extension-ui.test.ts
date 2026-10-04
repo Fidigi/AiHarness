@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { RpcExtensionUiBridge } from './rpc-extension-ui';
 
 describe('RpcExtensionUiBridge', () => {
-  it('correlates select and confirm dialogs with Pi extension UI responses', async () => {
+  it('correlates select and confirm dialogs with extension UI responses', async () => {
     const records: Array<Record<string, unknown>> = [];
     const bridge = new RpcExtensionUiBridge(record => records.push(record));
     const selected = bridge.request({

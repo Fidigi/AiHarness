@@ -150,7 +150,7 @@ async function forkSession(
   });
 }
 
-/** Apply Pi-style startup selectors to AiHarness's shared session manager. */
+/** Apply CLI startup selectors to AiHarness's shared session manager. */
 export async function resolveStartupSession(options: ResolveStartupSessionOptions): Promise<Session> {
   const { sessionManager: manager, args, cwd, workspaceId } = options;
   let selected: Session | undefined;

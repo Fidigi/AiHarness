@@ -165,7 +165,7 @@ function persistedUsage(message: Message): JsonUsage {
   return toJsonProtocolUsage(message.usage, message.provider, message.model);
 }
 
-/** Translate a persisted Core message to Pi's AgentMessage wire union. */
+/** Translate a persisted Core message to the JSONL AgentMessage wire union. */
 export function toJsonProtocolMessage(message: Message): JsonMessage {
   const timestamp = message.timestamp.getTime();
   if (message.role === 'user') return userMessage(message.content, message.blocks, timestamp);
@@ -239,7 +239,7 @@ function toolResultContent(result: ToolExecutionResult): {
 }
 
 /**
- * Pi-compatible JSONL lifecycle encoder. It owns only wire translation; model,
+ * JSONL lifecycle encoder. It owns only wire translation; model,
  * tool, and persistence behavior remains in the shared Core loop.
  */
 export class JsonEventStream {

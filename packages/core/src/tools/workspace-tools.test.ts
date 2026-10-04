@@ -149,7 +149,7 @@ describe('shared workspace tools', () => {
     ]);
   });
 
-  it('applies Pi shell path and prefix settings to the model bash tool', async () => {
+  it('applies shell path and prefix settings to the model bash tool', async () => {
     if (process.platform === 'win32') return;
     const { registry, context } = await setup({
       shellPath: '/bin/bash',
