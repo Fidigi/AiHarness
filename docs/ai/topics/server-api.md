@@ -15,6 +15,7 @@ The browser contract is summarized in [`web-app-architecture.md`](./web-app-arch
 | `packages/server/src/index.ts` | App composition, auth, legacy chat, sessions, sharing and static assets |
 | `packages/server/src/runtime/services.ts` | Shared service construction, extension reload and shutdown |
 | `packages/server/src/api/agent-routes.ts` | Detached runs, queues, state/events, interactions, commands and compaction |
+| `packages/server/src/api/mcp-routes.ts`, `packages/server/src/runtime/mcp-inventory-service.ts` | Canonical workspace adapter for Core's read-only, redacted MCP configuration inventory |
 | `packages/server/src/api/*-routes.ts` | Workspace, files, terminals, configuration, models, tools, packages and child agents |
 | `packages/server/src/api/websocket.ts` | Minimal RFC 6455 legacy chat transport |
 | `packages/server/src/security/request-security.ts` | Auth context, capabilities, Origin checks, limits and safe errors |
@@ -33,6 +34,7 @@ The browser contract is summarized in [`web-app-architecture.md`](./web-app-arch
 | Configuration | `/api/configuration` and legacy `/api/settings` alias; effective values include provenance |
 | Models | `GET /api/models`; `PATCH /api/models/enabled` |
 | Provider registry | `/api/provider-registry/auth`, OAuth flows, tests, custom providers and custom models |
+| MCP inventory | `GET /api/mcp` for global configuration; optional canonical `?cwd=` adds trust-gated project metadata/configuration |
 | Tools/packages/resources | `/api/tools`, `/api/plugins`, `/api/skills`, `/api/push` |
 | Child agents | settings; profile list/create/update/delete/duplicate; run list/start/get/stop/acknowledge under `/api/subagents` |
 | Legacy chat | `POST /api/chat`, `/stream`, `/compact`; WebSocket upgrade at `/api/chat/ws` |
@@ -69,6 +71,12 @@ Underscore events such as `message_start`, `text_delta`, and `message_end` belon
 
 See [`security.md`](./security.md) before changing credentials, capability guards, workspace paths, uploads, terminals, or package routes.
 
+## MCP Inventory Invariants
+
+`GET /api/mcp[?cwd=<absolute-or-tilde-path>]` requires `workspace:read`, resolves a supplied cwd through `WorkspaceManager`, sets `Cache-Control: no-store`, and delegates all parsing/redaction policy to Core. Without a cwd it returns only `<data-dir>/mcp.json`. With a cwd it always returns project trust/file metadata, but opens `.ai-harness/mcp.json` only for an effective persisted allow (`decision: true`, exact or inherited). A missing decision, explicit refusal or unreadable store produces a locked project file descriptor while the safe global inventory remains available.
+
+The response contains file existence/read flags and typed diagnostics, redacted server descriptors, exact-name global/project shadowing, and trust provenance. It contains no env/header values or source excerpts. This endpoint is not a connectivity probe: it must not expand references, run command-backed values, spawn stdio, make HTTP requests, initialize OAuth, read/create an OAuth store, or write either file. There is no MCP POST/runtime route in this delivery.
+
 ## Session HTTP Invariants
 
 1. Register `/tree` and `/search` before `/sessions/:id`.
@@ -80,7 +88,7 @@ See [`security.md`](./security.md) before changing credentials, capability guard
 
 ## Associated Tests
 
-- `packages/server/src/web-server.test.ts` — broad HTTP, auth, sessions, providers, files, PTY, packages and runtime integration
+- `packages/server/src/web-server.test.ts` — broad HTTP, auth, sessions, providers, files, PTY, read-only MCP trust/redaction, packages and runtime integration
 - `packages/server/src/api/session-pagination.test.ts` — bounded message windows and cursors
 - `packages/server/src/security/request-security.test.ts` — roles, capabilities, origins, limits and WebSocket auth
 - `packages/web/src/services/api.test.ts` — browser request/response contracts

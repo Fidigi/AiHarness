@@ -20,6 +20,7 @@ import { createAgentRouter } from './api/agent-routes.js';
 import { createWorkspaceRouter } from './api/workspace-routes.js';
 import { createFileRouter } from './api/file-routes.js';
 import { createConfigurationRouter } from './api/config-routes.js';
+import { createMcpRouter } from './api/mcp-routes.js';
 import { createModelRouter } from './api/model-routes.js';
 import { createPluginRouter } from './api/plugin-routes.js';
 import { createProviderRegistryRouter } from './api/provider-registry-routes.js';
@@ -267,6 +268,7 @@ export function createApp(config?: ServerConfig): express.Application {
   app.use('/api/agent', requireCapability('chat'), createAgentRouter(servicesPromise));
   app.use('/api/workspaces', requireCapability('workspace:read'), createWorkspaceRouter(servicesPromise));
   app.use('/api/files', requireCapability('files:read'), createFileRouter(servicesPromise));
+  app.use('/api/mcp', requireCapability('workspace:read'), createMcpRouter(servicesPromise));
   app.use('/api/terminals', requireCapability('terminal'), createTerminalRouter(servicesPromise));
   const configurationRouter = createConfigurationRouter(servicesPromise);
   app.use('/api/configuration', configurationRouter);

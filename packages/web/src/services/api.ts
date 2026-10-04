@@ -12,6 +12,7 @@ import type {
   EffectiveConfiguration,
   GitWorktree,
   Message,
+  McpConfigInventory,
   ModelCatalog,
   PluginCatalog,
   PluginReloadResult,
@@ -1636,6 +1637,20 @@ export async function updateEnabledSkills(
     return { success: true, data };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to update enabled skills' };
+  }
+}
+
+/** Read a redacted file-only inventory. The server never connects or resolves MCP values for this request. */
+export async function getMcpConfig(cwd?: string): Promise<ApiResponse<McpConfigInventory>> {
+  try {
+    const query = new URLSearchParams();
+    if (cwd) query.set('cwd', cwd);
+    const response = await apiFetch(`${API_BASE}/mcp${query.size ? `?${query}` : ''}`);
+    const data = await response.json().catch(() => ({})) as McpConfigInventory & { error?: string };
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to load MCP configuration' };
   }
 }
 

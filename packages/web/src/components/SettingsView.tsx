@@ -18,6 +18,7 @@ import {
   type AppUpdateStatus,
 } from '../services/api';
 import { SubagentSettings } from './SubagentSettings';
+import { McpSettings } from './McpSettings';
 import { usePreferences } from '../store/preferences';
 import { chordFromEvent, defaultKeybindings, shortcutActions, shortcutLabel } from '../services/keyboard';
 import { pushSupported, syncPushSubscription, type NotificationEvent } from '../services/push';
@@ -543,6 +544,8 @@ function SettingsView() {
         <p>{t('settings.totalSessions', { count: sessionCount })}</p>
         <small>{t('settings.sessionsLocation')}</small>
       </section>
+
+      <McpSettings />
 
       {/* About */}
       <section className="settings-section about" id="about">

@@ -3,6 +3,7 @@ import type {
   CustomModelDefinition,
   CustomProviderDefinition,
   ExtensionInteractionSnapshot,
+  McpConfigInventory,
   ModelCatalog,
   ModelCatalogEntry,
   PluginCatalog,
@@ -88,6 +89,7 @@ export interface MockApiOptions {
   sessions?: MockSession[];
   providers?: MockProvider[];
   modelCatalog?: ModelCatalog;
+  mcpConfig?: McpConfigInventory;
   pluginCatalog?: PluginCatalog;
   skillCatalog?: SkillCatalog;
   skillRegistry?: SkillRegistry;
@@ -405,6 +407,17 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
   ]);
   const providers = structuredClone(options.providers ?? [{ type: 'mock', configured: true }]);
   let modelCatalog = structuredClone(options.modelCatalog ?? mockModelCatalog(providers));
+  const mcpConfig = structuredClone(options.mcpConfig ?? {
+    files: [
+      { scope: 'global', path: '/agent/mcp.json', exists: false, contentRead: false, problems: [] },
+      { scope: 'project', path: `${workspace.cwd}/.ai-harness/mcp.json`, exists: false, contentRead: false, problems: [] },
+    ],
+    servers: [],
+    project: {
+      cwd: workspace.cwd, contentTrusted: workspace.trusted, requiresTrust: false,
+      decision: workspace.trusted ? true : null, inherited: false, trustError: false,
+    },
+  } satisfies McpConfigInventory);
   let pluginCatalog = structuredClone(options.pluginCatalog ?? mockPluginCatalog(workspace));
   let skillCatalog = structuredClone(options.skillCatalog ?? mockSkillCatalog(workspace));
   let skillRegistry = structuredClone(options.skillRegistry ?? {
@@ -655,6 +668,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       customModels = customModels.map(model => model.key === key ? { ...model, ...input, key: `${input.provider}:${input.id}`, updatedAt: DEFAULT_DATE } : model);
       await fulfillJson(route, customModels.find(model => model.key === `${input.provider}:${input.id}`)); return;
     }
+    if (url.pathname === '/api/mcp' && method === 'GET') { await fulfillJson(route, mcpConfig); return; }
     if (url.pathname === '/api/tools' && method === 'GET') { await fulfillJson(route, toolSettings); return; }
     if (url.pathname === '/api/tools' && method === 'PATCH') {
       const input = body as { enabledTools?: string[]; toolPreset?: ToolSettings['preset']; powershellEnabled?: boolean; projectId?: string };

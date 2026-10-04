@@ -13,6 +13,7 @@ import {
   getAppUpdateStatus,
   getChatTransport,
   getEffectiveConfiguration,
+  getMcpConfig,
   getModelCatalog,
   getPluginCatalog,
   getProviders,
@@ -239,6 +240,26 @@ describe('Web API service', () => {
       body: JSON.stringify({ enabledSkills: ['project:review:key'], cwd: '/workspace', projectId: 'workspace-1' }),
     }));
     expect(JSON.stringify(catalog)).not.toContain('instructions');
+  });
+
+  it('loads the redacted MCP inventory for the selected workspace', async () => {
+    const inventory = {
+      files: [{ scope: 'global', path: '/agent/mcp.json', exists: true, contentRead: true, problems: [] }],
+      servers: [{
+        name: 'docs', scope: 'global', sourcePath: '/agent/mcp.json', valid: true, enabled: true,
+        exposure: 'direct', transport: 'http', url: 'https://example.test/•••', envNames: [],
+        headerNames: ['Authorization'], commandFields: [], variableReferences: [], masked: true,
+        shadowedByProject: false, replacesGlobal: false, problems: [],
+      }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(inventory), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getMcpConfig('/workspace/project')).resolves.toEqual({ success: true, data: inventory });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/mcp?cwd=%2Fworkspace%2Fproject',
+      { headers: {}, credentials: 'same-origin' },
+    );
   });
 
   it('loads and explicitly mutates, checks, and reloads the plugin catalogue', async () => {

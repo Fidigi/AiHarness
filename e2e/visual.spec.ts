@@ -473,6 +473,7 @@ test.describe('Régression visuelle des métadonnées de message', () => {
       });
       const imageWarning = page.getByRole('alert').filter({ hasText: 'may not support images' });
       await imageWarning.getByRole('button', { name: 'Close' }).click();
+      await expect(imageWarning).toBeHidden();
       await page.locator('.message.assistant .message-content p').first().evaluate(element => {
         const range = document.createRange();
         range.selectNodeContents(element);
@@ -633,7 +634,7 @@ test.describe('Régression visuelle des versions et mises à jour', () => {
       });
 
       await page.goto('/settings#about');
-      await page.addStyleTag({ content: '#plugins { display: none !important; }' });
+      await page.addStyleTag({ content: '#plugins, #mcp { display: none !important; }' });
       const about = page.getByRole('heading', { name: 'About', exact: true }).locator('..');
       await about.scrollIntoViewIfNeeded();
       await about.getByText('Release notes').click();

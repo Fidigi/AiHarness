@@ -20,6 +20,7 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 | `packages/web/src/components/ChatView.tsx` | Detached runs, history, composer, queues, settings and reconciliation |
 | `packages/web/src/components/{Sidebar,WorkspacePanel,TerminalPanel}.tsx` | Navigation, files/Git and PTY surfaces |
 | `packages/web/src/components/SettingsView.tsx` | Lazy Settings route and administration sections |
+| `packages/web/src/components/McpSettings.tsx` | Read-only global/project MCP groups, redacted targets/references, trust lock and file diagnostics |
 
 ## State Boundaries
 
@@ -72,6 +73,12 @@ A cwd change aborts stale requests, clears old file/search results, and keys Rea
 
 See [`extensions.md`](./extensions.md) for server-side ownership and interaction validation.
 
+## Settings and MCP Inventory
+
+`McpSettings` requests the selected workspace through `getMcpConfig()`, reloads on cwd/trust changes, and keeps the returned inventory in component state only. It labels entries as Configured, Disabled, Invalid, or Replaced by project—never Connected—and renders only the already-redacted target, env/header names, command-backed field names and variable references returned by Core. A present untrusted project file shows a lock notice and no project names or values. File diagnostics use typed reasons translated in both built-in locales; server entry diagnostics are fixed, value-free schema messages.
+
+This panel has no add/edit/toggle/test/sign-in controls because the server has no MCP runtime or writer yet. Do not implement a browser-side parser or resolver: source files, literal values, environment access and command handling stay entirely on the server/Core side.
+
 ## PWA, Push, and i18n
 
 The service worker caches the offline shell/static assets, never `/api` data. Updates require user activation. Web Push is explicit and category-specific; visible clients suppress duplicate service-worker notifications. Locale resolution uses registered language packages with English fallback and a persisted selection.
@@ -89,7 +96,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 - `packages/web/src/store/preferences.test.ts` — schema migration and validation
 - `packages/web/src/services/api.test.ts` — REST/SSE contracts
 - `packages/web/src/services/{push,pwa,keyboard,notices}.test.ts` — global browser services
-- `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows
+- `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including locked/redacted MCP inventory
 - `e2e/accessibility.spec.ts`, `e2e/performance.spec.ts`, and `e2e/visual.spec.ts` — a11y, bounds and baselines
 - `e2e/live-server.spec.ts` — real browser-to-server smoke path
 

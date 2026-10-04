@@ -89,6 +89,7 @@ Start at `packages/core/src/index.ts`, which defines the public package exports.
 | Coding tools and commands | `src/tools/` | Shared CLI/Web `read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`; browser-safe `!`/`!!` parsing; detached direct-shell runtime; bounded/backpressured process execution, filtered environments, tree cancellation, private output retention, exact edits, trust gates and common active-tool selection |
 | Prompt inputs and instructions | `src/prompts/{prompt-input,instruction-context}.ts` | Canonical bounded `@path` UTF-8/image loading plus shared CLI/Web agent-directory, trusted project-context and system-prompt discovery/composition; regular files, aggregate limits and source precedence are enforced once in Core |
 | Agent settings | `src/config/agent-settings.ts` | Bounded `settings.json` loading, schema diagnostics, legacy migration, trusted global/project merge, global-only fields, provenance, resource paths, and tool/model/thinking/compaction resolution |
+| MCP configuration inventory | `src/mcp/config-inventory.ts` | File-only JSON/JSONC parsing, strict schema diagnostics, persisted-trust project gate, regular/no-link bounded reads, shadowing, hidden-character escaping and value-free redacted server descriptors; no runtime transport |
 | Workspace security | `src/security/` | Canonical allowed roots, symlink boundary, bounded project-resource inventory, shared exact/inherited allow/refuse trust decisions, Git/worktree operations |
 | Extension API/loader | `src/extensions/{extension-registry,module-loader}.ts` | Owned commands/tools/providers/plain-text UI, hooks/listeners, bounded symlink-free discovery and atomic managed generations |
 | Utilities | `src/utils/index.ts`, `src/utils/event-emitter.ts` | IDs, formatting, retry helpers, typed event infrastructure |
@@ -134,6 +135,7 @@ Project extensions are executable code. User extensions are loaded from `~/.ai-h
 | Scoped configuration | `src/api/config-routes.ts`, `src/config/{config-store,effective-configuration}.ts` | Validated nullable global/project/session values, runtime/environment precedence, provenance and atomic non-secret storage |
 | Providers/models | `src/api/{model,provider-registry}-routes.ts`, `src/runtime/{model-catalog,provider-registry,provider-oauth}.ts` | Published/discovered/custom models, custom dialect providers, OAuth Device Flow, capabilities/prices, activation and encrypted-or-volatile secrets |
 | Tools | `src/api/tool-routes.ts`, `src/runtime/services.ts`, Core `src/tools/` | Effective registry inventory, shared coding-tool registration, scoped presets/enabled tools, model capability filtering and Windows-only opt-in PowerShell |
+| MCP configuration | `src/api/mcp-routes.ts`, `src/runtime/mcp-inventory-service.ts`, Core `src/mcp/` | Authenticated read-only global/project overview over Core policy; canonical workspace resolution and no process, command resolver, network, OAuth or credential-store side effects |
 | Plugin packages | `src/api/plugin-routes.ts`, `src/runtime/plugin-service.ts`, `src/runtime/services.ts` | Explicit npm/Git/path administration, bounded metadata inventory, trust/scopes, transactional updates/checks and executable generation reload |
 | Skills | `src/api/skill-routes.ts`, `src/runtime/{skill-catalog,skill-registry}.ts` | Metadata-only discovery/invocation plus HTTPS/SHA-256 registry installs and updates by trusted global/project scope |
 | Web Push | `src/api/push-routes.ts`, `src/runtime/push-service.ts` | VAPID lifecycle, public-endpoint validation, encrypted-or-volatile subscriptions, categories and stale cleanup |
@@ -157,6 +159,7 @@ Main HTTP surfaces:
 - Models: grouped published/discovered/custom catalogue and refresh under `/api/models`; qualified global/project activation under `/api/models/enabled`
 - Provider registry: auth status/OAuth flows, tests, custom provider/model CRUD and imports under `/api/provider-registry`
 - Tools: effective inventory and scoped preset/enabled-tool mutations under `/api/tools`; project IDs require their canonical cwd
+- MCP: authenticated, `workspace:read`-guarded, redacted file-only `GET /api/mcp[?cwd=...]`; project bodies require an effective persisted allow and the route never resolves values or opens a transport
 - Plugins: metadata-only scoped catalogue plus explicit install/enable/disable/remove/update/check and atomic session-aware executable reload under `/api/plugins`
 - Skills: trust-aware catalogue/activation and HTTPS registry search/install/update under `/api/skills`
 - Push: public VAPID key plus authenticated status/subscribe/unsubscribe under `/api/push`
@@ -175,13 +178,13 @@ The server has adapter/proxy code in addition to the provider implementations in
 | App/router/auth | `src/App.tsx`, `src/index.tsx`, `src/components/LoginView.tsx` | Auth bootstrap, workspace/session/provider/model/skill hydration, deep-link restoration, detached-run polling, chat/settings routes and lazy Settings/terminal boundaries |
 | Session/provider state | `src/store/session-store.ts` | Date hydration, indexed windows, bounded v1→v2 workspace cache, drafts/attachments, sequenced workspace model/skill catalogues, provider/model selection, summaries, runs and per-session settings |
 | Preferences | `src/store/preferences.ts` | Validated v3 themes/layout/reasoning/volume and separate sound/local/Push categories, selection/panels/keybindings, v1/v2 migration and cross-tab updates |
-| API client | `src/services/api.ts`, `src/services/push.ts` | Cookie/Bearer fetch and SSE plus sessions/workspaces/files/Git, provider registry/OAuth, tools, skill registry, plugins, Push and child agents |
+| API client | `src/services/api.ts`, `src/services/push.ts` | Cookie/Bearer fetch and SSE plus sessions/workspaces/files/Git, provider registry/OAuth, tools, read-only MCP inventory, skill registry, plugins, Push and child agents |
 | Chat | `src/components/{ChatView,MarkdownContent,MarkdownContentRenderer,SubagentPanel}.tsx`, `src/agent.css` | Reconnection/history, rich rendering, Process/Response and full output, dynamic resource palette, declarative extension widgets/interactions, drafts/images/queues, settings/compaction/branches and child agents |
 | Navigation | `src/components/Sidebar.tsx` | Workspace/trust/worktrees, sequenced directory browsing, session search/create/inline rename/model auto-name/cascade-safe delete and run indicators |
 | Workspace panel | `src/components/WorkspacePanel.tsx`, `src/workspace-panel.css` | Lazy Git-annotated tree, grouped changes/stats, watched/resizable source/media/Markdown/diff viewer, abortable workspace refresh, cancellable XHR upload with collision strategy and file mentions |
 | Terminal | `src/components/TerminalPanel.tsx`, `src/terminal.css` | Dynamically imported multi-tab xterm UI with keyed workspace boundary, per-workspace tab restoration, input/clipboard/resize and offset reconnection |
 | Global keyboard/accessibility | `src/components/{CommandPalette,StatusCenter,SubagentMonitor}.tsx`, `src/services/{keyboard,notices}.ts`, `src/hooks/useFocusTrap.ts` | Focus-trapped palettes/dialogs/extensions, bounded status and child notices, robust focus restoration and portable shortcuts |
-| Settings | `src/components/{SettingsView,EcosystemSettings,PluginSettings,SubagentSettings}.tsx` | Provider lifecycle/custom resources, defaults/tools, model/skill registry, plugins, child profiles, auth, appearance, Push preferences, versions and shortcuts |
+| Settings | `src/components/{SettingsView,EcosystemSettings,McpSettings,PluginSettings,SubagentSettings}.tsx` | Provider lifecycle/custom resources, defaults/tools, model/skill registry, redacted read-only MCP files, plugins, child profiles, auth, appearance, Push preferences, versions and shortcuts |
 | PWA shell | `src/components/PwaStatus.tsx`, `src/services/push.ts`, `public/{manifest.webmanifest,sw.js,offline.html}` | Install/update/offline shell plus explicit Web Push subscription, visible-client deduplication and notification routing |
 | Internationalization | `src/hooks/useI18n.tsx`, `src/i18n/`, `src/components/LanguageSelector.tsx` | Browser locale detection, English fallback, registered language packages, persisted locale selection |
 | Styling | `src/{index,settings}.css`, `src/agent.css`, component CSS | Global/chat layout plus route-split Settings styles, themes and responsive behavior |
@@ -189,7 +192,7 @@ The server has adapter/proxy code in addition to the provider implementations in
 
 The server is the source of truth for persisted Web sessions. A `draft:*` session stays browser-local until `POST /api/agent/runs`; the server persists the user message before detached execution starts and later persists model/tool turns. `ChatView` may hold a temporary streamed assistant message, but terminal events must resynchronize it with the canonical session without duplicates. The optional per-tab workspace cache is schema v2 with explicit v1 migration; it must remain bounded, favor draft text over binary previews, strip provider API keys and be discarded or reconciled whenever the server revision changes. PTY React state and stored IDs are keyed by workspace so a cwd switch unmounts the previous surfaces before restoring the target workspace. Scroll state uses a separate versioned, 24-entry/24-hour per-workspace `sessionStorage` map; capture it at scroll time (not from reused DOM during route cleanup), debounce writes, and rematerialize a missing virtual anchor through the paged `around` API before correcting its measured offset.
 
-The Web uses the server's real mock provider; there is no client-side demo response path. Most Playwright tests intercept API requests and model the detached protocol, including OAuth/custom providers/models, tool settings, skill registry, plugin/reload, extension interactions, Web Push, profile CRUD and child runs. `e2e/live-server.spec.ts` traverses Vite → Express → mock provider → JSONL/reload and exercises real PTY/files/security. `web-server.test.ts` provides broader HTTP/provider/persistence/security and disposable Git/PTY/child-runtime coverage. Accessibility tests run axe plus focus/keyboard checks; performance tests protect bounds/cache/lazy loading. The 114 visual cases protect historical surfaces plus provider/model editors, registry, Process blocks and extension dialogs in Light/Dark desktop/tablet/mobile variants.
+The Web uses the server's real mock provider; there is no client-side demo response path. Most Playwright tests intercept API requests and model the detached protocol, including OAuth/custom providers/models, tool settings, redacted MCP inventory, skill registry, plugin/reload, extension interactions, Web Push, profile CRUD and child runs. `e2e/live-server.spec.ts` traverses Vite → Express → mock provider → JSONL/reload and exercises real PTY/files/security. `web-server.test.ts` provides broader HTTP/provider/persistence/security and disposable Git/PTY/child-runtime coverage. Accessibility tests run axe plus focus/keyboard checks; performance tests protect bounds/cache/lazy loading. The 114 visual cases protect historical surfaces plus provider/model editors, registry, Process blocks and extension dialogs in Light/Dark desktop/tablet/mobile variants.
 
 ## 4. Important Runtime Flows
 
@@ -251,6 +254,22 @@ parent AgentRuntime tool loop -> spawn_subagent(profile, task, background)
 
 Keep delegation on the shared `AgentRuntime`; a separate provider loop would bypass persistence, trust, hooks and cancellation. Context, history and run registries must remain bounded. A profile with empty allowlists inherits the parent policy; non-empty lists only reduce it. At maximum depth, `spawn_subagent` must be removed from the child tool set.
 
+### MCP configuration inventory
+
+```text
+Settings › MCP -> GET /api/mcp?cwd=<selected workspace>
+  -> workspace:read capability + canonical allowed-root directory resolution
+  -> Core reads the global <data-dir>/mcp.json as a bounded regular nonsymlink file
+  -> Core resolves fresh project trust from trust.json
+       |-> effective saved allow: read <cwd>/.ai-harness/mcp.json safely
+       `-> no allow/refusal/store error: inspect metadata only; never open the body
+  -> JSON/JSONC parse + strict shallow schema and depth/count limits
+  -> redact command paths/arguments/URL credentials and paths; return names/references only
+  -> render global/project entries, shadowing, trust and fixed diagnostics
+```
+
+This is deliberately an inventory, not an MCP runtime. A GET must never expand `$VAR`, run a `!command`, spawn a configured process, contact a configured URL, initialize OAuth, create a credential file, or mutate either configuration. Global and project files are each capped at 1 MiB; inventories cap server count at 200 and nesting at 64. Project content requires `ProjectTrustStatus.decision === true`, not resource-sensitive implicit trust for an empty folder, which closes the resource-appearance race. Keep add/edit/test/OAuth/host work separate until it has its own mutation, secret and process-boundary design.
+
 ### Plugin package administration
 
 ```text
@@ -291,7 +310,7 @@ Only an active run may request interaction. Keep widget content plain text and c
 
 Both CLI and server default to `~/.ai-harness/sessions/<session-id>.jsonl`, so they can share conversations when running as the same OS user. The custom v2 journal retains parent-linked active and abandoned entries; RPC fork moves the active leaf in place, while `--no-session` keeps an equivalent process-local journal. CLI and RPC resolve path-selected sessions first, then `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, and the merged agent/trusted-project setting `sessionDir`; interactive-only `--resume` is rejected in RPC in favor of `--session`. The persisted format remains AiHarness JSONL v2.
 
-Server state under `AI_HARNESS_DATA_DIR` includes atomic `config.json`, `providers.json`, `usage-metrics.json`, `plugins.json`, `subagents.json` and trust/session files. `trust.json` v2 stores bounded canonical boolean decisions; the nearest ancestor decision applies, explicit refusals override inherited allows, v1 allow-lists migrate on the next mutation, and async reads refresh across CLI/Web processes. `credentials.enc`, `provider-secrets.enc` and `push.enc` exist only when `AI_HARNESS_MASTER_KEY` enables encrypted persistence; their corresponding secrets/subscriptions otherwise remain process-memory only. Never put secrets into the non-secret JSON stores, fixtures, API status objects or browser persistence.
+Server state under `AI_HARNESS_DATA_DIR` includes atomic `config.json`, `providers.json`, `usage-metrics.json`, `plugins.json`, `subagents.json` and trust/session files. An operator-managed `mcp.json` may also live there; its current Web surface is read-only, bounded and redacted, and it may contain literal values that must be treated as secrets. `trust.json` v2 stores bounded canonical boolean decisions; the nearest ancestor decision applies, explicit refusals override inherited allows, v1 allow-lists migrate on the next mutation, and async reads refresh across CLI/Web processes. `credentials.enc`, `provider-secrets.enc` and `push.enc` exist only when `AI_HARNESS_MASTER_KEY` enables encrypted persistence; their corresponding secrets/subscriptions otherwise remain process-memory only. Never put secrets into the non-secret JSON stores, fixtures, API status objects or browser persistence.
 
 Use `SessionManager` for domain operations, `JsonlSessionStore` for storage behavior, and `serializeSession`/`deserializeSession` at JSON boundaries. Avoid direct mutation of manager internals. Every write is asynchronous and should be awaited before reporting success. Session files must be regular, non-symlink and owner-only. A clone is an independent root (`metadata.clonedFromSessionId`); RPC in-place fork retains descendants in one journal, while startup/copy forks keep related-session lineage.
 

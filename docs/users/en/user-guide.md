@@ -561,6 +561,7 @@ The **Settings** page allows:
 - administering the published or discovered catalog, its capabilities/prices, activation and global/project defaults;
 - configuring presets and actually available tools, including PowerShell on Windows;
 - reviewing skills by scope, authorizing their invocation and installing/updating from a registry;
+- inspecting a redacted, read-only inventory of global and trusted-project MCP configuration;
 - explicitly installing and administering global or project packages/plugins, their versions and resources;
 - configuring subagent profiles and their global/project scope, then monitoring child agents;
 - keeping SSE/WebSocket history transport for legacy chat endpoints;
@@ -606,6 +607,34 @@ The **Skills** section gathers discovered documents under **Project**, **Global*
 A checked box authorizes the model to load this skill with read-only `load_skill` tool; it launches or installs nothing. The setting is written at current project level, or globally when no project provided, and provenance displays. A project skill remains locked and uninvocable before explicit workspace approval, even if its frontmatter enables it by default. On duplicate names, invocation prioritizes project, configured path, package then global. The browser never receives instruction bodies: only catalog metadata transit there. Under authentication, reading is accessible to user role but modification demands `configuration` capability.
 
 Set `AI_HARNESS_SKILL_REGISTRY_URL` to an HTTPS index to open **Skill registry**. The panel searches metadata, installs at global or project scope, reports newer versions and applies update or all of the scope. Each registry entry must provide a `downloadUrl` HTTPS and SHA-256 of `SKILL.md`. Server limits index and documents, refuses redirects, embedded credentials and symlinks, verifies digest then atomically replaces installed version. Project installation requires approved workspace and reloads catalog without transmitting instructions to browser.
+
+### MCP Configuration Inventory
+
+**MCP servers** in Settings is currently a read-only configuration inventory, not an MCP runtime. It reads the global `<data-directory>/mcp.json` (by default `~/.ai-harness/mcp.json`) and, only after an exact or inherited saved allow, `<workspace>/.ai-harness/mcp.json`. A fresh empty workspace's implicit safe status is not enough to open a project file. Before approval, the panel reports only that the file exists; it does not read server names or values. An explicit refusal or unavailable trust store also keeps it locked.
+
+The accepted JSON/JSONC root contains optional `"version": 1` and an `mcpServers` object. Comments and trailing commas are accepted. Entries use exactly one HTTP(S) `url` or non-empty `command`, with optional string `args`, `env`, `headers`, `cwd`, `description`, boolean `enabled`, `direct|codemode|deferred` `exposure`, and supported OAuth metadata. For example:
+
+```json
+{
+  "version": 1,
+  "mcpServers": {
+    "documentation": {
+      "url": "https://docs.example.test/mcp",
+      "headers": { "Authorization": "${DOCS_TOKEN}" },
+      "exposure": "deferred"
+    },
+    "local-tools": {
+      "command": "npx",
+      "args": ["-y", "@example/mcp-server"],
+      "env": { "MCP_TOKEN": "${MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+Inventory reads never expand `$VARIABLE`, execute a `!command`, start a process, contact a URL, initialize OAuth, create credentials, or change either file. The browser receives env/header **names**, referenced variable names and command-backed field names, never their values. Executable paths and literal arguments are redacted; URL credentials, path, query and fragment are masked while the destination host remains visible for review. Hidden control characters are escaped, syntax errors never quote source, and global/project shadowing is explicit. **Configured** means that an entry passed file validation, not that it connected.
+
+Both files must be regular nonsymlink UTF-8 files and are capped at 1 MiB, 64 nesting levels and 200 servers. Invalid entries and file problems remain visible through value-free diagnostics. This release has no add/edit/enable/remove/test/sign-in controls and does not expose MCP tools to agents. Protect manually created files with OS permissions if they contain literal credentials; prefer environment references even though runtime resolution is not implemented yet.
 
 ### Packages and Plugins
 
@@ -835,6 +864,7 @@ By default, CLI and server use:
 | Custom provider secrets (if master key) | `~/.ai-harness/provider-secrets.enc` |
 | Usage and cost metrics | `~/.ai-harness/usage-metrics.json` |
 | Web Push subscriptions/private key (if master key) | `~/.ai-harness/push.enc` |
+| Operator-managed MCP configuration (may contain secrets) | `~/.ai-harness/mcp.json` |
 | Packages/plugins state | `~/.ai-harness/plugins.json` |
 | Managed npm/Git packages | `~/.ai-harness/plugins/installed/` |
 | Project trust decisions (exact/inherited allows and refusals) | `~/.ai-harness/trust.json` |

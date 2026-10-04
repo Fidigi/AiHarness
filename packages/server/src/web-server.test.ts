@@ -124,6 +124,77 @@ describe('combined Web server', () => {
     }
   });
 
+  it('lists global and trusted project MCP files without resolving values or opening transports', async () => {
+    const dataDir = path.join(webRoot, '.data');
+    const globalFile = path.join(dataDir, 'mcp.json');
+    const project = path.join(webRoot, `mcp-project-${Date.now()}`);
+    await mkdir(path.join(project, '.ai-harness'), { recursive: true });
+    await writeFile(globalFile, JSON.stringify({
+      mcpServers: {
+        shared: {
+          url: 'https://user:global-literal-secret@example.test/private?token=global-literal-secret',
+          headers: { Authorization: 'Bearer global-literal-secret', Trace: '${TRACE_TOKEN}' },
+        },
+      },
+    }));
+    await writeFile(path.join(project, '.ai-harness', 'mcp.json'), JSON.stringify({
+      mcpServers: {
+        shared: { command: 'node', args: ['project-literal-secret'] },
+        project: { command: 'sh', env: { START: '!touch project-command-must-not-run' } },
+      },
+    }));
+    try {
+      const lockedResponse = await fetch(`${baseUrl}/api/mcp?cwd=${encodeURIComponent(project)}`);
+      expect(lockedResponse.status).toBe(200);
+      expect(lockedResponse.headers.get('cache-control')).toBe('no-store');
+      const locked = await lockedResponse.json() as {
+        project: { contentTrusted: boolean; decision: boolean | null };
+        files: Array<{ scope: string; contentRead: boolean; problems: Array<{ reason: string }> }>;
+        servers: Array<{ name: string; scope: string; url?: string }>;
+      };
+      expect(locked.project).toMatchObject({ contentTrusted: false, decision: null });
+      expect(locked.files[1]).toMatchObject({
+        scope: 'project', contentRead: false, problems: [{ reason: 'trust-required' }],
+      });
+      expect(locked.servers).toEqual([expect.objectContaining({
+        name: 'shared', scope: 'global', url: 'https://example.test/•••?•••',
+      })]);
+      expect(JSON.stringify(locked)).not.toContain('project-literal-secret');
+      expect(JSON.stringify(locked)).not.toContain('global-literal-secret');
+
+      const trust = await fetch(`${baseUrl}/api/workspaces/trust`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: project, confirm: true }),
+      });
+      expect(trust.status).toBe(200);
+
+      const trusted = await fetch(`${baseUrl}/api/mcp?cwd=${encodeURIComponent(project)}`).then(response => response.json()) as {
+        project: { contentTrusted: boolean; decision: boolean | null };
+        files: Array<{ scope: string; contentRead: boolean }>;
+        servers: Array<{
+          name: string; scope: string; shadowedByProject: boolean; replacesGlobal: boolean;
+          commandFields: string[]; args?: string[];
+        }>;
+      };
+      expect(trusted.project).toMatchObject({ contentTrusted: true, decision: true });
+      expect(trusted.files[1]).toMatchObject({ scope: 'project', contentRead: true });
+      expect(trusted.servers).toEqual([
+        expect.objectContaining({ name: 'shared', scope: 'global', shadowedByProject: true }),
+        expect.objectContaining({ name: 'shared', scope: 'project', replacesGlobal: true, args: ['•••'] }),
+        expect.objectContaining({ name: 'project', scope: 'project', commandFields: ['env.START'] }),
+      ]);
+      const serialized = JSON.stringify(trusted);
+      expect(serialized).not.toContain('global-literal-secret');
+      expect(serialized).not.toContain('project-literal-secret');
+      expect(serialized).not.toContain('project-command-must-not-run');
+    } finally {
+      await Promise.all([
+        rm(globalFile, { force: true }),
+        rm(project, { recursive: true, force: true }),
+      ]);
+    }
+  });
+
   it('publishes a grouped model catalogue and persists project activation', async () => {
     const initialResponse = await fetch(`${baseUrl}/api/models?projectId=model-project`);
     expect(initialResponse.status).toBe(200);

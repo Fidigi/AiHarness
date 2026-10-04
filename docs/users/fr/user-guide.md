@@ -561,6 +561,7 @@ La page **Settings** permet de :
 - administrer le catalogue publié ou découvert, ses capacités/prix, son activation et les valeurs par défaut globales/projet ;
 - régler les presets et outils réellement disponibles, dont PowerShell sous Windows ;
 - examiner les skills par portée, autoriser leur invocation et installer ou mettre à jour ceux d’un registre ;
+- inspecter un inventaire expurgé et en lecture seule des configurations MCP globale et des projets approuvés ;
 - installer et administrer explicitement les packages/plugins globaux ou projet, leurs versions et leurs ressources ;
 - configurer les profils de sous-agent et leur portée globale/projet, puis suivre les agents enfants ;
 - conserver le transport historique SSE/WebSocket pour les anciens endpoints de chat ;
@@ -606,6 +607,34 @@ La section **Skills** regroupe les documents découverts sous **Project**, **Glo
 Une case cochée autorise le modèle à charger ce skill avec l’outil en lecture seule `load_skill` ; elle ne lance ni n’installe rien. Le réglage est écrit au niveau du projet courant, ou globalement lorsqu’aucun projet n’est fourni, et sa provenance est affichée. Un skill projet reste verrouillé et non invocable avant l’approbation explicite du workspace, même si son frontmatter l’active par défaut. En cas de noms identiques, l’invocation privilégie projet, chemin configuré, package puis global. Le navigateur ne reçoit jamais le corps d’instructions : seules les métadonnées du catalogue y transitent. Sous authentification, la lecture est accessible au rôle utilisateur, mais la modification exige la capacité `configuration`.
 
 Définissez `AI_HARNESS_SKILL_REGISTRY_URL` vers un index HTTPS pour ouvrir **Skill registry**. Le panneau recherche les métadonnées, installe en portée globale ou projet, signale les versions plus récentes et applique une mise à jour ou toutes celles de la portée. Chaque entrée du registre doit fournir un `downloadUrl` HTTPS et le SHA-256 du `SKILL.md`. Le serveur limite index et documents, refuse redirections, credentials intégrés et liens symboliques, vérifie le digest puis remplace atomiquement la version installée. Une installation projet exige un workspace approuvé et recharge le catalogue sans transmettre les instructions au navigateur.
+
+### Inventaire de configuration MCP
+
+La section **Serveurs MCP** des réglages est actuellement un inventaire de configuration en lecture seule, pas un runtime MCP. Elle lit le fichier global `<répertoire-de-données>/mcp.json` (par défaut `~/.ai-harness/mcp.json`) et, uniquement après une autorisation enregistrée exacte ou héritée, `<workspace>/.ai-harness/mcp.json`. Le statut implicitement sûr d’un workspace vide ne suffit pas à ouvrir un fichier projet. Avant approbation, le panneau signale seulement l’existence du fichier : il ne lit ni noms de serveurs ni valeurs. Un refus explicite ou un registre de confiance indisponible le maintient également verrouillé.
+
+La racine JSON/JSONC acceptée contient un `"version": 1` facultatif et un objet `mcpServers`. Les commentaires et virgules finales sont acceptés. Chaque entrée utilise exactement une `url` HTTP(S) ou une `command` non vide, avec facultativement des chaînes `args`, `env`, `headers`, `cwd`, `description`, un booléen `enabled`, une `exposure` parmi `direct|codemode|deferred` et les métadonnées OAuth prises en charge. Exemple :
+
+```json
+{
+  "version": 1,
+  "mcpServers": {
+    "documentation": {
+      "url": "https://docs.example.test/mcp",
+      "headers": { "Authorization": "${DOCS_TOKEN}" },
+      "exposure": "deferred"
+    },
+    "outils-locaux": {
+      "command": "npx",
+      "args": ["-y", "@example/mcp-server"],
+      "env": { "MCP_TOKEN": "${MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+L’inventaire ne développe jamais `$VARIABLE`, n’exécute aucune `!commande`, ne lance aucun processus, ne contacte aucune URL, n’initialise pas OAuth, ne crée pas de credentials et ne modifie aucun fichier. Le navigateur reçoit les **noms** d’environnement/headers, les noms de variables référencées et les noms des champs adossés à une commande, jamais leurs valeurs. Les chemins exécutables et arguments littéraux sont expurgés ; les credentials, le chemin, la query et le fragment d’une URL sont masqués, tandis que l’hôte de destination reste visible pour vérification. Les caractères de contrôle cachés sont échappés, les erreurs de syntaxe ne citent jamais la source et le masquage global/projet est explicite. **Configuré** signifie qu’une entrée a passé la validation du fichier, pas qu’elle est connectée.
+
+Les deux fichiers doivent être des fichiers UTF-8 réguliers, non symboliques, limités à 1 Mio, 64 niveaux d’imbrication et 200 serveurs. Les entrées invalides et problèmes de fichier restent visibles au moyen de diagnostics sans valeurs. Cette version ne fournit aucune commande d’ajout, édition, activation, suppression, test ou connexion et n’expose aucun outil MCP aux agents. Protégez par les permissions du système les fichiers créés manuellement s’ils contiennent des credentials littéraux ; préférez les références d’environnement, même si leur résolution à l’exécution n’est pas encore implémentée.
 
 ### Packages et plugins
 
@@ -839,6 +868,7 @@ Par défaut, le CLI et le serveur utilisent :
 | Providers/modèles personnalisés | `~/.ai-harness/providers.json` |
 | Secrets de providers personnalisés (si clé maître) | `~/.ai-harness/provider-secrets.enc` |
 | Métriques d’usage et de coût | `~/.ai-harness/usage-metrics.json` |
+| Configuration MCP gérée par l’opérateur (peut contenir des secrets) | `~/.ai-harness/mcp.json` |
 | Souscriptions/clé privée Web Push (si clé maître) | `~/.ai-harness/push.enc` |
 | État des packages/plugins | `~/.ai-harness/plugins.json` |
 | Packages npm/Git gérés | `~/.ai-harness/plugins/installed/` |

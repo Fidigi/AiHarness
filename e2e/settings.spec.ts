@@ -198,6 +198,45 @@ test.describe('Settings and authentication', () => {
     await expect(section.getByRole('checkbox', { name: 'Allow release-notes for autonomous model invocation' })).toBeEnabled();
   });
 
+  test('présente un inventaire MCP expurgé et garde le fichier projet fermé avant confiance', async ({ page }) => {
+    const api = await installMockApi(page, {
+      workspaceTrusted: false,
+      mcpConfig: {
+        files: [
+          { scope: 'global', path: '/agent/mcp.json', exists: true, contentRead: true, problems: [] },
+          {
+            scope: 'project', path: '/workspace/.ai-harness/mcp.json', exists: true, contentRead: false,
+            problems: [{ reason: 'trust-required', message: 'Project trust required.' }],
+          },
+        ],
+        project: {
+          cwd: '/workspace', contentTrusted: false, requiresTrust: true, decision: null,
+          inherited: false, trustError: false,
+        },
+        servers: [{
+          name: 'documentation', scope: 'global', sourcePath: '/agent/mcp.json', valid: true,
+          enabled: true, exposure: 'deferred', transport: 'http', url: 'https://docs.example.test/•••?•••',
+          envNames: [], headerNames: ['Authorization'], commandFields: [],
+          variableReferences: [{ field: 'headers.X-Token', names: ['DOCS_TOKEN'] }], masked: true,
+          shadowedByProject: false, replacesGlobal: false, problems: [],
+        }],
+      },
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+
+    await expect(section.getByRole('heading', { name: 'MCP servers' })).toBeVisible();
+    await expect(section).toContainText('documentation');
+    await expect(section).toContainText('https://docs.example.test/•••?•••');
+    await expect(section).toContainText('Header names: Authorization');
+    await expect(section).toContainText('headers.X-Token reads host variables: DOCS_TOKEN');
+    await expect(section).toContainText('Project server names and values are not read before trust.');
+    await section.getByText('Configuration file diagnostics').click();
+    await expect(section).toContainText('Project trust is required before reading this file.');
+    await section.getByRole('button', { name: 'Refresh' }).click();
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/mcp').length).toBeGreaterThanOrEqual(2);
+  });
+
   test('gère les plugins npm/git/path, leur inventaire et les mises à jour explicites', async ({ page }) => {
     const api = await installMockApi(page);
     await page.goto('/settings#plugins');

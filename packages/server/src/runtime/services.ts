@@ -17,6 +17,7 @@ import type { AiProxyServer } from '../api/proxy.js';
 import { ConfigurationStore } from '../config/config-store.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { CommandRuntime } from './command-runtime.js';
+import { McpInventoryService } from './mcp-inventory-service.js';
 import { ModelCatalogService } from './model-catalog.js';
 import { PluginService } from './plugin-service.js';
 import { ProviderRegistryService } from './provider-registry.js';
@@ -45,6 +46,7 @@ export interface RuntimeServices {
   extensionRegistry: ExtensionRegistry;
   agentRuntime: AgentRuntime;
   commandRuntime: CommandRuntime;
+  mcpInventory: McpInventoryService;
   modelCatalog: ModelCatalogService;
   pluginService: PluginService;
   providerRegistry: ProviderRegistryService;
@@ -88,6 +90,7 @@ export async function createRuntimeServices(
 
   const trustManager = new ProjectTrustManager(options.trustFile ?? path.join(dataDir, 'trust.json'));
   await trustManager.load();
+  const mcpInventory = new McpInventoryService(dataDir, workspaceManager, trustManager);
   const configurationStore = new ConfigurationStore(
     options.configurationFile ?? path.join(dataDir, 'config.json'),
   );
@@ -372,6 +375,7 @@ export async function createRuntimeServices(
     extensionRegistry,
     agentRuntime,
     commandRuntime: new CommandRuntime(sessionManager),
+    mcpInventory,
     modelCatalog,
     pluginService,
     providerRegistry,

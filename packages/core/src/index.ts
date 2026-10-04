@@ -158,8 +158,9 @@ export type {
   QueuedAgentMessage,
 } from './agent/events.js';
 
-// Shared coding tools and prompt inputs
+// Shared coding tools, MCP configuration inventory, and prompt inputs
 export * from './tools/index.js';
+export * from './mcp/index.js';
 export * from './prompts/index.js';
 
 // Extensions

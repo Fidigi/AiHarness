@@ -4,7 +4,7 @@
 
 ## Overview
 
-Security spans canonical workspace resolution, explicit project trust, HTTP/WebSocket authorization, secret storage, executable packages/extensions, and safe browser rendering. Every external path, ID, credential, package source, provider response, and extension payload is untrusted.
+Security spans canonical workspace resolution, explicit project trust, HTTP/WebSocket authorization, secret storage, executable packages/extensions, file-only MCP configuration inspection, and safe browser rendering. Every external path, ID, credential, package source, provider response, and extension payload is untrusted.
 
 Review [`server-api.md`](./server-api.md) for route guards and [`extensions.md`](./extensions.md) before changing executable-code loading.
 
@@ -17,6 +17,7 @@ Review [`server-api.md`](./server-api.md) for route guards and [`extensions.md`]
 | `packages/core/src/tools/workspace-tools.ts` | Shared CLI/Web path resolution, mutation trust gates, exact edits, bounded searches and command execution |
 | `packages/core/src/prompts/instruction-context.ts` | Shared trust-separated, bounded, regular-file-only instruction and system-prompt resolution |
 | `packages/core/src/config/agent-settings.ts` | Bounded no-follow settings reads, schema filtering, trust-gated layers, global-only policy and value-free diagnostics |
+| `packages/core/src/mcp/config-inventory.ts` | Side-effect-free global/project MCP file reads, persisted-trust gating, strict JSON/JSONC schema and redacted descriptors |
 | `packages/server/src/security/request-security.ts` | Roles, capabilities, Origin checks, limits, WebSocket auth and safe errors |
 | `packages/server/src/security/credential-store.ts` | Optional AES-GCM encrypted credential persistence |
 | `packages/server/src/runtime/provider-registry.ts` | Separation of custom-provider metadata and secrets |
@@ -55,6 +56,8 @@ Instruction text is executable only in the model-policy sense, but it is still u
 
 Agent settings use the same source boundary: agent-directory `settings.json` is user-controlled, while project `.ai-harness/settings.json` is not opened until canonical project trust. Project `sessionDir`, extensions, resources, command prefixes, models, proxies and tool settings all remain behind that boundary. Reads are capped at 256 KiB and reject links, non-files, invalid UTF-8/JSON, NULs, and identity/timestamp races. Validation keeps valid fields while omitting unknown or invalid values, and diagnostics never include setting values. `/settings` intentionally omits proxy and opaque telemetry identifiers.
 
+The MCP Settings inventory follows an even narrower read-only contract. Core may read `<data-dir>/mcp.json`, but it opens `<cwd>/.ai-harness/mcp.json` only when the nearest persisted trust decision is `true`; implicit resource-sensitive trust for an empty folder is not enough. Before that it uses `lstat` metadata only, so a file that appears after an empty-folder check is still not opened. Both files must be regular and nonsymlink, are capped at 1 MiB, and pass open/stat race checks, JSON/JSONC syntax, depth 64, server-count 200 and strict shallow entry validation. Parse errors are fixed text that never quote source. API descriptors omit env/header values, identify command-backed fields and variable names without resolving them, escape hidden characters, and redact executable paths, literal arguments, URL credentials/path/query/hash. The GET path must never expand a variable, execute `!command`, spawn a server, contact a URL, initialize OAuth or create a credential file. There is no MCP runtime yet; do not mistake a `Configured` inventory row for a live connection.
+
 CLI skill and prompt discovery loads project roots only after trust, does not traverse symbolic links, caps selection at 10,000 files, and opens each Markdown resource with no-follow identity/race checks and a 1 MiB limit. Settings resource exclusions operate on resolved paths; local extension code still passes the extension loader's separate regular-file, size and trust checks.
 
 The trust store accepts only bounded absolute paths and boolean decisions. Reads are size-capped and regular-file-only; malformed, linked or unsafe stores fail closed. Mutations re-read under a bounded lock, merge decisions, write owner-only temporary files and rename atomically so CLI and Web processes do not silently overwrite one another. Async status checks refresh when the file identity changes. Legacy v1 `trustedProjects` entries are read as allows and migrate to v2 on the next mutation; no project-controlled file can grant trust.
@@ -68,6 +71,7 @@ Truncated interactive CLI and direct RPC shell output is retained under an owner
 | Built-in provider credentials | `credentials.enc` only with `AI_HARNESS_MASTER_KEY`; otherwise memory |
 | Custom provider secrets | `provider-secrets.enc` only with master key; otherwise memory |
 | Push private key/subscriptions | `push.enc` only with master key; otherwise volatile |
+| MCP configuration literals | Operator-managed `mcp.json`; read-only Web inventory is redacted, but the file itself may contain secrets and needs OS-level protection |
 | Non-secret configuration | Atomic `config.json`, `providers.json`, `plugins.json`, `subagents.json` |
 
 Core model catalogues contain descriptors only: provider/ID/name, availability/source, capabilities, limits, prices and non-secret compatibility flags. Remote discovery is timeout/retry/result bounded and validated before a descriptor reaches CLI, RPC or Web. `--api-key` constructs an in-memory provider override and must never be copied into catalogue entries, protocol descriptors or session settings; users should still prefer environment or protected secret storage because command-line arguments can be exposed by shell history and process inspection.
@@ -100,7 +104,7 @@ The launcher binds to `127.0.0.1` by default. A non-loopback bind without authen
 
 ## Associated Tests
 
-- `packages/core/src/security/{project-trust,workspace-manager}.test.ts`, `packages/core/src/config/agent-settings.test.ts`, `packages/core/src/prompts/instruction-context.test.ts`, and `packages/core/src/tools/{workspace-tools,shell-command-runtime}.test.ts` — resource-sensitive exact/inherited/refused trust, v1 migration and cross-process merging, roots, settings/instruction precedence/bounds, realpath, symlinks, shared shell persistence/cancellation/backpressure, retention and child-environment filtering
+- `packages/core/src/security/{project-trust,workspace-manager}.test.ts`, `packages/core/src/config/agent-settings.test.ts`, `packages/core/src/prompts/instruction-context.test.ts`, `packages/core/src/mcp/config-inventory.test.ts`, and `packages/core/src/tools/{workspace-tools,shell-command-runtime}.test.ts` — resource-sensitive exact/inherited/refused trust, v1 migration and cross-process merging, roots, settings/instruction/MCP precedence and bounds, no-follow files, redaction, shadowing, realpath, shared shell cancellation/backpressure, retention and child-environment filtering
 - `packages/cli/src/resources/resource-manager.test.ts` — trusted roots, ordered selectors, no-follow resource loading and project precedence
 - `packages/cli/src/security/project-trust.test.ts`, `packages/cli/src/cli/invocation.test.ts` and `packages/cli/src/cli/shell-controller.test.ts` — prompt adapter, process overrides, headless policy and interactive shell gating/abort behavior
 - `packages/cli/src/security/oauth-device.test.ts` — bounded OAuth polling and cancellation
@@ -108,7 +112,7 @@ The launcher binds to `127.0.0.1` by default. A non-loopback bind without authen
 - `packages/server/src/security/credential-store.test.ts` — encryption, permissions and memory-only fallback
 - `packages/server/src/web-cli.test.ts` — bind/auth launcher policy
 - `packages/core/src/sessions/session-manager.test.ts` and `packages/cli/src/rpc/rpc-controller.test.ts` — session-file symlinks, retained output permissions/expiry, protocol purity and bounded shell output
-- `packages/server/src/web-server.test.ts` and `e2e/live-server.spec.ts` — end-to-end route/workspace/secret boundaries
+- `packages/server/src/web-server.test.ts`, `e2e/settings.spec.ts` and `e2e/live-server.spec.ts` — end-to-end route/workspace/MCP redaction/secret boundaries
 
 ## Common Changes
 
