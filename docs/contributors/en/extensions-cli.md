@@ -115,7 +115,7 @@ api.before('before:provider', data => ({
 
 ### Automatic Tool Invocations
 
-Tool schemas automatically pass through the shared provider contract; the OpenAI/Azure, Anthropic, Gemini/Vertex, Bedrock, and local-compatible adapters translate them when the model allows tool calls. When the model requests a tool, the CLI persists the tool call, executes the tool, persists its result (errors included), then resumes the model call. The loop is limited to eight consecutive turns to avoid infinite calls. A `Ctrl+C` interruption cancels the provider request and propagates the signal to the active tool.
+Tool schemas automatically pass through the shared provider contract; the OpenAI/Azure, Anthropic, Gemini/Vertex, Bedrock, and local-compatible adapters translate them when the model allows tool calls. When the model requests a tool, the CLI persists the tool call, executes the tool, persists its result (errors included), then resumes the model call. The loop is limited to eight consecutive turns to avoid infinite calls. An `Escape` or `Ctrl+C` interruption cancels the provider request and propagates the signal to the active tool.
 
 ## Management Commands
 

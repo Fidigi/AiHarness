@@ -19,6 +19,7 @@ packages/cli/src/index.ts
   |-> --print or redirected stream -> final-text print execution
   `-> terminal mode -> regular readline OR fullscreen raw input
          |-> active Enter / Alt+Enter -> Core AgentMessageQueue -> next turn/task
+         |-> lone Escape -> active-operation cancellation + queued-input restoration
          |-> ! / !! -> CLI shell adapter -> Core ShellCommandRuntime
          `-> resource/command dispatch -> Core runToolLoop -> provider
 ```
@@ -131,9 +132,9 @@ The old `{id,method,params}` calls (`system.ping`, custom session/provider metho
 
 Built-in metadata and handlers live in `commands/handler.ts`; extension commands are resolved after built-ins. The registry includes conversation/session lifecycle, provider/model/thinking, compaction/branching, import/export/share, resources, read-only effective `/settings`, extensions/tools/trust/reload, clipboard/search, and quit operations.
 
-While an interactive response is active, `Enter` queues steering for the next model boundary and `Alt+Enter` (or `Ctrl+Q` where the terminal reserves modified Enter) queues a follow-up after steering work settles. Core applies `steeringMode` and `followUpMode`: `one-at-a-time` delivers one queued message per response, while `all` delivers the pending kind as one boundary batch. `Alt+Up` restores pending text to the editor; interruption restores it automatically. Both terminal renderers accept input without serializing it behind the active provider call. Commands and direct shell input are restored rather than run concurrently.
+While an interactive response is active, `Enter` queues steering for the next model boundary and `Alt+Enter` (or `Ctrl+Q` where the terminal reserves modified Enter) queues a follow-up after steering work settles. Core applies `steeringMode` and `followUpMode`: `one-at-a-time` delivers one queued message per response, while `all` delivers the pending kind as one boundary batch. `Alt+Up` restores pending text to the editor; interruption restores it automatically. Both terminal renderers accept input without serializing it behind the active provider call. Commands and direct shell input are restored rather than run concurrently. Their shared terminal decoder waits briefly to distinguish lone `Escape` from split `Alt+Enter`; lone `Escape` aborts active provider/tool/shell work or cancels multiline input, but does not exit an idle CLI. `Ctrl+C` retains the idle-exit behavior.
 
-Interactive input beginning with `!` bypasses provider execution and runs in the trusted startup cwd. `!!` sets `excludedFromContext`; both variants stream into regular/fullscreen renderers, persist a parented command entry, participate in input/session history, and are cancelled with `Ctrl+C`. Core bounds stored output to 50 KiB for this adapter and retains complete truncated output in an owner-only temporary file for 24 hours. Agent settings `shellPath` and `shellCommandPrefix` apply to direct commands and the model `bash` tool and refresh interactively. The same parser and `ShellCommandRuntime` serve Web direct commands; the server file is only a compatibility re-export.
+Interactive input beginning with `!` bypasses provider execution and runs in the trusted startup cwd. `!!` sets `excludedFromContext`; both variants stream into regular/fullscreen renderers, persist a parented command entry, participate in input/session history, and are cancelled with `Escape` or `Ctrl+C`. Core bounds stored output to 50 KiB for this adapter and retains complete truncated output in an owner-only temporary file for 24 hours. Agent settings `shellPath` and `shellCommandPrefix` apply to direct commands and the model `bash` tool and refresh interactively. The same parser and `ShellCommandRuntime` serve Web direct commands; the server file is only a compatibility re-export.
 
 User-visible command help also exists in both TUI implementations. Never add a command only to the handler.
 

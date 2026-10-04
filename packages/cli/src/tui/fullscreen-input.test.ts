@@ -17,6 +17,7 @@ function createInput(ui = createUI()) {
   const handlers = {
     onLine: vi.fn(),
     onInterrupt: vi.fn(),
+    onEscape: vi.fn(),
     onExit: vi.fn(),
     onError: vi.fn(),
   };
@@ -70,6 +71,7 @@ describe('FullscreenInput', () => {
     const controller = new FullscreenInput(ui, {
       onLine: vi.fn(),
       onInterrupt: vi.fn(),
+      onEscape: vi.fn(),
       onExit: vi.fn(),
       complete: input => ['/prompts', '/provider'].filter(candidate => candidate.startsWith(input)),
     }, { resume: vi.fn(), pause: vi.fn(), on: vi.fn(), off: vi.fn() });
@@ -86,6 +88,7 @@ describe('FullscreenInput', () => {
     const handlers = {
       onLine: vi.fn(),
       onInterrupt: vi.fn(),
+      onEscape: vi.fn(),
       onExit: vi.fn(),
       onError: vi.fn(),
       onDequeue,
@@ -118,13 +121,23 @@ describe('FullscreenInput', () => {
     expect(ui.scrollDown).toHaveBeenCalledOnce();
   });
 
+  it('dispatches a lone Escape without treating it as Ctrl+C', async () => {
+    const { controller, handlers } = createInput();
+    controller.handleKeypress('', { name: 'escape', meta: true });
+
+    expect(handlers.onEscape).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(handlers.onEscape).toHaveBeenCalledOnce());
+    expect(handlers.onInterrupt).not.toHaveBeenCalled();
+  });
+
   it('recognizes terminals that report Alt+Enter as Escape then Enter', async () => {
     const { controller, handlers } = createInput();
     controller.handleKeypress('x', { name: 'x' });
-    controller.handleKeypress('', { name: 'escape' });
+    controller.handleKeypress('', { name: 'escape', meta: true });
     controller.handleKeypress('\r', { name: 'return' });
 
     await vi.waitFor(() => expect(handlers.onLine).toHaveBeenCalledWith('x', 'follow-up'));
+    expect(handlers.onEscape).not.toHaveBeenCalled();
   });
 
   it('uses Ctrl+Q as a terminal-compatible follow-up shortcut', async () => {

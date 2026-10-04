@@ -43,6 +43,10 @@ import { CommandHandler } from './commands/handler.js';
 import { TerminalUI } from './tui/terminal-ui.js';
 import { FullscreenUI } from './tui/fullscreen-ui.js';
 import { FullscreenInput } from './tui/fullscreen-input.js';
+import {
+  TerminalEscapeSequence,
+  TERMINAL_ESCAPE_CODE_TIMEOUT_MS,
+} from './tui/terminal-escape.js';
 import { resolveTerminalMode } from './tui/mode.js';
 import { KeyBindingManager } from './utils/keybinding-manager.js';
 import { ExtensionLoader } from './extensions/extension-loader.js';
@@ -708,10 +712,10 @@ async function main(): Promise<void> {
     });
   };
 
-  const interrupt = (): void => {
+  const cancelActiveOperation = (): boolean => {
     if (shellController.abort()) {
       terminal.addTranscriptEntry({ type: 'system', content: '[Commande interrompue]' });
-      return;
+      return true;
     }
 
     if (activeAbortController) {
@@ -724,17 +728,26 @@ async function main(): Promise<void> {
       keyBindings.setStreaming(false);
       terminal.addTranscriptEntry({ type: 'system', content: '[Interrompu]' });
       refreshPrompt();
-      return;
+      return true;
     }
 
     if (isMultiLineMode) {
       terminal.cancelMultiLineEditor();
       isMultiLineMode = false;
       refreshPrompt();
-      return;
+      return true;
     }
 
+    return false;
+  };
+
+  const interrupt = (): void => {
+    if (cancelActiveOperation()) return;
     shutdown('Au revoir ! 👋', terminalMode === 'fullscreen' ? 0 : undefined);
+  };
+
+  const escapeInterrupt = (): void => {
+    cancelActiveOperation();
   };
 
   /** Process a command or conversation message. */
@@ -1140,6 +1153,7 @@ async function main(): Promise<void> {
     const fullscreenInput = new FullscreenInput(fullscreenTerminal, {
       onLine: dispatchLine,
       onInterrupt: interrupt,
+      onEscape: escapeInterrupt,
       onExit: () => shutdown('Au revoir ! 👋', 0),
       onError: error => terminal.showError(error.message),
       complete: completeCommands,
@@ -1163,13 +1177,14 @@ async function main(): Promise<void> {
       output: process.stdout,
       prompt: sessionPrompt(),
       completer: (line: string): [string[], string] => [completeCommands(line), line],
+      escapeCodeTimeout: TERMINAL_ESCAPE_CODE_TIMEOUT_MS,
     });
     const replaceReadlineValue = (value: string): void => {
       rl.write(null, { ctrl: true, name: 'u' });
       const singleLine = value.replace(/[\r\n]+/g, ' ');
       if (singleLine) rl.write(singleLine);
     };
-    let pendingEscapeAt = 0;
+    const escapeSequence = new TerminalEscapeSequence(escapeInterrupt);
     let suppressLineEvent = false;
     const submitRegularFollowUp = (): void => {
       const currentInput = rl.line;
@@ -1180,17 +1195,15 @@ async function main(): Promise<void> {
         .catch(error => terminal.showError(error instanceof Error ? error.message : String(error)));
     };
     const regularKeypress = (_text: string, key: readline.Key): void => {
-      if (key.name === 'escape' && !key.ctrl && !key.meta && !key.shift) {
-        pendingEscapeAt = Date.now();
+      if (key.name === 'escape' && !key.ctrl && !key.shift) {
+        escapeSequence.deferEscape();
         return;
       }
-      if ((key.name === 'return' || key.name === 'enter')
-        && (key.meta || Date.now() - pendingEscapeAt < 500)) {
-        pendingEscapeAt = 0;
+      const escapedEnter = escapeSequence.consumeFollowingKey(key);
+      if ((key.name === 'return' || key.name === 'enter') && (key.meta || escapedEnter)) {
         submitRegularFollowUp();
         return;
       }
-      pendingEscapeAt = 0;
       if (key.ctrl && key.name === 'q') {
         submitRegularFollowUp();
         return;
@@ -1220,6 +1233,7 @@ async function main(): Promise<void> {
     inputDriver = {
       prompt: () => rl.prompt(),
       close: () => {
+        escapeSequence.cancel();
         process.stdin.removeListener('keypress', regularKeypress);
         rl.close();
       },

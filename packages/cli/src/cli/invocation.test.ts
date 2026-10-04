@@ -235,7 +235,7 @@ describe('CLI invocation contract', () => {
     expect(persisted.match(/"type":"message"/g)).toHaveLength(4);
   });
 
-  it('queues interactive steering/follow-ups and restores pending input on interrupt', async () => {
+  it('queues interactive steering/follow-ups and restores pending input on Escape', async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-interactive-queue-'));
     temporaryDirectories.push(cwd);
     const sessionDir = path.join(cwd, 'sessions');
@@ -312,11 +312,15 @@ describe('CLI invocation contract', () => {
       await waitForOutput('┌─ Assistant', 4);
       child.stdin.write('restore me\r');
       await waitForOutput('Steering en file', 2);
-      child.stdin.write('\u0003');
+      child.stdin.write('\u001b');
       await waitForOutput('[Interrupted]');
       await new Promise(resolve => setTimeout(resolve, 100));
       child.stdin.write('\r');
       await waitForOutput('answer:initial|steer now|later task|abort base|restore me');
+      await new Promise(resolve => setTimeout(resolve, 200));
+      child.stdin.write('\u001b');
+      await new Promise(resolve => setTimeout(resolve, 200));
+      expect(child.exitCode).toBeNull();
 
       child.stdin.write('/quit\r');
       child.stdin.end();

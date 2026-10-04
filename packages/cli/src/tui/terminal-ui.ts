@@ -77,7 +77,7 @@ export class TerminalUI {
     console.log();
     console.log(dim('  Type /help for available commands'));
     console.log(dim('  Providers: mock, openai, anthropic, google, local, azure, vertex, bedrock'));
-    console.log(dim('  Tip: Use Ctrl+C to interrupt streaming responses'));
+    console.log(dim('  Tip: Use Escape or Ctrl+C to interrupt active work'));
     console.log();
   }
 
@@ -295,7 +295,7 @@ ${chalk.bold('Input')}
   ${chalk.cyan('Alt+Enter / Ctrl+Q')}             Queue a follow-up after the active task
   ${chalk.cyan('Alt+Up')}                        Restore queued messages to the editor
   ${chalk.cyan('Ctrl+G')}                        Open $VISUAL or $EDITOR
-  ${chalk.cyan('Ctrl+C')}                        Interrupt; queued messages return to the editor
+  ${chalk.cyan('Escape / Ctrl+C')}               Interrupt; queued messages return to the editor
 
 ${chalk.bold('Providers:')}
   mock, openai, anthropic, google, local, azure, vertex, bedrock

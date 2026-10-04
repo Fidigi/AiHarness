@@ -239,13 +239,13 @@ Les sources d’instructions doivent être des fichiers UTF-8 réguliers, non sy
 | Rappeler le texte en file dans l’éditeur | `Alt+↑` |
 | Compléter une commande, un skill ou un prompt | `Tab` |
 | Parcourir l’historique de saisie | `↑` / `↓` |
-| Interrompre une réponse ou une commande shell en cours | `Ctrl+C` |
+| Interrompre une réponse ou une commande shell en cours | `Escape` ou `Ctrl+C` |
 | Quitter lorsqu’aucune opération n’est active | `Ctrl+C`, `Ctrl+D` ou `/quit` |
 | Ouvrir `$VISUAL` ou `$EDITOR` | `Ctrl+G` |
 | Rafraîchir l’écran | `Ctrl+L` |
 | Faire défiler le transcript en plein écran | `Alt+↓` ; `Alt+↑` si aucune saisie n’est en file |
 
-Pendant une réponse, `Entrée` ajoute un message de steering à la prochaine frontière de modèle ; `Alt+Entrée` attend que le steering et la tâche courante soient terminés. `steeringMode` et `followUpMode` indiquent si un seul message ou tous les messages en attente de ce type sont livrés à chaque frontière. `Alt+↑`, `Ctrl+C` ou l’échec du run restitue le texte en attente dans l’éditeur au lieu de le perdre. Les commandes et saisies shell `!` ne sont pas exécutées en parallèle d’une réponse active. Certains terminaux réservent `Alt+Entrée` ; utilisez alors `Ctrl+Q`.
+Pendant une réponse, `Entrée` ajoute un message de steering à la prochaine frontière de modèle ; `Alt+Entrée` attend que le steering et la tâche courante soient terminés. `steeringMode` et `followUpMode` indiquent si un seul message ou tous les messages en attente de ce type sont livrés à chaque frontière. `Alt+↑`, `Escape`, `Ctrl+C` ou l’échec du run restitue le texte en attente dans l’éditeur au lieu de le perdre. Les commandes et saisies shell `!` ne sont pas exécutées en parallèle d’une réponse active. Un court délai distingue `Escape` seul des terminaux qui séparent `Alt+Entrée` ; `Escape` ne quitte jamais le CLI au repos. Certains terminaux réservent `Alt+Entrée` ; utilisez alors `Ctrl+Q`.
 
 Pour une saisie multi-lignes dans le terminal classique :
 
@@ -256,7 +256,7 @@ seconde ligne
 /send
 ```
 
-Utilisez `/cancel` pour abandonner la saisie multi-lignes.
+Utilisez `/cancel` ou `Escape` pour abandonner la saisie multi-lignes.
 
 Pour exécuter directement une commande dans le workspace approuvé, préfixez-la avec `!`. Sa sortie progressive, son statut et son code de sortie sont persistés dans la session puis ajoutés au contexte du modèle. Utilisez `!!` pour conserver le même historique sans transmettre le résultat au modèle :
 
@@ -265,7 +265,7 @@ Pour exécuter directement une commande dans le workspace approuvé, préfixez-l
 !!git diff --stat
 ```
 
-`Ctrl+C` arrête l’arbre de processus actif. La sortie affichée et persistée est bornée ; si elle est tronquée, le CLI indique le chemin d’un fichier complet privé qui expire après 24 heures. Les commandes refusent un workspace non approuvé (`/trust add`) et leurs processus n’héritent pas des variables d’environnement dont le nom ressemble à un credential. Cette exécution directe et la commande Web reposent sur le même runtime Core ; elle reste distincte de l’outil `bash` appelé par le modèle.
+`Escape` ou `Ctrl+C` arrête l’arbre de processus actif. La sortie affichée et persistée est bornée ; si elle est tronquée, le CLI indique le chemin d’un fichier complet privé qui expire après 24 heures. Les commandes refusent un workspace non approuvé (`/trust add`) et leurs processus n’héritent pas des variables d’environnement dont le nom ressemble à un credential. Cette exécution directe et la commande Web reposent sur le même runtime Core ; elle reste distincte de l’outil `bash` appelé par le modèle.
 
 ### Commandes de conversation et de session
 

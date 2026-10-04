@@ -239,13 +239,13 @@ Instruction sources must be regular, nonsymlink UTF-8 files and are bounded per 
 | Return queued text to the editor | Alt+Up |
 | Complete a command, skill or prompt | Tab |
 | Browse input history | Up / Down |
-| Interrupt an ongoing response or shell command | Ctrl+C |
+| Interrupt an ongoing response or shell command | Escape or Ctrl+C |
 | Quit when no operation is active | Ctrl+C, Ctrl+D or /quit |
 | Open $VISUAL or $EDITOR | Ctrl+G |
 | Refresh the screen | Ctrl+L |
 | Scroll transcript in fullscreen | Alt+Down; Alt+Up when no text is queued |
 
-During a response, `Enter` adds steering at the next model boundary; `Alt+Enter` waits until steering and the current task settle. `steeringMode` and `followUpMode` choose whether one message or every pending message of that kind is delivered at each boundary. `Alt+Up`, `Ctrl+C`, or a failed run returns pending text to the editor instead of discarding it. Commands and `!` shell input are not run concurrently with an active response. Some terminals reserve `Alt+Enter`; use `Ctrl+Q` there.
+During a response, `Enter` adds steering at the next model boundary; `Alt+Enter` waits until steering and the current task settle. `steeringMode` and `followUpMode` choose whether one message or every pending message of that kind is delivered at each boundary. `Alt+Up`, `Escape`, `Ctrl+C`, or a failed run returns pending text to the editor instead of discarding it. Commands and `!` shell input are not run concurrently with an active response. A short delay distinguishes lone `Escape` from terminals that split `Alt+Enter`; idle `Escape` never exits the CLI. Some terminals reserve `Alt+Enter`; use `Ctrl+Q` there.
 
 For multi-line input in classic terminal:
 
@@ -256,7 +256,7 @@ second line
 /send
 ```
 
-Use `/cancel` to abandon multi-line input.
+Use `/cancel` or `Escape` to abandon multi-line input.
 
 Prefix input with `!` to run a command directly in the trusted workspace. Its progressive output, status and exit code are persisted in session history and added to model context. Use `!!` to keep the same history without sending the result to the model:
 
@@ -265,7 +265,7 @@ Prefix input with `!` to run a command directly in the trusted workspace. Its pr
 !!git diff --stat
 ```
 
-`Ctrl+C` stops the active process tree. Displayed and persisted output is bounded; when truncated, the CLI shows an owner-only complete-output file that expires after 24 hours. Commands reject an untrusted workspace (`/trust add`), and child processes do not inherit environment variables whose names look like credentials. Direct CLI and Web commands use the same Core runtime; this path remains separate from the model-invoked `bash` tool.
+`Escape` or `Ctrl+C` stops the active process tree. Displayed and persisted output is bounded; when truncated, the CLI shows an owner-only complete-output file that expires after 24 hours. Commands reject an untrusted workspace (`/trust add`), and child processes do not inherit environment variables whose names look like credentials. Direct CLI and Web commands use the same Core runtime; this path remains separate from the model-invoked `bash` tool.
 
 ### Conversation and Session Commands
 
