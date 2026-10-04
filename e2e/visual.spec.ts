@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { installMockApi, mockSession } from './fixtures/mock-api';
+import { mcpStateInventory } from './fixtures/mcp';
 
 const scenarios = [
   { name: 'desktop-dark', width: 1440, height: 900, theme: 'dark' },
@@ -9,6 +10,8 @@ const scenarios = [
   { name: 'mobile-dark', width: 390, height: 844, theme: 'dark' },
   { name: 'mobile-light', width: 390, height: 844, theme: 'light' },
 ] as const;
+
+const mcpScenarios = scenarios.filter(scenario => scenario.name.startsWith('desktop') || scenario.name.startsWith('mobile'));
 
 test.describe('Régression visuelle confiance et PWA', () => {
   for (const scenario of scenarios) {
@@ -297,6 +300,44 @@ test.describe('Régression visuelle du catalogue de skills', () => {
       await page.evaluate(() => document.fonts.ready);
       await expect(page).toHaveScreenshot(`skill-catalog-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
+      });
+    });
+  }
+});
+
+test.describe('Régression visuelle de l’inventaire MCP', () => {
+  for (const scenario of mcpScenarios) {
+    test(`${scenario.name} garde états, expurgation et diagnostics lisibles`, async ({ page }) => {
+      await page.setViewportSize({ width: scenario.width, height: scenario.height });
+      await page.addInitScript(({ theme }) => {
+        localStorage.setItem('ai-harness-preferences-v2', JSON.stringify({
+          version: 2, theme, contentWidth: 1000, fontSize: 16,
+          reasoningOpen: false, sound: false, notifications: false, selectionActions: true,
+          filesOpen: true, sidebarVisible: true, lastSettingsSection: 'mcp', keybindings: {},
+        }));
+      }, { theme: scenario.theme });
+      await installMockApi(page, { mcpConfig: mcpStateInventory() });
+
+      await page.goto('/settings#mcp');
+      await page.addStyleTag({ content: `
+        html, body, .app, .main-content, .settings-view {
+          height: auto !important;
+          max-height: none !important;
+          overflow: visible !important;
+        }
+        .settings-section:not(#mcp), .mobile-menu { display: none !important; }
+      ` });
+      const section = page.locator('#mcp');
+      await expect(section.getByRole('article', { name: 'remote-docs: Configured', exact: true })).toBeVisible();
+      await expect(section.getByRole('article', { name: 'local-tools: Disabled', exact: true })).toBeVisible();
+      await expect(section.getByRole('article', { name: 'shared: Replaced by project', exact: true })).toBeVisible();
+      await expect(section.getByRole('article', { name: 'bad\\u202ename: Invalid', exact: true })).toBeVisible();
+      await section.getByText('Configuration file diagnostics').click();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
+      await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
+      await page.evaluate(() => document.fonts.ready);
+      await expect(page).toHaveScreenshot(`mcp-inventory-${scenario.name}.png`, {
+        animations: 'disabled', caret: 'hide', fullPage: true, maxDiffPixelRatio: 0.02,
       });
     });
   }

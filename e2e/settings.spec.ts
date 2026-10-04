@@ -1,5 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 import { installMockApi, mockSession } from './fixtures/mock-api';
+import {
+  MCP_FILE_PROBLEM_MESSAGES,
+  MCP_FILE_PROBLEM_REASONS,
+  mcpFileProblemInventory,
+  mcpStateInventory,
+} from './fixtures/mcp';
 
 function settingsSection(page: Page, heading: string) {
   return page.getByRole('heading', { name: heading, exact: true }).locator('..');
@@ -236,6 +242,41 @@ test.describe('Settings and authentication', () => {
     await section.getByRole('button', { name: 'Refresh' }).click();
     await expect.poll(() => api.requests.filter(request => request.path === '/api/mcp').length).toBeGreaterThanOrEqual(2);
   });
+
+  test('présente tous les états de ligne MCP sans les confondre avec une connexion', async ({ page }) => {
+    await installMockApi(page, { mcpConfig: mcpStateInventory() });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+
+    await expect(section.getByRole('article', { name: 'remote-docs: Configured', exact: true })).toBeVisible();
+    await expect(section.getByRole('article', { name: 'local-tools: Disabled', exact: true })).toBeVisible();
+    await expect(section.getByRole('article', { name: 'shared: Replaced by project', exact: true })).toBeVisible();
+    await expect(section.getByRole('article', { name: 'bad\\u202ename: Invalid', exact: true })).toBeVisible();
+    const projectReplacement = section.locator('fieldset[data-scope="project"]')
+      .getByRole('article', { name: 'shared: Configured', exact: true });
+    await expect(projectReplacement).toContainText('replaces the global entry');
+    await expect(section.getByText('Connected', { exact: true })).toHaveCount(0);
+    await expect(section).toContainText('Command-backed fields: headers.X-Command');
+    await expect(section).toContainText('env.CACHE_DIR reads host variables: CACHE_DIR');
+    await section.getByText('Configuration file diagnostics').click();
+    await expect(section).toContainText(MCP_FILE_PROBLEM_MESSAGES['invalid-shape']);
+  });
+
+  for (const reason of MCP_FILE_PROBLEM_REASONS) {
+    test(`localise le diagnostic MCP ${reason} sans afficher le message source`, async ({ page }) => {
+      const trustProblem = reason === 'trust-required' || reason === 'trust-unavailable';
+      await installMockApi(page, {
+        workspaceTrusted: !trustProblem,
+        mcpConfig: mcpFileProblemInventory(reason),
+      });
+      await page.goto('/settings#mcp');
+      const section = page.locator('#mcp');
+
+      await section.getByText('Configuration file diagnostics').click();
+      await expect(section).toContainText(MCP_FILE_PROBLEM_MESSAGES[reason]);
+      await expect(section).not.toContainText('SOURCE-DIAGNOSTIC-MUST-NOT-RENDER');
+    });
+  }
 
   test('gère les plugins npm/git/path, leur inventaire et les mises à jour explicites', async ({ page }) => {
     const api = await installMockApi(page);
