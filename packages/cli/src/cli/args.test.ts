@@ -83,6 +83,9 @@ describe('CLI arguments', () => {
     expect(formatCliHelp()).toContain('ai-harness [options]');
     expect(formatCliHelp()).toContain('--append-system-prompt');
     expect(formatCliHelp()).toContain('--list-models [search]');
+    expect(formatCliHelp()).toContain('AI_HARNESS_AGENT_DIR');
+    expect(formatCliHelp()).toContain('AI_HARNESS_SESSIONS_DIR');
+    expect(formatCliHelp()).toContain('.ai-harness/settings.json');
     await expect(readPipedStdin(Readable.from([' hello ', 'world\n']), 100)).resolves.toBe('hello world');
     await expect(readPipedStdin(Readable.from(['too large']), 3)).rejects.toThrow(/exceeds/i);
   });

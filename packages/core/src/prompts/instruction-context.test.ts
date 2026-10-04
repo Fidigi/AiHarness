@@ -63,8 +63,8 @@ describe('instruction context', () => {
     await text(path.join(agentDir, 'APPEND_SYSTEM.md'), 'global addendum');
     await text(path.join(agentDir, 'AGENTS.md'), 'global context');
     await text(path.join(cwd, 'AGENTS.md'), 'project context');
-    await text(path.join(cwd, '.pi', 'SYSTEM.md'), 'project base');
-    await text(path.join(cwd, '.pi', 'APPEND_SYSTEM.md'), 'project addendum');
+    await text(path.join(cwd, '.ai-harness', 'SYSTEM.md'), 'project base');
+    await text(path.join(cwd, '.ai-harness', 'APPEND_SYSTEM.md'), 'project addendum');
 
     const untrusted = await resolveInstructionPrompt({ cwd, agentDir, projectTrusted: false });
     expect(untrusted.systemPrompt).toContain('global base');
@@ -80,7 +80,7 @@ describe('instruction context', () => {
     expect(trusted.systemPrompt).toContain('project context');
     expect(trusted.systemPrompt).not.toContain('global base');
     expect(trusted.appendSystemPromptSources).toEqual([
-      { kind: 'file', path: path.join(cwd, '.pi', 'APPEND_SYSTEM.md') },
+      { kind: 'file', path: path.join(cwd, '.ai-harness', 'APPEND_SYSTEM.md') },
     ]);
   });
 
@@ -158,7 +158,7 @@ describe('instruction context', () => {
 
   it('escapes source paths and resolves the conventional agent directory', () => {
     const home = path.join(path.sep, 'home', 'tester');
-    expect(resolveAgentDirectory(undefined, home)).toBe(path.join(home, '.pi', 'agent'));
+    expect(resolveAgentDirectory('', home)).toBe(path.join(home, '.ai-harness'));
     expect(resolveAgentDirectory('~/custom-agent', home)).toBe(path.join(home, 'custom-agent'));
     expect(composeInstructionSystemPrompt({
       cwd: home,

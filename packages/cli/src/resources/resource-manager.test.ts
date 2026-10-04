@@ -73,15 +73,17 @@ describe('ResourceManager', () => {
     expect(manager.expandPrompt('explain', [])).toContain('défaut=aucun');
   });
 
-  it('loads agent resources while trust-gating project resource directories', async () => {
+  it('uses the configured agent root while trust-gating project resource directories', async () => {
     const root = await temporaryDirectory();
     const home = path.join(root, 'home');
     const cwd = path.join(root, 'project');
     const agentDir = path.join(root, 'agent');
     await mkdir(path.join(agentDir, 'skills', 'user'), { recursive: true });
-    await mkdir(path.join(cwd, '.pi', 'skills', 'project'), { recursive: true });
+    await mkdir(path.join(home, '.ai-harness', 'skills', 'default-root'), { recursive: true });
+    await mkdir(path.join(cwd, '.ai-harness', 'skills', 'project'), { recursive: true });
     await writeFile(path.join(agentDir, 'skills', 'user', 'SKILL.md'), '---\nname: user\n---\nUser instructions');
-    await writeFile(path.join(cwd, '.pi', 'skills', 'project', 'SKILL.md'), '---\nname: project\n---\nProject instructions');
+    await writeFile(path.join(home, '.ai-harness', 'skills', 'default-root', 'SKILL.md'), 'Default root instructions');
+    await writeFile(path.join(cwd, '.ai-harness', 'skills', 'project', 'SKILL.md'), '---\nname: project\n---\nProject instructions');
 
     const untrusted = new ResourceManager({ cwd, homeDir: home, agentDir, projectTrusted: false });
     await untrusted.loadAll();

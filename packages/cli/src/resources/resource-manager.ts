@@ -182,7 +182,7 @@ async function readMarkdownFile(filePath: string): Promise<string> {
 export class ResourceManager {
   private readonly cwd: string;
   private readonly homeDir: string;
-  private readonly agentDir?: string;
+  private readonly agentDir: string;
   private readonly projectTrusted: boolean;
   private readonly extraSkillPaths: string[];
   private readonly extraPromptPaths: string[];
@@ -196,7 +196,7 @@ export class ResourceManager {
   constructor(options: ResourceManagerOptions = {}) {
     this.cwd = options.cwd ?? process.cwd();
     this.homeDir = options.homeDir ?? os.homedir();
-    this.agentDir = options.agentDir;
+    this.agentDir = options.agentDir ?? path.join(this.homeDir, '.ai-harness');
     this.projectTrusted = options.projectTrusted === true;
     const resolve = (entries: readonly string[]): string[] => entries.map(entry => {
       const marker = entry[0] === '+' || entry[0] === '-' || entry[0] === '!' ? entry[0] : '';
@@ -220,15 +220,13 @@ export class ResourceManager {
     const skillFiles = new Map<string, string>();
     await applyResourceSelectors(skillFiles, [
       path.join(this.homeDir, '.agents', 'skills'),
-      path.join(this.homeDir, '.ai-harness', 'skills'),
-      ...(this.agentDir ? [path.join(this.agentDir, 'skills')] : []),
+      path.join(this.agentDir, 'skills'),
     ], skillMatcher, errors);
     await applyResourceSelectors(skillFiles, this.globalSkillPaths, skillMatcher, errors);
     if (this.projectTrusted) {
       await applyResourceSelectors(skillFiles, [
         path.join(this.cwd, '.agents', 'skills'),
         path.join(this.cwd, '.ai-harness', 'skills'),
-        path.join(this.cwd, '.pi', 'skills'),
       ], skillMatcher, errors);
       await applyResourceSelectors(skillFiles, this.projectSkillPaths, skillMatcher, errors);
     }
@@ -245,14 +243,12 @@ export class ResourceManager {
     const promptMatcher = (name: string): boolean => name.toLowerCase().endsWith('.md');
     const promptFiles = new Map<string, string>();
     await applyResourceSelectors(promptFiles, [
-      path.join(this.homeDir, '.ai-harness', 'prompts'),
-      ...(this.agentDir ? [path.join(this.agentDir, 'prompts')] : []),
+      path.join(this.agentDir, 'prompts'),
     ], promptMatcher, errors);
     await applyResourceSelectors(promptFiles, this.globalPromptPaths, promptMatcher, errors);
     if (this.projectTrusted) {
       await applyResourceSelectors(promptFiles, [
         path.join(this.cwd, '.ai-harness', 'prompts'),
-        path.join(this.cwd, '.pi', 'prompts'),
         path.join(this.cwd, 'prompts'),
       ], promptMatcher, errors);
       await applyResourceSelectors(promptFiles, this.projectPromptPaths, promptMatcher, errors);

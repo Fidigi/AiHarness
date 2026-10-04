@@ -85,10 +85,10 @@ function expandHome(input: string, homeDir = os.homedir()): string {
 
 /** Resolve the configured agent directory without creating or mutating it. */
 export function resolveAgentDirectory(
-  configured = process.env.PI_CODING_AGENT_DIR,
+  configured = process.env.AI_HARNESS_AGENT_DIR,
   homeDir = os.homedir(),
 ): string {
-  const selected = configured?.trim() || path.join(homeDir, '.pi', 'agent');
+  const selected = configured?.trim() || path.join(homeDir, '.ai-harness');
   return path.resolve(expandHome(selected, homeDir));
 }
 
@@ -318,7 +318,7 @@ export async function resolveInstructionPrompt(
     systemPromptSource = { kind: 'literal' };
   } else {
     const discovered = await firstInstructionFile([
-      ...(options.projectTrusted ? [path.join(cwd, '.pi', 'SYSTEM.md')] : []),
+      ...(options.projectTrusted ? [path.join(cwd, '.ai-harness', 'SYSTEM.md')] : []),
       path.join(agentDir, 'SYSTEM.md'),
     ], maxFileBytes, diagnostics);
     if (discovered) {
@@ -345,7 +345,7 @@ export async function resolveInstructionPrompt(
     }
   } else {
     const discovered = await firstInstructionFile([
-      ...(options.projectTrusted ? [path.join(cwd, '.pi', 'APPEND_SYSTEM.md')] : []),
+      ...(options.projectTrusted ? [path.join(cwd, '.ai-harness', 'APPEND_SYSTEM.md')] : []),
       path.join(agentDir, 'APPEND_SYSTEM.md'),
     ], maxFileBytes, diagnostics);
     if (discovered) {

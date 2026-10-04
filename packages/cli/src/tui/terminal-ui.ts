@@ -299,8 +299,8 @@ ${chalk.bold('Providers:')}
 
 ${chalk.bold('Main environment variables:')}
   ${chalk.dim('OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY')}
-  ${chalk.dim('LOCAL_BASE_URL / LLAMA_BASE_URL, PI_CODING_AGENT_DIR')}
-  ${chalk.dim('PI_CODING_AGENT_SESSION_DIR, AI_HARNESS_TUI_MODE')}
+  ${chalk.dim('LOCAL_BASE_URL / LLAMA_BASE_URL, AI_HARNESS_AGENT_DIR')}
+  ${chalk.dim('AI_HARNESS_SESSIONS_DIR, AI_HARNESS_TUI_MODE')}
 `;
     console.log(helpText);
   }

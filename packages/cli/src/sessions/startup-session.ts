@@ -62,7 +62,6 @@ export function resolveStartupSessionDirectory(
     return path.dirname(selectorPath(args.session, cwd, homeDir));
   }
   const configured = args.sessionDir
-    ?? environment.PI_CODING_AGENT_SESSION_DIR
     ?? environment.AI_HARNESS_SESSIONS_DIR
     ?? settingsDirectory;
   return configured ? path.resolve(cwd, expandHome(configured, homeDir)) : undefined;

@@ -128,7 +128,7 @@ describe('CLI invocation contract', () => {
     await mkdir(agentDir, { recursive: true });
     await writeFile(path.join(agentDir, 'AGENTS.md'), 'user-level context');
     const capture = path.join(cwd, 'captured-prompt.txt');
-    const environment = { PI_CODING_AGENT_DIR: agentDir, PROMPT_CAPTURE: capture };
+    const environment = { AI_HARNESS_AGENT_DIR: agentDir, PROMPT_CAPTURE: capture };
 
     const printed = await invoke([
       '--print', '--no-session', '--extension', './capture.mjs',
@@ -173,7 +173,7 @@ describe('CLI invocation contract', () => {
       sessionDir: './settings-sessions',
       unknownForDiagnostic: true,
     }));
-    const environment = { PI_CODING_AGENT_DIR: agentDir };
+    const environment = { AI_HARNESS_AGENT_DIR: agentDir };
 
     const rpc = await invoke(
       ['--mode', 'rpc', '--no-session'],

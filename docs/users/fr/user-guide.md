@@ -185,13 +185,13 @@ Les prompts positionnels sont envoyés dans l’ordre. `@chemin` est résolu dan
 
 La résolution teste l’ID complet avant d’interpréter son dernier deux-points comme suffixe de raisonnement : les ID contenant `/` ou `:` restent donc valides. Un ID nu partagé entre plusieurs providers n’est résolu que si exactement un provider correspondant est configuré ; sinon, qualifiez-le. La recherche floue privilégie un alias non daté ou `-latest`, puis l’ID lexicalement le plus récent. Les motifs de portée sont ordonnés, dédupliqués et prennent en charge les globs `*`, `?` et crochets sans distinction de casse ; le premier résultat disponible démarre le run sauf sélection différente par `--model`, puis `/model cycle` et RPC réutilisent cette portée. La découverte est bornée en durée et en nombre de résultats. Les catalogues et sessions ne conservent jamais `--api-key`, mais un secret passé en argument peut rester visible dans l’historique du shell ou la liste des processus : préférez les variables d’environnement du provider pour un credential durable.
 
-Sans sélecteur de session, chaque invocation démarre une nouvelle session. `--resume` exige un terminal interactif ; utilisez `--session` ou `--continue` pour l’automatisation print/JSON. Un chemin de session explicite prévaut ; sinon l’ordre du stockage est `--session-dir`, `PI_CODING_AGENT_SESSION_DIR`, `AI_HARNESS_SESSIONS_DIR`, le réglage `sessionDir`, puis le dossier par défaut. Les sélecteurs incompatibles échouent avant l’exécution.
+Sans sélecteur de session, chaque invocation démarre une nouvelle session. `--resume` exige un terminal interactif ; utilisez `--session` ou `--continue` pour l’automatisation print/JSON. Un chemin de session explicite prévaut ; sinon l’ordre du stockage est `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, le réglage `sessionDir`, puis le dossier par défaut. Les sélecteurs incompatibles échouent avant l’exécution.
 
 La variable `AI_HARNESS_TUI_MODE=regular|fullscreen` permet aussi de définir le mode. L’option en ligne de commande reste prioritaire sur les réglages.
 
 ### Réglages de l’agent
 
-Le CLI et RPC utilisent le résolveur de réglages du Core AiHarness. Ils lisent les réglages utilisateur dans `<répertoire-agent>/settings.json` (`PI_CODING_AGENT_DIR`, sinon `~/.pi/agent`), puis superposent la source de compatibilité `<workspace>/.pi/settings.json` après approbation explicite du projet. La seule valeur projet lue avant cette approbation est `sessionDir`. Les sources doivent être des fichiers JSON UTF-8 réguliers, non symboliques, de 256 Kio au plus ; un champ invalide ou inconnu produit un avertissement sans afficher sa valeur. Ces réglages sont en lecture seule : AiHarness ne réécrit jamais les fichiers.
+Le CLI et RPC utilisent le résolveur de réglages du Core AiHarness. Ils lisent les réglages utilisateur dans `<répertoire-agent>/settings.json` (`AI_HARNESS_AGENT_DIR`, sinon `~/.ai-harness`), puis superposent `<workspace>/.ai-harness/settings.json` après approbation explicite du projet. La seule valeur projet lue avant cette approbation est `sessionDir`. Les sources doivent être des fichiers JSON UTF-8 réguliers, non symboliques, de 256 Kio au plus ; un champ invalide ou inconnu produit un avertissement sans afficher sa valeur. Ces réglages sont en lecture seule : AiHarness ne réécrit jamais les fichiers.
 
 Voici un point de départ :
 
@@ -216,7 +216,7 @@ Sont aussi appliqués : `modelThinkingLevels` exact, les `modelOverrides` de co
 
 ### Instructions du projet et prompts système
 
-AiHarness applique le même résolveur d’instructions aux runs agent interactifs, print, JSON, RPC et Web. Son répertoire agent utilisateur est `PI_CODING_AGENT_DIR` ou, si cette variable n’est pas définie, `~/.pi/agent`. Dans ce répertoire, puis dans chaque dossier parent approuvé depuis la racine du système de fichiers jusqu’au dossier de démarrage, il sélectionne le premier nom existant de cette liste prioritaire :
+AiHarness applique le même résolveur d’instructions aux runs agent interactifs, print, JSON, RPC et Web. Son répertoire agent utilisateur est `AI_HARNESS_AGENT_DIR` ou, si cette variable n’est pas définie, `~/.ai-harness`. Dans ce répertoire, puis dans chaque dossier parent approuvé depuis la racine du système de fichiers jusqu’au dossier de démarrage, il sélectionne le premier nom existant de cette liste prioritaire :
 
 1. `AGENTS.override.md`
 2. `AGENTS.md`
@@ -226,7 +226,7 @@ AiHarness applique le même résolveur d’instructions aux runs agent interacti
 
 Le fichier du répertoire agent appartient à l’utilisateur et peut être chargé avant l’approbation d’un projet. Les fichiers des parents/du projet ne le sont qu’après approbation explicite du workspace. Si vous lancez `/trust add` dans un CLI déjà actif, exécutez ensuite `/reload` pour recalculer les instructions. `--no-context-files` désactive la découverte des fichiers de contexte utilisateur et projet, mais pas `SYSTEM.md` ni `APPEND_SYSTEM.md`.
 
-Pour le prompt système de base, `--system-prompt` a la priorité, puis `<workspace>/.pi/SYSTEM.md` si le projet est approuvé, puis `<répertoire-agent>/SYSTEM.md`, enfin le prompt intégré. Sans option d’ajout explicite, `<workspace>/.pi/APPEND_SYSTEM.md` approuvé prévaut sur `<répertoire-agent>/APPEND_SYSTEM.md`. Répéter `--append-system-prompt` remplace ce choix automatique et conserve l’ordre de la ligne de commande. Une valeur CLI correspondant à un chemin existant est lue comme fichier ; sinon elle devient du texte littéral. Le réglage Web du prompt système reste toujours littéral et ne peut donc pas lire inopinément un chemin du serveur.
+Pour le prompt système de base, `--system-prompt` a la priorité, puis `<workspace>/.ai-harness/SYSTEM.md` si le projet est approuvé, puis `<répertoire-agent>/SYSTEM.md`, enfin le prompt intégré. Sans option d’ajout explicite, `<workspace>/.ai-harness/APPEND_SYSTEM.md` approuvé prévaut sur `<répertoire-agent>/APPEND_SYSTEM.md`. Répéter `--append-system-prompt` remplace ce choix automatique et conserve l’ordre de la ligne de commande. Une valeur CLI correspondant à un chemin existant est lue comme fichier ; sinon elle devient du texte littéral. Le réglage Web du prompt système reste toujours littéral et ne peut donc pas lire inopinément un chemin du serveur.
 
 Les sources d’instructions doivent être des fichiers UTF-8 réguliers, non symboliques, et restent bornées individuellement et globalement. Leur contenu résolu est envoyé au provider choisi sans être copié dans les réglages de session. Vérifiez les instructions d’un projet avant d’approuver son workspace : elles peuvent influer sur les décisions du modèle et ses demandes d’outils, même si l’exécution des outils conserve ses propres contrôles de confiance.
 
@@ -373,8 +373,8 @@ Les liens de partage expirent après 24 heures par défaut ; la durée accept�
 
 Le CLI découvre les skills `SKILL.md` dans :
 
-- `~/.agents/skills/`, `~/.ai-harness/skills/` et `<répertoire-agent>/skills/` ;
-- les dossiers approuvés `<projet>/.agents/skills/`, `<projet>/.ai-harness/skills/` et `<projet>/.pi/skills/` ;
+- `~/.agents/skills/` et `<répertoire-agent>/skills/` (par défaut : `~/.ai-harness/skills/`) ;
+- les dossiers approuvés `<projet>/.agents/skills/` et `<projet>/.ai-harness/skills/` ;
 - les sélecteurs utilisateur/projet `skills` supplémentaires de `settings.json`.
 
 Exemple `~/.ai-harness/skills/relecture/SKILL.md` :
@@ -396,7 +396,7 @@ Commandes :
 /skill:relecture Texte à relire
 ```
 
-Les prompts Markdown sont recherchés dans `~/.ai-harness/prompts/`, `<répertoire-agent>/prompts/`, ainsi que dans les dossiers approuvés `<projet>/.ai-harness/prompts/`, `<projet>/.pi/prompts/` et `<projet>/prompts/`. Les chemins `skills`/`prompts` des réglages sont résolus depuis le dossier du fichier déclarant et acceptent des inclusions simples ou `+`, des exclusions exactes `-` et des exclusions glob `!`. Les ressources sont UTF-8, sans lien symbolique et limitées à 1 Mio.
+Les prompts Markdown sont recherchés dans `<répertoire-agent>/prompts/` (par défaut : `~/.ai-harness/prompts/`), ainsi que dans les dossiers approuvés `<projet>/.ai-harness/prompts/` et `<projet>/prompts/`. Les chemins `skills`/`prompts` des réglages sont résolus depuis le dossier du fichier déclarant et acceptent des inclusions simples ou `+`, des exclusions exactes `-` et des exclusions glob `!`. Les ressources sont UTF-8, sans lien symbolique et limitées à 1 Mio.
 
 ```markdown
 ---

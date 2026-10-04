@@ -242,11 +242,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     const trustManager = new ProjectTrustManager();
     await trustManager.load();
     const projectTrusted = await trustManager.isTrusted(canonicalCwd);
-    const settingsResolution = await loadAgentSettings({
-      cwd: canonicalCwd,
-      projectSettingsPath: path.join(canonicalCwd, '.pi', 'settings.json'),
-      projectTrusted,
-    });
+    const settingsResolution = await loadAgentSettings({ cwd: canonicalCwd, projectTrusted });
     reportSettingsDiagnostics(settingsResolution);
     const sessionDirectory = resolveStartupSessionDirectory(
       {

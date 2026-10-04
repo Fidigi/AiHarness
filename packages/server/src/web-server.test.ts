@@ -1106,7 +1106,7 @@ describe('combined Web server', () => {
     await mkdir(agentDirectory, { recursive: true });
     await writeFile(path.join(agentDirectory, 'SYSTEM.md'), 'server-side global system prompt');
     await writeFile(path.join(agentDirectory, 'AGENTS.md'), 'server-side global context');
-    vi.stubEnv('PI_CODING_AGENT_DIR', agentDirectory);
+    vi.stubEnv('AI_HARNESS_AGENT_DIR', agentDirectory);
     const created = await fetch(`${baseUrl}/api/sessions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: 'Inherited run', cwd: webRoot }),

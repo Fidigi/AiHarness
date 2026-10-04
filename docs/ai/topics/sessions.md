@@ -40,7 +40,7 @@ Each line is one entry with a Unix-millisecond `timestamp`; v2 entries also carr
 | `compaction` | Parent, summary, first retained entry, token estimate, provider/model and summary-generation usage |
 | `branch_summary` | Named summary with a durable parent in the entry tree |
 
-Legacy unversioned message-only JSONL remains readable. Runtime dates are `Date`; API/import-export dates are ISO strings; persisted entry dates are numbers. `serializeSession()` does not write JSONL—it converts a whole session for JSON transport. This remains an AiHarness v2 format, not Pi v3, even though RPC can project its entries into a Pi-shaped tree.
+Legacy unversioned message-only JSONL remains readable. Runtime dates are `Date`; API/import-export dates are ISO strings; persisted entry dates are numbers. `serializeSession()` does not write JSONL—it converts a whole session for JSON transport. This remains an AiHarness v2 format; RPC tree responses are transport projections rather than the persisted representation.
 
 ## Critical Flows
 
@@ -53,9 +53,9 @@ SessionManager.addCommand -> append command -> advance leaf -> update memory/eve
 SessionManager.getRawEntries -> complete journal, including pre-compaction and abandoned entries
 ```
 
-The manager maintains the same journal semantics in process memory under `--no-session`. Saving metadata merges known entries without deleting durable descendants, although v2 metadata updates still rewrite the custom file rather than providing Pi's canonical append-only v3 format. Await every write before reporting success. `JsonlSessionStore` validates IDs, opens only regular non-symlink files, and forces owner-only permissions.
+The manager maintains the same journal semantics in process memory under `--no-session`. Saving metadata merges known entries without deleting durable descendants, although v2 metadata updates still rewrite the file rather than using an append-only metadata revision. Await every write before reporting success. `JsonlSessionStore` validates IDs, opens only regular non-symlink files, and forces owner-only permissions.
 
-CLI and RPC choose storage in this order: an explicit `--session <path>` parent, `--session-dir`, `PI_CODING_AGENT_SESSION_DIR`, legacy `AI_HARNESS_SESSIONS_DIR`, merged Pi `sessionDir`, then `~/.ai-harness/sessions`. Project `sessionDir` is the only `.pi/settings.json` field read before trust. `--no-session` bypasses the store regardless of the resolved directory.
+CLI and RPC choose storage in this order: an explicit `--session <path>` parent, `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, merged agent setting `sessionDir`, then `~/.ai-harness/sessions`. Project `sessionDir` is the only `.ai-harness/settings.json` field read before trust. `--no-session` bypasses the store regardless of the resolved directory.
 
 ### Effective context and compaction
 
@@ -65,7 +65,7 @@ CLI and RPC choose storage in this order: an explicit `--session <path>` parent,
 4. Append a `compaction` entry only after successful completion, including its parent and summary-call provider/model/usage when available.
 5. Recompute effective context and emit metrics/sequenced events.
 
-Cancellation must not apply a partial summary. Compaction entries remain in the journal while replaced messages disappear only from effective model context. CLI and RPC initialize Core policy from Pi `compaction.enabled`, `reserveTokens`, `keepRecentTokens`, and exact `modelOverrides["provider/model"]`; the policy is resolved for the startup model and currently requires restart after settings or model changes. `branchSummary` settings are validated but branch-summary generation is not yet wired to them.
+Cancellation must not apply a partial summary. Compaction entries remain in the journal while replaced messages disappear only from effective model context. CLI and RPC initialize Core policy from agent settings `compaction.enabled`, `reserveTokens`, `keepRecentTokens`, and exact `modelOverrides["provider/model"]`; the policy is resolved for the startup model and currently requires restart after settings or model changes. `branchSummary` settings are validated but branch-summary generation is not yet wired to them.
 
 ### Fork versus clone
 
@@ -75,7 +75,7 @@ Cancellation must not apply a partial summary. Compaction entries remain in the 
 | Startup/copy fork | Creates a related session from a selected durable path for flows that require a separate file. |
 | Clone | Creates an independent root, remaps active message/command IDs and internal parents, clears branch lineage, and records `metadata.clonedFromSessionId`. |
 
-Raw RPC entries/tree include all retained branches; normal messages, fork candidates, and effective context follow only the active parent chain. Branch summaries and compactions also advance that chain. The format is still v2, so labels, clone handling for every custom entry, and unmodified Pi SDK interoperability remain incomplete.
+Raw RPC entries/tree include all retained branches; normal messages, fork candidates, and effective context follow only the active parent chain. Branch summaries and compactions also advance that chain. The format is still v2, so labels and clone handling for every custom entry remain incomplete.
 
 ### Web windows
 

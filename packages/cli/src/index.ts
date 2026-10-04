@@ -35,7 +35,6 @@ import type {
   ThinkingLevel,
   ToolCall,
 } from '@ai-harness/core';
-import path from 'node:path';
 import readline from 'readline';
 import chalk from 'chalk';
 import { CommandHandler } from './commands/handler.js';
@@ -197,7 +196,6 @@ async function main(): Promise<void> {
       const cwd = process.cwd();
       reportAgentSettingsDiagnostics(await loadAgentSettings({
         cwd,
-        projectSettingsPath: path.join(cwd, '.pi', 'settings.json'),
         projectTrusted: await trustManager.isTrusted(cwd),
       }));
       const search = typeof cliArguments.listModels === 'string' ? cliArguments.listModels : undefined;
@@ -261,14 +259,12 @@ async function main(): Promise<void> {
   await trustManager.load();
   let settingsResolution = await loadAgentSettings({
     cwd: workspaceCwd,
-    projectSettingsPath: path.join(workspaceCwd, '.pi', 'settings.json'),
     projectTrusted: await trustManager.isTrusted(workspaceCwd),
   });
   reportAgentSettingsDiagnostics(settingsResolution);
   const reloadAgentSettings = async (): Promise<void> => {
     settingsResolution = await loadAgentSettings({
       cwd: workspaceCwd,
-      projectSettingsPath: path.join(workspaceCwd, '.pi', 'settings.json'),
       projectTrusted: await trustManager.isTrusted(workspaceCwd),
     });
     reportAgentSettingsDiagnostics(settingsResolution);

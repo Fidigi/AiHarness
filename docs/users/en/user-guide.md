@@ -185,13 +185,13 @@ Positional prompts are sent in order. `@path` resolves inside the startup worksp
 
 Model resolution checks the complete ID before treating its last colon as a thinking suffix, so IDs containing `/` or `:` remain valid. A bare ID shared by providers resolves only when exactly one matching provider is configured; otherwise qualify it. Fuzzy lookup prefers an undated/`-latest` alias, then the lexically newest ID. Scope patterns are ordered, deduplicated and support case-insensitive `*`, `?` and bracket globs; their first available match starts the run unless `--model` selects another, and `/model cycle` plus RPC reuse that scope. Discovery is timeout- and result-bounded. Catalogues and sessions never retain `--api-key`, but command-line secrets may remain visible in shell history or process listings, so prefer provider environment variables for durable credentials.
 
-Without a session selector, each invocation starts a new session. `--resume` requires an interactive terminal; use `--session` or `--continue` in print/JSON automation. An explicit session path wins; otherwise storage precedence is `--session-dir`, `PI_CODING_AGENT_SESSION_DIR`, `AI_HARNESS_SESSIONS_DIR`, settings `sessionDir`, then the default directory. Incompatible selectors fail before execution.
+Without a session selector, each invocation starts a new session. `--resume` requires an interactive terminal; use `--session` or `--continue` in print/JSON automation. An explicit session path wins; otherwise storage precedence is `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, settings `sessionDir`, then the default directory. Incompatible selectors fail before execution.
 
 The `AI_HARNESS_TUI_MODE=regular|fullscreen` variable also sets the mode. The command-line option takes priority over settings.
 
 ### Agent Settings
 
-The CLI and RPC use AiHarness's Core settings resolver. They read user settings from `<agent-directory>/settings.json` (`PI_CODING_AGENT_DIR`, otherwise `~/.pi/agent`) and, after explicit project trust, overlay the compatibility source `<workspace>/.pi/settings.json`. The only project value read before trust is `sessionDir`. Files must be regular nonsymlink UTF-8 JSON and are capped at 256 KiB; invalid or unknown fields produce a warning without printing their values. Settings are read-only: AiHarness never rewrites them.
+The CLI and RPC use AiHarness's Core settings resolver. They read user settings from `<agent-directory>/settings.json` (`AI_HARNESS_AGENT_DIR`, otherwise `~/.ai-harness`) and, after explicit project trust, overlay `<workspace>/.ai-harness/settings.json`. The only project value read before trust is `sessionDir`. Files must be regular nonsymlink UTF-8 JSON and are capped at 256 KiB; invalid or unknown fields produce a warning without printing their values. Settings are read-only: AiHarness never rewrites them.
 
 A useful starting file is:
 
@@ -216,7 +216,7 @@ Also implemented are exact `modelThinkingLevels`, compaction `modelOverrides`, `
 
 ### Project Instructions and System Prompts
 
-AiHarness applies the same instruction resolver in interactive, print, JSON, RPC, and Web agent runs. Its user-level agent directory is `PI_CODING_AGENT_DIR`, or `~/.pi/agent` when that variable is unset. In that directory, and then in each trusted ancestor from the filesystem root to the startup folder, it selects the first existing filename from this priority list:
+AiHarness applies the same instruction resolver in interactive, print, JSON, RPC, and Web agent runs. Its user-level agent directory is `AI_HARNESS_AGENT_DIR`, or `~/.ai-harness` when that variable is unset. In that directory, and then in each trusted ancestor from the filesystem root to the startup folder, it selects the first existing filename from this priority list:
 
 1. `AGENTS.override.md`
 2. `AGENTS.md`
@@ -226,7 +226,7 @@ AiHarness applies the same instruction resolver in interactive, print, JSON, RPC
 
 The agent-directory file is user-owned and may load before project trust. Ancestor/project files load only after the workspace has been explicitly approved. If you run `/trust add` inside an active CLI, run `/reload` to recompute the instructions. `--no-context-files` disables both user and project context-file discovery, but does not disable `SYSTEM.md` or `APPEND_SYSTEM.md`.
 
-For the base system prompt, `--system-prompt` has highest priority, then trusted `<workspace>/.pi/SYSTEM.md`, then `<agent-directory>/SYSTEM.md`, then the built-in prompt. Without explicit append flags, trusted `<workspace>/.pi/APPEND_SYSTEM.md` takes priority over `<agent-directory>/APPEND_SYSTEM.md`. Repeating `--append-system-prompt` replaces that automatic append-file choice and preserves command-line order. An existing CLI value is read as a path; a nonexistent value is used as literal text. The Web system-prompt setting is always literal, so it cannot unexpectedly read a server path.
+For the base system prompt, `--system-prompt` has highest priority, then trusted `<workspace>/.ai-harness/SYSTEM.md`, then `<agent-directory>/SYSTEM.md`, then the built-in prompt. Without explicit append flags, trusted `<workspace>/.ai-harness/APPEND_SYSTEM.md` takes priority over `<agent-directory>/APPEND_SYSTEM.md`. Repeating `--append-system-prompt` replaces that automatic append-file choice and preserves command-line order. An existing CLI value is read as a path; a nonexistent value is used as literal text. The Web system-prompt setting is always literal, so it cannot unexpectedly read a server path.
 
 Instruction sources must be regular, nonsymlink UTF-8 files and are bounded per file and in aggregate. Their resolved contents are sent to the selected provider but are not copied into session settings. Review project instruction files before trusting a workspace, because they can influence model decisions and tool requests even though tool execution keeps its own trust checks.
 
@@ -373,8 +373,8 @@ Share links expire after 24 hours by default; accepted duration is limited to 1-
 
 The CLI discovers `SKILL.md` files in:
 
-- `~/.agents/skills/`, `~/.ai-harness/skills/`, and `<agent-directory>/skills/`;
-- trusted `<project>/.agents/skills/`, `<project>/.ai-harness/skills/`, and `<project>/.pi/skills/`;
+- `~/.agents/skills/` and `<agent-directory>/skills/` (default: `~/.ai-harness/skills/`);
+- trusted `<project>/.agents/skills/` and `<project>/.ai-harness/skills/`;
 - additional user/project `skills` selectors from `settings.json`.
 
 Example `~/.ai-harness/skills/review/SKILL.md`:
@@ -396,7 +396,7 @@ Commands:
 /skill:review Text to review
 ```
 
-Markdown prompts are searched in `~/.ai-harness/prompts/`, `<agent-directory>/prompts/`, and trusted `<project>/.ai-harness/prompts/`, `<project>/.pi/prompts/`, and `<project>/prompts/`. Settings `skills`/`prompts` paths resolve from their declaring settings directory and support ordered plain or `+` includes, exact `-` exclusions, and `!` glob exclusions. Resource files are symlink-free, UTF-8, and capped at 1 MiB.
+Markdown prompts are searched in `<agent-directory>/prompts/` (default: `~/.ai-harness/prompts/`) and trusted `<project>/.ai-harness/prompts/` and `<project>/prompts/`. Settings `skills`/`prompts` paths resolve from their declaring settings directory and support ordered plain or `+` includes, exact `-` exclusions, and `!` glob exclusions. Resource files are symlink-free, UTF-8, and capped at 1 MiB.
 
 ```markdown
 ---

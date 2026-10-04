@@ -132,10 +132,10 @@ describe('startup session resolution', () => {
     expect(resolveStartupSessionDirectory(
       args(),
       '/workspace',
-      { PI_CODING_AGENT_SESSION_DIR: '~/compat-sessions', AI_HARNESS_SESSIONS_DIR: '~/legacy' },
+      { AI_HARNESS_SESSIONS_DIR: '~/configured-sessions' },
       '/home/test',
       './settings-sessions',
-    )).toBe(path.resolve('/home/test/compat-sessions'));
+    )).toBe(path.resolve('/home/test/configured-sessions'));
     expect(resolveStartupSessionDirectory(
       args(),
       '/workspace',
