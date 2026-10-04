@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -187,6 +187,145 @@ describe('combined Web server', () => {
       expect(serialized).not.toContain('global-literal-secret');
       expect(serialized).not.toContain('project-literal-secret');
       expect(serialized).not.toContain('project-command-must-not-run');
+    } finally {
+      await Promise.all([
+        rm(globalFile, { force: true }),
+        rm(project, { recursive: true, force: true }),
+      ]);
+    }
+  });
+
+  it('serializes atomic MCP activation, removal, and opaque one-shot restoration', async () => {
+    const dataDir = path.join(webRoot, '.data');
+    const globalFile = path.join(dataDir, 'mcp.json');
+    const project = path.join(webRoot, `mcp-mutation-${Date.now()}`);
+    const projectDirectory = path.join(project, '.ai-harness');
+    const projectFile = path.join(projectDirectory, 'mcp.json');
+    await mkdir(projectDirectory, { recursive: true });
+    await writeFile(globalFile, JSON.stringify({
+      version: 1,
+      mcpServers: {
+        alpha: { command: 'node' },
+        beta: { command: 'node' },
+        secret: { command: 'node', env: { TOKEN: 'SERVER-ONLY-UNDO-SECRET' } },
+      },
+    }));
+    await writeFile(projectFile, JSON.stringify({
+      mcpServers: { local: { command: 'node', env: { TOKEN: 'PROJECT-UNDO-SECRET' } } },
+    }));
+    try {
+      const initial = await fetch(`${baseUrl}/api/mcp?cwd=${encodeURIComponent(project)}`)
+        .then(response => response.json()) as {
+          files: Array<{ scope: string; revision?: string }>;
+        };
+      const initialRevision = initial.files.find(file => file.scope === 'global')!.revision!;
+      const enabled = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-enabled', scope: 'global', cwd: project,
+          revision: initialRevision, names: ['alpha', 'beta'], enabled: false,
+        }),
+      });
+      expect(enabled.status).toBe(200);
+      expect(enabled.headers.get('cache-control')).toBe('no-store');
+      const activated = await enabled.json() as {
+        inventory: { files: Array<{ scope: string; revision?: string }>; servers: Array<{ name: string; enabled: boolean }> };
+        outcomes: Array<{ name: string; status: string }>;
+      };
+      expect(activated.outcomes).toEqual([
+        { name: 'alpha', status: 'changed' },
+        { name: 'beta', status: 'changed' },
+      ]);
+      expect(activated.inventory.servers.filter(server => ['alpha', 'beta'].includes(server.name)))
+        .toEqual(expect.arrayContaining([
+          expect.objectContaining({ name: 'alpha', enabled: false }),
+          expect.objectContaining({ name: 'beta', enabled: false }),
+        ]));
+
+      const stale = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-enabled', scope: 'global', revision: initialRevision,
+          names: ['alpha'], enabled: true,
+        }),
+      });
+      expect(stale.status).toBe(409);
+      expect(await stale.json()).toMatchObject({ code: 'stale-revision', uncertain: false });
+      expect((JSON.parse(await readFile(globalFile, 'utf8')) as { mcpServers: Record<string, { enabled?: boolean }> })
+        .mcpServers.alpha?.enabled).toBe(false);
+
+      const currentRevision = activated.inventory.files.find(file => file.scope === 'global')!.revision!;
+      const removedResponse = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'remove', scope: 'global', cwd: project, revision: currentRevision, name: 'secret',
+        }),
+      });
+      expect(removedResponse.status).toBe(200);
+      const removedText = await removedResponse.text();
+      expect(removedText).not.toContain('SERVER-ONLY-UNDO-SECRET');
+      expect(removedText).not.toContain('entry');
+      const removed = JSON.parse(removedText) as { undo: { token: string; expiresAt: string } };
+      expect(removed.undo).toMatchObject({ token: expect.any(String), expiresAt: expect.any(String) });
+      expect((JSON.parse(await readFile(globalFile, 'utf8')) as { mcpServers: Record<string, unknown> })
+        .mcpServers.secret).toBeUndefined();
+
+      const restoredResponse = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restore', cwd: project, undoToken: removed.undo.token }),
+      });
+      expect(restoredResponse.status).toBe(200);
+      expect(await restoredResponse.text()).not.toContain('SERVER-ONLY-UNDO-SECRET');
+      expect((JSON.parse(await readFile(globalFile, 'utf8')) as {
+        mcpServers: Record<string, { env?: Record<string, string> }>;
+      }).mcpServers.secret?.env?.TOKEN).toBe('SERVER-ONLY-UNDO-SECRET');
+      expect((await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restore', cwd: project, undoToken: removed.undo.token }),
+      })).status).toBe(404);
+
+      const lockedInventory = await fetch(`${baseUrl}/api/mcp?cwd=${encodeURIComponent(project)}`)
+        .then(response => response.json()) as { files: Array<{ scope: string; revision?: string }> };
+      const lockedProjectRevision = lockedInventory.files.find(file => file.scope === 'project')?.revision;
+      expect(lockedProjectRevision).toBeUndefined();
+      const lockedMutation = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'remove', scope: 'project', cwd: project, revision: null, name: 'local',
+        }),
+      });
+      expect(lockedMutation.status).toBe(403);
+      expect(await lockedMutation.json()).toMatchObject({ code: 'trust-required' });
+      expect(await readFile(projectFile, 'utf8')).toContain('PROJECT-UNDO-SECRET');
+
+      await fetch(`${baseUrl}/api/workspaces/trust`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: project, confirm: true }),
+      });
+      const trusted = await fetch(`${baseUrl}/api/mcp?cwd=${encodeURIComponent(project)}`)
+        .then(response => response.json()) as { files: Array<{ scope: string; revision?: string }> };
+      const projectRevision = trusted.files.find(file => file.scope === 'project')!.revision!;
+      const projectRemoval = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'remove', scope: 'project', cwd: project, revision: projectRevision, name: 'local',
+        }),
+      }).then(response => response.json()) as { undo: { token: string } };
+      await fetch(`${baseUrl}/api/workspaces/trust`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: project, confirm: true }),
+      });
+      const refusedRestore = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restore', cwd: project, undoToken: projectRemoval.undo.token }),
+      });
+      expect(refusedRestore.status).toBe(403);
+      expect(await refusedRestore.json()).toMatchObject({ code: 'trust-required' });
+      expect((await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restore', cwd: project, undoToken: projectRemoval.undo.token }),
+      })).status).toBe(404);
     } finally {
       await Promise.all([
         rm(globalFile, { force: true }),
@@ -1180,6 +1319,16 @@ describe('combined Web server', () => {
     expect((await fetch(`${baseUrl}/api/models`, {
       headers: { Authorization: 'Bearer user-token' },
     })).status).toBe(200);
+    expect((await fetch(`${baseUrl}/api/mcp`, {
+      headers: { Authorization: 'Bearer user-token' },
+    })).status).toBe(200);
+    expect((await fetch(`${baseUrl}/api/mcp/actions`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer user-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'set-enabled', scope: 'global', revision: null, names: ['alpha'], enabled: false,
+      }),
+    })).status).toBe(403);
     expect((await fetch(`${baseUrl}/api/models/enabled`, {
       method: 'PATCH',
       headers: { Authorization: 'Bearer user-token', 'Content-Type': 'application/json' },

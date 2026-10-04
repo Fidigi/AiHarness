@@ -407,7 +407,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
   ]);
   const providers = structuredClone(options.providers ?? [{ type: 'mock', configured: true }]);
   let modelCatalog = structuredClone(options.modelCatalog ?? mockModelCatalog(providers));
-  const mcpConfig = structuredClone(options.mcpConfig ?? {
+  let mcpConfig = structuredClone(options.mcpConfig ?? {
     files: [
       { scope: 'global', path: '/agent/mcp.json', exists: false, contentRead: false, problems: [] },
       { scope: 'project', path: `${workspace.cwd}/.ai-harness/mcp.json`, exists: false, contentRead: false, problems: [] },
@@ -418,6 +418,35 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       decision: workspace.trusted ? true : null, inherited: false, trustError: false,
     },
   } satisfies McpConfigInventory);
+  let mcpRevisionSequence = 1;
+  for (const file of mcpConfig.files) {
+    if (file.exists && file.contentRead && !file.revision) {
+      file.revision = mcpRevisionSequence.toString(16).padStart(64, '0');
+      mcpRevisionSequence++;
+    }
+  }
+  const mcpUndo = new Map<string, {
+    server: McpConfigInventory['servers'][number]; index: number; revision: string; scope: 'global' | 'project';
+  }>();
+  let mcpUndoSequence = 0;
+  const bumpMcpRevision = (scope: 'global' | 'project'): string => {
+    const revision = mcpRevisionSequence.toString(16).padStart(64, '0');
+    mcpRevisionSequence++;
+    const file = mcpConfig.files.find(item => item.scope === scope);
+    if (file) file.revision = revision;
+    return revision;
+  };
+  const reconcileMcpShadowing = (): void => {
+    const projectNames = new Set(mcpConfig.servers
+      .filter(server => server.scope === 'project' && server.valid)
+      .map(server => server.name));
+    const globalNames = new Set(mcpConfig.servers.filter(server => server.scope === 'global').map(server => server.name));
+    mcpConfig.servers = mcpConfig.servers.map(server => ({
+      ...server,
+      shadowedByProject: server.scope === 'global' && projectNames.has(server.name),
+      replacesGlobal: server.scope === 'project' && server.valid && globalNames.has(server.name),
+    }));
+  };
   let pluginCatalog = structuredClone(options.pluginCatalog ?? mockPluginCatalog(workspace));
   let skillCatalog = structuredClone(options.skillCatalog ?? mockSkillCatalog(workspace));
   let skillRegistry = structuredClone(options.skillRegistry ?? {
@@ -669,6 +698,77 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       await fulfillJson(route, customModels.find(model => model.key === `${input.provider}:${input.id}`)); return;
     }
     if (url.pathname === '/api/mcp' && method === 'GET') { await fulfillJson(route, mcpConfig); return; }
+    if (url.pathname === '/api/mcp/actions' && method === 'POST') {
+      const input = body as Record<string, any>;
+      if (input.action === 'restore') {
+        const record = mcpUndo.get(String(input.undoToken));
+        if (record) mcpUndo.delete(String(input.undoToken));
+        if (!record) {
+          await fulfillJson(route, {
+            error: 'The MCP restoration token is unavailable or expired.',
+            code: 'target-not-found', uncertain: false,
+          }, 404); return;
+        }
+        const file = mcpConfig.files.find(item => item.scope === record.scope);
+        if ((file?.revision ?? null) !== record.revision) {
+          await fulfillJson(route, {
+            error: 'The MCP configuration changed; reload it before retrying.',
+            code: 'stale-revision', uncertain: false,
+          }, 409); return;
+        }
+        if (mcpConfig.servers.some(server => server.scope === record.scope && server.name === record.server.name)) {
+          await fulfillJson(route, {
+            error: 'The MCP server name is already configured.', code: 'target-conflict', uncertain: false,
+          }, 409); return;
+        }
+        mcpConfig.servers.splice(Math.min(record.index, mcpConfig.servers.length), 0, record.server);
+        bumpMcpRevision(record.scope);
+        reconcileMcpShadowing();
+        await fulfillJson(route, { inventory: structuredClone(mcpConfig) }); return;
+      }
+
+      const scope = input.scope === 'project' ? 'project' : 'global';
+      const file = mcpConfig.files.find(item => item.scope === scope);
+      if ((file?.revision ?? null) !== (input.revision ?? null)) {
+        await fulfillJson(route, {
+          error: 'The MCP configuration changed; reload it before retrying.',
+          code: 'stale-revision', uncertain: false,
+        }, 409); return;
+      }
+      if (input.action === 'set-enabled') {
+        let changed = false;
+        const outcomes = (Array.isArray(input.names) ? input.names : []).map((name: string) => {
+          const server = mcpConfig.servers.find(item => item.scope === scope && item.name === name);
+          if (!server) return { name, status: 'missing' };
+          if (!server.valid) return { name, status: 'invalid' };
+          if (server.enabled === input.enabled) return { name, status: 'unchanged' };
+          server.enabled = input.enabled === true;
+          changed = true;
+          return { name, status: 'changed' };
+        });
+        if (changed) bumpMcpRevision(scope);
+        await fulfillJson(route, { inventory: structuredClone(mcpConfig), outcomes }); return;
+      }
+      if (input.action === 'remove') {
+        const index = mcpConfig.servers.findIndex(server => server.scope === scope && server.name === input.name);
+        if (index < 0) {
+          await fulfillJson(route, {
+            error: 'The MCP server no longer exists.', code: 'target-not-found', uncertain: false,
+          }, 404); return;
+        }
+        const [server] = mcpConfig.servers.splice(index, 1);
+        const revision = bumpMcpRevision(scope);
+        reconcileMcpShadowing();
+        mcpUndoSequence++;
+        const token = `00000000-0000-4000-8000-${String(mcpUndoSequence).padStart(12, '0')}`;
+        mcpUndo.set(token, { server: server!, index, revision, scope });
+        await fulfillJson(route, {
+          inventory: structuredClone(mcpConfig),
+          undo: { token, expiresAt: new Date(Date.now() + 60_000).toISOString() },
+        }); return;
+      }
+      await fulfillJson(route, { error: 'Action MCP invalide.', code: 'invalid-request', uncertain: false }, 400); return;
+    }
     if (url.pathname === '/api/tools' && method === 'GET') { await fulfillJson(route, toolSettings); return; }
     if (url.pathname === '/api/tools' && method === 'PATCH') {
       const input = body as { enabledTools?: string[]; toolPreset?: ToolSettings['preset']; powershellEnabled?: boolean; projectId?: string };

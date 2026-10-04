@@ -262,6 +262,80 @@ test.describe('Settings and authentication', () => {
     await expect(section).toContainText(MCP_FILE_PROBLEM_MESSAGES['invalid-shape']);
   });
 
+  test('active et désactive les serveurs MCP par ligne ou groupe en une requête', async ({ page }) => {
+    const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const global = section.locator('fieldset[data-scope="global"]');
+
+    await global.getByRole('button', { name: 'Disable all', exact: true }).click();
+    await expect(global.getByRole('article', { name: 'remote-docs: Disabled', exact: true })).toBeVisible();
+    await expect(global.getByRole('article', { name: 'shared: Replaced by project', exact: true })).toBeVisible();
+    await expect(section).toContainText('MCP configuration updated.');
+    const groupRequest = api.requests.find(request => request.path === '/api/mcp/actions');
+    expect(groupRequest?.body).toMatchObject({
+      action: 'set-enabled', scope: 'global', names: ['remote-docs', 'shared'], enabled: false,
+    });
+
+    await global.getByRole('button', { name: 'Enable local-tools', exact: true }).click();
+    await expect(global.getByRole('article', { name: 'local-tools: Configured', exact: true })).toBeVisible();
+    const mutationRequests = api.requests.filter(request => request.path === '/api/mcp/actions');
+    expect(mutationRequests).toHaveLength(2);
+    expect(mutationRequests[1]?.body).toMatchObject({
+      action: 'set-enabled', scope: 'global', names: ['local-tools'], enabled: true,
+    });
+  });
+
+  test('confirme une suppression MCP, restaure le focus et utilise un undo opaque', async ({ page }) => {
+    const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const remove = section.getByRole('button', { name: 'Remove remote-docs', exact: true });
+
+    await remove.click();
+    const dialog = page.getByRole('alertdialog', { name: 'Remove MCP server?' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(remove).toBeFocused();
+
+    await remove.click();
+    await dialog.getByRole('button', { name: 'Remove', exact: true }).click();
+    await expect(section.getByRole('article', { name: /remote-docs:/u })).toHaveCount(0);
+    const undo = section.getByRole('button', { name: 'Undo', exact: true });
+    await expect(undo).toBeFocused();
+    const removalRequest = api.requests.find(request => request.path === '/api/mcp/actions'
+      && (request.body as { action?: string } | undefined)?.action === 'remove');
+    expect(removalRequest?.body).toMatchObject({ action: 'remove', scope: 'global', name: 'remote-docs' });
+
+    await undo.click();
+    await expect(section.getByRole('article', { name: 'remote-docs: Configured', exact: true })).toBeVisible();
+    const restoreRequest = api.requests.find(request => request.path === '/api/mcp/actions'
+      && (request.body as { action?: string } | undefined)?.action === 'restore');
+    expect(restoreRequest?.body).toMatchObject({ action: 'restore', undoToken: expect.any(String) });
+    expect(Object.keys(restoreRequest?.body as object)).not.toContain('entry');
+  });
+
+  test('recharge l’inventaire après un échec MCP au résultat incertain', async ({ page }) => {
+    const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
+    await page.route('**/api/mcp/actions', async route => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'uncertain', code: 'write-failed', uncertain: true }),
+      });
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const readsBefore = api.requests.filter(request => request.path === '/api/mcp').length;
+
+    await section.getByRole('button', { name: 'Disable remote-docs', exact: true }).click();
+    await expect(section).toContainText('The action result is uncertain and may have been committed. The inventory was reloaded.');
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/mcp').length)
+      .toBeGreaterThan(readsBefore);
+    await expect(section.getByRole('article', { name: 'remote-docs: Configured', exact: true })).toBeVisible();
+  });
+
   for (const reason of MCP_FILE_PROBLEM_REASONS) {
     test(`localise le diagnostic MCP ${reason} sans afficher le message source`, async ({ page }) => {
       const trustProblem = reason === 'trust-required' || reason === 'trust-unavailable';

@@ -1,5 +1,6 @@
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
-import { lstat, open, realpath } from 'node:fs/promises';
+import { lstat, mkdir, open, realpath, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import type { ProjectTrustManager } from '../security/project-trust.js';
 
@@ -10,6 +11,12 @@ export const MCP_CONFIG_MAX_SERVERS = 200;
 const MCP_CONFIG_MAX_DEPTH = 64;
 const MCP_CONFIG_MAX_STRING_BYTES = 16 * 1024;
 const MCP_CONFIG_MAX_COLLECTION_ENTRIES = 128;
+export const MCP_CONFIG_MAX_MUTATIONS = 100;
+const MCP_CONFIG_LOCK_TIMEOUT_MS = 2_000;
+const MCP_CONFIG_LOCK_STALE_MS = 30_000;
+const MCP_CONFIG_LOCK_HEARTBEAT_MS = 5_000;
+/** Per-process key makes browser revisions useful for equality but not offline secret guessing. */
+const MCP_CONFIG_REVISION_KEY = randomBytes(32);
 const CONTROL_OR_HIDDEN = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/u;
 const VARIABLE_REFERENCE = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g;
 const VARIABLE_ONLY = /^\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)$/;
@@ -45,6 +52,8 @@ export interface McpConfigFileInventory {
   exists: boolean;
   /** False means that no configuration body was opened or parsed. */
   contentRead: boolean;
+  /** Opaque keyed digest of exact bytes. Missing files and unreadable bodies omit it. */
+  revision?: string;
   problems: McpConfigProblem[];
 }
 
@@ -105,6 +114,7 @@ interface ParsedEntry {
 interface FileReadResult {
   info: McpConfigFileInventory;
   text?: string;
+  mode?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -142,6 +152,10 @@ function escapedDisplay(value: string, maxCodePoints = 256): string {
 
 function boundedString(value: unknown): value is string {
   return typeof value === 'string' && Buffer.byteLength(value, 'utf8') <= MCP_CONFIG_MAX_STRING_BYTES;
+}
+
+function contentRevision(bytes: Uint8Array): string {
+  return createHmac('sha256', MCP_CONFIG_REVISION_KEY).update(bytes).digest('hex');
 }
 
 async function readRegularFile(
@@ -239,7 +253,8 @@ async function readRegularFile(
       return { info };
     }
     info.contentRead = true;
-    return { info, text };
+    info.revision = contentRevision(bytes);
+    return { info, text, mode: opened.mode & 0o777 };
   } catch (error) {
     info.problems.push(problem(
       errorCode(error) === 'ELOOP' ? 'unsafe-link' : 'unreadable',
@@ -702,4 +717,568 @@ export async function inspectMcpConfig(
       .map(entry => ({ ...entry.info, sourcePath: escapedDisplay(entry.info.sourcePath, 4_096) })),
     ...(project ? { project } : {}),
   };
+}
+
+export type McpConfigMutationErrorCode =
+  | 'invalid-request'
+  | 'trust-required'
+  | 'trust-unavailable'
+  | 'unsafe-path'
+  | 'invalid-config'
+  | 'stale-revision'
+  | 'target-not-found'
+  | 'target-invalid'
+  | 'target-conflict'
+  | 'lock-timeout'
+  | 'write-failed';
+
+/** A fixed, value-free error safe for adapters to classify and present. */
+export class McpConfigMutationError extends Error {
+  readonly code: McpConfigMutationErrorCode;
+  readonly uncertain: boolean;
+
+  constructor(code: McpConfigMutationErrorCode, message: string, uncertain = false) {
+    super(message);
+    this.name = 'McpConfigMutationError';
+    this.code = code;
+    this.uncertain = uncertain;
+  }
+}
+
+export interface McpConfigMutationTarget {
+  agentDir: string;
+  scope: McpConfigScope;
+  cwd?: string;
+  trustManager?: ProjectTrustManager;
+  /** Null means the caller observed no file. Existing files use the exact inventory revision. */
+  expectedRevision: string | null;
+}
+
+export interface McpServerActivationMutation extends McpConfigMutationTarget {
+  names: string[];
+  enabled: boolean;
+}
+
+export type McpServerMutationOutcomeStatus = 'changed' | 'unchanged' | 'missing' | 'invalid';
+
+export interface McpServerMutationOutcome {
+  name: string;
+  status: McpServerMutationOutcomeStatus;
+}
+
+export interface McpServerActivationResult {
+  revision: string | null;
+  changed: boolean;
+  outcomes: McpServerMutationOutcome[];
+}
+
+export interface McpServerRemovalMutation extends McpConfigMutationTarget {
+  name: string;
+}
+
+/** Server-only undo material. Adapters must never serialize entry to an untrusted client. */
+export interface McpRemovedServerRecord {
+  scope: McpConfigScope;
+  cwd?: string;
+  name: string;
+  index: number;
+  entry: unknown;
+  expectedRevision: string | null;
+}
+
+export interface McpServerRemovalResult {
+  revision: string;
+  removed: McpRemovedServerRecord;
+}
+
+export interface RestoreMcpServerOptions {
+  agentDir: string;
+  trustManager?: ProjectTrustManager;
+  record: McpRemovedServerRecord;
+}
+
+export interface McpServerRestoreResult {
+  revision: string;
+}
+
+interface MutationPath {
+  scope: McpConfigScope;
+  cwd?: string;
+  directory: string;
+  filePath: string;
+}
+
+interface MutableConfig {
+  root: Record<string, unknown>;
+  servers: Record<string, unknown>;
+  indentation: string;
+  eol: '\n' | '\r\n';
+  mode?: number;
+}
+
+interface MutationResult<T> {
+  target: MutationPath;
+  revision: string | null;
+  changed: boolean;
+  value: T;
+}
+
+function mutationError(
+  code: McpConfigMutationErrorCode,
+  message: string,
+  uncertain = false,
+): McpConfigMutationError {
+  return new McpConfigMutationError(code, message, uncertain);
+}
+
+function validateExpectedRevision(value: unknown): asserts value is string | null {
+  if (value !== null && (typeof value !== 'string' || !/^[a-f0-9]{64}$/u.test(value))) {
+    throw mutationError('invalid-request', 'The MCP configuration revision is invalid.');
+  }
+}
+
+function validateMutationName(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !validName(value)) {
+    throw mutationError('invalid-request', 'The MCP server selector is invalid.');
+  }
+}
+
+async function canonicalExistingDirectory(input: string): Promise<string> {
+  try {
+    const canonical = await realpath(path.resolve(input));
+    const info = await lstat(canonical);
+    if (info.isSymbolicLink() || !info.isDirectory()) {
+      throw mutationError('unsafe-path', 'The MCP project root is not a safe directory.');
+    }
+    return canonical;
+  } catch (error) {
+    if (error instanceof McpConfigMutationError) throw error;
+    throw mutationError('unsafe-path', 'The MCP project root is not a safe directory.');
+  }
+}
+
+async function canonicalAgentDirectory(input: string): Promise<string> {
+  const resolved = path.resolve(input);
+  try {
+    const canonical = await realpath(resolved);
+    const info = await lstat(canonical);
+    if (!info.isDirectory()) throw mutationError('unsafe-path', 'The MCP data root is not a safe directory.');
+    return canonical;
+  } catch (error) {
+    if (error instanceof McpConfigMutationError) throw error;
+    if (errorCode(error) !== 'ENOENT') {
+      throw mutationError('unsafe-path', 'The MCP data root is not a safe directory.');
+    }
+  }
+
+  try {
+    await mkdir(resolved, { recursive: true, mode: 0o700 });
+    const canonical = await realpath(resolved);
+    const info = await lstat(canonical);
+    if (!info.isDirectory()) throw new Error('not a directory');
+    return canonical;
+  } catch {
+    throw mutationError('unsafe-path', 'The MCP data root cannot be created safely.');
+  }
+}
+
+async function requireProjectMutationTrust(
+  cwd: string,
+  trustManager: ProjectTrustManager | undefined,
+): Promise<void> {
+  if (!trustManager) {
+    throw mutationError('trust-unavailable', 'Project trust is unavailable for this MCP mutation.');
+  }
+  let status: Awaited<ReturnType<ProjectTrustManager['getStatus']>>;
+  try {
+    status = await trustManager.getStatus(cwd, { includeContextFiles: false });
+  } catch {
+    throw mutationError('trust-unavailable', 'Project trust is unavailable for this MCP mutation.');
+  }
+  if (status.decisionError) {
+    throw mutationError('trust-unavailable', 'Project trust is unavailable for this MCP mutation.');
+  }
+  if (status.decision !== true) {
+    throw mutationError('trust-required', 'A persisted project allow is required for this MCP mutation.');
+  }
+}
+
+async function ensureMutationDirectory(directory: string, project: boolean): Promise<void> {
+  try {
+    const info = await lstat(directory);
+    if (info.isSymbolicLink() || !info.isDirectory()) {
+      throw mutationError('unsafe-path', 'The MCP configuration directory is not safe.');
+    }
+    return;
+  } catch (error) {
+    if (error instanceof McpConfigMutationError) throw error;
+    if (errorCode(error) !== 'ENOENT') {
+      throw mutationError('unsafe-path', 'The MCP configuration directory is not safe.');
+    }
+  }
+
+  try {
+    await mkdir(directory, { recursive: !project, mode: project ? 0o755 : 0o700 });
+    const info = await lstat(directory);
+    if (info.isSymbolicLink() || !info.isDirectory()) throw new Error('unsafe directory');
+  } catch (error) {
+    if (errorCode(error) !== 'EEXIST') {
+      throw mutationError('unsafe-path', 'The MCP configuration directory cannot be created safely.');
+    }
+    const info = await lstat(directory).catch(() => undefined);
+    if (!info || info.isSymbolicLink() || !info.isDirectory()) {
+      throw mutationError('unsafe-path', 'The MCP configuration directory is not safe.');
+    }
+  }
+}
+
+async function resolveMutationPath(options: McpConfigMutationTarget): Promise<MutationPath> {
+  if (options.scope !== 'global' && options.scope !== 'project') {
+    throw mutationError('invalid-request', 'The MCP configuration scope is invalid.');
+  }
+  validateExpectedRevision(options.expectedRevision);
+
+  if (options.scope === 'global') {
+    const directory = await canonicalAgentDirectory(options.agentDir);
+    await ensureMutationDirectory(directory, false);
+    return { scope: 'global', directory, filePath: path.join(directory, 'mcp.json') };
+  }
+  if (typeof options.cwd !== 'string' || !options.cwd) {
+    throw mutationError('invalid-request', 'A project is required for this MCP mutation.');
+  }
+  const cwd = await canonicalExistingDirectory(options.cwd);
+  await requireProjectMutationTrust(cwd, options.trustManager);
+  const directory = path.join(cwd, '.ai-harness');
+  await ensureMutationDirectory(directory, true);
+  return { scope: 'project', cwd, directory, filePath: path.join(directory, 'mcp.json') };
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+async function acquireMcpConfigLock(filePath: string): Promise<() => Promise<void>> {
+  const lockPath = `${filePath}.lock`;
+  const deadline = Date.now() + MCP_CONFIG_LOCK_TIMEOUT_MS;
+
+  while (true) {
+    let candidateHandle;
+    let candidateIdentity: { dev: number; ino: number } | undefined;
+    try {
+      const handle = await open(lockPath, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_RDWR, 0o600);
+      candidateHandle = handle;
+      const opened = await handle.stat();
+      candidateIdentity = opened;
+      await handle.writeFile(`${process.pid}:${randomUUID()}\n`, 'utf8');
+      await handle.sync();
+      const heartbeat = setInterval(() => {
+        const now = new Date();
+        void handle.utimes(now, now).catch(() => undefined);
+      }, MCP_CONFIG_LOCK_HEARTBEAT_MS);
+      heartbeat.unref?.();
+      let released = false;
+      return async () => {
+        if (released) return;
+        released = true;
+        clearInterval(heartbeat);
+        const current = await lstat(lockPath).catch(() => undefined);
+        await handle.close().catch(() => undefined);
+        if (current && !current.isSymbolicLink() && sameIdentity(opened, current)) {
+          await unlink(lockPath).catch(() => undefined);
+        }
+      };
+    } catch (error) {
+      if (candidateHandle) {
+        await candidateHandle.close().catch(() => undefined);
+        const current = await lstat(lockPath).catch(() => undefined);
+        if (candidateIdentity && current && !current.isSymbolicLink()
+          && sameIdentity(candidateIdentity, current)) {
+          await unlink(lockPath).catch(() => undefined);
+        }
+      }
+      if (errorCode(error) !== 'EEXIST') {
+        throw mutationError('lock-timeout', 'The MCP configuration lock cannot be acquired.');
+      }
+      const existing = await lstat(lockPath).catch(() => undefined);
+      if (!existing || existing.isSymbolicLink() || !existing.isFile()) {
+        throw mutationError('unsafe-path', 'The MCP configuration lock path is not safe.');
+      }
+      if (Date.now() - existing.mtimeMs > MCP_CONFIG_LOCK_STALE_MS) {
+        const current = await lstat(lockPath).catch(() => undefined);
+        if (current && !current.isSymbolicLink() && sameIdentity(existing, current)) {
+          await unlink(lockPath).catch(() => undefined);
+          continue;
+        }
+      }
+      if (Date.now() >= deadline) {
+        throw mutationError('lock-timeout', 'The MCP configuration is busy.');
+      }
+      await sleep(20 + Math.floor(Math.random() * 20));
+    }
+  }
+}
+
+function parseMutableConfig(text: string | undefined, mode: number | undefined): MutableConfig {
+  if (text === undefined) {
+    const servers: Record<string, unknown> = {};
+    return { root: { version: 1, mcpServers: servers }, servers, indentation: '  ', eol: '\n' };
+  }
+
+  const jsonc = normalizeJsonc(text);
+  if (jsonc.tooDeep) {
+    throw mutationError('invalid-config', 'The MCP configuration exceeds its nesting limit.');
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonc.normalized ?? '') as unknown;
+  } catch {
+    throw mutationError('invalid-config', 'The MCP configuration is not valid JSON or JSONC.');
+  }
+  if (!isRecord(parsed) || (parsed.version !== undefined && parsed.version !== 1)) {
+    throw mutationError('invalid-config', 'The MCP configuration shape is invalid.');
+  }
+  if (parsed.mcpServers !== undefined && !isRecord(parsed.mcpServers)) {
+    throw mutationError('invalid-config', 'The MCP server collection is invalid.');
+  }
+  const servers = isRecord(parsed.mcpServers) ? parsed.mcpServers : {};
+  if (Object.keys(servers).length > MCP_CONFIG_MAX_SERVERS) {
+    throw mutationError('invalid-config', 'The MCP configuration contains too many servers.');
+  }
+  if (parsed.mcpServers === undefined) parsed.mcpServers = servers;
+  const indentationMatch = text.match(/(?:^|\r?\n)([\t ]{1,10})"/u);
+  return {
+    root: parsed,
+    servers,
+    indentation: indentationMatch?.[1] ?? '  ',
+    eol: text.includes('\r\n') ? '\r\n' : '\n',
+    ...(mode === undefined ? {} : { mode }),
+  };
+}
+
+function serializeMutableConfig(config: MutableConfig): Buffer {
+  const serialized = `${JSON.stringify(config.root, null, config.indentation).replace(/\n/gu, config.eol)}${config.eol}`;
+  const bytes = Buffer.from(serialized, 'utf8');
+  if (bytes.length > MCP_CONFIG_MAX_BYTES) {
+    throw mutationError('invalid-config', 'The MCP configuration would exceed its size limit.');
+  }
+  return bytes;
+}
+
+async function assertDirectoryIdentity(
+  directory: string,
+  expected: { dev: number; ino: number },
+): Promise<void> {
+  const current = await lstat(directory).catch(() => undefined);
+  if (!current || current.isSymbolicLink() || !current.isDirectory() || !sameIdentity(expected, current)) {
+    throw mutationError('unsafe-path', 'The MCP configuration directory changed during the mutation.');
+  }
+}
+
+async function atomicWriteMcpConfig(
+  target: MutationPath,
+  parentIdentity: { dev: number; ino: number },
+  bytes: Buffer,
+  existingMode: number | undefined,
+): Promise<string> {
+  const mode = target.scope === 'global' ? 0o600 : (existingMode ?? 0o644);
+  const temporaryPath = path.join(target.directory, `.mcp.json.${process.pid}.${randomUUID()}.tmp`);
+  let handle;
+  let renameAttempted = false;
+  let renameCompleted = false;
+  try {
+    handle = await open(temporaryPath, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY, mode);
+    const temporaryIdentity = await handle.stat();
+    await handle.writeFile(bytes);
+    await handle.chmod(mode);
+    await handle.sync();
+    await assertDirectoryIdentity(target.directory, parentIdentity);
+    renameAttempted = true;
+    await rename(temporaryPath, target.filePath);
+    renameCompleted = true;
+    const committed = await lstat(target.filePath);
+    const openedAfterRename = await handle.stat();
+    if (committed.isSymbolicLink() || !committed.isFile()
+      || !sameIdentity(temporaryIdentity, openedAfterRename)
+      || !sameIdentity(temporaryIdentity, committed)) {
+      throw mutationError('write-failed', 'The MCP atomic replacement identity could not be verified.', true);
+    }
+    await handle.close();
+    handle = undefined;
+    const directoryHandle = await open(target.directory, fsConstants.O_RDONLY);
+    try {
+      await directoryHandle.sync();
+    } finally {
+      await directoryHandle.close();
+    }
+    await assertDirectoryIdentity(target.directory, parentIdentity);
+    return contentRevision(bytes);
+  } catch (error) {
+    if (error instanceof McpConfigMutationError && !renameCompleted) throw error;
+    throw mutationError(
+      'write-failed',
+      'The MCP configuration could not be committed atomically.',
+      renameAttempted || renameCompleted,
+    );
+  } finally {
+    await handle?.close().catch(() => undefined);
+    await unlink(temporaryPath).catch(() => undefined);
+  }
+}
+
+function classifyReadFailure(file: McpConfigFileInventory): McpConfigMutationError {
+  if (file.problems.some(item => item.reason === 'unsafe-link' || item.reason === 'not-regular')) {
+    return mutationError('unsafe-path', 'The MCP configuration path is not safe to mutate.');
+  }
+  return mutationError('invalid-config', 'The MCP configuration cannot be mutated safely.');
+}
+
+async function mutateMcpConfig<T>(
+  options: McpConfigMutationTarget,
+  apply: (config: MutableConfig) => { changed: boolean; value: T },
+): Promise<MutationResult<T>> {
+  const target = await resolveMutationPath(options);
+  const release = await acquireMcpConfigLock(target.filePath);
+  try {
+    if (target.scope === 'project') {
+      await requireProjectMutationTrust(target.cwd!, options.trustManager);
+    }
+    const parent = await lstat(target.directory);
+    if (parent.isSymbolicLink() || !parent.isDirectory()) {
+      throw mutationError('unsafe-path', 'The MCP configuration directory is not safe.');
+    }
+    const read = await readRegularFile(target.filePath, target.scope, {
+      dev: parent.dev,
+      ino: parent.ino,
+      path: target.directory,
+    });
+    if (read.info.problems.length > 0) throw classifyReadFailure(read.info);
+    const currentRevision = read.info.revision ?? null;
+    if (currentRevision !== options.expectedRevision) {
+      throw mutationError('stale-revision', 'The MCP configuration changed; reload it before retrying.');
+    }
+    const config = parseMutableConfig(read.text, read.mode);
+    const outcome = apply(config);
+    if (!outcome.changed) {
+      return { target, revision: currentRevision, changed: false, value: outcome.value };
+    }
+    if (target.scope === 'project') {
+      await requireProjectMutationTrust(target.cwd!, options.trustManager);
+    }
+    const bytes = serializeMutableConfig(config);
+    const revision = await atomicWriteMcpConfig(target, parent, bytes, config.mode);
+    return { target, revision, changed: true, value: outcome.value };
+  } finally {
+    await release();
+  }
+}
+
+/** Enable or disable one bounded set in one lock and at most one atomic file replacement. */
+export async function setMcpServersEnabled(
+  options: McpServerActivationMutation,
+): Promise<McpServerActivationResult> {
+  if (typeof options.enabled !== 'boolean' || !Array.isArray(options.names)
+    || options.names.length < 1 || options.names.length > MCP_CONFIG_MAX_MUTATIONS) {
+    throw mutationError('invalid-request', 'The MCP activation request is invalid or too large.');
+  }
+  const names = new Set<string>();
+  for (const name of options.names) {
+    validateMutationName(name);
+    if (names.has(name)) throw mutationError('invalid-request', 'MCP server selectors must be unique.');
+    names.add(name);
+  }
+
+  const result = await mutateMcpConfig(options, config => {
+    let changed = false;
+    const outcomes: McpServerMutationOutcome[] = [];
+    for (const name of names) {
+      if (!Object.hasOwn(config.servers, name)) {
+        outcomes.push({ name, status: 'missing' });
+        continue;
+      }
+      const entry = config.servers[name];
+      if (!describeEntry(name, entry, options.scope, '').info.valid || !isRecord(entry)) {
+        outcomes.push({ name, status: 'invalid' });
+        continue;
+      }
+      const currentlyEnabled = entry.enabled !== false;
+      if (currentlyEnabled === options.enabled) {
+        outcomes.push({ name, status: 'unchanged' });
+        continue;
+      }
+      if (options.enabled) delete entry.enabled;
+      else entry.enabled = false;
+      changed = true;
+      outcomes.push({ name, status: 'changed' });
+    }
+    return { changed, value: outcomes };
+  });
+  return { revision: result.revision, changed: result.changed, outcomes: result.value };
+}
+
+/** Remove one literal entry. The returned raw record is server-only undo material. */
+export async function removeMcpServer(
+  options: McpServerRemovalMutation,
+): Promise<McpServerRemovalResult> {
+  validateMutationName(options.name);
+  const result = await mutateMcpConfig(options, config => {
+    if (!Object.hasOwn(config.servers, options.name)) {
+      throw mutationError('target-not-found', 'The MCP server no longer exists.');
+    }
+    const entries = Object.entries(config.servers);
+    const index = entries.findIndex(([name]) => name === options.name);
+    const entry = config.servers[options.name];
+    if (!isRecord(entry) || !describeEntry(options.name, entry, options.scope, '').info.valid) {
+      throw mutationError('target-invalid', 'The MCP server entry is invalid and was not removed.');
+    }
+    delete config.servers[options.name];
+    return { changed: true, value: { entry, index } };
+  });
+  if (!result.revision) throw mutationError('write-failed', 'The MCP configuration revision is unavailable.', true);
+  return {
+    revision: result.revision,
+    removed: {
+      scope: options.scope,
+      ...(result.target.scope === 'project' && result.target.cwd ? { cwd: result.target.cwd } : {}),
+      name: options.name,
+      index: result.value.index,
+      entry: result.value.entry,
+      expectedRevision: result.revision,
+    },
+  };
+}
+
+/** Restore a one-time server-side removal record at its bounded original position. */
+export async function restoreMcpServer(
+  options: RestoreMcpServerOptions,
+): Promise<McpServerRestoreResult> {
+  const record = options.record;
+  validateMutationName(record.name);
+  if (!Number.isSafeInteger(record.index) || record.index < 0
+    || (record.scope !== 'global' && record.scope !== 'project')) {
+    throw mutationError('invalid-request', 'The MCP restoration record is invalid.');
+  }
+  const target: McpConfigMutationTarget = {
+    agentDir: options.agentDir,
+    scope: record.scope,
+    expectedRevision: record.expectedRevision,
+    ...(record.scope === 'project' && record.cwd ? { cwd: record.cwd } : {}),
+    ...(options.trustManager ? { trustManager: options.trustManager } : {}),
+  };
+  const result = await mutateMcpConfig(target, config => {
+    if (Object.hasOwn(config.servers, record.name)) {
+      throw mutationError('target-conflict', 'The MCP server name is already configured.');
+    }
+    const entries = Object.entries(config.servers);
+    if (entries.length >= MCP_CONFIG_MAX_SERVERS) {
+      throw mutationError('target-conflict', 'The MCP server collection is full.');
+    }
+    entries.splice(Math.min(record.index, entries.length), 0, [record.name, record.entry]);
+    const restored = Object.fromEntries(entries);
+    // Replace the collection rather than assigning attacker-controlled names such as "__proto__".
+    config.root.mcpServers = restored;
+    config.servers = restored;
+    return { changed: true, value: undefined };
+  });
+  if (!result.revision) throw mutationError('write-failed', 'The MCP configuration revision is unavailable.', true);
+  return { revision: result.revision };
 }

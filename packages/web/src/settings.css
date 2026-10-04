@@ -46,6 +46,17 @@
 .mcp-scope { min-width: 0; margin-top: .75rem; padding: .55rem; border: 1px solid #40527b; border-radius: 6px; }
 .mcp-scope legend { padding: 0 .35rem; color: #e9eef8; font-weight: 600; }
 .mcp-server-card > div:last-child { max-width: 15rem; align-items: center; }
+.mcp-group-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .4rem; margin: 0 0 .5rem; }
+.mcp-row-actions { display: flex; flex-basis: 100%; justify-content: flex-end; gap: .35rem; margin-top: .2rem; }
+.mcp-row-actions button, .mcp-group-actions button { min-height: 2rem; padding: .3rem .55rem; }
+.mcp-remove-button { border-color: #a9485a; color: #ffd8df; }
+.mcp-action-feedback { margin: .55rem 0; }
+.mcp-undo { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: .55rem 0; padding: .55rem .65rem; border: 1px solid #5270a6; border-radius: 6px; background: #10182f; }
+.mcp-remove-backdrop { position: fixed; z-index: 70; inset: 0; display: grid; place-items: center; padding: 1rem; background: rgba(5, 8, 20, .78); }
+.mcp-remove-dialog { width: min(30rem, 100%); padding: 1rem; border: 1px solid #536b9e; border-radius: 8px; color: #e9eef8; background: #16213e; box-shadow: 0 20px 60px #0009; }
+.mcp-remove-dialog h4 { margin-top: 0; }
+.mcp-remove-dialog code { display: block; overflow-wrap: anywhere; margin: .75rem 0; }
+.mcp-dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; }
 .mcp-diagnostics { margin: .35rem 0 0; padding-left: 1.1rem; color: #ff9aad; font-size: .75rem; }
 .mcp-file-diagnostics { margin-top: .8rem; border-top: 1px solid #30466e; padding-top: .65rem; }
 .mcp-file-diagnostics > summary { color: #dce6f8; cursor: pointer; }
@@ -74,12 +85,17 @@ html[data-theme="light"] .mcp-scope { border-color: #b8c3d4; }
 html[data-theme="light"] .mcp-scope legend, html[data-theme="light"] .mcp-file-diagnostics > summary { color: #26344e; }
 html[data-theme="light"] .mcp-file-diagnostics { border-color: #d8dee9; }
 html[data-theme="light"] .mcp-diagnostics { color: #9b1c31; }
+html[data-theme="light"] .mcp-undo { color: #172033; border-color: #b8c3d4; background: #f8f9fc; }
+html[data-theme="light"] .mcp-remove-dialog { color: #172033; border-color: #aeb9ca; background: #fff; }
+html[data-theme="light"] .mcp-remove-button { color: #8b1e32; border-color: #b85b6b; }
 
 @media (max-width: 560px) {
   .shortcut-grid label { grid-template-columns: 1fr; }
   .shortcut-grid small { grid-column: 1; }
   .model-catalog-row, .skill-catalog-row { grid-template-columns: auto minmax(0, 1fr); }
   .settings-resource-card, .custom-resource-editor form { grid-template-columns: 1fr; }
-  .settings-resource-card > div:last-child { justify-content: flex-start; }
+  .settings-resource-card > div:last-child { max-width: none; justify-content: flex-start; }
+  .mcp-group-actions, .mcp-row-actions { justify-content: flex-start; }
+  .mcp-undo { align-items: flex-start; }
   .model-capabilities { grid-column: 2; justify-content: flex-start; }
 }

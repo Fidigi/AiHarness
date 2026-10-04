@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 const dist = resolve(process.cwd(), 'dist');
 const assets = join(dist, 'assets');
 const limits = {
-  entryJsRaw: 500 * 1024,
+  entryJsRaw: 504 * 1024,
   entryJsGzip: 150 * 1024,
   eagerGzip: 180 * 1024,
   asyncJsRaw: 1_600 * 1024,

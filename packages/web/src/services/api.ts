@@ -57,7 +57,7 @@ export function setAuthToken(token: string): void {
   }
 }
 
-function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+export function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   const headers: Record<string, string> = { ...(init.headers as Record<string, string> | undefined) };
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
   return fetch(input, { ...init, headers, credentials: init.credentials ?? 'same-origin' }).then(response => {

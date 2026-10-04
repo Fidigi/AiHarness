@@ -42,6 +42,11 @@ import {
   streamChat,
   uploadFiles,
 } from './api';
+import {
+  removeMcpConfigServer,
+  restoreMcpConfigServer,
+  setMcpConfigEnabled,
+} from './mcp-api';
 
 function sseResponse(chunks: string[], ok = true): Response {
   const encoder = new TextEncoder();
@@ -57,6 +62,7 @@ function sseResponse(chunks: string[], ok = true): Response {
 describe('Web API service', () => {
   afterEach(() => {
     setAuthToken('');
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -261,6 +267,68 @@ describe('Web API service', () => {
       '/api/mcp?cwd=%2Fworkspace%2Fproject',
       { headers: {}, credentials: 'same-origin' },
     );
+  });
+
+  it('posts bounded MCP actions and retains typed certainty without exposing undo material', async () => {
+    const inventory = {
+      files: [{
+        scope: 'global', path: '/agent/mcp.json', exists: true, contentRead: true,
+        revision: 'b'.repeat(64), problems: [],
+      }],
+      servers: [],
+    };
+    const success = { inventory, outcomes: [{ name: 'docs', status: 'changed' }] };
+    const removal = { inventory, undo: { token: 'opaque-token-1234', expiresAt: '2026-10-04T00:01:00.000Z' } };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(success), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(removal), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ inventory }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: 'Reload required.', code: 'stale-revision', uncertain: false,
+      }), { status: 409 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(setMcpConfigEnabled('project', ['docs'], false, 'a'.repeat(64), '/workspace'))
+      .resolves.toEqual({ success: true, data: success });
+    await expect(removeMcpConfigServer('global', 'private', 'b'.repeat(64), '/workspace'))
+      .resolves.toEqual({ success: true, data: removal });
+    await expect(restoreMcpConfigServer('opaque-token-1234', '/workspace'))
+      .resolves.toEqual({ success: true, data: { inventory } });
+    await expect(setMcpConfigEnabled('global', ['docs'], true, 'b'.repeat(64)))
+      .resolves.toEqual({
+        success: false, error: 'Reload required.', code: 'stale-revision', uncertain: false,
+      });
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/mcp/actions', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'set-enabled', scope: 'project', names: ['docs'], enabled: false,
+        revision: 'a'.repeat(64), cwd: '/workspace',
+      }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/mcp/actions', expect.objectContaining({
+      body: JSON.stringify({
+        action: 'remove', scope: 'global', name: 'private', revision: 'b'.repeat(64), cwd: '/workspace',
+      }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/mcp/actions', expect.objectContaining({
+      body: JSON.stringify({ action: 'restore', undoToken: 'opaque-token-1234', cwd: '/workspace' }),
+    }));
+  });
+
+  it('marks an MCP action timeout as uncertain so callers reload inventory', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+    })));
+
+    const pending = setMcpConfigEnabled('global', ['docs'], false, null);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await expect(pending).resolves.toEqual({
+      success: false,
+      error: 'The MCP action timed out.',
+      code: 'timeout',
+      uncertain: true,
+    });
   });
 
   it('loads and explicitly mutates, checks, and reloads the plugin catalogue', async () => {
