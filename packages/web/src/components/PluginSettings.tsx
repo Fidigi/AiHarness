@@ -17,7 +17,7 @@ import {
 import { useSessionStore } from '../store/session-store';
 
 function normalizedSource(value: string): string {
-  return value.trim().replace(/^\$?\s*pi\s+install\s+(\S+)\s*$/i, '$1');
+  return value.trim();
 }
 
 function resourceLabel(kind: PluginResourceKind, count: number): string {

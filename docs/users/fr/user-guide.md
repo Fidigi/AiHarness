@@ -212,7 +212,7 @@ Voici un point de départ :
 }
 ```
 
-Sont aussi appliqués : `modelThinkingLevels` exact, les `modelOverrides` de compaction, `externalEditor`, `quietStartup: true`, `shellPath`, `shellCommandPrefix`, les chemins locaux d’extensions/skills/prompts, `enableSkillCommands` et les modificateurs projet de `defaultTools`. Les options CLI explicites restent prioritaires. `/settings` affiche les valeurs effectives et leurs sources `global`/`project`. `/reload` recharge réglages, instructions, ressources, extensions, outils par défaut et callbacks shell ; redémarrez pour changer le dossier de sessions, le modèle initial, le renderer/thème, les files, la compaction ou les retries. L’installation de packages, les commutateurs d’extensions intégrées, les thèmes ressources, la génération de résumés de branche, codemode, les réglages réseau/proxy/transport/retry provider, les options terminal/image/Markdown détaillées, la télémétrie et les avertissements ne sont pas encore appliqués.
+Sont aussi appliqués : `modelThinkingLevels` exact, les `modelOverrides` de compaction, `externalEditor`, `quietStartup: true`, `shellPath`, `shellCommandPrefix`, les chemins locaux d’extensions/skills/prompts, `enableSkillCommands` et les modificateurs projet de `defaultTools`. Les runs Web détachés et approuvés résolvent aussi `steeringMode` et `followUpMode` au démarrage via le même chargeur et ordonnanceur Core. Les options CLI explicites restent prioritaires. `/settings` affiche les valeurs effectives et leurs sources `global`/`project`. `/reload` recharge réglages, instructions, ressources, extensions, outils par défaut, modes des files interactives et callbacks shell ; redémarrez pour changer le dossier de sessions, le modèle initial, le renderer/thème, les modes de file RPC, la compaction ou les retries. L’installation de packages, les commutateurs d’extensions intégrées, les thèmes ressources, la génération de résumés de branche, codemode, les réglages réseau/proxy/transport/retry provider, les options terminal/image/Markdown détaillées, la télémétrie et les avertissements ne sont pas encore appliqués.
 
 ### Instructions du projet et prompts système
 
@@ -234,14 +234,18 @@ Les sources d’instructions doivent être des fichiers UTF-8 réguliers, non sy
 
 | Action | Raccourci/commande |
 |---|---|
-| Envoyer la saisie | `Entrée` |
+| Envoyer la saisie ou orienter une réponse active | `Entrée` |
+| Mettre du travail en attente après la tâche active | `Alt+Entrée` (`Ctrl+Q` en secours) |
+| Rappeler le texte en file dans l’éditeur | `Alt+↑` |
 | Compléter une commande, un skill ou un prompt | `Tab` |
 | Parcourir l’historique de saisie | `↑` / `↓` |
 | Interrompre une réponse ou une commande shell en cours | `Ctrl+C` |
 | Quitter lorsqu’aucune opération n’est active | `Ctrl+C`, `Ctrl+D` ou `/quit` |
 | Ouvrir `$VISUAL` ou `$EDITOR` | `Ctrl+G` |
 | Rafraîchir l’écran | `Ctrl+L` |
-| Faire défiler le transcript en plein écran | `Alt+↑` / `Alt+↓` |
+| Faire défiler le transcript en plein écran | `Alt+↓` ; `Alt+↑` si aucune saisie n’est en file |
+
+Pendant une réponse, `Entrée` ajoute un message de steering à la prochaine frontière de modèle ; `Alt+Entrée` attend que le steering et la tâche courante soient terminés. `steeringMode` et `followUpMode` indiquent si un seul message ou tous les messages en attente de ce type sont livrés à chaque frontière. `Alt+↑`, `Ctrl+C` ou l’échec du run restitue le texte en attente dans l’éditeur au lieu de le perdre. Les commandes et saisies shell `!` ne sont pas exécutées en parallèle d’une réponse active. Certains terminaux réservent `Alt+Entrée` ; utilisez alors `Ctrl+Q`.
 
 Pour une saisie multi-lignes dans le terminal classique :
 

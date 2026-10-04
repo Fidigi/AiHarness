@@ -212,7 +212,7 @@ A useful starting file is:
 }
 ```
 
-Also implemented are exact `modelThinkingLevels`, compaction `modelOverrides`, `externalEditor`, `quietStartup: true`, `shellPath`, `shellCommandPrefix`, local extension/skill/prompt paths, `enableSkillCommands`, and project `defaultTools` modifiers. Explicit CLI options take priority. Use `/settings` to inspect effective values and `global`/`project` sources. `/reload` refreshes settings, instructions, resources, extensions, tool defaults and shell callbacks; restart to change the session directory, startup model, renderer/theme, queues, compaction or retry policy. Package installation, built-in extension switches, custom theme resources, branch-summary generation, codemode, network/proxy/transport/provider retry, detailed terminal/image/Markdown options, telemetry and warning settings are not yet applied.
+Also implemented are exact `modelThinkingLevels`, compaction `modelOverrides`, `externalEditor`, `quietStartup: true`, `shellPath`, `shellCommandPrefix`, local extension/skill/prompt paths, `enableSkillCommands`, and project `defaultTools` modifiers. Detached trusted Web runs also resolve `steeringMode` and `followUpMode` at run start through the same Core loader and scheduler. Explicit CLI options take priority. Use `/settings` to inspect effective values and `global`/`project` sources. `/reload` refreshes settings, instructions, resources, extensions, tool defaults, interactive queue modes and shell callbacks; restart to change the session directory, startup model, renderer/theme, RPC queue defaults, compaction or retry policy. Package installation, built-in extension switches, custom theme resources, branch-summary generation, codemode, network/proxy/transport/provider retry, detailed terminal/image/Markdown options, telemetry and warning settings are not yet applied.
 
 ### Project Instructions and System Prompts
 
@@ -234,14 +234,18 @@ Instruction sources must be regular, nonsymlink UTF-8 files and are bounded per 
 
 | Action | Shortcut/command |
 |---|---|
-| Send input | Enter |
+| Send input, or steer an active response | Enter |
+| Queue work after the active task | Alt+Enter (`Ctrl+Q` fallback) |
+| Return queued text to the editor | Alt+Up |
 | Complete a command, skill or prompt | Tab |
 | Browse input history | Up / Down |
 | Interrupt an ongoing response or shell command | Ctrl+C |
 | Quit when no operation is active | Ctrl+C, Ctrl+D or /quit |
 | Open $VISUAL or $EDITOR | Ctrl+G |
 | Refresh the screen | Ctrl+L |
-| Scroll transcript in fullscreen | Alt+Up / Alt+Down |
+| Scroll transcript in fullscreen | Alt+Down; Alt+Up when no text is queued |
+
+During a response, `Enter` adds steering at the next model boundary; `Alt+Enter` waits until steering and the current task settle. `steeringMode` and `followUpMode` choose whether one message or every pending message of that kind is delivered at each boundary. `Alt+Up`, `Ctrl+C`, or a failed run returns pending text to the editor instead of discarding it. Commands and `!` shell input are not run concurrently with an active response. Some terminals reserve `Alt+Enter`; use `Ctrl+Q` there.
 
 For multi-line input in classic terminal:
 

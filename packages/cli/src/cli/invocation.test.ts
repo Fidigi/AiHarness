@@ -10,6 +10,10 @@ const temporaryDirectories: string[] = [];
 const entry = fileURLToPath(new URL('../index.ts', import.meta.url));
 const tsxImport = createRequire(import.meta.url).resolve('tsx');
 
+function shellArgument(value: string): string {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
 async function invoke(
   args: string[],
   input?: string,
@@ -230,6 +234,126 @@ describe('CLI invocation contract', () => {
     expect(persisted).toContain('"title":"Named run"');
     expect(persisted.match(/"type":"message"/g)).toHaveLength(4);
   });
+
+  it('queues interactive steering/follow-ups and restores pending input on interrupt', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-interactive-queue-'));
+    temporaryDirectories.push(cwd);
+    const sessionDir = path.join(cwd, 'sessions');
+    const extensionPath = path.join(cwd, 'slow-provider.mjs');
+    await writeFile(extensionPath, `
+      export default api => api.registerProvider('slow', {
+        defaultConfig: { model: 'slow-model' },
+        create(config) {
+          return {
+            config,
+            validateConfig() { return true; },
+            getProviderType() { return 'slow'; },
+            getConfiguredModel() { return this.config.model || 'slow-model'; },
+            setConfiguredModel(model) { this.config.model = model; },
+            async chat() { return { content: 'unused' }; },
+            async streamChat(messages, onChunk, onComplete, onError, options) {
+              try {
+                await new Promise((resolve, reject) => {
+                  const timer = setTimeout(resolve, 250);
+                  options?.signal?.addEventListener('abort', () => {
+                    clearTimeout(timer);
+                    reject(new Error('aborted'));
+                  }, { once: true });
+                });
+                const users = messages.filter(message => message.role === 'user')
+                  .map(message => message.content).join('|');
+                onChunk('answer:' + users);
+                onComplete?.({ content: 'answer:' + users, model: 'slow-model' });
+              } catch (error) { onError?.(error); }
+            },
+          };
+        },
+      });
+    `);
+    const command = [
+      process.execPath, '--import', tsxImport, entry,
+      '--tui-mode', 'regular', '--session-dir', sessionDir, '--session-id', 'queue-test',
+      '--extension', extensionPath, '--provider', 'slow', '--model', 'slow-model',
+    ].map(shellArgument).join(' ');
+    const child = spawn('/usr/bin/script', ['-qefc', command, '/dev/null'], {
+      cwd,
+      env: {
+        ...process.env,
+        HOME: path.join(cwd, 'home'),
+        NO_COLOR: '1',
+        NODE_NO_WARNINGS: '1',
+        AI_HARNESS_DEFAULT_PROVIDER: '',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let output = '';
+    child.stdout.setEncoding('utf8').on('data', chunk => { output += chunk; });
+    child.stderr.setEncoding('utf8').on('data', chunk => { output += chunk; });
+    const waitForOutput = async (value: string, count = 1): Promise<void> => {
+      const deadline = Date.now() + 5_000;
+      while (output.split(value).length - 1 < count) {
+        if (Date.now() >= deadline) throw new Error(`Interactive CLI did not emit: ${value}\n${output}`);
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    };
+
+    try {
+      await waitForOutput('Nouvelle conversation:');
+      child.stdin.write('initial\r');
+      await waitForOutput('┌─ Assistant');
+      child.stdin.write('steer now\r');
+      await waitForOutput('Steering en file');
+      child.stdin.write('later task\u001b\r');
+      await waitForOutput('Follow-up en file');
+      await waitForOutput('answer:initial|steer now|later task');
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      child.stdin.write('abort base\r');
+      await waitForOutput('┌─ Assistant', 4);
+      child.stdin.write('restore me\r');
+      await waitForOutput('Steering en file', 2);
+      child.stdin.write('\u0003');
+      await waitForOutput('[Interrupted]');
+      await new Promise(resolve => setTimeout(resolve, 100));
+      child.stdin.write('\r');
+      await waitForOutput('answer:initial|steer now|later task|abort base|restore me');
+
+      child.stdin.write('/quit\r');
+      child.stdin.end();
+      const code = await new Promise<number | null>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          child.kill('SIGKILL');
+          reject(new Error(`Interactive CLI timed out.\n${output}`));
+        }, 5_000);
+        child.once('error', reject);
+        child.once('close', value => {
+          clearTimeout(timeout);
+          resolve(value);
+        });
+      });
+      expect(code).toBe(0);
+    } finally {
+      if (child.exitCode === null) child.kill('SIGKILL');
+    }
+
+    const entries = (await readFile(path.join(sessionDir, 'queue-test.jsonl'), 'utf8'))
+      .trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
+    expect(entries.filter(entry => entry.type === 'message').map(entry => ({
+      role: entry.role,
+      content: entry.content,
+      queueKind: (entry.metadata as { queueKind?: string } | undefined)?.queueKind,
+    }))).toEqual([
+      { role: 'user', content: 'initial', queueKind: undefined },
+      { role: 'assistant', content: 'answer:initial', queueKind: undefined },
+      { role: 'user', content: 'steer now', queueKind: 'steer' },
+      { role: 'assistant', content: 'answer:initial|steer now', queueKind: undefined },
+      { role: 'user', content: 'later task', queueKind: 'follow-up' },
+      { role: 'assistant', content: 'answer:initial|steer now|later task', queueKind: undefined },
+      { role: 'user', content: 'abort base', queueKind: undefined },
+      { role: 'user', content: 'restore me', queueKind: undefined },
+      { role: 'assistant', content: 'answer:initial|steer now|later task|abort base|restore me', queueKind: undefined },
+    ]);
+  }, 15_000);
 
   it('keeps RPC stdout protocol-pure and accepts in-memory startup', async () => {
     const extensionDirectory = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-rpc-extension-'));

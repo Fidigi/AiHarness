@@ -1,13 +1,16 @@
 import readline from 'readline';
+import type { AgentMessageQueueKind } from '@ai-harness/core';
 import type { FullscreenUI } from './fullscreen-ui.js';
 
 export interface FullscreenInputHandlers {
-  onLine: (line: string) => void | Promise<void>;
+  onLine: (line: string, kind: AgentMessageQueueKind) => void | Promise<void>;
   onInterrupt: () => void;
   onExit: () => void;
   onError?: (error: Error) => void;
   complete?: (input: string) => string[];
   onExternalEditor?: (currentInput: string) => Promise<string | undefined>;
+  /** Return replacement editor text, or undefined when there was nothing queued. */
+  onDequeue?: (currentInput: string) => string | undefined;
 }
 
 interface KeypressInput {
@@ -27,6 +30,7 @@ export class FullscreenInput {
   private readonly history: string[] = [];
   private historyIndex = 0;
   private started = false;
+  private pendingEscapeAt = 0;
   private processing = Promise.resolve();
   private readonly keypressListener: (text: string, key: readline.Key) => void;
 
@@ -73,16 +77,39 @@ export class FullscreenInput {
     return this.value;
   }
 
+  replaceValue(value: string): void {
+    this.value = value;
+    this.cursor = value.length;
+    this.ui.setInput(this.value, this.cursor);
+  }
+
   handleKeypress(text: string, key: readline.Key = {}): void {
     if (key.ctrl && key.name === 'c') {
+      this.pendingEscapeAt = 0;
       this.handlers.onInterrupt();
       return;
     }
 
     if (key.ctrl && key.name === 'd') {
+      this.pendingEscapeAt = 0;
       if (!this.value) this.handlers.onExit();
       return;
     }
+
+    if (key.ctrl && key.name === 'q') {
+      this.pendingEscapeAt = 0;
+      this.submit('follow-up');
+      return;
+    }
+
+    if (key.name === 'escape' && !key.ctrl && !key.meta && !key.shift) {
+      this.pendingEscapeAt = Date.now();
+      return;
+    }
+
+    const escapedEnter = (key.name === 'return' || key.name === 'enter')
+      && Date.now() - this.pendingEscapeAt < 500;
+    if (key.name !== 'return' && key.name !== 'enter') this.pendingEscapeAt = 0;
 
     if (key.ctrl && key.name === 'l') {
       this.ui.render();
@@ -107,8 +134,16 @@ export class FullscreenInput {
       return;
     }
 
+    if ((key.meta && (key.name === 'return' || key.name === 'enter')) || escapedEnter) {
+      this.pendingEscapeAt = 0;
+      this.submit('follow-up');
+      return;
+    }
+
     if (key.meta && key.name === 'up') {
-      this.ui.scrollUp();
+      const restored = this.handlers.onDequeue?.(this.value);
+      if (restored === undefined) this.ui.scrollUp();
+      else this.replaceValue(restored);
       return;
     }
 
@@ -120,7 +155,8 @@ export class FullscreenInput {
     switch (key.name) {
       case 'return':
       case 'enter':
-        this.submit();
+        this.pendingEscapeAt = 0;
+        this.submit('steer');
         return;
       case 'backspace':
         if (this.cursor > 0) {
@@ -169,7 +205,7 @@ export class FullscreenInput {
     this.ui.setInput(this.value, this.cursor);
   }
 
-  private submit(): void {
+  private submit(kind: AgentMessageQueueKind): void {
     const line = this.value;
     if (line.trim()) {
       this.history.push(line);
@@ -180,9 +216,12 @@ export class FullscreenInput {
     this.cursor = 0;
     this.ui.setInput('', 0);
 
-    this.processing = this.processing
-      .then(() => this.handlers.onLine(line))
-      .catch(error => this.handlers.onError?.(error instanceof Error ? error : new Error(String(error))));
+    try {
+      void Promise.resolve(this.handlers.onLine(line, kind))
+        .catch(error => this.handlers.onError?.(error instanceof Error ? error : new Error(String(error))));
+    } catch (error) {
+      this.handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
+    }
   }
 
   private navigateHistory(direction: -1 | 1): void {

@@ -4,6 +4,7 @@
 // ============================================================
 
 import {
+  AgentMessageQueue,
   clampPublishedThinkingLevel,
   DEFAULT_CODING_TOOL_NAMES,
   ExtensionRegistry,
@@ -27,6 +28,7 @@ import {
   WorkspaceManager,
 } from '@ai-harness/core';
 import type {
+  AgentMessageQueueKind,
   Message,
   MessageContentBlock,
   ResolvedAgentSettings,
@@ -78,6 +80,13 @@ interface InputDriver {
   prompt(): void;
   close(): void;
   setPrompt(prompt: string): void;
+  getValue(): string;
+  replaceValue(value: string): void;
+}
+
+interface InteractiveQueuedInput {
+  content: string;
+  imageBlocks?: MessageContentBlock[];
 }
 
 function messagesFromSessionEntries(entries: SessionEntry[]): Message[] {
@@ -304,11 +313,19 @@ async function main(): Promise<void> {
   let isStreaming = false;
   let isMultiLineMode = false;
   let shuttingDown = false;
+  let conversationRunning = false;
+  let foregroundInputRunning = false;
   let activeAbortController: AbortController | null = null;
+  const interactiveQueue = new AgentMessageQueue<InteractiveQueuedInput>({
+    steeringMode: settingsResolution.settings.steeringMode,
+    followUpMode: settingsResolution.settings.followUpMode,
+  });
   let inputDriver: InputDriver = {
     prompt: () => undefined,
     close: () => undefined,
     setPrompt: () => undefined,
+    getValue: () => '',
+    replaceValue: () => undefined,
   };
   const reportError = (message: string): void => {
     if (printMode) process.stderr.write(`Error: ${message}\n`);
@@ -397,6 +414,8 @@ async function main(): Promise<void> {
 
   extensionRegistry.setReloadHandler(async () => {
     await reloadAgentSettings();
+    interactiveQueue.setMode('steer', settingsResolution.settings.steeringMode ?? 'one-at-a-time');
+    interactiveQueue.setMode('follow-up', settingsResolution.settings.followUpMode ?? 'one-at-a-time');
     await reloadInstructionPrompt();
     resourceManager = createResourceManager();
     const resources = await resourceManager.loadAll();
@@ -662,6 +681,20 @@ async function main(): Promise<void> {
     inputDriver.prompt();
   };
 
+  const restoreQueuedInput = (
+    currentInput = '',
+    previouslyTaken: InteractiveQueuedInput[] = [],
+  ): string | undefined => {
+    const cleared = interactiveQueue.clear();
+    const pending = [...previouslyTaken, ...cleared.ordered];
+    if (pending.length === 0) return undefined;
+    const restored = [...pending.map(item => item.content), currentInput]
+      .filter(Boolean)
+      .join(' ');
+    reportOutput(`[Files restaurées dans l’éditeur : ${pending.length}]`);
+    return restored;
+  };
+
   const shutdown = (message: string, exitCode?: number): void => {
     if (shuttingDown) return;
     shuttingDown = true;
@@ -682,6 +715,8 @@ async function main(): Promise<void> {
     }
 
     if (activeAbortController) {
+      const restored = restoreQueuedInput(inputDriver.getValue());
+      if (restored !== undefined) inputDriver.replaceValue(restored);
       activeAbortController.abort();
       streamWriter?.cancel();
       isStreaming = false;
@@ -708,6 +743,7 @@ async function main(): Promise<void> {
     options: { allowCommands?: boolean; imageBlocks?: MessageContentBlock[] } = {},
   ): Promise<string | undefined> {
     let trimmed = input.trim();
+    const unprocessedQueuedInputs: InteractiveQueuedInput[] = [];
     if (!trimmed) {
       if (!printMode) inputDriver.prompt();
       return undefined;
@@ -778,39 +814,75 @@ async function main(): Promise<void> {
       if (!sessionManager.get(currentSessionId)) {
         throw new Error('Aucune session active. Créez-en une avec /new.');
       }
+      if (conversationRunning) throw new Error('Une réponse est déjà en cours.');
 
-      const providerName = String((provider as unknown as { config?: { type?: string } }).config?.type ?? 'unknown');
-      const providerModel = (provider as unknown as { config?: { model?: string } }).config?.model;
-      const agentHook = await extensionRegistry.runBefore('before:agent', {
-        sessionId: currentSessionId,
-        provider: providerName,
-        input: trimmed,
-      });
-      if (agentHook.cancelled) {
-        throw new Error(agentHook.reason ?? "Requête annulée par un hook d'extension.");
-      }
-      const userInput = agentHook.data.input.trim();
-      if (!userInput) throw new Error("Requête annulée : le hook d'extension a produit une entrée vide.");
-      const userBlocks: MessageContentBlock[] = [
-        { type: 'text', text: userInput },
-        ...(options.imageBlocks ?? []),
-      ];
-      if (!printMode) terminal.addTranscriptEntry({ type: 'user', content: userInput });
-      await jsonOutput?.events.startAgent(userInput, userBlocks);
-      await sessionManager.addMessage(currentSessionId, {
-        role: 'user',
-        content: userInput,
-        blocks: userBlocks,
-      });
-      if (!printMode) terminal.displayUserMessage(userInput);
-
+      conversationRunning = true;
       const operationController = new AbortController();
       activeAbortController = operationController;
+      const providerName = String((provider as unknown as { config?: { type?: string } }).config?.type ?? 'unknown');
+      const providerModel = (provider as unknown as { config?: { model?: string } }).config?.model;
+
+      const persistUserInput = async (
+        queued: InteractiveQueuedInput,
+        queueKind?: AgentMessageQueueKind,
+        announceJson = false,
+      ): Promise<boolean> => {
+        try {
+          const agentHook = await extensionRegistry.runBefore('before:agent', {
+            sessionId: currentSessionId,
+            provider: providerName,
+            input: queued.content,
+          });
+          if (agentHook.cancelled) {
+            throw new Error(agentHook.reason ?? "Requête annulée par un hook d'extension.");
+          }
+          const userInput = agentHook.data.input.trim();
+          if (!userInput) throw new Error("Requête annulée : le hook d'extension a produit une entrée vide.");
+          const userBlocks: MessageContentBlock[] = [
+            { type: 'text', text: userInput },
+            ...(queued.imageBlocks ?? []).filter(block => block.type !== 'text'),
+          ];
+          if (announceJson) await jsonOutput?.events.startAgent(userInput, userBlocks);
+          await sessionManager.addMessage(currentSessionId, {
+            role: 'user',
+            content: userInput,
+            blocks: userBlocks,
+            ...(queueKind ? { metadata: { queueKind } } : {}),
+          }, { signal: operationController.signal });
+          if (!printMode) {
+            terminal.addTranscriptEntry({ type: 'user', content: userInput });
+            terminal.displayUserMessage(userInput);
+          }
+          return true;
+        } catch (error) {
+          if (!queueKind) throw error;
+          reportError(error instanceof Error ? error.message : String(error));
+          return false;
+        }
+      };
+
+      const persistQueuedBatch = async (
+        queueKind: AgentMessageQueueKind,
+        batch: InteractiveQueuedInput[],
+      ): Promise<boolean> => {
+        let persisted = false;
+        for (const queued of batch) {
+          const accepted = await persistUserInput(queued, queueKind);
+          if (!accepted) unprocessedQueuedInputs.push(queued);
+          persisted = accepted || persisted;
+        }
+        return persisted;
+      };
+
+      await persistUserInput({ content: trimmed, imageBlocks: options.imageBlocks }, undefined, true);
       await extensionRegistry.emit('agent:start', { sessionId: currentSessionId, provider: providerName });
 
       let activeToolCall: ToolCall | undefined;
       let activeToolOutput = '';
-      const finalContent = await runToolLoop({
+      let finalContent = '';
+      let continueConversation = true;
+      while (continueConversation) {
+        finalContent = await runToolLoop({
         sessionManager,
         sessionId: currentSessionId,
         extensionRegistry,
@@ -897,18 +969,32 @@ async function main(): Promise<void> {
           if (!printMode) terminal.displayCommand(result.call.name, result.content);
           return event;
         },
-        onTurnEnd: () => jsonOutput?.events.endTurn(),
-        onFinalResponse: content => {
-          if (!printMode && content) terminal.addTranscriptEntry({ type: 'assistant', content });
-        },
-        signal: operationController.signal,
-      });
+          onTurnEnd: () => jsonOutput?.events.endTurn(),
+          beforeNextTurn: async () => {
+            await persistQueuedBatch('steer', interactiveQueue.take('steer'));
+          },
+          onFinalResponse: content => {
+            if (!printMode && content) terminal.addTranscriptEntry({ type: 'assistant', content });
+          },
+          signal: operationController.signal,
+        });
 
-      await extensionRegistry.emit('agent:end', {
-        sessionId: currentSessionId,
-        contentLength: finalContent.length,
-      });
-      await jsonOutput?.events.endAgent();
+        await extensionRegistry.emit('agent:end', {
+          sessionId: currentSessionId,
+          contentLength: finalContent.length,
+        });
+        continueConversation = false;
+        while (!continueConversation) {
+          const next = interactiveQueue.takeNext();
+          if (!next) break;
+          continueConversation = await persistQueuedBatch(next.kind, next.items);
+        }
+        if (continueConversation) {
+          await extensionRegistry.emit('agent:start', { sessionId: currentSessionId, provider: providerName });
+        }
+      }
+
+      if (jsonOutput) await jsonOutput.events.endAgent();
       return finalContent;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue.';
@@ -918,17 +1004,45 @@ async function main(): Promise<void> {
       if (!isStreaming && !activeAbortController?.signal.aborted) reportError(errorMessage);
       return undefined;
     } finally {
+      if (!printMode && (interactiveQueue.size() > 0 || unprocessedQueuedInputs.length > 0)) {
+        const restored = restoreQueuedInput(inputDriver.getValue(), unprocessedQueuedInputs);
+        if (restored !== undefined) inputDriver.replaceValue(restored);
+      }
       isStreaming = false;
       streamWriter = null;
       activeAbortController = null;
+      conversationRunning = false;
       keyBindings.setStreaming(false);
       if (!printMode && !shuttingDown) refreshPrompt();
     }
   }
 
   /** Shared line-oriented multi-line editor and regular input dispatcher. */
-  async function handleLine(input: string): Promise<void> {
+  async function handleLine(input: string, submission: AgentMessageQueueKind = 'steer'): Promise<void> {
     const trimmed = input.trim();
+
+    if (conversationRunning) {
+      if (!trimmed) {
+        inputDriver.prompt();
+        return;
+      }
+      if (trimmed.startsWith('/') || trimmed.startsWith('!')) {
+        inputDriver.replaceValue(input);
+        reportError('Les commandes ne peuvent pas être mises en file pendant une réponse.');
+        inputDriver.prompt();
+        return;
+      }
+      try {
+        interactiveQueue.enqueue(submission, { content: trimmed });
+        const queued = interactiveQueue.snapshot();
+        reportOutput(`[${submission === 'steer' ? 'Steering' : 'Follow-up'} en file · ${queued.steering.length + queued.followUp.length}]`);
+      } catch (error) {
+        inputDriver.replaceValue(input);
+        reportError(error instanceof Error ? error.message : String(error));
+      }
+      inputDriver.prompt();
+      return;
+    }
 
     if (trimmed === '/edit' && !isMultiLineMode) {
       terminal.startMultiLineEditor();
@@ -961,6 +1075,26 @@ async function main(): Promise<void> {
     }
 
     await processInput(input);
+  }
+
+  async function dispatchLine(input: string, submission: AgentMessageQueueKind = 'steer'): Promise<void> {
+    if (conversationRunning) {
+      await handleLine(input, submission);
+      return;
+    }
+    if (foregroundInputRunning) {
+      if (input.trim()) inputDriver.replaceValue(input);
+      reportError('Une commande ou saisie est déjà en cours.');
+      inputDriver.prompt();
+      return;
+    }
+
+    foregroundInputRunning = true;
+    try {
+      await handleLine(input, submission);
+    } finally {
+      foregroundInputRunning = false;
+    }
   }
 
   const completeCommands = (input: string): string[] => {
@@ -1004,11 +1138,12 @@ async function main(): Promise<void> {
 
   if (fullscreenTerminal) {
     const fullscreenInput = new FullscreenInput(fullscreenTerminal, {
-      onLine: handleLine,
+      onLine: dispatchLine,
       onInterrupt: interrupt,
       onExit: () => shutdown('Au revoir ! 👋', 0),
       onError: error => terminal.showError(error.message),
       complete: completeCommands,
+      onDequeue: currentInput => restoreQueuedInput(currentInput),
       onExternalEditor: async currentInput => {
         fullscreenTerminal.leave();
         try {
@@ -1029,27 +1164,80 @@ async function main(): Promise<void> {
       prompt: sessionPrompt(),
       completer: (line: string): [string[], string] => [completeCommands(line), line],
     });
+    const replaceReadlineValue = (value: string): void => {
+      rl.write(null, { ctrl: true, name: 'u' });
+      const singleLine = value.replace(/[\r\n]+/g, ' ');
+      if (singleLine) rl.write(singleLine);
+    };
+    let pendingEscapeAt = 0;
+    let suppressLineEvent = false;
+    const submitRegularFollowUp = (): void => {
+      const currentInput = rl.line;
+      suppressLineEvent = true;
+      queueMicrotask(() => { suppressLineEvent = false; });
+      replaceReadlineValue('');
+      void dispatchLine(currentInput, 'follow-up')
+        .catch(error => terminal.showError(error instanceof Error ? error.message : String(error)));
+    };
+    const regularKeypress = (_text: string, key: readline.Key): void => {
+      if (key.name === 'escape' && !key.ctrl && !key.meta && !key.shift) {
+        pendingEscapeAt = Date.now();
+        return;
+      }
+      if ((key.name === 'return' || key.name === 'enter')
+        && (key.meta || Date.now() - pendingEscapeAt < 500)) {
+        pendingEscapeAt = 0;
+        submitRegularFollowUp();
+        return;
+      }
+      pendingEscapeAt = 0;
+      if (key.ctrl && key.name === 'q') {
+        submitRegularFollowUp();
+        return;
+      }
+      if (key.meta && key.name === 'up') {
+        const restored = restoreQueuedInput(rl.line);
+        if (restored !== undefined) setImmediate(() => replaceReadlineValue(restored));
+        else terminal.scrollUp();
+        return;
+      }
+      if (key.meta && key.name === 'down') {
+        terminal.scrollDown();
+        return;
+      }
+      if (key.ctrl && key.name === 'g') {
+        const currentInput = rl.line;
+        replaceReadlineValue('');
+        void editInExternalEditor(currentInput, settingsResolution.settings.externalEditor)
+          .then(content => { if (content !== undefined) replaceReadlineValue(content); })
+          .catch(error => terminal.showError(error instanceof Error ? error.message : String(error)));
+        return;
+      }
+      if (key.ctrl && key.name === 'c') return; // readline emits SIGINT below.
+      keyBindings.handleKeypress(key);
+    };
+    process.stdin.prependListener('keypress', regularKeypress);
     inputDriver = {
       prompt: () => rl.prompt(),
-      close: () => rl.close(),
+      close: () => {
+        process.stdin.removeListener('keypress', regularKeypress);
+        rl.close();
+      },
       setPrompt: prompt => rl.setPrompt(prompt),
+      getValue: () => rl.line,
+      replaceValue: replaceReadlineValue,
     };
     terminal.setReadline(rl);
     if (settingsResolution.settings.quietStartup !== true) terminal.welcome();
 
+    rl.on('SIGINT', interrupt);
     rl.on('line', input => {
-      void handleLine(input).catch(error => terminal.showError(error instanceof Error ? error.message : String(error)));
-    });
-    rl.on('keypress', (_text, key) => {
-      if (key?.ctrl && key.name === 'g') {
-        const currentInput = rl.line;
-        rl.write(null, { ctrl: true, name: 'u' });
-        void editInExternalEditor(currentInput, settingsResolution.settings.externalEditor)
-          .then(content => { if (content) rl.write(content); })
-          .catch(error => terminal.showError(error instanceof Error ? error.message : String(error)));
+      if (suppressLineEvent) {
+        suppressLineEvent = false;
         return;
       }
-      if (!keyBindings.handleKeypress(key) && key?.ctrl && key.name === 'c') interrupt();
+      void dispatchLine(input, 'steer')
+        .catch(error => terminal.showError(error instanceof Error ? error.message : String(error)));
     });
     rl.prompt();
   }

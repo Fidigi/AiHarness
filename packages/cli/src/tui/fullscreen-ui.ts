@@ -143,7 +143,8 @@ export class FullscreenUI extends TerminalUI {
       '/edit · /export · /import · /settings · /extensions · /tools · /reload · /exit',
       '!commande (contexte) · !!commande (hors contexte)',
       '',
-      'Navigation : ↑/↓ historique · Alt+↑/↓ transcript · Ctrl+L rafraîchir',
+      'Entrée : envoyer/steer · Alt+Entrée ou Ctrl+Q : follow-up · Alt+↑ : rappeler la file',
+      'Navigation : ↑/↓ historique · Alt+↓ transcript · Ctrl+L rafraîchir',
     ].join('\n'));
   }
 

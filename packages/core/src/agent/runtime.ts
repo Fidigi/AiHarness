@@ -7,9 +7,15 @@ import type {
 } from '../extensions/extension-registry.js';
 import type { Message, MessageContentBlock, Session } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
+import type { AgentQueueMode } from '../config/agent-settings.js';
 import { selectRegisteredTools, toChatToolDefinitions } from '../tools/tool-selection.js';
 import { streamProviderTurn } from './provider-turn.js';
 import { AgentAbortError, runToolLoop } from './tool-loop.js';
+import {
+  AgentMessageQueue,
+  type AgentMessageQueueBatch,
+  type AgentMessageQueueKind,
+} from './message-queue.js';
 import {
   AgentEventJournal,
   type AgentEvent,
@@ -40,6 +46,8 @@ export interface StartAgentRunRequest {
   allowedTools?: string[];
   allowedSkills?: string[];
   allowedExtensions?: string[];
+  steeringMode?: AgentQueueMode;
+  followUpMode?: AgentQueueMode;
 }
 
 export interface AgentRuntimeOptions {
@@ -57,6 +65,7 @@ interface ActiveRun {
   controller: AbortController;
   completion: Promise<void>;
   resolveCompletion(): void;
+  queue: AgentMessageQueue<QueuedAgentMessage>;
 }
 
 interface PendingInteraction {
@@ -223,7 +232,16 @@ export class AgentRuntime {
       followUpQueue: [],
       lastSequence: this.journal.lastSequence(session.id),
     };
-    const active: ActiveRun = { snapshot, controller, completion, resolveCompletion };
+    const active: ActiveRun = {
+      snapshot,
+      controller,
+      completion,
+      resolveCompletion,
+      queue: new AgentMessageQueue({
+        steeringMode: request.steeringMode,
+        followUpMode: request.followUpMode,
+      }),
+    };
     await this.sessionManager.update(session.id, {
       cwd: request.cwd,
       workspaceId: request.workspaceId,
@@ -317,23 +335,22 @@ export class AgentRuntime {
       ...(blocks?.length ? { blocks: structuredClone(blocks) } : {}),
       createdAt: new Date().toISOString(),
     };
-    if (kind === 'steer') run.snapshot.steerQueue.push(message);
-    else run.snapshot.followUpQueue.push(message);
-    this.publish(run, 'queue.updated', {
-      steer: run.snapshot.steerQueue,
-      followUp: run.snapshot.followUpQueue,
-    });
+    try {
+      run.queue.enqueue(kind, message);
+    } catch (error) {
+      throw Object.assign(error instanceof Error ? error : new Error(String(error)), {
+        status: 409,
+        code: 'AGENT_QUEUE_FULL',
+      });
+    }
+    this.publishQueue(run);
     return cloneSnapshot(run.snapshot);
   }
 
   clearQueue(runId: string, kind?: QueuedAgentMessage['kind']): AgentRunSnapshot {
     const run = this.requireActive(runId);
-    if (!kind || kind === 'steer') run.snapshot.steerQueue = [];
-    if (!kind || kind === 'follow-up') run.snapshot.followUpQueue = [];
-    this.publish(run, 'queue.updated', {
-      steer: run.snapshot.steerQueue,
-      followUp: run.snapshot.followUpQueue,
-    });
+    run.queue.clear(kind);
+    this.publishQueue(run);
     return cloneSnapshot(run.snapshot);
   }
 
@@ -387,19 +404,9 @@ export class AgentRuntime {
       while (hasPrompt) {
         await this.executePrompt(run, request, provider);
         if (run.controller.signal.aborted) throw new AgentAbortError();
-        const next = run.snapshot.followUpQueue.shift() ?? run.snapshot.steerQueue.shift();
-        if (next) {
-          this.publish(run, 'queue.updated', {
-            steer: run.snapshot.steerQueue,
-            followUp: run.snapshot.followUpQueue,
-          });
-          await this.sessionManager.addMessage(run.snapshot.sessionId, {
-            role: 'user',
-            content: next.content,
-            blocks: next.blocks?.length ? next.blocks : [{ type: 'text', text: next.content }],
-            agentId: request.agentId ?? run.snapshot.id,
-            metadata: { queueKind: next.kind },
-          }, { signal: run.controller.signal });
+        const batch = this.takeNextQueued(run);
+        if (batch) {
+          await this.persistQueued(run, request, batch.items);
           this.setPhase(run, 'prompting');
         } else {
           hasPrompt = false;
@@ -536,21 +543,45 @@ export class AgentRuntime {
   }
 
   private async flushSteering(run: ActiveRun, request: StartAgentRunRequest): Promise<void> {
-    const queued = run.snapshot.steerQueue.splice(0);
-    if (!queued.length) return;
-    this.publish(run, 'queue.updated', {
-      steer: run.snapshot.steerQueue,
-      followUp: run.snapshot.followUpQueue,
-    });
+    await this.persistQueued(run, request, this.takeQueued(run, 'steer'));
+  }
+
+  private async persistQueued(
+    run: ActiveRun,
+    request: StartAgentRunRequest,
+    queued: QueuedAgentMessage[],
+  ): Promise<void> {
     for (const message of queued) {
       await this.sessionManager.addMessage(run.snapshot.sessionId, {
         role: 'user',
         content: message.content,
-        blocks: [{ type: 'text', text: message.content }],
+        blocks: message.blocks?.length ? message.blocks : [{ type: 'text', text: message.content }],
         agentId: request.agentId ?? run.snapshot.id,
-        metadata: { queueKind: 'steer' },
+        metadata: { queueKind: message.kind },
       }, { signal: run.controller.signal });
     }
+  }
+
+  private takeQueued(run: ActiveRun, kind: AgentMessageQueueKind): QueuedAgentMessage[] {
+    const queued = run.queue.take(kind);
+    if (queued.length) this.publishQueue(run);
+    return queued;
+  }
+
+  private takeNextQueued(run: ActiveRun): AgentMessageQueueBatch<QueuedAgentMessage> | undefined {
+    const queued = run.queue.takeNext();
+    if (queued) this.publishQueue(run);
+    return queued;
+  }
+
+  private publishQueue(run: ActiveRun): void {
+    const queued = run.queue.snapshot();
+    run.snapshot.steerQueue = queued.steering;
+    run.snapshot.followUpQueue = queued.followUp;
+    this.publish(run, 'queue.updated', {
+      steer: run.snapshot.steerQueue,
+      followUp: run.snapshot.followUpQueue,
+    });
   }
 
   private effectiveMessages(sessionId: string): Message[] {

@@ -2,6 +2,9 @@ import { constants as fsConstants } from 'node:fs';
 import { lstat, mkdir, open } from 'node:fs/promises';
 import path from 'node:path';
 import {
+  AgentMessageQueue,
+  type AgentMessageQueueKind,
+  type AgentQueueMode,
   buildProviderModelCatalog,
   calculatePublishedModelCost,
   clampPublishedThinkingLevel,
@@ -54,8 +57,8 @@ export interface RpcControllerContext {
   hooks?: { emit(event: string, data: Record<string, unknown>): Promise<void> };
   thinking?: ThinkingLevel;
   providerModels?: () => unknown[] | Promise<unknown[]>;
-  steeringMode?: 'one-at-a-time' | 'all';
-  followUpMode?: 'one-at-a-time' | 'all';
+  steeringMode?: AgentQueueMode;
+  followUpMode?: AgentQueueMode;
   retryEnabled?: boolean;
   retryMaxRetries?: number;
   retryDelayMs?: number;
@@ -87,7 +90,6 @@ export interface RpcCommandResponse {
   error?: string;
 }
 
-type QueueMode = 'one-at-a-time' | 'all';
 type RpcThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 interface RpcImage {
@@ -308,8 +310,7 @@ export class RpcController {
   private currentSessionId: string;
   private model: string | undefined;
   private thinking: RpcThinkingLevel;
-  private steeringMode: QueueMode = 'one-at-a-time';
-  private followUpMode: QueueMode = 'one-at-a-time';
+  private readonly messageQueue: AgentMessageQueue<PreparedPrompt>;
   private autoRetryEnabled = true;
   private retryActive = false;
   private retryAbortController?: AbortController;
@@ -317,8 +318,6 @@ export class RpcController {
   private compacting = false;
   private activeRun?: ActiveRun;
   private activeBash?: ActiveBash;
-  private steeringQueue: PreparedPrompt[] = [];
-  private followUpQueue: PreparedPrompt[] = [];
   private modelCache?: {
     expiresAt: number;
     models: Array<Record<string, unknown> & { provider: string; id: string }>;
@@ -334,8 +333,10 @@ export class RpcController {
     this.currentSessionId = context.sessionId;
     this.model = context.model;
     this.thinking = rpcThinkingLevel(context.thinking);
-    this.steeringMode = context.steeringMode ?? 'one-at-a-time';
-    this.followUpMode = context.followUpMode ?? 'one-at-a-time';
+    this.messageQueue = new AgentMessageQueue({
+      steeringMode: context.steeringMode,
+      followUpMode: context.followUpMode,
+    });
     this.autoRetryEnabled = context.retryEnabled ?? true;
     this.events = new JsonEventStream(record => this.emit(record));
   }
@@ -459,8 +460,8 @@ export class RpcController {
           }
           const prompt = await this.preparePrompt(message, request.images);
           if (this.activeRun) {
-            if (request.streamingBehavior === 'steer') this.steeringQueue.push(prompt);
-            else if (request.streamingBehavior === 'followUp') this.followUpQueue.push(prompt);
+            if (request.streamingBehavior === 'steer') this.messageQueue.enqueue('steer', prompt);
+            else if (request.streamingBehavior === 'followUp') this.messageQueue.enqueue('follow-up', prompt);
             else throw new Error("Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.");
             await this.emitQueueUpdate();
             return success(id, command, { disposition: 'queued' });
@@ -472,7 +473,7 @@ export class RpcController {
           const message = requiredString(request.message, 'message');
           if (this.isExtensionCommand(message)) throw new Error('Extension commands are not allowed in steer; use prompt instead.');
           const prompt = await this.preparePrompt(message, request.images);
-          this.steeringQueue.push(prompt);
+          this.messageQueue.enqueue('steer', prompt);
           await this.emitQueueUpdate();
           return success(id, command, { disposition: 'queued' });
         }
@@ -480,7 +481,7 @@ export class RpcController {
           const message = requiredString(request.message, 'message');
           if (this.isExtensionCommand(message)) throw new Error('Extension commands are not allowed in follow_up; use prompt instead.');
           const prompt = await this.preparePrompt(message, request.images);
-          this.followUpQueue.push(prompt);
+          this.messageQueue.enqueue('follow-up', prompt);
           await this.emitQueueUpdate();
           return success(id, command, { disposition: 'queued' });
         }
@@ -493,12 +494,12 @@ export class RpcController {
           return success(id, command);
         }
         case 'clear_queue': {
-          const steering = this.steeringQueue.map(item => item.content);
-          const followUp = this.followUpQueue.map(item => item.content);
-          this.steeringQueue = [];
-          this.followUpQueue = [];
+          const cleared = this.messageQueue.clear();
           await this.emitQueueUpdate();
-          return success(id, command, { steering, followUp });
+          return success(id, command, {
+            steering: cleared.steering.map(item => item.content),
+            followUp: cleared.followUp.map(item => item.content),
+          });
         }
         case 'new_session': {
           await this.ensureIdle(command);
@@ -580,10 +581,10 @@ export class RpcController {
         case 'get_available_thinking_levels':
           return success(id, command, { levels: this.availableThinkingLevels() });
         case 'set_steering_mode':
-          this.steeringMode = this.queueMode(request.mode);
+          this.messageQueue.setMode('steer', request.mode);
           return success(id, command);
         case 'set_follow_up_mode':
-          this.followUpMode = this.queueMode(request.mode);
+          this.messageQueue.setMode('follow-up', request.mode);
           return success(id, command);
         case 'set_auto_compaction': {
           if (typeof request.enabled !== 'boolean') throw new Error('enabled must be a boolean.');
@@ -1039,7 +1040,7 @@ export class RpcController {
           contentLength: lastContent.length,
         });
         await this.events.endAgent();
-        nextAgentPrompt = this.takeNextSteering() ?? this.takeNextFollowUp();
+        nextAgentPrompt = this.takeNextQueued();
       }
     } catch (error) {
       await this.events.failAgent(error, signal.aborted).catch(() => undefined);
@@ -1199,21 +1200,21 @@ export class RpcController {
   }
 
   private takeNextSteering(): PreparedPrompt | undefined {
-    if (this.steeringQueue.length === 0) return undefined;
-    const next = this.steeringMode === 'all' && this.steeringQueue.length > 1
-      ? this.combine(this.steeringQueue.splice(0))
-      : this.steeringQueue.shift();
-    this.emitQueueUpdate();
-    return next;
+    return this.takeQueued('steer');
   }
 
-  private takeNextFollowUp(): PreparedPrompt | undefined {
-    if (this.followUpQueue.length === 0) return undefined;
-    const next = this.followUpMode === 'all' && this.followUpQueue.length > 1
-      ? this.combine(this.followUpQueue.splice(0))
-      : this.followUpQueue.shift();
+  private takeNextQueued(): PreparedPrompt | undefined {
+    const batch = this.messageQueue.takeNext();
+    if (!batch) return undefined;
     this.emitQueueUpdate();
-    return next;
+    return batch.items.length === 1 ? batch.items[0] : this.combine(batch.items);
+  }
+
+  private takeQueued(kind: AgentMessageQueueKind): PreparedPrompt | undefined {
+    const prompts = this.messageQueue.take(kind);
+    if (prompts.length === 0) return undefined;
+    this.emitQueueUpdate();
+    return prompts.length === 1 ? prompts[0] : this.combine(prompts);
   }
 
   private emit(record: Record<string, unknown>): Promise<void> {
@@ -1231,16 +1232,16 @@ export class RpcController {
   }
 
   private emitQueueUpdate(): Promise<void> {
+    const queued = this.messageQueue.snapshot();
     return this.emit({
       type: 'queue_update',
-      steering: this.steeringQueue.map(prompt => prompt.content),
-      followUp: this.followUpQueue.map(prompt => prompt.content),
+      steering: queued.steering.map(prompt => prompt.content),
+      followUp: queued.followUp.map(prompt => prompt.content),
     });
   }
 
   private resetQueues(): void {
-    this.steeringQueue = [];
-    this.followUpQueue = [];
+    this.messageQueue.clear();
     this.emitQueueUpdate();
   }
 
@@ -1250,11 +1251,6 @@ export class RpcController {
       images: prompts.flatMap(prompt => prompt.images),
       blocks: prompts.flatMap(prompt => prompt.blocks),
     };
-  }
-
-  private queueMode(value: unknown): QueueMode {
-    if (value !== 'one-at-a-time' && value !== 'all') throw new Error(`Invalid queue mode: ${String(value)}`);
-    return value;
   }
 
   private async ensureIdle(command: string): Promise<void> {
@@ -1486,14 +1482,14 @@ export class RpcController {
       thinkingLevel: this.thinking,
       isStreaming: this.activeRun !== undefined,
       isCompacting: this.compacting,
-      steeringMode: this.steeringMode,
-      followUpMode: this.followUpMode,
+      steeringMode: this.messageQueue.getMode('steer'),
+      followUpMode: this.messageQueue.getMode('follow-up'),
       sessionFile: this.context.sessionDir ? path.join(this.context.sessionDir, `${session.id}.jsonl`) : undefined,
       sessionId: session.id,
       sessionName: session.title,
       autoCompactionEnabled: session.autoCompaction !== false,
       messageCount: session.messages.length,
-      pendingMessageCount: this.steeringQueue.length + this.followUpQueue.length,
+      pendingMessageCount: this.messageQueue.size(),
     };
   }
 

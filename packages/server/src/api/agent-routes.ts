@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import {
+  loadAgentSettings,
   resolveInstructionPrompt,
   type AgentEvent,
   type ExtensionInteractionRequest,
@@ -368,6 +369,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         systemPromptText: configuredSystemPrompt,
       });
       const modelSupportsTools = services.modelCatalog.getCapabilities(selectedProvider, selectedModel)?.toolCalls !== false;
+      const agentSettings = await loadAgentSettings({ cwd, projectTrusted: trusted });
       const run = await services.agentRuntime.start({
         sessionId: session.id,
         cwd,
@@ -386,6 +388,8 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
           ? (effective.values.enabledTools ?? services.extensionRegistry.getTools().map(tool => tool.name))
             .filter(tool => tool !== 'powershell' || effective.values.powershellEnabled === true)
           : [],
+        steeringMode: agentSettings.settings.steeringMode,
+        followUpMode: agentSettings.settings.followUpMode,
       });
       response.status(202).json({ run, session: serializeSessionPage(session, { limit: 80 }), workspace });
     } catch (error) {

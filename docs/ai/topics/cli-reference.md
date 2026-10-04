@@ -6,7 +6,7 @@
 
 `ai-harness` has two interactive terminal renderers, a final-text print path, a one-shot JSONL event path, and a bidirectional JSONL RPC path. All execution modes reuse Core provider hooks, bounded retry, persistence, active-tool selection, and the multi-turn tool loop. RPC adds a typed command/response and asynchronous event adapter while retaining the former `method`/`params` requests as deprecated compatibility input.
 
-Conversation persistence follows [`sessions.md`](./sessions.md), while extension hooks follow [`extensions.md`](./extensions.md). The built-in workspace tools are implemented once in Core and registered by both CLI and server startup. Core also owns model catalogue assembly/discovery/resolution, direct shell parsing, bounded process execution, cancellation, replay and command persistence; the CLI, RPC and Web/Server surfaces provide presentation or transport adapters around those contracts. Instruction discovery and system-prompt composition likewise live once in Core and feed every CLI mode plus trusted Web agent runs.
+Conversation persistence follows [`sessions.md`](./sessions.md), while extension hooks follow [`extensions.md`](./extensions.md). The built-in workspace tools are implemented once in Core and registered by both CLI and server startup. Core also owns model catalogue assembly/discovery/resolution, bounded all/one-at-a-time steering and follow-up scheduling, direct shell parsing, bounded process execution, cancellation, replay and command persistence; the CLI, RPC and Web/Server surfaces provide presentation or transport adapters around those contracts. Instruction discovery and system-prompt composition likewise live once in Core and feed every CLI mode plus trusted Web agent runs.
 
 ## Architecture
 
@@ -18,6 +18,7 @@ packages/cli/src/index.ts
   |-> --mode json -> versioned JSONL event encoder
   |-> --print or redirected stream -> final-text print execution
   `-> terminal mode -> regular readline OR fullscreen raw input
+         |-> active Enter / Alt+Enter -> Core AgentMessageQueue -> next turn/task
          |-> ! / !! -> CLI shell adapter -> Core ShellCommandRuntime
          `-> resource/command dispatch -> Core runToolLoop -> provider
 ```
@@ -81,9 +82,9 @@ The CLI and RPC load `<agent-dir>/settings.json`, where the agent directory is `
 
 Objects merge recursively, project scalar/array values override user values, and resource arrays are combined. A project `defaultTools` list containing only `+name`/`-name` entries modifies the user list; a list containing plain names replaces it. `cacheWarming`, `defaultProjectTrust`, `httpProxy`, and `deviceId` are agent-directory-only. `/settings` displays selected effective values and their `global`/`project` provenance without exposing proxy values or credentials.
 
-Implemented runtime settings are startup provider/model, `enabledModels`, default/per-model thinking, default tools, session directory, compaction enable/reserve/keep values and exact model overrides, agent retry timing, RPC steering/follow-up queues, theme and TUI mode, `quietStartup: true`, external editor, shell path/prefix, local extensions, skills/prompts and `enableSkillCommands`. Explicit CLI options remain strongest. Session storage resolves an explicit session path, `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, settings `sessionDir`, then the AiHarness default.
+Implemented runtime settings are startup provider/model, `enabledModels`, default/per-model thinking, default tools, session directory, compaction enable/reserve/keep values and exact model overrides, agent retry timing, interactive/RPC steering and follow-up queues plus their delivery modes for detached trusted Web runs, theme and TUI mode, `quietStartup: true`, external editor, shell path/prefix, local extensions, skills/prompts and `enableSkillCommands`. Explicit CLI options remain strongest. Session storage resolves an explicit session path, `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, settings `sessionDir`, then the AiHarness default.
 
-Interactive `/reload` re-reads trust and settings, instructions, resource selectors, extensions, skill commands, default-tool additions, and reloadable shell callbacks. Session directory, startup model/thinking, terminal renderer/theme, queue defaults, compaction policy and retry policy are startup values and require a restart. The loader validates and reports the remaining documented fields, but package installation/built-in switches, custom theme resources, branch-summary generation, codemode, cache warming, provider transport/proxy/timeouts/retries, npm commands, detailed terminal/image/Markdown options, updates, telemetry and warnings are not yet applied by the CLI.
+Interactive `/reload` re-reads trust and settings, instructions, resource selectors, extensions, skill commands, default-tool additions, steering/follow-up delivery modes, and reloadable shell callbacks. Session directory, startup model/thinking, terminal renderer/theme, RPC queue defaults, compaction policy and retry policy are startup values and require a restart. The loader validates and reports the remaining documented fields, but package installation/built-in switches, custom theme resources, branch-summary generation, codemode, cache warming, provider transport/proxy/timeouts/retries, npm commands, detailed terminal/image/Markdown options, updates, telemetry and warnings are not yet applied by the CLI.
 
 Configured skill and prompt paths resolve relative to the declaring agent directory or project `.ai-harness` directory. Ordered plain/`+` includes and exact/glob `-`/`!` exclusions are applied around automatic user/project roots. Discovery is trust-gated, symlink-free, bounded to 10,000 files, and each Markdown source is a race-checked UTF-8 regular file capped at 1 MiB. Local extension includes and ordered exclusions are honored; package resources, built-in extension switches and extension include globs remain outside the current custom loader.
 
@@ -130,6 +131,8 @@ The old `{id,method,params}` calls (`system.ping`, custom session/provider metho
 
 Built-in metadata and handlers live in `commands/handler.ts`; extension commands are resolved after built-ins. The registry includes conversation/session lifecycle, provider/model/thinking, compaction/branching, import/export/share, resources, read-only effective `/settings`, extensions/tools/trust/reload, clipboard/search, and quit operations.
 
+While an interactive response is active, `Enter` queues steering for the next model boundary and `Alt+Enter` (or `Ctrl+Q` where the terminal reserves modified Enter) queues a follow-up after steering work settles. Core applies `steeringMode` and `followUpMode`: `one-at-a-time` delivers one queued message per response, while `all` delivers the pending kind as one boundary batch. `Alt+Up` restores pending text to the editor; interruption restores it automatically. Both terminal renderers accept input without serializing it behind the active provider call. Commands and direct shell input are restored rather than run concurrently.
+
 Interactive input beginning with `!` bypasses provider execution and runs in the trusted startup cwd. `!!` sets `excludedFromContext`; both variants stream into regular/fullscreen renderers, persist a parented command entry, participate in input/session history, and are cancelled with `Ctrl+C`. Core bounds stored output to 50 KiB for this adapter and retains complete truncated output in an owner-only temporary file for 24 hours. Agent settings `shellPath` and `shellCommandPrefix` apply to direct commands and the model `bash` tool and refresh interactively. The same parser and `ShellCommandRuntime` serve Web direct commands; the server file is only a compatibility re-export.
 
 User-visible command help also exists in both TUI implementations. Never add a command only to the handler.
@@ -144,7 +147,9 @@ input
        -> before:agent -> persist user message
        -> Core runToolLoop
             -> before:provider -> provider stream
-            -> before:tool -> tool -> persisted call/result -> next turn
+            -> before:tool -> tool -> persisted call/result
+            -> consume bounded steering batch before the next model turn
+       -> consume steering before follow-up work
        -> persist assistant response -> lifecycle events/rendering
 ```
 
@@ -167,7 +172,7 @@ Reads, searches, and CLI `@path` inputs are canonicalized inside the active work
 
 ## Associated Tests
 
-- `packages/cli/src/cli/{args,json-output,invocation,shell-controller}.test.ts` — strict options, JSON events, modes, process exits/stdout purity and direct shell trust/stream/abort/persistence
+- `packages/cli/src/cli/{args,json-output,invocation,shell-controller}.test.ts` — strict options, JSON events, modes, process exits/stdout purity, real pseudo-terminal steering/follow-up ordering and direct shell trust/stream/abort/persistence
 - `packages/core/src/providers/model-catalog.test.ts` and `packages/cli/src/cli/model-list.test.ts` — shared assembly/discovery, full-ID-first resolution, scopes, fuzzy listing and protocol metadata
 - `packages/cli/src/providers/configured-providers.test.ts` — common environment, startup scopes and non-persistent key overrides
 - `packages/cli/src/sessions/startup-session.test.ts` — startup selectors, exact IDs, naming, forking, cwd filtering and directory precedence
@@ -179,7 +184,8 @@ Reads, searches, and CLI `@path` inputs are canonicalized inside the active work
 - `packages/cli/src/agent/{tool-loop,provider-turn}.test.ts` — CLI re-exports and bounded pre-delta retry
 - `packages/cli/src/extensions/extension-loader.test.ts` — explicit extension paths and reload
 - `packages/cli/src/tui/mode.test.ts` — flag/environment/capability precedence
-- `packages/cli/src/tui/{terminal-ui,fullscreen-ui,fullscreen-input,theme-manager}.test.ts` — rendering, input and themes
+- `packages/core/src/agent/{message-queue,runtime}.test.ts` — common queue modes/bounds plus detached Web scheduling
+- `packages/cli/src/tui/{terminal-ui,fullscreen-ui,fullscreen-input,theme-manager}.test.ts` — rendering, concurrent input, queue shortcuts/editor restoration and themes
 
 ## Common Changes
 

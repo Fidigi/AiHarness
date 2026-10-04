@@ -291,8 +291,11 @@ ${chalk.bold('Input')}
   ${chalk.cyan('/edit')} / ${chalk.cyan('/send')} / ${chalk.cyan('/cancel')}          Multi-line input
   ${chalk.cyan('!<command>')}                    Run a shell command and include its output in context
   ${chalk.cyan('!!<command>')}                   Run a shell command outside model context
+  ${chalk.cyan('Enter')}                         Send now, or steer an active response
+  ${chalk.cyan('Alt+Enter / Ctrl+Q')}             Queue a follow-up after the active task
+  ${chalk.cyan('Alt+Up')}                        Restore queued messages to the editor
   ${chalk.cyan('Ctrl+G')}                        Open $VISUAL or $EDITOR
-  ${chalk.cyan('Ctrl+C')}                        Interrupt streaming/commands or exit
+  ${chalk.cyan('Ctrl+C')}                        Interrupt; queued messages return to the editor
 
 ${chalk.bold('Providers:')}
   mock, openai, anthropic, google, local, azure, vertex, bedrock

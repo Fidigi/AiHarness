@@ -581,6 +581,58 @@ describe('combined Web server', () => {
     expect(replay).toContain('"sequence":');
   });
 
+  it('applies shared Core queue modes to detached Web runs', async () => {
+    const agentDirectory = path.join(webRoot, '.queue-agent');
+    await mkdir(agentDirectory, { recursive: true });
+    await writeFile(path.join(agentDirectory, 'settings.json'), JSON.stringify({
+      steeringMode: 'all',
+      followUpMode: 'all',
+    }));
+    vi.stubEnv('AI_HARNESS_AGENT_DIR', agentDirectory);
+    const trust = await fetch(`${baseUrl}/api/workspaces/trust`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: webRoot, confirm: true }),
+    });
+    expect(trust.status).toBe(200);
+
+    const startResponse = await fetch(`${baseUrl}/api/agent/runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: webRoot, provider: 'mock', input: 'queue initial' }),
+    });
+    expect(startResponse.status).toBe(202);
+    const started = await startResponse.json() as { run: { id: string; sessionId: string } };
+
+    const queued = await Promise.all(['follow one', 'follow two'].map(content => fetch(
+      `${baseUrl}/api/agent/runs/${started.run.id}/queue`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'follow-up', content }),
+      },
+    )));
+    expect(queued.map(item => item.status)).toEqual([202, 202]);
+
+    let state: {
+      run?: { phase: string };
+      session: { messages: Array<{ role: string; content: string }> };
+    } | undefined;
+    for (let attempt = 0; attempt < 200; attempt++) {
+      state = await fetch(`${baseUrl}/api/agent/sessions/${started.run.sessionId}/state`)
+        .then(response => response.json()) as typeof state;
+      if (state?.run?.phase === 'completed') break;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+
+    expect(state?.run?.phase).toBe('completed');
+    expect(state?.session.messages.filter(message => message.role === 'user').map(message => message.content))
+      .toEqual(['queue initial', 'follow one', 'follow two']);
+    expect(state?.session.messages.filter(message => message.role === 'assistant')).toHaveLength(2);
+    await fetch(`${baseUrl}/api/sessions/${started.run.sessionId}`, { method: 'DELETE' });
+    await rm(agentDirectory, { recursive: true, force: true });
+  });
+
   it('reports the exact tools enabled by each session preset', async () => {
     const created = await fetch(`${baseUrl}/api/sessions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
