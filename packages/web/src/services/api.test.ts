@@ -33,6 +33,7 @@ import {
   setAuthToken,
   setChatTransport,
   setProviderApiKey,
+  setPluginsEnabled,
   stopSubagentRun,
   streamAgentEvents,
   updateEnabledModels,
@@ -303,6 +304,35 @@ describe('Web API service', () => {
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/plugins/check', expect.objectContaining({ method: 'POST' }));
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/plugins/reload', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('posts plugin group activation as one bounded request and retains partial outcomes', async () => {
+    const catalog = {
+      updatedAt: '2026-10-01T00:00:00.000Z', generation: 2, cwd: '/workspace', projectId: 'workspace-1',
+      projectTrusted: false, projectResourcesLoaded: false, packages: [], standaloneExtensions: [],
+      totals: { extensions: 0, skills: 0, prompts: 0, themes: 0 }, diagnostics: [],
+    };
+    const changes = [
+      { key: 'global:global:01234567890123456789', scope: 'global' as const, enabled: true },
+      { key: 'project:workspace-1:11234567890123456789', scope: 'project' as const, enabled: true },
+    ];
+    const batch = {
+      catalog,
+      outcomes: [
+        { ...changes[0]!, state: 'changed' },
+        { ...changes[1]!, state: 'failed', code: 'PROJECT_TRUST_REQUIRED' },
+      ],
+      reloadRequired: true,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(batch), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(setPluginsEnabled({ cwd: '/workspace', projectId: 'workspace-1', changes }))
+      .resolves.toEqual({ success: true, data: batch });
+    expect(fetchMock).toHaveBeenCalledWith('/api/plugins/enabled', expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ cwd: '/workspace', projectId: 'workspace-1', changes }),
+    }));
   });
 
   it('loads sub-agent settings, creates profiles and controls child runs', async () => {

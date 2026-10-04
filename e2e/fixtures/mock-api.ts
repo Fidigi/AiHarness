@@ -760,6 +760,42 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
         });
       await fulfillJson(route, scopedCatalog); return;
     }
+    if (url.pathname === '/api/plugins/enabled' && method === 'PATCH') {
+      const input = body as {
+        changes?: Array<{ key?: string; scope?: 'global' | 'project'; enabled?: boolean }>;
+      };
+      if (!Array.isArray(input.changes) || input.changes.length === 0 || input.changes.length > 100) {
+        await fulfillJson(route, { error: 'Invalid plugin batch', code: 'INVALID_PLUGIN_BATCH' }, 400); return;
+      }
+      const changedPackages: PluginPackageInfo[] = [];
+      const outcomes = input.changes.map(change => {
+        const pkg = pluginCatalog.packages.find(candidate => candidate.key === change.key && candidate.scope === change.scope);
+        if (!pkg) {
+          return { ...change, state: 'failed', code: 'PLUGIN_NOT_FOUND', message: 'Package not found.' };
+        }
+        if (change.enabled === true && pkg.scope === 'project' && !workspace.trusted) {
+          return {
+            key: pkg.key, scope: pkg.scope, enabled: true, state: 'failed',
+            code: 'PROJECT_TRUST_REQUIRED', message: 'Project trust required.',
+          };
+        }
+        if (typeof change.enabled !== 'boolean' || pkg.enabled === change.enabled) {
+          return { key: pkg.key, scope: pkg.scope, enabled: pkg.enabled, state: 'unchanged' };
+        }
+        changedPackages.push(pkg);
+        pkg.enabled = change.enabled;
+        pkg.status = change.enabled ? 'active' : 'disabled';
+        pkg.updatedAt = '2025-01-01T12:02:00.000Z';
+        return { key: pkg.key, scope: pkg.scope, enabled: change.enabled, state: 'changed' };
+      });
+      pluginCatalog = withPluginTotals({ ...pluginCatalog, updatedAt: '2025-01-01T12:02:00.000Z' });
+      await fulfillJson(route, {
+        catalog: pluginCatalog,
+        outcomes,
+        reloadRequired: changedPackages.some(pkg => pkg.counts.extensions > 0
+          || (pkg.scope === 'project' && !workspace.trusted)),
+      }); return;
+    }
     if (url.pathname === '/api/plugins' && method === 'POST') {
       const input = body as {
         action?: string; key?: string; source?: string; scope?: 'global' | 'project';

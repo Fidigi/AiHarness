@@ -88,6 +88,7 @@ Never expose provider keys, OAuth tokens, server-side authorization headers, pas
 - Disable npm lifecycle scripts and use shallow Git clones in staging.
 - Reject linked package roots/resources, traversal and out-of-package filters; bound state, manifest, scan depth/count and resource count.
 - Serialize every CLI/Server mutation under the same heartbeat lock, refresh state inside it, and commit owner-only temporary files by atomic rename.
+- Bound group activation to 100 unique entries, authorize each project enable independently, keep project disable available for cleanup, and commit all allowed changes in one state write without altering resource filters; flag untrusted cleanup for runtime reload without reopening package contents.
 - Validate a complete managed candidate before atomic replacement and restore its backup if package or state publication fails.
 - Exclude resource bodies, source code, command output and credentials from catalogues and diagnostics.
 
@@ -108,7 +109,7 @@ The launcher binds to `127.0.0.1` by default. A non-loopback bind without authen
 ## Associated Tests
 
 - `packages/core/src/security/{project-trust,workspace-manager}.test.ts`, `packages/core/src/config/agent-settings.test.ts`, `packages/core/src/prompts/instruction-context.test.ts`, `packages/core/src/mcp/config-inventory.test.ts`, and `packages/core/src/tools/{workspace-tools,shell-command-runtime}.test.ts` — resource-sensitive exact/inherited/refused trust, v1 migration and cross-process merging, roots, settings/instruction/MCP precedence and bounds, no-follow files, redaction, shadowing, realpath, shared shell cancellation/backpressure, retention and child-environment filtering
-- `packages/core/src/plugins/plugin-service.test.ts` — package source/filter validation, project trust, linked-resource rejection, atomic persistence and concurrent service mutation
+- `packages/core/src/plugins/plugin-service.test.ts` — package source/filter validation, project trust, bounded batch refusal/partial success, linked-resource rejection, atomic persistence and concurrent service mutation
 - `packages/cli/src/resources/resource-manager.test.ts` — trusted local/package roots, ordered selectors, no-follow resource loading and project precedence
 - `packages/cli/src/security/project-trust.test.ts`, `packages/cli/src/cli/invocation.test.ts` and `packages/cli/src/cli/shell-controller.test.ts` — prompt adapter, process overrides, headless policy and interactive shell gating/abort behavior
 - `packages/cli/src/security/oauth-device.test.ts` — bounded OAuth polling and cancellation

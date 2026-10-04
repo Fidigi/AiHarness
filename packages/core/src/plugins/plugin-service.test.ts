@@ -146,6 +146,101 @@ describe('PluginService', () => {
     expect(persisted.packages).toHaveLength(1);
   });
 
+  it('applies group activation in one write and reports untrusted entries independently', async () => {
+    const root = await temporaryDirectory();
+    const source = path.join(root, 'batch-plugin');
+    await fixturePackage(source);
+    const { project, trust, service } = await setup(root);
+
+    const globalCatalog = await service.install({ cwd: project, scope: 'global', source });
+    await trust.trust(project);
+    const installed = await service.install({ cwd: project, scope: 'project', source });
+    const globalPackage = globalCatalog.packages[0]!;
+    const projectPackage = installed.packages.find(pkg => pkg.scope === 'project')!;
+    await service.configure({
+      cwd: project,
+      key: globalPackage.key,
+      scope: 'global',
+      resourceFilters: { prompts: [] },
+    });
+
+    const changes = [
+      { key: globalPackage.key, scope: 'global' as const, enabled: false },
+      { key: projectPackage.key, scope: 'project' as const, enabled: false },
+    ];
+    const persist = vi.spyOn(service as unknown as { persist(): Promise<void> }, 'persist');
+    persist.mockRejectedValueOnce(new Error('simulated batch persistence failure'));
+    await expect(service.setEnabledBatch({ cwd: project, projectId: installed.projectId, changes }))
+      .rejects.toThrow('simulated batch persistence failure');
+    const rolledBack = await service.getCatalog({ cwd: project, projectId: installed.projectId, refresh: true });
+    expect(rolledBack.packages.filter(pkg => [globalPackage.key, projectPackage.key].includes(pkg.key)))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ key: globalPackage.key, enabled: true }),
+        expect.objectContaining({ key: projectPackage.key, enabled: true }),
+      ]));
+
+    persist.mockClear();
+    const disabled = await service.setEnabledBatch({
+      cwd: project,
+      projectId: installed.projectId,
+      changes,
+    });
+    expect(disabled.outcomes).toEqual([
+      expect.objectContaining({ key: globalPackage.key, state: 'changed' }),
+      expect.objectContaining({ key: projectPackage.key, state: 'changed' }),
+    ]);
+    expect(disabled.reloadRequired).toBe(true);
+    expect(disabled.catalog.packages.find(pkg => pkg.key === globalPackage.key)).toMatchObject({
+      enabled: false,
+      resourceFilters: { prompts: [] },
+    });
+    expect(persist).toHaveBeenCalledTimes(1);
+
+    await service.setEnabled({
+      cwd: project,
+      projectId: installed.projectId,
+      key: projectPackage.key,
+      scope: 'project',
+      enabled: true,
+    });
+    persist.mockClear();
+    await trust.untrust(project);
+    const cleanup = await service.setEnabledBatch({
+      cwd: project,
+      projectId: installed.projectId,
+      changes: [{ key: projectPackage.key, scope: 'project', enabled: false }],
+    });
+    expect(cleanup.outcomes).toEqual([expect.objectContaining({ state: 'changed' })]);
+    expect(cleanup.reloadRequired).toBe(true);
+    expect(persist).toHaveBeenCalledTimes(1);
+
+    persist.mockClear();
+    const missingKey = `global:global:${'f'.repeat(20)}`;
+    const partial = await service.setEnabledBatch({
+      cwd: project,
+      projectId: installed.projectId,
+      changes: [
+        { key: globalPackage.key, scope: 'global', enabled: true },
+        { key: projectPackage.key, scope: 'project', enabled: true },
+        { key: missingKey, scope: 'global', enabled: true },
+      ],
+    });
+    expect(partial.outcomes).toEqual([
+      expect.objectContaining({ key: globalPackage.key, state: 'changed' }),
+      expect.objectContaining({ key: projectPackage.key, state: 'failed', code: 'PROJECT_TRUST_REQUIRED' }),
+      expect.objectContaining({ key: missingKey, state: 'failed', code: 'PLUGIN_NOT_FOUND' }),
+    ]);
+    expect(partial.reloadRequired).toBe(true);
+    expect(partial.catalog.packages.find(pkg => pkg.key === globalPackage.key)).toMatchObject({
+      enabled: true,
+      resourceFilters: { prompts: [] },
+    });
+    expect(partial.catalog.packages.find(pkg => pkg.key === projectPackage.key)?.enabled).toBe(false);
+    expect(persist).toHaveBeenCalledTimes(1);
+    await expect(service.setEnabledBatch({ cwd: project, changes: [] }))
+      .rejects.toMatchObject({ code: 'INVALID_PLUGIN_BATCH' });
+  });
+
   it('rejects linked local roots, manifests, and persisted state', async () => {
     const root = await temporaryDirectory();
     const realSource = path.join(root, 'real-source');

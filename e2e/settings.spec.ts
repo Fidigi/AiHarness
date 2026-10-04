@@ -251,6 +251,19 @@ test.describe('Settings and authentication', () => {
     await expect(globalCard).toContainText('extensions/review-tools.js');
     await expect(globalCard).toContainText('skills/release-review');
 
+    const globalGroup = section.locator('fieldset[data-scope="global"]');
+    const disableRequestPromise = page.waitForRequest(request => request.url().endsWith('/api/plugins/enabled'));
+    await globalGroup.getByRole('button', { name: 'Disable all (1)' }).click();
+    const disableRequest = await disableRequestPromise;
+    expect(disableRequest.method()).toBe('PATCH');
+    expect(disableRequest.postDataJSON().changes).toEqual([{
+      key: 'global:global:11111111111111111111', scope: 'global', enabled: false,
+    }]);
+    await expect(globalCard.getByRole('checkbox')).not.toBeChecked();
+    await expect(section.getByText('Executable extension changes are pending.', { exact: false })).toBeVisible();
+    await globalGroup.getByRole('button', { name: 'Enable all (1)' }).click();
+    await expect(globalCard.getByRole('checkbox')).toBeChecked();
+
     await section.getByLabel('Filter packages').fill('workspace');
     await expect(section.locator('.plugin-card')).toHaveCount(1);
     await section.getByLabel('Filter packages').fill('');
@@ -280,6 +293,28 @@ test.describe('Settings and authentication', () => {
     page.once('dialog', dialog => dialog.accept());
     await installed.getByRole('button', { name: 'Remove' }).click();
     await expect(installed).toHaveCount(0);
+  });
+
+  test('refuse indépendamment une activation groupée projet sans confiance', async ({ page }) => {
+    await installMockApi(page, { workspaceTrusted: false });
+    await page.goto('/settings#plugins');
+    const section = page.locator('#plugins');
+    const projectGroup = section.locator('fieldset[data-scope="project"]');
+    const projectCard = projectGroup.locator('.plugin-card').filter({ hasText: 'workspace-kit' });
+
+    await projectGroup.getByRole('button', { name: 'Disable all (1)' }).click();
+    await expect(projectCard.getByRole('checkbox')).not.toBeChecked();
+    await expect(section.getByText('Executable extension changes are pending.', { exact: false })).toBeVisible();
+    const requestPromise = page.waitForRequest(request => request.url().endsWith('/api/plugins/enabled'));
+    await projectGroup.getByRole('button', { name: 'Enable all (1)' }).click();
+    const request = await requestPromise;
+    expect(request.method()).toBe('PATCH');
+    expect(request.postDataJSON().changes).toEqual([{
+      key: 'project:workspace-e2e:22222222222222222222', scope: 'project', enabled: true,
+    }]);
+    await expect(section.getByRole('alert')).toContainText('Changed: 0 · unchanged: 0 · refused: 1.');
+    await expect(section).toContainText('workspace-kit: Project trust is required.');
+    await expect(projectCard.getByRole('checkbox')).not.toBeChecked();
   });
 
   test('verrouille les packages projet non approuvés sans bloquer l’administration globale', async ({ page }) => {

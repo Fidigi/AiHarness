@@ -453,15 +453,45 @@ describe('combined Web server', () => {
     expect(mismatchedReloadResponse.status).toBe(409);
     expect(await mismatchedReloadResponse.json()).toMatchObject({ code: 'SESSION_WORKSPACE_MISMATCH' });
 
-    const disableResponse = await fetch(`${baseUrl}/api/plugins`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'disable', ...baseInput, key }),
+    const invalidBatch = await fetch(`${baseUrl}/api/plugins/enabled`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...baseInput, changes: [] }),
+    });
+    expect(invalidBatch.status).toBe(400);
+    const disableResponse = await fetch(`${baseUrl}/api/plugins/enabled`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...baseInput,
+        changes: [{ key, scope: 'project', enabled: false }],
+      }),
     });
     expect(disableResponse.status).toBe(200);
-    expect(await disableResponse.json()).toMatchObject({ packages: [expect.objectContaining({ enabled: false })] });
+    expect(await disableResponse.json()).toMatchObject({
+      catalog: { packages: [expect.objectContaining({ enabled: false })] },
+      outcomes: [{ key, state: 'changed' }],
+      reloadRequired: true,
+    });
     const disabledSkills = await fetch(`${baseUrl}/api/skills?cwd=${encodeURIComponent(webRoot)}&projectId=${workspace.id}&refresh=true`)
       .then(response => response.json()) as { skills: Array<{ name: string }> };
     expect(disabledSkills.skills.some(skill => skill.name === 'http-plugin-review')).toBe(false);
+
+    await fetch(`${baseUrl}/api/workspaces/trust`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: webRoot, confirm: true }),
+    });
+    const refusedResponse = await fetch(`${baseUrl}/api/plugins/enabled`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...baseInput,
+        changes: [{ key, scope: 'project', enabled: true }],
+      }),
+    });
+    expect(refusedResponse.status).toBe(200);
+    expect(await refusedResponse.json()).toMatchObject({
+      catalog: { packages: [expect.objectContaining({ enabled: false, trusted: false })] },
+      outcomes: [{ key, state: 'failed', code: 'PROJECT_TRUST_REQUIRED' }],
+      reloadRequired: false,
+    });
 
     const removeResponse = await fetch(`${baseUrl}/api/plugins`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -469,10 +499,6 @@ describe('combined Web server', () => {
     });
     expect(removeResponse.status).toBe(200);
     expect((await removeResponse.json() as { packages: unknown[] }).packages).toEqual([]);
-    await fetch(`${baseUrl}/api/workspaces/trust`, {
-      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd: webRoot, confirm: true }),
-    });
   });
 
   it('manages sub-agent profiles and executes linked background children', async () => {

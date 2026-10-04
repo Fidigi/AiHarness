@@ -15,6 +15,9 @@ import { promisify } from 'node:util';
 import type {
   PluginCatalog,
   PluginDiagnostic,
+  PluginEnableBatchResult,
+  PluginEnableChange,
+  PluginEnableOutcome,
   PluginPackageInfo,
   PluginReloadResult,
   PluginResourceCounts,
@@ -46,6 +49,7 @@ const INSTALL_TIMEOUT_MS = 120_000;
 const CHECK_TIMEOUT_MS = 20_000;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 const UNSAFE_METADATA_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/;
+const PLUGIN_KEY_PATTERN = /^(?:global|project):[a-zA-Z0-9._:-]{1,200}:[a-f0-9]{20}$/;
 const EXTENSION_SUFFIXES = new Set(['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.tsx']);
 const EMPTY_COUNTS: PluginResourceCounts = { extensions: 0, skills: 0, prompts: 0, themes: 0 };
 
@@ -179,6 +183,30 @@ function inside(root: string, candidate: string): boolean {
 
 function cloneCatalog(catalog: PluginCatalog): PluginCatalog {
   return structuredClone(catalog);
+}
+
+function validatedEnableChanges(value: unknown): PluginEnableChange[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_PACKAGES) {
+    throw httpError('Lot d’activation de packages invalide.', 400, 'INVALID_PLUGIN_BATCH');
+  }
+  const selectors = new Set<string>();
+  return value.map(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw httpError('Lot d’activation de packages invalide.', 400, 'INVALID_PLUGIN_BATCH');
+    }
+    const change = item as Partial<PluginEnableChange>;
+    if (typeof change.key !== 'string' || !PLUGIN_KEY_PATTERN.test(change.key)
+      || (change.scope !== 'global' && change.scope !== 'project')
+      || typeof change.enabled !== 'boolean') {
+      throw httpError('Lot d’activation de packages invalide.', 400, 'INVALID_PLUGIN_BATCH');
+    }
+    const selector = `${change.scope}:${change.key}`;
+    if (selectors.has(selector)) {
+      throw httpError('Le lot contient un package en double.', 400, 'INVALID_PLUGIN_BATCH');
+    }
+    selectors.add(selector);
+    return { key: change.key, scope: change.scope, enabled: change.enabled };
+  });
 }
 
 function sourceHosts(): Set<string> {
@@ -834,6 +862,79 @@ export class PluginService {
     });
   }
 
+  /** Apply one bounded group change under a single lock/write while reporting policy failures per package. */
+  async setEnabledBatch(
+    input: PluginContextInput & { changes: readonly PluginEnableChange[] },
+  ): Promise<PluginEnableBatchResult> {
+    const changes = validatedEnableChanges(input.changes);
+    return this.queued(async () => {
+      const context = await this.context(input);
+      const initial = await this.scanCatalog(context, this.state.generation);
+      const initialPackages = new Map(initial.packages.map(pkg => [`${pkg.scope}:${pkg.key}`, pkg]));
+      const records = this.visibleRecords(context);
+      const snapshots: Array<{ record: StoredPlugin; enabled: boolean; updatedAt: string }> = [];
+      const outcomes: PluginEnableOutcome[] = [];
+      const updatedAt = new Date().toISOString();
+
+      for (const change of changes) {
+        const record = records.find(candidate => candidate.key === change.key && candidate.scope === change.scope);
+        if (!record) {
+          outcomes.push({
+            ...change,
+            state: 'failed',
+            code: 'PLUGIN_NOT_FOUND',
+            message: 'Package introuvable.',
+          });
+          continue;
+        }
+        if (change.enabled && record.scope === 'project' && !context.projectTrusted) {
+          outcomes.push({
+            ...change,
+            state: 'failed',
+            code: 'PROJECT_TRUST_REQUIRED',
+            message: 'Le workspace doit être approuvé avant d’activer ce package projet.',
+          });
+          continue;
+        }
+        if (record.enabled === change.enabled) {
+          outcomes.push({ ...change, state: 'unchanged' });
+          continue;
+        }
+        snapshots.push({ record, enabled: record.enabled, updatedAt: record.updatedAt });
+        record.enabled = change.enabled;
+        record.updatedAt = updatedAt;
+        outcomes.push({ ...change, state: 'changed' });
+      }
+
+      if (snapshots.length > 0) {
+        try {
+          await this.persist();
+        } catch (error) {
+          for (const snapshot of snapshots) {
+            snapshot.record.enabled = snapshot.enabled;
+            snapshot.record.updatedAt = snapshot.updatedAt;
+          }
+          throw error;
+        }
+        this.invalidate();
+      }
+
+      const reloadRequired = snapshots.some(snapshot => {
+        // Never reopen an untrusted project package merely to classify cleanup. Its prior runtime
+        // generation may still contain executable code, so disabling it conservatively requires reload.
+        if (snapshot.record.scope === 'project' && !context.projectTrusted) return true;
+        return (initialPackages.get(`${snapshot.record.scope}:${snapshot.record.key}`)?.counts.extensions ?? 0) > 0;
+      });
+      const catalog = await this.getCatalog({
+        cwd: context.cwd,
+        projectId: context.projectId,
+        projectTrusted: context.projectTrusted,
+        refresh: true,
+      });
+      return { catalog, outcomes, reloadRequired };
+    });
+  }
+
   async configure(
     input: PluginMutationInput & { key: string; resourceFilters?: PluginResourceFilters },
   ): Promise<PluginCatalog> {
@@ -1416,7 +1517,7 @@ export class PluginService {
   }
 
   private findMutable(key: string, scope: PluginScope, context: PluginContext): StoredPlugin {
-    if (!/^(?:global|project):[a-zA-Z0-9._:-]{1,200}:[a-f0-9]{20}$/.test(key)) {
+    if (!PLUGIN_KEY_PATTERN.test(key)) {
       throw httpError('Identifiant de package invalide.', 400, 'INVALID_PLUGIN_KEY');
     }
     const record = this.state.packages.find(candidate => candidate.key === key
@@ -1455,7 +1556,7 @@ export class PluginService {
     catch { filtersValid = false; }
     return filtersValid
       && typeof record.key === 'string'
-      && /^(?:global|project):[a-zA-Z0-9._:-]{1,200}:[a-f0-9]{20}$/.test(record.key)
+      && PLUGIN_KEY_PATTERN.test(record.key)
       && typeof record.source === 'string' && record.source.length <= 1_000 && !CONTROL_CHARACTERS.test(record.source)
       && ['npm', 'git', 'path'].includes(record.sourceType ?? '')
       && (record.scope === 'global' || record.scope === 'project')

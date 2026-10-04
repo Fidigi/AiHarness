@@ -15,6 +15,8 @@ import type {
   McpConfigInventory,
   ModelCatalog,
   PluginCatalog,
+  PluginEnableBatchResult,
+  PluginEnableChange,
   PluginReloadResult,
   PluginScope,
   PluginUpdateResult,
@@ -1695,6 +1697,25 @@ export async function mutatePlugin(input: {
     return { success: true, data };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Plugin action failed' };
+  }
+}
+
+export async function setPluginsEnabled(input: {
+  cwd?: string;
+  projectId?: string;
+  changes: PluginEnableChange[];
+}): Promise<ApiResponse<PluginEnableBatchResult>> {
+  try {
+    const response = await apiFetch(`${API_BASE}/plugins/enabled`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const data = await response.json().catch(() => ({})) as PluginEnableBatchResult & { error?: string };
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Plugin group action failed' };
   }
 }
 

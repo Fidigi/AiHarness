@@ -1,5 +1,5 @@
 import { Router, type Request } from 'express';
-import type { PluginScope } from '@ai-harness/core';
+import type { PluginEnableChange, PluginScope } from '@ai-harness/core';
 import { requireCapability } from '../security/request-security.js';
 import type { RuntimeServices } from '../runtime/services.js';
 
@@ -29,6 +29,35 @@ function requiredScope(value: unknown): PluginScope {
   const scope = optionalScope(value);
   if (!scope) throw Object.assign(new Error('Portée de plugin requise.'), { status: 400, code: 'INVALID_PLUGIN_SCOPE' });
   return scope;
+}
+
+function enabledChanges(value: unknown): PluginEnableChange[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 100) {
+    throw Object.assign(new Error('Lot d’activation de packages invalide.'), {
+      status: 400,
+      code: 'INVALID_PLUGIN_BATCH',
+    });
+  }
+  const selectors = new Set<string>();
+  return value.map(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw Object.assign(new Error('Lot d’activation de packages invalide.'), {
+        status: 400,
+        code: 'INVALID_PLUGIN_BATCH',
+      });
+    }
+    const entry = item as Record<string, unknown>;
+    const key = requiredString(entry.key, 'key', 300);
+    const scope = requiredScope(entry.scope);
+    if (typeof entry.enabled !== 'boolean' || selectors.has(`${scope}:${key}`)) {
+      throw Object.assign(new Error('Lot d’activation de packages invalide.'), {
+        status: 400,
+        code: 'INVALID_PLUGIN_BATCH',
+      });
+    }
+    selectors.add(`${scope}:${key}`);
+    return { key, scope, enabled: entry.enabled };
+  });
 }
 
 function webPluginSource(value: unknown): string {
@@ -84,6 +113,22 @@ export function createPluginRouter(servicesPromise: Promise<RuntimeServices>): R
       });
       response.setHeader('Cache-Control', 'no-store');
       response.json(catalog);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch('/enabled', requireCapability('packages'), async (request, response, next) => {
+    try {
+      const services = await servicesPromise;
+      const result = await services.pluginService.setEnabledBatch({
+        ...context(request.body),
+        changes: enabledChanges(request.body?.changes),
+      });
+      if (result.outcomes.some(outcome => outcome.state === 'changed')) {
+        await refreshSkills(services, result.catalog.cwd, result.catalog.projectId);
+      }
+      response.json(result);
     } catch (error) {
       next(error);
     }

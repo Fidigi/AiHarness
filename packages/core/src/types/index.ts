@@ -340,6 +340,26 @@ export interface PluginCatalog {
   diagnostics: PluginDiagnostic[];
 }
 
+export interface PluginEnableChange {
+  key: string;
+  scope: PluginScope;
+  enabled: boolean;
+}
+
+export interface PluginEnableOutcome extends PluginEnableChange {
+  state: 'changed' | 'unchanged' | 'failed';
+  code?: 'PLUGIN_NOT_FOUND' | 'PROJECT_TRUST_REQUIRED';
+  /** Fixed, value-free diagnostic suitable for administrative clients. */
+  message?: string;
+}
+
+export interface PluginEnableBatchResult {
+  catalog: PluginCatalog;
+  outcomes: PluginEnableOutcome[];
+  /** Executable changes remain pending until the explicit runtime reload action succeeds. */
+  reloadRequired: boolean;
+}
+
 export type PluginUpdateState = 'update-available' | 'up-to-date' | 'unsupported' | 'error';
 
 export interface PluginUpdateResult {

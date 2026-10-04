@@ -328,10 +328,14 @@ html[data-theme="light"] .sidebar-footer button { color: #52627b; }
 .plugin-toolbar-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .4rem; }
 .plugin-feedback { min-height: 1.6rem; }
 .plugin-feedback p { margin: .25rem 0; font-size: .78rem; }
+.plugin-batch-failures { margin: .2rem 0 .45rem; padding-left: 1.25rem; color: #ffb1bf; font-size: .72rem; }
+.plugin-batch-failures li + li { margin-top: .2rem; }
 .plugin-empty { padding: 1rem; border: 1px dashed #40527b; border-radius: 6px; color: #98a6bd; text-align: center; }
 .plugin-groups { display: grid; gap: .8rem; }
 .plugin-groups > fieldset { min-width: 0; padding: .55rem; border: 1px solid #40527b; border-radius: 7px; }
 .plugin-groups > fieldset > legend { padding: 0 .35rem; color: #e9eef8; font-weight: 600; text-transform: capitalize; }
+.plugin-group-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .4rem; margin: 0 0 .55rem; }
+.plugin-group-actions button { padding: .32rem .55rem; font-size: .7rem; }
 .plugin-card { min-width: 0; padding: .7rem; border: 1px solid #30466e; border-radius: 7px; background: #111a31; }
 .plugin-card + .plugin-card { margin-top: .55rem; }
 .plugin-card > header { display: flex; align-items: start; justify-content: space-between; gap: .7rem; }
@@ -426,6 +430,7 @@ html[data-theme="light"] .plugin-resource-group > code, html[data-theme="light"]
 html[data-theme="light"] .plugin-toggle { color: #34445e; }
 html[data-theme="light"] .plugin-resources { border-color: #d8dee9; }
 html[data-theme="light"] .plugin-actions button.danger { color: #87253a; background: #fff2f4; border-color: #c77a89; }
+html[data-theme="light"] .plugin-batch-failures { color: #87253a; }
 html[data-theme="light"] .plugin-trust-notice { background: #fff8e8; }
 html[data-theme="light"] .subagent-engine-settings small, html[data-theme="light"] .subagent-toolbar > label,
 html[data-theme="light"] .subagent-editor-grid label, html[data-theme="light"] .subagent-profile-card dt,
@@ -467,6 +472,8 @@ html[data-theme="light"] .version-status .update-available > a, html[data-theme=
   .plugin-install-panel > small { grid-column: 1; }
   .plugin-toolbar-actions { justify-content: flex-start; }
   .plugin-toolbar-actions button { flex: 1 1 auto; }
+  .plugin-group-actions { justify-content: stretch; }
+  .plugin-group-actions button { flex: 1 1 8rem; }
   .plugin-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .plugin-actions .plugin-toggle { grid-column: 1 / -1; }
   .plugin-resource-group { grid-template-columns: 1fr; }

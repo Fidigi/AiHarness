@@ -12,7 +12,7 @@ Package administration is also Core-owned. CLI commands and the Server/Web route
 
 ```text
 ExtensionModuleLoader -> candidate JS modules -> ExtensionRegistry generation
-Core PluginService -> install/locked state/filtered inventory -> enabled resources
+Core PluginService -> install/locked state/filtered inventory/bounded batch state -> enabled resources
   |-> CLI package commands + CLI/RPC startup/reload
   `-> Server API adapter + trusted workspace generation -> AgentRuntime/Web metadata
 ```
@@ -71,6 +71,10 @@ explicit CLI or Web install/update
 
 `ai-harness package list` and `GET /api/plugins` are metadata-only: they must not execute code, install, update, or contact npm/Git. CLI package actions exit before agent startup. Enabled package resources are workspace/scope filtered; project resources remain hidden until trust. Interactive `/reload` re-resolves package resources for the CLI generation, while Server reload validates and publishes its own runtime generation.
 
+### Change a Web package group
+
+`PluginSettings` offers **Enable all** and **Disable all** independently for Project and Global packages. It submits only rows whose enabled state changes in one bounded `PATCH /api/plugins/enabled` request. Core validates at most 100 unique selectors, evaluates trust per entry, applies allowed changes under one inter-process lock and commits them in one atomic state write. The response preserves input order and reports each selector as `changed`, `unchanged`, or `failed`; missing and untrusted project entries do not erase allowed global changes. Only `enabled` and `updatedAt` change, so resource filters remain intact. Disabling an untrusted project entry is safe cleanup, while enabling it is refused. If an affected package contains executable extensions, Web keeps an explicit reload-pending notice until **Reload resources** succeeds. Because Core must not reopen an untrusted project package to classify its resources, disabling one conservatively raises the same notice in case its prior runtime generation still contains executable code.
+
 ### Request declarative UI
 
 ```text
@@ -91,13 +95,13 @@ Never accept extension-provided React, DOM, script, style, or arbitrary HTML. Fo
 - Preserve registration ownership so unload removes every command/tool/provider/UI/hook/listener.
 - Pass cancellation to active tool and interaction work.
 - Validate package source, bounded manifests/state, package-relative filters, symlinks, and rollback before changing active state.
-- Serialize CLI/Server mutations with the Core heartbeat lock and owner-only atomic state writes.
+- Serialize CLI/Server mutations with the Core heartbeat lock and owner-only atomic state writes; group activation remains bounded, uses one write, and returns value-free per-entry failures.
 
 ## Associated Tests
 
 - `packages/core/src/extensions/extension-registry.test.ts` — ownership, hooks, tools, providers, UI and atomic replacement
 - `packages/cli/src/extensions/extension-loader.test.ts` — explicit path parsing and loader behavior
-- `packages/core/src/plugins/plugin-service.test.ts` — source validation, filters, trust, concurrency, inventory and transactional package state
+- `packages/core/src/plugins/plugin-service.test.ts` — source validation, filters, trust, bounded one-write group activation, partial outcomes, concurrency, inventory and transactional package state
 - `packages/cli/src/cli/{package-command,invocation}.test.ts` — strict command parsing and real package resource startup
 - `packages/server/src/web-server.test.ts` — plugin/reload HTTP, trust and runtime integration
 - `e2e/settings.spec.ts` — package administration flows

@@ -134,6 +134,8 @@ ai-harness package remove @scope/review-kit
 
 `npm:`, restricted HTTPS `git:`, and explicit local paths are supported. `--extensions`, `--skills`, `--prompts`, and `--themes` only narrow manifest resources; an empty value disables a kind and `--reset` restores defaults. Installing, configuring, enabling, updating, or loading project packages requires project trust; disabling and removal remain available for safe cleanup. Packages run trusted Node code without a sandbox, so review sources before installation.
 
+Web Project/Global **Enable all** and **Disable all** controls delegate one bounded batch to Core. Core preserves resource filters, commits allowed changes with one atomic state write, reports per-entry trust/not-found failures, and flags executable changes for the separate resource reload.
+
 ## Management Commands
 
 ```text

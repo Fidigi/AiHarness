@@ -35,7 +35,7 @@ The browser contract is summarized in [`web-app-architecture.md`](./web-app-arch
 | Models | `GET /api/models`; `PATCH /api/models/enabled` |
 | Provider registry | `/api/provider-registry/auth`, OAuth flows, tests, custom providers and custom models |
 | MCP inventory | `GET /api/mcp` for global configuration; optional canonical `?cwd=` adds trust-gated project metadata/configuration |
-| Tools/packages/resources | `/api/tools`, `/api/plugins`, `/api/skills`, `/api/push` |
+| Tools/packages/resources | `/api/tools`; `/api/plugins` plus `PATCH /api/plugins/enabled`; `/api/skills`; `/api/push` |
 | Child agents | settings; profile list/create/update/delete/duplicate; run list/start/get/stop/acknowledge under `/api/subagents` |
 | Legacy chat | `POST /api/chat`, `/stream`, `/compact`; WebSocket upgrade at `/api/chat/ws` |
 
@@ -77,6 +77,10 @@ See [`security.md`](./security.md) before changing credentials, capability guard
 
 The response contains file existence/read flags and typed diagnostics, redacted server descriptors, exact-name global/project shadowing, and trust provenance. It contains no env/header values or source excerpts. This endpoint is not a connectivity probe: it must not expand references, run command-backed values, spawn stdio, make HTTP requests, initialize OAuth, read/create an OAuth store, or write either file. There is no MCP POST/runtime route in this delivery.
 
+## Plugin Group Mutation
+
+`PATCH /api/plugins/enabled` accepts one to 100 unique `{ key, scope, enabled }` selectors plus canonical workspace context. It requires the `packages` capability and the normal mutation Origin check. The Server adapter validates shape only; Core owns lookup, trust, locking, rollback and persistence. Allowed entries are committed in one atomic state write, while ordered outcomes report changed, unchanged, missing and trust-refused entries independently. Project enables require resolved trust; project disables remain available for cleanup. The returned catalogue reflects the committed state, resource selectors are untouched, and `reloadRequired` tells Web when executable extension changes need the separate atomic reload endpoint. An untrusted project cleanup is conservatively flagged without reopening package files, because a prior trusted runtime generation may still contain its code.
+
 ## Session HTTP Invariants
 
 1. Register `/tree` and `/search` before `/sessions/:id`.
@@ -91,7 +95,7 @@ The response contains file existence/read flags and typed diagnostics, redacted 
 - `packages/server/src/web-server.test.ts` — broad HTTP, auth, sessions, providers, files, PTY, read-only MCP trust/redaction, packages and runtime integration
 - `packages/server/src/api/session-pagination.test.ts` — bounded message windows and cursors
 - `packages/server/src/security/request-security.test.ts` — roles, capabilities, origins, limits and WebSocket auth
-- `packages/web/src/services/api.test.ts` — browser request/response contracts
+- `packages/web/src/services/api.test.ts` — browser request/response contracts, including one-request package group activation and partial outcomes
 - `e2e/live-server.spec.ts` — Vite to real Express/mock provider/JSONL smoke flow
 - `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, and `e2e/settings.spec.ts` — mocked browser protocol flows
 
