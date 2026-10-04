@@ -83,3 +83,99 @@ describe('McpInventoryService undo store', () => {
     });
   });
 });
+
+describe('McpInventoryService import preview', () => {
+  it('passes only redacted inventory and environment names to the pure Core preview', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-preview-service-'));
+    temporaryDirectories.push(root);
+    const agentDir = path.join(root, 'agent');
+    const project = path.join(root, 'project');
+    await Promise.all([
+      mkdir(agentDir),
+      mkdir(path.join(project, '.ai-harness'), { recursive: true }),
+    ]);
+    const globalPath = path.join(agentDir, 'mcp.json');
+    const projectPath = path.join(project, '.ai-harness', 'mcp.json');
+    const globalSource = JSON.stringify({ mcpServers: { existing: { command: 'node' } } });
+    const projectSource = JSON.stringify({
+      mcpServers: { hidden: { command: 'node', env: { TOKEN: 'UNTRUSTED-PROJECT-SECRET' } } },
+    });
+    await Promise.all([
+      writeFile(globalPath, globalSource),
+      writeFile(projectPath, projectSource),
+    ]);
+    const workspaceManager = new WorkspaceManager({ allowedRoots: [root], defaultCwd: project });
+    await workspaceManager.initialize();
+    const trustManager = new ProjectTrustManager(path.join(agentDir, 'trust.json'));
+    await trustManager.load();
+    const service = new McpInventoryService(agentDir, workspaceManager, trustManager);
+    process.env.MCP_PREVIEW_HOST_TOKEN = 'HOST-ENV-SECRET-MUST-NOT-LEAK';
+    try {
+      const pasteSecret = 'PASTED-SECRET-MUST-NOT-LEAK';
+      const preview = await service.previewImport(JSON.stringify({
+        mcpServers: {
+          existing: {
+            url: 'https://example.test/private/path',
+            headers: {
+              Authorization: `Bearer ${pasteSecret}`,
+              'X-Host': '${MCP_PREVIEW_HOST_TOKEN}',
+            },
+          },
+        },
+      }), 'foreign', project);
+      const serialized = JSON.stringify(preview);
+
+      expect(preview.entries[0]!.variables).toEqual([
+        expect.objectContaining({
+          name: 'MCP_PREVIEW_HOST_TOKEN', availability: 'available', confirmationRequired: true,
+        }),
+      ]);
+      expect(preview.entries[0]!.scopes).toEqual({
+        global: {
+          allowed: false,
+          reasons: ['name-taken'],
+          confirmations: ['literal-secret', 'remote-host-variable'],
+        },
+        project: {
+          allowed: false,
+          reasons: ['trust-required', 'literal-secret'],
+          confirmations: ['remote-host-variable'],
+        },
+      });
+      expect(serialized).not.toContain(pasteSecret);
+      expect(serialized).not.toContain(process.env.MCP_PREVIEW_HOST_TOKEN);
+      expect(serialized).not.toContain('UNTRUSTED-PROJECT-SECRET');
+      expect(await readFile(globalPath, 'utf8')).toBe(globalSource);
+      expect(await readFile(projectPath, 'utf8')).toBe(projectSource);
+    } finally {
+      delete process.env.MCP_PREVIEW_HOST_TOKEN;
+    }
+  });
+
+  it('uses a fresh persisted trust decision before offering project scope', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-preview-service-'));
+    temporaryDirectories.push(root);
+    const agentDir = path.join(root, 'agent');
+    const project = path.join(root, 'project');
+    await Promise.all([mkdir(agentDir), mkdir(project)]);
+    const workspaceManager = new WorkspaceManager({ allowedRoots: [root], defaultCwd: project });
+    await workspaceManager.initialize();
+    const trustPath = path.join(agentDir, 'trust.json');
+    const trustManager = new ProjectTrustManager(trustPath);
+    await trustManager.load();
+    const service = new McpInventoryService(agentDir, workspaceManager, trustManager);
+
+    const before = await service.previewImport('npx public-mcp-server', 'foreign', project);
+    expect(before.entries[0]!.scopes.project).toEqual({
+      allowed: false,
+      reasons: ['trust-required'],
+      confirmations: [],
+    });
+
+    const secondManager = new ProjectTrustManager(trustPath);
+    await secondManager.load();
+    await secondManager.trust(project);
+    const after = await service.previewImport('npx public-mcp-server', 'foreign', project);
+    expect(after.entries[0]!.scopes.project).toEqual({ allowed: true, reasons: [], confirmations: [] });
+  });
+});

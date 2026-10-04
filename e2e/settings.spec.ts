@@ -4,6 +4,7 @@ import {
   MCP_FILE_PROBLEM_MESSAGES,
   MCP_FILE_PROBLEM_REASONS,
   mcpFileProblemInventory,
+  mcpImportPreviewFixture,
   mcpStateInventory,
 } from './fixtures/mcp';
 
@@ -260,6 +261,43 @@ test.describe('Settings and authentication', () => {
     await expect(section).toContainText('env.CACHE_DIR reads host variables: CACHE_DIR');
     await section.getByText('Configuration file diagnostics').click();
     await expect(section).toContainText(MCP_FILE_PROBLEM_MESSAGES['invalid-shape']);
+  });
+
+  test('reparcourt le texte MCP côté serveur et affiche seulement un aperçu expurgé', async ({ page }) => {
+    const api = await installMockApi(page, {
+      mcpConfig: mcpStateInventory(),
+      mcpImportPreview: mcpImportPreviewFixture(),
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    await section.getByText('Paste and preview a server').click();
+    const paste = '{"mcpServers":{"docs-import":{"url":"https://docs.example.test/private?token=SOURCE-SECRET","headers":{"Authorization":"Bearer ${DOCS_TOKEN}"}}}}';
+    await section.getByLabel('MCP server text').fill(paste);
+    await section.getByLabel('Treat resolved values as AiHarness syntax').check();
+    await section.getByRole('button', { name: 'Preview', exact: true }).click();
+
+    await expect(section.getByRole('heading', { name: 'Redacted import preview' })).toBeVisible();
+    const preview = section.getByRole('article', { name: 'docs-import' });
+    await expect(preview).toContainText('https://docs.example.test/•••?•••');
+    await expect(preview).toContainText('Header names: Authorization, X-Tenant');
+    await expect(preview).toContainText('headers.X-Tenant');
+    await expect(preview).toContainText('DOCS_TOKEN');
+    await expect(preview).toContainText('explicit confirmation required');
+    await expect(preview).toContainText('Confirmation is required before sending available host values remotely');
+    await expect(preview).toContainText('Confirmation is required before storing literal secrets globally');
+    await expect(preview).toContainText('Project configuration');
+    await expect(preview).toContainText('cannot contain literal secrets');
+    // The textarea intentionally retains the user's own paste; the rendered
+    // server response must not echo any literal from it.
+    await expect(preview).not.toContainText('SOURCE-SECRET');
+
+    const request = api.requests.find(item => item.path === '/api/mcp/preview');
+    expect(request?.body).toEqual({ text: paste, syntax: 'aiharness', cwd: '/workspace' });
+    expect(Object.keys(request?.body as object)).not.toContain('configuration');
+    expect(api.requests.filter(item => item.path === '/api/mcp/actions')).toHaveLength(0);
+
+    await section.getByLabel('MCP server text').fill('https://other.example.test');
+    await expect(section.getByRole('heading', { name: 'Redacted import preview' })).toHaveCount(0);
   });
 
   test('active et désactive les serveurs MCP par ligne ou groupe en une requête', async ({ page }) => {

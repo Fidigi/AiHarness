@@ -195,6 +195,106 @@ describe('combined Web server', () => {
     }
   });
 
+  it('previews MCP paste server-side without writes, resolution, execution, or source-value disclosure', async () => {
+    const dataDir = path.join(webRoot, '.data');
+    const globalFile = path.join(dataDir, 'mcp.json');
+    const project = path.join(webRoot, `mcp-preview-${Date.now()}`);
+    const projectDirectory = path.join(project, '.ai-harness');
+    const projectFile = path.join(projectDirectory, 'mcp.json');
+    const marker = path.join(project, 'must-not-exist');
+    await mkdir(projectDirectory, { recursive: true });
+    const globalSource = JSON.stringify({ mcpServers: { existing: { command: 'node' } } });
+    const projectSource = JSON.stringify({
+      mcpServers: { hidden: { command: 'node', env: { TOKEN: 'PROJECT-SOURCE-MUST-NOT-LEAK' } } },
+    });
+    await Promise.all([
+      writeFile(globalFile, globalSource),
+      writeFile(projectFile, projectSource),
+    ]);
+    vi.stubEnv('MCP_ROUTE_HOST_TOKEN', 'HOST-VALUE-MUST-NOT-LEAK');
+    try {
+      const pastedSecret = 'PASTED-VALUE-MUST-NOT-LEAK';
+      const response = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cwd: project,
+          syntax: 'foreign',
+          text: JSON.stringify({
+            mcpServers: {
+              existing: {
+                url: 'https://example.test/private/source-path',
+                headers: {
+                  Authorization: `Bearer ${pastedSecret}`,
+                  'X-Host': '${MCP_ROUTE_HOST_TOKEN}',
+                },
+              },
+            },
+          }),
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      const responseText = await response.text();
+      const preview = JSON.parse(responseText) as {
+        entries: Array<{
+          name: string;
+          variables: Array<{ name: string; availability: string; confirmationRequired: boolean }>;
+          scopes: { global: { allowed: boolean; reasons: string[] }; project: { allowed: boolean; reasons: string[] } };
+        }>;
+      };
+      expect(preview.entries[0]).toMatchObject({
+        name: 'existing',
+        variables: [{
+          name: 'MCP_ROUTE_HOST_TOKEN', availability: 'available', confirmationRequired: true,
+        }],
+        scopes: {
+          global: { allowed: false, reasons: ['name-taken'] },
+          project: { allowed: false, reasons: ['trust-required', 'literal-secret'] },
+        },
+      });
+      for (const value of [pastedSecret, 'HOST-VALUE-MUST-NOT-LEAK', 'PROJECT-SOURCE-MUST-NOT-LEAK', 'source-path']) {
+        expect(responseText).not.toContain(value);
+      }
+      expect(await readFile(globalFile, 'utf8')).toBe(globalSource);
+      expect(await readFile(projectFile, 'utf8')).toBe(projectSource);
+
+      const dangerous = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: `npx server; touch ${marker}` }),
+      });
+      expect(dangerous.status).toBe(200);
+      expect(await dangerous.json()).toMatchObject({
+        ok: false,
+        entries: [],
+        notes: [{ code: 'unsafe-shell', severity: 'error' }],
+      });
+      await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+
+      const objectInsteadOfText = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'npx server', configuration: { command: 'other' } }),
+      });
+      expect(objectInsteadOfText.status).toBe(400);
+      expect(await objectInsteadOfText.json()).toMatchObject({ code: 'invalid-request' });
+
+      const invalidCwd = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'npx server', cwd: null }),
+      });
+      expect(invalidCwd.status).toBe(400);
+      expect(await invalidCwd.json()).toMatchObject({ code: 'invalid-request' });
+    } finally {
+      await Promise.all([
+        rm(globalFile, { force: true }),
+        rm(project, { recursive: true, force: true }),
+      ]);
+    }
+  });
+
   it('serializes atomic MCP activation, removal, and opaque one-shot restoration', async () => {
     const dataDir = path.join(webRoot, '.data');
     const globalFile = path.join(dataDir, 'mcp.json');
@@ -1329,6 +1429,16 @@ describe('combined Web server', () => {
         action: 'set-enabled', scope: 'global', revision: null, names: ['alpha'], enabled: false,
       }),
     })).status).toBe(403);
+    expect((await fetch(`${baseUrl}/api/mcp/preview`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer user-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'npx public-mcp-server' }),
+    })).status).toBe(403);
+    expect((await fetch(`${baseUrl}/api/mcp/preview`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer admin-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'npx public-mcp-server' }),
+    })).status).toBe(200);
     expect((await fetch(`${baseUrl}/api/models/enabled`, {
       method: 'PATCH',
       headers: { Authorization: 'Bearer user-token', 'Content-Type': 'application/json' },

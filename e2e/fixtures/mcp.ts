@@ -1,6 +1,7 @@
 import type {
   McpConfigInventory,
   McpConfigProblemReason,
+  McpImportPreview,
   McpServerInventoryEntry,
 } from '@ai-harness/core';
 
@@ -86,6 +87,45 @@ export function mcpStateInventory(): McpConfigInventory {
         replacesGlobal: true, masked: true,
       }),
     ],
+  };
+}
+
+/** A value-free import preview covering fields, references, secrets, and scope policy. */
+export function mcpImportPreviewFixture(): McpImportPreview {
+  return {
+    ok: true,
+    entries: [{
+      name: 'docs-import',
+      source: 'mcp-json',
+      complete: false,
+      persisted: {
+        valid: true,
+        enabled: true,
+        exposure: 'direct',
+        transport: 'http',
+        url: 'https://docs.example.test/•••?•••',
+        envNames: [],
+        headerNames: ['Authorization', 'X-Tenant'],
+        oauthFields: [],
+        commandFields: [],
+        variableReferences: [{ field: 'headers.Authorization', names: ['DOCS_TOKEN'] }],
+        masked: true,
+      },
+      fields: [{
+        id: 'headers.X-Tenant', field: 'headers.X-Tenant', kind: 'text', required: true, canReference: true,
+      }],
+      variables: [{
+        field: 'headers.Authorization', name: 'DOCS_TOKEN', availability: 'available',
+        remote: true, confirmationRequired: true,
+      }],
+      literalSecretFields: ['url'],
+      scopes: {
+        global: { allowed: true, reasons: [], confirmations: ['literal-secret', 'remote-host-variable'] },
+        project: { allowed: false, reasons: ['literal-secret'], confirmations: ['remote-host-variable'] },
+      },
+      notes: [{ code: 'missing-value', severity: 'warning', field: 'headers.X-Tenant' }],
+    }],
+    notes: [],
   };
 }
 

@@ -62,6 +62,29 @@
 .mcp-file-diagnostics > summary { color: #dce6f8; cursor: pointer; }
 .mcp-file-diagnostics > div { margin-top: .55rem; }
 .mcp-file-diagnostics ul { margin: .3rem 0; }
+.mcp-import-panel { min-width: 0; margin: .8rem 0; padding-top: .65rem; border-top: 1px solid #30466e; }
+.mcp-import-panel > summary { color: #dce6f8; font-weight: 600; cursor: pointer; }
+.mcp-import-body { display: grid; gap: .55rem; margin-top: .7rem; }
+.mcp-import-body > label:not(.mcp-import-syntax) { color: #aebad0; font-size: .8rem; font-weight: 600; }
+.mcp-import-body textarea { box-sizing: border-box; width: 100%; min-height: 8rem; resize: vertical; padding: .65rem; border: 1px solid #40527b; border-radius: 5px; color: #eef3fc; background: #10182d; font: .78rem/1.45 ui-monospace, monospace; }
+.mcp-import-syntax { display: flex; align-items: flex-start; gap: .45rem; font-size: .84rem; }
+.mcp-import-syntax input { margin-top: .15rem; }
+.mcp-import-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
+.mcp-import-results { min-width: 0; margin-top: .25rem; padding-top: .65rem; border-top: 1px solid #30466e; }
+.mcp-import-results h4 { margin: 0; }
+.settings-resource-card.mcp-import-entry { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+.mcp-import-entry > header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: .45rem; }
+.mcp-import-entry > header > div, .mcp-import-persisted { min-width: 0; display: grid; gap: .2rem; }
+.mcp-import-entry h5 { margin: .3rem 0 .2rem; }
+.mcp-import-entry section { min-width: 0; }
+.mcp-import-entry ul, .mcp-import-notes { margin: .3rem 0; padding-left: 1.2rem; font-size: .78rem; }
+.mcp-import-entry code, .mcp-import-entry small { overflow-wrap: anywhere; }
+.settings-resource-card > .mcp-import-scopes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; gap: .55rem; }
+.mcp-import-scope-result { min-width: 0; padding: .45rem; border: 1px solid #30466e; border-radius: 5px; }
+.mcp-import-scope-result > span { display: block; margin-top: .15rem; font-size: .75rem; }
+.mcp-import-scope-result ul { margin-bottom: 0; }
+.mcp-import-note-error { color: #ff9aad; }
+.mcp-import-note-warning { color: #f2c36b; }
 
 html[data-theme="light"] .settings-help, html[data-theme="light"] .model-catalog-meta { color: #52627b; }
 html[data-theme="light"] .custom-resource-editor > summary, html[data-theme="light"] .skill-registry > summary { color: #26344e; }
@@ -88,6 +111,13 @@ html[data-theme="light"] .mcp-diagnostics { color: #9b1c31; }
 html[data-theme="light"] .mcp-undo { color: #172033; border-color: #b8c3d4; background: #f8f9fc; }
 html[data-theme="light"] .mcp-remove-dialog { color: #172033; border-color: #aeb9ca; background: #fff; }
 html[data-theme="light"] .mcp-remove-button { color: #8b1e32; border-color: #b85b6b; }
+html[data-theme="light"] .mcp-import-panel, html[data-theme="light"] .mcp-import-results { border-color: #d8dee9; }
+html[data-theme="light"] .mcp-import-panel > summary { color: #26344e; }
+html[data-theme="light"] .mcp-import-body > label:not(.mcp-import-syntax) { color: #52627b; }
+html[data-theme="light"] .mcp-import-body textarea { color: #172033; background: #fff; border-color: #aeb9ca; }
+html[data-theme="light"] .mcp-import-scope-result { border-color: #c5cede; }
+html[data-theme="light"] .mcp-import-note-error { color: #9b1c31; }
+html[data-theme="light"] .mcp-import-note-warning { color: #7a4b08; }
 
 @media (max-width: 560px) {
   .shortcut-grid label { grid-template-columns: 1fr; }
@@ -97,5 +127,7 @@ html[data-theme="light"] .mcp-remove-button { color: #8b1e32; border-color: #b85
   .settings-resource-card > div:last-child { max-width: none; justify-content: flex-start; }
   .mcp-group-actions, .mcp-row-actions { justify-content: flex-start; }
   .mcp-undo { align-items: flex-start; }
+  .settings-resource-card > .mcp-import-scopes { grid-template-columns: 1fr; }
+  .mcp-import-actions button { flex: 1 1 auto; }
   .model-capabilities { grid-column: 2; justify-content: flex-start; }
 }

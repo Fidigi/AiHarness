@@ -1,4 +1,30 @@
 export {
+  MCP_IMPORT_MAX_BYTES,
+  MCP_IMPORT_MAX_FIELDS,
+  MCP_IMPORT_MAX_SERVERS,
+  MCP_RESERVED_VARIABLE_NAMES,
+  previewMcpImport,
+} from './config-import.js';
+export type {
+  McpImportEntryPreview,
+  McpImportFieldPreview,
+  McpImportNote,
+  McpImportNoteCode,
+  McpImportNoteSeverity,
+  McpImportPersistedPreview,
+  McpImportPreview,
+  McpImportScopeBlockReason,
+  McpImportScopeConfirmation,
+  McpImportScopeContext,
+  McpImportScopePreview,
+  McpImportSource,
+  McpImportSyntax,
+  McpImportVariableAvailability,
+  McpImportVariablePreview,
+  PreviewMcpImportOptions,
+} from './config-import.js';
+
+export {
   inspectMcpConfig,
   MCP_CONFIG_MAX_BYTES,
   MCP_CONFIG_MAX_MUTATIONS,

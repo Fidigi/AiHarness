@@ -43,6 +43,7 @@ import {
   uploadFiles,
 } from './api';
 import {
+  previewMcpImport,
   removeMcpConfigServer,
   restoreMcpConfigServer,
   setMcpConfigEnabled,
@@ -267,6 +268,43 @@ describe('Web API service', () => {
       '/api/mcp?cwd=%2Fworkspace%2Fproject',
       { headers: {}, credentials: 'same-origin' },
     );
+  });
+
+  it('posts only pasted text and context for an MCP import preview', async () => {
+    const preview = {
+      ok: true,
+      entries: [{
+        name: 'docs', source: 'mcp-json', complete: true,
+        persisted: {
+          valid: true, enabled: true, exposure: 'direct', transport: 'stdio', command: 'npx',
+          envNames: [], headerNames: [], oauthFields: [], commandFields: [], variableReferences: [], masked: false,
+        },
+        fields: [], variables: [], literalSecretFields: [],
+        scopes: {
+          global: { allowed: true, reasons: [], confirmations: [] },
+          project: { allowed: false, reasons: ['no-project'], confirmations: [] },
+        },
+        notes: [],
+      }],
+      notes: [],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(preview), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(previewMcpImport({
+      text: '{"mcpServers":{"docs":{"command":"npx"}}}',
+      syntax: 'foreign',
+      cwd: '/workspace',
+    })).resolves.toEqual(preview);
+    expect(fetchMock).toHaveBeenCalledWith('/api/mcp/preview', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        text: '{"mcpServers":{"docs":{"command":"npx"}}}',
+        syntax: 'foreign',
+        cwd: '/workspace',
+      }),
+      credentials: 'same-origin',
+    }));
   });
 
   it('posts bounded MCP actions and retains typed certainty without exposing undo material', async () => {

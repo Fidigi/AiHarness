@@ -25,9 +25,11 @@ L'application React s'organise autour des composants principaux suivants :
 | `CommandPalette` | recherche et exécution clavier de commandes, sessions, réglages et fichiers |
 | `StatusCenter` | file globale bornée de succès, avertissements, erreurs et progressions, conservée pendant les navigations avec expiration suspendue au survol/focus |
 | `PluginSettings` | packages globaux/projet, installation explicite, inventaire, activation, mises à jour, diagnostics et reload lié à la session |
-| `McpSettings` | inventaire expurgé global/projet approuvé, activation atomique, suppression confirmée et restauration éphémère sans démarrer de serveur |
+| `McpSettings`, `McpImportPreview` | inventaire expurgé global/projet approuvé, aperçu non mutant d'un collage, activation atomique, suppression confirmée et restauration éphémère sans démarrer de serveur |
 | `EcosystemSettings` | cycle de vie/OAuth des providers, providers et modèles personnalisés, defaults, outils et registre de skills |
 | `SubagentSettings`, `SubagentPanel`, `SubagentMonitor` | profils globaux/projet, permissions, progression, attention, notifications globales, arrêt et navigation parent/enfant |
+
+`McpImportPreview` envoie le texte original et un mode syntaxique étranger/AiHarness explicite à la route Server réservée aux administrateurs ; parsing, politique des secrets/références et éligibilité par scope restent dans Core. La réponse contient cibles masquées, champs structurels, noms de variables et diagnostics fixes, jamais les valeurs env/header/OAuth, le texte des arguments, des extraits source ou une configuration normalisée réutilisable pour écrire. Changer texte, syntaxe ou workspace invalide la requête en cours, et cet aperçu ne propose volontairement aucune sauvegarde.
 
 Pour la vue d'ensemble du projet, consultez [architecture-overview.md](./architecture-overview.md).
 
@@ -87,7 +89,7 @@ Le bundle de production est une PWA : manifeste et icône installables, fallback
 
 Les tests Vitest couvrent les contrats Core, runtime agent/extensions, providers, JSONL, workspace/Git, commandes, PTY, configuration, catalogues et registres, OAuth, métriques tarifées, Push, sous-agents, sécurité, routes réelles et stores Web. Playwright couvre l'interface avec une API déterministe interceptée **et** un parcours complet contre Express/provider mock/persistance/PTY/fichiers. `web-server.test.ts` complète par Git/worktrees/diffs/uploads/watch, PTY et contrats HTTP sans navigateur. Les suites dédiées vérifient axe/WCAG, focus et clavier, virtualisation/cache, restauration et chargement différé.
 
-Les 118 baselines Light/Dark desktop/tablette/mobile couvrent notamment modèles/providers personnalisés, registre de skills, inventaire MCP et actions locales, processus et dialogue d'extension, en plus des surfaces historiques, avec un seuil maximal de différence de 2 %.
+Les 118 baselines Light/Dark desktop/tablette/mobile couvrent notamment modèles/providers personnalisés, registre de skills, inventaire/aperçu d'import/actions locales MCP, processus et dialogue d'extension, en plus des surfaces historiques, avec un seuil maximal de différence de 2 %.
 
 Le build Web exécute `packages/web/scripts/check-bundle-budget.mjs` après Vite. Il échoue au-delà de :
 

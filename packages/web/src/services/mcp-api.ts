@@ -1,6 +1,8 @@
 import type {
   McpConfigInventory,
   McpConfigScope,
+  McpImportPreview,
+  McpImportSyntax,
   McpServerMutationOutcome,
 } from '@ai-harness/core';
 import { apiFetch } from './api';
@@ -13,6 +15,12 @@ export interface McpMutationResponse {
   undo?: { token: string; expiresAt: string };
 }
 
+export interface McpImportPreviewRequest {
+  text: string;
+  syntax: McpImportSyntax;
+  cwd?: string;
+}
+
 export interface McpActionResponse {
   success: boolean;
   data?: McpMutationResponse;
@@ -20,6 +28,21 @@ export interface McpActionResponse {
   code?: string;
   /** True means the server may have committed before the client observed failure. */
   uncertain?: boolean;
+}
+
+export async function previewMcpImport(
+  request: McpImportPreviewRequest,
+  signal?: AbortSignal,
+): Promise<McpImportPreview> {
+  const response = await apiFetch('/api/mcp/preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+    ...(signal ? { signal } : {}),
+  });
+  const data = await response.json().catch(() => ({})) as McpImportPreview & { error?: string };
+  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+  return data;
 }
 
 type McpActionRequest =

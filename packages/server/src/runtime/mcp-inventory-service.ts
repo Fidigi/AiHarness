@@ -2,8 +2,12 @@ import { randomUUID } from 'node:crypto';
 import {
   inspectMcpConfig,
   McpConfigMutationError,
+  previewMcpImport,
   type McpConfigInventory,
   type McpConfigScope,
+  type McpImportPreview,
+  type McpImportScopeContext,
+  type McpImportSyntax,
   type McpRemovedServerRecord,
   type McpServerMutationOutcome,
   type ProjectTrustManager,
@@ -87,6 +91,49 @@ export class McpInventoryService {
       agentDir: this.agentDir,
       ...(canonicalCwd ? { cwd: canonicalCwd } : {}),
       trustManager: this.trustManager,
+    });
+  }
+
+  /**
+   * Re-parse an untrusted paste in Core. Only environment names and redacted
+   * inventory metadata cross this boundary: values are never expanded or
+   * returned, and preview never opens a resolver or credential store.
+   */
+  async previewImport(text: string, syntax: McpImportSyntax, cwd?: string): Promise<McpImportPreview> {
+    const inventory = await this.getOverview(cwd);
+    const file = (scope: McpConfigScope) => inventory.files.find(item => item.scope === scope);
+    const names = (scope: McpConfigScope) => inventory.servers
+      .filter(server => server.scope === scope)
+      .map(server => server.name);
+    const available = (scope: McpConfigScope): boolean => {
+      const target = file(scope);
+      return Boolean(target && (!target.exists || (target.contentRead && target.problems.length === 0)));
+    };
+    const globalAvailable = available('global');
+    const global: McpImportScopeContext = {
+      available: globalAvailable,
+      ...(!globalAvailable ? { unavailableReason: 'config-unavailable' as const } : {}),
+      names: names('global'),
+    };
+    let project: McpImportScopeContext;
+    if (!inventory.project) {
+      project = { available: false, unavailableReason: 'no-project', names: [] };
+    } else if (inventory.project.trustError) {
+      project = { available: false, unavailableReason: 'trust-unavailable', names: [] };
+    } else if (!inventory.project.contentTrusted || inventory.project.decision !== true) {
+      project = { available: false, unavailableReason: 'trust-required', names: [] };
+    } else {
+      const projectAvailable = available('project');
+      project = {
+        available: projectAvailable,
+        ...(!projectAvailable ? { unavailableReason: 'config-unavailable' as const } : {}),
+        names: names('project'),
+      };
+    }
+    return previewMcpImport(text, {
+      syntax,
+      availableVariableNames: Object.keys(process.env),
+      scopes: { global, project },
     });
   }
 

@@ -4,6 +4,7 @@ import type {
   CustomProviderDefinition,
   ExtensionInteractionSnapshot,
   McpConfigInventory,
+  McpImportPreview,
   ModelCatalog,
   ModelCatalogEntry,
   PluginCatalog,
@@ -90,6 +91,7 @@ export interface MockApiOptions {
   providers?: MockProvider[];
   modelCatalog?: ModelCatalog;
   mcpConfig?: McpConfigInventory;
+  mcpImportPreview?: McpImportPreview;
   pluginCatalog?: PluginCatalog;
   skillCatalog?: SkillCatalog;
   skillRegistry?: SkillRegistry;
@@ -418,6 +420,11 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       decision: workspace.trusted ? true : null, inherited: false, trustError: false,
     },
   } satisfies McpConfigInventory);
+  const mcpImportPreview = structuredClone(options.mcpImportPreview ?? {
+    ok: false,
+    entries: [],
+    notes: [{ code: 'no-server', severity: 'error' }],
+  } satisfies McpImportPreview);
   let mcpRevisionSequence = 1;
   for (const file of mcpConfig.files) {
     if (file.exists && file.contentRead && !file.revision) {
@@ -698,6 +705,9 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       await fulfillJson(route, customModels.find(model => model.key === `${input.provider}:${input.id}`)); return;
     }
     if (url.pathname === '/api/mcp' && method === 'GET') { await fulfillJson(route, mcpConfig); return; }
+    if (url.pathname === '/api/mcp/preview' && method === 'POST') {
+      await fulfillJson(route, mcpImportPreview); return;
+    }
     if (url.pathname === '/api/mcp/actions' && method === 'POST') {
       const input = body as Record<string, any>;
       if (input.action === 'restore') {

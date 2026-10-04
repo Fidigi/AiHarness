@@ -1,4 +1,9 @@
-import { McpConfigMutationError, type McpConfigScope } from '@ai-harness/core';
+import {
+  MCP_IMPORT_MAX_BYTES,
+  McpConfigMutationError,
+  type McpConfigScope,
+  type McpImportSyntax,
+} from '@ai-harness/core';
 import { Router, type Response } from 'express';
 import type { RuntimeServices } from '../runtime/services.js';
 import { requireCapability } from '../security/request-security.js';
@@ -80,6 +85,33 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
       } else {
         next(error);
       }
+    }
+  });
+
+  router.post('/preview', requireCapability('configuration'), async (request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
+    const body: unknown = request.body;
+    if (!isRecord(body)
+      || !hasOnlyKeys(body, ['cwd', 'syntax', 'text'])
+      || typeof body.text !== 'string'
+      || body.text.includes('\0')
+      || Buffer.byteLength(body.text, 'utf8') > MCP_IMPORT_MAX_BYTES
+      || (body.cwd !== undefined && typeof body.cwd !== 'string')
+      || (body.syntax !== undefined && body.syntax !== 'foreign' && body.syntax !== 'aiharness')) {
+      response.status(400).json({ error: 'Aperçu d’import MCP invalide.', code: 'invalid-request' });
+      return;
+    }
+    try {
+      const services = await servicesPromise;
+      const preview = await services.mcpInventory.previewImport(
+        body.text,
+        (body.syntax ?? 'foreign') as McpImportSyntax,
+        optionalCwd(body.cwd),
+      );
+      response.json(preview);
+    } catch (error) {
+      if (error instanceof McpConfigMutationError) sendMutationError(response, error);
+      else response.status(500).json({ error: 'L’aperçu MCP a échoué.', code: 'preview-failed' });
     }
   });
 

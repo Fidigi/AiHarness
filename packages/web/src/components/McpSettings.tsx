@@ -7,6 +7,7 @@ import type {
   McpServerInventoryEntry,
 } from '@ai-harness/core';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { McpImportPreview } from './McpImportPreview';
 import { useI18n } from '../hooks/useI18n';
 import { getMcpConfig } from '../services/api';
 import {
@@ -290,6 +291,11 @@ export function McpSettings() {
     {inventory?.project && !inventory.project.contentTrusted && projectFile?.exists && <p role="status" className="plugin-trust-notice">
       {inventory.project.trustError ? t('settings.mcp.trustUnavailable') : t('settings.mcp.untrustedProject')}
     </p>}
+    <McpImportPreview
+      key={`${workspace?.cwd ?? 'global'}:${workspace?.trusted ? 'trusted' : 'untrusted'}`}
+      cwd={workspace?.cwd}
+      disabled={Boolean(busy)}
+    />
     {inventory && groups.map(group => {
       const actionable = group.servers.filter(server => server.valid);
       const enableNames = actionable.filter(server => !server.enabled).map(server => server.name);

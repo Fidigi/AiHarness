@@ -48,7 +48,12 @@ describe('inspectMcpConfig', () => {
         "local": {
           "command": "/usr/local/bin/npx",
           "args": ["-y", "@scope/server", "--api-key=literal-secret", "\${SAFE_ARG}"],
-          "env": { "TOKEN": "!secret-command", "HOME_REF": "$HOME" },
+          "env": {
+            "TOKEN": "!secret-command",
+            "HOME_REF": "$HOME",
+            "ESCAPED": "$$NOT_A_REFERENCE",
+            "COMMAND_ESCAPE": "$!literal",
+          },
         },
       },
     }`);

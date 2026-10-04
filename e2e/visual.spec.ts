@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { mcpStateInventory } from './fixtures/mcp';
+import { mcpImportPreviewFixture, mcpStateInventory } from './fixtures/mcp';
 
 const scenarios = [
   { name: 'desktop-dark', width: 1440, height: 900, theme: 'dark' },
@@ -316,7 +316,10 @@ test.describe('Régression visuelle de l’inventaire MCP', () => {
           filesOpen: true, sidebarVisible: true, lastSettingsSection: 'mcp', keybindings: {},
         }));
       }, { theme: scenario.theme });
-      await installMockApi(page, { mcpConfig: mcpStateInventory() });
+      await installMockApi(page, {
+        mcpConfig: mcpStateInventory(),
+        mcpImportPreview: mcpImportPreviewFixture(),
+      });
 
       await page.goto('/settings#mcp');
       await page.addStyleTag({ content: `
@@ -328,6 +331,10 @@ test.describe('Régression visuelle de l’inventaire MCP', () => {
         .settings-section:not(#mcp), .mobile-menu { display: none !important; }
       ` });
       const section = page.locator('#mcp');
+      await section.getByText('Paste and preview a server').click();
+      await section.getByLabel('MCP server text').fill('https://docs.example.test/mcp');
+      await section.getByRole('button', { name: 'Preview', exact: true }).click();
+      await expect(section.getByRole('article', { name: 'docs-import' })).toBeVisible();
       await expect(section.getByRole('article', { name: 'remote-docs: Configured', exact: true })).toBeVisible();
       await expect(section.getByRole('article', { name: 'local-tools: Disabled', exact: true })).toBeVisible();
       await expect(section.getByRole('article', { name: 'shared: Replaced by project', exact: true })).toBeVisible();

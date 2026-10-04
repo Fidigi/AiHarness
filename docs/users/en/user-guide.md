@@ -561,7 +561,7 @@ The **Settings** page allows:
 - administering the published or discovered catalog, its capabilities/prices, activation and global/project defaults;
 - configuring presets and actually available tools, including PowerShell on Windows;
 - reviewing skills by scope, authorizing their invocation and installing/updating from a registry;
-- inspecting redacted global/trusted-project MCP configuration and administering local activation or removal without connecting;
+- previewing pasted MCP URLs, commands, install links or JSON without writing, then inspecting redacted global/trusted-project configuration and administering local activation or removal without connecting;
 - explicitly installing and administering global or project packages/plugins, their versions and resources;
 - configuring subagent profiles and their global/project scope, then monitoring child agents;
 - keeping SSE/WebSocket history transport for legacy chat endpoints;
@@ -612,6 +612,12 @@ Set `AI_HARNESS_SKILL_REGISTRY_URL` to an HTTPS index to open **Skill registry**
 
 **MCP servers** in Settings is a redacted configuration inventory with local enable, disable, remove and restore controls—not an MCP runtime. It reads the global `<data-directory>/mcp.json` (by default `~/.ai-harness/mcp.json`) and, only after an exact or inherited saved allow, `<workspace>/.ai-harness/mcp.json`. A fresh empty workspace's implicit safe status is not enough to open or change a project file. Before approval, the panel reports only that the file exists; it does not read server names or values. An explicit refusal or unavailable trust store also keeps it locked.
 
+Expand **Paste and preview a server** to inspect a URL, direct command, supported client `mcp add` command, Cursor/VS Code/Visual Studio/Copilot install link, or JSON/JSONC before editing a file manually. Paste the original text and choose **Preview**. The default **foreign** mode treats foreign `$...` and initial `!` values as literals and escapes them in the proposed shape; explicit variable forms in supported shell/client add commands remain references. Select **Treat resolved values as AiHarness syntax** only when the pasted text intentionally uses AiHarness `${VARIABLE}`, `$VARIABLE` or `!command` syntax. Changing text, mode or workspace discards an obsolete result.
+
+Preview cards show only a masked target, structural fields, variable names, fixed notes and eligibility for **Global** and **Project**. They do not echo env/header/OAuth values, arguments, literal secrets, source excerpts or a reusable raw configuration. A literal secret is allowed for a global proposal only with a warning and blocks project scope; available server variables used remotely require confirmation. References to `AI_HARNESS_AUTH_TOKEN`, `AI_HARNESS_ADMIN_TOKEN` or `AI_HARNESS_MASTER_KEY` block every scope. References are accepted only in env values, header values and `oauth.clientSecret`. The preview reads only host environment **names**, never values, and performs no write, process, network, OAuth or credential-store operation. It accepts at most 256 KiB, 20 servers, 128 fields, 64 nesting levels and 256 shell words; shell operators, substitutions, multiple commands, `sh -c`, `cmd /c` and `pwsh -Command` are refused.
+
+This is a review tool only: there is no **Save** action yet. Copying or pasting a secret still places it in the browser textarea and request, so use the minimum needed and clear the field after review.
+
 The accepted JSON/JSONC root contains optional `"version": 1` and an `mcpServers` object. Comments and trailing commas are accepted. Entries use exactly one HTTP(S) `url` or non-empty `command`, with optional string `args`, `env`, `headers`, `cwd`, `description`, boolean `enabled`, `direct|codemode|deferred` `exposure`, and supported OAuth metadata. For example:
 
 ```json
@@ -632,13 +638,13 @@ The accepted JSON/JSONC root contains optional `"version": 1` and an `mcpServers
 }
 ```
 
-Inventory reads and local actions never expand `$VARIABLE`, execute a `!command`, start a process, contact a URL, initialize OAuth or create credentials. The browser receives env/header **names**, referenced variable names and command-backed field names, never their values. Executable paths and literal arguments are redacted; URL credentials, path, query and fragment are masked while the destination host remains visible for review. Hidden control characters are escaped, syntax errors never quote source, and global/project shadowing is explicit. **Configured** means that an entry passed file validation, not that it connected.
+Inventory reads, paste previews and local actions never expand `$VARIABLE`, execute a `!command`, start a process, contact a URL, initialize OAuth or create credentials. The browser receives env/header **names**, referenced variable names and command-backed field names, never their values. Executable paths and literal arguments are redacted; URL credentials, path, query and fragment are masked while the destination host remains visible for review. Hidden control characters are escaped, syntax errors never quote source, and global/project shadowing is explicit. **Configured** means that an entry passed file validation, not that it connected.
 
 Use a row **Enable**/**Disable** control or **Enable all**/**Disable all** to change valid entries. One group action is one bounded file transaction, not a series of browser requests. **Remove** on a valid row opens a confirmation dialog; invalid entries remain read-only. After success, **Undo** is available for 60 seconds. The removed literal entry stays only in bounded server memory, while the browser receives a random one-use token. Project restoration checks saved trust again. Under authentication, listing needs user `workspace:read`; every action needs the administrator `configuration` capability.
 
 Every action compares the opaque revision last returned to the panel. Core locks cooperating writers, rereads current bytes, refuses stale, malformed, linked or nonregular targets, and atomically replaces the file. Unknown keys remain, JSONC is normalized to JSON, indentation and LF/CRLF style are retained, and one final newline is written. Global writes use mode `0600`; an existing project mode is retained and a new project file uses `0644`. If a request times out, it may already have committed, so the panel reloads rather than claiming rollback.
 
-Both files are capped at 1 MiB, 64 nesting levels and 200 servers; group activation is capped at 100 unique names. Invalid entries and file problems remain visible through value-free diagnostics. This release still has no add/import/edit/exposure/Test/sign-in controls and does not expose MCP tools to agents. Protect manually created project files with stricter OS permissions if they contain literal credentials; prefer environment references even though runtime resolution is not implemented yet.
+Both files are capped at 1 MiB, 64 nesting levels and 200 servers; group activation is capped at 100 unique names. Invalid entries and file problems remain visible through value-free diagnostics. This release can preview an import but still cannot persist it or complete missing fields; it has no add/edit/exposure/Test/sign-in controls and does not expose MCP tools to agents. Protect manually created project files with stricter OS permissions if they contain literal credentials; prefer environment references even though runtime resolution is not implemented yet.
 
 ### Packages and Plugins
 

@@ -18,7 +18,6 @@ const MCP_CONFIG_LOCK_HEARTBEAT_MS = 5_000;
 /** Per-process key makes browser revisions useful for equality but not offline secret guessing. */
 const MCP_CONFIG_REVISION_KEY = randomBytes(32);
 const CONTROL_OR_HIDDEN = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/u;
-const VARIABLE_REFERENCE = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g;
 const VARIABLE_ONLY = /^\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)$/;
 const SAFE_COMMAND_NAMES = new Set([
   'bash', 'bun', 'cmd', 'deno', 'docker', 'java', 'node', 'npx', 'powershell', 'pwsh', 'python', 'python3', 'sh', 'uvx',
@@ -469,8 +468,27 @@ function validateStringMap(value: unknown): value is Record<string, string> {
 
 function fieldReferences(field: string, value: string): McpVariableReference | undefined {
   const names: string[] = [];
-  for (const match of value.matchAll(VARIABLE_REFERENCE)) {
-    const name = match[1] ?? match[2];
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] !== '$') continue;
+    const next = value[index + 1];
+    if (next === '$' || next === '!') {
+      index++;
+      continue;
+    }
+    let name: string | undefined;
+    if (next === '{') {
+      const end = value.indexOf('}', index + 2);
+      if (end < 0) continue;
+      const candidate = value.slice(index + 2, end);
+      if (/^[A-Za-z_][A-Za-z0-9_]*$/u.test(candidate)) name = candidate;
+      index = end;
+    } else {
+      const match = /^[A-Za-z_][A-Za-z0-9_]*/u.exec(value.slice(index + 1));
+      if (match) {
+        name = match[0];
+        index += match[0].length;
+      }
+    }
     if (name && !names.includes(name)) names.push(name);
     if (names.length >= MCP_CONFIG_MAX_COLLECTION_ENTRIES) break;
   }
@@ -642,6 +660,18 @@ function describeEntry(
       problems,
     },
   };
+}
+
+/**
+ * Validate and redact one in-memory entry with the same schema used by the
+ * file inventory. Import preview uses this internal Core contract so an
+ * adapter can never drift into accepting or exposing a different shape.
+ */
+export function describeMcpConfigEntry(
+  name: string,
+  value: unknown,
+): McpServerInventoryEntry {
+  return describeEntry(name, value, 'global', '').info;
 }
 
 async function canonicalDirectory(input: string): Promise<string> {
