@@ -48,6 +48,7 @@ export interface CommandContext {
   extensionProviderNames: Set<string>;
   thinkingLevel: ThinkingLevel;
   trustManager?: ProjectTrustManager;
+  isProjectTrusted?: () => boolean;
   cwd: string;
   workspaceId?: string;
   enabledToolNames?: () => readonly string[];
@@ -58,6 +59,7 @@ export interface CommandContext {
 export interface CommandWorkspaceContext {
   cwd: string;
   workspaceId?: string;
+  isProjectTrusted?: () => boolean;
   enabledToolNames?: () => readonly string[];
   modelPatterns?: readonly string[];
   settingsInfo?: () => string;
@@ -71,7 +73,7 @@ function createExtensionContext(ctx: CommandContext): ExtensionRuntimeContext {
     providerName: String((ctx.provider as unknown as { config?: { type?: string } } | undefined)?.config?.type ?? 'unknown'),
     cwd: ctx.cwd,
     workspaceId: ctx.workspaceId,
-    projectTrusted: ctx.trustManager?.isTrustedSync(ctx.cwd) ?? false,
+    projectTrusted: ctx.isProjectTrusted?.() ?? ctx.trustManager?.isTrustedSync(ctx.cwd) ?? false,
     notify: (message, level = 'info') => {
       if (level === 'error') ctx.terminal.showError(message);
       else if (typeof ctx.terminal.writeOutput === 'function') ctx.terminal.writeOutput(message);
@@ -996,26 +998,51 @@ const commands: CommandEntry[] = [
   {
     name: 'trust',
     description: 'Gérer la confiance accordée au projet courant',
-    usage: '/trust [status|add|remove|list]',
+    usage: '/trust [status|allow|allow-parent|refuse|forget|list]',
     handler: async (args, ctx) => {
       if (!ctx.trustManager) return chalk.yellow('La gestion de confiance n’est pas configurée.');
       const action = args[0]?.toLowerCase() || 'status';
       if (action === 'list') {
-        const projects = ctx.trustManager.list();
-        return projects.length ? projects.join('\n') : 'Aucun projet approuvé.';
+        await ctx.trustManager.refresh();
+        const decisions = ctx.trustManager.listDecisions();
+        return decisions.length
+          ? decisions.map(entry => `[${entry.decision ? 'allow' : 'refuse'}] ${entry.path}`).join('\n')
+          : 'Aucune décision de confiance enregistrée.';
       }
-      if (action === 'add') {
+      if (action === 'add' || action === 'allow') {
         const trusted = await ctx.trustManager.trust(ctx.cwd);
-        return chalk.green(`Projet approuvé : ${trusted}. Utilisez /reload pour charger ses extensions.`);
+        return chalk.green(`Projet approuvé : ${trusted}. Utilisez /reload pour charger ses ressources.`);
       }
-      if (action === 'remove') {
-        const removed = await ctx.trustManager.untrust(ctx.cwd);
-        return chalk.yellow(`Confiance retirée : ${removed}. Utilisez /reload.`);
+      if (action === 'parent' || action === 'allow-parent') {
+        const parent = path.dirname(ctx.cwd);
+        if (parent === ctx.cwd) return chalk.red('Le dossier racine ne possède pas de parent approuvable.');
+        await ctx.trustManager.setMany([
+          { path: parent, decision: true },
+          { path: ctx.cwd, decision: null },
+        ]);
+        return chalk.green(`Dossier parent approuvé : ${parent}. La décision est héritée ; utilisez /reload.`);
       }
-      if (action !== 'status') return chalk.red('Usage: /trust [status|add|remove|list]');
-      return await ctx.trustManager.isTrusted(ctx.cwd)
-        ? chalk.green('Le projet courant est approuvé.')
-        : chalk.yellow('Le projet courant n’est pas approuvé ; ses extensions sont ignorées.');
+      if (action === 'remove' || action === 'deny' || action === 'refuse') {
+        const refused = await ctx.trustManager.refuse(ctx.cwd);
+        return chalk.yellow(`Refus enregistré : ${refused}. Utilisez /reload.`);
+      }
+      if (action === 'forget') {
+        const forgotten = await ctx.trustManager.forget(ctx.cwd);
+        return chalk.yellow(`Décision exacte supprimée : ${forgotten}. Utilisez /reload.`);
+      }
+      if (action !== 'status') {
+        return chalk.red('Usage: /trust [status|allow|allow-parent|refuse|forget|list]');
+      }
+      const status = await ctx.trustManager.getStatus(ctx.cwd);
+      const effectiveTrusted = ctx.isProjectTrusted?.() ?? status.trusted;
+      const origin = status.decisionPath
+        ? `${status.inherited ? 'héritée de' : 'enregistrée pour'} ${status.decisionPath}`
+        : !status.requiresTrust
+          ? 'aucune ressource protégée'
+          : effectiveTrusted ? 'autorisation limitée au processus' : 'aucune décision enregistrée';
+      return effectiveTrusted
+        ? chalk.green(`Le projet courant est approuvé (${origin}).`)
+        : chalk.yellow(`Le projet courant n’est pas approuvé (${origin}) ; ses ressources sont ignorées.`);
     },
   },
   {
@@ -1060,6 +1087,7 @@ export class CommandHandler {
       extensionProviderNames: new Set(),
       thinkingLevel: 'off',
       trustManager,
+      isProjectTrusted: workspace.isProjectTrusted,
       cwd: workspace.cwd,
       workspaceId: workspace.workspaceId,
       enabledToolNames: workspace.enabledToolNames,

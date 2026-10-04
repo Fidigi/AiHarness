@@ -166,8 +166,31 @@ export * from './prompts/index.js';
 export * from './extensions/index.js';
 
 // Shared workspace security (explicit exports keep browser type-only imports tree-shakeable)
-export { ProjectTrustManager, WorkspaceManager, WorkspacePathError } from './security/index.js';
-export type { WorkspaceDescriptor, DirectoryEntry, GitWorktree, WorkspacePathKind } from './security/index.js';
+export {
+  inspectProjectTrustResources,
+  ProjectTrustManager,
+  resolveProjectTrust,
+  WorkspaceManager,
+  WorkspacePathError,
+} from './security/index.js';
+export type {
+  DirectoryEntry,
+  GitWorktree,
+  ProjectTrustDecision,
+  ProjectTrustDecisionEntry,
+  ProjectTrustDefault,
+  ProjectTrustInspection,
+  ProjectTrustInspectionOptions,
+  ProjectTrustPromptChoice,
+  ProjectTrustPromptRequest,
+  ProjectTrustResource,
+  ProjectTrustStatus,
+  ProjectTrustUpdate,
+  ResolvedProjectTrust,
+  ResolveProjectTrustOptions,
+  WorkspaceDescriptor,
+  WorkspacePathKind,
+} from './security/index.js';
 
 // Utils
 export * from './utils/index.js';

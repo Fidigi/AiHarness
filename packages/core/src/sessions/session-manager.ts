@@ -1092,7 +1092,8 @@ export class SessionManager {
     const fullMessage: Message = {
       id: msgId,
       ...messageWithParent,
-      timestamp: new Date(),
+      // Preserve append order even when the wall clock is coarse or moves backwards.
+      timestamp: new Date(Math.max(Date.now(), session.updatedAt.getTime() + 1)),
     };
 
     session.messages.push(fullMessage);

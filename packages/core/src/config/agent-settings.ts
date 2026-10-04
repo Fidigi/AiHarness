@@ -144,8 +144,6 @@ export interface LoadAgentSettingsOptions {
   projectTrusted?: boolean;
   /** Defaults to `<cwd>/.ai-harness/settings.json`. */
   projectSettingsPath?: string;
-  /** Allow only sessionDir to be resolved before project trust. */
-  includeUntrustedProjectSessionDir?: boolean;
   maxFileBytes?: number;
 }
 
@@ -593,8 +591,8 @@ function buildProvenance(
 }
 
 /**
- * Load bounded agent settings without creating files. Project values are trust-gated,
- * except an optional sessionDir used to select startup storage before trust.
+ * Load bounded agent settings without creating files. Project files are never opened
+ * until the caller has resolved canonical project trust.
  */
 export async function loadAgentSettings(options: LoadAgentSettingsOptions): Promise<ResolvedAgentSettings> {
   const cwd = path.resolve(options.cwd);
@@ -626,21 +624,6 @@ export async function loadAgentSettings(options: LoadAgentSettingsOptions): Prom
           message: `Project setting "${field}" was ignored because it is global-only.`,
         });
       }
-    }
-  } else if (options.includeUntrustedProjectSessionDir !== false) {
-    try {
-      const parsed = await readBoundedSettingsFile(paths.project, maxBytes);
-      if (parsed && Object.hasOwn(parsed, 'sessionDir')) {
-        const validated = validateValue(parsed.sessionDir, settingsSchema.kind === 'object'
-          ? settingsSchema.fields.sessionDir! : text(), 'sessionDir', 'project', paths.project, diagnostics);
-        if (validated !== INVALID) projectSettings.sessionDir = validated as string;
-      }
-    } catch (error) {
-      addDiagnostic(diagnostics, {
-        scope: 'project',
-        path: paths.project,
-        message: error instanceof Error ? error.message : String(error),
-      });
     }
   }
   const settings = mergeAgentSettings(globalSettings, projectSettings);

@@ -142,6 +142,7 @@ Saisissez ensuite un message et validez avec Entrée. La réponse est affichée 
 | `-p`, `--print` | exécute les prompts une fois et écrit uniquement la réponse finale sur stdout |
 | `--mode json` | exécute les prompts une fois et écrit les événements de session/cycle de vie en JSONL |
 | `--mode rpc` ou `--rpc` | active le protocole RPC JSONL sur stdin/stdout |
+| `-a`, `--approve` / `-na`, `--no-approve` | autorise ou refuse le projet pour ce processus uniquement, sans modifier le registre de confiance |
 | `--tui-mode fullscreen` / `regular` | sélectionne le mode terminal |
 | `--fullscreen` / `--regular` / `--no-fullscreen` | anciens alias de mode terminal |
 | `--provider <nom>` | limite `--model` ou `--models` à un provider |
@@ -191,7 +192,7 @@ La variable `AI_HARNESS_TUI_MODE=regular|fullscreen` permet aussi de définir le
 
 ### Réglages de l’agent
 
-Le CLI et RPC utilisent le résolveur de réglages du Core AiHarness. Ils lisent les réglages utilisateur dans `<répertoire-agent>/settings.json` (`AI_HARNESS_AGENT_DIR`, sinon `~/.ai-harness`), puis superposent `<workspace>/.ai-harness/settings.json` après approbation explicite du projet. La seule valeur projet lue avant cette approbation est `sessionDir`. Les sources doivent être des fichiers JSON UTF-8 réguliers, non symboliques, de 256 Kio au plus ; un champ invalide ou inconnu produit un avertissement sans afficher sa valeur. Ces réglages sont en lecture seule : AiHarness ne réécrit jamais les fichiers.
+Le CLI et RPC utilisent le résolveur de réglages du Core AiHarness. Ils lisent les réglages utilisateur dans `<répertoire-agent>/settings.json` (`AI_HARNESS_AGENT_DIR`, sinon `~/.ai-harness`), puis superposent `<workspace>/.ai-harness/settings.json` après résolution positive de la confiance du projet. Aucun contenu de réglage projet n’est lu avant cette résolution ; un `sessionDir` projet ne participe à la priorité de stockage qu’après résolution positive de la confiance. Les sources doivent être des fichiers JSON UTF-8 réguliers, non symboliques, de 256 Kio au plus ; un champ invalide ou inconnu produit un avertissement sans afficher sa valeur. Ces réglages sont en lecture seule : AiHarness ne réécrit jamais les fichiers.
 
 Voici un point de départ :
 
@@ -207,12 +208,13 @@ Voici un point de départ :
   "retry": { "enabled": true, "maxRetries": 3, "baseDelayMs": 2000 },
   "steeringMode": "one-at-a-time",
   "followUpMode": "one-at-a-time",
+  "defaultProjectTrust": "ask",
   "tuiMode": "fullscreen",
   "theme": "system"
 }
 ```
 
-Sont aussi appliqués : `modelThinkingLevels` exact, les `modelOverrides` de compaction, `externalEditor`, `quietStartup: true`, `shellPath`, `shellCommandPrefix`, les chemins locaux d’extensions/skills/prompts, `enableSkillCommands` et les modificateurs projet de `defaultTools`. Les runs Web détachés et approuvés résolvent aussi `steeringMode` et `followUpMode` au démarrage via le même chargeur et ordonnanceur Core. Les options CLI explicites restent prioritaires. `/settings` affiche les valeurs effectives et leurs sources `global`/`project`. `/reload` recharge réglages, instructions, ressources, extensions, outils par défaut, modes des files interactives et callbacks shell ; redémarrez pour changer le dossier de sessions, le modèle initial, le renderer/thème, les modes de file RPC, la compaction ou les retries. L’installation de packages, les commutateurs d’extensions intégrées, les thèmes ressources, la génération de résumés de branche, codemode, les réglages réseau/proxy/transport/retry provider, les options terminal/image/Markdown détaillées, la télémétrie et les avertissements ne sont pas encore appliqués.
+Sont aussi appliqués : `modelThinkingLevels` exact, les `modelOverrides` de compaction, `defaultProjectTrust` global (`ask`, `always` ou `never`), `externalEditor`, `quietStartup: true`, `shellPath`, `shellCommandPrefix`, les chemins locaux d’extensions/skills/prompts, `enableSkillCommands` et les modificateurs projet de `defaultTools`. Les runs Web détachés et approuvés résolvent aussi `steeringMode` et `followUpMode` au démarrage via le même chargeur et ordonnanceur Core. Les options CLI explicites restent prioritaires. `/settings` affiche les valeurs effectives et leurs sources `global`/`project`. `/reload` recharge les décisions persistées, réglages, instructions, ressources, extensions, outils par défaut, modes des files interactives et callbacks shell ; les choix de confiance limités au processus restent inchangés. Redémarrez pour changer le dossier de sessions, le modèle initial, le renderer/thème, les modes de file RPC, la compaction ou les retries. L’installation de packages, les commutateurs d’extensions intégrées, les thèmes ressources, la génération de résumés de branche, codemode, les réglages réseau/proxy/transport/retry provider, les options terminal/image/Markdown détaillées, la télémétrie et les avertissements ne sont pas encore appliqués.
 
 ### Instructions du projet et prompts système
 
@@ -224,7 +226,7 @@ AiHarness applique le même résolveur d’instructions aux runs agent interacti
 4. `CLAUDE.md`
 5. `CLAUDE.MD`
 
-Le fichier du répertoire agent appartient à l’utilisateur et peut être chargé avant l’approbation d’un projet. Les fichiers des parents/du projet ne le sont qu’après approbation explicite du workspace. Si vous lancez `/trust add` dans un CLI déjà actif, exécutez ensuite `/reload` pour recalculer les instructions. `--no-context-files` désactive la découverte des fichiers de contexte utilisateur et projet, mais pas `SYSTEM.md` ni `APPEND_SYSTEM.md`.
+Le fichier du répertoire agent appartient à l’utilisateur et peut être chargé avant l’approbation d’un projet. Avant toute lecture du contenu projet, AiHarness inventorie seulement des métadonnées de chemins bornées. En mode interactif et avec `defaultProjectTrust: "ask"`, il demande une décision uniquement si des réglages, instructions, skills, prompts ou extensions protégés existent ; les modes print, JSON et RPC sans décision refusent alors ces ressources. Les fichiers des parents/du projet ne sont chargés qu’après résolution de la confiance. Si vous lancez `/trust allow` dans un CLI déjà actif, exécutez ensuite `/reload` pour recalculer les instructions. `--no-context-files` désactive la découverte des fichiers de contexte utilisateur et projet, mais pas `SYSTEM.md` ni `APPEND_SYSTEM.md`.
 
 Pour le prompt système de base, `--system-prompt` a la priorité, puis `<workspace>/.ai-harness/SYSTEM.md` si le projet est approuvé, puis `<répertoire-agent>/SYSTEM.md`, enfin le prompt intégré. Sans option d’ajout explicite, `<workspace>/.ai-harness/APPEND_SYSTEM.md` approuvé prévaut sur `<répertoire-agent>/APPEND_SYSTEM.md`. Répéter `--append-system-prompt` remplace ce choix automatique et conserve l’ordre de la ligne de commande. Une valeur CLI correspondant à un chemin existant est lue comme fichier ; sinon elle devient du texte littéral. Le réglage Web du prompt système reste toujours littéral et ne peut donc pas lire inopinément un chemin du serveur.
 
@@ -265,7 +267,7 @@ Pour exécuter directement une commande dans le workspace approuvé, préfixez-l
 !!git diff --stat
 ```
 
-`Escape` ou `Ctrl+C` arrête l’arbre de processus actif. La sortie affichée et persistée est bornée ; si elle est tronquée, le CLI indique le chemin d’un fichier complet privé qui expire après 24 heures. Les commandes refusent un workspace non approuvé (`/trust add`) et leurs processus n’héritent pas des variables d’environnement dont le nom ressemble à un credential. Cette exécution directe et la commande Web reposent sur le même runtime Core ; elle reste distincte de l’outil `bash` appelé par le modèle.
+`Escape` ou `Ctrl+C` arrête l’arbre de processus actif. La sortie affichée et persistée est bornée ; si elle est tronquée, le CLI indique le chemin d’un fichier complet privé qui expire après 24 heures. Les commandes refusent un workspace non approuvé (`/trust allow`) et leurs processus n’héritent pas des variables d’environnement dont le nom ressemble à un credential. Cette exécution directe et la commande Web reposent sur le même runtime Core ; elle reste distincte de l’outil `bash` appelé par le modèle.
 
 ### Commandes de conversation et de session
 
@@ -327,10 +329,10 @@ Le CLI et l’agent Web utilisent les mêmes implémentations d’outils fournie
 
 Par défaut, le modèle reçoit `read`, `bash`, `edit` et `write`, ainsi que les outils des extensions chargées ; `grep`, `find` et `ls` sont optionnels. Le réglage agent `defaultTools` peut remplacer ou modifier cette liste. `--tools <noms>` remplace la sélection, `--exclude-tools <noms>` en retire ensuite certains, `--no-builtin-tools` ne garde que les outils d’extension et `--no-tools` désactive tous les outils par défaut. `/tools` signale les outils inactifs et `/reload` réapplique la politique à la nouvelle génération d’extensions. `shellPath` et `shellCommandPrefix` affectent cet outil `bash` comme les commandes directes `!`/`!!`.
 
-Tous les chemins sont canonicalisés dans le dossier depuis lequel le CLI a démarré ; les liens symboliques sortants et les traversées sont refusés. Les lectures et recherches sont disponibles sans exécuter de code. `bash`, `edit` et `write` exigent une approbation explicite :
+Tous les chemins sont canonicalisés dans le dossier depuis lequel le CLI a démarré ; les liens symboliques sortants et les traversées sont refusés. Les lectures et recherches sont disponibles sans exécuter de code. `bash`, `edit` et `write` exigent une confiance résolue. Un dossier sans ressource projet protégée est autorisé pour le processus courant sans enregistrer de marqueur ; si une telle ressource apparaît, `/reload` résout de nouveau la confiance et la bloque ou provoque une demande au prochain lancement interactif. Sinon, approuvez explicitement :
 
 ```text
-/trust add
+/trust allow
 /tools
 /tool read {"path":"README.md","offset":1,"limit":80}
 ```
@@ -419,14 +421,14 @@ Les extensions utilisateur sont chargées depuis `~/.ai-harness/extensions/`. Le
 
 ```text
 /trust status
-/trust add
+/trust allow
 /reload
 /extensions
 /tools
 /tool nom {"parametre":"valeur"}
 ```
 
-Pour révoquer l'autorisation : `/trust remove`, puis `/reload`. Une extension peut enregistrer des commandes, outils, providers, hooks de cycle de vie et panneaux texte pour le mode plein écran. Elle s'exécute avec les mêmes droits que le CLI : n'approuvez que du code vérifié. Voir [extensions-cli.md](../../contributors/fr/extensions-cli.md) pour développer une extension CLI et [extensions-web.md](../../contributors/fr/extensions-web.md) pour le pont UI Web.
+`/trust allow-parent` autorise le dossier parent et ses descendants, `/trust refuse` enregistre un refus exact, `/trust forget` supprime seulement la décision exacte et `/trust list` affiche toutes les autorisations et tous les refus. La décision la plus proche du projet gagne : un refus exact peut donc bloquer l’autorisation héritée d’un parent, et inversement. Les anciens alias `/trust add` et `/trust remove` restent acceptés, ce dernier enregistrant désormais un refus explicite. Après une modification, lancez `/reload`. Une extension peut enregistrer des commandes, outils, providers, hooks de cycle de vie et panneaux texte pour le mode plein écran. Elle s'exécute avec les mêmes droits que le CLI : n'approuvez que du code vérifié. Voir [extensions-cli.md](../../contributors/fr/extensions-cli.md) pour développer une extension CLI et [extensions-web.md](../../contributors/fr/extensions-web.md) pour le pont UI Web.
 
 ### Thème et raccourcis personnalisés
 
@@ -678,7 +680,7 @@ le [guide d'internationalisation](../../contributors/fr/i18n.md).
 
 Le bouton de workspace ouvre un navigateur de répertoires. Il accepte un chemin absolu ou `~`, permet de remonter au parent et mémorise les projets récents. Le paramètre `?cwd=` rend le workspace partageable sans créer de conversation.
 
-L’approbation est volontaire : vérifiez le chemin canonique affiché avant de confirmer. Elle autorise les outils, commandes et écritures dans ce projet. Un chemin hors des racines autorisées ou un lien symbolique sortant est refusé.
+L’approbation est volontaire : vérifiez le chemin canonique affiché avant de confirmer. Le Web et le CLI utilisent le même registre Core : une autorisation ou un refus peut être exact ou hérité du dossier parent le plus proche. Une révocation par l’API Web enregistre un refus exact afin qu’une ancienne autorisation parente ne réactive pas silencieusement le projet. Une autorisation active les ressources, outils, commandes et écritures dans ce projet. Un chemin hors des racines autorisées ou un lien symbolique sortant est refusé.
 
 Dans un dépôt Git, le sélecteur affiche la branche et les worktrees. Le bouton **+** adjacent permet de créer un worktree depuis une branche existante ou une nouvelle branche. La suppression d’un worktree demande confirmation. Les agents déjà lancés restent liés au cwd avec lequel ils ont démarré. Une bascule vide immédiatement les résultats de recherche et l’explorer devenus obsolètes, démonte les surfaces PTY de l’ancien cwd puis restaure séparément brouillons, provider/modèles, skills, plugins, profils de sous-agent, confiance et onglets du workspace cible.
 
@@ -840,7 +842,7 @@ Par défaut, le CLI et le serveur utilisent :
 | Souscriptions/clé privée Web Push (si clé maître) | `~/.ai-harness/push.enc` |
 | État des packages/plugins | `~/.ai-harness/plugins.json` |
 | Packages npm/Git gérés | `~/.ai-harness/plugins/installed/` |
-| Confiance des projets | `~/.ai-harness/trust.json` |
+| Décisions de confiance des projets (autorisations/refus exacts ou hérités) | `~/.ai-harness/trust.json` |
 | Extensions utilisateur | `~/.ai-harness/extensions/` |
 | Skills utilisateur | `~/.ai-harness/skills/` |
 | Prompts utilisateur | `~/.ai-harness/prompts/` |
@@ -909,7 +911,7 @@ Les mutations HTTP et les upgrades WebSocket refusent les origines non autorisé
 
 ### « Workspace non approuvé » ou `PROJECT_TRUST_REQUIRED`
 
-Ouvrez le sélecteur de workspace, vérifiez le chemin puis cliquez sur l’action d’utilisation et confirmez l’approbation. Si le chemin est refusé avant cette étape, ajoutez sa racine canonique à `AI_HARNESS_ALLOWED_ROOTS` puis redémarrez le serveur. Ne contournez pas cette vérification pour un dépôt inconnu.
+Ouvrez le sélecteur de workspace, vérifiez le chemin, puis cliquez sur l’action d’utilisation et confirmez l’approbation. Dans le CLI, utilisez `/trust status`, puis `/trust allow` et `/reload`, ou relancez ponctuellement avec `--approve`; `/trust list` permet de repérer un refus hérité. Si le chemin est refusé avant cette étape, ajoutez sa racine canonique à `AI_HARNESS_ALLOWED_ROOTS` puis redémarrez le serveur. Ne contournez pas cette vérification pour un dépôt inconnu.
 
 ### « Provider not configured »
 

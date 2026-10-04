@@ -140,7 +140,7 @@ export class FullscreenUI extends TerminalUI {
       'Commandes principales',
       '/help · /new [titre] · /list [filtre] · /switch <id>',
       '/provider · /model · /compact · /search <texte>',
-      '/edit · /export · /import · /settings · /extensions · /tools · /reload · /exit',
+      '/edit · /export · /import · /settings · /extensions · /tools · /trust · /reload · /exit',
       '!commande (contexte) · !!commande (hors contexte)',
       '',
       'Entrée : envoyer/steer · Alt+Entrée ou Ctrl+Q : follow-up · Alt+↑ : rappeler la file',

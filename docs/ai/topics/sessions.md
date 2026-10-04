@@ -30,7 +30,7 @@ SessionManager -> in-memory domain state
 
 ## JSONL v2 Contract
 
-Each line is one entry with a Unix-millisecond `timestamp`; v2 entries also carry `version: 2`.
+Each line is one entry with a Unix-millisecond `timestamp`; v2 entries also carry `version: 2`. The manager advances newly appended message timestamps monotonically so context order survives coarse or backward-moving wall clocks.
 
 | Entry | Purpose |
 |---|---|
@@ -55,7 +55,7 @@ SessionManager.getRawEntries -> complete journal, including pre-compaction and a
 
 The manager maintains the same journal semantics in process memory under `--no-session`. Saving metadata merges known entries without deleting durable descendants, although v2 metadata updates still rewrite the file rather than using an append-only metadata revision. Await every write before reporting success. `JsonlSessionStore` validates IDs, opens only regular non-symlink files, and forces owner-only permissions.
 
-CLI and RPC choose storage in this order: an explicit `--session <path>` parent, `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, merged agent setting `sessionDir`, then `~/.ai-harness/sessions`. Project `sessionDir` is the only `.ai-harness/settings.json` field read before trust. `--no-session` bypasses the store regardless of the resolved directory.
+CLI and RPC choose storage in this order: an explicit `--session <path>` parent, `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, merged agent setting `sessionDir`, then `~/.ai-harness/sessions`. Project `sessionDir` participates only after project trust resolves; no project settings body is read before trust. `--no-session` bypasses the store regardless of the resolved directory.
 
 ### Effective context and compaction
 

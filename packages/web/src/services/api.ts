@@ -17,6 +17,7 @@ import type {
   PluginReloadResult,
   PluginScope,
   PluginUpdateResult,
+  ProjectTrustStatus,
   ProviderAuthStatus,
   SkillCatalog,
   SkillRegistry,
@@ -1158,14 +1159,16 @@ export async function removeWorktree(cwd: string, path: string, force = false): 
   }
 }
 
-export async function setWorkspaceTrust(cwd: string, trusted: boolean): Promise<ApiResponse<{ cwd: string; trusted: boolean }>> {
+export type WorkspaceTrustStatus = ProjectTrustStatus & { operationTrusted: boolean };
+
+export async function setWorkspaceTrust(cwd: string, trusted: boolean): Promise<ApiResponse<WorkspaceTrustStatus>> {
   try {
     const response = await apiFetch(`${API_BASE}/workspaces/trust`, {
       method: trusted ? 'POST' : 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd, confirm: true }),
     });
-    const data = await response.json().catch(() => ({})) as { cwd: string; trusted: boolean; error?: string };
+    const data = await response.json().catch(() => ({})) as WorkspaceTrustStatus & { error?: string };
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
     return { success: true, data };
   } catch (error) {

@@ -142,6 +142,7 @@ Then type a message and press Enter. The response displays progressively.
 | `-p`, `--print` | runs supplied prompts once and writes only the final answer to stdout |
 | `--mode json` | runs supplied prompts once and writes session/lifecycle events as JSONL |
 | `--mode rpc` or `--rpc` | enables the JSONL RPC protocol on stdin/stdout |
+| `-a`, `--approve` / `-na`, `--no-approve` | allows or refuses the project for this process only without changing the trust store |
 | `--tui-mode fullscreen` / `regular` | selects the terminal mode |
 | `--fullscreen` / `--regular` / `--no-fullscreen` | legacy terminal-mode aliases |
 | `--provider <name>` | constrains `--model` or `--models` to a provider |
@@ -191,7 +192,7 @@ The `AI_HARNESS_TUI_MODE=regular|fullscreen` variable also sets the mode. The co
 
 ### Agent Settings
 
-The CLI and RPC use AiHarness's Core settings resolver. They read user settings from `<agent-directory>/settings.json` (`AI_HARNESS_AGENT_DIR`, otherwise `~/.ai-harness`) and, after explicit project trust, overlay `<workspace>/.ai-harness/settings.json`. The only project value read before trust is `sessionDir`. Files must be regular nonsymlink UTF-8 JSON and are capped at 256 KiB; invalid or unknown fields produce a warning without printing their values. Settings are read-only: AiHarness never rewrites them.
+The CLI and RPC use AiHarness's Core settings resolver. They read user settings from `<agent-directory>/settings.json` (`AI_HARNESS_AGENT_DIR`, otherwise `~/.ai-harness`) and, after project trust resolves, overlay `<workspace>/.ai-harness/settings.json`. No project setting body is read before trust; a project `sessionDir` participates in storage precedence only after trust resolves. Files must be regular nonsymlink UTF-8 JSON and are capped at 256 KiB; invalid or unknown fields produce a warning without printing their values. Settings are read-only: AiHarness never rewrites them.
 
 A useful starting file is:
 
@@ -207,12 +208,13 @@ A useful starting file is:
   "retry": { "enabled": true, "maxRetries": 3, "baseDelayMs": 2000 },
   "steeringMode": "one-at-a-time",
   "followUpMode": "one-at-a-time",
+  "defaultProjectTrust": "ask",
   "tuiMode": "fullscreen",
   "theme": "system"
 }
 ```
 
-Also implemented are exact `modelThinkingLevels`, compaction `modelOverrides`, `externalEditor`, `quietStartup: true`, `shellPath`, `shellCommandPrefix`, local extension/skill/prompt paths, `enableSkillCommands`, and project `defaultTools` modifiers. Detached trusted Web runs also resolve `steeringMode` and `followUpMode` at run start through the same Core loader and scheduler. Explicit CLI options take priority. Use `/settings` to inspect effective values and `global`/`project` sources. `/reload` refreshes settings, instructions, resources, extensions, tool defaults, interactive queue modes and shell callbacks; restart to change the session directory, startup model, renderer/theme, RPC queue defaults, compaction or retry policy. Package installation, built-in extension switches, custom theme resources, branch-summary generation, codemode, network/proxy/transport/provider retry, detailed terminal/image/Markdown options, telemetry and warning settings are not yet applied.
+Also implemented are exact `modelThinkingLevels`, compaction `modelOverrides`, global `defaultProjectTrust` (`ask`, `always`, or `never`), `externalEditor`, `quietStartup: true`, `shellPath`, `shellCommandPrefix`, local extension/skill/prompt paths, `enableSkillCommands`, and project `defaultTools` modifiers. Detached trusted Web runs also resolve `steeringMode` and `followUpMode` at run start through the same Core loader and scheduler. Explicit CLI options take priority. Use `/settings` to inspect effective values and `global`/`project` sources. `/reload` refreshes persisted trust decisions, settings, instructions, resources, extensions, tool defaults, interactive queue modes and shell callbacks; process-only trust choices remain unchanged. Restart to change the session directory, startup model, renderer/theme, RPC queue defaults, compaction or retry policy. Package installation, built-in extension switches, custom theme resources, branch-summary generation, codemode, network/proxy/transport/provider retry, detailed terminal/image/Markdown options, telemetry and warning settings are not yet applied.
 
 ### Project Instructions and System Prompts
 
@@ -224,7 +226,7 @@ AiHarness applies the same instruction resolver in interactive, print, JSON, RPC
 4. `CLAUDE.md`
 5. `CLAUDE.MD`
 
-The agent-directory file is user-owned and may load before project trust. Ancestor/project files load only after the workspace has been explicitly approved. If you run `/trust add` inside an active CLI, run `/reload` to recompute the instructions. `--no-context-files` disables both user and project context-file discovery, but does not disable `SYSTEM.md` or `APPEND_SYSTEM.md`.
+The agent-directory file is user-owned and may load before project trust. Before reading any project body, AiHarness inventories only bounded path metadata. In interactive mode with `defaultProjectTrust: "ask"`, it asks only when protected settings, instructions, skills, prompts, or extensions exist; print, JSON, and RPC modes without a decision safely refuse those resources. Ancestor/project files load only after trust resolution. If you run `/trust allow` inside an active CLI, run `/reload` to recompute the instructions. `--no-context-files` disables both user and project context-file discovery, but does not disable `SYSTEM.md` or `APPEND_SYSTEM.md`.
 
 For the base system prompt, `--system-prompt` has highest priority, then trusted `<workspace>/.ai-harness/SYSTEM.md`, then `<agent-directory>/SYSTEM.md`, then the built-in prompt. Without explicit append flags, trusted `<workspace>/.ai-harness/APPEND_SYSTEM.md` takes priority over `<agent-directory>/APPEND_SYSTEM.md`. Repeating `--append-system-prompt` replaces that automatic append-file choice and preserves command-line order. An existing CLI value is read as a path; a nonexistent value is used as literal text. The Web system-prompt setting is always literal, so it cannot unexpectedly read a server path.
 
@@ -265,7 +267,7 @@ Prefix input with `!` to run a command directly in the trusted workspace. Its pr
 !!git diff --stat
 ```
 
-`Escape` or `Ctrl+C` stops the active process tree. Displayed and persisted output is bounded; when truncated, the CLI shows an owner-only complete-output file that expires after 24 hours. Commands reject an untrusted workspace (`/trust add`), and child processes do not inherit environment variables whose names look like credentials. Direct CLI and Web commands use the same Core runtime; this path remains separate from the model-invoked `bash` tool.
+`Escape` or `Ctrl+C` stops the active process tree. Displayed and persisted output is bounded; when truncated, the CLI shows an owner-only complete-output file that expires after 24 hours. Commands reject an untrusted workspace (`/trust allow`), and child processes do not inherit environment variables whose names look like credentials. Direct CLI and Web commands use the same Core runtime; this path remains separate from the model-invoked `bash` tool.
 
 ### Conversation and Session Commands
 
@@ -327,10 +329,10 @@ The CLI and Web agent use the same tool implementations from the Core package:
 
 By default the model receives `read`, `bash`, `edit`, and `write`, plus loaded extension tools; `grep`, `find`, and `ls` are opt-in. The `defaultTools` agent setting can replace or modify that list. `--tools <names>` replaces the selection, `--exclude-tools <names>` removes names afterward, `--no-builtin-tools` keeps only extension tools, and `--no-tools` disables all defaults. `/tools` marks inactive tools, and `/reload` reapplies the policy to the new extension generation. Agent settings `shellPath` and `shellCommandPrefix` affect both this `bash` tool and direct `!`/`!!` commands.
 
-Every path is canonicalized inside the directory from which the CLI started; escaping symlinks and traversal are rejected. Reads and searches do not execute code. `bash`, `edit`, and `write` require explicit trust:
+Every path is canonicalized inside the directory from which the CLI started; escaping symlinks and traversal are rejected. Reads and searches do not execute code. `bash`, `edit`, and `write` require resolved trust. A folder with no protected project resource is allowed for the current process without saving a marker; once such a resource appears, `/reload` resolves trust again and blocks or asks on the next interactive launch. Otherwise approve explicitly:
 
 ```text
-/trust add
+/trust allow
 /tools
 /tool read {"path":"README.md","offset":1,"limit":80}
 ```
@@ -419,14 +421,14 @@ User extensions are loaded from `~/.ai-harness/extensions/`. Extensions from `<p
 
 ```text
 /trust status
-/trust add
+/trust allow
 /reload
 /extensions
 /tools
 /tool name {"parameter":"value"}
 ```
 
-To revoke authorization: `/trust remove`, then `/reload`. An extension can register commands, tools, providers, lifecycle hooks and text panels for fullscreen mode. It runs with the same privileges as the CLI: only approve verified code. See [extensions-cli.md](../../contributors/en/extensions-cli.md) to develop a CLI extension and [extensions-web.md](../../contributors/en/extensions-web.md) for the Web UI bridge.
+`/trust allow-parent` allows the parent directory and descendants, `/trust refuse` saves an exact refusal, `/trust forget` removes only the exact decision, and `/trust list` displays allows and refusals. The decision nearest the project wins, so an exact refusal can block an inherited parent allow and vice versa. Legacy aliases `/trust add` and `/trust remove` remain accepted; the latter now saves an explicit refusal. Run `/reload` after changing a decision. An extension can register commands, tools, providers, lifecycle hooks and text panels for fullscreen mode. It runs with the same privileges as the CLI: only approve verified code. See [extensions-cli.md](../../contributors/en/extensions-cli.md) to develop a CLI extension and [extensions-web.md](../../contributors/en/extensions-web.md) for the Web UI bridge.
 
 ### Custom Theme and Keybindings
 
@@ -673,7 +675,7 @@ To add a language pack or modify interface text, see the [internationalization g
 
 The workspace button opens a directory browser. It accepts an absolute path or `~`, supports navigation to the parent, and remembers recent projects. The `?cwd=` parameter makes a workspace shareable without creating a conversation.
 
-Approval is deliberate: verify the displayed canonical path before confirming. Approval enables tools, commands and writes in that project. A path outside allowed roots or an escaping symlink is rejected.
+Approval is deliberate: verify the displayed canonical path before confirming. Web and CLI use the same Core store: an allow or refusal may be exact or inherited from the nearest parent. A revocation through the Web API saves an exact refusal so an older parent allow cannot silently reactivate the project. An active allow enables project resources, tools, commands and writes. A path outside allowed roots or an escaping symlink is rejected.
 
 In a Git repository, the selector shows the branch and worktrees. The adjacent **+** button creates a worktree from an existing or new branch. Removing a worktree requires confirmation. Running agents stay bound to the cwd where they started. Switching immediately clears stale search and explorer results, unmounts PTY surfaces from the old cwd, then separately restores drafts, provider/models, skills, plugins, child-agent profiles, trust and tabs for the target workspace.
 
@@ -835,7 +837,7 @@ By default, CLI and server use:
 | Web Push subscriptions/private key (if master key) | `~/.ai-harness/push.enc` |
 | Packages/plugins state | `~/.ai-harness/plugins.json` |
 | Managed npm/Git packages | `~/.ai-harness/plugins/installed/` |
-| Project trust | `~/.ai-harness/trust.json` |
+| Project trust decisions (exact/inherited allows and refusals) | `~/.ai-harness/trust.json` |
 | User extensions | `~/.ai-harness/extensions/` |
 | User skills | `~/.ai-harness/skills/` |
 | User prompts | `~/.ai-harness/prompts/` |
@@ -904,7 +906,7 @@ HTTP mutations and WebSocket upgrades refuse unauthorized origins. Web session d
 
 ### "Workspace not approved" or PROJECT_TRUST_REQUIRED
 
-Open workspace selector, verify path then click usage action and confirm approval. If path refused before this step, add its canonical root to `AI_HARNESS_ALLOWED_ROOTS` then restart server. Do not bypass this check for unknown repository.
+Open the workspace selector, verify the path, then click the usage action and confirm approval. In CLI, use `/trust status`, then `/trust allow` and `/reload`, or restart once with `--approve`; `/trust list` helps locate an inherited refusal. If the path is rejected before this step, add its canonical root to `AI_HARNESS_ALLOWED_ROOTS` and restart the server. Do not bypass this check for an unknown repository.
 
 ### "Provider not configured"
 

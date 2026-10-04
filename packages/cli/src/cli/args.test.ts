@@ -16,7 +16,7 @@ describe('CLI arguments', () => {
       '--tools', 'read,GREP,read', '-xt', 'bash', '--provider', 'openai', '--model', 'gpt-test',
       '--models', 'openai/o*,anthropic/Claude*,openai/o*',
       '--thinking=max', '--system-prompt', './SYSTEM.md',
-      '--append-system-prompt=first', '--append-system-prompt', './extra.md', '-nc',
+      '--append-system-prompt=first', '--append-system-prompt', './extra.md', '-nc', '--approve',
       '--session-dir', './sessions', '--session-id', 'run-1',
       '--name', 'Review run', '@notes.txt', 'review this',
     ])).toMatchObject({
@@ -32,6 +32,7 @@ describe('CLI arguments', () => {
       systemPrompt: './SYSTEM.md',
       appendSystemPrompts: ['first', './extra.md'],
       noContextFiles: true,
+      projectTrust: true,
       sessionDir: './sessions',
       sessionId: 'run-1',
       name: 'Review run',
@@ -49,6 +50,8 @@ describe('CLI arguments', () => {
     expect(() => parseCliArguments(['--models', ', ,'])).toThrow(/at least one model pattern/i);
     expect(() => parseCliArguments(['--system-prompt', ''])).toThrow(/non-empty/i);
     expect(() => parseCliArguments(['--append-system-prompt'])).toThrow(/requires a value/i);
+    expect(parseCliArguments(['-na'])).toMatchObject({ projectTrust: false });
+    expect(() => parseCliArguments(['--approve', '--no-approve'])).toThrow(/cannot be combined/i);
     expect(() => parseCliArguments(['--provider', 'openai'])).toThrow(/requires --model/i);
     expect(parseCliArguments(['--api-key', 'temporary', '--models', 'openai/gpt*']))
       .toMatchObject({ apiKey: 'temporary', models: ['openai/gpt*'] });
@@ -83,6 +86,8 @@ describe('CLI arguments', () => {
     expect(formatCliHelp()).toContain('ai-harness [options]');
     expect(formatCliHelp()).toContain('--append-system-prompt');
     expect(formatCliHelp()).toContain('--list-models [search]');
+    expect(formatCliHelp()).toContain('--approve');
+    expect(formatCliHelp()).toContain('--no-approve');
     expect(formatCliHelp()).toContain('AI_HARNESS_AGENT_DIR');
     expect(formatCliHelp()).toContain('AI_HARNESS_SESSIONS_DIR');
     expect(formatCliHelp()).toContain('.ai-harness/settings.json');

@@ -190,7 +190,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
     if (!pendingWorkspace) return;
     setError('');
     const trust = await setWorkspaceTrust(pendingWorkspace.cwd, true);
-    if (!trust.success) {
+    if (!trust.success || !(trust.data?.operationTrusted ?? trust.data?.trusted)) {
       setError(trust.error || t('workspace.trustFailed'));
       return;
     }

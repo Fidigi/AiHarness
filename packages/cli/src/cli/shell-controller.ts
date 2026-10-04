@@ -48,7 +48,7 @@ export class InteractiveShellController {
 
     const cwd = this.context.getCwd();
     if (!await this.context.isTrusted(cwd)) {
-      this.context.reportError("Approuvez le workspace actif avec /trust add avant d'exécuter une commande.");
+      this.context.reportError("Approuvez le workspace actif avec /trust allow avant d'exécuter une commande.");
       return true;
     }
 

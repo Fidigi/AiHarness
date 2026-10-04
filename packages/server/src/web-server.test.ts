@@ -56,6 +56,74 @@ describe('combined Web server', () => {
     expect(await response.text()).toContain('openai');
   });
 
+  it('shares resource-sensitive exact, inherited, and refused trust status across workspace routes', async () => {
+    const parent = path.join(webRoot, `trust-parent-${Date.now()}`);
+    const project = path.join(parent, 'project');
+    const emptyProject = path.join(parent, 'empty-project');
+    await mkdir(path.join(project, '.ai-harness'), { recursive: true });
+    await mkdir(emptyProject);
+    await writeFile(path.join(project, '.ai-harness', 'settings.json'), '{}');
+    try {
+      const empty = await fetch(`${baseUrl}/api/workspaces/trust?cwd=${encodeURIComponent(emptyProject)}`);
+      expect(await empty.json()).toMatchObject({
+        cwd: emptyProject,
+        requiresTrust: false,
+        trusted: true,
+        operationTrusted: false,
+        resources: [],
+      });
+
+      const initial = await fetch(`${baseUrl}/api/workspaces/trust?cwd=${encodeURIComponent(project)}`);
+      expect(initial.status).toBe(200);
+      expect(await initial.json()).toMatchObject({
+        cwd: project,
+        requiresTrust: true,
+        trusted: false,
+        operationTrusted: false,
+        decision: null,
+        inherited: false,
+        resources: [expect.objectContaining({
+          relativePath: path.join('.ai-harness', 'settings.json'),
+          safeKind: true,
+        })],
+      });
+
+      const allowed = await fetch(`${baseUrl}/api/workspaces/trust`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: parent, confirm: true }),
+      });
+      expect(allowed.status).toBe(200);
+      const inherited = await fetch(`${baseUrl}/api/workspaces/trust?cwd=${encodeURIComponent(project)}`)
+        .then(response => response.json()) as Record<string, unknown>;
+      expect(inherited).toMatchObject({
+        trusted: true,
+        operationTrusted: true,
+        decision: true,
+        decisionPath: parent,
+        inherited: true,
+      });
+      expect((await fetch(`${baseUrl}/api/workspaces/validate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: project }),
+      }).then(response => response.json()))).toMatchObject({ trusted: true });
+
+      const refused = await fetch(`${baseUrl}/api/workspaces/trust`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: project, confirm: true }),
+      });
+      expect(refused.status).toBe(200);
+      expect(await refused.json()).toMatchObject({
+        trusted: false,
+        operationTrusted: false,
+        decision: false,
+        decisionPath: project,
+        inherited: false,
+      });
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
   it('publishes a grouped model catalogue and persists project activation', async () => {
     const initialResponse = await fetch(`${baseUrl}/api/models?projectId=model-project`);
     expect(initialResponse.status).toBe(200);

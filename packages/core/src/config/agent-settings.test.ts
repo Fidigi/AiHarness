@@ -83,7 +83,7 @@ describe('agent settings resolution', () => {
     expect(result.provenance.defaultTools?.scopes).toEqual(['global', 'project']);
   });
 
-  it('reads only project sessionDir before trust and never exposes other project settings', async () => {
+  it('does not open or expose project settings before trust', async () => {
     const { cwd, agentDir } = await fixture();
     await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({ theme: 'dark', sessionDir: 'global-sessions' }));
     await writeFile(path.join(cwd, '.ai-harness', 'settings.json'), JSON.stringify({
@@ -93,15 +93,11 @@ describe('agent settings resolution', () => {
     }));
 
     const untrusted = await loadAgentSettings({ cwd, agentDir, projectTrusted: false });
-    expect(untrusted.projectSettings).toEqual({ sessionDir: 'project-sessions' });
-    expect(untrusted.settings).toMatchObject({ theme: 'dark', sessionDir: 'project-sessions' });
+    expect(untrusted.projectSettings).toEqual({});
+    expect(untrusted.settings).toMatchObject({ theme: 'dark', sessionDir: 'global-sessions' });
     expect(untrusted.settings.extensions).toBeUndefined();
+    expect(untrusted.diagnostics.some(diagnostic => diagnostic.scope === 'project')).toBe(false);
     expect(resolveAgentResourcePaths(untrusted, 'extensions')).toEqual([]);
-
-    const strict = await loadAgentSettings({
-      cwd, agentDir, projectTrusted: false, includeUntrustedProjectSessionDir: false,
-    });
-    expect(strict.settings.sessionDir).toBe('global-sessions');
   });
 
   it('migrates legacy keys and ignores invalid or unknown fields without dropping valid settings', async () => {

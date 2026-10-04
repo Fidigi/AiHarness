@@ -216,6 +216,100 @@ describe('CLI invocation contract', () => {
     expect(JSON.parse(explicit.stdout)).toMatchObject({ data: { model: { id: 'mock-model' } } });
   });
 
+  it('applies one-process trust overrides and the global headless trust policy without persisting overrides', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-trust-'));
+    temporaryDirectories.push(cwd);
+    const agentDir = path.join(cwd, 'agent');
+    const projectConfig = path.join(cwd, '.ai-harness');
+    const capture = path.join(cwd, 'captured-trust-prompt.txt');
+    await mkdir(agentDir, { recursive: true });
+    await mkdir(projectConfig, { recursive: true });
+    await writeFile(path.join(projectConfig, 'SYSTEM.md'), 'trusted project instructions');
+    await writeFile(path.join(cwd, 'capture.mjs'), `
+      import { writeFileSync } from 'node:fs';
+      export default api => api.before('before:provider', data => {
+        writeFileSync(process.env.PROMPT_CAPTURE, String(data.options.systemPrompt));
+      });
+    `);
+    const environment = { AI_HARNESS_AGENT_DIR: agentDir, PROMPT_CAPTURE: capture };
+    const args = ['--print', '--no-session', '--extension', './capture.mjs', 'hello'];
+
+    expect((await invoke(args, undefined, environment, cwd)).code).toBe(0);
+    expect(await readFile(capture, 'utf8')).not.toContain('trusted project instructions');
+
+    expect((await invoke(['--approve', ...args], undefined, environment, cwd)).code).toBe(0);
+    expect(await readFile(capture, 'utf8')).toContain('trusted project instructions');
+    await expect(readFile(path.join(agentDir, 'trust.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+
+    await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({ defaultProjectTrust: 'always' }));
+    expect((await invoke(args, undefined, environment, cwd)).code).toBe(0);
+    expect(await readFile(capture, 'utf8')).toContain('trusted project instructions');
+
+    expect((await invoke(['--no-approve', ...args], undefined, environment, cwd)).code).toBe(0);
+    expect(await readFile(capture, 'utf8')).not.toContain('trusted project instructions');
+  });
+
+  it('prompts for protected resources in an interactive terminal and saves the selected decision', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-trust-prompt-'));
+    temporaryDirectories.push(cwd);
+    const agentDir = path.join(cwd, 'agent');
+    await mkdir(path.join(cwd, '.ai-harness'), { recursive: true });
+    await writeFile(path.join(cwd, '.ai-harness', 'SYSTEM.md'), 'project instructions');
+    const command = [
+      process.execPath, '--import', tsxImport, entry,
+      '--tui-mode', 'regular', '--no-session',
+    ].map(shellArgument).join(' ');
+    const child = spawn('/usr/bin/script', ['-qefc', command, '/dev/null'], {
+      cwd,
+      env: {
+        ...process.env,
+        HOME: path.join(cwd, 'home'),
+        AI_HARNESS_AGENT_DIR: agentDir,
+        NO_COLOR: '1',
+        NODE_NO_WARNINGS: '1',
+        AI_HARNESS_DEFAULT_PROVIDER: '',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let output = '';
+    child.stdout.setEncoding('utf8').on('data', chunk => { output += chunk; });
+    child.stderr.setEncoding('utf8').on('data', chunk => { output += chunk; });
+    const waitForOutput = async (value: string): Promise<void> => {
+      const deadline = Date.now() + 5_000;
+      while (!output.includes(value)) {
+        if (Date.now() >= deadline) throw new Error(`Interactive CLI did not emit: ${value}\n${output}`);
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    };
+
+    try {
+      await waitForOutput('Project-controlled resources require a trust decision');
+      child.stdin.write('1\r');
+      await waitForOutput('Nouvelle conversation:');
+      child.stdin.write('/quit\r');
+      child.stdin.end();
+      const code = await new Promise<number | null>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          child.kill('SIGKILL');
+          reject(new Error(`Interactive CLI trust prompt timed out.\n${output}`));
+        }, 5_000);
+        child.once('error', reject);
+        child.once('close', value => {
+          clearTimeout(timeout);
+          resolve(value);
+        });
+      });
+      expect(code).toBe(0);
+    } finally {
+      if (child.exitCode === null) child.kill('SIGKILL');
+    }
+
+    expect(JSON.parse(await readFile(path.join(agentDir, 'trust.json'), 'utf8'))).toMatchObject({
+      version: 2,
+      decisions: { [cwd]: true },
+    });
+  }, 15_000);
+
   it('selects, names, and continues persisted startup sessions', async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-sessions-'));
     temporaryDirectories.push(cwd);

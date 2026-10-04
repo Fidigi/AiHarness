@@ -55,7 +55,11 @@ import { streamProviderTurn } from './agent/provider-turn.js';
 import { ResourceManager } from './resources/resource-manager.js';
 import { editInExternalEditor } from './utils/system-integration.js';
 import { runRpcMode } from './rpc/rpc-server.js';
-import { ProjectTrustManager } from './security/project-trust.js';
+import {
+  ProjectTrustManager,
+  promptForProjectTrust,
+  resolveProjectTrust,
+} from './security/project-trust.js';
 import { ThemeManager } from './tui/theme-manager.js';
 import {
   CliArgumentError,
@@ -145,6 +149,7 @@ function formatAgentSettingsSummary(resolved: ResolvedAgentSettings): string {
       ?? DEFAULT_CODING_TOOL_NAMES, 'defaultTools'],
     ['steeringMode', resolved.settings.steeringMode ?? 'one-at-a-time', 'steeringMode'],
     ['followUpMode', resolved.settings.followUpMode ?? 'one-at-a-time', 'followUpMode'],
+    ['defaultProjectTrust', resolved.settings.defaultProjectTrust ?? 'ask', 'defaultProjectTrust'],
     ['sessionDir', resolved.settings.sessionDir ?? 'agent default', 'sessionDir'],
     ['compaction.enabled', resolved.settings.compaction?.enabled ?? true, 'compaction.enabled'],
     ['compaction.reserveTokens', resolved.settings.compaction?.reserveTokens ?? 16_384, 'compaction.reserveTokens'],
@@ -156,7 +161,7 @@ function formatAgentSettingsSummary(resolved: ResolvedAgentSettings): string {
   ];
   return [
     `Agent settings: ${resolved.paths.global}`,
-    `Project settings: ${resolved.paths.project} (${resolved.projectTrusted ? 'trusted' : 'blocked except sessionDir'})`,
+    `Project settings: ${resolved.paths.project} (${resolved.projectTrusted ? 'trusted' : 'blocked'})`,
     ...values.map(([name, value, field]) => `${name}: ${typeof value === 'string' ? value : JSON.stringify(value)} [${source(field)}]`),
   ].join('\n');
 }
@@ -207,10 +212,15 @@ async function main(): Promise<void> {
       const trustManager = new ProjectTrustManager();
       await trustManager.load();
       const cwd = process.cwd();
-      reportAgentSettingsDiagnostics(await loadAgentSettings({
+      const bootstrapSettings = await loadAgentSettings({ cwd, projectTrusted: false });
+      const trust = await resolveProjectTrust({
         cwd,
-        projectTrusted: await trustManager.isTrusted(cwd),
-      }));
+        trustManager,
+        override: cliArguments.projectTrust,
+        defaultProjectTrust: bootstrapSettings.settings.defaultProjectTrust,
+        includeContextFiles: !cliArguments.noContextFiles,
+      });
+      reportAgentSettingsDiagnostics(await loadAgentSettings({ cwd, projectTrusted: trust.resourceTrusted }));
       const search = typeof cliArguments.listModels === 'string' ? cliArguments.listModels : undefined;
       process.stdout.write(`${await formatConfiguredModelList(createConfiguredProviders(), search)}\n`);
     } catch (error) {
@@ -246,6 +256,7 @@ async function main(): Promise<void> {
       excludeTools: cliArguments.excludeTools,
       noBuiltinTools: cliArguments.noBuiltinTools,
       noTools: cliArguments.noTools,
+      projectTrust: cliArguments.projectTrust,
     });
     return;
   }
@@ -270,18 +281,39 @@ async function main(): Promise<void> {
   const workspaceCwd = await workspaceManager.getDefaultCwd();
   const trustManager = new ProjectTrustManager();
   await trustManager.load();
-  let settingsResolution = await loadAgentSettings({
-    cwd: workspaceCwd,
-    projectTrusted: await trustManager.isTrusted(workspaceCwd),
-  });
-  reportAgentSettingsDiagnostics(settingsResolution);
-  const reloadAgentSettings = async (): Promise<void> => {
-    settingsResolution = await loadAgentSettings({
+  let projectTrusted = false;
+  let projectResourcesTrusted = false;
+  let sessionProjectTrust: boolean | undefined;
+  const resolveSettingsForTrust = async (allowPrompt = false): Promise<ResolvedAgentSettings> => {
+    const bootstrapSettings = await loadAgentSettings({ cwd: workspaceCwd, projectTrusted: false });
+    const trust = await resolveProjectTrust({
       cwd: workspaceCwd,
-      projectTrusted: await trustManager.isTrusted(workspaceCwd),
+      trustManager,
+      override: cliArguments.projectTrust ?? sessionProjectTrust,
+      defaultProjectTrust: bootstrapSettings.settings.defaultProjectTrust,
+      includeContextFiles: !cliArguments.noContextFiles,
+      ...(allowPrompt && applicationMode === 'interactive' ? { prompt: promptForProjectTrust } : {}),
     });
-    reportAgentSettingsDiagnostics(settingsResolution);
+    if (allowPrompt && trust.source === 'prompt' && trust.decision === null) {
+      sessionProjectTrust = trust.trusted;
+    }
+    projectTrusted = trust.trusted;
+    projectResourcesTrusted = trust.resourceTrusted;
+    const resolved = await loadAgentSettings({ cwd: workspaceCwd, projectTrusted: projectResourcesTrusted });
+    reportAgentSettingsDiagnostics(resolved);
+    return resolved;
   };
+  let settingsResolution = await resolveSettingsForTrust(true);
+  const reloadAgentSettings = async (): Promise<void> => {
+    settingsResolution = await resolveSettingsForTrust();
+  };
+  const currentProjectTrust = (fallback: boolean): boolean => {
+    if (cliArguments.projectTrust !== undefined) return cliArguments.projectTrust;
+    if (sessionProjectTrust !== undefined) return sessionProjectTrust;
+    return trustManager.getDecisionSync(workspaceCwd)?.decision ?? fallback;
+  };
+  const isProjectTrusted = (): boolean => currentProjectTrust(projectTrusted);
+  const mayLoadProjectResources = (): boolean => currentProjectTrust(projectResourcesTrusted);
   const sessionDirectory = resolveStartupSessionDirectory(
     cliArguments,
     workspaceCwd,
@@ -354,7 +386,7 @@ async function main(): Promise<void> {
 
   const workspaceDescriptor = await workspaceManager.describe(
     workspaceCwd,
-    settingsResolution.projectTrusted,
+    isProjectTrusted(),
   );
 
   const extensionRegistry = new ExtensionRegistry();
@@ -367,7 +399,7 @@ async function main(): Promise<void> {
   const reloadInstructionPrompt = async (): Promise<void> => {
     const resolved = await resolveInstructionPrompt({
       cwd: workspaceCwd,
-      projectTrusted: await trustManager.isTrusted(workspaceCwd),
+      projectTrusted: mayLoadProjectResources(),
       noContextFiles: cliArguments.noContextFiles,
       systemPromptInput: cliArguments.systemPrompt,
       appendSystemPromptInputs: cliArguments.appendSystemPrompts,
@@ -390,7 +422,7 @@ async function main(): Promise<void> {
   }
   const extensionLoader = new ExtensionLoader(extensionRegistry, {
     paths: () => configuredExtensionPaths(cliArguments.extensions, settingsResolution),
-    isProjectTrusted: () => trustManager.isTrustedSync(workspaceCwd),
+    isProjectTrusted: mayLoadProjectResources,
   });
   const registerSkillTool = async (): Promise<void> => {
     await extensionRegistry.unload('builtin:skills');
@@ -479,6 +511,7 @@ async function main(): Promise<void> {
     {
       cwd: workspaceCwd,
       workspaceId: workspaceDescriptor.id,
+      isProjectTrusted,
       enabledToolNames: () => selectedTools().map(tool => tool.name),
       modelPatterns: effectiveModelSettings.modelPatterns,
       settingsInfo: () => formatAgentSettingsSummary(settingsResolution),
@@ -668,7 +701,7 @@ async function main(): Promise<void> {
   const shellController = new InteractiveShellController(sessionManager, terminal, {
     getSessionId: () => currentSessionId,
     getCwd: () => workspaceCwd,
-    isTrusted: cwd => trustManager.isTrusted(cwd),
+    isTrusted: () => isProjectTrusted(),
     reportError,
   }, {
     shellPath: () => settingsResolution.settings.shellPath,
@@ -907,7 +940,7 @@ async function main(): Promise<void> {
           providerName,
           cwd: workspaceCwd,
           workspaceId: workspaceDescriptor.id,
-          projectTrusted: await trustManager.isTrusted(workspaceCwd),
+          projectTrusted: isProjectTrusted(),
           onProcessOutput: chunk => {
             if (!activeToolCall) return;
             activeToolOutput = truncateToolTail(activeToolOutput + chunk).content;

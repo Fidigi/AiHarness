@@ -280,7 +280,7 @@ ${chalk.bold('Extensions and application')}
   ${chalk.cyan('/extensions')}                   List loaded extensions
   ${chalk.cyan('/tools')}                        List built-in and extension tools
   ${chalk.cyan('/tool <name> [json]')}           Run a registered tool
-  ${chalk.cyan('/trust [status|add|remove|list]')} Manage project trust
+  ${chalk.cyan('/trust [status|allow|allow-parent|refuse|forget|list]')} Manage project trust decisions
   ${chalk.cyan('/reload')}                       Reload settings, resources and extensions
   ${chalk.cyan('/settings')}                     Show effective agent settings and sources
   ${chalk.cyan('/config')}                       Show storage configuration

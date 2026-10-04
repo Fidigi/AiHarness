@@ -12,6 +12,7 @@ import {
   WorkspaceManager,
   registerWorkspaceTools,
   resolveInstructionPrompt,
+  resolveProjectTrust,
   resolveAgentCompactionSettings,
   resolveAgentDefaultTools,
   resolveAgentResourcePaths,
@@ -84,6 +85,7 @@ export interface RpcStartupOptions {
   excludeTools?: string[];
   noBuiltinTools?: boolean;
   noTools?: boolean;
+  projectTrust?: boolean;
   input?: Readable;
   output?: (record: Record<string, unknown>) => void | Promise<void>;
 }
@@ -241,8 +243,20 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     const canonicalCwd = await workspaceManager.getDefaultCwd();
     const trustManager = new ProjectTrustManager();
     await trustManager.load();
-    const projectTrusted = await trustManager.isTrusted(canonicalCwd);
-    const settingsResolution = await loadAgentSettings({ cwd: canonicalCwd, projectTrusted });
+    const bootstrapSettings = await loadAgentSettings({ cwd: canonicalCwd, projectTrusted: false });
+    const projectTrust = await resolveProjectTrust({
+      cwd: canonicalCwd,
+      trustManager,
+      override: options.projectTrust,
+      defaultProjectTrust: bootstrapSettings.settings.defaultProjectTrust,
+      includeContextFiles: !options.noContextFiles,
+    });
+    const projectTrusted = projectTrust.trusted;
+    const projectResourcesTrusted = projectTrust.resourceTrusted;
+    const settingsResolution = await loadAgentSettings({
+      cwd: canonicalCwd,
+      projectTrusted: projectResourcesTrusted,
+    });
     reportSettingsDiagnostics(settingsResolution);
     const sessionDirectory = resolveStartupSessionDirectory(
       {
@@ -261,7 +275,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
 
     const instructions = await resolveInstructionPrompt({
       cwd: canonicalCwd,
-      projectTrusted,
+      projectTrusted: projectResourcesTrusted,
       noContextFiles: options.noContextFiles,
       systemPromptInput: options.systemPrompt,
       appendSystemPromptInputs: options.appendSystemPrompts,
@@ -272,7 +286,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     const resourceManager = new ResourceManager({
       cwd: canonicalCwd,
       agentDir: settingsResolution.agentDir,
-      projectTrusted,
+      projectTrusted: projectResourcesTrusted,
       globalSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'global'),
       projectSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'project'),
       globalPromptPaths: resolveAgentResourcePaths(settingsResolution, 'prompts', undefined, 'global'),
@@ -305,7 +319,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     ));
     const extensionLoader = new ExtensionLoader(extensionRegistry, {
       paths: rpcExtensionPaths(options.extensions ?? [], settingsResolution),
-      isProjectTrusted: () => trustManager.isTrustedSync(canonicalCwd),
+      isProjectTrusted: () => projectResourcesTrusted,
     });
     const extensionLoadResult = await extensionLoader.loadAll();
     for (const failure of extensionLoadResult.errors) {

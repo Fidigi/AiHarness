@@ -1,6 +1,14 @@
 import { Router } from 'express';
+import type { ProjectTrustStatus } from '@ai-harness/core';
 import type { RuntimeServices } from '../runtime/services.js';
 import { requireCapability } from '../security/request-security.js';
+
+function withOperationTrust(status: ProjectTrustStatus): ProjectTrustStatus & { operationTrusted: boolean } {
+  return {
+    ...status,
+    operationTrusted: status.decision === true && status.decisionError === undefined,
+  };
+}
 
 export function createWorkspaceRouter(servicesPromise: Promise<RuntimeServices>): Router {
   const router = Router();
@@ -121,7 +129,7 @@ export function createWorkspaceRouter(servicesPromise: Promise<RuntimeServices>)
         return;
       }
       const cwd = await services.workspaceManager.resolve(request.query.cwd, { kind: 'directory' });
-      response.json({ cwd, trusted: await services.trustManager.isTrusted(cwd) });
+      response.json(withOperationTrust(await services.trustManager.getStatus(cwd)));
     } catch (error) {
       next(error);
     }
@@ -136,7 +144,7 @@ export function createWorkspaceRouter(servicesPromise: Promise<RuntimeServices>)
       }
       const cwd = await services.workspaceManager.resolve(request.body.cwd, { kind: 'directory' });
       await services.trustManager.trust(cwd);
-      response.json({ cwd, trusted: true });
+      response.json(withOperationTrust(await services.trustManager.getStatus(cwd)));
     } catch (error) {
       next(error);
     }
@@ -150,11 +158,11 @@ export function createWorkspaceRouter(servicesPromise: Promise<RuntimeServices>)
         return;
       }
       const cwd = await services.workspaceManager.resolve(request.body.cwd, { kind: 'directory' });
-      await services.trustManager.untrust(cwd);
+      await services.trustManager.refuse(cwd);
       for (const terminal of services.terminalRuntime.list(cwd)) {
         if (terminal.status === 'running') services.terminalRuntime.kill(terminal.id);
       }
-      response.json({ cwd, trusted: false });
+      response.json(withOperationTrust(await services.trustManager.getStatus(cwd)));
     } catch (error) {
       next(error);
     }

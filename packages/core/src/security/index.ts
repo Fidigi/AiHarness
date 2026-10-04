@@ -1,4 +1,22 @@
-export { ProjectTrustManager } from './project-trust.js';
+export {
+  inspectProjectTrustResources,
+  ProjectTrustManager,
+  resolveProjectTrust,
+} from './project-trust.js';
+export type {
+  ProjectTrustDecision,
+  ProjectTrustDecisionEntry,
+  ProjectTrustDefault,
+  ProjectTrustInspection,
+  ProjectTrustInspectionOptions,
+  ProjectTrustPromptChoice,
+  ProjectTrustPromptRequest,
+  ProjectTrustResource,
+  ProjectTrustStatus,
+  ProjectTrustUpdate,
+  ResolvedProjectTrust,
+  ResolveProjectTrustOptions,
+} from './project-trust.js';
 export {
   WorkspaceManager,
   WorkspacePathError,

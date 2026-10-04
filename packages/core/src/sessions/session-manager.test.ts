@@ -559,6 +559,8 @@ describe('SessionManager with JSONL Persistence', () => {
       expect(loaded!.messages[0].content).toBe('First');
       expect(loaded!.messages[1].content).toBe('Second');
       expect(loaded!.messages[2].content).toBe('Third');
+      expect(loaded!.messages.map(message => message.timestamp.getTime()))
+        .toEqual([...loaded!.messages.map(message => message.timestamp.getTime())].sort((left, right) => left - right));
     });
   });
 
