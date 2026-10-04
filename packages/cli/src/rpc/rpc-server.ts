@@ -7,6 +7,7 @@ import {
   JsonlSessionStore,
   loadAgentSettings,
   normalizeProviderUsage,
+  PluginService,
   ProjectTrustManager,
   SessionManager,
   WorkspaceManager,
@@ -258,6 +259,27 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       projectTrusted: projectResourcesTrusted,
     });
     reportSettingsDiagnostics(settingsResolution);
+    const workspaceDescriptor = await workspaceManager.describe(canonicalCwd, projectTrusted);
+    const pluginService = new PluginService(
+      workspaceManager,
+      trustManager,
+      path.join(settingsResolution.agentDir, 'plugins.json'),
+      settingsResolution.agentDir,
+    );
+    await pluginService.load();
+    const packageContext = {
+      cwd: canonicalCwd,
+      projectId: workspaceDescriptor.id,
+      projectTrusted: projectResourcesTrusted,
+    };
+    const [packageSkills, packagePrompts, packageExtensions] = await Promise.all([
+      pluginService.getEnabledResourceLocations('skill', packageContext),
+      pluginService.getEnabledResourceLocations('prompt', packageContext),
+      pluginService.getEnabledExtensionFiles(packageContext),
+    ]).catch(error => {
+      process.stderr.write(`Warning: Package resources ignored: ${error instanceof Error ? error.message : String(error)}\n`);
+      return [[], [], []] as const;
+    });
     const sessionDirectory = resolveStartupSessionDirectory(
       {
         session: options.session,
@@ -291,6 +313,10 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       projectSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'project'),
       globalPromptPaths: resolveAgentResourcePaths(settingsResolution, 'prompts', undefined, 'global'),
       projectPromptPaths: resolveAgentResourcePaths(settingsResolution, 'prompts', undefined, 'project'),
+      globalPackageSkillPaths: packageSkills.filter(item => item.scope === 'global').map(item => item.path),
+      projectPackageSkillPaths: packageSkills.filter(item => item.scope === 'project').map(item => item.path),
+      globalPackagePromptPaths: packagePrompts.filter(item => item.scope === 'global').map(item => item.path),
+      projectPackagePromptPaths: packagePrompts.filter(item => item.scope === 'project').map(item => item.path),
     });
     const resourceLoadResult = await resourceManager.loadAll();
     for (const failure of resourceLoadResult.errors) {
@@ -318,7 +344,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       startupModel,
     ));
     const extensionLoader = new ExtensionLoader(extensionRegistry, {
-      paths: rpcExtensionPaths(options.extensions ?? [], settingsResolution),
+      paths: [...rpcExtensionPaths(options.extensions ?? [], settingsResolution), ...packageExtensions],
       isProjectTrusted: () => projectResourcesTrusted,
     });
     const extensionLoadResult = await extensionLoader.loadAll();

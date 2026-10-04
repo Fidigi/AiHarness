@@ -90,6 +90,7 @@ Start at `packages/core/src/index.ts`, which defines the public package exports.
 | Prompt inputs and instructions | `src/prompts/{prompt-input,instruction-context}.ts` | Canonical bounded `@path` UTF-8/image loading plus shared CLI/Web agent-directory, trusted project-context and system-prompt discovery/composition; regular files, aggregate limits and source precedence are enforced once in Core |
 | Agent settings | `src/config/agent-settings.ts` | Bounded `settings.json` loading, schema diagnostics, legacy migration, trusted global/project merge, global-only fields, provenance, resource paths, and tool/model/thinking/compaction resolution |
 | MCP configuration inventory | `src/mcp/config-inventory.ts` | File-only JSON/JSONC parsing, strict schema diagnostics, persisted-trust project gate, regular/no-link bounded reads, shadowing, hidden-character escaping and value-free redacted server descriptors; no runtime transport |
+| Plugin packages | `src/plugins/plugin-service.ts` | Shared CLI/Web npm/Git/local source policy, staging, trust/scopes, per-resource filters, bounded symlink-free inventory, checks/updates, rollback, locked owner-only atomic state and sanitized catalogues |
 | Workspace security | `src/security/` | Canonical allowed roots, symlink boundary, bounded project-resource inventory, shared exact/inherited allow/refuse trust decisions, Git/worktree operations |
 | Extension API/loader | `src/extensions/{extension-registry,module-loader}.ts` | Owned commands/tools/providers/plain-text UI, hooks/listeners, bounded symlink-free discovery and atomic managed generations |
 | Utilities | `src/utils/index.ts`, `src/utils/event-emitter.ts` | IDs, formatting, retry helpers, typed event infrastructure |
@@ -113,6 +114,7 @@ Session files are versioned JSONL (current schema: v2). Entry types include `met
 | Skills/prompts | `src/resources/resource-manager.ts` | Markdown front matter, discovery, prompt expansion, model-invocable skills |
 | Trust and OAuth | `src/security/` | Project trust file and provider OAuth device flow |
 | Direct shell | `src/cli/shell-controller.ts` | Trust-aware interactive `!`/`!!` adapter over Core's CLI/Web shell runtime, with regular/fullscreen streaming and abort |
+| Package commands | `src/cli/package-command.ts` | Strict top-level lifecycle aliases/actions, global/project scopes, per-kind filters and JSON/text adapter over Core `PluginService` |
 | Models | `src/cli/model-list.ts`, `src/providers/configured-providers.ts` | Configured-provider listing, shared startup exact/fuzzy/scope resolution, settings defaults/scopes, ephemeral API-key override and mode-independent provider construction |
 | Agent settings and resources | `src/index.ts`, `src/resources/resource-manager.ts` | Global/trusted-project settings integration, safe ordered skill/prompt discovery, startup precedence, `/settings`, and interactive reload |
 | Headless JSON | `src/cli/json-output.ts` | Versioned session/lifecycle/retry/compaction JSONL encoding plus serialized backpressure-aware stdout isolation over the shared Core loop |
@@ -121,7 +123,7 @@ Session files are versioned JSONL (current schema: v2). Entry types include `met
 
 The CLI has regular, fullscreen, print, one-shot JSON event, and RPC paths. A change to shared conversation behavior may need coverage in more than one path. Interactive and RPC steering/follow-up delivery plus detached Web queues use Core's bounded all/one-at-a-time scheduler; trusted Web runs resolve the same Core delivery-mode settings at startup, while terminal adapters only own key dispatch, lone-Escape/Alt+Enter disambiguation, cancellation feedback and editor restoration. All paths resolve Core's same model, instruction, agent-settings and project-trust contracts: startup model/scopes, thinking, tools, compaction/retry, session directory, resources, shell behavior, supported TUI preferences, nearest saved allow/refuse decisions and `defaultProjectTrust` use explicit CLI → environment/process → trusted project → agent-setting precedence where applicable. Interactive startup prompts only when bounded metadata discovery finds protected project resources; `--approve`/`--no-approve` and headless RPC use one-process decisions without mutating the shared store. Documented context filenames and replace/append flags feed every provider turn; `/settings` reports effective source scopes and `/reload` refreshes settings, trust, instructions, resources, extensions, tools, and shell callbacks for interactive runs. Startup-only session/model/TUI values still require a restart. `/model` and RPC cycle against the shared ordered scope, and `--list-models` reports settings diagnostics but exits before session/resource startup. Built-in command metadata lives in `commands/handler.ts`, while user-visible help also exists in both TUI implementations.
 
-Project extensions are executable code. User extensions are loaded from `~/.ai-harness/extensions`; project extensions under `.ai-harness/extensions` require project trust. CLI discovery/orchestration remains in `cli/src/extensions`, while the bounded `ExtensionModuleLoader` implementation is shared from Core. The server also uses it only during explicit startup/reload to atomically host enabled standalone/package extensions and their declarative Web surfaces; catalogue GETs and install operations never execute extension code.
+Project extensions are executable code. User extensions are loaded from `~/.ai-harness/extensions`; project extensions and project package resources require project trust. CLI discovery/orchestration remains in `cli/src/extensions`, while bounded `ExtensionModuleLoader` and package lifecycle/state/inventory implementations are shared from Core. Top-level package actions exit before agent startup; enabled package extensions, skills and prompts feed interactive/print/JSON/RPC startup and reload, while package themes can be selected by filename stem. The server uses the same Core service and module loader through thin adapters during explicit startup/reload to atomically host enabled standalone/package extensions and their declarative Web surfaces; catalogue GETs and list operations never execute extension code or contact npm/Git.
 
 ### `packages/server`: API, transport, persistence, and Web launcher
 
@@ -136,7 +138,7 @@ Project extensions are executable code. User extensions are loaded from `~/.ai-h
 | Providers/models | `src/api/{model,provider-registry}-routes.ts`, `src/runtime/{model-catalog,provider-registry,provider-oauth}.ts` | Published/discovered/custom models, custom dialect providers, OAuth Device Flow, capabilities/prices, activation and encrypted-or-volatile secrets |
 | Tools | `src/api/tool-routes.ts`, `src/runtime/services.ts`, Core `src/tools/` | Effective registry inventory, shared coding-tool registration, scoped presets/enabled tools, model capability filtering and Windows-only opt-in PowerShell |
 | MCP configuration | `src/api/mcp-routes.ts`, `src/runtime/mcp-inventory-service.ts`, Core `src/mcp/` | Authenticated read-only global/project overview over Core policy; canonical workspace resolution and no process, command resolver, network, OAuth or credential-store side effects |
-| Plugin packages | `src/api/plugin-routes.ts`, `src/runtime/plugin-service.ts`, `src/runtime/services.ts` | Explicit npm/Git/path administration, bounded metadata inventory, trust/scopes, transactional updates/checks and executable generation reload |
+| Plugin packages | `src/api/plugin-routes.ts`, `src/runtime/{plugin-service,services}.ts`, Core `src/plugins/` | HTTP adapter and executable generation composition over shared Core npm/Git/path administration, inventory, trust/scopes, filters, locking and transactional updates/checks |
 | Skills | `src/api/skill-routes.ts`, `src/runtime/{skill-catalog,skill-registry}.ts` | Metadata-only discovery/invocation plus HTTPS/SHA-256 registry installs and updates by trusted global/project scope |
 | Web Push | `src/api/push-routes.ts`, `src/runtime/push-service.ts` | VAPID lifecycle, public-endpoint validation, encrypted-or-volatile subscriptions, categories and stale cleanup |
 | Child agents | `src/api/subagent-routes.ts`, `src/runtime/{subagent-service,subagent-runtime}.ts`, `src/runtime/services.ts` | Atomic global/project profiles, `spawn_subagent`, bounded linked child sessions, shared trusted instruction composition, concurrency/depth, lifecycle and parent journal events |
@@ -273,14 +275,19 @@ This is deliberately an inventory, not an MCP runtime. A GET must never expand `
 ### Plugin package administration
 
 ```text
-explicit POST install/update
-  -> strict npm:/Git HTTPS/path parsing + workspace/scope trust
+explicit CLI or POST install/update
+  -> shared Core strict npm:/Git HTTPS/path parsing + workspace/scope trust
   -> npm without lifecycle scripts, or shallow Git clone, in staging
-  -> bounded symlink-free manifest/convention inventory
-  -> atomic package/state replacement and catalogue invalidation
+  -> bounded symlink-free manifest/convention inventory + per-kind filters
+  -> heartbeat lock + refreshed state + owner-only atomic package/state replacement
 
-GET /api/plugins
+CLI package list / GET /api/plugins
   -> workspace-isolated, metadata-only catalogue; never network or install
+
+CLI/RPC startup or interactive /reload
+  -> expose enabled package extensions, skills and prompts behind trust
+CLI startup
+  -> resolve a selected package theme by filename stem behind trust
 
 POST /api/plugins/reload [sessionId]
   -> resolve in-memory or persisted session and verify its workspace
@@ -290,7 +297,7 @@ POST /api/plugins/reload [sessionId]
   -> invalidate separately discovered resource catalogues; rollback the old generation on failure
 ```
 
-Keep package administration explicit: a read must never install, update, contact npm/Git, or execute code. State and managed files must roll back together. Project resources stay hidden/inactive until trust, scans never follow symlinks, extension modules are capped at 5 MiB, and diagnostics exclude resource bodies, command output and credentials. On workspace change, a failed candidate clears handlers from the old cwd rather than leaking them.
+Keep package administration explicit: a read must never install, update, contact npm/Git, or execute code. Core owns source policy, state, filters, inventory, checks/updates and locking; CLI and Server own only command/HTTP presentation and runtime generation composition. State and managed files must roll back together. Project resources stay hidden/inactive until trust, scans never follow symlinks, extension modules are capped at 5 MiB, and diagnostics exclude resource bodies, command output and credentials. On workspace change, a failed Server candidate clears handlers from the old cwd rather than leaking them.
 
 ### Extension interaction
 
@@ -345,7 +352,7 @@ Update `server/src/index.ts` or `server/src/api/proxy.ts`, the matching `web/src
 
 ### Change extensions, skills, prompts, or plugin packages
 
-The shared extension contracts and bounded module loader belong in `core/src/extensions`; CLI orchestration belongs in `cli/src/extensions`, `resources`, and `security`. Server package/registry contracts live in Core types, while source validation, transactional installation, metadata inventory and runtime composition belong in server services. Browser UI must stay declarative/text-only: never move command execution, arbitrary HTML/DOM or filesystem paths there. Preserve managed ownership, unload cleanup, response validation and atomic rollback. Project code/resources remain blocked until trusted, reads stay side-effect free, and skill downloads require bounded HTTPS plus SHA-256. Update `docs/contributors/fr/extensions-cli.md` and `docs/contributors/fr/extensions-web.md`, or the resource/package sections of `docs/users/fr/user-guide.md`.
+Shared extension contracts and the bounded module loader belong in `core/src/extensions`; shared package source validation, state, filters, locking, installation, checks and inventory belong in `core/src/plugins`. CLI orchestration belongs in `cli/src/{extensions,resources,security,cli/package-command.ts}`. Server package code must remain a thin API/runtime-composition adapter over Core; do not fork an installer or state schema there. Browser UI must stay declarative/text-only: never move command execution, arbitrary HTML/DOM or filesystem paths there. Preserve managed ownership, unload cleanup, response validation and atomic rollback. Project code/resources remain blocked until trusted, reads stay side-effect free, and skill downloads require bounded HTTPS plus SHA-256. Update `docs/contributors/{en,fr}/extensions-cli.md`, relevant Web contributor docs, and the bilingual resource/package user-guide sections.
 
 ### Change startup, packaging, native dependencies, or static assets
 
@@ -377,7 +384,7 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 | `docs/ai/topics/providers.md` | English | Agents | Versioned | Provider execution, catalogue, registry and OAuth |
 | `docs/ai/topics/sessions.md` | English | Agents | Versioned | JSONL v2, serialization, compaction, pagination and branches |
 | `docs/ai/topics/extensions.md` | English | Agents | Versioned | JavaScript extensions, packages, reload and declarative interactions |
-| `docs/ai/topics/cli-reference.md` | English | Agents | Versioned | Regular/fullscreen/print CLI, JSON events, and JSONL RPC |
+| `docs/ai/topics/cli-reference.md` | English | Agents | Versioned | Package commands, regular/fullscreen/print CLI, JSON events, and JSONL RPC |
 | `docs/ai/topics/server-api.md` | English | Agents | Versioned | REST, SSE, WebSocket and detached runtime contracts |
 | `docs/ai/topics/web-app-architecture.md` | English | Agents | Versioned | React stores/components, browser persistence, PWA and validation |
 | `docs/ai/topics/security.md` | English | Agents | Versioned | Workspace trust, auth, secrets and executable-code boundaries |

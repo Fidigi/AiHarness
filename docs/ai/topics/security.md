@@ -18,6 +18,7 @@ Review [`server-api.md`](./server-api.md) for route guards and [`extensions.md`]
 | `packages/core/src/prompts/instruction-context.ts` | Shared trust-separated, bounded, regular-file-only instruction and system-prompt resolution |
 | `packages/core/src/config/agent-settings.ts` | Bounded no-follow settings reads, schema filtering, trust-gated layers, global-only policy and value-free diagnostics |
 | `packages/core/src/mcp/config-inventory.ts` | Side-effect-free global/project MCP file reads, persisted-trust gating, strict JSON/JSONC schema and redacted descriptors |
+| `packages/core/src/plugins/plugin-service.ts` | Shared package source policy, trust gates, bounded inventory, owner-only locked state and rollback |
 | `packages/server/src/security/request-security.ts` | Roles, capabilities, Origin checks, limits, WebSocket auth and safe errors |
 | `packages/server/src/security/credential-store.ts` | Optional AES-GCM encrypted credential persistence |
 | `packages/server/src/runtime/provider-registry.ts` | Separation of custom-provider metadata and secrets |
@@ -58,7 +59,7 @@ Agent settings use the same source boundary: agent-directory `settings.json` is 
 
 The MCP Settings inventory follows an even narrower read-only contract. Core may read `<data-dir>/mcp.json`, but it opens `<cwd>/.ai-harness/mcp.json` only when the nearest persisted trust decision is `true`; implicit resource-sensitive trust for an empty folder is not enough. Before that it uses `lstat` metadata only, so a file that appears after an empty-folder check is still not opened. Both files must be regular and nonsymlink, are capped at 1 MiB, and pass open/stat race checks, JSON/JSONC syntax, depth 64, server-count 200 and strict shallow entry validation. Parse errors are fixed text that never quote source. API descriptors omit env/header values, identify command-backed fields and variable names without resolving them, escape hidden characters, and redact executable paths, literal arguments, URL credentials/path/query/hash. The GET path must never expand a variable, execute `!command`, spawn a server, contact a URL, initialize OAuth or create a credential file. There is no MCP runtime yet; do not mistake a `Configured` inventory row for a live connection.
 
-CLI skill and prompt discovery loads project roots only after trust, does not traverse symbolic links, caps selection at 10,000 files, and opens each Markdown resource with no-follow identity/race checks and a 1 MiB limit. Settings resource exclusions operate on resolved paths; local extension code still passes the extension loader's separate regular-file, size and trust checks.
+CLI skill and prompt discovery loads project roots only after trust, does not traverse symbolic links, caps selection at 10,000 files, and opens each Markdown resource with no-follow identity/race checks and a 1 MiB limit. Settings resource exclusions operate on resolved paths; local and package extension code still passes the extension loader's separate regular-file, size and trust checks. Core exposes project package paths only after the same trust decision, and the package filters can only narrow resources already declared by a validated manifest. Custom and package theme files use bounded no-follow identity-checked reads.
 
 The trust store accepts only bounded absolute paths and boolean decisions. Reads are size-capped and regular-file-only; malformed, linked or unsafe stores fail closed. Mutations re-read under a bounded lock, merge decisions, write owner-only temporary files and rename atomically so CLI and Web processes do not silently overwrite one another. Async status checks refresh when the file identity changes. Legacy v1 `trustedProjects` entries are read as allows and migrate to v2 on the next mutation; no project-controlled file can grant trust.
 
@@ -82,13 +83,15 @@ Never expose provider keys, OAuth tokens, server-side authorization headers, pas
 
 - Load project code/resources and model instructions only after trust.
 - Refuse symlinked extension modules and modules over 5 MiB.
-- Keep GET catalogues metadata-only and side-effect free.
-- Parse only supported npm, HTTPS Git, and allowed local sources.
+- Keep GET catalogues and CLI `package list` metadata-only and side-effect free.
+- Parse only supported npm, HTTPS Git, and allowed local sources; relative local paths are a CLI-only convenience resolved against its canonical cwd.
 - Disable npm lifecycle scripts and use shallow Git clones in staging.
-- Validate a complete candidate before atomic replacement; preserve or clear the previous generation according to workspace context.
-- Exclude resource bodies, source code, command output, and credentials from diagnostics.
+- Reject linked package roots/resources, traversal and out-of-package filters; bound state, manifest, scan depth/count and resource count.
+- Serialize every CLI/Server mutation under the same heartbeat lock, refresh state inside it, and commit owner-only temporary files by atomic rename.
+- Validate a complete managed candidate before atomic replacement and restore its backup if package or state publication fails.
+- Exclude resource bodies, source code, command output and credentials from catalogues and diagnostics.
 
-These controls reduce exposure; they do not sandbox trusted third-party JavaScript from the server OS user.
+These controls reduce exposure; they do not sandbox trusted third-party JavaScript, which runs with the privileges of the active CLI or server OS user.
 
 ## Browser Content Security
 
@@ -105,7 +108,8 @@ The launcher binds to `127.0.0.1` by default. A non-loopback bind without authen
 ## Associated Tests
 
 - `packages/core/src/security/{project-trust,workspace-manager}.test.ts`, `packages/core/src/config/agent-settings.test.ts`, `packages/core/src/prompts/instruction-context.test.ts`, `packages/core/src/mcp/config-inventory.test.ts`, and `packages/core/src/tools/{workspace-tools,shell-command-runtime}.test.ts` — resource-sensitive exact/inherited/refused trust, v1 migration and cross-process merging, roots, settings/instruction/MCP precedence and bounds, no-follow files, redaction, shadowing, realpath, shared shell cancellation/backpressure, retention and child-environment filtering
-- `packages/cli/src/resources/resource-manager.test.ts` — trusted roots, ordered selectors, no-follow resource loading and project precedence
+- `packages/core/src/plugins/plugin-service.test.ts` — package source/filter validation, project trust, linked-resource rejection, atomic persistence and concurrent service mutation
+- `packages/cli/src/resources/resource-manager.test.ts` — trusted local/package roots, ordered selectors, no-follow resource loading and project precedence
 - `packages/cli/src/security/project-trust.test.ts`, `packages/cli/src/cli/invocation.test.ts` and `packages/cli/src/cli/shell-controller.test.ts` — prompt adapter, process overrides, headless policy and interactive shell gating/abort behavior
 - `packages/cli/src/security/oauth-device.test.ts` — bounded OAuth polling and cancellation
 - `packages/server/src/security/request-security.test.ts` — tokens, cookies, capabilities, Origin, limits and upgrades

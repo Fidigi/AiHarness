@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { mkdtemp, rm, symlink, writeFile } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { ThemeManager } from './theme-manager';
@@ -25,5 +25,12 @@ describe('ThemeManager', () => {
     expect(theme.name).toBe('ocean');
     expect(theme.colors.accent).toBe('#123456');
     expect(theme.colors.error).toBeDefined();
+
+    const packageTheme = await ThemeManager.load('ocean', [filePath]);
+    expect(packageTheme.colors.accent).toBe('#123456');
+
+    const linkedTheme = path.join(directory, 'linked.json');
+    await symlink(filePath, linkedTheme);
+    await expect(ThemeManager.load(linkedTheme)).rejects.toBeDefined();
   });
 });

@@ -13,6 +13,7 @@ import {
   loadAgentSettings,
   loadPromptFiles,
   normalizeProviderUsage,
+  PluginService,
   resolveInstructionPrompt,
   resolveAgentCompactionSettings,
   resolveAgentDefaultTools,
@@ -31,12 +32,14 @@ import type {
   AgentMessageQueueKind,
   Message,
   MessageContentBlock,
+  PluginResourceKind,
   ResolvedAgentSettings,
   Session,
   SessionEntry,
   ThinkingLevel,
   ToolCall,
 } from '@ai-harness/core';
+import path from 'node:path';
 import readline from 'readline';
 import chalk from 'chalk';
 import { CommandHandler } from './commands/handler.js';
@@ -78,6 +81,7 @@ import {
 import { reserveProcessStdoutForJson, toJsonProtocolUsage } from './cli/json-output.js';
 import { InteractiveShellController } from './cli/shell-controller.js';
 import { formatConfiguredModelList } from './cli/model-list.js';
+import { runPackageCommand } from './cli/package-command.js';
 import {
   resolveStartupSession,
   resolveStartupSessionDirectory,
@@ -190,6 +194,13 @@ async function chooseStartupSession(sessions: Session[]): Promise<Session | unde
 
 async function main(): Promise<void> {
   const rawArguments = process.argv.slice(2);
+  const packageCommand = rawArguments[0] === 'package' || rawArguments[0] === 'packages';
+  const directPackageCommand = ['install', 'remove', 'uninstall', 'update', 'list', 'config'].includes(rawArguments[0] ?? '');
+  if (packageCommand || directPackageCommand) {
+    const packageArguments = packageCommand ? rawArguments.slice(1) : rawArguments;
+    process.exitCode = await runPackageCommand(packageArguments);
+    return;
+  }
   let cliArguments: ReturnType<typeof parseCliArguments>;
   try {
     cliArguments = parseCliArguments(rawArguments);
@@ -329,8 +340,48 @@ async function main(): Promise<void> {
     await sessionManager.loadAllSessions();
   }
 
+  const workspaceDescriptor = await workspaceManager.describe(
+    workspaceCwd,
+    isProjectTrusted(),
+  );
+  const pluginService = new PluginService(
+    workspaceManager,
+    trustManager,
+    path.join(settingsResolution.agentDir, 'plugins.json'),
+    settingsResolution.agentDir,
+  );
+  await pluginService.load();
+  type PackagePaths = Record<PluginResourceKind, { global: string[]; project: string[] }>;
+  const emptyPackagePaths = (): PackagePaths => ({
+    extension: { global: [], project: [] },
+    skill: { global: [], project: [] },
+    prompt: { global: [], project: [] },
+    theme: { global: [], project: [] },
+  });
+  const loadPackagePaths = async (): Promise<PackagePaths> => {
+    const result = emptyPackagePaths();
+    try {
+      await Promise.all((['extension', 'skill', 'prompt', 'theme'] as PluginResourceKind[]).map(async kind => {
+        const locations = await pluginService.getEnabledResourceLocations(kind, {
+          cwd: workspaceCwd,
+          projectId: workspaceDescriptor.id,
+          projectTrusted: mayLoadProjectResources(),
+        });
+        for (const location of locations) result[kind][location.scope].push(location.path);
+      }));
+    } catch (error) {
+      process.stderr.write(`Warning: Package resources ignored: ${error instanceof Error ? error.message : String(error)}\n`);
+    }
+    return result;
+  };
+  let packagePaths = await loadPackagePaths();
+
   const configuredTheme = cliArguments.theme ?? settingsResolution.settings.theme;
-  const theme = await ThemeManager.load(configuredTheme === 'system' ? 'auto' : configuredTheme).catch(error => {
+  const packageThemes = [...packagePaths.theme.global, ...packagePaths.theme.project];
+  const theme = await ThemeManager.load(
+    configuredTheme === 'system' ? 'auto' : configuredTheme,
+    packageThemes,
+  ).catch(error => {
     console.error(`Thème ignoré : ${error instanceof Error ? error.message : String(error)}`);
     return ThemeManager.load('dark');
   });
@@ -379,15 +430,14 @@ async function main(): Promise<void> {
     projectSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'project'),
     globalPromptPaths: resolveAgentResourcePaths(settingsResolution, 'prompts', undefined, 'global'),
     projectPromptPaths: resolveAgentResourcePaths(settingsResolution, 'prompts', undefined, 'project'),
+    globalPackageSkillPaths: packagePaths.skill.global,
+    projectPackageSkillPaths: packagePaths.skill.project,
+    globalPackagePromptPaths: packagePaths.prompt.global,
+    projectPackagePromptPaths: packagePaths.prompt.project,
   });
   let resourceManager = createResourceManager();
   const resourceLoadResult = await resourceManager.loadAll();
   for (const error of resourceLoadResult.errors) reportError(`Ressource : ${error.message}`);
-
-  const workspaceDescriptor = await workspaceManager.describe(
-    workspaceCwd,
-    isProjectTrusted(),
-  );
 
   const extensionRegistry = new ExtensionRegistry();
   extensionRegistry.attachSessionManager(sessionManager);
@@ -421,7 +471,17 @@ async function main(): Promise<void> {
     return;
   }
   const extensionLoader = new ExtensionLoader(extensionRegistry, {
-    paths: () => configuredExtensionPaths(cliArguments.extensions, settingsResolution),
+    paths: async () => [
+      ...configuredExtensionPaths(cliArguments.extensions, settingsResolution),
+      ...(await pluginService.getEnabledExtensionFiles({
+        cwd: workspaceCwd,
+        projectId: workspaceDescriptor.id,
+        projectTrusted: mayLoadProjectResources(),
+      }).catch(error => {
+        process.stderr.write(`Warning: Package extensions ignored: ${error instanceof Error ? error.message : String(error)}\n`);
+        return [];
+      })),
+    ],
     isProjectTrusted: mayLoadProjectResources,
   });
   const registerSkillTool = async (): Promise<void> => {
@@ -453,6 +513,7 @@ async function main(): Promise<void> {
     interactiveQueue.setMode('steer', settingsResolution.settings.steeringMode ?? 'one-at-a-time');
     interactiveQueue.setMode('follow-up', settingsResolution.settings.followUpMode ?? 'one-at-a-time');
     await reloadInstructionPrompt();
+    packagePaths = await loadPackagePaths();
     resourceManager = createResourceManager();
     const resources = await resourceManager.loadAll();
     for (const error of resources.errors) reportError(`Ressource : ${error.message}`);

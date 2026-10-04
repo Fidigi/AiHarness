@@ -6,12 +6,13 @@
 
 `ai-harness` has two interactive terminal renderers, a final-text print path, a one-shot JSONL event path, and a bidirectional JSONL RPC path. All execution modes reuse Core provider hooks, bounded retry, persistence, active-tool selection, and the multi-turn tool loop. RPC adds a typed command/response and asynchronous event adapter while retaining the former `method`/`params` requests as deprecated compatibility input.
 
-Conversation persistence follows [`sessions.md`](./sessions.md), while extension hooks follow [`extensions.md`](./extensions.md). The built-in workspace tools are implemented once in Core and registered by both CLI and server startup. Core also owns model catalogue assembly/discovery/resolution, bounded all/one-at-a-time steering and follow-up scheduling, direct shell parsing, bounded process execution, cancellation, replay and command persistence; the CLI, RPC and Web/Server surfaces provide presentation or transport adapters around those contracts. Instruction discovery, system-prompt composition, protected-resource inventory and exact/inherited allow/refuse trust decisions likewise live once in Core and feed CLI plus Web/server adapters.
+Conversation persistence follows [`sessions.md`](./sessions.md), while extension hooks follow [`extensions.md`](./extensions.md). The built-in workspace tools are implemented once in Core and registered by both CLI and server startup. Core also owns package installation/state/inventory, model catalogue assembly/discovery/resolution, bounded all/one-at-a-time steering and follow-up scheduling, direct shell parsing, bounded process execution, cancellation, replay and command persistence; the CLI, RPC and Web/Server surfaces provide presentation or transport adapters around those contracts. Instruction discovery, system-prompt composition, protected-resource inventory and exact/inherited allow/refuse trust decisions likewise live once in Core and feed CLI plus Web/server adapters.
 
 ## Architecture
 
 ```text
 packages/cli/src/index.ts
+  |-> package command -> Core PluginService -> shared plugins.json
   |-> Core model catalogue -> startup selection / --list-models / scoped cycling
   |-> Core instruction resolver -> composed provider system prompt
   |-> --mode rpc / --rpc -> rpc/rpc-server.ts
@@ -33,6 +34,7 @@ packages/cli/src/index.ts
 | `packages/cli/src/cli/json-output.ts` | Versioned session header plus agent/message/tool/retry/compaction JSONL encoding with guarded stdout |
 | `packages/cli/src/cli/shell-controller.ts` | Interactive `!`/`!!` trust, streaming, cancellation and TUI adapter |
 | `packages/cli/src/cli/model-list.ts` | Configured-provider `--list-models` metadata table and fuzzy filtering |
+| `packages/cli/src/cli/package-command.ts` | Strict top-level package parsing, scopes, filters and Core service adapter |
 | `packages/cli/src/providers/configured-providers.ts` | Shared interactive/print/JSON/RPC provider environment and startup model resolution |
 | `packages/cli/src/sessions/startup-session.ts` | New/continue/resume/open/fork/exact-ID/name selection and session-directory precedence |
 | `packages/cli/src/commands/handler.ts` | Built-in command registry and execution context |
@@ -43,6 +45,7 @@ packages/cli/src/index.ts
 | `packages/core/src/prompts/instruction-context.ts` | Bounded instruction hierarchy, trust-separated system files, text-or-file overrides and prompt composition shared with Server |
 | `packages/core/src/config/agent-settings.ts` | Validated agent settings layers, migration, merge/global-only policy, provenance and shared value resolvers |
 | `packages/core/src/providers/model-catalog.ts` | Non-secret catalogue assembly, bounded discovery, exact/fuzzy lookup, thinking suffixes, ordered glob scopes and protocol descriptors |
+| `packages/core/src/plugins/plugin-service.ts` | Shared npm/Git/local package lifecycle, locked state, filters and sanitized resource inventory |
 | `packages/cli/src/tui/terminal-ui.ts` | Regular readline output, help and streaming writer |
 | `packages/cli/src/tui/fullscreen-{ui,input}.ts` | Alternate-screen rendering and raw-mode line editor |
 | `packages/cli/src/tui/{mode,theme-manager}.ts` | Mode precedence and built-in/custom themes |
@@ -85,9 +88,33 @@ Objects merge recursively, project scalar/array values override user values, and
 
 Implemented runtime settings are startup provider/model, `enabledModels`, default/per-model thinking, default tools, session directory, compaction enable/reserve/keep values and exact model overrides, agent retry timing, interactive/RPC steering and follow-up queues plus their delivery modes for detached trusted Web runs, `defaultProjectTrust`, theme and TUI mode, `quietStartup: true`, external editor, shell path/prefix, local extensions, skills/prompts and `enableSkillCommands`. Explicit CLI options remain strongest. Session storage resolves an explicit session path, `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, settings `sessionDir`, then the AiHarness default.
 
-Interactive `/reload` re-reads saved trust and settings, instructions, resource selectors, extensions, skill commands, default-tool additions, steering/follow-up delivery modes, and reloadable shell callbacks. Session-only and command-line trust decisions remain process-local across reload. Session directory, startup model/thinking, terminal renderer/theme, RPC queue defaults, compaction policy and retry policy are startup values and require a restart. The loader validates and reports the remaining documented fields, but package installation/built-in switches, custom theme resources, branch-summary generation, codemode, cache warming, provider transport/proxy/timeouts/retries, npm commands, detailed terminal/image/Markdown options, updates, telemetry and warnings are not yet applied by the CLI.
+Interactive `/reload` re-reads saved trust and settings, package inventory, instructions, resource selectors, extensions, skill commands, default-tool additions, steering/follow-up delivery modes, and reloadable shell callbacks. Session-only and command-line trust decisions remain process-local across reload. Session directory, startup model/thinking, terminal renderer/theme, RPC queue defaults, compaction policy and retry policy are startup values and require a restart. The loader validates and reports the remaining documented fields, but built-in extension switches, branch-summary generation, codemode, cache warming, provider transport/proxy/timeouts/retries, configurable npm commands, detailed terminal/image/Markdown options, updates, telemetry and warnings are not yet applied by the CLI.
 
-Configured skill and prompt paths resolve relative to the declaring agent directory or project `.ai-harness` directory. Ordered plain/`+` includes and exact/glob `-`/`!` exclusions are applied around automatic user/project roots. Discovery is trust-gated, symlink-free, bounded to 10,000 files, and each Markdown source is a race-checked UTF-8 regular file capped at 1 MiB. Local extension includes and ordered exclusions are honored; package resources, built-in extension switches and extension include globs remain outside the current custom loader.
+Configured skill and prompt paths resolve relative to the declaring agent directory or project `.ai-harness` directory. Ordered plain/`+` includes and exact/glob `-`/`!` exclusions are applied around automatic user/project roots. Discovery is trust-gated, symlink-free, bounded to 10,000 files, and each Markdown source is a race-checked UTF-8 regular file capped at 1 MiB. Local extension includes and ordered exclusions are honored. Enabled package extensions, skills and prompts join the same interactive/print/JSON/RPC startup and reload paths; a selected package theme can be addressed by its JSON filename stem. Built-in extension switches and settings extension include globs remain outside the current custom loader.
+
+## Package Administration
+
+Package commands exit before provider, session, executable-extension or TUI startup. Use `ai-harness package --help` for the complete action help. `install`, `remove`/`uninstall`, `update`, `list`, and `config` are direct aliases; every action also has the explicit `package` form:
+
+```bash
+ai-harness package install npm:@scope/review-kit@^2.0.0 --global
+ai-harness package install ./workspace-kit --project --approve
+ai-harness package list --json
+ai-harness package configure @scope/review-kit \
+  --extensions='extensions/*.mjs,!extensions/unsafe.mjs' \
+  --skills='+skills/review' --prompts='prompts/**' --themes=
+ai-harness package check @scope/review-kit
+ai-harness package update @scope/review-kit
+ai-harness package disable @scope/review-kit
+ai-harness package reload
+ai-harness package remove @scope/review-kit
+```
+
+Sources are explicit `npm:<package>[@version]`, `git:<https-url>[#ref]`, or absolute/`./`/`../` local paths. Registry and Git installs are staged under the agent directory with npm lifecycle scripts disabled and shallow Git clones; local sources remain in place. `list` and `reload` never contact a remote source, while `check`, `install`, and `update` may. `--json` emits the sanitized catalogue or update result. A selector may be the stable key, normalized source, package name, or resolved local path; ambiguous names require `--scope global|project`.
+
+`package configure` can narrow each manifest-declared resource kind with comma-separated package-relative paths or globs. `+path` is an exact include, `-path` an exact exclusion, and `!glob` a glob exclusion; an empty option such as `--themes=` disables that kind. `--reset` restores manifest defaults. Filters never add a resource the package did not declare.
+
+The shared Core service persists non-secret state in `<agent-dir>/plugins.json`, serializes inter-process mutation with a heartbeat lock, performs owner-only atomic writes, validates paths and bounded manifests without following resource symlinks, and rolls back failed managed-package replacements. Project installation, configuration, enabling, updating, and resource loading require resolved project trust; disabling and removal remain available as safe cleanup, and `--approve` is only a one-process decision. The Server/Web API uses the same service through a thin adapter, so package state, source policy, inventory and updates are not maintained twice.
 
 ## Instructions and System Prompts
 
@@ -164,8 +191,8 @@ Reads, searches, and CLI `@path` inputs are canonicalized inside the active work
 
 - A normal invocation creates a new session. `--continue` reopens the newest session for the current workspace; `--resume` shows an interactive selector; `--session <path|id>` opens a file or ID prefix; `--session-id <id>` opens or creates an exact valid ID; and `--fork <path|id>` copies a source into a new session.
 - `--name` applies a startup title. An explicit `--session <path>` keeps that file's parent directory; otherwise directory precedence is `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, settings `sessionDir`, then `~/.ai-harness/sessions`. `--no-session` disables persistence.
-- Global JavaScript extensions load from `~/.ai-harness/extensions`; settings can add local exact file/directory paths.
-- Project extensions under `.ai-harness/extensions` remain blocked until `ProjectTrustManager` resolves the canonical cwd as trusted.
+- Global JavaScript extensions load from `~/.ai-harness/extensions`; settings can add local exact file/directory paths. Enabled package extensions come from the shared Core package catalogue.
+- Project extensions under `.ai-harness/extensions`, project package resources, and package themes remain blocked until `ProjectTrustManager` resolves the canonical cwd as trusted.
 - Before inspecting project resource bodies, Core inventories bounded path metadata for `.ai-harness` settings/resources/system prompts, project skills/prompts and enabled ancestor context candidates. Interactive `ask` mode prompts only when that inventory is non-empty; print/JSON/RPC `ask` mode refuses it safely, while global `always`/`never` and process flags resolve without a prompt. An implicitly safe empty folder may use operations, but its separate body-loading gate stays closed against resources that appear after inventory.
 - Saved trust is a canonical v2 decision map shared with the Web server. The nearest exact/ancestor allow or refusal wins, v1 allow-lists migrate on mutation, reads refresh across processes, unsafe store files fail closed, and writes are lock-serialized, private and atomic.
 - Project settings/resources, ancestor context files and project `.ai-harness` system files are blocked until the resolved process trust allows them, including project `sessionDir`; user-owned files under the agent directory remain a separate source boundary. Run `/reload` after changing a saved decision during an interactive session.
@@ -175,7 +202,8 @@ Reads, searches, and CLI `@path` inputs are canonicalized inside the active work
 
 ## Associated Tests
 
-- `packages/cli/src/cli/{args,json-output,invocation,shell-controller}.test.ts` — strict options, JSON events, modes, process exits/stdout purity, real pseudo-terminal steering/follow-up ordering and direct shell trust/stream/abort/persistence
+- `packages/cli/src/cli/{args,json-output,invocation,shell-controller,package-command}.test.ts` — strict options and package parsing, JSON events, package/resource process integration, modes, process exits/stdout purity, real pseudo-terminal steering/follow-up ordering and direct shell trust/stream/abort/persistence
+- `packages/core/src/plugins/plugin-service.test.ts` — npm/Git/local source policy, filters, trust, symlink rejection, atomic state and concurrent mutation
 - `packages/core/src/providers/model-catalog.test.ts` and `packages/cli/src/cli/model-list.test.ts` — shared assembly/discovery, full-ID-first resolution, scopes, fuzzy listing and protocol metadata
 - `packages/cli/src/providers/configured-providers.test.ts` — common environment, startup scopes and non-persistent key overrides
 - `packages/cli/src/sessions/startup-session.test.ts` — startup selectors, exact IDs, naming, forking, cwd filtering and directory precedence

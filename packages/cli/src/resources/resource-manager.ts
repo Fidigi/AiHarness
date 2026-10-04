@@ -31,6 +31,10 @@ export interface ResourceManagerOptions {
   projectSkillPaths?: string[];
   globalPromptPaths?: string[];
   projectPromptPaths?: string[];
+  globalPackageSkillPaths?: string[];
+  projectPackageSkillPaths?: string[];
+  globalPackagePromptPaths?: string[];
+  projectPackagePromptPaths?: string[];
 }
 
 interface MarkdownDocument {
@@ -190,6 +194,10 @@ export class ResourceManager {
   private readonly projectSkillPaths: string[];
   private readonly globalPromptPaths: string[];
   private readonly projectPromptPaths: string[];
+  private readonly globalPackageSkillPaths: string[];
+  private readonly projectPackageSkillPaths: string[];
+  private readonly globalPackagePromptPaths: string[];
+  private readonly projectPackagePromptPaths: string[];
   private readonly skills = new Map<string, SkillDefinition>();
   private readonly prompts = new Map<string, PromptDefinition>();
 
@@ -209,6 +217,10 @@ export class ResourceManager {
     this.projectSkillPaths = resolve(options.projectSkillPaths ?? []);
     this.globalPromptPaths = resolve(options.globalPromptPaths ?? []);
     this.projectPromptPaths = resolve(options.projectPromptPaths ?? []);
+    this.globalPackageSkillPaths = resolve(options.globalPackageSkillPaths ?? []);
+    this.projectPackageSkillPaths = resolve(options.projectPackageSkillPaths ?? []);
+    this.globalPackagePromptPaths = resolve(options.globalPackagePromptPaths ?? []);
+    this.projectPackagePromptPaths = resolve(options.projectPackagePromptPaths ?? []);
   }
 
   async loadAll(): Promise<{ skills: number; prompts: number; errors: Error[] }> {
@@ -222,8 +234,10 @@ export class ResourceManager {
       path.join(this.homeDir, '.agents', 'skills'),
       path.join(this.agentDir, 'skills'),
     ], skillMatcher, errors);
+    await applyResourceSelectors(skillFiles, this.globalPackageSkillPaths, skillMatcher, errors);
     await applyResourceSelectors(skillFiles, this.globalSkillPaths, skillMatcher, errors);
     if (this.projectTrusted) {
+      await applyResourceSelectors(skillFiles, this.projectPackageSkillPaths, skillMatcher, errors);
       await applyResourceSelectors(skillFiles, [
         path.join(this.cwd, '.agents', 'skills'),
         path.join(this.cwd, '.ai-harness', 'skills'),
@@ -245,8 +259,10 @@ export class ResourceManager {
     await applyResourceSelectors(promptFiles, [
       path.join(this.agentDir, 'prompts'),
     ], promptMatcher, errors);
+    await applyResourceSelectors(promptFiles, this.globalPackagePromptPaths, promptMatcher, errors);
     await applyResourceSelectors(promptFiles, this.globalPromptPaths, promptMatcher, errors);
     if (this.projectTrusted) {
+      await applyResourceSelectors(promptFiles, this.projectPackagePromptPaths, promptMatcher, errors);
       await applyResourceSelectors(promptFiles, [
         path.join(this.cwd, '.ai-harness', 'prompts'),
         path.join(this.cwd, 'prompts'),

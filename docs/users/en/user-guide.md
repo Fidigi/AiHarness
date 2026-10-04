@@ -638,7 +638,7 @@ Both files must be regular nonsymlink UTF-8 files and are capped at 1 MiB, 64 ne
 
 ### Packages and Plugins
 
-The **Plugins and packages** section groups **Project** and **Global** packages, then separately inventories standalone extensions from `.ai-harness/extensions/` and data directory. Installation is always an explicit action; viewing or refreshing the catalog contacts no registry and modifies no files. Three strict source forms are accepted:
+CLI and Web use one Core package service and the same `plugins.json`; source validation, inventory, trust, updates and persistence are not duplicated. The **Plugins and packages** section groups **Project** and **Global** packages, then separately inventories standalone extensions from `.ai-harness/extensions/` and data directory. Installation is always an explicit action; viewing or refreshing the catalog contacts no registry and modifies no files. Three strict source forms are accepted:
 
 ```text
 npm:@scope/package@^2.0.0
@@ -646,15 +646,31 @@ git:https://github.com/organization/repo.git#branch-or-tag
 /absolute/path/to/a-package-or-extension.js
 ```
 
-A Git source must use HTTPS, without credentials, query string or custom port. Allowed hosts are `github.com`, `gitlab.com` and `bitbucket.org` by default; `AI_HARNESS_PLUGIN_GIT_HOSTS=git.example.com,github.com` replaces this list. A local path must exist in server's allowed roots. Project scope is only available after explicit workspace approval.
+A Git source must use HTTPS, without credentials, query string or custom port. Allowed hosts are `github.com`, `gitlab.com` and `bitbucket.org` by default; `AI_HARNESS_PLUGIN_GIT_HOSTS=git.example.com,github.com` replaces this list. A local path must exist in the active allowed root. The Web API requires an absolute path; the CLI also accepts `./` and `../` paths relative to its canonical startup directory. Installing, configuring, enabling, updating, or loading project-scoped packages requires explicit workspace approval or a CLI one-process `--approve` decision; disabling and removal remain available for safe cleanup.
 
-npm and Git installations are copied to `~/.ai-harness/plugins/installed/` by staging then atomic rename. npm lifecycle scripts are disabled, Git clones are shallow and dev dependencies omitted. This reduces exposure during installation without making a third-party package trustworthy: always verify its source. An enabled executable extension runs as trusted Node code in the server process, without a security sandbox. Removing a local source only removes its AiHarness configuration, never the original folder.
+The CLI exits before agent startup for package administration. `ai-harness package --help` lists every action; `install`, `remove`/`uninstall`, `update`, `list`, and `config` are direct aliases:
+
+```bash
+ai-harness package install npm:@scope/package@^2 --global
+ai-harness package install ./workspace-package --project --approve
+ai-harness package list --json
+ai-harness package configure @scope/package --extensions='extensions/*.mjs,!extensions/unsafe.mjs' --themes=
+ai-harness package check @scope/package
+ai-harness package update @scope/package
+ai-harness package disable @scope/package
+ai-harness package reload
+ai-harness package remove @scope/package
+```
+
+Resource configuration can only narrow extensions, skills, prompts and themes already declared by the package. Comma-separated globs accept `!glob` exclusions, while `+path` and `-path` are exact inclusion/exclusion; an empty value disables that kind and `--reset` restores manifest defaults.
+
+npm and Git installations are copied to `~/.ai-harness/plugins/installed/` by staging then atomic rename. npm lifecycle scripts are disabled, Git clones are shallow and dev dependencies omitted. This reduces exposure during installation without making a third-party package trustworthy: always verify its source. An enabled executable extension runs as trusted Node code in the active CLI or server process, without a security sandbox. Removing a local source only removes its AiHarness configuration, never the original folder.
 
 Each card shows version, status, source and counts of extensions, skills, prompts and themes. **Disable/Enable** keeps the package but removes or restores its resources; **Remove** asks confirmation. **Check** and **Check all** are the only actions that query npm or Git repository. An update is also voluntary, prepared outside active installation then replaced with rollback if state write or installation fails. Local sources are read directly and have no remote verification.
 
 **Refresh catalogue** only reruns the bounded inventory. **Reload resources** first validates every active package, then publishes one atomic generation; on failure, the previous generation remains active. If a persisted conversation is open, its ID binds the reload to the same workspace. Skills and prompts from enabled packages become available in their catalogs, and `load_skill` can load authorized skills. Enabled executable extensions are then loaded as one managed generation: their commands, providers, tools, text panels, hooks and listeners replace the previous generation together, without retaining stale handlers. Switching to a workspace whose generation is invalid removes handlers from the old project.
 
-The browser catalogue contains sanitized metadata only: never a skill or prompt body, extension code, credentials, or command stdout/stderr. Discovery and loading are bounded, reject symlinks and modules larger than 5 MiB, and hide project resources when a workspace loses trust. With authentication enabled, mutations, checks, updates and reloads require the admin `packages` capability.
+The browser catalogue and CLI `--json` output contain sanitized metadata only: never a skill or prompt body, extension code, credentials, or command stdout/stderr. Discovery and loading are bounded, reject symlinks and modules larger than 5 MiB, and hide project resources when a workspace loses trust. State mutation is serialized across CLI/Server processes and uses owner-only atomic files. With authentication enabled, Web mutations, checks, updates and reloads require the admin `packages` capability.
 
 ### Web Extensions and Interactions
 

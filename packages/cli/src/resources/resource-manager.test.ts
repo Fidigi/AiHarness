@@ -122,6 +122,37 @@ describe('ResourceManager', () => {
     expect(manager.getSkill('shared')?.instructions).toBe('Project skill');
   });
 
+  it('loads package skills and prompts while trust-gating project package paths', async () => {
+    const root = await temporaryDirectory();
+    const skillDirectory = path.join(root, 'packages', 'global', 'skills', 'review');
+    const promptFile = path.join(root, 'packages', 'project', 'prompts', 'plan.md');
+    await mkdir(skillDirectory, { recursive: true });
+    await mkdir(path.dirname(promptFile), { recursive: true });
+    await writeFile(path.join(skillDirectory, 'SKILL.md'), '---\nname: packaged-review\n---\nPackage review');
+    await writeFile(promptFile, '---\nname: packaged-plan\n---\nPlan $@');
+
+    const untrusted = new ResourceManager({
+      cwd: root,
+      homeDir: path.join(root, 'home'),
+      projectTrusted: false,
+      globalPackageSkillPaths: [skillDirectory],
+      projectPackagePromptPaths: [promptFile],
+    });
+    await untrusted.loadAll();
+    expect(untrusted.listSkills().map(skill => skill.name)).toEqual(['packaged-review']);
+    expect(untrusted.listPrompts()).toEqual([]);
+
+    const trusted = new ResourceManager({
+      cwd: root,
+      homeDir: path.join(root, 'home'),
+      projectTrusted: true,
+      globalPackageSkillPaths: [skillDirectory],
+      projectPackagePromptPaths: [promptFile],
+    });
+    await trusted.loadAll();
+    expect(trusted.expandPrompt('packaged-plan', ['release'])).toBe('Plan release');
+  });
+
   it('reports malformed or empty resources without blocking valid files', async () => {
     const root = await temporaryDirectory();
     const skills = path.join(root, '.agents', 'skills');

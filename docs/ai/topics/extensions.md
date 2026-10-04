@@ -6,15 +6,15 @@
 
 JavaScript extensions register commands, tools, providers, plain-text terminal UI components, lifecycle listeners, and cancellable `before:*` hooks. CLI and Server share the bounded Core loader but own discovery context, trust checks, and runtime composition.
 
-Server plugin packages are a separate administration layer: they inventory package resources and make enabled executable extension files available only during explicit resource reload. See [`security.md`](./security.md) for trust and executable-code boundaries.
+Package administration is also Core-owned. CLI commands and the Server/Web routes use the same `PluginService`, `plugins.json`, source validation, resource filters, locking, inventory and update behavior. Enabled package extensions, skills, prompts and themes feed each runtime through interface-specific composition; see [`security.md`](./security.md) for trust and executable-code boundaries.
 
 ## Architecture
 
 ```text
 ExtensionModuleLoader -> candidate JS modules -> ExtensionRegistry generation
-CLI loader -> global/project/explicit files -> terminal runtime
-PluginService -> install/state/inventory -> enabled extension files
-Server reload -> trusted workspace generation -> AgentRuntime/Web metadata
+Core PluginService -> install/locked state/filtered inventory -> enabled resources
+  |-> CLI package commands + CLI/RPC startup/reload
+  `-> Server API adapter + trusted workspace generation -> AgentRuntime/Web metadata
 ```
 
 ## Main Entry Points
@@ -23,10 +23,12 @@ Server reload -> trusted workspace generation -> AgentRuntime/Web metadata
 |---|---|
 | `packages/core/src/extensions/extension-registry.ts` | Owned registrations, hooks, execution, cleanup and rollback |
 | `packages/core/src/extensions/module-loader.ts` | Bounded discovery/import and atomic managed generations |
-| `packages/cli/src/extensions/extension-loader.ts` | Explicit CLI extension paths and loader orchestration |
-| `packages/cli/src/resources/resource-manager.ts` | Markdown prompts and model-invocable resource discovery |
-| `packages/server/src/runtime/plugin-service.ts` | npm/Git/path package state, staging, inventory and updates |
-| `packages/server/src/api/plugin-routes.ts` | Explicit package administration and reload routes |
+| `packages/cli/src/extensions/extension-loader.ts` | Explicit, configured and package extension paths plus loader orchestration |
+| `packages/cli/src/resources/resource-manager.ts` | Local/package Markdown prompts and model-invocable resource discovery |
+| `packages/cli/src/cli/package-command.ts` | Top-level package lifecycle, scope and resource-filter adapter |
+| `packages/core/src/plugins/plugin-service.ts` | Shared npm/Git/path package state, staging, filters, inventory, locks and updates |
+| `packages/server/src/runtime/plugin-service.ts` | Thin compatibility re-export of the Core service |
+| `packages/server/src/api/plugin-routes.ts` | Explicit Web package administration and reload routes |
 | `packages/server/src/runtime/services.ts` | Server loader composition and workspace generation switching |
 
 ## Extension Contracts
@@ -58,15 +60,16 @@ Prompts, package skills, and themes are discovered resources, not `ExtensionAPI`
 ### Administer a plugin package
 
 ```text
-explicit install/update
-  -> parse npm:/HTTPS Git/allowed local path
+explicit CLI or Web install/update
+  -> Core parses npm:/HTTPS Git/allowed local path
   -> stage without npm lifecycle scripts or with shallow Git clone
   -> bounded symlink-free manifest/convention inventory
-  -> atomically replace package and non-secret state
-  -> expose extension files only to explicit reload
+  -> apply package-relative include/exclude filters
+  -> lock and atomically replace package plus non-secret state
+  -> expose enabled resources to the selected runtime composition
 ```
 
-`GET /api/plugins` is metadata-only: it must not execute code, install, update, or contact npm/Git. Enabled package resources are workspace/scope filtered; project resources remain hidden until trust.
+`ai-harness package list` and `GET /api/plugins` are metadata-only: they must not execute code, install, update, or contact npm/Git. CLI package actions exit before agent startup. Enabled package resources are workspace/scope filtered; project resources remain hidden until trust. Interactive `/reload` re-resolves package resources for the CLI generation, while Server reload validates and publishes its own runtime generation.
 
 ### Request declarative UI
 
@@ -87,13 +90,15 @@ Never accept extension-provided React, DOM, script, style, or arbitrary HTML. Fo
 - Keep catalogue reads side-effect free and diagnostics free of source bodies, command output, and secrets.
 - Preserve registration ownership so unload removes every command/tool/provider/UI/hook/listener.
 - Pass cancellation to active tool and interaction work.
-- Validate package source, bounds, symlinks, and rollback before changing active state.
+- Validate package source, bounded manifests/state, package-relative filters, symlinks, and rollback before changing active state.
+- Serialize CLI/Server mutations with the Core heartbeat lock and owner-only atomic state writes.
 
 ## Associated Tests
 
 - `packages/core/src/extensions/extension-registry.test.ts` — ownership, hooks, tools, providers, UI and atomic replacement
 - `packages/cli/src/extensions/extension-loader.test.ts` — explicit path parsing and loader behavior
-- `packages/server/src/runtime/plugin-service.test.ts` — source validation, inventory and transactional package state
+- `packages/core/src/plugins/plugin-service.test.ts` — source validation, filters, trust, concurrency, inventory and transactional package state
+- `packages/cli/src/cli/{package-command,invocation}.test.ts` — strict command parsing and real package resource startup
 - `packages/server/src/web-server.test.ts` — plugin/reload HTTP, trust and runtime integration
 - `e2e/settings.spec.ts` — package administration flows
 - `e2e/chat.spec.ts` and `e2e/accessibility.spec.ts` — widgets, interactions, focus and response handling

@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { ProjectTrustManager, WorkspaceManager } from '@ai-harness/core';
+import { ProjectTrustManager } from '../security/project-trust.js';
+import { WorkspaceManager } from '../security/workspace-manager.js';
 import {
   parsePluginSource,
   PluginService,
@@ -26,7 +27,7 @@ async function fixturePackage(root: string, version = '1.0.0'): Promise<void> {
     name: '@demo/plugin',
     version,
     description: 'Safe test plugin',
-    aiHarness: {
+    pi: {
       extensions: ['src/**/*.js'],
       skills: ['skills'],
       prompts: ['prompts/*.md'],
@@ -71,7 +72,10 @@ describe('parsePluginSource', () => {
       normalized: 'git:https://github.com/example/plugin.git#main', type: 'git', gitRef: 'main',
     });
     expect(parsePluginSource('/tmp/plugin')).toMatchObject({ type: 'path', localPath: '/tmp/plugin' });
-    expect(() => parsePluginSource('./plugin')).toThrow(/absolu/i);
+    expect(parsePluginSource('./plugin', '/workspace')).toMatchObject({
+      normalized: path.join('/workspace', 'plugin'), type: 'path', localPath: path.join('/workspace', 'plugin'),
+    });
+    expect(() => parsePluginSource('ambiguous-package-name')).toThrow(/npm|git|local/i);
     expect(() => parsePluginSource('git:https://token@github.com/example/plugin')).toThrow(/credentials/i);
     expect(() => parsePluginSource('git:https://localhost/example/plugin')).toThrow(/refusée/i);
     expect(() => parsePluginSource('npm:--registry=evil')).toThrow(/invalide/i);
@@ -110,6 +114,21 @@ describe('PluginService', () => {
     expect(roots).toHaveLength(2);
     expect(roots.every(item => item.directory.endsWith(path.join('skills', 'review')))).toBe(true);
 
+    const configured = await service.configure({
+      cwd: project,
+      projectId: projectCatalog.projectId,
+      scope: 'project',
+      key: projectPackage.key,
+      resourceFilters: { extensions: [], skills: ['+skills/review'], prompts: ['!prompts/review.md'] },
+    });
+    expect(configured.packages.find(item => item.key === projectPackage.key)).toMatchObject({
+      counts: { extensions: 0, skills: 1, prompts: 0, themes: 1 },
+      resourceFilters: { extensions: [], skills: ['+skills/review'], prompts: ['!prompts/review.md'] },
+    });
+    expect(await service.getEnabledResourceLocations('extension', {
+      cwd: project, projectId: projectCatalog.projectId,
+    })).toHaveLength(1);
+
     const disabled = await service.setEnabled({
       cwd: project, projectId: projectCatalog.projectId, scope: 'project', key: projectPackage.key, enabled: false,
     });
@@ -127,6 +146,36 @@ describe('PluginService', () => {
     expect(persisted.packages).toHaveLength(1);
   });
 
+  it('rejects linked local roots, manifests, and persisted state', async () => {
+    const root = await temporaryDirectory();
+    const realSource = path.join(root, 'real-source');
+    const linkedSource = path.join(root, 'linked-source');
+    await fixturePackage(realSource);
+    await symlink(realSource, linkedSource);
+    const { project, data, service } = await setup(root);
+
+    await expect(service.install({ cwd: project, scope: 'global', source: linkedSource }))
+      .rejects.toMatchObject({ code: 'PLUGIN_SYMLINK_REJECTED' });
+
+    const linkedManifestSource = path.join(root, 'linked-manifest-source');
+    const outsideManifest = path.join(root, 'outside-package.json');
+    await fixturePackage(linkedManifestSource);
+    await writeFile(outsideManifest, JSON.stringify({ name: 'outside' }));
+    await rm(path.join(linkedManifestSource, 'package.json'));
+    await symlink(outsideManifest, path.join(linkedManifestSource, 'package.json'));
+    await expect(service.install({ cwd: project, scope: 'global', source: linkedManifestSource }))
+      .rejects.toThrow(/bounded regular file/i);
+
+    const outsideState = path.join(root, 'outside-state.json');
+    await writeFile(outsideState, '{"version":1,"generation":0,"packages":[]}');
+    const stateFile = path.join(data, 'plugins.json');
+    await symlink(outsideState, stateFile);
+    await expect(service.getCatalog({ cwd: project })).rejects.toThrow(/regular file|symbolic link/i);
+    await rm(stateFile);
+    await writeFile(stateFile, '{not-json');
+    await expect(service.getCatalog({ cwd: project })).rejects.toBeInstanceOf(SyntaxError);
+  });
+
   it('hides untrusted project resources while retaining actionable metadata', async () => {
     const root = await temporaryDirectory();
     const source = path.join(root, 'source-plugin');
@@ -141,6 +190,37 @@ describe('PluginService', () => {
     expect(catalog.packages[0]).toMatchObject({ trusted: false, status: 'installed', counts: EMPTY_COUNTS_FOR_TEST });
     expect(catalog.packages[0]?.diagnostics[0]?.code).toBe('PROJECT_TRUST_REQUIRED');
     expect(await first.service.getEnabledSkillRoots({ cwd: first.project })).toEqual([]);
+  });
+
+  it('serializes state across service instances and observes external mutations without losing packages', async () => {
+    const root = await temporaryDirectory();
+    const firstSource = path.join(root, 'first-plugin');
+    const secondSource = path.join(root, 'second-plugin');
+    await fixturePackage(firstSource);
+    await fixturePackage(secondSource);
+    await writeFile(path.join(secondSource, 'package.json'), JSON.stringify({
+      name: '@demo/second',
+      version: '1.0.0',
+      pi: { extensions: ['src/**/*.js'], prompts: [] },
+      aiHarness: { extensions: [], prompts: ['prompts/*.md'] },
+    }));
+    const first = await setup(root);
+    const second = await setup(root);
+
+    await Promise.all([
+      first.service.install({ cwd: first.project, scope: 'global', source: '../first-plugin' }),
+      second.service.install({ cwd: second.project, scope: 'global', source: '../second-plugin' }),
+    ]);
+
+    const refreshed = await first.service.getCatalog({ cwd: first.project });
+    expect(refreshed.packages.map(pkg => pkg.packageName).sort()).toEqual(['@demo/plugin', '@demo/second']);
+    expect(refreshed.packages.find(pkg => pkg.packageName === '@demo/second')?.counts).toMatchObject({
+      extensions: 0,
+      prompts: 1,
+    });
+    const state = JSON.parse(await readFile(path.join(root, 'data', 'plugins.json'), 'utf8')) as { packages: unknown[] };
+    expect(state.packages).toHaveLength(2);
+    await expect(readFile(path.join(root, 'data', 'plugins.json.lock'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('installs and updates npm packages in staging, checks versions only on request, and keeps state across reloads', async () => {
@@ -166,6 +246,7 @@ describe('PluginService', () => {
     const installed = await service.install({ cwd: project, scope: 'global', source: 'npm:@demo/plugin' });
     const pkg = installed.packages[0]!;
     expect(pkg).toMatchObject({ sourceType: 'npm', version: '1.0.0', installedPath: expect.stringContaining('plugins/') });
+    expect((await service.getEnabledSkillRoots({ cwd: project }))[0]?.displayRoot).toMatch(/^plugins\//);
     expect(calls.filter(call => call.args[0] === 'view')).toHaveLength(0);
 
     await expect(service.checkUpdates({ cwd: project, key: pkg.key, scope: 'global' }))

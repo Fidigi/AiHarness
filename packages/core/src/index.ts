@@ -163,8 +163,9 @@ export * from './tools/index.js';
 export * from './mcp/index.js';
 export * from './prompts/index.js';
 
-// Extensions
+// Extensions and package resources
 export * from './extensions/index.js';
+export * from './plugins/index.js';
 
 // Shared workspace security (explicit exports keep browser type-only imports tree-shakeable)
 export {

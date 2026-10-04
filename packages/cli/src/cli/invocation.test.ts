@@ -76,6 +76,79 @@ describe('CLI invocation contract', () => {
     expect(invalid.stderr).toContain('Unknown option');
   });
 
+  it('administers shared packages without starting the agent and loads enabled package resources', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-packages-'));
+    temporaryDirectories.push(cwd);
+    const agentDir = path.join(cwd, 'agent');
+    const packageRoot = path.join(cwd, 'review-package');
+    const marker = path.join(cwd, 'package-extension-loaded');
+    await mkdir(path.join(packageRoot, 'extensions'), { recursive: true });
+    await mkdir(path.join(packageRoot, 'prompts'), { recursive: true });
+    await mkdir(path.join(packageRoot, 'skills', 'package-audit'), { recursive: true });
+    await writeFile(path.join(packageRoot, 'package.json'), JSON.stringify({
+      name: '@demo/cli-package',
+      version: '1.0.0',
+      aiHarness: { extensions: ['extensions/*.mjs'], skills: ['skills'], prompts: ['prompts/*.md'] },
+    }));
+    await writeFile(path.join(packageRoot, 'extensions', 'marker.mjs'), `
+      import { writeFileSync } from 'node:fs';
+      writeFileSync(process.env.PACKAGE_MARKER, 'loaded');
+      export default () => {};
+    `);
+    await writeFile(path.join(packageRoot, 'prompts', 'review.md'), '---\nname: package-review\n---\nReview $@');
+    await writeFile(
+      path.join(packageRoot, 'skills', 'package-audit', 'SKILL.md'),
+      '---\nname: package-audit\ndescription: Audit a package\n---\nAudit instructions',
+    );
+    const environment = { AI_HARNESS_AGENT_DIR: agentDir, PACKAGE_MARKER: marker };
+
+    const installed = await invoke(['package', 'install', './review-package', '--json'], undefined, environment, cwd);
+    expect(installed).toMatchObject({ code: 0, stderr: '' });
+    expect(JSON.parse(installed.stdout)).toMatchObject({
+      packages: [expect.objectContaining({ packageName: '@demo/cli-package', scope: 'global', status: 'active' })],
+    });
+
+    const listed = await invoke(['list', '--json'], undefined, environment, cwd);
+    expect(listed.code).toBe(0);
+    expect(JSON.parse(listed.stdout).packages).toHaveLength(1);
+
+    const active = await invoke(['--print', '--no-session', 'hello'], undefined, environment, cwd);
+    expect(active).toEqual({ code: 0, stdout: '[Mock AI Response]\n', stderr: '' });
+    expect(await readFile(marker, 'utf8')).toBe('loaded');
+
+    const rpc = await invoke(
+      ['--mode', 'rpc', '--no-session'],
+      '{"type":"get_commands","id":"packages"}\n',
+      environment,
+      cwd,
+    );
+    expect(rpc.code).toBe(0);
+    expect(JSON.parse(rpc.stdout)).toMatchObject({
+      id: 'packages',
+      success: true,
+      data: { commands: expect.arrayContaining([
+        expect.objectContaining({ name: 'package-review', source: 'prompt' }),
+        expect.objectContaining({ name: 'skill:package-audit', source: 'skill' }),
+      ]) },
+    });
+
+    const configured = await invoke([
+      'config', '@demo/cli-package', '--extensions=', '--prompts=+prompts/review.md', '--json',
+    ], undefined, environment, cwd);
+    expect(configured.code).toBe(0);
+    expect(JSON.parse(configured.stdout).packages[0]).toMatchObject({
+      counts: { extensions: 0, prompts: 1 },
+      resourceFilters: { extensions: [], prompts: ['+prompts/review.md'] },
+    });
+    await rm(marker, { force: true });
+    expect((await invoke(['--print', '--no-session', 'hello'], undefined, environment, cwd)).code).toBe(0);
+    await expect(readFile(marker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+
+    const removed = await invoke(['remove', '@demo/cli-package', '--json'], undefined, environment, cwd);
+    expect(removed.code).toBe(0);
+    expect(JSON.parse(removed.stdout).packages).toEqual([]);
+  });
+
   it('keeps print stdout pure for positional, piped, and @file input', async () => {
     const positional = await invoke(
       ['--print', '--no-session', 'hello'],

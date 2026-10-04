@@ -638,7 +638,7 @@ Les deux fichiers doivent être des fichiers UTF-8 réguliers, non symboliques, 
 
 ### Packages et plugins
 
-La section **Plugins and packages** regroupe les packages **Project** et **Global**, puis inventorie séparément les extensions autonomes de `.ai-harness/extensions/` et du répertoire de données. L’installation reste toujours une action explicite ; afficher ou rafraîchir le catalogue ne contacte aucun registre et ne modifie aucun fichier. Trois formes de source strictes sont acceptées :
+Le CLI et le Web utilisent un unique service Core et le même `plugins.json` : validation des sources, inventaire, confiance, mises à jour et persistance ne sont pas dupliqués. La section **Plugins and packages** regroupe les packages **Project** et **Global**, puis inventorie séparément les extensions autonomes de `.ai-harness/extensions/` et du répertoire de données. L’installation reste toujours une action explicite ; afficher ou rafraîchir le catalogue ne contacte aucun registre et ne modifie aucun fichier. Trois formes de source strictes sont acceptées :
 
 ```text
 npm:@scope/package@^2.0.0
@@ -646,15 +646,31 @@ git:https://github.com/organisation/depot.git#branche-ou-tag
 /chemin/absolu/vers/un-package-ou-une-extension.js
 ```
 
-Une source Git doit utiliser HTTPS, sans credentials, query string ni port personnalisé. Les hôtes permis sont `github.com`, `gitlab.com` et `bitbucket.org` par défaut ; `AI_HARNESS_PLUGIN_GIT_HOSTS=git.example.com,github.com` remplace cette liste. Un chemin local doit exister dans les racines autorisées du serveur. La portée projet n’est disponible qu’après approbation explicite du workspace.
+Une source Git doit utiliser HTTPS, sans credentials, query string ni port personnalisé. Les hôtes permis sont `github.com`, `gitlab.com` et `bitbucket.org` par défaut ; `AI_HARNESS_PLUGIN_GIT_HOSTS=git.example.com,github.com` remplace cette liste. Un chemin local doit exister dans la racine active autorisée. L’API Web exige un chemin absolu ; le CLI accepte aussi `./` et `../` relativement à son répertoire canonique de démarrage. Installer, configurer, activer, mettre à jour ou charger un package de portée projet exige l’approbation explicite du workspace ou une décision CLI `--approve` limitée au processus ; sa désactivation et sa suppression restent disponibles pour un nettoyage sûr.
 
-Les installations npm et Git sont copiées dans `~/.ai-harness/plugins/installed/` par staging puis renommage atomique. Les scripts de cycle de vie npm sont désactivés, les clones Git sont superficiels et les dépendances de développement sont omises. Cela réduit l’exposition lors de l’installation, sans rendre un package tiers digne de confiance : vérifiez toujours sa source. Une extension exécutable activée s’exécute comme code Node de confiance dans le processus serveur, sans sandbox de sécurité. Supprimer une source locale retire uniquement sa configuration AiHarness, jamais le dossier d’origine.
+Le CLI termine avant le démarrage de l’agent pour administrer les packages. `ai-harness package --help` décrit toutes les actions ; `install`, `remove`/`uninstall`, `update`, `list` et `config` sont des alias directs :
+
+```bash
+ai-harness package install npm:@scope/package@^2 --global
+ai-harness package install ./package-workspace --project --approve
+ai-harness package list --json
+ai-harness package configure @scope/package --extensions='extensions/*.mjs,!extensions/unsafe.mjs' --themes=
+ai-harness package check @scope/package
+ai-harness package update @scope/package
+ai-harness package disable @scope/package
+ai-harness package reload
+ai-harness package remove @scope/package
+```
+
+La configuration ne peut que restreindre les extensions, skills, prompts et thèmes déjà déclarés par le package. Les globs séparés par des virgules acceptent les exclusions `!glob`, tandis que `+chemin` et `-chemin` sont une inclusion/exclusion exacte ; une valeur vide désactive le type et `--reset` restaure le manifeste.
+
+Les installations npm et Git sont copiées dans `~/.ai-harness/plugins/installed/` par staging puis renommage atomique. Les scripts de cycle de vie npm sont désactivés, les clones Git sont superficiels et les dépendances de développement sont omises. Cela réduit l’exposition lors de l’installation, sans rendre un package tiers digne de confiance : vérifiez toujours sa source. Une extension exécutable activée s’exécute comme code Node de confiance dans le processus CLI ou serveur actif, sans sandbox de sécurité. Supprimer une source locale retire uniquement sa configuration AiHarness, jamais le dossier d’origine.
 
 Chaque fiche affiche version, état, source et nombres d’extensions, skills, prompts et thèmes. **Disable/Enable** conserve le package mais retire ou restaure ses ressources ; **Remove** demande confirmation. **Check** et **Check all** sont les seules actions qui interrogent npm ou le dépôt Git. Une mise à jour est elle aussi volontaire, préparée hors de l’installation active, puis remplacée avec rollback si l’écriture d’état ou l’installation échoue. Les sources locales sont relues directement et n’ont pas de vérification distante.
 
 **Refresh catalogue** refait seulement l’inventaire borné. **Reload resources** valide d’abord tous les packages actifs, puis publie une génération atomique ; en cas d’erreur, l’ancienne génération reste active. Si une conversation persistée est ouverte, son identifiant lie le reload au même workspace. Les skills et prompts des packages activés deviennent disponibles dans leurs catalogues, et `load_skill` peut charger les skills autorisés. Les extensions exécutables activées sont ensuite chargées dans une génération gérée : leurs commandes, providers, outils, panneaux texte, hooks et listeners remplacent ensemble l’ancienne génération, sans conserver de handler périmé. Un changement vers un workspace dont la génération est invalide retire les handlers de l’ancien projet.
 
-Le catalogue transmis au navigateur ne contient que des métadonnées nettoyées : jamais le corps d’un skill ou prompt, le code d’une extension, des credentials ni stdout/stderr de commande. La découverte et le chargeur sont bornés, refusent les liens symboliques et les modules dépassant 5 Mio, et masquent les ressources projet lorsqu’un workspace perd sa confiance. Sous authentification, les mutations, vérifications, mises à jour et reloads exigent la capacité administrateur `packages`.
+Le catalogue transmis au navigateur et la sortie CLI `--json` ne contiennent que des métadonnées nettoyées : jamais le corps d’un skill ou prompt, le code d’une extension, des credentials ni stdout/stderr de commande. La découverte et le chargeur sont bornés, refusent les liens symboliques et les modules dépassant 5 Mio, et masquent les ressources projet lorsqu’un workspace perd sa confiance. Les mutations d’état sont sérialisées entre les processus CLI/Server et utilisent des fichiers atomiques réservés au propriétaire. Sous authentification, les mutations Web, vérifications, mises à jour et reloads exigent la capacité administrateur `packages`.
 
 ### Extensions Web et interactions
 

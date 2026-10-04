@@ -31,6 +31,18 @@ function requiredScope(value: unknown): PluginScope {
   return scope;
 }
 
+function webPluginSource(value: unknown): string {
+  const source = requiredString(value, 'source', 1_000);
+  // The browser API keeps local sources explicit and absolute; relative paths are only a CLI convenience.
+  if (source === '.' || source === '..' || source.startsWith('./') || source.startsWith('../')) {
+    throw Object.assign(new Error('La source locale du package doit être absolue.'), {
+      status: 400,
+      code: 'INVALID_PLUGIN_SOURCE',
+    });
+  }
+  return source;
+}
+
 function operationSignal(request: Request): { signal: AbortSignal; dispose(): void } {
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -88,7 +100,7 @@ export function createPluginRouter(servicesPromise: Promise<RuntimeServices>): R
         catalog = await services.pluginService.install({
           ...input,
           scope: requiredScope(request.body?.scope),
-          source: requiredString(request.body?.source, 'source', 1_000),
+          source: webPluginSource(request.body?.source),
         }, operation.signal);
       } else if (action === 'enable' || action === 'disable') {
         catalog = await services.pluginService.setEnabled({

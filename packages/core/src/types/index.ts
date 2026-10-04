@@ -267,6 +267,9 @@ export type PluginScope = 'global' | 'project';
 export type PluginSourceType = 'npm' | 'git' | 'path';
 export type PluginResourceKind = 'extension' | 'skill' | 'prompt' | 'theme';
 
+/** Optional package-level selectors. Omitted kinds keep all manifest-approved resources. */
+export type PluginResourceFilters = Partial<Record<`${PluginResourceKind}s`, string[]>>;
+
 export interface PluginResourceCounts {
   extensions: number;
   skills: number;
@@ -307,6 +310,8 @@ export interface PluginPackageInfo {
   installedRevision?: string;
   counts: PluginResourceCounts;
   resources: PluginResourceInfo[];
+  /** User filters can only narrow resources already allowed by the package manifest. */
+  resourceFilters?: PluginResourceFilters;
   diagnostics: PluginDiagnostic[];
   status: 'active' | 'installed' | 'missing' | 'disabled' | 'error';
   /** Executable extension changes cannot be applied by a metadata-only resource reload. */
