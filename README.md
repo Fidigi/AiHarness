@@ -37,15 +37,19 @@
 
 ## 📖 Documentation
 
-Le [guide utilisateur complet](docs/users/fr/user-guide.md) décrit l’installation, la configuration des providers, le CLI, l’interface Web, la persistance et la sécurité.
+Human-facing documentation is maintained in both **English** and **French**.
 
-Documentation complémentaire :
+| Audience | English | Français |
+|---|---|---|
+| End users | [Documentation index](docs/users/en/README.md) · [User guide](docs/users/en/user-guide.md) | [Index de la documentation](docs/users/fr/README.md) · [Guide utilisateur](docs/users/fr/user-guide.md) |
+| Contributors | [Contributor documentation](docs/contributors/en/README.md) | [Documentation contributeur](docs/contributors/fr/README.md) |
 
-- [Extensions CLI](docs/contributors/fr/extensions-cli.md)
-- [Extensions Web](docs/contributors/fr/extensions-web.md)
-- [Internationalisation Web](docs/contributors/fr/i18n.md)
-- [Conteneurisation](docs/users/fr/containerization.md)
-- [Architecture](docs/contributors/fr/architecture-overview.md)
+The user documentation covers installation, CLI and Web configuration, containers, sessions, and security. The contributor documentation covers the Core, server, and Web architectures, extensions, and internationalization.
+
+Additional references:
+
+- [AI-agent technical documentation](docs/ai/index.md) (English)
+- [Screenshot inventory](docs/screenshots/README.md) (English / Français)
 
 ## 🏗 Architecture
 

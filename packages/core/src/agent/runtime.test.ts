@@ -53,6 +53,48 @@ class RetryProvider extends AiProvider {
   }
 }
 
+class CapturingProvider extends MockProvider {
+  systemPrompt?: string;
+
+  override async streamChat(...args: Parameters<MockProvider['streamChat']>): Promise<void> {
+    this.systemPrompt = args[4]?.systemPrompt;
+    await super.streamChat(...args);
+  }
+}
+
+class GatedProvider extends AiProvider {
+  calls: string[][] = [];
+  readonly started: Promise<void>;
+  private markStarted!: () => void;
+  private releaseFirst!: () => void;
+  private readonly firstGate: Promise<void>;
+
+  constructor() {
+    super({ type: 'mock' as never });
+    this.started = new Promise(resolve => { this.markStarted = resolve; });
+    this.firstGate = new Promise(resolve => { this.releaseFirst = resolve; });
+  }
+
+  validateConfig(): boolean { return true; }
+  async chat(): Promise<ChatResponse> { return { content: 'unused' }; }
+  async streamChat(
+    messages: Message[],
+    onChunk: (chunk: string) => void,
+    onComplete?: (response?: ChatResponse) => void,
+  ): Promise<void> {
+    this.calls.push(messages.filter(message => message.role === 'user').map(message => message.content));
+    if (this.calls.length === 1) {
+      this.markStarted();
+      await this.firstGate;
+    }
+    const content = `response ${this.calls.length}`;
+    onChunk(content);
+    onComplete?.({ content });
+  }
+
+  release(): void { this.releaseFirst(); }
+}
+
 class BlockingProvider extends AiProvider {
   constructor() { super({ type: 'mock' as never }); }
   validateConfig(): boolean { return true; }
@@ -170,14 +212,14 @@ describe('AgentRuntime', () => {
   it('exposes the exact tools selected by each preset', async () => {
     const { runtime, extensionRegistry } = await setup(new MockProvider({ type: 'mock' as never }, ['ok']));
     await extensionRegistry.load('workspace', api => {
-      for (const name of ['read_file', 'write_file', 'custom_tool']) {
+      for (const name of ['read', 'write', 'custom_tool']) {
         api.registerTool({ name, description: name, execute: () => ({ content: 'ok' }) });
       }
     });
 
     expect(runtime.getTools('chat-only')).toEqual([]);
-    expect(runtime.getTools('read-only').map(tool => tool.name)).toEqual(['read_file']);
-    expect(runtime.getTools('full').map(tool => tool.name)).toEqual(['read_file', 'write_file', 'custom_tool']);
+    expect(runtime.getTools('read-only').map(tool => tool.name)).toEqual(['read']);
+    expect(runtime.getTools('full').map(tool => tool.name)).toEqual(['read', 'write', 'custom_tool']);
   });
 
   it('keeps queued follow-ups in snapshots and consumes them after the active response', async () => {
@@ -191,6 +233,31 @@ describe('AgentRuntime', () => {
     expect(sessionManager.get(session.id)?.messages.filter(message => message.role === 'user').map(message => message.content))
       .toEqual(['initial', 'next request']);
     expect(runtime.getRun(started.id)?.followUpQueue).toEqual([]);
+  });
+
+  it('uses the shared all/one-at-a-time scheduler for detached Web queues', async () => {
+    const provider = new GatedProvider();
+    const { runtime, sessionManager, session } = await setup(provider);
+    const started = await runtime.start({
+      sessionId: session.id,
+      cwd: process.cwd(),
+      provider: 'mock',
+      input: 'initial',
+      followUpMode: 'all',
+    });
+    await provider.started;
+    runtime.enqueue(started.id, 'follow-up', 'next one', [{ type: 'text', text: 'next one' }]);
+    runtime.enqueue(started.id, 'follow-up', 'next two', [{ type: 'text', text: 'next two' }]);
+    provider.release();
+
+    await runtime.wait(started.id);
+    expect(provider.calls).toEqual([
+      ['initial'],
+      ['initial', 'next one', 'next two'],
+    ]);
+    expect(sessionManager.get(session.id)?.messages.filter(message => message.role === 'user').map(message => message.content))
+      .toEqual(['initial', 'next one', 'next two']);
+    expect(runtime.getRun(started.id)).toMatchObject({ steerQueue: [], followUpQueue: [] });
   });
 
   it('retries only failures that happen before a delta and does not duplicate assistant messages', async () => {
@@ -230,6 +297,23 @@ describe('AgentRuntime', () => {
     expect(runtime.getTools('default', undefined, ['extension-beta']).map(tool => tool.name))
       .toEqual(['beta_tool']);
     expect(runtime.getTools('read-only')).toEqual([]);
+  });
+
+  it('forwards ephemeral resolved instructions without persisting their contents', async () => {
+    const provider = new CapturingProvider({ type: 'mock' as never }, ['ok']);
+    const { runtime, sessionManager, session } = await setup(provider);
+    const started = await runtime.start({
+      sessionId: session.id,
+      cwd: process.cwd(),
+      provider: 'mock',
+      input: 'prompt',
+      systemPrompt: 'resolved instructions including local context',
+      persistSettings: false,
+    });
+    await runtime.wait(started.id);
+
+    expect(provider.systemPrompt).toBe('resolved instructions including local context');
+    expect(sessionManager.get(session.id)?.metadata?.systemPrompt).toBeUndefined();
   });
 
   it('stops a detached provider request and requires explicit project trust', async () => {

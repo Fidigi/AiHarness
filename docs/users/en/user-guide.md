@@ -138,34 +138,114 @@ Then type a message and press Enter. The response displays progressively.
 
 | Option | Effect |
 |---|---|
-| `--fullscreen` | requests fullscreen interface if the terminal supports it |
-| `--regular` or `--no-fullscreen` | forces classic terminal interface |
+| `-h`, `--help` / `-v`, `--version` | prints command metadata without starting a session |
+| `-p`, `--print` | runs supplied prompts once and writes only the final answer to stdout |
+| `--mode json` | runs supplied prompts once and writes session/lifecycle events as JSONL |
+| `--mode rpc` or `--rpc` | enables the JSONL RPC protocol on stdin/stdout |
+| `--tui-mode fullscreen` / `regular` | selects the terminal mode |
+| `--fullscreen` / `--regular` / `--no-fullscreen` | legacy terminal-mode aliases |
+| `--provider <name>` | constrains `--model` or `--models` to a provider |
+| `--model <[provider/]model[:thinking]>` | selects an exact/fuzzy model and optional thinking level |
+| `--models <patterns>` | sets an ordered startup and interactive/RPC cycling scope with exact/fuzzy references or globs |
+| `--list-models [search]` | prints configured-provider model metadata, optionally fuzzy-filtered, then exits |
+| `--api-key <key>` | applies a non-persistent credential override; requires `--model` or `--models` |
+| `--thinking <level>` | selects `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` |
+| `--system-prompt <text-or-path>` | replaces the default system prompt with literal text or an existing file |
+| `--append-system-prompt <text-or-path>` | appends literal text or an existing file; repeatable and order-preserving |
+| `-nc`, `--no-context-files` | disables automatic `AGENTS.md` / `CLAUDE.md` discovery |
+| `-c`, `--continue` | continues the newest session for the current workspace |
+| `-r`, `--resume` | opens an interactive stored-session selector |
+| `--session <path-or-id>` | opens an exact file, ID, or ID prefix |
+| `--session-id <id>` | opens or creates an exact validated ID |
+| `--fork <path-or-id>` | forks a stored session before startup |
+| `--session-dir <directory>` | overrides the session storage/lookup directory |
+| `-n`, `--name <name>` | names or renames the startup session |
 | `--no-session` | keeps conversation in memory only |
 | `--theme dark` / `--theme light` | selects a built-in theme |
 | `--theme <file.json>` | loads a custom theme |
 | `--extension <file-or-folder>` | loads an explicit JavaScript extension; repeatable option |
-| `--rpc` | enables JSONL protocol on stdin/stdout instead of interactive mode |
 
-Example:
+Examples:
 
 ```bash
-ai-harness --regular --theme light
+ai-harness --tui-mode regular --theme light
+ai-harness --print --no-session "Summarize this repository"
+git diff | ai-harness --print --no-session "Review this patch"
+ai-harness --print --no-session @README.md "Summarize this file"
+ai-harness --mode json --no-session "Review this repository"
+ai-harness --list-models "sonnet 4"
+ai-harness --models 'openai/o*:high,anthropic/*sonnet*:medium' --mode rpc
+ai-harness --system-prompt ./SYSTEM.md --append-system-prompt "Prefer small changes"
+ai-harness --continue "Follow up on the previous work"
+ai-harness --session-id review-42 --name "Review 42"
+ai-harness --fork review-42 --session-id review-42-alternative
 ```
 
-The `AI_HARNESS_TUI_MODE=regular|fullscreen` variable also sets the mode. The command-line option takes priority.
+Positional prompts are sent in order. `@path` resolves inside the startup workspace and accepts bounded UTF-8 text or PNG/JPEG/GIF/WebP images; traversal, escaping symbolic links, binary text, and oversized inputs are rejected. Redirected stdin or stdout automatically selects print mode. Unknown options are errors; use `--` before a prompt that starts with `-`.
+
+Model resolution checks the complete ID before treating its last colon as a thinking suffix, so IDs containing `/` or `:` remain valid. A bare ID shared by providers resolves only when exactly one matching provider is configured; otherwise qualify it. Fuzzy lookup prefers an undated/`-latest` alias, then the lexically newest ID. Scope patterns are ordered, deduplicated and support case-insensitive `*`, `?` and bracket globs; their first available match starts the run unless `--model` selects another, and `/model cycle` plus RPC reuse that scope. Discovery is timeout- and result-bounded. Catalogues and sessions never retain `--api-key`, but command-line secrets may remain visible in shell history or process listings, so prefer provider environment variables for durable credentials.
+
+Without a session selector, each invocation starts a new session. `--resume` requires an interactive terminal; use `--session` or `--continue` in print/JSON automation. An explicit session path wins; otherwise storage precedence is `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, settings `sessionDir`, then the default directory. Incompatible selectors fail before execution.
+
+The `AI_HARNESS_TUI_MODE=regular|fullscreen` variable also sets the mode. The command-line option takes priority over settings.
+
+### Agent Settings
+
+The CLI and RPC use AiHarness's Core settings resolver. They read user settings from `<agent-directory>/settings.json` (`AI_HARNESS_AGENT_DIR`, otherwise `~/.ai-harness`) and, after explicit project trust, overlay `<workspace>/.ai-harness/settings.json`. The only project value read before trust is `sessionDir`. Files must be regular nonsymlink UTF-8 JSON and are capped at 256 KiB; invalid or unknown fields produce a warning without printing their values. Settings are read-only: AiHarness never rewrites them.
+
+A useful starting file is:
+
+```json
+{
+  "defaultProvider": "mock",
+  "defaultModel": "mock-model-v1",
+  "defaultThinkingLevel": "medium",
+  "enabledModels": ["mock/*", "openai/o*:high"],
+  "defaultTools": ["read", "bash", "edit", "write", "+grep"],
+  "sessionDir": "./sessions",
+  "compaction": { "enabled": true, "reserveTokens": 16384, "keepRecentTokens": 20000 },
+  "retry": { "enabled": true, "maxRetries": 3, "baseDelayMs": 2000 },
+  "steeringMode": "one-at-a-time",
+  "followUpMode": "one-at-a-time",
+  "tuiMode": "fullscreen",
+  "theme": "system"
+}
+```
+
+Also implemented are exact `modelThinkingLevels`, compaction `modelOverrides`, `externalEditor`, `quietStartup: true`, `shellPath`, `shellCommandPrefix`, local extension/skill/prompt paths, `enableSkillCommands`, and project `defaultTools` modifiers. Detached trusted Web runs also resolve `steeringMode` and `followUpMode` at run start through the same Core loader and scheduler. Explicit CLI options take priority. Use `/settings` to inspect effective values and `global`/`project` sources. `/reload` refreshes settings, instructions, resources, extensions, tool defaults, interactive queue modes and shell callbacks; restart to change the session directory, startup model, renderer/theme, RPC queue defaults, compaction or retry policy. Package installation, built-in extension switches, custom theme resources, branch-summary generation, codemode, network/proxy/transport/provider retry, detailed terminal/image/Markdown options, telemetry and warning settings are not yet applied.
+
+### Project Instructions and System Prompts
+
+AiHarness applies the same instruction resolver in interactive, print, JSON, RPC, and Web agent runs. Its user-level agent directory is `AI_HARNESS_AGENT_DIR`, or `~/.ai-harness` when that variable is unset. In that directory, and then in each trusted ancestor from the filesystem root to the startup folder, it selects the first existing filename from this priority list:
+
+1. `AGENTS.override.md`
+2. `AGENTS.md`
+3. `AGENTS.MD`
+4. `CLAUDE.md`
+5. `CLAUDE.MD`
+
+The agent-directory file is user-owned and may load before project trust. Ancestor/project files load only after the workspace has been explicitly approved. If you run `/trust add` inside an active CLI, run `/reload` to recompute the instructions. `--no-context-files` disables both user and project context-file discovery, but does not disable `SYSTEM.md` or `APPEND_SYSTEM.md`.
+
+For the base system prompt, `--system-prompt` has highest priority, then trusted `<workspace>/.ai-harness/SYSTEM.md`, then `<agent-directory>/SYSTEM.md`, then the built-in prompt. Without explicit append flags, trusted `<workspace>/.ai-harness/APPEND_SYSTEM.md` takes priority over `<agent-directory>/APPEND_SYSTEM.md`. Repeating `--append-system-prompt` replaces that automatic append-file choice and preserves command-line order. An existing CLI value is read as a path; a nonexistent value is used as literal text. The Web system-prompt setting is always literal, so it cannot unexpectedly read a server path.
+
+Instruction sources must be regular, nonsymlink UTF-8 files and are bounded per file and in aggregate. Their resolved contents are sent to the selected provider but are not copied into session settings. Review project instruction files before trusting a workspace, because they can influence model decisions and tool requests even though tool execution keeps its own trust checks.
 
 ### Shortcuts and Input
 
 | Action | Shortcut/command |
 |---|---|
-| Send input | Enter |
+| Send input, or steer an active response | Enter |
+| Queue work after the active task | Alt+Enter (`Ctrl+Q` fallback) |
+| Return queued text to the editor | Alt+Up |
 | Complete a command, skill or prompt | Tab |
 | Browse input history | Up / Down |
-| Interrupt an ongoing response | Ctrl+C |
+| Interrupt an ongoing response or shell command | Escape or Ctrl+C |
 | Quit when no operation is active | Ctrl+C, Ctrl+D or /quit |
 | Open $VISUAL or $EDITOR | Ctrl+G |
 | Refresh the screen | Ctrl+L |
-| Scroll transcript in fullscreen | Alt+Up / Alt+Down |
+| Scroll transcript in fullscreen | Alt+Down; Alt+Up when no text is queued |
+
+During a response, `Enter` adds steering at the next model boundary; `Alt+Enter` waits until steering and the current task settle. `steeringMode` and `followUpMode` choose whether one message or every pending message of that kind is delivered at each boundary. `Alt+Up`, `Escape`, `Ctrl+C`, or a failed run returns pending text to the editor instead of discarding it. Commands and `!` shell input are not run concurrently with an active response. A short delay distinguishes lone `Escape` from terminals that split `Alt+Enter`; idle `Escape` never exits the CLI. Some terminals reserve `Alt+Enter`; use `Ctrl+Q` there.
 
 For multi-line input in classic terminal:
 
@@ -176,7 +256,16 @@ second line
 /send
 ```
 
-Use `/cancel` to abandon multi-line input.
+Use `/cancel` or `Escape` to abandon multi-line input.
+
+Prefix input with `!` to run a command directly in the trusted workspace. Its progressive output, status and exit code are persisted in session history and added to model context. Use `!!` to keep the same history without sending the result to the model:
+
+```text
+!git status
+!!git diff --stat
+```
+
+`Escape` or `Ctrl+C` stops the active process tree. Displayed and persisted output is bounded; when truncated, the CLI shows an owner-only complete-output file that expires after 24 hours. Commands reject an untrusted workspace (`/trust add`), and child processes do not inherit environment variables whose names look like credentials. Direct CLI and Web commands use the same Core runtime; this path remains separate from the model-invoked `bash` tool.
 
 ### Conversation and Session Commands
 
@@ -200,12 +289,13 @@ Use `/cancel` to abandon multi-line input.
 |---|---|
 | `/provider` | displays available providers and their status |
 | `/provider <name>` | selects openai, anthropic, google, local, azure, vertex, bedrock or mock if available |
-| `/model` | displays current model and provider catalog |
-| `/model <name>` | chooses a model |
-| `/model cycle` | switches to next model |
-| `/thinking [off\|low\|medium\|high\|xhigh]` | displays or changes thinking level |
+| `/model` or `/model list` | displays the current model and active provider catalogue |
+| `/model <[provider/]name[:thinking]>` | chooses an exact/fuzzy model, including across configured providers |
+| `/model cycle` | switches to the next model in the ordered `--models` scope, or the active provider catalogue |
+| `/thinking [off\|minimal\|low\|medium\|high\|xhigh\|max]` | displays or changes thinking level |
 | `/login <provider>` | starts an OAuth Device Flow if configured |
 | `/config` | displays session location |
+| `/settings` | displays effective agent settings and source scopes |
 
 Actual support for a thinking level depends on the provider and model.
 
@@ -219,6 +309,33 @@ export AI_HARNESS_OAUTH_OPENAI_SCOPE='...' # optional
 ```
 
 The prefix follows the form `AI_HARNESS_OAUTH_<PROVIDER>_*`.
+
+### Built-in Coding Tools
+
+The CLI and Web agent use the same tool implementations from the Core package:
+
+| Tool | Purpose |
+|---|---|
+| `read` | reads a text-file window with `offset` and `limit` |
+| `grep` | searches files for a regular expression or literal string |
+| `find` | finds files by glob |
+| `ls` | lists a directory |
+| `edit` | applies exact, unique, non-overlapping text replacements |
+| `write` | creates or completely rewrites a file |
+| `bash` | runs a bounded shell command in the workspace |
+| `powershell` | Windows equivalent, available only on that OS |
+
+By default the model receives `read`, `bash`, `edit`, and `write`, plus loaded extension tools; `grep`, `find`, and `ls` are opt-in. The `defaultTools` agent setting can replace or modify that list. `--tools <names>` replaces the selection, `--exclude-tools <names>` removes names afterward, `--no-builtin-tools` keeps only extension tools, and `--no-tools` disables all defaults. `/tools` marks inactive tools, and `/reload` reapplies the policy to the new extension generation. Agent settings `shellPath` and `shellCommandPrefix` affect both this `bash` tool and direct `!`/`!!` commands.
+
+Every path is canonicalized inside the directory from which the CLI started; escaping symlinks and traversal are rejected. Reads and searches do not execute code. `bash`, `edit`, and `write` require explicit trust:
+
+```text
+/trust add
+/tools
+/tool read {"path":"README.md","offset":1,"limit":80}
+```
+
+File reads, searches, listings, and command output are bounded so they cannot exhaust the model context. The `read` tool remains text-only, but startup `@image.png` inputs use the shared multimodal message/provider pipeline.
 
 ### Branches and Context
 
@@ -260,8 +377,9 @@ Share links expire after 24 hours by default; accepted duration is limited to 1-
 
 The CLI discovers `SKILL.md` files in:
 
-- `~/.agents/skills/` and `~/.ai-harness/skills/`;
-- `<project>/.agents/skills/` and `<project>/.ai-harness/skills/`.
+- `~/.agents/skills/` and `<agent-directory>/skills/` (default: `~/.ai-harness/skills/`);
+- trusted `<project>/.agents/skills/` and `<project>/.ai-harness/skills/`;
+- additional user/project `skills` selectors from `settings.json`.
 
 Example `~/.ai-harness/skills/review/SKILL.md`:
 
@@ -282,7 +400,7 @@ Commands:
 /skill:review Text to review
 ```
 
-Markdown prompts are searched in `~/.ai-harness/prompts/`, `<project>/.ai-harness/prompts/` and `<project>/prompts/`.
+Markdown prompts are searched in `<agent-directory>/prompts/` (default: `~/.ai-harness/prompts/`) and trusted `<project>/.ai-harness/prompts/` and `<project>/prompts/`. Settings `skills`/`prompts` paths resolve from their declaring settings directory and support ordered plain or `+` includes, exact `-` exclusions, and `!` glob exclusions. Resource files are symlink-free, UTF-8, and capped at 1 MiB.
 
 ```markdown
 ---
@@ -344,30 +462,35 @@ A keybindings file can reassign `app.help` and `terminal.clear` actions:
 export AI_HARNESS_KEYBINDINGS="$HOME/.ai-harness/keybindings.json"
 ```
 
-### RPC Mode
+### JSON Event Mode
 
-RPC mode reads one JSON request per line on stdin and writes responses and events to stdout:
+JSON mode writes exactly one LF-delimited JSON object per stdout record and exits after all supplied prompts:
 
 ```bash
-ai-harness --rpc
+ai-harness --mode json --no-session "List the important files"
 ```
 
-Available methods:
+The first record is a version-3 session header. It is followed by agent, turn, message, text/reasoning update, tool execution/result, retry, compaction, usage, error, and settled records as applicable. Completed `message_end` values are authoritative. Diagnostics and extension logs use stderr, so stdout can be piped directly to a JSONL consumer. Read the stream continuously and split records only on LF.
 
-- `system.ping`;
-- `session.list`, `session.create`, `session.get`, `session.delete`;
-- `provider.list`;
-- `chat.send`.
+### RPC Mode
 
-Example:
+RPC mode reads strict LF-delimited JSON requests from stdin and writes correlated responses plus asynchronous events to stdout:
+
+```bash
+ai-harness --mode rpc --models 'openai/o*,anthropic/claude*' --session-id automation-run --name "Automation run"
+```
+
+Canonical requests use `type` and an optional string `id`:
 
 ```json
-{"id":1,"method":"session.create","params":{"title":"RPC"}}
-{"id":2,"method":"provider.list"}
-{"id":3,"method":"chat.send","params":{"sessionId":"<returned-id>","provider":"mock","content":"Hello"}}
+{"type":"get_state","id":"state-1"}
+{"type":"prompt","id":"prompt-1","message":"Review this repository"}
+{"type":"follow_up","id":"follow-1","message":"Summarize the findings"}
 ```
 
-**chat.send** emits text_delta and message_end events before its final response. `AI_HARNESS_SESSIONS_DIR` lets you choose the session folder specific to RPC mode.
+Responses use `type: "response"`, repeat the command and ID, and contain `success` plus either `data` or `error`. Prompting streams the same agent/turn/message/tool events as JSON mode but without a session header. RPC also supports prompt images and discovered prompt/skill expansion; immediate extension commands; next-turn steering, later follow-ups and abort; bounded cached configured-provider model listing/switching and ordered exact/fuzzy/glob `--models` cycling with per-entry capability-clamped thinking; session creation, switching, in-place forks, clones and nested raw-history projections; cache-aware message/compaction usage without invented unknown-model prices; provider/summarization retry events; trusted bash with incremental correlated output and a private `fullOutputPath` when truncated; HTML export; and extension dialog request/response records. Read stdout continuously and split only on LF; protocol writes and built-in provider chunks are awaited, and non-cooperative extension streams are bounded.
+
+Normal startup selectors such as `--continue`, `--session`, `--session-id`, `--fork`, `--session-dir`, `--name`, and `--no-session` apply, as do agent settings for models, thinking, tools, resources, queues, retry and compaction. `--resume` is interactive-only, so use `--session` in RPC. The former `{id,method,params}` requests remain accepted for migration. Diagnostics always use stderr, trusted shell children do not inherit credential-like environment variables, and retained full-output files are private and expire after 24 hours by default.
 
 ## Using the Web Interface
 

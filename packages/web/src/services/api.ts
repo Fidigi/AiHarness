@@ -22,6 +22,8 @@ import type {
   SkillRegistry,
   SkillRegistryEntry,
   SerializedSession,
+  ShellCommandEvent,
+  ShellCommandSnapshot,
   SubagentConfiguration,
   SubagentProfile,
   SubagentRunSnapshot,
@@ -289,26 +291,11 @@ export async function enqueueAgentMessage(
   }
 }
 
-export interface CommandSnapshot {
-  id: string;
-  sessionId: string;
-  command: string;
-  cwd: string;
-  excludedFromContext: boolean;
-  status: 'running' | 'completed' | 'failed' | 'cancelled';
-  startedAt: string;
-  completedAt?: string;
-  exitCode?: number;
-  output: string;
-  truncated: boolean;
-  lastSequence: number;
-}
+export type CommandSnapshot = ShellCommandSnapshot;
 
-export interface CommandEvent {
-  sequence: number;
-  type: 'output' | 'exit' | 'error' | 'cancelled';
+export type CommandEvent = Omit<ShellCommandEvent, 'data'> & {
   data: { stream?: string; chunk?: string; truncated?: boolean; exitCode?: number; message?: string };
-}
+};
 
 export interface PaletteItem {
   name: string;

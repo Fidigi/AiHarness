@@ -1,6 +1,7 @@
-import { readFile, readdir, stat } from 'fs/promises';
-import os from 'os';
-import path from 'path';
+import { constants as fsConstants } from 'node:fs';
+import { lstat, open, readdir } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 export interface SkillDefinition {
   name: string;
@@ -21,8 +22,15 @@ export interface PromptDefinition {
 export interface ResourceManagerOptions {
   cwd?: string;
   homeDir?: string;
+  agentDir?: string;
+  projectTrusted?: boolean;
+  /** Backward-compatible explicit paths applied after all automatic roots. */
   skillPaths?: string[];
   promptPaths?: string[];
+  globalSkillPaths?: string[];
+  projectSkillPaths?: string[];
+  globalPromptPaths?: string[];
+  projectPromptPaths?: string[];
 }
 
 interface MarkdownDocument {
@@ -51,44 +59,156 @@ function normalizeResourceName(value: string): string {
   return name;
 }
 
-async function existsDirectory(candidate: string): Promise<boolean> {
-  try {
-    return (await stat(candidate)).isDirectory();
-  } catch {
-    return false;
-  }
-}
+const MAX_RESOURCE_FILES = 10_000;
+const MAX_RESOURCE_BYTES = 1024 * 1024;
+const GLOB_MAGIC = /[*?[\]{}]/;
 
 async function findFiles(root: string, matcher: (name: string) => boolean, maxDepth = 3): Promise<string[]> {
-  if (!(await existsDirectory(root))) return [];
+  let rootInfo;
+  try { rootInfo = await lstat(root); }
+  catch { return []; }
+  if (rootInfo.isSymbolicLink()) return [];
+  if (rootInfo.isFile()) return matcher(path.basename(root)) ? [root] : [];
+  if (!rootInfo.isDirectory()) return [];
   const found: string[] = [];
 
   async function walk(directory: string, depth: number): Promise<void> {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    entries.sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      if (found.length >= MAX_RESOURCE_FILES) return;
       const entryPath = path.join(directory, entry.name);
       if (entry.isFile() && matcher(entry.name)) found.push(entryPath);
-      else if (entry.isDirectory() && depth < maxDepth) await walk(entryPath, depth + 1);
+      else if (entry.isDirectory() && !entry.isSymbolicLink() && depth < maxDepth) await walk(entryPath, depth + 1);
     }
   }
 
   await walk(root, 0);
-  return found.sort();
+  return found;
+}
+
+function normalizedGlobPath(value: string): string {
+  return value.split(path.sep).join('/');
+}
+
+function matchesGlob(filePath: string, pattern: string): boolean {
+  try { return path.posix.matchesGlob(normalizedGlobPath(filePath), normalizedGlobPath(pattern)); }
+  catch { return false; }
+}
+
+function globSearchRoot(pattern: string): string {
+  const magic = pattern.search(GLOB_MAGIC);
+  if (magic < 0) return pattern;
+  const before = pattern.slice(0, magic);
+  const separator = Math.max(before.lastIndexOf('/'), before.lastIndexOf('\\'));
+  return separator < 0 ? path.parse(pattern).root || '.' : pattern.slice(0, separator) || path.parse(pattern).root;
+}
+
+async function selectorFiles(
+  selector: string,
+  matcher: (name: string) => boolean,
+): Promise<string[]> {
+  if (!GLOB_MAGIC.test(selector)) return findFiles(selector, matcher, 8);
+  const candidates = await findFiles(globSearchRoot(selector), matcher, 8);
+  return candidates.filter(candidate => matchesGlob(candidate, selector));
+}
+
+async function applyResourceSelectors(
+  selected: Map<string, string>,
+  selectors: readonly string[],
+  matcher: (name: string) => boolean,
+  errors: Error[],
+): Promise<void> {
+  for (const rawSelector of selectors.slice(0, 512)) {
+    const marker = rawSelector[0] === '+' || rawSelector[0] === '-' || rawSelector[0] === '!'
+      ? rawSelector[0] : '';
+    const value = marker ? rawSelector.slice(1) : rawSelector;
+    if (!value) continue;
+    const selector = path.resolve(value);
+    if (marker === '-' || marker === '!') {
+      for (const [key, filePath] of selected) {
+        const excluded = marker === '!'
+          ? matchesGlob(filePath, selector)
+          : filePath === selector || filePath.startsWith(`${selector}${path.sep}`);
+        if (excluded) selected.delete(key);
+      }
+      continue;
+    }
+    try {
+      for (const filePath of await selectorFiles(selector, matcher)) {
+        if (selected.size >= MAX_RESOURCE_FILES) break;
+        selected.set(path.resolve(filePath), filePath);
+      }
+    } catch (error) {
+      errors.push(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+}
+
+async function readMarkdownFile(filePath: string): Promise<string> {
+  const before = await lstat(filePath);
+  if (!before.isFile() || before.isSymbolicLink()) {
+    throw new Error(`Resource must be a regular file and cannot be a symbolic link: ${filePath}`);
+  }
+  if (before.size > MAX_RESOURCE_BYTES) throw new Error(`Resource exceeds the ${MAX_RESOURCE_BYTES} byte limit: ${filePath}`);
+  const handle = await open(filePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0));
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino || opened.size !== before.size) {
+      throw new Error(`Resource changed while it was being opened: ${filePath}`);
+    }
+    const bytes = Buffer.allocUnsafe(opened.size);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const result = await handle.read(bytes, offset, bytes.length - offset, offset);
+      if (result.bytesRead === 0) break;
+      offset += result.bytesRead;
+    }
+    const after = await handle.stat();
+    if (offset !== opened.size || after.dev !== opened.dev || after.ino !== opened.ino
+      || after.size !== opened.size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) {
+      throw new Error(`Resource changed while it was being read: ${filePath}`);
+    }
+    const content = bytes.subarray(0, offset);
+    if (content.includes(0)) throw new Error(`Resource must be UTF-8 text, not binary data: ${filePath}`);
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(content); }
+    catch { throw new Error(`Resource is not valid UTF-8 text: ${filePath}`); }
+  } finally {
+    await handle.close();
+  }
 }
 
 /** Agent Skills Spec and markdown prompt discovery for the CLI. */
 export class ResourceManager {
   private readonly cwd: string;
   private readonly homeDir: string;
+  private readonly agentDir: string;
+  private readonly projectTrusted: boolean;
   private readonly extraSkillPaths: string[];
   private readonly extraPromptPaths: string[];
+  private readonly globalSkillPaths: string[];
+  private readonly projectSkillPaths: string[];
+  private readonly globalPromptPaths: string[];
+  private readonly projectPromptPaths: string[];
   private readonly skills = new Map<string, SkillDefinition>();
   private readonly prompts = new Map<string, PromptDefinition>();
 
   constructor(options: ResourceManagerOptions = {}) {
     this.cwd = options.cwd ?? process.cwd();
     this.homeDir = options.homeDir ?? os.homedir();
-    this.extraSkillPaths = options.skillPaths ?? [];
-    this.extraPromptPaths = options.promptPaths ?? [];
+    this.agentDir = options.agentDir ?? path.join(this.homeDir, '.ai-harness');
+    this.projectTrusted = options.projectTrusted === true;
+    const resolve = (entries: readonly string[]): string[] => entries.map(entry => {
+      const marker = entry[0] === '+' || entry[0] === '-' || entry[0] === '!' ? entry[0] : '';
+      const value = marker ? entry.slice(1) : entry;
+      return `${marker}${path.resolve(this.cwd, value)}`;
+    });
+    this.extraSkillPaths = resolve(options.skillPaths ?? []);
+    this.extraPromptPaths = resolve(options.promptPaths ?? []);
+    this.globalSkillPaths = resolve(options.globalSkillPaths ?? []);
+    this.projectSkillPaths = resolve(options.projectSkillPaths ?? []);
+    this.globalPromptPaths = resolve(options.globalPromptPaths ?? []);
+    this.projectPromptPaths = resolve(options.projectPromptPaths ?? []);
   }
 
   async loadAll(): Promise<{ skills: number; prompts: number; errors: Error[] }> {
@@ -96,38 +216,50 @@ export class ResourceManager {
     this.prompts.clear();
     const errors: Error[] = [];
 
-    const skillRoots = [
+    const skillMatcher = (name: string): boolean => name.toLowerCase() === 'skill.md';
+    const skillFiles = new Map<string, string>();
+    await applyResourceSelectors(skillFiles, [
       path.join(this.homeDir, '.agents', 'skills'),
-      path.join(this.homeDir, '.ai-harness', 'skills'),
-      path.join(this.cwd, '.agents', 'skills'),
-      path.join(this.cwd, '.ai-harness', 'skills'),
-      ...this.extraSkillPaths.map(item => path.resolve(this.cwd, item)),
-    ];
-    for (const root of skillRoots) {
-      for (const filePath of await findFiles(root, name => name.toLowerCase() === 'skill.md')) {
-        try {
-          const skill = await this.parseSkill(filePath);
-          this.skills.set(skill.name, skill);
-        } catch (error) {
-          errors.push(error instanceof Error ? error : new Error(String(error)));
-        }
+      path.join(this.agentDir, 'skills'),
+    ], skillMatcher, errors);
+    await applyResourceSelectors(skillFiles, this.globalSkillPaths, skillMatcher, errors);
+    if (this.projectTrusted) {
+      await applyResourceSelectors(skillFiles, [
+        path.join(this.cwd, '.agents', 'skills'),
+        path.join(this.cwd, '.ai-harness', 'skills'),
+      ], skillMatcher, errors);
+      await applyResourceSelectors(skillFiles, this.projectSkillPaths, skillMatcher, errors);
+    }
+    await applyResourceSelectors(skillFiles, this.extraSkillPaths, skillMatcher, errors);
+    for (const filePath of skillFiles.values()) {
+      try {
+        const skill = await this.parseSkill(filePath);
+        this.skills.set(skill.name, skill);
+      } catch (error) {
+        errors.push(error instanceof Error ? error : new Error(String(error)));
       }
     }
 
-    const promptRoots = [
-      path.join(this.homeDir, '.ai-harness', 'prompts'),
-      path.join(this.cwd, '.ai-harness', 'prompts'),
-      path.join(this.cwd, 'prompts'),
-      ...this.extraPromptPaths.map(item => path.resolve(this.cwd, item)),
-    ];
-    for (const root of promptRoots) {
-      for (const filePath of await findFiles(root, name => name.toLowerCase().endsWith('.md'))) {
-        try {
-          const prompt = await this.parsePrompt(filePath);
-          this.prompts.set(prompt.name, prompt);
-        } catch (error) {
-          errors.push(error instanceof Error ? error : new Error(String(error)));
-        }
+    const promptMatcher = (name: string): boolean => name.toLowerCase().endsWith('.md');
+    const promptFiles = new Map<string, string>();
+    await applyResourceSelectors(promptFiles, [
+      path.join(this.agentDir, 'prompts'),
+    ], promptMatcher, errors);
+    await applyResourceSelectors(promptFiles, this.globalPromptPaths, promptMatcher, errors);
+    if (this.projectTrusted) {
+      await applyResourceSelectors(promptFiles, [
+        path.join(this.cwd, '.ai-harness', 'prompts'),
+        path.join(this.cwd, 'prompts'),
+      ], promptMatcher, errors);
+      await applyResourceSelectors(promptFiles, this.projectPromptPaths, promptMatcher, errors);
+    }
+    await applyResourceSelectors(promptFiles, this.extraPromptPaths, promptMatcher, errors);
+    for (const filePath of promptFiles.values()) {
+      try {
+        const prompt = await this.parsePrompt(filePath);
+        this.prompts.set(prompt.name, prompt);
+      } catch (error) {
+        errors.push(error instanceof Error ? error : new Error(String(error)));
       }
     }
 
@@ -177,7 +309,7 @@ export class ResourceManager {
   }
 
   private async parseSkill(filePath: string): Promise<SkillDefinition> {
-    const document = parseMarkdownDocument(await readFile(filePath, 'utf8'));
+    const document = parseMarkdownDocument(await readMarkdownFile(filePath));
     const fallbackName = path.basename(path.dirname(filePath));
     const name = normalizeResourceName(document.attributes.name || fallbackName);
     if (!document.body) throw new Error(`Skill vide : ${filePath}`);
@@ -192,7 +324,7 @@ export class ResourceManager {
   }
 
   private async parsePrompt(filePath: string): Promise<PromptDefinition> {
-    const document = parseMarkdownDocument(await readFile(filePath, 'utf8'));
+    const document = parseMarkdownDocument(await readMarkdownFile(filePath));
     const name = normalizeResourceName(document.attributes.name || path.basename(filePath, path.extname(filePath)));
     if (!document.body) throw new Error(`Prompt vide : ${filePath}`);
     return {

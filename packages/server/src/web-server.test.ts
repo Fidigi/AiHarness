@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -113,7 +114,14 @@ describe('combined Web server', () => {
 
     const workspace = await fetch(`${baseUrl}/api/workspaces/default`).then(response => response.json()) as { id: string };
     const tools = await fetch(`${baseUrl}/api/tools?cwd=${encodeURIComponent(webRoot)}&projectId=${workspace.id}`)
-      .then(response => response.json()) as { tools: Array<{ name: string }> };
+      .then(response => response.json()) as { tools: Array<{ name: string; extensionId: string }> };
+    expect(tools.tools
+      .filter(tool => tool.extensionId === 'builtin:workspace-tools')
+      .map(tool => tool.name))
+      .toEqual([
+        'read', 'write', 'edit', 'ls', 'find', 'grep', 'bash',
+        ...(process.platform === 'win32' ? ['powershell'] : []),
+      ]);
     const toolUpdate = await fetch(`${baseUrl}/api/tools`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -209,7 +217,7 @@ describe('combined Web server', () => {
     await mkdir(path.join(pluginRoot, 'skills', 'http-plugin-review'), { recursive: true });
     await writeFile(path.join(pluginRoot, 'package.json'), JSON.stringify({
       name: 'http-plugin', version: '1.0.0', description: 'HTTP plugin fixture',
-      pi: { extensions: ['extensions/*.js'], skills: ['skills'] },
+      aiHarness: { extensions: ['extensions/*.js'], skills: ['skills'] },
     }));
     await writeFile(path.join(pluginRoot, 'extensions', 'index.js'), 'export default () => undefined;');
     await writeFile(path.join(pluginRoot, 'skills', 'http-plugin-review', 'SKILL.md'), [
@@ -353,7 +361,7 @@ describe('combined Web server', () => {
         profile: {
           id: 'http-review', name: 'HTTP review', description: 'Review through HTTP',
           instructions: 'Return a concise review.', kind: 'custom', enabled: true,
-          tools: ['read_file'], skills: [], extensions: [], maxTurns: 4,
+          tools: ['read'], skills: [], extensions: [], maxTurns: 4,
           inheritContext: true, background: true,
         },
       }),
@@ -573,6 +581,58 @@ describe('combined Web server', () => {
     expect(replay).toContain('"sequence":');
   });
 
+  it('applies shared Core queue modes to detached Web runs', async () => {
+    const agentDirectory = path.join(webRoot, '.queue-agent');
+    await mkdir(agentDirectory, { recursive: true });
+    await writeFile(path.join(agentDirectory, 'settings.json'), JSON.stringify({
+      steeringMode: 'all',
+      followUpMode: 'all',
+    }));
+    vi.stubEnv('AI_HARNESS_AGENT_DIR', agentDirectory);
+    const trust = await fetch(`${baseUrl}/api/workspaces/trust`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: webRoot, confirm: true }),
+    });
+    expect(trust.status).toBe(200);
+
+    const startResponse = await fetch(`${baseUrl}/api/agent/runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: webRoot, provider: 'mock', input: 'queue initial' }),
+    });
+    expect(startResponse.status).toBe(202);
+    const started = await startResponse.json() as { run: { id: string; sessionId: string } };
+
+    const queued = await Promise.all(['follow one', 'follow two'].map(content => fetch(
+      `${baseUrl}/api/agent/runs/${started.run.id}/queue`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'follow-up', content }),
+      },
+    )));
+    expect(queued.map(item => item.status)).toEqual([202, 202]);
+
+    let state: {
+      run?: { phase: string };
+      session: { messages: Array<{ role: string; content: string }> };
+    } | undefined;
+    for (let attempt = 0; attempt < 200; attempt++) {
+      state = await fetch(`${baseUrl}/api/agent/sessions/${started.run.sessionId}/state`)
+        .then(response => response.json()) as typeof state;
+      if (state?.run?.phase === 'completed') break;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+
+    expect(state?.run?.phase).toBe('completed');
+    expect(state?.session.messages.filter(message => message.role === 'user').map(message => message.content))
+      .toEqual(['queue initial', 'follow one', 'follow two']);
+    expect(state?.session.messages.filter(message => message.role === 'assistant')).toHaveLength(2);
+    await fetch(`${baseUrl}/api/sessions/${started.run.sessionId}`, { method: 'DELETE' });
+    await rm(agentDirectory, { recursive: true, force: true });
+  });
+
   it('reports the exact tools enabled by each session preset', async () => {
     const created = await fetch(`${baseUrl}/api/sessions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -589,9 +649,11 @@ describe('combined Web server', () => {
     });
     const readOnly = await fetch(`${baseUrl}/api/agent/sessions/${created.id}/capabilities`).then(response => response.json()) as { tools: Array<{ name: string }> };
     expect(readOnly.tools.map(tool => tool.name)).toEqual(expect.arrayContaining([
-      'list_files', 'read_file', 'git_status', 'git_diff', 'load_skill',
+      'read', 'grep', 'find', 'ls', 'load_skill',
     ]));
-    expect(readOnly.tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['write_file', 'bash']));
+    expect(readOnly.tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining([
+      'edit', 'write', 'bash',
+    ]));
     await fetch(`${baseUrl}/api/sessions/${created.id}`, { method: 'DELETE' });
   });
 
@@ -1085,11 +1147,18 @@ describe('combined Web server', () => {
     });
   });
 
-  it('runs with effective project settings without persisting them and supports explicit session overrides', async () => {
+  it('delivers shared instructions, keeps effective settings ephemeral, and supports explicit session overrides', async () => {
     await fetch(`${baseUrl}/api/workspaces/trust`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd: webRoot, confirm: true }),
     });
+    const projectInstructions = path.join(webRoot, 'AGENTS.override.md');
+    const agentDirectory = path.join(webRoot, '.capture-agent');
+    await writeFile(projectInstructions, 'ephemeral server-side project instructions');
+    await mkdir(agentDirectory, { recursive: true });
+    await writeFile(path.join(agentDirectory, 'SYSTEM.md'), 'server-side global system prompt');
+    await writeFile(path.join(agentDirectory, 'AGENTS.md'), 'server-side global context');
+    vi.stubEnv('AI_HARNESS_AGENT_DIR', agentDirectory);
     const created = await fetch(`${baseUrl}/api/sessions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: 'Inherited run', cwd: webRoot }),
@@ -1111,6 +1180,57 @@ describe('combined Web server', () => {
       throw new Error('Agent run did not complete');
     };
 
+    let capturedProviderBody: { messages?: Array<{ role?: string; content?: string }> } | undefined;
+    const captureServer = createServer((request, response) => {
+      let requestBody = '';
+      request.setEncoding('utf8');
+      request.on('data', chunk => { requestBody += chunk; });
+      request.on('end', () => {
+        capturedProviderBody = JSON.parse(requestBody) as typeof capturedProviderBody;
+        response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        response.end('data: {"choices":[{"delta":{"content":"captured"}}]}\n\ndata: [DONE]\n\n');
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      captureServer.once('error', reject);
+      captureServer.listen(0, '127.0.0.1', resolve);
+    });
+    const captureAddress = captureServer.address();
+    if (!captureAddress || typeof captureAddress === 'string') throw new Error('Capture provider did not bind');
+    try {
+      const providerResponse = await fetch(`${baseUrl}/api/provider-registry/custom`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 'instruction-capture',
+          name: 'Instruction capture',
+          baseUrl: `http://127.0.0.1:${captureAddress.port}/v1`,
+          dialect: 'openai-completions',
+          apiKey: 'capture-key',
+        }),
+      });
+      expect(providerResponse.status).toBe(201);
+      const captureRun = await fetch(`${baseUrl}/api/agent/runs`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: created.id,
+          cwd: webRoot,
+          provider: 'instruction-capture',
+          input: 'Capture instructions',
+          settingOverrides: [],
+        }),
+      });
+      expect(captureRun.status).toBe(202);
+      await waitForCompletion();
+      const deliveredSystemPrompt = capturedProviderBody?.messages
+        ?.find(message => message.role === 'system')?.content;
+      expect(deliveredSystemPrompt).toContain('server-side global system prompt');
+      expect(deliveredSystemPrompt).toContain('server-side global context');
+      expect(deliveredSystemPrompt).toContain('ephemeral server-side project instructions');
+    } finally {
+      await fetch(`${baseUrl}/api/provider-registry/custom/instruction-capture`, { method: 'DELETE' });
+      await new Promise<void>((resolve, reject) => captureServer.close(error => error ? reject(error) : resolve()));
+    }
+
     const inherited = await fetch(`${baseUrl}/api/agent/runs`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1127,6 +1247,10 @@ describe('combined Web server', () => {
     expect(inherited.session).not.toHaveProperty('toolPreset');
     expect(inherited.session).not.toHaveProperty('autoCompaction');
     await waitForCompletion();
+    const persistedAfterRun = await fetch(`${baseUrl}/api/sessions/${created.id}`).then(response => response.text());
+    expect(persistedAfterRun).not.toContain('server-side global system prompt');
+    expect(persistedAfterRun).not.toContain('server-side global context');
+    expect(persistedAfterRun).not.toContain('ephemeral server-side project instructions');
 
     const explicit = await fetch(`${baseUrl}/api/agent/runs`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1166,6 +1290,8 @@ describe('combined Web server', () => {
     await waitForCompletion();
 
     await fetch(`${baseUrl}/api/sessions/${created.id}`, { method: 'DELETE' });
+    await rm(projectInstructions, { force: true });
+    await rm(agentDirectory, { recursive: true, force: true });
     await fetch(`${baseUrl}/api/configuration/scope`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scope: 'project', scopeId: created.workspaceId, values: {} }),

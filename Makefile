@@ -17,6 +17,7 @@ PROD_DATA_VOLUME   ?= $(PROJECT_NAME)-data
 PROD_BIND_ADDRESS  ?= 127.0.0.1
 PROD_PORT          ?= 3080
 PROD_DOCKER_ARGS   ?=
+E2E_DOCKER_ARGS    ?= --shm-size=1g
 
 # Couleurs pour le terminal
 GREEN  := \033[0;32m
@@ -201,6 +202,7 @@ test-e2e: ## Lancer les tests e2e Playwright dans Docker (rebuild inclus)
 		docker create \
 			--name "$$container" \
 			-e CI=true \
+			$(E2E_DOCKER_ARGS) \
 			"$$image" \
 			npm run test:e2e -- $(E2E_ARGS) >/dev/null; \
 		docker start --attach "$$container"

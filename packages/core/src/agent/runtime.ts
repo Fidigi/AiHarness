@@ -1,4 +1,4 @@
-import type { AiProvider, ChatOptions, ChatResponse, ChatToolDefinition } from '../providers/index.js';
+import type { AiProvider, ChatResponse, ChatToolDefinition } from '../providers/index.js';
 import type {
   ExtensionInteractionRequest,
   ExtensionInteractionResponse,
@@ -7,7 +7,15 @@ import type {
 } from '../extensions/extension-registry.js';
 import type { Message, MessageContentBlock, Session } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
+import type { AgentQueueMode } from '../config/agent-settings.js';
+import { selectRegisteredTools, toChatToolDefinitions } from '../tools/tool-selection.js';
+import { streamProviderTurn } from './provider-turn.js';
 import { AgentAbortError, runToolLoop } from './tool-loop.js';
+import {
+  AgentMessageQueue,
+  type AgentMessageQueueBatch,
+  type AgentMessageQueueKind,
+} from './message-queue.js';
 import {
   AgentEventJournal,
   type AgentEvent,
@@ -38,6 +46,8 @@ export interface StartAgentRunRequest {
   allowedTools?: string[];
   allowedSkills?: string[];
   allowedExtensions?: string[];
+  steeringMode?: AgentQueueMode;
+  followUpMode?: AgentQueueMode;
 }
 
 export interface AgentRuntimeOptions {
@@ -55,6 +65,7 @@ interface ActiveRun {
   controller: AbortController;
   completion: Promise<void>;
   resolveCompletion(): void;
+  queue: AgentMessageQueue<QueuedAgentMessage>;
 }
 
 interface PendingInteraction {
@@ -157,20 +168,6 @@ function cloneSnapshot(snapshot: AgentRunSnapshot): AgentRunSnapshot {
   return structuredClone(snapshot);
 }
 
-function delay(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) {
-      reject(new AgentAbortError());
-      return;
-    }
-    const timer = setTimeout(resolve, ms);
-    signal.addEventListener('abort', () => {
-      clearTimeout(timer);
-      reject(new AgentAbortError());
-    }, { once: true });
-  });
-}
-
 /** Detached multi-turn agent runtime shared by all HTTP transports. */
 export class AgentRuntime {
   readonly journal: AgentEventJournal;
@@ -235,7 +232,16 @@ export class AgentRuntime {
       followUpQueue: [],
       lastSequence: this.journal.lastSequence(session.id),
     };
-    const active: ActiveRun = { snapshot, controller, completion, resolveCompletion };
+    const active: ActiveRun = {
+      snapshot,
+      controller,
+      completion,
+      resolveCompletion,
+      queue: new AgentMessageQueue({
+        steeringMode: request.steeringMode,
+        followUpMode: request.followUpMode,
+      }),
+    };
     await this.sessionManager.update(session.id, {
       cwd: request.cwd,
       workspaceId: request.workspaceId,
@@ -244,8 +250,10 @@ export class AgentRuntime {
         model: request.model,
         thinking: request.thinking,
         toolPreset: request.toolPreset,
+        ...(request.systemPrompt !== undefined
+          ? { metadata: { ...session.metadata, systemPrompt: request.systemPrompt } }
+          : {}),
       }),
-      ...(request.systemPrompt ? { metadata: { ...session.metadata, systemPrompt: request.systemPrompt } } : {}),
     });
     await this.sessionManager.addMessage(session.id, {
       role: 'user',
@@ -327,23 +335,22 @@ export class AgentRuntime {
       ...(blocks?.length ? { blocks: structuredClone(blocks) } : {}),
       createdAt: new Date().toISOString(),
     };
-    if (kind === 'steer') run.snapshot.steerQueue.push(message);
-    else run.snapshot.followUpQueue.push(message);
-    this.publish(run, 'queue.updated', {
-      steer: run.snapshot.steerQueue,
-      followUp: run.snapshot.followUpQueue,
-    });
+    try {
+      run.queue.enqueue(kind, message);
+    } catch (error) {
+      throw Object.assign(error instanceof Error ? error : new Error(String(error)), {
+        status: 409,
+        code: 'AGENT_QUEUE_FULL',
+      });
+    }
+    this.publishQueue(run);
     return cloneSnapshot(run.snapshot);
   }
 
   clearQueue(runId: string, kind?: QueuedAgentMessage['kind']): AgentRunSnapshot {
     const run = this.requireActive(runId);
-    if (!kind || kind === 'steer') run.snapshot.steerQueue = [];
-    if (!kind || kind === 'follow-up') run.snapshot.followUpQueue = [];
-    this.publish(run, 'queue.updated', {
-      steer: run.snapshot.steerQueue,
-      followUp: run.snapshot.followUpQueue,
-    });
+    run.queue.clear(kind);
+    this.publishQueue(run);
     return cloneSnapshot(run.snapshot);
   }
 
@@ -397,19 +404,9 @@ export class AgentRuntime {
       while (hasPrompt) {
         await this.executePrompt(run, request, provider);
         if (run.controller.signal.aborted) throw new AgentAbortError();
-        const next = run.snapshot.followUpQueue.shift() ?? run.snapshot.steerQueue.shift();
-        if (next) {
-          this.publish(run, 'queue.updated', {
-            steer: run.snapshot.steerQueue,
-            followUp: run.snapshot.followUpQueue,
-          });
-          await this.sessionManager.addMessage(run.snapshot.sessionId, {
-            role: 'user',
-            content: next.content,
-            blocks: next.blocks?.length ? next.blocks : [{ type: 'text', text: next.content }],
-            agentId: request.agentId ?? run.snapshot.id,
-            metadata: { queueKind: next.kind },
-          }, { signal: run.controller.signal });
+        const batch = this.takeNextQueued(run);
+        if (batch) {
+          await this.persistQueued(run, request, batch.items);
           this.setPhase(run, 'prompting');
         } else {
           hasPrompt = false;
@@ -486,122 +483,105 @@ export class AgentRuntime {
         await this.flushSteering(run, request);
         const currentMessages = this.effectiveMessages(run.snapshot.sessionId);
         const thinking = request.thinking === 'max' ? 'xhigh' : request.thinking;
-        const baseOptions: ChatOptions = {
-          model: request.model,
-          systemPrompt: request.systemPrompt,
-          thinking,
-          tools: definitions,
-          signal: run.controller.signal,
-        };
-        const hook = await this.extensionRegistry.runBefore('before:provider', {
-          provider: run.snapshot.provider,
+        let messageId = '';
+        let content = '';
+        let reasoning = '';
+        const response = await streamProviderTurn({
+          provider,
+          providerName: run.snapshot.provider,
           model: request.model,
           messages: currentMessages.length ? currentMessages : messages,
-          options: baseOptions,
-        });
-        if (hook.cancelled) throw new Error(hook.reason || 'Appel provider annulé par une extension.');
-        return this.streamProvider(run, provider, hook.data.messages, hook.data.options, request.maxRetries ?? 2);
-      },
-    });
-  }
-
-  private async streamProvider(
-    run: ActiveRun,
-    provider: AiProvider,
-    messages: Message[],
-    options: ChatOptions,
-    maxRetries: number,
-  ): Promise<ChatResponse> {
-    for (let attempt = 0; ; attempt++) {
-      let hadDelta = false;
-      try {
-        this.setPhase(run, 'streaming');
-        run.snapshot.retry = undefined;
-        run.snapshot.error = undefined;
-        const messageId = `stream:${run.snapshot.id}:${crypto.randomUUID()}`;
-        run.snapshot.partialMessage = { id: messageId, content: '' };
-        this.publish(run, 'message.start', { attempt: attempt + 1, model: options.model, messageId });
-        const response = await new Promise<ChatResponse>((resolve, reject) => {
-          let content = '';
-          let reasoning = '';
-          let settled = false;
-          const complete = (response?: ChatResponse): void => {
-            if (settled) return;
-            settled = true;
-            resolve(response ? {
-              ...response,
-              ...(response.reasoning || !reasoning ? {} : { reasoning }),
-            } : { content, ...(reasoning ? { reasoning } : {}) });
-          };
-          const fail = (error: Error): void => {
-            if (settled) return;
-            settled = true;
-            reject(error);
-          };
-          void provider.streamChat(
-            messages,
-            (chunk, event) => {
-              if (chunk) {
-                hadDelta = true;
-                content += chunk;
-                run.snapshot.partialMessage = { id: messageId, content };
-                this.publish(run, 'message.delta', { content: chunk, messageId });
-              }
-              if (event?.type === 'reasoning_delta') {
-                const delta = typeof (event.data as { content?: unknown } | undefined)?.content === 'string'
-                  ? String((event.data as { content: string }).content)
-                  : '';
-                if (delta) {
-                  hadDelta = true;
-                  reasoning += delta;
-                  run.snapshot.partialMessage = { id: messageId, content, reasoning };
-                  this.publish(run, 'reasoning.delta', { content: delta, messageId });
-                }
-              }
-              if (event?.type === 'tool_call') this.publish(run, 'tool.progress', event.data);
-            },
-            complete,
-            fail,
-            options,
-          ).then(() => complete()).catch(fail);
+          tools: definitions,
+          systemPrompt: request.systemPrompt,
+          thinking,
+          signal: run.controller.signal,
+          extensionRegistry: this.extensionRegistry,
+          maxRetries: request.maxRetries ?? 2,
+          retryDelayMs: 500,
+          retryMaxDelayMs: 5_000,
+          onStart: (_provider, model) => {
+            this.setPhase(run, 'streaming');
+            run.snapshot.retry = undefined;
+            run.snapshot.error = undefined;
+            messageId = `stream:${run.snapshot.id}:${crypto.randomUUID()}`;
+            run.snapshot.partialMessage = { id: messageId, content: '' };
+            this.publish(run, 'message.start', { attempt: 1, model, messageId });
+          },
+          onTextDelta: delta => {
+            content += delta;
+            run.snapshot.partialMessage = { id: messageId, content, ...(reasoning ? { reasoning } : {}) };
+            this.publish(run, 'message.delta', { content: delta, messageId });
+          },
+          onReasoningDelta: delta => {
+            reasoning += delta;
+            run.snapshot.partialMessage = { id: messageId, content, reasoning };
+            this.publish(run, 'reasoning.delta', { content: delta, messageId });
+          },
+          onProviderEvent: event => {
+            if (event.type === 'tool_call') this.publish(run, 'tool.progress', event.data);
+          },
+          onRetryStart: ({ attempt, maxAttempts, delayMs, error }) => {
+            run.snapshot.partialMessage = undefined;
+            run.snapshot.retry = {
+              attempt,
+              max: maxAttempts,
+              delayMs,
+              message: error instanceof Error ? error.message : String(error),
+              scheduledAt: new Date().toISOString(),
+            };
+            this.publish(run, 'retry.scheduled', run.snapshot.retry);
+          },
+          onError: () => {
+            run.snapshot.partialMessage = undefined;
+          },
         });
         run.snapshot.partialMessage = undefined;
         run.snapshot.retry = undefined;
         return response;
-      } catch (error) {
-        if (run.controller.signal.aborted) throw new AgentAbortError();
-        if (hadDelta || attempt >= maxRetries) throw error;
-        run.snapshot.partialMessage = undefined;
-        const delayMs = Math.min(5_000, 500 * 2 ** attempt);
-        run.snapshot.retry = {
-          attempt: attempt + 1,
-          max: maxRetries + 1,
-          delayMs,
-          message: error instanceof Error ? error.message : String(error),
-          scheduledAt: new Date().toISOString(),
-        };
-        this.publish(run, 'retry.scheduled', run.snapshot.retry);
-        await delay(delayMs, run.controller.signal);
-      }
-    }
+      },
+    });
   }
 
   private async flushSteering(run: ActiveRun, request: StartAgentRunRequest): Promise<void> {
-    const queued = run.snapshot.steerQueue.splice(0);
-    if (!queued.length) return;
-    this.publish(run, 'queue.updated', {
-      steer: run.snapshot.steerQueue,
-      followUp: run.snapshot.followUpQueue,
-    });
+    await this.persistQueued(run, request, this.takeQueued(run, 'steer'));
+  }
+
+  private async persistQueued(
+    run: ActiveRun,
+    request: StartAgentRunRequest,
+    queued: QueuedAgentMessage[],
+  ): Promise<void> {
     for (const message of queued) {
       await this.sessionManager.addMessage(run.snapshot.sessionId, {
         role: 'user',
         content: message.content,
-        blocks: [{ type: 'text', text: message.content }],
+        blocks: message.blocks?.length ? message.blocks : [{ type: 'text', text: message.content }],
         agentId: request.agentId ?? run.snapshot.id,
-        metadata: { queueKind: 'steer' },
+        metadata: { queueKind: message.kind },
       }, { signal: run.controller.signal });
     }
+  }
+
+  private takeQueued(run: ActiveRun, kind: AgentMessageQueueKind): QueuedAgentMessage[] {
+    const queued = run.queue.take(kind);
+    if (queued.length) this.publishQueue(run);
+    return queued;
+  }
+
+  private takeNextQueued(run: ActiveRun): AgentMessageQueueBatch<QueuedAgentMessage> | undefined {
+    const queued = run.queue.takeNext();
+    if (queued) this.publishQueue(run);
+    return queued;
+  }
+
+  private publishQueue(run: ActiveRun): void {
+    const queued = run.queue.snapshot();
+    run.snapshot.steerQueue = queued.steering;
+    run.snapshot.followUpQueue = queued.followUp;
+    this.publish(run, 'queue.updated', {
+      steer: run.snapshot.steerQueue,
+      followUp: run.snapshot.followUpQueue,
+    });
   }
 
   private effectiveMessages(sessionId: string): Message[] {
@@ -633,19 +613,11 @@ export class AgentRuntime {
     allowedTools?: string[],
     allowedExtensions?: string[],
   ): ReturnType<ExtensionRegistry['getTools']> {
-    if (preset === 'chat-only') return [];
-    const readOnly = new Set([
-      'read_file', 'list_files', 'search_files', 'git_status', 'git_diff', 'load_skill', 'spawn_subagent',
-    ]);
-    const toolAllowlist = allowedTools === undefined ? undefined : new Set(allowedTools);
-    const extensionAllowlist = allowedExtensions === undefined ? undefined : new Set(allowedExtensions);
-    return this.extensionRegistry.getTools()
-      .filter(tool => preset !== 'read-only' || readOnly.has(tool.name))
-      .filter(tool => !toolAllowlist || toolAllowlist.has(tool.name))
-      .filter(tool => !extensionAllowlist
-        || tool.extensionId.startsWith('server:')
-        || tool.extensionId.startsWith('builtin:')
-        || extensionAllowlist.has(tool.extensionId));
+    return selectRegisteredTools(this.extensionRegistry.getTools(), {
+      preset,
+      allowedTools,
+      allowedExtensions,
+    });
   }
 
   private selectTools(
@@ -653,12 +625,7 @@ export class AgentRuntime {
     allowedTools?: string[],
     allowedExtensions?: string[],
   ): ChatToolDefinition[] {
-    return this.getTools(preset, allowedTools, allowedExtensions)
-      .map(tool => ({
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters ?? { type: 'object', properties: {} },
-      }));
+    return toChatToolDefinitions(this.getTools(preset, allowedTools, allowedExtensions));
   }
 
   private async toolContext(

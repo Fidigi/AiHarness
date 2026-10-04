@@ -9,6 +9,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./shell-input": {
+      "import": "./dist/tools/shell-input.js",
+      "types": "./dist/tools/shell-input.d.ts"
     }
   },
   "scripts": {

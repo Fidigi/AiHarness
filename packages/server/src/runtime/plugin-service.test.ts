@@ -26,7 +26,7 @@ async function fixturePackage(root: string, version = '1.0.0'): Promise<void> {
     name: '@demo/plugin',
     version,
     description: 'Safe test plugin',
-    pi: {
+    aiHarness: {
       extensions: ['src/**/*.js'],
       skills: ['skills'],
       prompts: ['prompts/*.md'],

@@ -1,12 +1,44 @@
-import readline from 'readline';
+import path from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
+import type { Readable } from 'node:stream';
 import {
+  DEFAULT_CODING_TOOL_NAMES,
+  ExtensionRegistry,
   JsonlSessionStore,
-  ProviderFactory,
+  loadAgentSettings,
+  normalizeProviderUsage,
+  ProjectTrustManager,
   SessionManager,
+  WorkspaceManager,
+  registerWorkspaceTools,
+  resolveInstructionPrompt,
+  resolveAgentCompactionSettings,
+  resolveAgentDefaultTools,
+  resolveAgentResourcePaths,
+  resolveAgentThinkingLevel,
+  selectAgentResourcePaths,
+  selectRegisteredTools,
+  toChatToolDefinitions,
+  unknownToolNames,
   type AiProvider,
+  type ChatResponse,
   type Message,
-  type ProviderConfig,
+  type ResolvedAgentSettings,
+  type ThinkingLevel,
 } from '@ai-harness/core';
+import { reserveProcessStdoutForJsonLines } from '../cli/json-output.js';
+import { ExtensionLoader } from '../extensions/extension-loader.js';
+import {
+  applyAgentModelSettings,
+  createConfiguredProviders,
+  resolveStartupProvider,
+} from '../providers/configured-providers.js';
+import { resolveStartupSession, resolveStartupSessionDirectory } from '../sessions/startup-session.js';
+import { ResourceManager } from '../resources/resource-manager.js';
+import { RpcExtensionUiBridge } from './rpc-extension-ui.js';
+import { isRpcCommandRequest, RpcController, rpcParseError } from './rpc-controller.js';
+
+const MAX_PENDING_RPC_REQUESTS = 256;
 
 export interface RpcRequest {
   id?: string | number;
@@ -25,32 +57,35 @@ export interface RpcResponse {
 export interface RpcContext {
   sessionManager: SessionManager;
   providers: Map<string, AiProvider>;
-  emit(response: RpcResponse): void;
+  defaultProviderName?: string;
+  defaultThinking?: ThinkingLevel;
+  systemPrompt?: string;
+  emit(response: RpcResponse): void | Promise<void>;
 }
 
-function configuredProviders(): Map<string, AiProvider> {
-  const providers = new Map<string, AiProvider>();
-  providers.set('mock', ProviderFactory.create({ type: 'mock' as any, apiKey: '' }));
-  const configs: Array<ProviderConfig | undefined> = [
-    process.env.OPENAI_API_KEY ? { type: 'openai' as any, apiKey: process.env.OPENAI_API_KEY, model: process.env.OPENAI_MODEL } : undefined,
-    process.env.ANTHROPIC_API_KEY ? { type: 'anthropic' as any, apiKey: process.env.ANTHROPIC_API_KEY, model: process.env.ANTHROPIC_MODEL } : undefined,
-    (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY) ? {
-      type: 'google' as any,
-      apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
-      model: process.env.GEMINI_MODEL,
-    } : undefined,
-    {
-      type: 'local' as any,
-      apiKey: process.env.LOCAL_API_KEY || process.env.LLAMA_API_KEY || 'local',
-      baseUrl: process.env.LOCAL_BASE_URL || process.env.LLAMA_BASE_URL || 'http://localhost:11434/v1',
-      model: process.env.LOCAL_MODEL || process.env.LLAMA_MODEL || 'local-model',
-    },
-  ];
-  for (const config of configs) {
-    if (!config) continue;
-    providers.set(String(config.type), ProviderFactory.create(config));
-  }
-  return providers;
+export interface RpcStartupOptions {
+  noSession?: boolean;
+  sessionDir?: string;
+  provider?: string;
+  model?: string;
+  models?: string[];
+  apiKey?: string;
+  thinking?: ThinkingLevel;
+  systemPrompt?: string;
+  appendSystemPrompts?: string[];
+  noContextFiles?: boolean;
+  continueSession?: boolean;
+  session?: string;
+  sessionId?: string;
+  fork?: string;
+  name?: string;
+  extensions?: string[];
+  tools?: string[];
+  excludeTools?: string[];
+  noBuiltinTools?: boolean;
+  noTools?: boolean;
+  input?: Readable;
+  output?: (record: Record<string, unknown>) => void | Promise<void>;
 }
 
 export async function handleRpcRequest(request: RpcRequest, context: RpcContext): Promise<RpcResponse> {
@@ -79,7 +114,7 @@ export async function handleRpcRequest(request: RpcRequest, context: RpcContext)
     case 'chat.send': {
       const sessionId = String(params.sessionId ?? '');
       const content = String(params.content ?? '').trim();
-      const providerName = String(params.provider ?? 'mock');
+      const providerName = String(params.provider ?? context.defaultProviderName ?? 'mock');
       if (!content) throw new Error('Le contenu du message est requis.');
       const session = context.sessionManager.get(sessionId) ?? await context.sessionManager.loadFromStore(sessionId);
       if (!session) throw new Error(`Session introuvable : ${sessionId}`);
@@ -88,21 +123,39 @@ export async function handleRpcRequest(request: RpcRequest, context: RpcContext)
       await context.sessionManager.addMessage(sessionId, { role: 'user', content });
       const messages = context.sessionManager.get(sessionId)!.messages.map(message => ({ ...message })) as Message[];
       let streamed = '';
-      const response = await new Promise<{ content: string; usage?: unknown }>((resolve, reject) => {
+      let emitTail = Promise.resolve();
+      const response = await new Promise<ChatResponse>((resolve, reject) => {
         provider.streamChat(
           messages,
           chunk => {
             if (!chunk) return;
             streamed += chunk;
-            context.emit({ event: 'text_delta', data: { requestId: request.id, sessionId, content: chunk } });
+            emitTail = emitTail.then(() => context.emit({
+              event: 'text_delta', data: { requestId: request.id, sessionId, content: chunk },
+            }));
+            return emitTail;
           },
-          result => resolve({ content: streamed || result?.content || '', usage: result?.usage }),
+          result => resolve({
+            ...result,
+            content: streamed || result?.content || '',
+          }),
           reject,
-          { model: typeof params.model === 'string' ? params.model : undefined },
+          {
+            model: typeof params.model === 'string' ? params.model : undefined,
+            thinking: context.defaultThinking,
+            systemPrompt: context.systemPrompt,
+          },
         ).catch(reject);
       });
-      if (response.content) await context.sessionManager.addMessage(sessionId, { role: 'assistant', content: response.content });
-      context.emit({ event: 'message_end', data: { requestId: request.id, sessionId, ...response } });
+      await emitTail;
+      if (response.content) await context.sessionManager.addMessage(sessionId, {
+        role: 'assistant',
+        content: response.content,
+        provider: providerName,
+        model: response.model ?? (typeof params.model === 'string' ? params.model : provider.getConfiguredModel()),
+        usage: normalizeProviderUsage(response.usage),
+      });
+      await context.emit({ event: 'message_end', data: { requestId: request.id, sessionId, ...response } });
       return { id: request.id, result: response };
     }
     default:
@@ -110,34 +163,312 @@ export async function handleRpcRequest(request: RpcRequest, context: RpcContext)
   }
 }
 
-/** JSONL stdin/stdout RPC mode for headless integrations. */
-export async function runRpcMode(): Promise<void> {
-  const sessionManager = new SessionManager();
-  sessionManager.setStore(new JsonlSessionStore(process.env.AI_HARNESS_SESSIONS_DIR));
-  await sessionManager.loadAllSessions();
-  const output = (response: RpcResponse): void => {
-    process.stdout.write(`${JSON.stringify(response)}\n`);
-  };
-  const context: RpcContext = { sessionManager, providers: configuredProviders(), emit: output };
-  const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
+/** Read strict LF-framed JSONL without treating U+2028/U+2029 as delimiters. */
+async function* jsonLines(input: Readable): AsyncGenerator<string> {
+  const decoder = new StringDecoder('utf8');
+  let buffer = '';
+  for await (const chunk of input) {
+    buffer += typeof chunk === 'string' ? chunk : decoder.write(chunk as Buffer);
+    while (true) {
+      const newline = buffer.indexOf('\n');
+      if (newline < 0) break;
+      const line = buffer.slice(0, newline);
+      buffer = buffer.slice(newline + 1);
+      yield line.endsWith('\r') ? line.slice(0, -1) : line;
+    }
+  }
+  buffer += decoder.end();
+  if (buffer) yield buffer.endsWith('\r') ? buffer.slice(0, -1) : buffer;
+}
 
-  for await (const line of lines) {
-    if (!line.trim()) continue;
-    let request: RpcRequest;
-    try {
-      request = JSON.parse(line) as RpcRequest;
-      if (!request.method) throw new Error('Le champ method est requis.');
-    } catch (error) {
-      output({ error: { code: 'INVALID_REQUEST', message: error instanceof Error ? error.message : String(error) } });
-      continue;
+function reportSettingsDiagnostics(settings: ResolvedAgentSettings): void {
+  for (const diagnostic of settings.diagnostics) {
+    const field = diagnostic.setting ? ` [${diagnostic.setting}]` : '';
+    process.stderr.write(`Warning: Settings ignored (${diagnostic.path})${field}: ${diagnostic.message}\n`);
+  }
+}
+
+function rpcExtensionPaths(paths: readonly string[], settings: ResolvedAgentSettings): string[] {
+  return [
+    ...paths,
+    ...selectAgentResourcePaths(resolveAgentResourcePaths(settings, 'extensions'))
+      .filter(entry => !entry.includes('builtin:')),
+  ];
+}
+
+/**
+ * JSONL stdin/stdout composition root for headless integrations. This module
+ * owns framing and startup; RpcController owns stateful command execution.
+ */
+export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void> {
+  const reservedOutput = options.output ? undefined : reserveProcessStdoutForJsonLines();
+  const outputSink = options.output ?? reservedOutput!.write;
+  let outputTail: Promise<void> = Promise.resolve();
+  let outputFailure: unknown;
+  const output = (record: Record<string, unknown>): Promise<void> => {
+    const operation = outputTail.then(async () => {
+      if (outputFailure) throw outputFailure;
+      await outputSink(record);
+    });
+    outputTail = operation.then(
+      () => undefined,
+      error => { outputFailure ??= error ?? new Error('RPC output delivery failed.'); },
+    );
+    void operation.catch(() => undefined);
+    return operation;
+  };
+  const input = options.input ?? process.stdin;
+  const extensionUi = new RpcExtensionUiBridge(output);
+  const sessionManager = new SessionManager();
+  const extensionRegistry = new ExtensionRegistry();
+  let controller: RpcController | undefined;
+  const stopForSignal = (): void => {
+    if (controller) void controller.close().catch(() => undefined);
+    input.destroy();
+  };
+  if (input === process.stdin) {
+    process.once('SIGINT', stopForSignal);
+    process.once('SIGTERM', stopForSignal);
+  }
+
+  let runError: unknown;
+  try {
+    extensionRegistry.attachSessionManager(sessionManager);
+
+    const cwd = process.cwd();
+    const workspaceManager = new WorkspaceManager({ allowedRoots: [cwd], defaultCwd: cwd });
+    await workspaceManager.initialize();
+    const canonicalCwd = await workspaceManager.getDefaultCwd();
+    const trustManager = new ProjectTrustManager();
+    await trustManager.load();
+    const projectTrusted = await trustManager.isTrusted(canonicalCwd);
+    const settingsResolution = await loadAgentSettings({ cwd: canonicalCwd, projectTrusted });
+    reportSettingsDiagnostics(settingsResolution);
+    const sessionDirectory = resolveStartupSessionDirectory(
+      {
+        session: options.session,
+        sessionDir: options.sessionDir,
+      },
+      canonicalCwd,
+      process.env,
+      undefined,
+      settingsResolution.settings.sessionDir,
+    );
+    if (!options.noSession) {
+      sessionManager.setStore(new JsonlSessionStore(sessionDirectory));
+      await sessionManager.loadAllSessions();
     }
-    try {
-      output(await handleRpcRequest(request, context));
-    } catch (error) {
-      output({
-        id: request.id,
-        error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : String(error) },
-      });
+
+    const instructions = await resolveInstructionPrompt({
+      cwd: canonicalCwd,
+      projectTrusted,
+      noContextFiles: options.noContextFiles,
+      systemPromptInput: options.systemPrompt,
+      appendSystemPromptInputs: options.appendSystemPrompts,
+    });
+    for (const diagnostic of instructions.diagnostics) {
+      process.stderr.write(`Warning: Instruction ignored (${diagnostic.path}): ${diagnostic.message}\n`);
     }
+    const resourceManager = new ResourceManager({
+      cwd: canonicalCwd,
+      agentDir: settingsResolution.agentDir,
+      projectTrusted,
+      globalSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'global'),
+      projectSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'project'),
+      globalPromptPaths: resolveAgentResourcePaths(settingsResolution, 'prompts', undefined, 'global'),
+      projectPromptPaths: resolveAgentResourcePaths(settingsResolution, 'prompts', undefined, 'project'),
+    });
+    const resourceLoadResult = await resourceManager.loadAll();
+    for (const failure of resourceLoadResult.errors) {
+      process.stderr.write(`Resource: ${failure.message}\n`);
+    }
+    await registerWorkspaceTools(extensionRegistry, workspaceManager, {
+      shellPath: settingsResolution.settings.shellPath,
+      shellCommandPrefix: settingsResolution.settings.shellCommandPrefix,
+    });
+    const providers = createConfiguredProviders();
+    const effectiveModels = applyAgentModelSettings({
+      provider: options.provider,
+      model: options.model,
+      models: options.models,
+      apiKey: options.apiKey,
+    }, settingsResolution.settings);
+    const startup = await resolveStartupProvider(providers, effectiveModels.selection);
+    const startupModel = startup.model ?? startup.provider.getConfiguredModel();
+    const startupThinking = options.thinking
+      ?? startup.thinkingLevel
+      ?? resolveAgentThinkingLevel(settingsResolution.settings, startup.providerName, startupModel);
+    sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
+      settingsResolution.settings,
+      startup.providerName,
+      startupModel,
+    ));
+    const extensionLoader = new ExtensionLoader(extensionRegistry, {
+      paths: rpcExtensionPaths(options.extensions ?? [], settingsResolution),
+      isProjectTrusted: () => trustManager.isTrustedSync(canonicalCwd),
+    });
+    const extensionLoadResult = await extensionLoader.loadAll();
+    for (const failure of extensionLoadResult.errors) {
+      process.stderr.write(`Extension ${failure.path}: ${failure.error.message}\n`);
+    }
+    const registeredTools = extensionRegistry.getTools();
+    const unknownTools = unknownToolNames(registeredTools, options.tools, options.excludeTools);
+    if (unknownTools.length) throw new Error(`Unknown tool name(s): ${unknownTools.join(', ')}.`);
+    const configuredDefaults = resolveAgentDefaultTools(
+      settingsResolution.settings.defaultTools,
+      DEFAULT_CODING_TOOL_NAMES,
+    );
+    const selectedTools = selectRegisteredTools(registeredTools, {
+      allowedTools: options.tools,
+      excludedTools: options.excludeTools,
+      defaultTools: configuredDefaults ?? DEFAULT_CODING_TOOL_NAMES,
+      builtInExtensionId: 'builtin:workspace-tools',
+      includeNonBuiltInByDefault: true,
+      noBuiltInTools: options.noBuiltinTools,
+      noTools: options.noTools,
+    });
+
+    const startupSession = await resolveStartupSession({
+      sessionManager,
+      args: {
+        continueSession: options.continueSession ?? false,
+        resume: false,
+        session: options.session,
+        sessionId: options.sessionId,
+        fork: options.fork,
+        sessionDir: sessionDirectory,
+        name: options.name,
+        noSession: options.noSession ?? false,
+      },
+      cwd: canonicalCwd,
+      interactive: false,
+    });
+
+    const customContext: RpcContext = {
+      sessionManager,
+      providers,
+      defaultProviderName: startup.providerName,
+      defaultThinking: startupThinking,
+      systemPrompt: instructions.systemPrompt,
+      emit: response => output(response as Record<string, unknown>),
+    };
+    controller = new RpcController({
+      provider: startup.provider,
+      providers,
+      sessionManager,
+      sessionId: startupSession.id,
+      sessionDir: options.noSession ? undefined : sessionDirectory
+        ?? path.join(process.env.HOME || '.', '.ai-harness', 'sessions'),
+      extensionRegistry,
+      resourceManager,
+      providerName: startup.providerName,
+      model: startupModel,
+      systemPrompt: instructions.systemPrompt,
+      tools: toChatToolDefinitions(selectedTools),
+      thinking: startupThinking,
+      scopedModelPatterns: effectiveModels.modelPatterns,
+      steeringMode: settingsResolution.settings.steeringMode,
+      followUpMode: settingsResolution.settings.followUpMode,
+      retryEnabled: settingsResolution.settings.retry?.enabled,
+      retryMaxRetries: settingsResolution.settings.retry?.maxRetries,
+      retryDelayMs: settingsResolution.settings.retry?.baseDelayMs,
+      retryMaxDelayMs: settingsResolution.settings.retry?.maxAgentDelayMs,
+      enableSkillCommands: settingsResolution.settings.enableSkillCommands,
+      summarizationRetryDelayMs: settingsResolution.settings.retry?.baseDelayMs,
+      toolContext: {
+        sessionManager,
+        provider: startup.provider,
+        providerName: startup.providerName,
+        currentSessionId: '',
+        cwd: canonicalCwd,
+        projectTrusted,
+        notify: (message, level = 'info') => extensionUi.notify(message, level),
+        requestInteraction: request => extensionUi.request(request),
+      },
+    }, output);
+    await controller.initialize();
+
+    const handleLine = async (line: string): Promise<void> => {
+      if (!line.trim()) return;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(line);
+      } catch (error) {
+        await output(rpcParseError(error) as unknown as Record<string, unknown>);
+        return;
+      }
+
+      if (extensionUi.handleResponse(parsed)) return;
+
+      if (isRpcCommandRequest(parsed)) {
+        const response = await controller!.handle(parsed);
+        if (response) await output(response as unknown as Record<string, unknown>);
+        return;
+      }
+
+      const request = parsed as Partial<RpcRequest>;
+      if (!request || typeof request !== 'object' || typeof request.method !== 'string' || !request.method) {
+        await output({ error: { code: 'INVALID_REQUEST', message: 'The type or method field is required.' } });
+        return;
+      }
+      try {
+        await output(await handleRpcRequest(request as RpcRequest, customContext) as unknown as Record<string, unknown>);
+      } catch (error) {
+        await output({
+          id: request.id,
+          error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : String(error) },
+        });
+      }
+    };
+
+    const pending = new Set<Promise<void>>();
+    let taskFailure: unknown;
+    for await (const line of jsonLines(input)) {
+      if (taskFailure) throw taskFailure;
+      while (pending.size >= MAX_PENDING_RPC_REQUESTS) {
+        await Promise.race([...pending].map(task => task.catch(() => undefined)));
+        if (taskFailure) throw taskFailure;
+      }
+      const task = handleLine(line);
+      pending.add(task);
+      void task.then(
+        () => pending.delete(task),
+        error => {
+          pending.delete(task);
+          taskFailure ??= error ?? new Error('RPC request task failed.');
+        },
+      );
+    }
+    await Promise.allSettled([...pending]);
+    if (taskFailure) throw taskFailure;
+  } catch (error) {
+    runError = error ?? new Error('RPC mode failed.');
+  } finally {
+    if (input === process.stdin) {
+      process.off('SIGINT', stopForSignal);
+      process.off('SIGTERM', stopForSignal);
+    }
+    let cleanupError: unknown;
+    try { extensionUi.close(); } catch (error) { cleanupError = error ?? new Error('RPC UI cleanup failed.'); }
+    try { await controller?.close(); } catch (error) { cleanupError ??= error ?? new Error('RPC controller cleanup failed.'); }
+    try { await extensionRegistry.shutdown(); } catch (error) { cleanupError ??= error ?? new Error('Extension shutdown failed.'); }
+    try {
+      await outputTail;
+      if (outputFailure) throw outputFailure;
+      await reservedOutput?.flush();
+    } catch (error) {
+      cleanupError ??= error ?? new Error('RPC output flush failed.');
+    }
+    reservedOutput?.restore();
+    if (runError && cleanupError && runError !== cleanupError) {
+      const runMessage = runError instanceof Error ? runError.message : String(runError);
+      const cleanupMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+      throw new AggregateError(
+        [runError, cleanupError],
+        `RPC mode failed: ${runMessage}; cleanup failed: ${cleanupMessage}`,
+      );
+    }
+    if (runError) throw runError;
+    if (cleanupError) throw cleanupError;
   }
 }

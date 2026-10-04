@@ -313,7 +313,7 @@ function mockSubagentConfiguration(workspace: typeof WORKSPACE): SubagentConfigu
   const base = (id: string, name: string, kind: SubagentProfile['kind'], background: boolean): SubagentProfile => ({
     id, name, kind, background, builtIn: true, enabled: true,
     description: `${name} child-agent profile`, instructions: `${name} the delegated task.`,
-    tools: kind === 'general' ? [] : ['list_files', 'read_file', 'search_files'],
+    tools: kind === 'general' ? [] : ['ls', 'read', 'grep', 'find'],
     skills: [], extensions: [], maxTurns: kind === 'general' ? 12 : 8, inheritContext: true,
   });
   return {
@@ -425,9 +425,9 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
   let toolSettings = structuredClone(options.toolSettings ?? {
     scope: 'project', source: workspace.id, preset: 'default', powershellAvailable: false, powershellEnabled: false,
     tools: [
-      { name: 'read_file', description: 'Read a workspace file', extensionId: 'server:workspace', enabled: true, available: true },
-      { name: 'write_file', description: 'Write a workspace file', extensionId: 'server:workspace', enabled: true, available: true },
-      { name: 'powershell', description: 'Run PowerShell', extensionId: 'server:workspace', enabled: false, available: false, unavailableReason: 'Windows only' },
+      { name: 'read', description: 'Read a workspace file', extensionId: 'builtin:workspace-tools', enabled: true, available: true },
+      { name: 'write', description: 'Write a workspace file', extensionId: 'builtin:workspace-tools', enabled: true, available: true },
+      { name: 'powershell', description: 'Run PowerShell', extensionId: 'builtin:workspace-tools', enabled: false, available: false, unavailableReason: 'Windows only' },
     ],
   } satisfies ToolSettings);
   const configurationScopes: Record<'global' | 'project', Record<string, unknown>> = {
@@ -1203,7 +1203,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     if (capabilities && method === 'GET') {
       const session = controller.sessions.find(item => item.id === decodeURIComponent(capabilities[1]!));
       const preset = session?.toolPreset ?? options.effectiveConfiguration?.values?.toolPreset ?? 'default';
-      const readOnly = new Set(['read_file', 'list_files', 'search_files', 'git_status', 'git_diff', 'load_skill']);
+      const readOnly = new Set(['read', 'grep', 'find', 'ls', 'load_skill']);
       const tools = (options.capabilities?.tools ?? []).filter(tool => (
         preset !== 'chat-only' && (preset !== 'read-only' || readOnly.has(tool.name))
       ));

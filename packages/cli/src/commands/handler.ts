@@ -5,13 +5,27 @@
 // ============================================================
 
 import chalk from 'chalk';
-import { SessionManager, JsonlSessionStore, AiProvider, ProviderFactory, Message, Session } from '@ai-harness/core';
-import type { ExtensionRegistry, ExtensionRuntimeContext, ThinkingLevel } from '@ai-harness/core';
+import {
+  clampPublishedThinkingLevel,
+  collectProviderModelCatalog,
+  flattenModelCatalog,
+  getSupportedThinkingLevels,
+  resolveModelReference,
+  resolveModelScope,
+  SessionManager,
+  JsonlSessionStore,
+  AiProvider,
+  ProviderFactory,
+  Message,
+  Session,
+} from '@ai-harness/core';
+import type { ExtensionRegistry, ExtensionRuntimeContext, ModelCatalogEntry, ThinkingLevel } from '@ai-harness/core';
 import type { TerminalUI } from '../tui/terminal-ui.js';
 import { renderSessionHtml, sanitizeFilename } from '../utils/session-export.js';
 import { copyToClipboard } from '../utils/system-integration.js';
 import type { ProjectTrustManager } from '../security/project-trust.js';
 import { OAuthDeviceClient, oauthConfigFromEnv } from '../security/oauth-device.js';
+import { createConfiguredProviders } from '../providers/configured-providers.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -34,6 +48,19 @@ export interface CommandContext {
   extensionProviderNames: Set<string>;
   thinkingLevel: ThinkingLevel;
   trustManager?: ProjectTrustManager;
+  cwd: string;
+  workspaceId?: string;
+  enabledToolNames?: () => readonly string[];
+  modelPatterns?: readonly string[];
+  settingsInfo?: () => string;
+}
+
+export interface CommandWorkspaceContext {
+  cwd: string;
+  workspaceId?: string;
+  enabledToolNames?: () => readonly string[];
+  modelPatterns?: readonly string[];
+  settingsInfo?: () => string;
 }
 
 function createExtensionContext(ctx: CommandContext): ExtensionRuntimeContext {
@@ -41,6 +68,10 @@ function createExtensionContext(ctx: CommandContext): ExtensionRuntimeContext {
     sessionManager: ctx.sessionManager,
     currentSessionId: ctx.currentSessionId,
     provider: ctx.provider,
+    providerName: String((ctx.provider as unknown as { config?: { type?: string } } | undefined)?.config?.type ?? 'unknown'),
+    cwd: ctx.cwd,
+    workspaceId: ctx.workspaceId,
+    projectTrusted: ctx.trustManager?.isTrustedSync(ctx.cwd) ?? false,
     notify: (message, level = 'info') => {
       if (level === 'error') ctx.terminal.showError(message);
       else if (typeof ctx.terminal.writeOutput === 'function') ctx.terminal.writeOutput(message);
@@ -70,6 +101,39 @@ function syncExtensionProviders(ctx: CommandContext): void {
   if (activeType && !ctx.providers.has(activeType)) ctx.provider = ctx.providers.get('mock');
 }
 
+async function availableCommandModels(ctx: CommandContext): Promise<ModelCatalogEntry[]> {
+  return flattenModelCatalog(await collectProviderModelCatalog(ctx.providers, {
+    timeoutMs: 2_000,
+    retries: 0,
+  })).filter(model => model.available);
+}
+
+function modelLabel(model: ModelCatalogEntry): string {
+  return model.name === model.id ? model.source : model.name;
+}
+
+async function selectCommandModel(
+  ctx: CommandContext,
+  model: ModelCatalogEntry,
+  thinkingLevel?: ThinkingLevel,
+): Promise<void> {
+  const provider = ctx.providers.get(model.provider);
+  if (!provider) throw new Error(`Provider unavailable: ${model.provider}`);
+  provider.setConfiguredModel(model.id);
+  ctx.provider = provider;
+  if (thinkingLevel) {
+    ctx.thinkingLevel = clampPublishedThinkingLevel(
+      thinkingLevel,
+      getSupportedThinkingLevels(model.provider, model.id),
+    );
+  } else {
+    ctx.thinkingLevel = clampPublishedThinkingLevel(
+      ctx.thinkingLevel,
+      getSupportedThinkingLevels(model.provider, model.id),
+    );
+  }
+}
+
 const commands: CommandEntry[] = [
   {
     name: 'help',
@@ -77,12 +141,22 @@ const commands: CommandEntry[] = [
     handler: async () => '', // Handled by TerminalUI.showHelp()
   },
   {
+    name: 'settings',
+    description: 'Show effective agent settings and their source scopes',
+    handler: async (_args, ctx) => ctx.settingsInfo?.()
+      ?? chalk.yellow('Agent settings are not configured for this runtime.'),
+  },
+  {
     name: 'new',
     description: 'Create a new conversation',
     usage: '/new [title]',
     handler: async (args, ctx) => {
       const title = args.length > 0 ? args.join(' ') : `Conversation ${ctx.sessionManager.list().length + 1}`;
-      const session = await ctx.sessionManager.create({ title });
+      const session = await ctx.sessionManager.create({
+        title,
+        cwd: ctx.cwd,
+        workspaceId: ctx.workspaceId,
+      });
       // Switch to the newly created session
       ctx.currentSessionId = session.id;
       return `Created: ${chalk.cyan(session.id)} - ${chalk.dim(title)}`;
@@ -251,108 +325,55 @@ const commands: CommandEntry[] = [
   },
   {
     name: 'model',
-    description: 'List/switch/cycle models for current provider',
-    usage: '/model [list|cycle|<model-name>]',
+    description: 'List/switch/cycle models from the shared catalogue',
+    usage: '/model [list|cycle|<[provider/]model[:thinking]>]',
     handler: async (args, ctx) => {
-      const provider = ctx.provider;
-      if (!provider) return chalk.yellow('No active provider configured.');
+      const activeProvider = ctx.provider;
+      if (!activeProvider) return chalk.yellow('No active provider configured.');
+      const activeProviderName = String((activeProvider as unknown as { config?: { type?: string } }).config?.type ?? 'unknown');
+      const available = await availableCommandModels(ctx);
+      if (!available.length) return chalk.yellow('No models available for configured providers.');
 
-      // Get the config type to determine available models
-      const configType = (provider as any)['config']?.type || 'unknown';
-      
-      // Define available models per provider
-      const modelRegistry: Record<string, { name: string; description: string }[]> = {
-        openai: [
-          { name: 'gpt-4o', description: 'default, recommended' },
-          { name: 'gpt-4-turbo', description: 'fast and capable' },
-          { name: 'gpt-3.5-turbo', description: 'lightweight, cost-effective' },
-        ],
-        anthropic: [
-          { name: 'claude-3-opus-20240229', description: 'most capable' },
-          { name: 'claude-3-sonnet-20240229', description: 'balanced performance' },
-          { name: 'claude-3-haiku-20240307', description: 'fastest, cost-effective' },
-        ],
-        google: [
-          { name: 'gemini-2.5-pro', description: 'advanced reasoning' },
-          { name: 'gemini-2.0-flash', description: 'fast, multimodal' },
-          { name: 'gemini-2.0-flash-lite', description: 'lightweight' },
-        ],
-        azure: [{ name: 'gpt-4o', description: 'Azure OpenAI deployment' }],
-        vertex: [{ name: 'gemini-2.0-flash', description: 'Google Vertex AI' }],
-        bedrock: [{ name: 'anthropic.claude-3-haiku-20240307-v1:0', description: 'AWS Bedrock Converse' }],
-        mock: [
-          { name: 'mock-model-v1', description: 'for testing only' },
-        ],
-      };
-
-      let models = modelRegistry[configType] || [];
-      if (configType === 'local' && provider.getAvailableModels) {
-        const discoveredModels = await provider.getAvailableModels();
-        models = discoveredModels.map(name => ({ name, description: 'modèle local détecté' }));
-        if (models.length === 0) {
-          const configuredModel = (provider as any)['config']?.model || 'local-model';
-          models = [{ name: configuredModel, description: 'modèle local configuré' }];
-        }
+      if (args[0]?.toLowerCase() === 'cycle' || args[0]?.toLowerCase() === '--cycle') {
+        const scope = ctx.modelPatterns?.length
+          ? resolveModelScope(ctx.modelPatterns, available).models
+          : available.filter(model => model.provider === activeProviderName)
+            .map(model => ({ model, thinkingLevel: undefined as ThinkingLevel | undefined }));
+        if (!scope.length) return chalk.yellow('No models match the active model scope.');
+        const currentModel = activeProvider.getConfiguredModel();
+        const currentIndex = scope.findIndex(item => (
+          item.model.provider === activeProviderName && item.model.id === currentModel
+        ));
+        const next = scope[(currentIndex + 1 + scope.length) % scope.length]!;
+        await selectCommandModel(ctx, next.model, next.thinkingLevel);
+        return `${chalk.green('✅')} Switched to ${chalk.cyan(`${next.model.provider}/${next.model.id}`)}`
+          + ` (${modelLabel(next.model)})\n   Cycle: [`
+          + `${scope.map(item => chalk.dim(`${item.model.provider}/${item.model.id}`)).join(' → ')}]`;
       }
 
-      // Handle cycling (e.g., /model cycle or just /model with --cycle)
-      if (args.length > 0 && (args[0].toLowerCase() === 'cycle' || args[0].toLowerCase() === '--cycle')) {
-        const currentModel = (provider as any)['config']?.model;
-        let currentIndex = -1;
-
-        // Find the index of the current model in the registry
-        if (currentModel) {
-          currentIndex = models.findIndex(m => m.name.toLowerCase().includes(currentModel.toLowerCase()));
+      if (args.length > 0 && args[0]?.toLowerCase() !== 'list') {
+        const reference = args.join(' ');
+        const resolved = resolveModelReference(reference, available);
+        if (!resolved.model) {
+          return chalk.red(`${resolved.message ?? `Unknown model: ${reference}`} Available:\n  `
+            + available.map(model => `${chalk.cyan(`${model.provider}/${model.id}`)} - ${modelLabel(model)}`).join('\n  '));
         }
-
-        const nextIndex = (currentIndex + 1) % models.length;
-        const nextModel = models[nextIndex];
-
-        // Update the provider's model config
-        if ((provider as any)['config']) {
-          (provider as any)['config'].model = nextModel.name;
-        }
-
-        return `${chalk.green('✅')} Switched to ${chalk.cyan(nextModel.name)} (${nextModel.description})` +
-          `\n   Cycle: [${models.map(m => chalk.dim(m.name)).join(' → ')}]`;
+        await selectCommandModel(ctx, resolved.model, resolved.thinkingLevel);
+        return `${chalk.green('✅')} Set model to ${chalk.cyan(`${resolved.model.provider}/${resolved.model.id}`)}`
+          + ` (${modelLabel(resolved.model)})`;
       }
 
-      // Handle setting a specific model (e.g., /model gpt-4o)
-      if (args.length > 0) {
-        const modelName = args[0].toLowerCase();
-        
-        // Find matching model
-        const matchedModel = models.find(m => m.name.toLowerCase().includes(modelName));
-        
-        if (!matchedModel) {
-          return chalk.red(`Unknown model: ${chalk.yellow(args[0])}. Available:` +
-            `\n  ${models.map(m => `${chalk.cyan(m.name)} - ${m.description}`).join('\n  ')}`);
-        }
-
-        // Update the provider's model config
-        if ((provider as any)['config']) {
-          (provider as any)['config'].model = matchedModel.name;
-        }
-
-        return `${chalk.green('✅')} Set model to ${chalk.cyan(matchedModel.name)}` +
-          ` (${matchedModel.description})`;
-      }
-
-      // No args - show current model and available options
-      const currentModel = (provider as any)['config']?.model || models[0]?.name;
-      
-      let output = `${chalk.bold('Current Model:')} ${chalk.cyan(currentModel)}\n`;
-      output += `\n${chalk.bold(`${configType.toUpperCase()} Models:`)}\n`;
-
+      const currentModel = activeProvider.getConfiguredModel();
+      const models = available.filter(model => model.provider === activeProviderName);
+      let output = `${chalk.bold('Current Model:')} ${chalk.cyan(currentModel ?? 'none')}\n`;
+      output += `\n${chalk.bold(`${activeProviderName.toUpperCase()} Models:`)}\n`;
       for (const model of models) {
-        const marker = model.name === currentModel ? chalk.green('●') : chalk.dim('○');
-        output += `  ${marker} ${chalk.cyan(model.name)} - ${model.description}\n`;
+        const marker = model.id === currentModel ? chalk.green('●') : chalk.dim('○');
+        output += `  ${marker} ${chalk.cyan(model.id)} - ${modelLabel(model)}\n`;
       }
-
       output += `\n${chalk.yellow('Commands:')}\n`;
-      output += `  /model <name>     Set specific model\n`;
-      output += `  /model cycle       Cycle to next model in list`; // No trailing newline for cleaner display
-
+      output += `  /model <name>      Set a fuzzy or provider-qualified model\n`;
+      output += `  /model cycle       Cycle through the active --models scope`;
       return output;
     },
   },
@@ -393,15 +414,19 @@ const commands: CommandEntry[] = [
   {
     name: 'thinking',
     description: 'Configurer le niveau de raisonnement du modèle',
-    usage: '/thinking [off|low|medium|high|xhigh]',
+    usage: '/thinking [off|minimal|low|medium|high|xhigh|max]',
     handler: async (args, ctx) => {
       const level = args[0]?.toLowerCase() as ThinkingLevel | undefined;
       if (!level) return `Niveau de raisonnement : ${chalk.cyan(ctx.thinkingLevel)}`;
-      if (!['off', 'low', 'medium', 'high', 'xhigh'].includes(level)) {
-        return chalk.red('Usage: /thinking [off|low|medium|high|xhigh]');
+      if (!['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(level)) {
+        return chalk.red('Usage: /thinking [off|minimal|low|medium|high|xhigh|max]');
       }
-      ctx.thinkingLevel = level;
-      return chalk.green(`Niveau de raisonnement défini sur ${level}.`);
+      const available = getSupportedThinkingLevels(
+        ctx.provider?.getProviderType() ?? 'unknown',
+        ctx.provider?.getConfiguredModel(),
+      );
+      ctx.thinkingLevel = clampPublishedThinkingLevel(level, available);
+      return chalk.green(`Niveau de raisonnement défini sur ${ctx.thinkingLevel}.`);
     },
   },
   {
@@ -763,7 +788,7 @@ const commands: CommandEntry[] = [
       return chalk.green(`✅ Session title updated to: "${chalk.cyan(title)}"`);
     },
   },
-  // Alias for /name (Pi compatibility)
+  // Alias for /name.
   {
     name: 'rename',
     description: 'Rename the current session (alias for /name)',
@@ -936,19 +961,22 @@ const commands: CommandEntry[] = [
   },
   {
     name: 'tools',
-    description: 'List tools registered by extensions',
+    description: 'List built-in and extension tools',
     handler: async (_args, ctx) => {
       const tools = ctx.extensionRegistry?.getTools() ?? [];
-      if (tools.length === 0) return chalk.yellow('No extension tools registered.');
-      return tools.map(tool => `${chalk.green('●')} ${chalk.cyan(tool.name)} — ${tool.description}`).join('\n');
+      if (tools.length === 0) return chalk.yellow('No tools registered.');
+      const enabled = new Set(ctx.enabledToolNames?.() ?? tools.map(tool => tool.name));
+      return tools.map(tool => `${enabled.has(tool.name) ? chalk.green('●') : chalk.dim('○')} ${chalk.cyan(tool.name)} — ${tool.description}${enabled.has(tool.name) ? '' : chalk.dim(' [disabled]')}`).join('\n');
     },
   },
   {
     name: 'tool',
-    description: 'Execute an extension tool manually',
+    description: 'Execute a registered tool manually',
     usage: '/tool <name> [json-input]',
     handler: async (args, ctx) => {
       if (!ctx.extensionRegistry || !args[0]) return chalk.red('Usage: /tool <name> [json-input]');
+      const enabled = new Set(ctx.enabledToolNames?.() ?? ctx.extensionRegistry.getTools().map(tool => tool.name));
+      if (!enabled.has(args[0].toLowerCase())) return chalk.red(`Tool is disabled for this run: ${args[0]}`);
       let input: unknown = {};
       if (args.length > 1) {
         try {
@@ -977,15 +1005,15 @@ const commands: CommandEntry[] = [
         return projects.length ? projects.join('\n') : 'Aucun projet approuvé.';
       }
       if (action === 'add') {
-        const trusted = await ctx.trustManager.trust(process.cwd());
+        const trusted = await ctx.trustManager.trust(ctx.cwd);
         return chalk.green(`Projet approuvé : ${trusted}. Utilisez /reload pour charger ses extensions.`);
       }
       if (action === 'remove') {
-        const removed = await ctx.trustManager.untrust(process.cwd());
+        const removed = await ctx.trustManager.untrust(ctx.cwd);
         return chalk.yellow(`Confiance retirée : ${removed}. Utilisez /reload.`);
       }
       if (action !== 'status') return chalk.red('Usage: /trust [status|add|remove|list]');
-      return await ctx.trustManager.isTrusted(process.cwd())
+      return await ctx.trustManager.isTrusted(ctx.cwd)
         ? chalk.green('Le projet courant est approuvé.')
         : chalk.yellow('Le projet courant n’est pas approuvé ; ses extensions sont ignorées.');
     },
@@ -1017,83 +1045,9 @@ export class CommandHandler {
     terminal: TerminalUI,
     extensionRegistry?: ExtensionRegistry,
     trustManager?: ProjectTrustManager,
+    workspace: CommandWorkspaceContext = { cwd: process.cwd() },
   ) {
-    // Initialize providers
-    const providers = new Map<string, AiProvider>();
-
-    // Mock provider (always available for testing)
-    providers.set('mock', ProviderFactory.create({ type: 'mock' as any, apiKey: '' }));
-
-    // Try to initialize real providers if API keys are configured
-    try {
-      const openaiKey = process.env.OPENAI_API_KEY;
-      if (openaiKey) {
-        providers.set('openai', ProviderFactory.create({ type: 'openai' as any, apiKey: openaiKey }));
-      }
-    } catch { /* Skip OpenAI provider initialization */ }
-
-    try {
-      const anthropicKey = process.env.ANTHROPIC_API_KEY;
-      if (anthropicKey) {
-        providers.set('anthropic', ProviderFactory.create({ type: 'anthropic' as any, apiKey: anthropicKey }));
-      }
-    } catch { /* Skip Anthropic provider initialization */ }
-
-    try {
-      const googleKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-      if (googleKey) {
-        providers.set('google', ProviderFactory.create({
-          type: 'google' as any,
-          apiKey: googleKey,
-          model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
-        }));
-      }
-    } catch { /* Skip Gemini provider initialization */ }
-
-    try {
-      if (process.env.AZURE_OPENAI_API_KEY && process.env.AZURE_OPENAI_ENDPOINT) {
-        providers.set('azure', ProviderFactory.create({
-          type: 'azure' as any,
-          apiKey: process.env.AZURE_OPENAI_API_KEY,
-          baseUrl: process.env.AZURE_OPENAI_ENDPOINT,
-          deployment: process.env.AZURE_OPENAI_DEPLOYMENT,
-          model: process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o',
-          apiVersion: process.env.AZURE_OPENAI_API_VERSION,
-        }));
-      }
-    } catch { /* Skip Azure initialization */ }
-
-    try {
-      if (process.env.GOOGLE_VERTEX_ACCESS_TOKEN && process.env.GOOGLE_CLOUD_PROJECT) {
-        providers.set('vertex', ProviderFactory.create({
-          type: 'vertex' as any,
-          apiKey: process.env.GOOGLE_VERTEX_ACCESS_TOKEN,
-          project: process.env.GOOGLE_CLOUD_PROJECT,
-          location: process.env.GOOGLE_CLOUD_LOCATION,
-          model: process.env.VERTEX_MODEL || 'gemini-2.0-flash',
-        }));
-      }
-    } catch { /* Skip Vertex initialization */ }
-
-    try {
-      if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
-        providers.set('bedrock', ProviderFactory.create({
-          type: 'bedrock' as any,
-          region: process.env.AWS_REGION,
-          model: process.env.BEDROCK_MODEL,
-        }));
-      }
-    } catch { /* Skip Bedrock initialization */ }
-
-    // Local OpenAI-compatible provider (Ollama, llama.cpp, AirNES router).
-    try {
-      providers.set('local', ProviderFactory.create({
-        type: 'local' as any,
-        baseUrl: process.env.LOCAL_BASE_URL || process.env.LLAMA_BASE_URL || 'http://localhost:11434/v1',
-        apiKey: process.env.LOCAL_API_KEY || process.env.LLAMA_API_KEY || 'local',
-        model: process.env.LOCAL_MODEL || process.env.LLAMA_MODEL || 'local-model',
-      }));
-    } catch { /* Skip invalid local provider initialization */ }
+    const providers = createConfiguredProviders();
 
     this.ctx = {
       sessionManager,
@@ -1106,6 +1060,11 @@ export class CommandHandler {
       extensionProviderNames: new Set(),
       thinkingLevel: 'off',
       trustManager,
+      cwd: workspace.cwd,
+      workspaceId: workspace.workspaceId,
+      enabledToolNames: workspace.enabledToolNames,
+      modelPatterns: workspace.modelPatterns,
+      settingsInfo: workspace.settingsInfo,
     };
     syncExtensionProviders(this.ctx);
   }

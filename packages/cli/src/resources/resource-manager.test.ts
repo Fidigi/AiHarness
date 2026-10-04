@@ -30,7 +30,7 @@ describe('ResourceManager', () => {
       '---', 'description: Déployer', 'disable-model-invocation: true', '---', 'Déploie prudemment.',
     ].join('\n'));
 
-    const manager = new ResourceManager({ cwd, homeDir: home });
+    const manager = new ResourceManager({ cwd, homeDir: home, projectTrusted: true });
     const result = await manager.loadAll();
 
     expect(result).toMatchObject({ skills: 2, prompts: 0, errors: [] });
@@ -48,7 +48,7 @@ describe('ResourceManager', () => {
     await writeFile(path.join(home, '.agents', 'skills', 'shared', 'SKILL.md'), '---\nname: shared\n---\nUtilisateur');
     await writeFile(path.join(cwd, '.agents', 'skills', 'shared', 'SKILL.md'), '---\nname: shared\n---\nProjet');
 
-    const manager = new ResourceManager({ cwd, homeDir: home });
+    const manager = new ResourceManager({ cwd, homeDir: home, projectTrusted: true });
     await manager.loadAll();
 
     expect(manager.getSkill('shared')?.instructions).toBe('Projet');
@@ -63,7 +63,7 @@ describe('ResourceManager', () => {
       'Sujet=$1; niveau=${2:-simple}; tout=$@; défaut=${@:-aucun}',
     ].join('\n'));
 
-    const manager = new ResourceManager({ cwd: root, homeDir: path.join(root, 'home') });
+    const manager = new ResourceManager({ cwd: root, homeDir: path.join(root, 'home'), projectTrusted: true });
     const result = await manager.loadAll();
 
     expect(result.prompts).toBe(1);
@@ -71,6 +71,55 @@ describe('ResourceManager', () => {
       'Sujet=TypeScript; niveau=simple; tout=TypeScript; défaut=TypeScript',
     );
     expect(manager.expandPrompt('explain', [])).toContain('défaut=aucun');
+  });
+
+  it('uses the configured agent root while trust-gating project resource directories', async () => {
+    const root = await temporaryDirectory();
+    const home = path.join(root, 'home');
+    const cwd = path.join(root, 'project');
+    const agentDir = path.join(root, 'agent');
+    await mkdir(path.join(agentDir, 'skills', 'user'), { recursive: true });
+    await mkdir(path.join(home, '.ai-harness', 'skills', 'default-root'), { recursive: true });
+    await mkdir(path.join(cwd, '.ai-harness', 'skills', 'project'), { recursive: true });
+    await writeFile(path.join(agentDir, 'skills', 'user', 'SKILL.md'), '---\nname: user\n---\nUser instructions');
+    await writeFile(path.join(home, '.ai-harness', 'skills', 'default-root', 'SKILL.md'), 'Default root instructions');
+    await writeFile(path.join(cwd, '.ai-harness', 'skills', 'project', 'SKILL.md'), '---\nname: project\n---\nProject instructions');
+
+    const untrusted = new ResourceManager({ cwd, homeDir: home, agentDir, projectTrusted: false });
+    await untrusted.loadAll();
+    expect(untrusted.listSkills().map(skill => skill.name)).toEqual(['user']);
+
+    const trusted = new ResourceManager({ cwd, homeDir: home, agentDir, projectTrusted: true });
+    await trusted.loadAll();
+    expect(trusted.listSkills().map(skill => skill.name)).toEqual(['project', 'user']);
+  });
+
+  it('applies ordered resource globs, exclusions, and project precedence', async () => {
+    const root = await temporaryDirectory();
+    const globalPrompts = path.join(root, 'configured-prompts');
+    const globalSkills = path.join(root, 'global-skills');
+    const projectSkills = path.join(root, 'project-skills');
+    await mkdir(globalPrompts, { recursive: true });
+    await mkdir(path.join(globalSkills, 'shared'), { recursive: true });
+    await mkdir(path.join(projectSkills, 'shared'), { recursive: true });
+    await writeFile(path.join(globalPrompts, 'public.md'), 'Public prompt');
+    await writeFile(path.join(globalPrompts, 'private.md'), 'Private prompt');
+    await writeFile(path.join(globalSkills, 'shared', 'SKILL.md'), 'Global skill');
+    await writeFile(path.join(projectSkills, 'shared', 'SKILL.md'), 'Project skill');
+
+    const manager = new ResourceManager({
+      cwd: root,
+      homeDir: path.join(root, 'home'),
+      projectTrusted: true,
+      globalPromptPaths: [path.join(globalPrompts, '*.md'), `!${path.join(globalPrompts, 'private.md')}`],
+      globalSkillPaths: [globalSkills],
+      projectSkillPaths: [projectSkills],
+    });
+    const result = await manager.loadAll();
+
+    expect(result).toMatchObject({ prompts: 1, skills: 1, errors: [] });
+    expect(manager.listPrompts().map(prompt => prompt.name)).toEqual(['public']);
+    expect(manager.getSkill('shared')?.instructions).toBe('Project skill');
   });
 
   it('reports malformed or empty resources without blocking valid files', async () => {
@@ -81,7 +130,7 @@ describe('ResourceManager', () => {
     await writeFile(path.join(skills, 'empty', 'SKILL.md'), '---\nname: empty\n---\n');
     await writeFile(path.join(skills, 'valid', 'SKILL.md'), 'Instructions valides');
 
-    const manager = new ResourceManager({ cwd: root, homeDir: path.join(root, 'home') });
+    const manager = new ResourceManager({ cwd: root, homeDir: path.join(root, 'home'), projectTrusted: true });
     const result = await manager.loadAll();
 
     expect(result.skills).toBe(1);

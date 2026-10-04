@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent, ReactNode, RefObject } from 'react';
+import { parseShellCommandInput } from '@ai-harness/core/shell-input';
 import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, ExtensionInteractionSnapshot, Message, ModelCatalog, ProviderType, Session, TokenUsage } from '@ai-harness/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { AgentCapabilities, CommandSnapshot, ExtensionWidget, PaletteItem, SessionInfo } from '../services/api';
@@ -1022,12 +1023,12 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
 
   const runShellCommand = async (raw: string) => {
     if (!currentSession || !workspace) return;
-    const excludedFromContext = raw.startsWith('!!');
-    const command = raw.slice(excludedFromContext ? 2 : 1).trim();
-    if (!command) {
+    const parsed = parseShellCommandInput(raw);
+    if (!parsed?.command) {
       setNotice(t('chat.commandMissing'), 'warning');
       return;
     }
+    const { command, excludedFromContext } = parsed;
     let sessionId = currentSession.id;
     if (currentSession.draft) {
       const created = await createApiSession(command.slice(0, 50), workspace.cwd);

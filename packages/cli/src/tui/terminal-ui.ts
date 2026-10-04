@@ -19,6 +19,18 @@ export interface TranscriptEntry {
   timestamp: Date;
 }
 
+export interface ShellCommandSummary {
+  status: 'completed' | 'failed' | 'cancelled';
+  exitCode?: number;
+  truncated: boolean;
+  fullOutputPath?: string;
+}
+
+export interface ShellCommandWriter {
+  write(chunk: string): void;
+  finish(summary: ShellCommandSummary): void;
+}
+
 /** Manages terminal output with scrollable transcript and streaming support */
 export class TerminalUI {
   private options: Required<TerminalOptions>;
@@ -65,7 +77,7 @@ export class TerminalUI {
     console.log();
     console.log(dim('  Type /help for available commands'));
     console.log(dim('  Providers: mock, openai, anthropic, google, local, azure, vertex, bedrock'));
-    console.log(dim('  Tip: Use Ctrl+C to interrupt streaming responses'));
+    console.log(dim('  Tip: Use Escape or Ctrl+C to interrupt active work'));
     console.log();
   }
 
@@ -175,6 +187,34 @@ export class TerminalUI {
     process.stdout.write(`${output}\n\n`);
   }
 
+  /** Stream a direct `!`/`!!` command without buffering unbounded terminal output. */
+  startShellCommand(command: string, excludedFromContext: boolean): ShellCommandWriter {
+    const policy = excludedFromContext ? 'excluded from model context' : 'included in model context';
+    process.stdout.write(`${chalk.yellow(`[shell] $ ${command}`)} ${chalk.dim(`(${policy})`)}\n`);
+    let wroteOutput = false;
+    let endedWithNewline = true;
+    return {
+      write: chunk => {
+        if (!chunk) return;
+        wroteOutput = true;
+        endedWithNewline = chunk.endsWith('\n');
+        process.stdout.write(chunk);
+      },
+      finish: summary => {
+        if (wroteOutput && !endedWithNewline) process.stdout.write('\n');
+        if (!wroteOutput) process.stdout.write(chalk.dim('(no output)\n'));
+        const status = summary.status === 'cancelled'
+          ? 'cancelled'
+          : `exit ${summary.exitCode ?? 'unknown'}`;
+        process.stdout.write(chalk.dim(`[${status}${summary.truncated ? ' · truncated' : ''}]\n`));
+        if (summary.fullOutputPath) {
+          process.stdout.write(chalk.dim(`[full output: ${summary.fullOutputPath}]\n`));
+        }
+        process.stdout.write('\n');
+      },
+    };
+  }
+
   /** Display command output */
   displayCommand(name: string, output: string): void {
     if (this.isStreaming) {
@@ -218,7 +258,7 @@ ${chalk.bold('Conversation and sessions')}
 ${chalk.bold('Providers and context')}
   ${chalk.cyan('/provider [name]')}              List or select a provider
   ${chalk.cyan('/model [list|cycle|name]')}      List or select a model
-  ${chalk.cyan('/thinking [level]')}             Set off/low/medium/high/xhigh
+  ${chalk.cyan('/thinking [level]')}             Set off/minimal/low/medium/high/xhigh/max
   ${chalk.cyan('/login <provider>')}             Start a configured OAuth device flow
   ${chalk.cyan('/compact [instructions]')}       Compact the active conversation
   ${chalk.cyan('/summarize-branch [id] [text]')} Store a branch summary
@@ -238,25 +278,32 @@ ${chalk.bold('Files, resources and sharing')}
 
 ${chalk.bold('Extensions and application')}
   ${chalk.cyan('/extensions')}                   List loaded extensions
-  ${chalk.cyan('/tools')}                        List extension tools
-  ${chalk.cyan('/tool <name> [json]')}           Run an extension tool
+  ${chalk.cyan('/tools')}                        List built-in and extension tools
+  ${chalk.cyan('/tool <name> [json]')}           Run a registered tool
   ${chalk.cyan('/trust [status|add|remove|list]')} Manage project trust
-  ${chalk.cyan('/reload')}                       Reload resources and extensions
+  ${chalk.cyan('/reload')}                       Reload settings, resources and extensions
+  ${chalk.cyan('/settings')}                     Show effective agent settings and sources
   ${chalk.cyan('/config')}                       Show storage configuration
   ${chalk.cyan('/help')}                         Show this help
   ${chalk.cyan('/quit')} or ${chalk.cyan('/exit')}                  Exit AiHarness
 
 ${chalk.bold('Input')}
   ${chalk.cyan('/edit')} / ${chalk.cyan('/send')} / ${chalk.cyan('/cancel')}          Multi-line input
+  ${chalk.cyan('!<command>')}                    Run a shell command and include its output in context
+  ${chalk.cyan('!!<command>')}                   Run a shell command outside model context
+  ${chalk.cyan('Enter')}                         Send now, or steer an active response
+  ${chalk.cyan('Alt+Enter / Ctrl+Q')}             Queue a follow-up after the active task
+  ${chalk.cyan('Alt+Up')}                        Restore queued messages to the editor
   ${chalk.cyan('Ctrl+G')}                        Open $VISUAL or $EDITOR
-  ${chalk.cyan('Ctrl+C')}                        Interrupt streaming or exit
+  ${chalk.cyan('Escape / Ctrl+C')}               Interrupt; queued messages return to the editor
 
 ${chalk.bold('Providers:')}
   mock, openai, anthropic, google, local, azure, vertex, bedrock
 
 ${chalk.bold('Main environment variables:')}
   ${chalk.dim('OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY')}
-  ${chalk.dim('LOCAL_BASE_URL / LLAMA_BASE_URL, AI_HARNESS_TUI_MODE')}
+  ${chalk.dim('LOCAL_BASE_URL / LLAMA_BASE_URL, AI_HARNESS_AGENT_DIR')}
+  ${chalk.dim('AI_HARNESS_SESSIONS_DIR, AI_HARNESS_TUI_MODE')}
 `;
     console.log(helpText);
   }

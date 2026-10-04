@@ -1,13 +1,21 @@
 import readline from 'readline';
+import type { AgentMessageQueueKind } from '@ai-harness/core';
 import type { FullscreenUI } from './fullscreen-ui.js';
+import {
+  TerminalEscapeSequence,
+  TERMINAL_ESCAPE_CODE_TIMEOUT_MS,
+} from './terminal-escape.js';
 
 export interface FullscreenInputHandlers {
-  onLine: (line: string) => void | Promise<void>;
+  onLine: (line: string, kind: AgentMessageQueueKind) => void | Promise<void>;
   onInterrupt: () => void;
+  onEscape: () => void;
   onExit: () => void;
   onError?: (error: Error) => void;
   complete?: (input: string) => string[];
   onExternalEditor?: (currentInput: string) => Promise<string | undefined>;
+  /** Return replacement editor text, or undefined when there was nothing queued. */
+  onDequeue?: (currentInput: string) => string | undefined;
 }
 
 interface KeypressInput {
@@ -28,6 +36,7 @@ export class FullscreenInput {
   private historyIndex = 0;
   private started = false;
   private processing = Promise.resolve();
+  private readonly escapeSequence: TerminalEscapeSequence;
   private readonly keypressListener: (text: string, key: readline.Key) => void;
 
   constructor(
@@ -35,13 +44,19 @@ export class FullscreenInput {
     private readonly handlers: FullscreenInputHandlers,
     private readonly input: KeypressInput = process.stdin,
   ) {
+    this.escapeSequence = new TerminalEscapeSequence(handlers.onEscape);
     this.keypressListener = (text, key) => this.handleKeypress(text, key);
   }
 
   start(): void {
     if (this.started) return;
     this.started = true;
-    readline.emitKeypressEvents(this.input as NodeJS.ReadStream);
+    // The optional interface argument supplies Node's raw Escape decoder timeout;
+    // fullscreen owns line editing, so only the decoder state object is needed.
+    readline.emitKeypressEvents(
+      this.input as NodeJS.ReadStream,
+      { escapeCodeTimeout: TERMINAL_ESCAPE_CODE_TIMEOUT_MS } as unknown as readline.Interface,
+    );
     if (this.input.isTTY && this.input.setRawMode) this.input.setRawMode(true);
     this.input.on('keypress', this.keypressListener);
     this.input.resume();
@@ -49,6 +64,7 @@ export class FullscreenInput {
   }
 
   stop(): void {
+    this.escapeSequence.cancel();
     if (!this.started) return;
     this.started = false;
     this.input.off('keypress', this.keypressListener);
@@ -73,16 +89,37 @@ export class FullscreenInput {
     return this.value;
   }
 
+  replaceValue(value: string): void {
+    this.value = value;
+    this.cursor = value.length;
+    this.ui.setInput(this.value, this.cursor);
+  }
+
   handleKeypress(text: string, key: readline.Key = {}): void {
     if (key.ctrl && key.name === 'c') {
+      this.escapeSequence.cancel();
       this.handlers.onInterrupt();
       return;
     }
 
     if (key.ctrl && key.name === 'd') {
+      this.escapeSequence.cancel();
       if (!this.value) this.handlers.onExit();
       return;
     }
+
+    if (key.ctrl && key.name === 'q') {
+      this.escapeSequence.cancel();
+      this.submit('follow-up');
+      return;
+    }
+
+    if (key.name === 'escape' && !key.ctrl && !key.shift) {
+      this.escapeSequence.deferEscape();
+      return;
+    }
+
+    const escapedEnter = this.escapeSequence.consumeFollowingKey(key);
 
     if (key.ctrl && key.name === 'l') {
       this.ui.render();
@@ -107,8 +144,15 @@ export class FullscreenInput {
       return;
     }
 
+    if ((key.meta && (key.name === 'return' || key.name === 'enter')) || escapedEnter) {
+      this.submit('follow-up');
+      return;
+    }
+
     if (key.meta && key.name === 'up') {
-      this.ui.scrollUp();
+      const restored = this.handlers.onDequeue?.(this.value);
+      if (restored === undefined) this.ui.scrollUp();
+      else this.replaceValue(restored);
       return;
     }
 
@@ -120,7 +164,7 @@ export class FullscreenInput {
     switch (key.name) {
       case 'return':
       case 'enter':
-        this.submit();
+        this.submit('steer');
         return;
       case 'backspace':
         if (this.cursor > 0) {
@@ -169,7 +213,7 @@ export class FullscreenInput {
     this.ui.setInput(this.value, this.cursor);
   }
 
-  private submit(): void {
+  private submit(kind: AgentMessageQueueKind): void {
     const line = this.value;
     if (line.trim()) {
       this.history.push(line);
@@ -180,9 +224,12 @@ export class FullscreenInput {
     this.cursor = 0;
     this.ui.setInput('', 0);
 
-    this.processing = this.processing
-      .then(() => this.handlers.onLine(line))
-      .catch(error => this.handlers.onError?.(error instanceof Error ? error : new Error(String(error))));
+    try {
+      void Promise.resolve(this.handlers.onLine(line, kind))
+        .catch(error => this.handlers.onError?.(error instanceof Error ? error : new Error(String(error))));
+    } catch (error) {
+      this.handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
+    }
   }
 
   private navigateHistory(direction: -1 | 1): void {

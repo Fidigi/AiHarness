@@ -95,7 +95,7 @@
 |---|---|---|
 | DOC-23 | DONE | `index.md` gives task-oriented loading paths and corrected repository-root entry points. |
 | DOC-24 | DONE | Six focused workflows route creation, modification, audit, validation, navigation, and rule tasks. |
-| DOC-25 | GAP ACCEPTED | Do not create a root `SKILLS.md`: neither Pi nor AiHarness discovers that plural file automatically, and it would duplicate `AGENTS.md`, workflows, acceptance rules, and navigation. |
+| DOC-25 | GAP ACCEPTED | Do not create a root `SKILLS.md`: AiHarness does not discover that plural file automatically, and it would duplicate `AGENTS.md`, workflows, acceptance rules, and navigation. |
 | DOC-26 | DONE | Acceptance rules, audit rules, template, README, and workflows now agree on links, statuses, closure arithmetic, dates, evidence, and validation. |
 
 ## 4. Convention for Future Audits
@@ -120,7 +120,7 @@ One gap is accepted after explicit discussion.
 
 | ID | Dated decision | Justification | Re-examination trigger |
 |---|---|---|---|
-| DOC-25 | 2026-10-02 — Do not create a root `SKILLS.md` | The file has no automatic meaning for Pi or AiHarness and would duplicate the existing workflow/router hierarchy. If specialization becomes useful, prefer a portable `.agents/skills/<name>/SKILL.md`. | A method needs cross-repository reuse, bundled scripts/assets, explicit `/skill:*` invocation, or agents repeatedly fail to route to existing workflows. |
+| DOC-25 | 2026-10-02 — Do not create a root `SKILLS.md` | The file has no automatic meaning for AiHarness and would duplicate the existing workflow/router hierarchy. If specialization becomes useful, prefer a portable `.agents/skills/<name>/SKILL.md`. | A method needs cross-repository reuse, bundled scripts/assets, explicit `/skill:*` invocation, or agents repeatedly fail to route to existing workflows. |
 
 ## 6. Delivery Journal
 

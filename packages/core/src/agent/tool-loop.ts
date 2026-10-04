@@ -20,8 +20,12 @@ export interface ToolLoopOptions {
   streamTurn(messages: Message[], tools: ChatToolDefinition[], round: number): Promise<ChatResponse>;
   tools?: ChatToolDefinition[];
   onTurnStart?(round: number): void | Promise<void>;
+  onAssistantResponse?(response: ChatResponse, round: number, durationMs: number): void | Promise<void>;
   onToolCall?(call: ToolCall): void | Promise<void>;
   onToolResult?(result: ToolExecutionResult): void | Promise<void>;
+  onTurnEnd?(response: ChatResponse, toolResults: ToolExecutionResult[], round: number): void | Promise<void>;
+  /** Persist or transform queued input after tools and before the next provider turn. */
+  beforeNextTurn?(response: ChatResponse, toolResults: ToolExecutionResult[], round: number): void | Promise<void>;
   onUsage?(response: ChatResponse, round: number): void | Promise<void>;
   onFinalResponse?(content: string, response: ChatResponse): void | Promise<void>;
   maxToolRounds?: number;
@@ -63,6 +67,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
     description: tool.description,
     parameters: tool.parameters ?? { type: 'object', properties: {} },
   }));
+  const enabledToolNames = new Set(tools.map(tool => tool.name.toLowerCase()));
   const effectiveMessages = (): Message[] => options.sessionManager.getEffectiveContext(options.sessionId)
     .filter(entry => entry.type === 'message')
     .map(entry => ({
@@ -96,23 +101,26 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
     const response = await options.streamTurn(messages, tools, round);
     throwIfAborted();
     if (response.usage) await options.onUsage?.(response, round);
+    const durationMs = Date.now() - startedAt;
+    await options.onAssistantResponse?.(response, round, durationMs);
     const toolCalls = response.toolCalls ?? [];
 
     if (toolCalls.length === 0) {
-      if (response.content) {
+      if (response.content || response.reasoning) {
         await options.sessionManager.addMessage(options.sessionId, {
           role: 'assistant',
           content: response.content,
           blocks: [
             ...(response.reasoning ? [{ type: 'reasoning' as const, text: response.reasoning }] : []),
-            { type: 'text', text: response.content },
+            ...(response.content ? [{ type: 'text' as const, text: response.content }] : []),
           ],
           provider: options.provider,
           model: response.model,
           usage: normalizeUsage(response.usage),
-          durationMs: Date.now() - startedAt,
+          durationMs,
         }, { signal: options.signal });
       }
+      await options.onTurnEnd?.(response, [], round);
       await options.onFinalResponse?.(response.content, response);
       return response.content;
     }
@@ -129,9 +137,10 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       provider: options.provider,
       model: response.model,
       usage: normalizeUsage(response.usage),
-      durationMs: Date.now() - startedAt,
+      durationMs,
     }, { signal: options.signal });
 
+    const toolResults: ToolExecutionResult[] = [];
     for (const call of toolCalls) {
       throwIfAborted();
       await options.onToolCall?.(call);
@@ -139,6 +148,11 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       let content: string;
       let isError = false;
       try {
+        const normalizedToolName = call.name.toLowerCase();
+        if (!enabledToolNames.has(normalizedToolName)
+          && options.extensionRegistry.getTools().some(tool => tool.name === normalizedToolName)) {
+          throw new Error(`Tool is not enabled for this run: ${call.name}`);
+        }
         const result = await options.extensionRegistry.executeTool(
           call.name,
           call.input,
@@ -174,16 +188,21 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         isError,
         durationMs,
       }, { signal: options.signal });
-      await options.onToolResult?.({
+      const toolResult: ToolExecutionResult = {
         call,
         content,
         ...(truncated ? { fullContent } : {}),
         isError,
         durationMs,
         truncated,
-      });
+      };
+      toolResults.push(toolResult);
+      await options.onToolResult?.(toolResult);
     }
 
+    await options.onTurnEnd?.(response, toolResults, round);
+    await options.beforeNextTurn?.(response, toolResults, round);
+    throwIfAborted();
     messages = effectiveMessages();
   }
 

@@ -291,13 +291,13 @@ test.describe('Settings and authentication', () => {
     await dialog.getByLabel('Name').fill('Security review');
     await dialog.getByLabel('Description').fill('Review trust boundaries');
     await dialog.getByLabel('Instructions').fill('Inspect the selected trust boundaries.');
-    await dialog.getByLabel('Tools').fill('read_file, search_files');
+    await dialog.getByLabel('Tools').fill('read, grep');
     await dialog.getByLabel('Skills').fill('review-project');
     await dialog.getByLabel('Maximum turns').fill('6');
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(section.getByText('Security review', { exact: true })).toBeVisible();
     const custom = section.locator('.subagent-profile-card').filter({ hasText: 'Security review' });
-    await expect(custom).toContainText('read_file, search_files');
+    await expect(custom).toContainText('read, grep');
     await custom.getByRole('button', { name: 'Duplicate' }).click();
     await expect(section.getByText('Security review copy', { exact: true })).toBeVisible();
   });

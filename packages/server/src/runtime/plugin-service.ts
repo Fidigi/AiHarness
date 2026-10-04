@@ -434,8 +434,8 @@ async function inventoryPackage(
   const rootInfo = await lstat(root);
   if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) throw new Error('Plugin package root is not a safe directory');
   const manifest = await readPackageManifest(root);
-  const piManifest = manifest.pi && typeof manifest.pi === 'object' && !Array.isArray(manifest.pi)
-    ? manifest.pi as Record<string, unknown>
+  const resourceManifest = manifest.aiHarness && typeof manifest.aiHarness === 'object' && !Array.isArray(manifest.aiHarness)
+    ? manifest.aiHarness as Record<string, unknown>
     : {};
   let files: ScannedFile[];
   let truncated = false;
@@ -455,7 +455,7 @@ async function inventoryPackage(
   for (const kind of ['extension', 'skill', 'prompt', 'theme'] as PluginResourceKind[]) {
     const candidates = files.map(file => candidateForKind(file, kind)).filter((item): item is NonNullable<typeof item> => Boolean(item));
     const field = `${kind}s`;
-    const configured = piManifest[field];
+    const configured = resourceManifest[field];
     if (configured !== undefined && (!Array.isArray(configured) || configured.length > MAX_PATTERNS)) {
       throw new Error(`Invalid ${field} package manifest entry`);
     }

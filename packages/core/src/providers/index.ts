@@ -4,7 +4,7 @@
 // token usage tracking, model registry
 // ============================================================
 
-import { Message, ProviderConfig, ProviderType, ToolCall } from '../types/index.js';
+import { Message, ProviderConfig, ProviderType, ToolCall, TokenUsage } from '../types/index.js';
 import { fetchWithRetry, RetryOptions } from '../utils/index.js';
 
 // ===================================================================
@@ -15,6 +15,9 @@ export interface StreamEvent {
   type: 'text_delta' | 'reasoning_delta' | 'tool_call' | 'message_start' | 'message_end' | 'error' | 'done';
   data?: unknown;
 }
+
+/** A provider must await this callback before reading or producing the next stream item. */
+export type StreamChunkCallback = (chunk: string, event?: StreamEvent) => void | Promise<void>;
 
 function messageImages(message: Message): Array<Extract<NonNullable<Message['blocks']>[number], { type: 'image' }>> {
   return (message.blocks ?? []).filter((block): block is Extract<NonNullable<Message['blocks']>[number], { type: 'image' }> => block.type === 'image');
@@ -49,6 +52,31 @@ export interface ChatResponse {
   toolCalls?: ToolCall[];
 }
 
+/** Normalize provider response accounting for persistence and cross-frontend reporting. */
+export function normalizeProviderUsage(usage: ChatResponse['usage']): TokenUsage | undefined {
+  if (!usage) return undefined;
+  const token = (value: unknown): number => (
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+  );
+  const inputTokens = token(usage.promptTokens);
+  const outputTokens = token(usage.completionTokens);
+  const cacheReadTokens = token(usage.cacheReadTokens);
+  const cacheWriteTokens = token(usage.cacheWriteTokens);
+  const componentTotal = inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens;
+  const reportedTotal = token(usage.totalTokens);
+  const costUsd = typeof usage.costUsd === 'number' && Number.isFinite(usage.costUsd) && usage.costUsd >= 0
+    ? usage.costUsd
+    : undefined;
+  return {
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
+    totalTokens: Math.max(componentTotal, reportedTotal),
+    ...(costUsd === undefined ? {} : { costUsd }),
+  };
+}
+
 // ===================================================================
 // Abstract base class
 // ===================================================================
@@ -67,7 +95,7 @@ export abstract class AiProvider {
   /** Stream a response (for real-time output) */
   abstract streamChat(
     messages: Message[],
-    onChunk: (chunk: string, event?: StreamEvent) => void,
+    onChunk: StreamChunkCallback,
     onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void,
     options?: ChatOptions,
@@ -81,11 +109,21 @@ export abstract class AiProvider {
     return [];
   }
 
+  /** Expose the non-secret provider type without leaking its configuration. */
+  getProviderType(): string {
+    return String(this.config.type);
+  }
+
   /** Expose only the configured model identifier; provider credentials stay private. */
   getConfiguredModel(): string | undefined {
     return typeof this.config.model === 'string' && this.config.model.trim()
       ? this.config.model.trim()
       : undefined;
+  }
+
+  /** Change the model selected for subsequent requests without exposing provider credentials. */
+  setConfiguredModel(model: string): void {
+    this.config.model = model;
   }
 }
 
@@ -95,7 +133,7 @@ export interface ChatToolDefinition {
   parameters: Record<string, unknown>;
 }
 
-export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high' | 'xhigh';
+export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export interface ChatOptions {
   model?: string;
@@ -184,6 +222,23 @@ export class ProviderFactory {
 // ===================================================================
 // OpenAI Provider (real implementation)
 // ===================================================================
+
+function normalizeOpenAiUsage(
+  usage: NonNullable<OpenAiResponse['usage']> | NonNullable<OpenAiStreamChunk['usage']>,
+): NonNullable<ChatResponse['usage']> {
+  const promptTokens = usage.prompt_tokens ?? 0;
+  const cacheReadTokens = usage.prompt_tokens_details?.cached_tokens ?? 0;
+  const cacheWriteTokens = usage.prompt_tokens_details?.cache_write_tokens ?? 0;
+  const inputTokens = Math.max(0, promptTokens - cacheReadTokens - cacheWriteTokens);
+  const completionTokens = usage.completion_tokens ?? 0;
+  return {
+    promptTokens: inputTokens,
+    completionTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
+    totalTokens: inputTokens + completionTokens + cacheReadTokens + cacheWriteTokens,
+  };
+}
 
 export class OpenAiProvider extends AiProvider {
   private readonly baseUrl: string;
@@ -309,7 +364,8 @@ export class OpenAiProvider extends AiProvider {
           ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
           ...(options?.maxTokens !== undefined ? { max_tokens: options.maxTokens } : {}),
           ...(options?.thinking && options.thinking !== 'off' ? {
-            reasoning_effort: options.thinking === 'xhigh' ? 'high' : options.thinking,
+            reasoning_effort: options.thinking === 'xhigh' || options.thinking === 'max'
+              ? 'high' : options.thinking,
           } : {}),
           ...(options?.tools?.length ? {
             tools: options.tools.map(tool => ({
@@ -340,19 +396,14 @@ export class OpenAiProvider extends AiProvider {
       ...(choice.message.reasoning_content || choice.message.reasoning_summary
         ? { reasoning: choice.message.reasoning_content || choice.message.reasoning_summary } : {}),
       model: data.model,
-      usage: data.usage ? {
-        promptTokens: data.usage.prompt_tokens ?? 0,
-        completionTokens: data.usage.completion_tokens ?? 0,
-        cacheReadTokens: data.usage.prompt_tokens_details?.cached_tokens ?? 0,
-        totalTokens: data.usage.total_tokens ?? 0,
-      } : undefined,
+      usage: data.usage ? normalizeOpenAiUsage(data.usage) : undefined,
       toolCalls: this.parseToolCalls(choice.message.tool_calls),
     };
   }
 
   async streamChat(
     messages: Message[],
-    onChunk: (chunk: string, event?: StreamEvent) => void,
+    onChunk: StreamChunkCallback,
     onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void,
     options?: ChatOptions,
@@ -382,7 +433,8 @@ export class OpenAiProvider extends AiProvider {
     if (options?.temperature !== undefined) body.temperature = options.temperature;
     if (options?.maxTokens !== undefined) body.max_tokens = options.maxTokens;
     if (options?.thinking && options.thinking !== 'off') {
-      body.reasoning_effort = options.thinking === 'xhigh' ? 'high' : options.thinking;
+      body.reasoning_effort = options.thinking === 'xhigh' || options.thinking === 'max'
+        ? 'high' : options.thinking;
     }
     if (options?.systemPrompt) {
       const msgs = [...messages];
@@ -442,7 +494,7 @@ export class OpenAiProvider extends AiProvider {
           const dataStr = trimmed.slice(6); // Remove "data: " prefix
           if (dataStr === '[DONE]') {
             const toolCalls = collectToolCalls();
-            for (const call of toolCalls ?? []) onChunk('', { type: 'tool_call', data: call });
+            for (const call of toolCalls ?? []) await onChunk('', { type: 'tool_call', data: call });
             onComplete?.({
               content: fullContent,
               ...(fullReasoning ? { reasoning: fullReasoning } : {}),
@@ -458,11 +510,11 @@ export class OpenAiProvider extends AiProvider {
             const delta = data.choices?.[0]?.delta;
             if (delta?.content) {
               fullContent += delta.content;
-              onChunk(delta.content, { type: 'text_delta', data });
+              await onChunk(delta.content, { type: 'text_delta', data });
             }
             if (delta?.reasoning_content) {
               fullReasoning += delta.reasoning_content;
-              onChunk('', { type: 'reasoning_delta', data: { content: delta.reasoning_content } });
+              await onChunk('', { type: 'reasoning_delta', data: { content: delta.reasoning_content } });
             }
             for (const fragment of delta?.tool_calls ?? []) {
               const existing = toolCallFragments.get(fragment.index) ?? {
@@ -478,12 +530,7 @@ export class OpenAiProvider extends AiProvider {
 
             if (data.model) streamModel = data.model;
             // OpenAI emits usage in a final empty-choices chunk when include_usage is enabled.
-            if (data.usage) usage = {
-              promptTokens: data.usage.prompt_tokens ?? 0,
-              completionTokens: data.usage.completion_tokens ?? 0,
-              cacheReadTokens: data.usage.prompt_tokens_details?.cached_tokens ?? 0,
-              totalTokens: data.usage.total_tokens ?? 0,
-            };
+            if (data.usage) usage = normalizeOpenAiUsage(data.usage);
           } catch {
             // Skip malformed JSON lines
           }
@@ -491,7 +538,7 @@ export class OpenAiProvider extends AiProvider {
       }
 
       const toolCalls = collectToolCalls();
-      for (const call of toolCalls ?? []) onChunk('', { type: 'tool_call', data: call });
+      for (const call of toolCalls ?? []) await onChunk('', { type: 'tool_call', data: call });
       onComplete?.({
         content: fullContent,
         ...(fullReasoning ? { reasoning: fullReasoning } : {}),
@@ -581,7 +628,7 @@ interface OpenAiResponse {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
-    prompt_tokens_details?: { cached_tokens?: number };
+    prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
   };
 }
 
@@ -612,7 +659,7 @@ interface OpenAiStreamChunk {
     prompt_tokens?: number;
     completion_tokens?: number;
     total_tokens?: number;
-    prompt_tokens_details?: { cached_tokens?: number };
+    prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
   };
 }
 
@@ -630,6 +677,7 @@ interface GeminiResponse {
   usageMetadata?: {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
+    thoughtsTokenCount?: number;
     totalTokenCount?: number;
     cachedContentTokenCount?: number;
   };
@@ -696,14 +744,24 @@ export class GeminiProvider extends AiProvider {
       }
       return { role: message.role === 'assistant' ? 'model' : 'user', parts };
     });
-    const thinkingBudgets = { low: 1024, medium: 4096, high: 8192, xhigh: 16384 } as const;
+    const thinkingModel = String(options?.model ?? this.config.model ?? '');
+    const highBudget = thinkingModel.includes('2.5-pro') ? 32768
+      : thinkingModel.includes('2.5-flash') ? 24576 : 8192;
+    const thinkingBudgets = {
+      minimal: 128,
+      low: 2048,
+      medium: 8192,
+      high: highBudget,
+      xhigh: highBudget,
+      max: highBudget,
+    } as const;
     const body: Record<string, unknown> = {
       contents,
       generationConfig: {
         ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
         ...(options?.maxTokens !== undefined ? { maxOutputTokens: options.maxTokens } : {}),
-        ...(options?.thinking && options.thinking !== 'off'
-          ? { thinkingConfig: { thinkingBudget: thinkingBudgets[options.thinking] } }
+        ...(options?.thinking
+          ? { thinkingConfig: { thinkingBudget: options.thinking === 'off' ? 0 : thinkingBudgets[options.thinking] } }
           : {}),
       },
     };
@@ -732,10 +790,11 @@ export class GeminiProvider extends AiProvider {
       content,
       model: String(this.config.model),
       usage: usage ? {
-        promptTokens: usage.promptTokenCount ?? 0,
-        completionTokens: usage.candidatesTokenCount ?? 0,
+        promptTokens: Math.max(0, (usage.promptTokenCount ?? 0) - (usage.cachedContentTokenCount ?? 0)),
+        completionTokens: (usage.candidatesTokenCount ?? 0) + (usage.thoughtsTokenCount ?? 0),
         cacheReadTokens: usage.cachedContentTokenCount ?? 0,
-        totalTokens: usage.totalTokenCount ?? (usage.promptTokenCount ?? 0) + (usage.candidatesTokenCount ?? 0),
+        totalTokens: usage.totalTokenCount ?? (usage.promptTokenCount ?? 0)
+          + (usage.candidatesTokenCount ?? 0) + (usage.thoughtsTokenCount ?? 0),
       } : undefined,
       toolCalls: toolCalls.length ? toolCalls : undefined,
     };
@@ -755,7 +814,7 @@ export class GeminiProvider extends AiProvider {
 
   async streamChat(
     messages: Message[],
-    onChunk: (chunk: string, event?: StreamEvent) => void,
+    onChunk: StreamChunkCallback,
     onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void,
     options?: ChatOptions,
@@ -778,13 +837,13 @@ export class GeminiProvider extends AiProvider {
       const toolCalls: ToolCall[] = [];
       let usage: ChatResponse['usage'];
 
-      const consume = (record: string): void => {
+      const consume = async (record: string): Promise<void> => {
         const data = record.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trim()).join('\n');
         if (!data || data === '[DONE]') return;
         const normalized = this.normalize(JSON.parse(data) as GeminiResponse);
         if (normalized.content) {
           content += normalized.content;
-          onChunk(normalized.content, { type: 'text_delta', data: normalized.content });
+          await onChunk(normalized.content, { type: 'text_delta', data: normalized.content });
         }
         for (const call of normalized.toolCalls ?? []) toolCalls.push(call);
         if (normalized.usage) usage = normalized.usage;
@@ -795,11 +854,11 @@ export class GeminiProvider extends AiProvider {
         buffer += decoder.decode(value, { stream: !done });
         const records = buffer.split(/\r?\n\r?\n/);
         buffer = records.pop() ?? '';
-        for (const record of records) consume(record);
+        for (const record of records) await consume(record);
         if (done) break;
       }
-      if (buffer.trim()) consume(buffer);
-      for (const call of toolCalls) onChunk('', { type: 'tool_call', data: call });
+      if (buffer.trim()) await consume(buffer);
+      for (const call of toolCalls) await onChunk('', { type: 'tool_call', data: call });
       onComplete?.({ content, model: String(this.config.model), usage, toolCalls: toolCalls.length ? toolCalls : undefined });
     } catch (error) {
       const normalized = error instanceof Error ? error : new Error(String(error));
@@ -947,15 +1006,15 @@ export class BedrockProvider extends AiProvider {
 
   async streamChat(
     messages: Message[],
-    onChunk: (chunk: string, event?: StreamEvent) => void,
+    onChunk: StreamChunkCallback,
     onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void,
     options?: ChatOptions,
   ): Promise<void> {
     try {
       const response = await this.chat(messages, options);
-      if (response.content) onChunk(response.content, { type: 'text_delta', data: response.content });
-      for (const call of response.toolCalls ?? []) onChunk('', { type: 'tool_call', data: call });
+      if (response.content) await onChunk(response.content, { type: 'text_delta', data: response.content });
+      for (const call of response.toolCalls ?? []) await onChunk('', { type: 'tool_call', data: call });
       onComplete?.(response);
     } catch (error) {
       const normalized = error instanceof Error ? error : new Error(String(error));
@@ -1074,7 +1133,9 @@ export class AnthropicProvider extends AiProvider {
     if (systemPrompt) body.system = systemPrompt;
     if (options?.temperature !== undefined && (!options.thinking || options.thinking === 'off')) body.temperature = options.temperature;
     if (options?.thinking && options.thinking !== 'off') {
-      const budgets = { low: 1024, medium: 4096, high: 8192, xhigh: 16384 } as const;
+      const budgets = {
+        minimal: 512, low: 1024, medium: 4096, high: 8192, xhigh: 16384, max: 32768,
+      } as const;
       body.thinking = { type: 'enabled', budget_tokens: budgets[options.thinking] };
       body.max_tokens = Math.max(Number(body.max_tokens), budgets[options.thinking] + 1024);
     }
@@ -1125,9 +1186,7 @@ export class AnthropicProvider extends AiProvider {
       ...(reasoning ? { reasoning } : {}),
       model: data.model,
       usage: data.usage ? {
-        promptTokens: (data.usage.input_tokens ?? 0)
-          + (data.usage.cache_read_input_tokens ?? 0)
-          + (data.usage.cache_creation_input_tokens ?? 0),
+        promptTokens: data.usage.input_tokens ?? 0,
         completionTokens: data.usage.output_tokens ?? 0,
         cacheReadTokens: data.usage.cache_read_input_tokens ?? 0,
         cacheWriteTokens: data.usage.cache_creation_input_tokens ?? 0,
@@ -1142,7 +1201,7 @@ export class AnthropicProvider extends AiProvider {
 
   async streamChat(
     messages: Message[],
-    onChunk: (chunk: string, event?: StreamEvent) => void,
+    onChunk: StreamChunkCallback,
     onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void,
     options?: ChatOptions,
@@ -1172,7 +1231,9 @@ export class AnthropicProvider extends AiProvider {
     if (systemPrompt) body.system = systemPrompt;
     if (options?.temperature !== undefined && (!options.thinking || options.thinking === 'off')) body.temperature = options.temperature;
     if (options?.thinking && options.thinking !== 'off') {
-      const budgets = { low: 1024, medium: 4096, high: 8192, xhigh: 16384 } as const;
+      const budgets = {
+        minimal: 512, low: 1024, medium: 4096, high: 8192, xhigh: 16384, max: 32768,
+      } as const;
       body.thinking = { type: 'enabled', budget_tokens: budgets[options.thinking] };
       body.max_tokens = Math.max(Number(body.max_tokens), budgets[options.thinking] + 1024);
     }
@@ -1249,10 +1310,10 @@ export class AnthropicProvider extends AiProvider {
                 const delta = eventData.delta;
                 if (delta.type === 'text_delta' && delta.text) {
                   fullContent += delta.text;
-                  onChunk(delta.text, { type: 'text_delta', data: eventData });
+                  await onChunk(delta.text, { type: 'text_delta', data: eventData });
                 } else if (delta.type === 'thinking_delta' && delta.thinking) {
                   fullReasoning += delta.thinking;
-                  onChunk('', { type: 'reasoning_delta', data: { content: delta.thinking } });
+                  await onChunk('', { type: 'reasoning_delta', data: { content: delta.thinking } });
                 } else if (delta.type === 'input_json_delta') {
                   const fragment = toolCallFragments.get(eventData.index);
                   if (fragment) fragment.json += delta.partial_json;
@@ -1264,9 +1325,9 @@ export class AnthropicProvider extends AiProvider {
                 if (msgStart?.usage) {
                   cacheReadTokens = msgStart.usage.cache_read_input_tokens ?? 0;
                   cacheWriteTokens = msgStart.usage.cache_creation_input_tokens ?? 0;
-                  inputTokens = (msgStart.usage.input_tokens ?? 0) + cacheReadTokens + cacheWriteTokens;
+                  inputTokens = msgStart.usage.input_tokens ?? 0;
                 }
-                onChunk('', { type: 'message_start', data: eventData });
+                await onChunk('', { type: 'message_start', data: eventData });
                 break;
               }
               case 'message_delta': {
@@ -1296,7 +1357,7 @@ export class AnthropicProvider extends AiProvider {
         }
         return { id: fragment.id, name: fragment.name, input };
       });
-      for (const call of toolCalls) onChunk('', { type: 'tool_call', data: call });
+      for (const call of toolCalls) await onChunk('', { type: 'tool_call', data: call });
       onComplete?.({
         content: fullContent,
         ...(fullReasoning ? { reasoning: fullReasoning } : {}),
@@ -1439,7 +1500,7 @@ export class MockProvider extends AiProvider {
 
   async streamChat(
     messages: Message[],
-    onChunk: (chunk: string, event?: StreamEvent) => void,
+    onChunk: StreamChunkCallback,
     onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void,
     options?: ChatOptions,
@@ -1449,13 +1510,13 @@ export class MockProvider extends AiProvider {
       const content = this.getNextMockResponse();
 
       // Emit message_start event
-      onChunk('', { type: 'message_start', data: { mock: true } });
+      await onChunk('', { type: 'message_start', data: { mock: true } });
 
       // Stream the response character by character
       for (let i = 0; i < content.length; i++) {
         await new Promise(resolve => setTimeout(resolve, Math.random() * 15 + 5));
         if (options?.signal?.aborted) throw new Error('Request aborted');
-        onChunk(content[i], { type: 'text_delta', data: { index: i } });
+        await onChunk(content[i], { type: 'text_delta', data: { index: i } });
       }
 
       onComplete?.({

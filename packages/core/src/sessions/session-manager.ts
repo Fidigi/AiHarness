@@ -10,6 +10,7 @@ import {
   type Session,
   type ShellCommandRecord,
 } from '../types/index.js';
+import { constants as fsConstants } from 'node:fs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { EventEmitter, EventHandler, EventMap } from '../utils/event-emitter.js';
@@ -49,6 +50,7 @@ export interface MessageEntry extends SessionEntryBase {
 /** Shell command entry, kept separate so exclusion from model context is explicit. */
 export interface CommandEntry extends SessionEntryBase {
   type: 'command';
+  parentEntryId?: string;
   command: string;
   cwd: string;
   status: ShellCommandRecord['status'];
@@ -63,17 +65,22 @@ export interface CommandEntry extends SessionEntryBase {
 /** Compaction summary entry */
 export interface CompactionEntry extends SessionEntryBase {
   type: 'compaction';
+  parentEntryId?: string;
   summary: string;
   firstKeptEntryId: string; // ID of the first message kept after compaction
   tokenEstimate?: number;
   instruction?: string;
   tokensBefore?: number;
   tokensAfter?: number;
+  provider?: string;
+  model?: string;
+  usage?: Message['usage'];
 }
 
 /** Branch summary entry (when navigating tree) */
 export interface BranchSummaryEntry extends SessionEntryBase {
   type: 'branch_summary';
+  parentEntryId?: string;
   branchName: string;
   summary: string;
 }
@@ -103,6 +110,16 @@ export interface SessionMetadataEntry extends SessionEntryBase {
 
 export type SessionEntry = MessageEntry | CommandEntry | CompactionEntry | BranchSummaryEntry | SessionMetadataEntry;
 
+function isPersistedUsage(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return [
+    'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'totalTokens', 'costUsd',
+  ].every(field => {
+    const candidate = (value as Record<string, unknown>)[field];
+    return candidate === undefined || (typeof candidate === 'number' && Number.isFinite(candidate) && candidate >= 0);
+  });
+}
+
 function isSessionEntry(value: unknown): value is SessionEntry {
   if (!value || typeof value !== 'object') return false;
   const entry = value as Record<string, unknown>;
@@ -115,29 +132,78 @@ function isSessionEntry(value: unknown): value is SessionEntry {
     case 'message':
       return ['user', 'assistant', 'system', 'tool'].includes(String(entry.role))
         && typeof entry.content === 'string'
+        && (entry.parentMessageId === undefined || typeof entry.parentMessageId === 'string')
+        && (entry.provider === undefined || typeof entry.provider === 'string')
+        && (entry.model === undefined || typeof entry.model === 'string')
+        && (entry.usage === undefined || isPersistedUsage(entry.usage))
         && (entry.blocks === undefined || Array.isArray(entry.blocks));
     case 'command':
-      return typeof entry.command === 'string'
+      return (entry.parentEntryId === undefined || typeof entry.parentEntryId === 'string')
+        && typeof entry.command === 'string'
         && typeof entry.cwd === 'string'
         && ['queued', 'running', 'completed', 'failed', 'cancelled'].includes(String(entry.status));
     case 'compaction':
-      return typeof entry.summary === 'string' && typeof entry.firstKeptEntryId === 'string';
+      return (entry.parentEntryId === undefined || typeof entry.parentEntryId === 'string')
+        && (entry.provider === undefined || typeof entry.provider === 'string')
+        && (entry.model === undefined || typeof entry.model === 'string')
+        && (entry.usage === undefined || isPersistedUsage(entry.usage))
+        && typeof entry.summary === 'string' && typeof entry.firstKeptEntryId === 'string';
     case 'branch_summary':
-      return typeof entry.branchName === 'string' && typeof entry.summary === 'string';
+      return (entry.parentEntryId === undefined || typeof entry.parentEntryId === 'string')
+        && typeof entry.branchName === 'string' && typeof entry.summary === 'string';
     case 'metadata':
       return typeof entry.createdAt === 'number' && Number.isFinite(entry.createdAt)
-        && typeof entry.updatedAt === 'number' && Number.isFinite(entry.updatedAt);
+        && typeof entry.updatedAt === 'number' && Number.isFinite(entry.updatedAt)
+        && (entry.usage === undefined || isPersistedUsage(entry.usage));
     default:
       return false;
   }
 }
 
-const SECRET_CONFIG_KEYS = /^(?:api[-_]?key|secret(?:access)?key|access[-_]?token|session[-_]?token|authorization|password)$/i;
+const SECRET_CONFIG_KEYS = /(?:api[-_]?key|secret|private[-_]?key|(?:access|refresh|session|auth|bearer)[-_]?token|authorization|password|cookie|credential|^token$)/i;
 
 /** Provider identity may be stored with a session, credentials never are. */
 function sanitizeProviderConfig(config: ProviderConfig | undefined): ProviderConfig | undefined {
-  if (!config) return undefined;
-  return Object.fromEntries(Object.entries(config).filter(([key]) => !SECRET_CONFIG_KEYS.test(key))) as ProviderConfig;
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return undefined;
+  const seen = new WeakSet<object>();
+  const sanitize = (value: unknown): unknown => {
+    if (!value || typeof value !== 'object') return value;
+    if (seen.has(value)) return undefined;
+    seen.add(value);
+    if (Array.isArray(value)) return value.map(sanitize).filter(item => item !== undefined);
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => !SECRET_CONFIG_KEYS.test(key))
+        .flatMap(([key, item]) => {
+          const sanitized = sanitize(item);
+          return sanitized === undefined ? [] : [[key, sanitized]];
+        }),
+    );
+  };
+  return sanitize(config) as ProviderConfig;
+}
+
+function messageFromEntry(entry: MessageEntry): Message | undefined {
+  const timestamp = new Date(entry.timestamp);
+  if (Number.isNaN(timestamp.getTime())) return undefined;
+  return {
+    id: entry.id,
+    role: entry.role,
+    content: entry.content,
+    timestamp,
+    blocks: entry.blocks,
+    toolCalls: entry.toolCalls,
+    toolCallId: entry.toolCallId,
+    name: entry.name,
+    isError: entry.isError,
+    provider: entry.provider,
+    model: entry.model,
+    usage: entry.usage,
+    durationMs: entry.durationMs,
+    parentMessageId: entry.parentMessageId,
+    agentId: entry.agentId,
+    metadata: entry.metadata,
+  };
 }
 
 function messageToEntry(message: Message): MessageEntry {
@@ -195,21 +261,86 @@ export class JsonlSessionStore {
     return filePath;
   }
 
+  private async verifySessionPath(filePath: string, allowMissing: boolean): Promise<void> {
+    try {
+      const stats = await fs.lstat(filePath);
+      if (stats.isSymbolicLink() || !stats.isFile() || stats.nlink > 1) {
+        throw new Error('Session path must be a regular, unlinked file.');
+      }
+    } catch (error) {
+      if (allowMissing && (error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw error;
+    }
+  }
+
+  private async readSessionFile(filePath: string): Promise<string> {
+    await this.verifySessionPath(filePath, false);
+    const handle = await fs.open(
+      filePath,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
+    );
+    try {
+      const stats = await handle.stat();
+      if (!stats.isFile() || stats.nlink > 1) throw new Error('Session path must be a regular, unlinked file.');
+      return await handle.readFile({ encoding: 'utf8' });
+    } finally {
+      await handle.close();
+    }
+  }
+
+  private async appendSessionFile(filePath: string, content: string): Promise<void> {
+    await this.verifySessionPath(filePath, true);
+    const handle = await fs.open(
+      filePath,
+      fsConstants.O_WRONLY | fsConstants.O_APPEND | fsConstants.O_CREAT
+        | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
+      0o600,
+    );
+    try {
+      const stats = await handle.stat();
+      if (!stats.isFile() || stats.nlink > 1) throw new Error('Session path must be a regular, unlinked file.');
+      await handle.chmod(0o600);
+      await handle.writeFile(content, { encoding: 'utf8' });
+    } finally {
+      await handle.close();
+    }
+  }
+
+  private async rewriteSessionFile(filePath: string, content: string): Promise<void> {
+    await this.verifySessionPath(filePath, true);
+    const handle = await fs.open(
+      filePath,
+      fsConstants.O_WRONLY | fsConstants.O_CREAT
+        | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
+      0o600,
+    );
+    try {
+      const stats = await handle.stat();
+      if (!stats.isFile() || stats.nlink > 1) throw new Error('Session path must be a regular, unlinked file.');
+      await handle.chmod(0o600);
+      await handle.truncate(0);
+      await handle.writeFile(content, { encoding: 'utf8' });
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  }
+
   /** List all session IDs (from .jsonl files) */
   async listSessionIds(): Promise<string[]> {
     if (!this.enabled) return [];
     try {
       await this.ensureDir();
-      const files = await fs.readdir(this.sessionsDir);
-      // Sort by last modified time (newest first)
+      const files = await fs.readdir(this.sessionsDir, { withFileTypes: true });
+      // Never discover symbolic links as sessions.
       const sessionFiles = files
-        .filter(f => f.endsWith('.jsonl'))
-        .map(f => f.replace(/\.jsonl$/, ''));
+        .filter(entry => entry.isFile() && entry.name.endsWith('.jsonl'))
+        .map(entry => entry.name.replace(/\.jsonl$/, ''));
 
       for (let i = 0; i < sessionFiles.length; i++) {
         for (let j = i + 1; j < sessionFiles.length; j++) {
-          const aStat = await fs.stat(path.join(this.sessionsDir, `${sessionFiles[i]}.jsonl`)).catch(() => ({ mtimeMs: 0 }));
-          const bStat = await fs.stat(path.join(this.sessionsDir, `${sessionFiles[j]}.jsonl`)).catch(() => ({ mtimeMs: 0 }));
+          const aStat = await fs.lstat(path.join(this.sessionsDir, `${sessionFiles[i]}.jsonl`)).catch(() => ({ mtimeMs: 0 }));
+          const bStat = await fs.lstat(path.join(this.sessionsDir, `${sessionFiles[j]}.jsonl`)).catch(() => ({ mtimeMs: 0 }));
           if ((bStat as any).mtimeMs > (aStat as any).mtimeMs) {
             [sessionFiles[i], sessionFiles[j]] = [sessionFiles[j], sessionFiles[i]];
           }
@@ -228,13 +359,12 @@ export class JsonlSessionStore {
     if (!this.enabled) return null;
     const filePath = this.getFilePath(sessionId);
 
+    let content: string;
     try {
-      await fs.access(filePath);
+      content = await this.readSessionFile(filePath);
     } catch {
-      return null; // File doesn't exist
+      return null;
     }
-
-    const content = await fs.readFile(filePath, 'utf-8');
     if (!content.trim()) {
       return {
         id: sessionId,
@@ -256,7 +386,7 @@ export class JsonlSessionStore {
     }
 
     let messages: Message[] = [];
-    const commands: ShellCommandRecord[] = [];
+    let commands: ShellCommandRecord[] = [];
     let title: string | undefined;
     let createdAt: Date | undefined;
     let updatedAt: Date | undefined;
@@ -286,26 +416,8 @@ export class JsonlSessionStore {
 
     for (const entry of entries) {
       if (entry.type === 'message') {
-        const timestamp = new Date(entry.timestamp);
-        if (Number.isNaN(timestamp.getTime())) continue;
-        const msg: Message = {
-          id: entry.id,
-          role: entry.role,
-          content: entry.content,
-          timestamp,
-          blocks: entry.blocks,
-          toolCalls: entry.toolCalls,
-          toolCallId: entry.toolCallId,
-          name: entry.name,
-          isError: entry.isError,
-          provider: entry.provider,
-          model: entry.model,
-          usage: entry.usage,
-          durationMs: entry.durationMs,
-          parentMessageId: entry.parentMessageId,
-          agentId: entry.agentId,
-          metadata: entry.metadata,
-        };
+        const msg = messageFromEntry(entry);
+        if (!msg) continue;
         messages.push(msg);
 
         if (!title && entry.role === 'user') {
@@ -320,6 +432,7 @@ export class JsonlSessionStore {
             cwd: entry.cwd,
             timestamp,
             status: entry.status,
+            parentEntryId: entry.parentEntryId,
             output: entry.output,
             exitCode: entry.exitCode,
             durationMs: entry.durationMs,
@@ -354,6 +467,44 @@ export class JsonlSessionStore {
       }
 
       includeTimestamp(entry.timestamp);
+    }
+
+    const treeEntries = entries.filter(entry => entry.type !== 'metadata');
+    const entriesById = new Map(treeEntries.map(entry => [entry.id, entry]));
+    const activePathIds = new Set<string>();
+    let cursor = activeLeafId;
+    while (cursor && !activePathIds.has(cursor)) {
+      const entry = entriesById.get(cursor);
+      if (!entry) break;
+      activePathIds.add(cursor);
+      cursor = entry.type === 'message' ? entry.parentMessageId
+        : entry.type === 'command' || entry.type === 'compaction' || entry.type === 'branch_summary'
+          ? entry.parentEntryId
+          : undefined;
+    }
+    const activeLeafReset = metadata?.activeLeafReset === true && !activeLeafId;
+    const hasUsableTree = Boolean(activeLeafId) && (
+      activePathIds.size > 1 || treeEntries.length <= 1 || metadata?.hasBranchedHistory === true
+    );
+    if (activeLeafReset) {
+      messages = [];
+      commands = [];
+      latestCompaction = undefined;
+    } else if (hasUsableTree) {
+      messages = messages.filter(message => activePathIds.has(message.id));
+      commands = commands.filter(command => activePathIds.has(command.id));
+      latestCompaction = [...treeEntries].reverse().find(
+        (entry): entry is CompactionEntry => entry.type === 'compaction' && activePathIds.has(entry.id),
+      );
+    }
+
+    if ((activeLeafReset || hasUsableTree) && !latestCompaction && metadata) {
+      const activeMetadata = { ...metadata };
+      delete activeMetadata.lastCompacted;
+      delete activeMetadata.compactionSummary;
+      delete activeMetadata.compactionEntryId;
+      delete activeMetadata.compactionStats;
+      metadata = activeMetadata;
     }
 
     if (latestCompaction) {
@@ -401,28 +552,13 @@ export class JsonlSessionStore {
     await this.ensureDir();
 
     const filePath = this.getFilePath(session.id);
-
-    // Read existing entries if any (to avoid duplicates)
-    let existingEntries: string[] = [];
+    let existingLines: string[] = [];
     try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      existingEntries = content.split('\n').filter(l => l.trim());
+      existingLines = (await this.readSessionFile(filePath)).split('\n').filter(line => line.trim());
     } catch {
-      // File doesn't exist yet
+      // File does not exist yet.
     }
 
-    // Build new entries (only messages that aren't already in the file)
-    const existingIds = new Set(existingEntries.map(e => {
-      try {
-        return JSON.parse(e).id;
-      } catch {
-        return null;
-      }
-    }).filter(Boolean));
-
-    const lines: string[] = existingEntries.filter(line => {
-      try { return JSON.parse(line).type !== 'metadata'; } catch { return true; }
-    });
     const metadataEntry: SessionMetadataEntry = {
       id: 'session-metadata',
       type: 'metadata',
@@ -448,23 +584,36 @@ export class JsonlSessionStore {
       providerConfig: sanitizeProviderConfig(session.providerConfig),
       metadata: session.metadata,
     };
-    lines.unshift(JSON.stringify(metadataEntry));
-
-    for (const message of session.messages) {
-      if (!existingIds.has(message.id)) lines.push(JSON.stringify(messageToEntry(message)));
-    }
-    for (const command of session.commands ?? []) {
-      if (existingIds.has(command.id)) continue;
-      const entry: CommandEntry = {
+    const currentEntries: Array<MessageEntry | CommandEntry> = [
+      ...session.messages.map(messageToEntry),
+      ...(session.commands ?? []).map(command => ({
         ...command,
-        type: 'command',
+        type: 'command' as const,
         version: SESSION_SCHEMA_VERSION,
         timestamp: command.timestamp.getTime(),
-      };
-      lines.push(JSON.stringify(entry));
-    }
+      })),
+    ];
+    const currentById = new Map(currentEntries.map(entry => [entry.id, entry]));
+    const existingIds = new Set<string>();
+    const durableLines = existingLines.flatMap(line => {
+      try {
+        const entry = JSON.parse(line) as { id?: unknown; type?: unknown };
+        if (entry.type === 'metadata') return [];
+        if (typeof entry.id !== 'string') return [line];
+        existingIds.add(entry.id);
+        const current = currentById.get(entry.id);
+        return [current ? JSON.stringify(current) : line];
+      } catch {
+        return [line];
+      }
+    });
+    const newEntries = currentEntries
+      .filter(entry => !existingIds.has(entry.id))
+      .sort((left, right) => left.timestamp - right.timestamp)
+      .map(entry => JSON.stringify(entry));
+    const lines = [JSON.stringify(metadataEntry), ...durableLines, ...newEntries];
 
-    await fs.writeFile(filePath, `${lines.join('\n')}\n`, { mode: 0o600 });
+    await this.rewriteSessionFile(filePath, `${lines.join('\n')}\n`);
   }
 
   /** Append a message entry to the session file */
@@ -484,10 +633,9 @@ export class JsonlSessionStore {
     if (!this.enabled) return message.id;
 
     await this.ensureDir();
-    await fs.appendFile(
+    await this.appendSessionFile(
       this.getFilePath(sessionId),
       `${JSON.stringify(messageToEntry(message))}\n`,
-      { mode: 0o600 },
     );
 
     return message.id;
@@ -511,7 +659,7 @@ export class JsonlSessionStore {
       timestamp: record.timestamp.getTime(),
     };
     await this.ensureDir();
-    await fs.appendFile(this.getFilePath(sessionId), `${JSON.stringify(entry)}\n`, { mode: 0o600 });
+    await this.appendSessionFile(this.getFilePath(sessionId), `${JSON.stringify(entry)}\n`);
     return record;
   }
 
@@ -521,7 +669,8 @@ export class JsonlSessionStore {
     summary: string,
     firstKeptEntryId: string,
     tokenEstimate?: number,
-    details: Pick<CompactionEntry, 'instruction' | 'tokensBefore' | 'tokensAfter'> = {},
+    details: Pick<CompactionEntry,
+      'instruction' | 'tokensBefore' | 'tokensAfter' | 'parentEntryId' | 'provider' | 'model' | 'usage'> = {},
   ): Promise<void> {
     if (!this.enabled) return;
     await this.ensureDir();
@@ -532,28 +681,40 @@ export class JsonlSessionStore {
       summary,
       firstKeptEntryId,
       timestamp: Date.now(),
+      ...(details.parentEntryId ? { parentEntryId: details.parentEntryId } : {}),
       ...(tokenEstimate !== undefined ? { tokenEstimate } : {}),
       ...(details.instruction ? { instruction: details.instruction } : {}),
       ...(details.tokensBefore !== undefined ? { tokensBefore: details.tokensBefore } : {}),
       ...(details.tokensAfter !== undefined ? { tokensAfter: details.tokensAfter } : {}),
+      ...(details.provider ? { provider: details.provider } : {}),
+      ...(details.model ? { model: details.model } : {}),
+      ...(details.usage ? { usage: details.usage } : {}),
     });
 
-    await fs.appendFile(this.getFilePath(sessionId), `${line}\n`, { mode: 0o600 });
+    await this.appendSessionFile(this.getFilePath(sessionId), `${line}\n`);
   }
 
   /** Append a summary describing an abandoned or completed branch. */
-  async appendBranchSummary(sessionId: string, branchName: string, summary: string): Promise<void> {
-    if (!this.enabled) return;
+  async appendBranchSummary(
+    sessionId: string,
+    branchName: string,
+    summary: string,
+    parentEntryId?: string,
+  ): Promise<BranchSummaryEntry> {
     const entry: BranchSummaryEntry = {
       id: `branch-summary-${crypto.randomUUID()}`,
       type: 'branch_summary',
       version: SESSION_SCHEMA_VERSION,
+      ...(parentEntryId ? { parentEntryId } : {}),
       branchName,
       summary,
       timestamp: Date.now(),
     };
-    await this.ensureDir();
-    await fs.appendFile(this.getFilePath(sessionId), `${JSON.stringify(entry)}\n`, { mode: 0o600 });
+    if (this.enabled) {
+      await this.ensureDir();
+      await this.appendSessionFile(this.getFilePath(sessionId), `${JSON.stringify(entry)}\n`);
+    }
+    return entry;
   }
 
   /** Delete a session file */
@@ -573,7 +734,7 @@ export class JsonlSessionStore {
     if (!this.enabled) return [];
     const filePath = this.getFilePath(sessionId);
     try {
-      const content = await fs.readFile(filePath, 'utf-8');
+      const content = await this.readSessionFile(filePath);
       const entries: SessionEntry[] = [];
 
       for (const line of content.split('\n').filter(l => l.trim())) {
@@ -677,13 +838,20 @@ class TokenEstimator {
   }
 }
 
+export interface AutoCompactionResult {
+  summary: string;
+  provider?: string;
+  model?: string;
+  usage?: Message['usage'];
+}
+
 /** Callback type for auto-compaction trigger */
 export type AutoCompactionCallback = (
   sessionId: string,
   toCompact: SessionEntry[],
   keptEntries: SessionEntry[],
   signal?: AbortSignal,
-) => Promise<string>;
+) => Promise<string | AutoCompactionResult>;
 
 /** Optional host policy used to resolve global/project/session inheritance. */
 export type AutoCompactionPolicy = (session: Readonly<Session>) => boolean | Promise<boolean>;
@@ -691,6 +859,8 @@ export type AutoCompactionPolicy = (session: Readonly<Session>) => boolean | Pro
 /** Main session manager with in-memory storage and optional JSONL persistence */
 export class SessionManager {
   private sessions: Map<string, Session> = new Map();
+  /** Append-only journal used when persistence is disabled. */
+  private volatileEntries: Map<string, SessionEntry[]> = new Map();
   private onSessionUpdate?: (sessionId: string) => void;
   private store: JsonlSessionStore | null = null;
   private compactionSettings: CompactionSettings = DEFAULT_COMPACTION_SETTINGS;
@@ -699,6 +869,10 @@ export class SessionManager {
   
   // Event system for lifecycle hooks and extensions
   private emitter = new EventEmitter<EventMap>();
+
+  constructor(options: { store?: JsonlSessionStore } = {}) {
+    this.store = options.store ?? null;
+  }
 
   /** Set the JSONL persistence store */
   setStore(store: JsonlSessionStore): void {
@@ -742,17 +916,23 @@ export class SessionManager {
 
     try {
       await this.emitter.emit('compaction:start', { sessionId, automatic: true, tokensBefore });
-      const summary = await this.autoCompactionCallback(
+      const generated = await this.autoCompactionCallback(
         sessionId,
         result.toCompact,
         result.keptEntries,
         signal,
       );
+      const summary = typeof generated === 'string' ? generated : generated.summary;
       const tokensAfter = TokenEstimator.estimateTokens(summary)
         + TokenEstimator.totalMessages(result.keptEntries);
       await this.applyCompaction(sessionId, summary, firstKeptMessage.id, {
         tokensBefore,
         tokensAfter,
+        ...(typeof generated === 'string' ? {} : {
+          provider: generated.provider,
+          model: generated.model,
+          usage: generated.usage,
+        }),
       });
       await this.emitter.emit('compaction:end', {
         sessionId,
@@ -856,6 +1036,17 @@ export class SessionManager {
     };
 
     this.sessions.set(session.id, session);
+    const initialEntries: Array<MessageEntry | CommandEntry> = [
+      ...session.messages.map(messageToEntry),
+      ...(session.commands ?? []).map(command => ({
+        ...command,
+        type: 'command' as const,
+        version: SESSION_SCHEMA_VERSION,
+        timestamp: command.timestamp.getTime(),
+      })),
+    ].sort((left, right) => left.timestamp - right.timestamp);
+    if (!session.activeLeafId) session.activeLeafId = initialEntries.at(-1)?.id;
+    this.volatileEntries.set(session.id, initialEntries);
     await this.persistSession(session);
     this.onSessionUpdate?.(session.id);
     
@@ -886,10 +1077,13 @@ export class SessionManager {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
 
+    const parentMessageId = message.parentMessageId ?? session.activeLeafId;
+    const messageWithParent = parentMessageId ? { ...message, parentMessageId } : message;
+
     // Persist to JSONL first (for streaming scenarios where we don't have the full message object yet)
     let msgId: string;
     if (this.store) {
-      const { role: _role, content: _content, ...metadata } = message;
+      const { role: _role, content: _content, ...metadata } = messageWithParent;
       msgId = await this.store.appendMessage(sessionId, message.role, message.content, metadata);
     } else {
       msgId = crypto.randomUUID();
@@ -897,22 +1091,35 @@ export class SessionManager {
 
     const fullMessage: Message = {
       id: msgId,
-      ...message,
+      ...messageWithParent,
       timestamp: new Date(),
     };
 
     session.messages.push(fullMessage);
+    if (!this.store) this.volatileEntries.get(sessionId)?.push(messageToEntry(fullMessage));
+    session.activeLeafId = msgId;
+    if (session.metadata?.activeLeafReset === true) {
+      const metadata = { ...session.metadata };
+      delete metadata.activeLeafReset;
+      session.metadata = metadata;
+    }
     session.updatedAt = new Date();
     if (message.usage) {
+      const hadPreviousUsage = session.usage !== undefined;
       const previous = session.usage ?? {};
+      const cumulativeCost = message.usage.costUsd === undefined
+        || (hadPreviousUsage && previous.costUsd === undefined)
+        ? undefined
+        : (previous.costUsd ?? 0) + message.usage.costUsd;
       session.usage = {
         inputTokens: (previous.inputTokens ?? 0) + (message.usage.inputTokens ?? 0),
         outputTokens: (previous.outputTokens ?? 0) + (message.usage.outputTokens ?? 0),
         cacheReadTokens: (previous.cacheReadTokens ?? 0) + (message.usage.cacheReadTokens ?? 0),
         cacheWriteTokens: (previous.cacheWriteTokens ?? 0) + (message.usage.cacheWriteTokens ?? 0),
         totalTokens: (previous.totalTokens ?? 0) + (message.usage.totalTokens
-          ?? (message.usage.inputTokens ?? 0) + (message.usage.outputTokens ?? 0)),
-        costUsd: (previous.costUsd ?? 0) + (message.usage.costUsd ?? 0),
+          ?? (message.usage.inputTokens ?? 0) + (message.usage.outputTokens ?? 0)
+            + (message.usage.cacheReadTokens ?? 0) + (message.usage.cacheWriteTokens ?? 0)),
+        ...(cumulativeCost === undefined ? {} : { costUsd: cumulativeCost }),
       };
     }
 
@@ -950,14 +1157,31 @@ export class SessionManager {
   ): Promise<ShellCommandRecord | null> {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
+    const commandWithParent = command.parentEntryId || !session.activeLeafId
+      ? command
+      : { ...command, parentEntryId: session.activeLeafId };
     const record = this.store
-      ? await this.store.appendCommand(sessionId, command)
+      ? await this.store.appendCommand(sessionId, commandWithParent)
       : {
-          ...command,
+          ...commandWithParent,
           id: command.id ?? `command-${crypto.randomUUID()}`,
           timestamp: command.timestamp ? new Date(command.timestamp) : new Date(),
         };
     session.commands = [...(session.commands ?? []), record];
+    if (!this.store) {
+      this.volatileEntries.get(sessionId)?.push({
+        ...record,
+        type: 'command',
+        version: SESSION_SCHEMA_VERSION,
+        timestamp: record.timestamp.getTime(),
+      });
+    }
+    session.activeLeafId = record.id;
+    if (session.metadata?.activeLeafReset === true) {
+      const metadata = { ...session.metadata };
+      delete metadata.activeLeafReset;
+      session.metadata = metadata;
+    }
     session.updatedAt = new Date();
     await this.persistSession(session);
     this.onSessionUpdate?.(sessionId);
@@ -995,6 +1219,7 @@ export class SessionManager {
   async delete(id: string): Promise<boolean> {
     const deleted = this.sessions.delete(id);
     if (deleted) {
+      this.volatileEntries.delete(id);
       await this.persistDelete(id);
       this.onSessionUpdate?.(id);
       
@@ -1076,6 +1301,11 @@ export class SessionManager {
     }, ...entries];
   }
 
+  /** Estimate the current model-visible context with the same estimator used by compaction. */
+  estimateContextTokens(sessionId: string): number {
+    return TokenEstimator.totalMessages(this.getEffectiveContext(sessionId));
+  }
+
   /** Request compaction for a session (returns the entries to be compacted) */
   requestCompaction(sessionId: string): { toCompact: SessionEntry[]; keptEntries: SessionEntry[] } | null {
     const session = this.sessions.get(sessionId);
@@ -1112,7 +1342,14 @@ export class SessionManager {
     sessionId: string,
     summary: string,
     firstKeptEntryId: string,
-    details: { instruction?: string; tokensBefore?: number; tokensAfter?: number } = {},
+    details: {
+      instruction?: string;
+      tokensBefore?: number;
+      tokensAfter?: number;
+      provider?: string;
+      model?: string;
+      usage?: Message['usage'];
+    } = {},
   ): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) return;
@@ -1126,11 +1363,15 @@ export class SessionManager {
 
     if (this.store) {
       const totalTokens = TokenEstimator.totalMessages(session.messages.map(messageToEntry));
-      await this.store.appendCompaction(sessionId, summary, firstKeptEntryId, totalTokens, details);
+      await this.store.appendCompaction(sessionId, summary, firstKeptEntryId, totalTokens, {
+        ...details,
+        parentEntryId: session.activeLeafId,
+      });
       const rawEntries = await this.store.getRawEntries(sessionId);
       const compactionEntry = [...rawEntries].reverse().find(
         (entry): entry is CompactionEntry => entry.type === 'compaction',
       );
+      if (compactionEntry) session.activeLeafId = compactionEntry.id;
       session.metadata = {
         ...session.metadata,
         lastCompacted: new Date(compactionEntry?.timestamp ?? session.updatedAt.getTime()).toISOString(),
@@ -1139,11 +1380,25 @@ export class SessionManager {
         ...(compactionEntry ? { compactionEntryId: compactionEntry.id } : {}),
       };
     } else {
+      const compactionEntry: CompactionEntry = {
+        id: `compaction-${crypto.randomUUID()}`,
+        type: 'compaction',
+        version: SESSION_SCHEMA_VERSION,
+        ...(session.activeLeafId ? { parentEntryId: session.activeLeafId } : {}),
+        summary,
+        firstKeptEntryId,
+        tokenEstimate: TokenEstimator.totalMessages(session.messages.map(messageToEntry)),
+        timestamp: session.updatedAt.getTime(),
+        ...details,
+      };
+      this.volatileEntries.get(sessionId)?.push(compactionEntry);
+      session.activeLeafId = compactionEntry.id;
       session.metadata = {
         ...session.metadata,
         lastCompacted: session.updatedAt.toISOString(),
         compactionSummary: summary,
         compactionStats: details,
+        compactionEntryId: compactionEntry.id,
       };
     }
 
@@ -1169,24 +1424,66 @@ export class SessionManager {
   async addBranchSummary(sessionId: string, summary: string, branchName?: string): Promise<BranchSummaryEntry | null> {
     const session = this.sessions.get(sessionId);
     if (!session || !summary.trim()) return null;
-    const entry: BranchSummaryEntry = {
-      id: `branch-summary-${crypto.randomUUID()}`,
-      type: 'branch_summary',
-      version: SESSION_SCHEMA_VERSION,
-      branchName: branchName || session.title || session.id,
-      summary: summary.trim(),
-      timestamp: Date.now(),
-    };
-    if (this.store) await this.store.appendBranchSummary(sessionId, entry.branchName, entry.summary);
+    const resolvedBranchName = branchName || session.title || session.id;
+    const entry: BranchSummaryEntry = this.store
+      ? await this.store.appendBranchSummary(
+          sessionId,
+          resolvedBranchName,
+          summary.trim(),
+          session.activeLeafId,
+        )
+      : {
+          id: `branch-summary-${crypto.randomUUID()}`,
+          type: 'branch_summary',
+          version: SESSION_SCHEMA_VERSION,
+          ...(session.activeLeafId ? { parentEntryId: session.activeLeafId } : {}),
+          branchName: resolvedBranchName,
+          summary: summary.trim(),
+          timestamp: Date.now(),
+        };
+    if (!this.store) this.volatileEntries.get(sessionId)?.push(entry);
     session.metadata = {
       ...session.metadata,
       branchSummaries: [
-        ...((session.metadata?.branchSummaries as Array<{ branchName: string; summary: string }> | undefined) ?? []),
-        { branchName: entry.branchName, summary: entry.summary },
+        ...((session.metadata?.branchSummaries as BranchSummaryEntry[] | undefined) ?? []),
+        entry,
       ],
     };
+    session.activeLeafId = entry.id;
     session.updatedAt = new Date();
+    await this.persistSession(session);
+    this.onSessionUpdate?.(sessionId);
     return entry;
+  }
+
+  /** Return append-order entries, including pre-compaction history when a persistent store is attached. */
+  async getRawEntries(sessionId: string): Promise<SessionEntry[]> {
+    if (this.store) return this.store.getRawEntries(sessionId);
+    const journal = this.volatileEntries.get(sessionId);
+    if (journal) return structuredClone(journal);
+    const session = this.sessions.get(sessionId);
+    if (!session) return [];
+    const messages = session.messages.map(messageToEntry);
+    const commands: CommandEntry[] = (session.commands ?? []).map(command => ({
+      ...command,
+      type: 'command',
+      version: SESSION_SCHEMA_VERSION,
+      timestamp: command.timestamp.getTime(),
+    }));
+    const branchSummaries: BranchSummaryEntry[] = (
+      (session.metadata?.branchSummaries as Array<Partial<BranchSummaryEntry>
+        & Pick<BranchSummaryEntry, 'branchName' | 'summary'>> | undefined) ?? []
+    ).map((entry, index) => ({
+      id: entry.id ?? `branch-summary-memory-${index}`,
+      type: 'branch_summary',
+      version: SESSION_SCHEMA_VERSION,
+      ...(entry.parentEntryId ? { parentEntryId: entry.parentEntryId } : {}),
+      branchName: entry.branchName,
+      summary: entry.summary,
+      timestamp: entry.timestamp ?? session.updatedAt.getTime(),
+    }));
+    return [...messages, ...commands, ...branchSummaries]
+      .sort((left, right) => left.timestamp - right.timestamp);
   }
 
   async getBranchSummaries(sessionId: string): Promise<BranchSummaryEntry[]> {
@@ -1196,19 +1493,126 @@ export class SessionManager {
       );
     }
     const session = this.sessions.get(sessionId);
-    return ((session?.metadata?.branchSummaries as Array<{ branchName: string; summary: string }> | undefined) ?? [])
+    return ((session?.metadata?.branchSummaries as Array<Partial<BranchSummaryEntry>
+      & Pick<BranchSummaryEntry, 'branchName' | 'summary'>> | undefined) ?? [])
       .map((entry, index) => ({
-        id: `branch-summary-memory-${index}`,
+        id: entry.id ?? `branch-summary-memory-${index}`,
         type: 'branch_summary' as const,
+        ...(entry.parentEntryId ? { parentEntryId: entry.parentEntryId } : {}),
         branchName: entry.branchName,
         summary: entry.summary,
-        timestamp: session?.updatedAt.getTime() ?? Date.now(),
+        timestamp: entry.timestamp ?? session?.updatedAt.getTime() ?? Date.now(),
       }));
   }
 
   // ===================================================================
   // Session Tree Operations (fork/clone/tree)
   // ===================================================================
+
+  /** Fork through a durable user entry on its parent-linked path. */
+  async forkSessionAtEntry(
+    sessionId: string,
+    entryId: string,
+    newTitle?: string,
+  ): Promise<Session | null> {
+    const original = this.sessions.get(sessionId);
+    if (!original) return null;
+    const rawEntries = await this.getRawEntries(sessionId);
+    const selectedIndex = rawEntries.findIndex(entry => entry.id === entryId);
+    const selected = rawEntries[selectedIndex];
+    if (selectedIndex < 0 || selected?.type !== 'message' || selected.role !== 'user') return null;
+
+    const entriesById = new Map(rawEntries.filter(entry => entry.type !== 'metadata').map(entry => [entry.id, entry]));
+    const ancestorIds = new Set<string>();
+    let cursor: string | undefined = selected.id;
+    while (cursor && !ancestorIds.has(cursor)) {
+      const entry = entriesById.get(cursor);
+      if (!entry) break;
+      ancestorIds.add(cursor);
+      cursor = entry.type === 'message' ? entry.parentMessageId
+        : entry.type === 'command' || entry.type === 'compaction' || entry.type === 'branch_summary'
+          ? entry.parentEntryId
+          : undefined;
+    }
+    const prefix = ancestorIds.size > 1 || selectedIndex === 0
+      ? rawEntries.filter(entry => entry.type !== 'metadata' && ancestorIds.has(entry.id))
+      : rawEntries.slice(0, selectedIndex + 1);
+    const copiedEntries = prefix.filter(
+      (entry): entry is MessageEntry | CommandEntry => entry.type === 'message' || entry.type === 'command',
+    );
+    const normalizedParents = new Map<string, string | undefined>();
+    copiedEntries.forEach((entry, index) => normalizedParents.set(entry.id, copiedEntries[index - 1]?.id));
+    const messages: Message[] = prefix.flatMap(entry => entry.type === 'message' ? [{
+      id: entry.id,
+      role: entry.role,
+      content: entry.content,
+      timestamp: new Date(entry.timestamp),
+      blocks: entry.blocks,
+      toolCalls: entry.toolCalls,
+      toolCallId: entry.toolCallId,
+      name: entry.name,
+      isError: entry.isError,
+      provider: entry.provider,
+      model: entry.model,
+      usage: entry.usage,
+      durationMs: entry.durationMs,
+      parentMessageId: normalizedParents.get(entry.id),
+      agentId: entry.agentId,
+      metadata: entry.metadata,
+    }] : []);
+    const commands: ShellCommandRecord[] = prefix.flatMap(entry => entry.type === 'command' ? [{
+      id: entry.id,
+      command: entry.command,
+      cwd: entry.cwd,
+      timestamp: new Date(entry.timestamp),
+      status: entry.status,
+      parentEntryId: normalizedParents.get(entry.id),
+      output: entry.output,
+      exitCode: entry.exitCode,
+      durationMs: entry.durationMs,
+      excludedFromContext: entry.excludedFromContext,
+      truncated: entry.truncated,
+      downloadPath: entry.downloadPath,
+    }] : []);
+    const metadata = original.metadata ? structuredClone(original.metadata) : undefined;
+    if (metadata) {
+      for (const key of [
+        'lastCompacted', 'compactionSummary', 'compactionEntryId', 'compactionStats',
+        'activeLeafReset', 'hasBranchedHistory', 'branchSummaries',
+      ]) {
+        delete metadata[key];
+      }
+    }
+    const usageEntries = messages.flatMap(message => message.usage ? [message.usage] : []);
+    const usage = usageEntries.length ? usageEntries.reduce((total, current) => ({
+      inputTokens: (total.inputTokens ?? 0) + (current.inputTokens ?? 0),
+      outputTokens: (total.outputTokens ?? 0) + (current.outputTokens ?? 0),
+      cacheReadTokens: (total.cacheReadTokens ?? 0) + (current.cacheReadTokens ?? 0),
+      cacheWriteTokens: (total.cacheWriteTokens ?? 0) + (current.cacheWriteTokens ?? 0),
+      totalTokens: (total.totalTokens ?? 0) + (current.totalTokens
+        ?? (current.inputTokens ?? 0) + (current.outputTokens ?? 0)),
+      costUsd: (total.costUsd ?? 0) + (current.costUsd ?? 0),
+    }), {} as NonNullable<Session['usage']>) : undefined;
+
+    return this.create({
+      title: newTitle || `${original.title || 'Fork'} (fork)`,
+      messages,
+      commands: commands.length ? commands : undefined,
+      parentId: sessionId,
+      branchId: original.branchId || sessionId,
+      activeLeafId: entryId,
+      cwd: original.cwd,
+      workspaceId: original.workspaceId,
+      gitBranch: original.gitBranch,
+      model: original.model,
+      thinking: original.thinking,
+      toolPreset: original.toolPreset,
+      autoCompaction: original.autoCompaction,
+      providerConfig: sanitizeProviderConfig(original.providerConfig),
+      metadata,
+      usage,
+    });
+  }
 
   /** Fork a session from a specific message index */
   async forkSession(
@@ -1228,17 +1632,26 @@ export class SessionManager {
       ...message,
       timestamp: new Date(message.timestamp),
     }));
+    const cutoff = sourceMessages.at(-1)?.timestamp.getTime();
+    const sourceCommands = fromMessageIndex === undefined
+      ? original.commands ?? []
+      : (original.commands ?? []).filter(command => cutoff === undefined || command.timestamp.getTime() <= cutoff);
+    const commandsToCopy = structuredClone(sourceCommands)
+      .map(command => ({ ...command, timestamp: new Date(command.timestamp) }));
 
     const forkedSession: Session = {
       id: crypto.randomUUID(),
       schemaVersion: SESSION_SCHEMA_VERSION,
       title: newTitle || `${original.title || 'Fork'} (fork)`,
       messages: messagesToCopy,
+      commands: commandsToCopy.length ? commandsToCopy : undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
       parentId: sessionId,
       branchId: original.branchId || sessionId, // Group forks under the same branch
-      activeLeafId: messagesToCopy.at(-1)?.id,
+      activeLeafId: fromMessageIndex === undefined
+        ? original.activeLeafId ?? messagesToCopy.at(-1)?.id ?? commandsToCopy.at(-1)?.id
+        : messagesToCopy.at(-1)?.id ?? commandsToCopy.at(-1)?.id,
       cwd: original.cwd,
       workspaceId: original.workspaceId,
       gitBranch: original.gitBranch,
@@ -1257,6 +1670,108 @@ export class SessionManager {
     return forkedSession;
   }
 
+  /**
+   * Move the active leaf to immediately before a durable user entry.
+   * Descendants remain in the journal so a later prompt creates a sibling branch.
+   */
+  async branchBeforeEntry(sessionId: string, entryId: string): Promise<Message | null> {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    const rawEntries = await this.getRawEntries(sessionId);
+    const target = rawEntries.find(
+      (entry): entry is MessageEntry => entry.type === 'message' && entry.id === entryId && entry.role === 'user',
+    );
+    const fallbackTarget = session.messages.find(message => message.id === entryId && message.role === 'user');
+    if (!target && !fallbackTarget) return null;
+
+    const selected = target ? messageFromEntry(target) : structuredClone(fallbackTarget!);
+    if (!selected) return null;
+
+    session.activeLeafId = target?.parentMessageId ?? fallbackTarget?.parentMessageId;
+    session.metadata = {
+      ...session.metadata,
+      hasBranchedHistory: true,
+      ...(session.activeLeafId ? { activeLeafReset: false } : { activeLeafReset: true }),
+    };
+    const ancestors = new Set<string>();
+    const entriesById = new Map(rawEntries.filter(entry => entry.type !== 'metadata').map(entry => [entry.id, entry]));
+    let cursor = session.activeLeafId;
+    while (cursor && !ancestors.has(cursor)) {
+      const entry = entriesById.get(cursor);
+      if (!entry) break;
+      ancestors.add(cursor);
+      cursor = entry.type === 'message' ? entry.parentMessageId
+        : entry.type === 'command' || entry.type === 'compaction' || entry.type === 'branch_summary'
+          ? entry.parentEntryId
+          : undefined;
+    }
+    if (rawEntries.length > 0) {
+      session.messages = rawEntries.flatMap(entry => {
+        if (entry.type !== 'message' || !ancestors.has(entry.id)) return [];
+        const message = messageFromEntry(entry);
+        return message ? [message] : [];
+      });
+      const commands = rawEntries.flatMap(entry => {
+        if (entry.type !== 'command' || !ancestors.has(entry.id)) return [];
+        const timestamp = new Date(entry.timestamp);
+        if (Number.isNaN(timestamp.getTime())) return [];
+        return [{
+          id: entry.id,
+          command: entry.command,
+          cwd: entry.cwd,
+          timestamp,
+          status: entry.status,
+          parentEntryId: entry.parentEntryId,
+          output: entry.output,
+          exitCode: entry.exitCode,
+          durationMs: entry.durationMs,
+          excludedFromContext: entry.excludedFromContext,
+          truncated: entry.truncated,
+          downloadPath: entry.downloadPath,
+        }];
+      });
+      session.commands = commands.length ? commands : undefined;
+    } else {
+      session.messages = session.messages.filter(message => ancestors.has(message.id));
+      if (session.commands) session.commands = session.commands.filter(command => ancestors.has(command.id));
+    }
+    const activeCompaction = [...rawEntries].reverse().find(
+      (entry): entry is CompactionEntry => entry.type === 'compaction' && ancestors.has(entry.id),
+    );
+    if (activeCompaction) {
+      session.metadata = {
+        ...session.metadata,
+        lastCompacted: new Date(activeCompaction.timestamp).toISOString(),
+        compactionSummary: activeCompaction.summary,
+        compactionEntryId: activeCompaction.id,
+        compactionStats: {
+          instruction: activeCompaction.instruction,
+          tokensBefore: activeCompaction.tokensBefore,
+          tokensAfter: activeCompaction.tokensAfter,
+          provider: activeCompaction.provider,
+          model: activeCompaction.model,
+          usage: activeCompaction.usage,
+        },
+      };
+    } else if (session.metadata) {
+      const metadata = { ...session.metadata };
+      delete metadata.lastCompacted;
+      delete metadata.compactionSummary;
+      delete metadata.compactionEntryId;
+      delete metadata.compactionStats;
+      session.metadata = metadata;
+    }
+    session.updatedAt = new Date();
+    await this.persistSession(session);
+
+    if (this.store) {
+      const reloaded = await this.store.loadSession(sessionId);
+      if (reloaded) this.sessions.set(sessionId, reloaded);
+    }
+    this.onSessionUpdate?.(sessionId);
+    return selected;
+  }
+
   /** Clone a session as an independent root, optionally through one message. */
   async cloneSession(sessionId: string, newTitle?: string, throughMessageIndex?: number): Promise<Session | null> {
     const original = this.sessions.get(sessionId);
@@ -1266,25 +1781,40 @@ export class SessionManager {
       : original.messages.slice(0, Math.max(0, Math.min(original.messages.length, throughMessageIndex + 1)));
 
     // Deep clone entries and identifiers so edits cannot mutate or branch the source.
+    const messageIds = new Map(sourceMessages.map(message => [message.id, crypto.randomUUID()]));
+    const sourceCommands = throughMessageIndex === undefined ? original.commands ?? [] : [];
+    const commandIds = new Map(sourceCommands.map(command => [command.id, `command-${crypto.randomUUID()}`]));
     const clonedMessages = structuredClone(sourceMessages).map(message => ({
       ...message,
-      id: crypto.randomUUID(),
+      id: messageIds.get(message.id)!,
       timestamp: new Date(message.timestamp),
+      ...(message.parentMessageId ? {
+        parentMessageId: messageIds.get(message.parentMessageId)
+          ?? commandIds.get(message.parentMessageId),
+      } : {}),
     }));
+    const clonedCommands = structuredClone(sourceCommands).map(command => ({
+      ...command,
+      id: commandIds.get(command.id)!,
+      timestamp: new Date(command.timestamp),
+      ...(command.parentEntryId ? {
+        parentEntryId: messageIds.get(command.parentEntryId)
+          ?? commandIds.get(command.parentEntryId),
+      } : {}),
+    }));
+    const clonedActiveLeafId = original.activeLeafId
+      ? messageIds.get(original.activeLeafId) ?? commandIds.get(original.activeLeafId)
+      : undefined;
 
     const clonedSession: Session = {
       id: crypto.randomUUID(),
       schemaVersion: SESSION_SCHEMA_VERSION,
       title: newTitle || `${original.title || 'Clone'} (clone)`,
       messages: clonedMessages,
-      commands: throughMessageIndex === undefined && original.commands ? structuredClone(original.commands).map(command => ({
-        ...command,
-        id: `command-${crypto.randomUUID()}`,
-        timestamp: new Date(command.timestamp),
-      })) : undefined,
+      commands: clonedCommands.length ? clonedCommands : undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
-      activeLeafId: clonedMessages.at(-1)?.id,
+      activeLeafId: clonedActiveLeafId ?? clonedMessages.at(-1)?.id ?? clonedCommands.at(-1)?.id,
       cwd: original.cwd,
       workspaceId: original.workspaceId,
       gitBranch: original.gitBranch,

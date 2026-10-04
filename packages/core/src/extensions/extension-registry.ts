@@ -33,6 +33,10 @@ export interface ExtensionInteractionRequest {
   fields?: ExtensionInteractionField[];
   output?: string;
   ansi?: boolean;
+  /** Optional host-side timeout for dialog interactions, in milliseconds. */
+  timeoutMs?: number;
+  /** Optional cancellation signal; never serialized to clients. */
+  signal?: AbortSignal;
 }
 
 export interface ExtensionInteractionResponse {
@@ -53,6 +57,10 @@ export interface ExtensionRuntimeContext {
   workspaceId?: string;
   projectTrusted?: boolean;
   notify(message: string, level?: ExtensionLogLevel): void;
+  /** Optional raw subprocess output sink; awaiting it applies downstream backpressure. */
+  onProcessOutput?(chunk: string): void | Promise<void>;
+  /** Host-owned path where the same complete subprocess stream is retained. */
+  processOutputPath?: string;
   requestInteraction?(request: ExtensionInteractionRequest): Promise<ExtensionInteractionResponse>;
 }
 

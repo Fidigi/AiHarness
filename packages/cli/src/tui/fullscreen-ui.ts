@@ -1,5 +1,10 @@
 import chalk from 'chalk';
-import { TerminalUI, type TerminalOptions, type TranscriptEntry } from './terminal-ui.js';
+import {
+  TerminalUI,
+  type ShellCommandWriter,
+  type TerminalOptions,
+  type TranscriptEntry,
+} from './terminal-ui.js';
 
 interface ScreenWriter {
   write(chunk: string): unknown;
@@ -135,9 +140,11 @@ export class FullscreenUI extends TerminalUI {
       'Commandes principales',
       '/help · /new [titre] · /list [filtre] · /switch <id>',
       '/provider · /model · /compact · /search <texte>',
-      '/edit · /export · /import · /extensions · /tools · /reload · /exit',
+      '/edit · /export · /import · /settings · /extensions · /tools · /reload · /exit',
+      '!commande (contexte) · !!commande (hors contexte)',
       '',
-      'Navigation : ↑/↓ historique · Alt+↑/↓ transcript · Ctrl+L rafraîchir',
+      'Entrée : envoyer/steer · Alt+Entrée ou Ctrl+Q : follow-up · Alt+↑ : rappeler la file',
+      'Escape/Ctrl+C : interrompre · ↑/↓ historique · Alt+↓ transcript · Ctrl+L rafraîchir',
     ].join('\n'));
   }
 
@@ -183,6 +190,38 @@ export class FullscreenUI extends TerminalUI {
     super.addMultiLineBuffer(line);
     this.status = `Mode multi-lignes · ${this.multiLineBuffer.length} ligne(s)`;
     this.render();
+  }
+
+  startShellCommand(command: string, excludedFromContext: boolean): ShellCommandWriter {
+    const policy = excludedFromContext ? 'hors contexte modèle' : 'inclus dans le contexte modèle';
+    const entry: ScreenEntry = { type: 'command', content: `$ ${command}\n(${policy})` };
+    this.screenEntries.push(entry);
+    if (this.screenEntries.length > 500) this.screenEntries.shift();
+    super.addTranscriptEntry({ type: 'command', content: `$ ${command} (${policy})` });
+    let output = '';
+    let outputBounded = false;
+    this.status = 'Commande en cours…';
+    this.render();
+    return {
+      write: chunk => {
+        output += chunk;
+        if (output.length > 50_000) {
+          output = output.slice(-50_000);
+          outputBounded = true;
+        }
+        entry.content = `$ ${command}\n(${policy})\n${outputBounded ? '[… sortie précédente masquée …]\n' : ''}${output}`;
+        this.render();
+      },
+      finish: summary => {
+        const status = summary.status === 'cancelled'
+          ? 'annulée'
+          : `code ${summary.exitCode ?? 'inconnu'}`;
+        const details = [status, summary.truncated ? 'tronquée' : undefined].filter(Boolean).join(' · ');
+        entry.content = `$ ${command}\n(${policy})\n${outputBounded ? '[… sortie précédente masquée …]\n' : ''}${output || '(aucune sortie)'}\n[${details}]${summary.fullOutputPath ? `\n[sortie complète : ${summary.fullOutputPath}]` : ''}`;
+        this.status = summary.status === 'cancelled' ? 'Commande interrompue' : 'Commande terminée';
+        this.render();
+      },
+    };
   }
 
   startStreaming(): { write: (text: string) => void; finish: () => void; cancel: () => void } {

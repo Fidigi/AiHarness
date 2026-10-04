@@ -81,6 +81,21 @@ describe('TerminalUI', () => {
       expect(console.log).toHaveBeenCalledWith(expect.stringContaining('[test]'));
       expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Output content'));
     });
+
+    it('streams shell output and reports truncation retention', () => {
+      const writer = terminal.startShellCommand('printf test', true);
+      writer.write('test');
+      writer.finish({
+        status: 'completed', exitCode: 0, truncated: true, fullOutputPath: '/tmp/output.log',
+      });
+
+      const output = vi.mocked(process.stdout.write).mock.calls.map(call => String(call[0])).join('');
+      expect(output).toContain('$ printf test');
+      expect(output).toContain('excluded from model context');
+      expect(output).toContain('test');
+      expect(output).toContain('truncated');
+      expect(output).toContain('/tmp/output.log');
+    });
   });
 
   // Show error tests
