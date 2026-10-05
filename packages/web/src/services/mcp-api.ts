@@ -1,6 +1,7 @@
 import type {
   McpConfigInventory,
   McpConfigScope,
+  McpExposure,
   McpImportFieldValue,
   McpImportPreview,
   McpImportSyntax,
@@ -72,6 +73,14 @@ type McpActionRequest =
     enabled: boolean;
   }
   | {
+    action: 'set-exposure';
+    scope: McpConfigScope;
+    cwd?: string;
+    revision: string | null;
+    name: string;
+    exposure: McpExposure;
+  }
+  | {
     action: 'remove';
     scope: McpConfigScope;
     cwd?: string;
@@ -132,6 +141,18 @@ export function setMcpConfigEnabled(
 ): Promise<McpActionResponse> {
   return postMcpAction({
     action: 'set-enabled', scope, names, enabled, revision, ...(cwd ? { cwd } : {}),
+  });
+}
+
+export function setMcpConfigExposure(
+  scope: McpConfigScope,
+  name: string,
+  exposure: McpExposure,
+  revision: string | null,
+  cwd?: string,
+): Promise<McpActionResponse> {
+  return postMcpAction({
+    action: 'set-exposure', scope, name, exposure, revision, ...(cwd ? { cwd } : {}),
   });
 }
 

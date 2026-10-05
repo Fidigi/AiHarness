@@ -49,6 +49,9 @@
 .mcp-group-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .4rem; margin: 0 0 .5rem; }
 .mcp-row-actions { display: flex; flex-basis: 100%; justify-content: flex-end; gap: .35rem; margin-top: .2rem; }
 .mcp-row-actions button, .mcp-group-actions button { min-height: 2rem; padding: .3rem .55rem; }
+.mcp-exposure-control { display: grid; gap: .2rem; width: 100%; color: #aebad0; font-size: .72rem; text-align: left; }
+.mcp-exposure-control select { width: 100%; min-height: 2rem; padding: .3rem .45rem; }
+.mcp-exposure-control select:disabled { opacity: .5; cursor: not-allowed; }
 .mcp-remove-button { border-color: #a9485a; color: #ffd8df; }
 .mcp-action-feedback { margin: .55rem 0; }
 .mcp-undo { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: .55rem 0; padding: .55rem .65rem; border: 1px solid #5270a6; border-radius: 6px; background: #10182f; }
@@ -102,6 +105,7 @@
 html[data-theme="light"] .settings-help, html[data-theme="light"] .model-catalog-meta { color: #52627b; }
 html[data-theme="light"] .custom-resource-editor > summary, html[data-theme="light"] .skill-registry > summary { color: #26344e; }
 html[data-theme="light"] .settings-resource-card, html[data-theme="light"] .oauth-device-flow { color: #172033; background: #f8f9fc; border-color: #b8c3d4; }
+html[data-theme="light"] .mcp-exposure-control { color: #52627b; }
 html[data-theme="light"] .custom-resource-editor, html[data-theme="light"] .skill-registry,
 html[data-theme="light"] .tool-settings-list > label { border-color: #d8dee9; }
 html[data-theme="light"] .tool-settings-list small { color: #52627b; }

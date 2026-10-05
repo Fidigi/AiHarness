@@ -807,6 +807,16 @@ export interface McpServerActivationResult {
   outcomes: McpServerMutationOutcome[];
 }
 
+export interface McpServerExposureMutation extends McpConfigMutationTarget {
+  name: string;
+  exposure: McpExposure;
+}
+
+export interface McpServerExposureResult {
+  revision: string | null;
+  changed: boolean;
+}
+
 export interface McpServerRemovalMutation extends McpConfigMutationTarget {
   name: string;
 }
@@ -1258,6 +1268,37 @@ export async function setMcpServersEnabled(
     return { changed, value: outcomes };
   });
   return { revision: result.revision, changed: result.changed, outcomes: result.value };
+}
+
+/** Change one valid entry's local tool exposure without resolving or executing it. */
+export async function setMcpServerExposure(
+  options: McpServerExposureMutation,
+): Promise<McpServerExposureResult> {
+  validateMutationName(options.name);
+  if (options.exposure !== 'direct' && options.exposure !== 'codemode'
+    && options.exposure !== 'deferred') {
+    throw mutationError('invalid-request', 'The MCP server exposure is invalid.');
+  }
+
+  const result = await mutateMcpConfig(options, config => {
+    if (!Object.hasOwn(config.servers, options.name)) {
+      throw mutationError('target-not-found', 'The MCP server no longer exists.');
+    }
+    const entry = config.servers[options.name];
+    if (!isRecord(entry) || !describeEntry(options.name, entry, options.scope, '').info.valid) {
+      throw mutationError('target-invalid', 'The MCP server entry is invalid and was not changed.');
+    }
+    const current = entry.exposure === 'codemode' || entry.exposure === 'deferred'
+      ? entry.exposure
+      : 'direct';
+    if (current === options.exposure) {
+      return { changed: false, value: undefined };
+    }
+    if (options.exposure === 'direct') delete entry.exposure;
+    else entry.exposure = options.exposure;
+    return { changed: true, value: undefined };
+  });
+  return { revision: result.revision, changed: result.changed };
 }
 
 /**

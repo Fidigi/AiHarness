@@ -25,7 +25,7 @@ The React application is organized around these main components:
 | `CommandPalette` | keyboard search and execution of commands, sessions, settings and files |
 | `StatusCenter` | bounded global queue of successes, warnings, errors and progressions, preserved during navigation with expiration suspended on hover/focus |
 | `PluginSettings` | global/project packages, explicit installation, inventory, activation, updates, diagnostics and session-linked reload |
-| `McpSettings`, `McpImportPreview` | redacted global/trusted-project inventory, non-mutating paste preview, completion/confirmation-gated atomic import, atomic enable/disable, confirmed removal and short-lived undo without starting servers |
+| `McpSettings`, `McpImportPreview` | redacted global/trusted-project inventory, non-mutating paste preview, completion/confirmation-gated atomic import, atomic enable/disable and exposure selection, confirmed removal and short-lived undo without starting servers |
 | `EcosystemSettings` | provider lifecycle/OAuth, custom providers and models, defaults, tools and skill registry |
 | `SubagentSettings`, `SubagentPanel`, `SubagentMonitor` | global/project profiles, permissions, progress, attention, global notifications, stop and parent/child navigation |
 
@@ -89,7 +89,7 @@ The production bundle is a PWA with an installable manifest/icon, offline fallba
 
 Vitest covers Core contracts, the agent/extension runtime, providers, JSONL, workspace/Git, commands, PTY, configuration, catalogs and registries, OAuth, priced metrics, Push, subagents, security, real routes, and Web stores. Playwright covers the interface with an intercepted deterministic API **and** an end-to-end flow through Express, the mock provider, persistence, PTY, and files. `web-server.test.ts` adds Git/worktree/diff/upload/watch, PTY, and HTTP contracts without a browser. Dedicated suites verify axe/WCAG, focus and keyboard behavior, virtualization/cache, restoration, and deferred loading.
 
-The 118 Light/Dark desktop/tablet/mobile baselines cover custom models/providers, the skill registry, MCP inventory/import preview/atomic import/local actions, extension process and dialogs, and established surfaces, with a maximum 2% difference threshold.
+The 118 Light/Dark desktop/tablet/mobile baselines cover custom models/providers, the skill registry, MCP inventory/import preview/atomic import/exposure/local actions, extension process and dialogs, and established surfaces, with a maximum 2% difference threshold.
 
 The Web build runs `packages/web/scripts/check-bundle-budget.mjs` after Vite and fails beyond:
 

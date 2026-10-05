@@ -20,7 +20,7 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 | `packages/web/src/components/ChatView.tsx` | Detached runs, history, composer, queues, settings and reconciliation |
 | `packages/web/src/components/{Sidebar,WorkspacePanel,TerminalPanel}.tsx` | Navigation, files/Git and PTY surfaces |
 | `packages/web/src/components/SettingsView.tsx` | Lazy Settings route and administration sections |
-| `packages/web/src/components/{McpSettings,McpImportPreview}.tsx` | Redacted global/project MCP groups, paste preview, field/reference completion, scope/confirmation-gated atomic import, trust lock, row/group activation, confirmed removal, temporary undo and file diagnostics |
+| `packages/web/src/components/{McpSettings,McpImportPreview}.tsx` | Redacted global/project MCP groups, paste preview, field/reference completion, scope/confirmation-gated atomic import, trust lock, row/group activation, per-server exposure, confirmed removal, temporary undo and file diagnostics |
 | `packages/web/src/components/PluginSettings.tsx` | Project/global package inventory, individual and one-request group activation, partial-result and reload-pending feedback |
 
 ## State Boundaries
@@ -84,9 +84,9 @@ See [`extensions.md`](./extensions.md) for server-side ownership and interaction
 
 A scope action opens a focus-trapped completion dialog. It collects a bounded target name, only the missing fields reported by Core, optional host-variable substitutions for reference-capable secret locations, and explicit confirmations for remaining global literals and named remote variables. The write request resends the original paste and these choices; Core reparses it and the browser never submits an approved normalized entry. Success replaces inventory with the server response and clears the paste. Every failure closes stale revision-backed controls and reloads canonical inventory; UI errors remain localized and generic.
 
-Valid rows can be enabled, disabled or removed; each scope also has one-request bounded group controls. Requests include the opaque revision from the last inventory. A removal uses an accessible confirmation dialog and only a short-lived opaque undo token crosses into the browser; the literal removed entry stays in server memory. Busy controls serialize browser intent, focus returns after cancellation or moves to Undo after success, and any uncertain timeout/network result triggers a canonical reload because the write may already have committed. Server responses replace local inventory rather than applying speculative patches.
+Valid rows can be enabled, disabled, assigned `direct`, `codemode` or `deferred` tool exposure, or removed; each scope also has one-request bounded activation controls. Requests include the opaque revision from the last inventory. A removal uses an accessible confirmation dialog and only a short-lived opaque undo token crosses into the browser; the literal removed entry stays in server memory. Busy controls serialize browser intent; focus returns after cancellation and exposure changes or moves to Undo after removal, and any uncertain timeout/network result triggers a canonical reload because the write may already have committed. Server responses replace local inventory rather than applying speculative patches.
 
-This panel still has no general add/edit/exposure, Test/sign-in or runtime controls beyond the reviewed single-entry import flow. Do not implement a browser-side parser or resolver: source files, literal values, environment access and command handling stay entirely on the Server/Core side.
+This panel still has no general add/edit, Test/sign-in or runtime controls beyond the reviewed single-entry import and local exposure flows. Do not implement a browser-side parser or resolver: source files, literal values, environment access and command handling stay entirely on the Server/Core side.
 
 ## PWA, Push, and i18n
 
@@ -103,9 +103,9 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 
 - `packages/web/src/store/session-store.test.ts` plus `.remote.test.ts` and `.integration.test.ts` — hydration, windows, drafts, cache and run state
 - `packages/web/src/store/preferences.test.ts` — schema migration and validation
-- `packages/web/src/services/api.test.ts` — REST/SSE contracts, including MCP import-preview/original-text persistence/action bodies, typed errors and uncertain timeouts
+- `packages/web/src/services/api.test.ts` — REST/SSE contracts, including MCP import-preview/original-text persistence/exposure/action bodies, typed errors and uncertain timeouts
 - `packages/web/src/services/{push,pwa,keyboard,notices}.test.ts` — global browser services
-- `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including locked/redacted MCP inventory, non-mutating paste preview, completion/confirmation-gated atomic import, grouped activation, focus, undo and failure reconciliation
+- `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including locked/redacted MCP inventory, non-mutating paste preview, completion/confirmation-gated atomic import, grouped activation, exposure selection, focus, undo and failure reconciliation
 - `e2e/accessibility.spec.ts`, `e2e/performance.spec.ts`, and `e2e/visual.spec.ts` — a11y, bounds and baselines
 - `e2e/live-server.spec.ts` — real browser-to-server smoke path
 

@@ -4,6 +4,7 @@ import type {
   McpConfigInventory,
   McpConfigProblemReason,
   McpConfigScope,
+  McpExposure,
   McpServerInventoryEntry,
 } from '@ai-harness/core';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -14,6 +15,7 @@ import {
   removeMcpConfigServer,
   restoreMcpConfigServer,
   setMcpConfigEnabled,
+  setMcpConfigExposure,
   type McpActionResponse,
 } from '../services/mcp-api';
 import { useSessionStore } from '../store/session-store';
@@ -67,11 +69,13 @@ function ServerCard({
   server,
   disabled,
   onToggle,
+  onExposureChange,
   onRemove,
 }: {
   server: McpServerInventoryEntry;
   disabled: boolean;
   onToggle: () => void;
+  onExposureChange: (exposure: McpExposure, trigger: HTMLSelectElement) => void;
   onRemove: (trigger: HTMLButtonElement) => void;
 }) {
   const { t } = useI18n();
@@ -100,7 +104,16 @@ function ServerCard({
       <span className={state === 'configured' ? 'status-success' : 'status-warning'}>
         {t(`settings.mcp.state.${state}`)}
       </span>
-      <small>{t(`settings.mcp.exposure.${server.exposure}`)}</small>
+      {server.valid ? <label className="mcp-exposure-control">
+        <span>{t('settings.mcp.exposureLabel')}</span>
+        <select value={server.exposure} disabled={disabled}
+          aria-label={t('settings.mcp.exposureNamed', { name: server.name })}
+          onChange={event => onExposureChange(event.currentTarget.value as McpExposure, event.currentTarget)}>
+          {(['direct', 'codemode', 'deferred'] as const).map(exposure => (
+            <option value={exposure} key={exposure}>{t(`settings.mcp.exposure.${exposure}`)}</option>
+          ))}
+        </select>
+      </label> : <small>{t(`settings.mcp.exposure.${server.exposure}`)}</small>}
       {server.masked && <small>{t('settings.mcp.masked')}</small>}
       {server.replacesGlobal && <small>{t('settings.mcp.replacesGlobal')}</small>}
       {server.valid && <div className="mcp-row-actions">
@@ -209,6 +222,39 @@ export function McpSettings() {
       await reconcileFailure(result);
     }
     if (request === actionRequest.current) setBusy(undefined);
+  };
+
+  const setExposure = async (
+    server: McpServerInventoryEntry,
+    exposure: McpExposure,
+    trigger: HTMLSelectElement,
+  ): Promise<void> => {
+    if (!inventory || busy || exposure === server.exposure) return;
+    const request = ++actionRequest.current;
+    const revision = fileForScope(inventory, server.scope)?.revision ?? null;
+    setBusy(`exposure:${server.scope}:${server.name}`);
+    setFeedback(undefined);
+    setUndo(undefined);
+    const result = await setMcpConfigExposure(
+      server.scope,
+      server.name,
+      exposure,
+      revision,
+      workspace?.cwd,
+    );
+    if (request !== actionRequest.current) return;
+    if (result.success && result.data) {
+      setInventory(result.data.inventory);
+      setFeedback('updated');
+    } else {
+      await reconcileFailure(result);
+    }
+    if (request === actionRequest.current) {
+      setBusy(undefined);
+      window.requestAnimationFrame(() => {
+        if (trigger.isConnected) trigger.focus();
+      });
+    }
   };
 
   const closeRemoval = (restoreFocus: boolean): void => {
@@ -326,6 +372,7 @@ export function McpSettings() {
               disabled={Boolean(busy)}
               key={`${server.scope}:${server.name}:${index}`}
               onToggle={() => void setEnabled(server.scope, [server.name], !server.enabled, `row:${server.scope}:${server.name}`)}
+              onExposureChange={(exposure, trigger) => void setExposure(server, exposure, trigger)}
               onRemove={trigger => {
                 removalReturnFocus.current = trigger;
                 setPendingRemoval({ scope: server.scope, name: server.name, revision });

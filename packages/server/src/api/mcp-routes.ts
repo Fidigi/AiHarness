@@ -4,6 +4,7 @@ import {
   MCP_IMPORT_MAX_SERVERS,
   McpConfigMutationError,
   type McpConfigScope,
+  type McpExposure,
   type McpImportFieldValue,
   type McpImportSyntax,
   type McpImportWriteConfirmations,
@@ -39,6 +40,10 @@ function scopeOf(value: unknown): McpConfigScope | undefined {
 function revisionOf(value: unknown): string | null | undefined {
   if (value === null) return null;
   return typeof value === 'string' ? value : undefined;
+}
+
+function exposureOf(value: unknown): McpExposure | undefined {
+  return value === 'direct' || value === 'codemode' || value === 'deferred' ? value : undefined;
 }
 
 function importFieldValues(value: unknown): Record<string, McpImportFieldValue> | undefined {
@@ -233,6 +238,27 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
           revision,
           enabled: body.enabled,
           names: body.names,
+          ...(cwd ? { cwd } : {}),
+        }));
+        return;
+      }
+
+      if (body.action === 'set-exposure') {
+        const scope = scopeOf(body.scope);
+        const revision = revisionOf(body.revision);
+        const exposure = exposureOf(body.exposure);
+        if (!hasOnlyKeys(body, ['action', 'cwd', 'exposure', 'name', 'revision', 'scope'])
+          || !scope || revision === undefined || !exposure || typeof body.name !== 'string'
+          || (body.cwd !== undefined && typeof body.cwd !== 'string')) {
+          throw new McpConfigMutationError('invalid-request', INVALID_ACTION);
+        }
+        const services = await servicesPromise;
+        const cwd = optionalCwd(body.cwd);
+        response.json(await services.mcpInventory.setExposure({
+          scope,
+          revision,
+          name: body.name,
+          exposure,
           ...(cwd ? { cwd } : {}),
         }));
         return;

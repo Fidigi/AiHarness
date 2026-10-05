@@ -801,6 +801,27 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
         if (changed) bumpMcpRevision(scope);
         await fulfillJson(route, { inventory: structuredClone(mcpConfig), outcomes }); return;
       }
+      if (input.action === 'set-exposure') {
+        const server = mcpConfig.servers.find(item => item.scope === scope && item.name === input.name);
+        if (!server) {
+          await fulfillJson(route, {
+            error: 'The MCP server no longer exists.', code: 'target-not-found', uncertain: false,
+          }, 404); return;
+        }
+        if (!server.valid) {
+          await fulfillJson(route, {
+            error: 'The MCP server entry is invalid and was not changed.', code: 'target-invalid', uncertain: false,
+          }, 409); return;
+        }
+        if (input.exposure !== 'direct' && input.exposure !== 'codemode' && input.exposure !== 'deferred') {
+          await fulfillJson(route, { error: 'Action MCP invalide.', code: 'invalid-request', uncertain: false }, 400); return;
+        }
+        if (server.exposure !== input.exposure) {
+          server.exposure = input.exposure;
+          bumpMcpRevision(scope);
+        }
+        await fulfillJson(route, { inventory: structuredClone(mcpConfig) }); return;
+      }
       if (input.action === 'remove') {
         const index = mcpConfig.servers.findIndex(server => server.scope === scope && server.name === input.name);
         if (index < 0) {

@@ -373,6 +373,28 @@ test.describe('Settings and authentication', () => {
     });
   });
 
+  test('modifie l’exposition MCP atomiquement et restaure le focus du sélecteur', async ({ page }) => {
+    const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const card = section.getByRole('article', { name: 'remote-docs: Configured', exact: true });
+    const exposure = card.getByRole('combobox', { name: 'Tool exposure for remote-docs' });
+
+    await expect(exposure).toHaveValue('deferred');
+    await exposure.selectOption('direct');
+    await expect(exposure).toHaveValue('direct');
+    await expect(exposure).toBeFocused();
+    await expect(section).toContainText('MCP configuration updated.');
+
+    const request = api.requests.find(item => item.path === '/api/mcp/actions'
+      && (item.body as { action?: string } | undefined)?.action === 'set-exposure');
+    expect(request?.body).toEqual({
+      action: 'set-exposure', scope: 'global', name: 'remote-docs', exposure: 'direct',
+      revision: expect.stringMatching(/^[a-f0-9]{64}$/u), cwd: '/workspace',
+    });
+    expect(Object.keys(request?.body as object)).not.toContain('configuration');
+  });
+
   test('confirme une suppression MCP, restaure le focus et utilise un undo opaque', async ({ page }) => {
     const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
     await page.goto('/settings#mcp');

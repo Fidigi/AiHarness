@@ -370,7 +370,7 @@ describe('combined Web server', () => {
     }
   });
 
-  it('serializes atomic MCP activation, removal, and opaque one-shot restoration', async () => {
+  it('serializes atomic MCP activation, exposure, removal, and opaque one-shot restoration', async () => {
     const dataDir = path.join(webRoot, '.data');
     const globalFile = path.join(dataDir, 'mcp.json');
     const project = path.join(webRoot, `mcp-mutation-${Date.now()}`);
@@ -431,10 +431,44 @@ describe('combined Web server', () => {
         .mcpServers.alpha?.enabled).toBe(false);
 
       const currentRevision = activated.inventory.files.find(file => file.scope === 'global')!.revision!;
+      const smuggledExposure = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-exposure', scope: 'global', cwd: project, revision: currentRevision,
+          name: 'alpha', exposure: 'deferred', configuration: { exposure: 'direct' },
+        }),
+      });
+      expect(smuggledExposure.status).toBe(400);
+      expect(await smuggledExposure.json()).toMatchObject({ code: 'invalid-request', uncertain: false });
+
+      const exposureResponse = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-exposure', scope: 'global', cwd: project, revision: currentRevision,
+          name: 'alpha', exposure: 'deferred',
+        }),
+      });
+      expect(exposureResponse.status).toBe(200);
+      const exposureText = await exposureResponse.text();
+      expect(exposureText).not.toContain('SERVER-ONLY-UNDO-SECRET');
+      const exposed = JSON.parse(exposureText) as {
+        inventory: {
+          files: Array<{ scope: string; revision?: string }>;
+          servers: Array<{ name: string; exposure: string }>;
+        };
+      };
+      expect(exposed.inventory.servers).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: 'alpha', exposure: 'deferred' }),
+      ]));
+      expect((JSON.parse(await readFile(globalFile, 'utf8')) as {
+        mcpServers: Record<string, { exposure?: string }>;
+      }).mcpServers.alpha?.exposure).toBe('deferred');
+
+      const exposedRevision = exposed.inventory.files.find(file => file.scope === 'global')!.revision!;
       const removedResponse = await fetch(`${baseUrl}/api/mcp/actions`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'remove', scope: 'global', cwd: project, revision: currentRevision, name: 'secret',
+          action: 'remove', scope: 'global', cwd: project, revision: exposedRevision, name: 'secret',
         }),
       });
       expect(removedResponse.status).toBe(200);
@@ -481,10 +515,31 @@ describe('combined Web server', () => {
       const trusted = await fetch(`${baseUrl}/api/mcp?cwd=${encodeURIComponent(project)}`)
         .then(response => response.json()) as { files: Array<{ scope: string; revision?: string }> };
       const projectRevision = trusted.files.find(file => file.scope === 'project')!.revision!;
+      const projectExposureResponse = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-exposure', scope: 'project', cwd: project, revision: projectRevision,
+          name: 'local', exposure: 'codemode',
+        }),
+      });
+      expect(projectExposureResponse.status).toBe(200);
+      const projectExposureText = await projectExposureResponse.text();
+      expect(projectExposureText).not.toContain('PROJECT-UNDO-SECRET');
+      const projectExposed = JSON.parse(projectExposureText) as {
+        inventory: { files: Array<{ scope: string; revision?: string }> };
+      };
+      expect((JSON.parse(await readFile(projectFile, 'utf8')) as {
+        mcpServers: Record<string, { exposure?: string; env?: Record<string, string> }>;
+      }).mcpServers.local).toMatchObject({
+        exposure: 'codemode', env: { TOKEN: 'PROJECT-UNDO-SECRET' },
+      });
+      const projectExposureRevision = projectExposed.inventory.files
+        .find(file => file.scope === 'project')!.revision!;
       const projectRemoval = await fetch(`${baseUrl}/api/mcp/actions`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'remove', scope: 'project', cwd: project, revision: projectRevision, name: 'local',
+          action: 'remove', scope: 'project', cwd: project,
+          revision: projectExposureRevision, name: 'local',
         }),
       }).then(response => response.json()) as { undo: { token: string } };
       await fetch(`${baseUrl}/api/workspaces/trust`, {

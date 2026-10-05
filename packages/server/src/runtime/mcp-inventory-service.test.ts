@@ -56,6 +56,33 @@ describe('McpInventoryService undo store', () => {
     await expect(service.restore({ undoToken: third })).rejects.toMatchObject({ code: 'target-not-found' });
   });
 
+  it('marks a failed canonical reload after an exposure commit as uncertain', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-service-'));
+    temporaryDirectories.push(root);
+    const agentDir = path.join(root, 'agent');
+    const filePath = path.join(agentDir, 'mcp.json');
+    await mkdir(agentDir);
+    await writeFile(filePath, JSON.stringify({ mcpServers: { alpha: { command: 'node' } } }));
+    const workspaceManager = new WorkspaceManager({ allowedRoots: [root], defaultCwd: root });
+    await workspaceManager.initialize();
+    const trustManager = new ProjectTrustManager(path.join(agentDir, 'trust.json'));
+    await trustManager.load();
+    const service = new McpInventoryService(agentDir, workspaceManager, trustManager);
+    const inventory = await service.getOverview();
+    vi.spyOn(service, 'getOverview').mockRejectedValueOnce(new Error('reload failed'));
+
+    await expect(service.setExposure({
+      scope: 'global',
+      revision: inventory.files[0]!.revision!,
+      name: 'alpha',
+      exposure: 'deferred',
+    })).rejects.toMatchObject({ code: 'write-failed', uncertain: true });
+
+    expect(JSON.parse(await readFile(filePath, 'utf8'))).toMatchObject({
+      mcpServers: { alpha: { exposure: 'deferred' } },
+    });
+  });
+
   it('marks a failed canonical reload after commit as uncertain', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-service-'));
     temporaryDirectories.push(root);

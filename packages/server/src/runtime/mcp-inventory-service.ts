@@ -6,6 +6,7 @@ import {
   previewMcpImport,
   type McpConfigInventory,
   type McpConfigScope,
+  type McpExposure,
   type McpImportFieldValue,
   type McpImportPreview,
   type McpImportScopeContext,
@@ -16,6 +17,7 @@ import {
   type ProjectTrustManager,
   removeMcpServer,
   restoreMcpServer,
+  setMcpServerExposure,
   setMcpServersEnabled,
   WorkspaceManager,
 } from '@ai-harness/core';
@@ -55,6 +57,14 @@ export interface McpRemoveRequest {
   cwd?: string;
   revision: string | null;
   name: string;
+}
+
+export interface McpSetExposureRequest {
+  scope: McpConfigScope;
+  cwd?: string;
+  revision: string | null;
+  name: string;
+  exposure: McpExposure;
 }
 
 export interface McpRestoreRequest {
@@ -203,6 +213,25 @@ export class McpInventoryService {
       };
     } catch (error) {
       if (!activation.changed) throw error;
+      throw this.postCommitFailure(error);
+    }
+  }
+
+  async setExposure(request: McpSetExposureRequest): Promise<McpMutationOverview> {
+    const canonicalCwd = await this.resolveOptionalWorkspace(request.cwd);
+    const exposure = await setMcpServerExposure({
+      agentDir: this.agentDir,
+      scope: request.scope,
+      expectedRevision: request.revision,
+      name: request.name,
+      exposure: request.exposure,
+      ...(request.scope === 'project' && canonicalCwd ? { cwd: canonicalCwd } : {}),
+      trustManager: this.trustManager,
+    });
+    try {
+      return { inventory: await this.getOverview(canonicalCwd) };
+    } catch (error) {
+      if (!exposure.changed) throw error;
       throw this.postCommitFailure(error);
     }
   }

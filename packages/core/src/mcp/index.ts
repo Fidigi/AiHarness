@@ -37,6 +37,7 @@ export {
   McpConfigMutationError,
   removeMcpServer,
   restoreMcpServer,
+  setMcpServerExposure,
   setMcpServersEnabled,
 } from './config-inventory.js';
 export type {
@@ -53,6 +54,8 @@ export type {
   McpRemovedServerRecord,
   McpServerActivationMutation,
   McpServerActivationResult,
+  McpServerExposureMutation,
+  McpServerExposureResult,
   McpServerInventoryEntry,
   McpServerMutationOutcome,
   McpServerMutationOutcomeStatus,

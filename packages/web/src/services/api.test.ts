@@ -48,6 +48,7 @@ import {
   removeMcpConfigServer,
   restoreMcpConfigServer,
   setMcpConfigEnabled,
+  setMcpConfigExposure,
 } from './mcp-api';
 
 function sseResponse(chunks: string[], ok = true): Response {
@@ -345,6 +346,7 @@ describe('Web API service', () => {
     const removal = { inventory, undo: { token: 'opaque-token-1234', expiresAt: '2026-10-04T00:01:00.000Z' } };
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(success), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ inventory }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(removal), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ inventory }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
@@ -354,6 +356,8 @@ describe('Web API service', () => {
 
     await expect(setMcpConfigEnabled('project', ['docs'], false, 'a'.repeat(64), '/workspace'))
       .resolves.toEqual({ success: true, data: success });
+    await expect(setMcpConfigExposure('global', 'docs', 'deferred', 'b'.repeat(64), '/workspace'))
+      .resolves.toEqual({ success: true, data: { inventory } });
     await expect(removeMcpConfigServer('global', 'private', 'b'.repeat(64), '/workspace'))
       .resolves.toEqual({ success: true, data: removal });
     await expect(restoreMcpConfigServer('opaque-token-1234', '/workspace'))
@@ -371,10 +375,16 @@ describe('Web API service', () => {
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/mcp/actions', expect.objectContaining({
       body: JSON.stringify({
-        action: 'remove', scope: 'global', name: 'private', revision: 'b'.repeat(64), cwd: '/workspace',
+        action: 'set-exposure', scope: 'global', name: 'docs', exposure: 'deferred',
+        revision: 'b'.repeat(64), cwd: '/workspace',
       }),
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/mcp/actions', expect.objectContaining({
+      body: JSON.stringify({
+        action: 'remove', scope: 'global', name: 'private', revision: 'b'.repeat(64), cwd: '/workspace',
+      }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/mcp/actions', expect.objectContaining({
       body: JSON.stringify({ action: 'restore', undoToken: 'opaque-token-1234', cwd: '/workspace' }),
     }));
   });
