@@ -1,8 +1,12 @@
 import {
   MCP_IMPORT_MAX_BYTES,
+  MCP_IMPORT_MAX_FIELDS,
+  MCP_IMPORT_MAX_SERVERS,
   McpConfigMutationError,
   type McpConfigScope,
+  type McpImportFieldValue,
   type McpImportSyntax,
+  type McpImportWriteConfirmations,
 } from '@ai-harness/core';
 import { Router, type Response } from 'express';
 import type { RuntimeServices } from '../runtime/services.js';
@@ -37,6 +41,53 @@ function revisionOf(value: unknown): string | null | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function importFieldValues(value: unknown): Record<string, McpImportFieldValue> | undefined {
+  if (value === undefined) return {};
+  if (!isRecord(value) || Object.keys(value).length > MCP_IMPORT_MAX_FIELDS) return undefined;
+  const output: Record<string, McpImportFieldValue> = {};
+  for (const [field, given] of Object.entries(value)) {
+    if (!field || Buffer.byteLength(field, 'utf8') > 16 * 1024) return undefined;
+    if (typeof given === 'string' && Buffer.byteLength(given, 'utf8') <= 16 * 1024) {
+      Object.defineProperty(output, field, { value: given, enumerable: true });
+    } else if (isRecord(given) && hasOnlyKeys(given, ['reference'])
+      && typeof given.reference === 'string' && given.reference.length <= 256) {
+      Object.defineProperty(output, field, {
+        value: { reference: given.reference }, enumerable: true,
+      });
+    } else return undefined;
+  }
+  return output;
+}
+
+function importSecretReferences(value: unknown): Record<string, string> | undefined {
+  if (value === undefined) return {};
+  if (!isRecord(value) || Object.keys(value).length > MCP_IMPORT_MAX_FIELDS) return undefined;
+  const output: Record<string, string> = {};
+  for (const [field, name] of Object.entries(value)) {
+    if (!field || Buffer.byteLength(field, 'utf8') > 16 * 1024
+      || typeof name !== 'string' || name.length > 256) return undefined;
+    Object.defineProperty(output, field, { value: name, enumerable: true });
+  }
+  return output;
+}
+
+function importConfirmations(value: unknown): McpImportWriteConfirmations | undefined {
+  if (value === undefined) return {};
+  if (!isRecord(value) || !hasOnlyKeys(value, ['literalSecret', 'remoteHostVariables'])
+    || (value.literalSecret !== undefined && value.literalSecret !== true)
+    || (value.remoteHostVariables !== undefined && (!Array.isArray(value.remoteHostVariables)
+      || value.remoteHostVariables.length > 128
+      || !value.remoteHostVariables.every(name => typeof name === 'string' && name.length <= 256)))) {
+    return undefined;
+  }
+  return {
+    ...(value.literalSecret === true ? { literalSecret: true as const } : {}),
+    ...(Array.isArray(value.remoteHostVariables)
+      ? { remoteHostVariables: value.remoteHostVariables as string[] }
+      : {}),
+  };
+}
+
 function mutationStatus(error: McpConfigMutationError): number {
   switch (error.code) {
     case 'invalid-request': return 400;
@@ -48,6 +99,11 @@ function mutationStatus(error: McpConfigMutationError): number {
     case 'stale-revision':
     case 'target-conflict':
     case 'target-invalid':
+    case 'import-invalid':
+    case 'fields-incomplete':
+    case 'confirmation-required':
+    case 'scope-blocked':
+    case 'reserved-variable':
     case 'unsafe-path': return 409;
     case 'write-failed': return 500;
     default: return 500;
@@ -124,6 +180,43 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
     }
 
     try {
+      if (body.action === 'import') {
+        const scope = scopeOf(body.scope);
+        const revision = revisionOf(body.revision);
+        const values = importFieldValues(body.values);
+        const secretReferences = importSecretReferences(body.secretReferences);
+        const confirmations = importConfirmations(body.confirmations);
+        if (!hasOnlyKeys(body, [
+          'action', 'confirmations', 'cwd', 'entryIndex', 'name', 'revision', 'scope',
+          'secretReferences', 'syntax', 'text', 'values',
+        ]) || !scope || revision === undefined || values === undefined
+          || secretReferences === undefined || confirmations === undefined
+          || typeof body.text !== 'string' || body.text.includes('\0')
+          || Buffer.byteLength(body.text, 'utf8') > MCP_IMPORT_MAX_BYTES
+          || (body.syntax !== 'foreign' && body.syntax !== 'aiharness')
+          || !Number.isSafeInteger(body.entryIndex) || (body.entryIndex as number) < 0
+          || (body.entryIndex as number) >= MCP_IMPORT_MAX_SERVERS
+          || (body.name !== undefined && (typeof body.name !== 'string' || body.name.length > 64))
+          || (body.cwd !== undefined && typeof body.cwd !== 'string')) {
+          throw new McpConfigMutationError('invalid-request', INVALID_ACTION);
+        }
+        const services = await servicesPromise;
+        const cwd = optionalCwd(body.cwd);
+        response.json(await services.mcpInventory.importServer({
+          scope,
+          revision,
+          text: body.text,
+          syntax: body.syntax,
+          entryIndex: body.entryIndex as number,
+          values,
+          secretReferences,
+          confirmations,
+          ...(typeof body.name === 'string' ? { name: body.name } : {}),
+          ...(cwd ? { cwd } : {}),
+        }));
+        return;
+      }
+
       if (body.action === 'set-enabled') {
         const scope = scopeOf(body.scope);
         const revision = revisionOf(body.revision);

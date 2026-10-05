@@ -3,11 +3,14 @@ export {
   MCP_IMPORT_MAX_FIELDS,
   MCP_IMPORT_MAX_SERVERS,
   MCP_RESERVED_VARIABLE_NAMES,
+  importMcpServer,
   previewMcpImport,
 } from './config-import.js';
 export type {
+  ImportMcpServerOptions,
   McpImportEntryPreview,
   McpImportFieldPreview,
+  McpImportFieldValue,
   McpImportNote,
   McpImportNoteCode,
   McpImportNoteSeverity,
@@ -21,6 +24,8 @@ export type {
   McpImportSyntax,
   McpImportVariableAvailability,
   McpImportVariablePreview,
+  McpImportWriteConfirmations,
+  McpServerImportResult,
   PreviewMcpImportOptions,
 } from './config-import.js';
 

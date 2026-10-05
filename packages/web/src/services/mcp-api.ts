@@ -1,8 +1,10 @@
 import type {
   McpConfigInventory,
   McpConfigScope,
+  McpImportFieldValue,
   McpImportPreview,
   McpImportSyntax,
+  McpImportWriteConfirmations,
   McpServerMutationOutcome,
 } from '@ai-harness/core';
 import { apiFetch } from './api';
@@ -13,12 +15,26 @@ export interface McpMutationResponse {
   inventory: McpConfigInventory;
   outcomes?: McpServerMutationOutcome[];
   undo?: { token: string; expiresAt: string };
+  added?: { scope: McpConfigScope; name: string };
 }
 
 export interface McpImportPreviewRequest {
   text: string;
   syntax: McpImportSyntax;
   cwd?: string;
+}
+
+export interface McpImportWriteRequest {
+  scope: McpConfigScope;
+  cwd?: string;
+  revision: string | null;
+  text: string;
+  syntax: McpImportSyntax;
+  entryIndex: number;
+  name?: string;
+  values?: Record<string, McpImportFieldValue>;
+  secretReferences?: Record<string, string>;
+  confirmations?: McpImportWriteConfirmations;
 }
 
 export interface McpActionResponse {
@@ -46,6 +62,7 @@ export async function previewMcpImport(
 }
 
 type McpActionRequest =
+  | ({ action: 'import' } & McpImportWriteRequest)
   | {
     action: 'set-enabled';
     scope: McpConfigScope;
@@ -100,6 +117,10 @@ async function postMcpAction(action: McpActionRequest): Promise<McpActionRespons
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export function importMcpConfigServer(request: McpImportWriteRequest): Promise<McpActionResponse> {
+  return postMcpAction({ action: 'import', ...request });
 }
 
 export function setMcpConfigEnabled(

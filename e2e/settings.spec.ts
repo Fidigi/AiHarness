@@ -300,6 +300,55 @@ test.describe('Settings and authentication', () => {
     await expect(section.getByRole('heading', { name: 'Redacted import preview' })).toHaveCount(0);
   });
 
+  test('complète, confirme et persiste un import MCP depuis le texte original', async ({ page }) => {
+    const api = await installMockApi(page, {
+      mcpConfig: mcpStateInventory(),
+      mcpImportPreview: mcpImportPreviewFixture(),
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    await section.getByText('Paste and preview a server').click();
+    const paste = '{"mcpServers":{"docs-import":{"url":"https://docs.example.test/private?token=SOURCE-SECRET","headers":{"Authorization":"Bearer ${DOCS_TOKEN}"}}}}';
+    await section.getByLabel('MCP server text').fill(paste);
+    await section.getByLabel('Treat resolved values as AiHarness syntax').check();
+    await section.getByRole('button', { name: 'Preview', exact: true }).click();
+    const configure = section.getByRole('button', { name: 'Configure global import' });
+    await configure.click();
+
+    const dialog = page.getByRole('dialog', { name: 'Configure MCP import' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('Server name')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(configure).toBeFocused();
+    await configure.click();
+    await expect(dialog.getByLabel('Server name')).toBeFocused();
+    const tenant = dialog.getByRole('group', { name: 'headers.X-Tenant' });
+    await tenant.getByLabel('Use a host-variable reference').check();
+    await tenant.getByLabel('Host variable name').fill('TENANT_TOKEN');
+    await dialog.getByLabel('I confirm storing the remaining literal secret values in global configuration.').check();
+    await dialog.getByLabel(/I confirm that these host variables may be sent/u).check();
+    await dialog.getByRole('button', { name: 'Save atomically' }).click();
+
+    await expect(section).toContainText('The MCP server was imported.');
+    await expect(section.getByRole('article', { name: 'docs-import: Configured', exact: true })).toBeVisible();
+    await expect(section).not.toContainText('SOURCE-SECRET');
+    const request = api.requests.find(item => item.path === '/api/mcp/actions'
+      && (item.body as { action?: string } | undefined)?.action === 'import');
+    expect(request?.body).toEqual({
+      action: 'import', scope: 'global', revision: expect.any(String), text: paste,
+      syntax: 'aiharness', entryIndex: 0, name: 'docs-import',
+      values: { 'headers.X-Tenant': { reference: 'TENANT_TOKEN' } },
+      secretReferences: {},
+      confirmations: {
+        literalSecret: true,
+        remoteHostVariables: ['DOCS_TOKEN', 'TENANT_TOKEN'],
+      },
+      cwd: '/workspace',
+    });
+    expect(Object.keys(request?.body as object)).not.toContain('configuration');
+  });
+
   test('active et désactive les serveurs MCP par ligne ou groupe en une requête', async ({ page }) => {
     const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
     await page.goto('/settings#mcp');

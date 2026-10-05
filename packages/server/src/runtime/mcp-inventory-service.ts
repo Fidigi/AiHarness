@@ -1,13 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import {
+  importMcpServer,
   inspectMcpConfig,
   McpConfigMutationError,
   previewMcpImport,
   type McpConfigInventory,
   type McpConfigScope,
+  type McpImportFieldValue,
   type McpImportPreview,
   type McpImportScopeContext,
   type McpImportSyntax,
+  type McpImportWriteConfirmations,
   type McpRemovedServerRecord,
   type McpServerMutationOutcome,
   type ProjectTrustManager,
@@ -33,6 +36,10 @@ export interface McpMutationOverview {
     token: string;
     expiresAt: string;
   };
+  added?: {
+    scope: McpConfigScope;
+    name: string;
+  };
 }
 
 export interface McpSetEnabledRequest {
@@ -53,6 +60,19 @@ export interface McpRemoveRequest {
 export interface McpRestoreRequest {
   cwd?: string;
   undoToken: string;
+}
+
+export interface McpImportRequest {
+  scope: McpConfigScope;
+  cwd?: string;
+  revision: string | null;
+  text: string;
+  syntax: McpImportSyntax;
+  entryIndex: number;
+  name?: string;
+  values?: Record<string, McpImportFieldValue>;
+  secretReferences?: Record<string, string>;
+  confirmations?: McpImportWriteConfirmations;
 }
 
 export interface McpInventoryServiceOptions {
@@ -135,6 +155,33 @@ export class McpInventoryService {
       availableVariableNames: Object.keys(process.env),
       scopes: { global, project },
     });
+  }
+
+  async importServer(request: McpImportRequest): Promise<McpMutationOverview> {
+    const canonicalCwd = await this.resolveOptionalWorkspace(request.cwd);
+    const imported = await importMcpServer({
+      agentDir: this.agentDir,
+      scope: request.scope,
+      expectedRevision: request.revision,
+      text: request.text,
+      syntax: request.syntax,
+      entryIndex: request.entryIndex,
+      availableVariableNames: Object.keys(process.env),
+      ...(request.name !== undefined ? { name: request.name } : {}),
+      ...(request.values ? { values: request.values } : {}),
+      ...(request.secretReferences ? { secretReferences: request.secretReferences } : {}),
+      ...(request.confirmations ? { confirmations: request.confirmations } : {}),
+      ...(request.scope === 'project' && canonicalCwd ? { cwd: canonicalCwd } : {}),
+      trustManager: this.trustManager,
+    });
+    try {
+      return {
+        inventory: await this.getOverview(canonicalCwd),
+        added: { scope: imported.scope, name: imported.name },
+      };
+    } catch (error) {
+      throw this.postCommitFailure(error);
+    }
   }
 
   async setEnabled(request: McpSetEnabledRequest): Promise<McpMutationOverview> {

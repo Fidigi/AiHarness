@@ -16,11 +16,11 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 | `packages/web/src/App.tsx` | Auth bootstrap, route/deep-link restoration and top-level data hydration |
 | `packages/web/src/store/session-store.ts` | Sessions, windows, drafts, runs, catalogues and bounded workspace cache |
 | `packages/web/src/store/preferences.ts` | Versioned appearance, layout, notification, panel and keybinding state |
-| `packages/web/src/services/api.ts`, `packages/web/src/services/mcp-api.ts` | Credential-aware fetch, REST/SSE contracts and Settings-lazy MCP import-preview/mutation requests |
+| `packages/web/src/services/api.ts`, `packages/web/src/services/mcp-api.ts` | Credential-aware fetch, REST/SSE contracts and Settings-lazy MCP import-preview/persistence/mutation requests |
 | `packages/web/src/components/ChatView.tsx` | Detached runs, history, composer, queues, settings and reconciliation |
 | `packages/web/src/components/{Sidebar,WorkspacePanel,TerminalPanel}.tsx` | Navigation, files/Git and PTY surfaces |
 | `packages/web/src/components/SettingsView.tsx` | Lazy Settings route and administration sections |
-| `packages/web/src/components/{McpSettings,McpImportPreview}.tsx` | Redacted global/project MCP groups, paste preview and scope eligibility, trust lock, row/group activation, confirmed removal, temporary undo and file diagnostics |
+| `packages/web/src/components/{McpSettings,McpImportPreview}.tsx` | Redacted global/project MCP groups, paste preview, field/reference completion, scope/confirmation-gated atomic import, trust lock, row/group activation, confirmed removal, temporary undo and file diagnostics |
 | `packages/web/src/components/PluginSettings.tsx` | Project/global package inventory, individual and one-request group activation, partial-result and reload-pending feedback |
 
 ## State Boundaries
@@ -80,11 +80,13 @@ See [`extensions.md`](./extensions.md) for server-side ownership and interaction
 
 `McpSettings` requests the selected workspace through `getMcpConfig()`, reloads on cwd/trust changes, and keeps the returned inventory in component state only. It labels entries as Configured, Disabled, Invalid, or Replaced by project—never Connected—and renders only the already-redacted target, env/header names, command-backed field names and variable references returned by Core. A present untrusted project file shows a lock notice and no project names or values. File diagnostics use typed reasons translated in both built-in locales; server entry diagnostics are fixed, value-free schema messages.
 
-`McpImportPreview` keeps pasted text only in component state and sends the original text, explicit foreign/AiHarness syntax choice and current cwd to the administrator preview route—never a browser-built configuration object. Text/syntax/workspace changes abort or invalidate stale requests. Returned cards contain only source kind, normalized name, masked target, structural field names, variable names, fixed notes and per-scope eligibility/confirmations. Literal env/header/OAuth values, argument text, source excerpts and writable normalized configuration never render. The preview has no save action and does not change the canonical inventory.
+`McpImportPreview` keeps pasted text only in component state and sends the original text, explicit foreign/AiHarness syntax choice and current cwd to the administrator preview route—never a browser-built configuration object. Text/syntax/workspace/inventory changes abort or invalidate stale requests. Returned cards contain only source kind, normalized name, masked target, structural field names, variable names, fixed notes and per-scope eligibility/confirmations. Literal env/header/OAuth values, argument text, source excerpts and writable normalized configuration never render.
+
+A scope action opens a focus-trapped completion dialog. It collects a bounded target name, only the missing fields reported by Core, optional host-variable substitutions for reference-capable secret locations, and explicit confirmations for remaining global literals and named remote variables. The write request resends the original paste and these choices; Core reparses it and the browser never submits an approved normalized entry. Success replaces inventory with the server response and clears the paste. Every failure closes stale revision-backed controls and reloads canonical inventory; UI errors remain localized and generic.
 
 Valid rows can be enabled, disabled or removed; each scope also has one-request bounded group controls. Requests include the opaque revision from the last inventory. A removal uses an accessible confirmation dialog and only a short-lived opaque undo token crosses into the browser; the literal removed entry stays in server memory. Busy controls serialize browser intent, focus returns after cancellation or moves to Undo after success, and any uncertain timeout/network result triggers a canonical reload because the write may already have committed. Server responses replace local inventory rather than applying speculative patches.
 
-This panel still has no import persistence/field completion, edit/exposure, Test/sign-in or runtime controls. Do not implement a browser-side parser or resolver: source files, literal values, environment access and command handling stay entirely on the Server/Core side.
+This panel still has no general add/edit/exposure, Test/sign-in or runtime controls beyond the reviewed single-entry import flow. Do not implement a browser-side parser or resolver: source files, literal values, environment access and command handling stay entirely on the Server/Core side.
 
 ## PWA, Push, and i18n
 
@@ -101,9 +103,9 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 
 - `packages/web/src/store/session-store.test.ts` plus `.remote.test.ts` and `.integration.test.ts` — hydration, windows, drafts, cache and run state
 - `packages/web/src/store/preferences.test.ts` — schema migration and validation
-- `packages/web/src/services/api.test.ts` — REST/SSE contracts, including MCP import-preview/action bodies, typed errors and uncertain timeouts
+- `packages/web/src/services/api.test.ts` — REST/SSE contracts, including MCP import-preview/original-text persistence/action bodies, typed errors and uncertain timeouts
 - `packages/web/src/services/{push,pwa,keyboard,notices}.test.ts` — global browser services
-- `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including locked/redacted MCP inventory, non-mutating paste preview, grouped activation, confirmation, focus, undo and failure reconciliation
+- `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including locked/redacted MCP inventory, non-mutating paste preview, completion/confirmation-gated atomic import, grouped activation, focus, undo and failure reconciliation
 - `e2e/accessibility.spec.ts`, `e2e/performance.spec.ts`, and `e2e/visual.spec.ts` — a11y, bounds and baselines
 - `e2e/live-server.spec.ts` — real browser-to-server smoke path
 

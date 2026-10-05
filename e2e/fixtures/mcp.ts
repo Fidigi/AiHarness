@@ -119,6 +119,7 @@ export function mcpImportPreviewFixture(): McpImportPreview {
         remote: true, confirmationRequired: true,
       }],
       literalSecretFields: ['url'],
+      referenceableLiteralSecretFields: [],
       scopes: {
         global: { allowed: true, reasons: [], confirmations: ['literal-secret', 'remote-host-variable'] },
         project: { allowed: false, reasons: ['literal-secret'], confirmations: ['remote-host-variable'] },

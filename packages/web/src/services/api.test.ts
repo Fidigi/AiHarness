@@ -43,6 +43,7 @@ import {
   uploadFiles,
 } from './api';
 import {
+  importMcpConfigServer,
   previewMcpImport,
   removeMcpConfigServer,
   restoreMcpConfigServer,
@@ -279,7 +280,7 @@ describe('Web API service', () => {
           valid: true, enabled: true, exposure: 'direct', transport: 'stdio', command: 'npx',
           envNames: [], headerNames: [], oauthFields: [], commandFields: [], variableReferences: [], masked: false,
         },
-        fields: [], variables: [], literalSecretFields: [],
+        fields: [], variables: [], literalSecretFields: [], referenceableLiteralSecretFields: [],
         scopes: {
           global: { allowed: true, reasons: [], confirmations: [] },
           project: { allowed: false, reasons: ['no-project'], confirmations: [] },
@@ -304,6 +305,31 @@ describe('Web API service', () => {
         cwd: '/workspace',
       }),
       credentials: 'same-origin',
+    }));
+  });
+
+  it('posts original MCP import text with explicit completion and confirmations', async () => {
+    const inventory = { files: [], servers: [] };
+    const payload = { inventory, added: { scope: 'project', name: 'docs' } };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(importMcpConfigServer({
+      scope: 'project', cwd: '/workspace', revision: null, syntax: 'foreign', entryIndex: 0,
+      text: 'ORIGINAL-PASTE', name: 'docs',
+      values: { 'headers.X-Tenant': { reference: 'TENANT_TOKEN' } },
+      secretReferences: { 'headers.Authorization': 'DOCS_TOKEN' },
+      confirmations: { remoteHostVariables: ['DOCS_TOKEN', 'TENANT_TOKEN'] },
+    })).resolves.toEqual({ success: true, data: payload });
+    expect(fetchMock).toHaveBeenCalledWith('/api/mcp/actions', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'import', scope: 'project', cwd: '/workspace', revision: null,
+        syntax: 'foreign', entryIndex: 0, text: 'ORIGINAL-PASTE', name: 'docs',
+        values: { 'headers.X-Tenant': { reference: 'TENANT_TOKEN' } },
+        secretReferences: { 'headers.Authorization': 'DOCS_TOKEN' },
+        confirmations: { remoteHostVariables: ['DOCS_TOKEN', 'TENANT_TOKEN'] },
+      }),
     }));
   });
 

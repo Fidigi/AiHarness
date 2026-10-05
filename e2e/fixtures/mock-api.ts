@@ -745,6 +745,48 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
           code: 'stale-revision', uncertain: false,
         }, 409); return;
       }
+      if (input.action === 'import') {
+        const previewEntry = mcpImportPreview.entries[Number(input.entryIndex)];
+        const name = typeof input.name === 'string' ? input.name : previewEntry?.name;
+        if (!previewEntry || !name) {
+          await fulfillJson(route, { error: 'Invalid MCP import.', code: 'import-invalid', uncertain: false }, 409); return;
+        }
+        if (mcpConfig.servers.some(server => server.scope === scope && server.name === name)) {
+          await fulfillJson(route, {
+            error: 'The MCP server name is already configured.', code: 'target-conflict', uncertain: false,
+          }, 409); return;
+        }
+        mcpConfig.servers.push({
+          name,
+          scope,
+          sourcePath: file?.path ?? (scope === 'project' ? `${workspace.cwd}/.ai-harness/mcp.json` : '/agent/mcp.json'),
+          valid: previewEntry.persisted.valid,
+          enabled: previewEntry.persisted.enabled,
+          exposure: previewEntry.persisted.exposure,
+          ...(previewEntry.persisted.transport ? { transport: previewEntry.persisted.transport } : {}),
+          ...(previewEntry.persisted.command ? { command: previewEntry.persisted.command } : {}),
+          ...(previewEntry.persisted.args ? { args: previewEntry.persisted.args } : {}),
+          ...(previewEntry.persisted.url ? { url: previewEntry.persisted.url } : {}),
+          envNames: previewEntry.persisted.envNames,
+          headerNames: previewEntry.persisted.headerNames,
+          commandFields: previewEntry.persisted.commandFields,
+          variableReferences: previewEntry.persisted.variableReferences,
+          masked: previewEntry.persisted.masked,
+          shadowedByProject: false,
+          replacesGlobal: false,
+          problems: [],
+        });
+        if (file) {
+          file.exists = true;
+          file.contentRead = true;
+          file.problems = [];
+        }
+        bumpMcpRevision(scope);
+        reconcileMcpShadowing();
+        await fulfillJson(route, {
+          inventory: structuredClone(mcpConfig), added: { scope, name },
+        }); return;
+      }
       if (input.action === 'set-enabled') {
         let changed = false;
         const outcomes = (Array.isArray(input.names) ? input.names : []).map((name: string) => {

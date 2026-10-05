@@ -759,6 +759,11 @@ export type McpConfigMutationErrorCode =
   | 'target-not-found'
   | 'target-invalid'
   | 'target-conflict'
+  | 'import-invalid'
+  | 'fields-incomplete'
+  | 'confirmation-required'
+  | 'scope-blocked'
+  | 'reserved-variable'
   | 'lock-timeout'
   | 'write-failed';
 
@@ -804,6 +809,16 @@ export interface McpServerActivationResult {
 
 export interface McpServerRemovalMutation extends McpConfigMutationTarget {
   name: string;
+}
+
+/** Internal insertion input used by Core import policy after it rebuilds an entry from pasted text. */
+export interface McpServerInsertionMutation extends McpConfigMutationTarget {
+  name: string;
+  entry: unknown;
+}
+
+export interface McpServerInsertionResult {
+  revision: string;
 }
 
 /** Server-only undo material. Adapters must never serialize entry to an untrusted client. */
@@ -1243,6 +1258,39 @@ export async function setMcpServersEnabled(
     return { changed, value: outcomes };
   });
   return { revision: result.revision, changed: result.changed, outcomes: result.value };
+}
+
+/**
+ * Append one already-policy-checked Core entry under the same lock and atomic
+ * replacement as every other local mutation. This helper is intentionally
+ * not re-exported from the public MCP barrel: import callers must go through
+ * config-import's text re-parse and confirmation policy.
+ */
+export async function insertMcpServerEntry(
+  options: McpServerInsertionMutation,
+): Promise<McpServerInsertionResult> {
+  validateMutationName(options.name);
+  if (!isRecord(options.entry)
+    || !describeEntry(options.name, options.entry, options.scope, '').info.valid) {
+    throw mutationError('invalid-request', 'The MCP server to import is invalid.');
+  }
+  const entry = structuredClone(options.entry);
+  const result = await mutateMcpConfig(options, config => {
+    if (Object.hasOwn(config.servers, options.name)) {
+      throw mutationError('target-conflict', 'The MCP server name is already configured.');
+    }
+    const entries = Object.entries(config.servers);
+    if (entries.length >= MCP_CONFIG_MAX_SERVERS) {
+      throw mutationError('target-conflict', 'The MCP server collection is full.');
+    }
+    entries.push([options.name, entry]);
+    const inserted = Object.fromEntries(entries);
+    config.root.mcpServers = inserted;
+    config.servers = inserted;
+    return { changed: true, value: undefined };
+  });
+  if (!result.revision) throw mutationError('write-failed', 'The MCP configuration revision is unavailable.', true);
+  return { revision: result.revision };
 }
 
 /** Remove one literal entry. The returned raw record is server-only undo material. */

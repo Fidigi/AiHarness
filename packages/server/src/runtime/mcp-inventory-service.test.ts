@@ -84,6 +84,59 @@ describe('McpInventoryService undo store', () => {
   });
 });
 
+describe('McpInventoryService import persistence', () => {
+  it('passes source text and value-free environment context into Core, then returns only canonical inventory', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-import-service-'));
+    temporaryDirectories.push(root);
+    const agentDir = path.join(root, 'agent');
+    await mkdir(agentDir);
+    const workspaceManager = new WorkspaceManager({ allowedRoots: [root], defaultCwd: root });
+    await workspaceManager.initialize();
+    const trustManager = new ProjectTrustManager(path.join(agentDir, 'trust.json'));
+    await trustManager.load();
+    const service = new McpInventoryService(agentDir, workspaceManager, trustManager);
+    const pastedSecret = 'SERVICE-PASTED-SECRET-0123456789';
+    const response = await service.importServer({
+      scope: 'global',
+      revision: null,
+      syntax: 'foreign',
+      entryIndex: 0,
+      text: JSON.stringify({
+        mcpServers: {
+          docs: {
+            url: 'https://docs.example.test/mcp',
+            headers: { Authorization: `Bearer ${pastedSecret}` },
+          },
+        },
+      }),
+      confirmations: { literalSecret: true },
+    });
+
+    expect(response.added).toEqual({ scope: 'global', name: 'docs' });
+    expect(JSON.stringify(response)).not.toContain(pastedSecret);
+    expect(await readFile(path.join(agentDir, 'mcp.json'), 'utf8')).toContain(pastedSecret);
+  });
+
+  it('marks a canonical reload failure after import as uncertain', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-import-service-'));
+    temporaryDirectories.push(root);
+    const agentDir = path.join(root, 'agent');
+    await mkdir(agentDir);
+    const workspaceManager = new WorkspaceManager({ allowedRoots: [root], defaultCwd: root });
+    await workspaceManager.initialize();
+    const trustManager = new ProjectTrustManager(path.join(agentDir, 'trust.json'));
+    await trustManager.load();
+    const service = new McpInventoryService(agentDir, workspaceManager, trustManager);
+    vi.spyOn(service, 'getOverview').mockRejectedValueOnce(new Error('reload failed'));
+
+    await expect(service.importServer({
+      scope: 'global', revision: null, syntax: 'foreign', entryIndex: 0,
+      text: 'npx public-mcp-server',
+    })).rejects.toMatchObject({ code: 'write-failed', uncertain: true });
+    expect(await readFile(path.join(agentDir, 'mcp.json'), 'utf8')).toContain('public-mcp-server');
+  });
+});
+
 describe('McpInventoryService import preview', () => {
   it('passes only redacted inventory and environment names to the pure Core preview', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-preview-service-'));

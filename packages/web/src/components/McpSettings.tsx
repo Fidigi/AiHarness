@@ -295,6 +295,9 @@ export function McpSettings() {
       key={`${workspace?.cwd ?? 'global'}:${workspace?.trusted ? 'trusted' : 'untrusted'}`}
       cwd={workspace?.cwd}
       disabled={Boolean(busy)}
+      inventory={inventory}
+      onInventory={setInventory}
+      onReload={() => load(true)}
     />
     {inventory && groups.map(group => {
       const actionable = group.servers.filter(server => server.valid);

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
+  McpConfigInventory,
   McpConfigScope,
   McpImportEntryPreview,
+  McpImportFieldValue,
   McpImportNote,
   McpImportNoteCode,
   McpImportScopeBlockReason,
@@ -10,8 +12,9 @@ import type {
   McpImportVariableAvailability,
   McpImportPreview as McpImportPreviewResult,
 } from '@ai-harness/core';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useI18n } from '../hooks/useI18n';
-import { previewMcpImport } from '../services/mcp-api';
+import { importMcpConfigServer, previewMcpImport } from '../services/mcp-api';
 import { mcpImportMessage, type McpImportMessageKey } from './mcp-import-messages';
 
 const SOURCE_KEYS: Record<McpImportSource, McpImportMessageKey> = {
@@ -87,6 +90,37 @@ const AVAILABILITY_KEYS: Record<McpImportVariableAvailability, McpImportMessageK
   reserved: 'settings.mcp.import.variable.reserved',
 };
 
+interface ImportDraft {
+  entry: McpImportEntryPreview;
+  entryIndex: number;
+  scope: McpConfigScope;
+  name: string;
+  values: Record<string, string>;
+  referenceModes: Record<string, boolean>;
+  secretReferences: Record<string, string>;
+  literalConfirmed: boolean;
+  remoteConfirmed: boolean;
+}
+
+function isReferenceableField(field: string): boolean {
+  return field.startsWith('env.') || field.startsWith('headers.') || field === 'oauth.clientSecret';
+}
+
+function isRemoteReferenceField(field: string): boolean {
+  return field.startsWith('headers.') || field === 'oauth.clientSecret';
+}
+
+function canConfigure(entry: McpImportEntryPreview, scope: McpConfigScope): boolean {
+  return entry.scopes[scope].reasons.every(reason => {
+    if (reason === 'name-taken') return true;
+    if (reason === 'invalid-entry') return entry.fields.length > 0;
+    if (reason === 'literal-secret') {
+      return entry.literalSecretFields.every(field => entry.referenceableLiteralSecretFields.includes(field));
+    }
+    return false;
+  });
+}
+
 function NoteList({ notes }: { notes: McpImportNote[] }) {
   const { locale } = useI18n();
   const m = mcpImportMessage.bind(null, locale);
@@ -117,7 +151,17 @@ function ScopeResult({ scope, entry }: { scope: McpConfigScope; entry: McpImport
   </div>;
 }
 
-function PreviewEntry({ entry }: { entry: McpImportEntryPreview }) {
+function PreviewEntry({
+  disabled,
+  entry,
+  entryIndex,
+  onConfigure,
+}: {
+  disabled: boolean;
+  entry: McpImportEntryPreview;
+  entryIndex: number;
+  onConfigure: (entry: McpImportEntryPreview, entryIndex: number, scope: McpConfigScope) => void;
+}) {
   const { locale, t } = useI18n();
   const m = mcpImportMessage.bind(null, locale);
   const target = entry.persisted.transport === 'stdio'
@@ -167,42 +211,84 @@ function PreviewEntry({ entry }: { entry: McpImportEntryPreview }) {
       <ScopeResult scope="global" entry={entry} />
       <ScopeResult scope="project" entry={entry} />
     </div>
+    <div className="mcp-import-save-actions">
+      {(['global', 'project'] as const).map(scope => <button type="button" key={scope}
+        disabled={disabled || !canConfigure(entry, scope)}
+        onClick={() => onConfigure(entry, entryIndex, scope)}>
+        {m(scope === 'global' ? 'settings.mcp.import.saveGlobal' : 'settings.mcp.import.saveProject')}
+      </button>)}
+    </div>
     <NoteList notes={entry.notes} />
   </article>;
 }
 
-export function McpImportPreview({ cwd, disabled }: { cwd?: string; disabled: boolean }) {
+export function McpImportPreview({
+  cwd,
+  disabled,
+  inventory,
+  onInventory,
+  onReload,
+}: {
+  cwd?: string;
+  disabled: boolean;
+  inventory?: McpConfigInventory;
+  onInventory: (inventory: McpConfigInventory) => void;
+  onReload: () => Promise<void>;
+}) {
   const { locale } = useI18n();
   const m = mcpImportMessage.bind(null, locale);
   const [text, setText] = useState('');
   const [nativeSyntax, setNativeSyntax] = useState(false);
   const [preview, setPreview] = useState<McpImportPreviewResult>();
   const [error, setError] = useState<string>();
+  const [writeMessage, setWriteMessage] = useState<'success' | 'error'>();
   const [loading, setLoading] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const [draft, setDraft] = useState<ImportDraft>();
   const request = useRef(0);
   const controller = useRef<AbortController | null>(null);
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const inventoryKey = inventory?.files
+    .map(file => `${file.scope}:${file.exists ? file.revision ?? 'invalid' : 'missing'}`)
+    .join('|') ?? '';
+
+  const closeDraft = (): void => {
+    if (!writing) setDraft(undefined);
+  };
+  useFocusTrap(Boolean(draft), dialogRef, closeDraft);
 
   useEffect(() => () => {
     request.current++;
     controller.current?.abort();
   }, []);
 
+  useEffect(() => {
+    request.current++;
+    controller.current?.abort();
+    setPreview(undefined);
+    setDraft(undefined);
+    setLoading(false);
+  }, [inventoryKey]);
+
   const clearResult = (): void => {
     request.current++;
     controller.current?.abort();
     setPreview(undefined);
+    setDraft(undefined);
     setError(undefined);
+    setWriteMessage(undefined);
     setLoading(false);
   };
 
   const runPreview = async (): Promise<void> => {
-    if (!text.trim() || disabled || loading) return;
+    if (!text.trim() || disabled || loading || writing) return;
     const sequence = ++request.current;
     controller.current?.abort();
     const nextController = new AbortController();
     controller.current = nextController;
     setLoading(true);
     setError(undefined);
+    setWriteMessage(undefined);
     setPreview(undefined);
     try {
       const result = await previewMcpImport({
@@ -220,46 +306,228 @@ export function McpImportPreview({ cwd, disabled }: { cwd?: string; disabled: bo
     }
   };
 
-  return <details className="mcp-import-panel">
-    <summary>{m('settings.mcp.import.title')}</summary>
-    <div className="mcp-import-body">
-      <p className="settings-help">{m('settings.mcp.import.help')}</p>
-      <label htmlFor="mcp-import-text">{m('settings.mcp.import.pasteLabel')}</label>
-      <textarea id="mcp-import-text" rows={6} maxLength={262_144} value={text}
-        placeholder={m('settings.mcp.import.placeholder')}
-        onChange={event => {
-          clearResult();
-          setText(event.target.value);
-        }} />
-      <label className="mcp-import-syntax">
-        <input type="checkbox" checked={nativeSyntax} onChange={event => {
-          clearResult();
-          setNativeSyntax(event.target.checked);
-        }} />
-        <span>{m('settings.mcp.import.nativeSyntax')}</span>
-      </label>
-      <p className="settings-help">{m('settings.mcp.import.syntaxHelp')}</p>
-      <div className="mcp-import-actions">
-        <button type="button" disabled={disabled || loading || !text.trim()} onClick={() => void runPreview()}>
-          {loading ? m('settings.mcp.import.previewing') : m('settings.mcp.import.preview')}
-        </button>
-        <button type="button" disabled={!text && !preview && !error} onClick={() => {
-          clearResult();
-          setText('');
-        }}>{m('settings.mcp.import.clear')}</button>
+  const openDraft = (entry: McpImportEntryPreview, entryIndex: number, scope: McpConfigScope): void => {
+    setWriteMessage(undefined);
+    setDraft({
+      entry,
+      entryIndex,
+      scope,
+      name: entry.name,
+      values: Object.fromEntries(entry.fields.map(field => [field.field, ''])),
+      referenceModes: Object.fromEntries(entry.fields.map(field => [field.field, false])),
+      secretReferences: Object.fromEntries(entry.referenceableLiteralSecretFields.map(field => [field, ''])),
+      literalConfirmed: false,
+      remoteConfirmed: false,
+    });
+  };
+
+  const remoteNames = new Set<string>();
+  if (draft) {
+    for (const variable of draft.entry.variables) {
+      if (variable.confirmationRequired) remoteNames.add(variable.name);
+    }
+    for (const field of draft.entry.fields) {
+      if (draft.referenceModes[field.field] && isRemoteReferenceField(field.field)) {
+        const name = draft.values[field.field]?.trim();
+        if (name) remoteNames.add(name);
+      }
+    }
+    for (const [field, value] of Object.entries(draft.secretReferences)) {
+      if (value.trim() && isRemoteReferenceField(field)) remoteNames.add(value.trim());
+    }
+  }
+  const confirmedRemoteNames = [...remoteNames].sort();
+  const unreplacedLiteralFields = draft?.entry.literalSecretFields
+    .filter(field => !draft.secretReferences[field]?.trim()) ?? [];
+  const missingLiteralFields = draft?.entry.fields.filter(field => !draft.referenceModes[field.field]) ?? [];
+  const knownMissingSecretFields = missingLiteralFields.filter(field => field.kind === 'secret');
+  const needsGlobalLiteralConfirmation = unreplacedLiteralFields.length > 0 || missingLiteralFields.length > 0;
+  const projectLiteralBlocked = draft?.scope === 'project'
+    && (unreplacedLiteralFields.length > 0 || knownMissingSecretFields.length > 0);
+  const fieldsReady = draft?.entry.fields.every(field => Boolean(draft.values[field.field]?.trim())) ?? false;
+  const readyToWrite = Boolean(draft && inventory && draft.name.trim() && fieldsReady
+    && !projectLiteralBlocked
+    && (draft.scope !== 'global' || !needsGlobalLiteralConfirmation || draft.literalConfirmed)
+    && (confirmedRemoteNames.length === 0 || draft.remoteConfirmed));
+
+  const submitImport = async (): Promise<void> => {
+    if (!draft || !inventory || !readyToWrite || writing) return;
+    const selected = draft;
+    const values: Record<string, McpImportFieldValue> = {};
+    for (const field of selected.entry.fields) {
+      const value = selected.values[field.field]!.trim();
+      values[field.field] = selected.referenceModes[field.field] ? { reference: value } : value;
+    }
+    const secretReferences = Object.fromEntries(Object.entries(selected.secretReferences)
+      .filter(([, value]) => Boolean(value.trim()))
+      .map(([field, value]) => [field, value.trim()]));
+    request.current++;
+    controller.current?.abort();
+    setWriting(true);
+    setError(undefined);
+    setWriteMessage(undefined);
+    try {
+      const file = inventory.files.find(item => item.scope === selected.scope);
+      const result = await importMcpConfigServer({
+        scope: selected.scope,
+        revision: file?.revision ?? null,
+        text,
+        syntax: nativeSyntax ? 'aiharness' : 'foreign',
+        entryIndex: selected.entryIndex,
+        name: selected.name.trim(),
+        values,
+        secretReferences,
+        confirmations: {
+          ...(selected.scope === 'global' && needsGlobalLiteralConfirmation ? { literalSecret: true as const } : {}),
+          ...(confirmedRemoteNames.length > 0 ? { remoteHostVariables: confirmedRemoteNames } : {}),
+        },
+        ...(cwd ? { cwd } : {}),
+      });
+      if (!result.success || !result.data) throw new Error('MCP import failed');
+      setDraft(undefined);
+      setPreview(undefined);
+      setText('');
+      onInventory(result.data.inventory);
+      setWriteMessage('success');
+    } catch {
+      setDraft(undefined);
+      setPreview(undefined);
+      setWriteMessage('error');
+      try {
+        await onReload();
+      } catch {
+        // Keep the generic local failure and no revision-backed import controls.
+      }
+    } finally {
+      setWriting(false);
+    }
+  };
+
+  return <>
+    <details className="mcp-import-panel">
+      <summary>{m('settings.mcp.import.title')}</summary>
+      <div className="mcp-import-body">
+        <p className="settings-help">{m('settings.mcp.import.help')}</p>
+        <label htmlFor="mcp-import-text">{m('settings.mcp.import.pasteLabel')}</label>
+        <textarea id="mcp-import-text" rows={6} maxLength={262_144} value={text} disabled={writing}
+          placeholder={m('settings.mcp.import.placeholder')}
+          onChange={event => {
+            clearResult();
+            setText(event.target.value);
+          }} />
+        <label className="mcp-import-syntax">
+          <input type="checkbox" checked={nativeSyntax} disabled={writing} onChange={event => {
+            clearResult();
+            setNativeSyntax(event.target.checked);
+          }} />
+          <span>{m('settings.mcp.import.nativeSyntax')}</span>
+        </label>
+        <p className="settings-help">{m('settings.mcp.import.syntaxHelp')}</p>
+        <div className="mcp-import-actions">
+          <button type="button" disabled={disabled || loading || writing || !text.trim()} onClick={() => void runPreview()}>
+            {loading ? m('settings.mcp.import.previewing') : m('settings.mcp.import.preview')}
+          </button>
+          <button type="button" disabled={writing || (!text && !preview && !error)} onClick={() => {
+            clearResult();
+            setText('');
+          }}>{m('settings.mcp.import.clear')}</button>
+        </div>
+        {loading && <p role="status">{m('settings.mcp.import.previewing')}</p>}
+        {error && <p role="alert" className="status-warning">{error}</p>}
+        {writeMessage && <p role={writeMessage === 'error' ? 'alert' : 'status'}
+          className={writeMessage === 'error' ? 'status-warning' : 'status-success'}>
+          {m(writeMessage === 'error' ? 'settings.mcp.import.writeFailed' : 'settings.mcp.import.saved')}
+        </p>}
+        {preview && <section className="mcp-import-results" aria-live="polite" aria-labelledby="mcp-import-results-title">
+          <h4 id="mcp-import-results-title">{m('settings.mcp.import.results')}</h4>
+          <NoteList notes={preview.notes} />
+          {preview.entries.length === 0
+            ? <p className="settings-help">{m('settings.mcp.import.noEntries')}</p>
+            : <div className="settings-resource-list">{preview.entries.map((entry, index) => (
+              <PreviewEntry disabled={disabled || writing || !inventory} entry={entry} entryIndex={index}
+                key={`${entry.name}:${index}`} onConfigure={openDraft} />
+            ))}</div>}
+          <p className="settings-help">{m('settings.mcp.import.writeHelp')}</p>
+        </section>}
       </div>
-      {loading && <p role="status">{m('settings.mcp.import.previewing')}</p>}
-      {error && <p role="alert" className="status-warning">{error}</p>}
-      {preview && <section className="mcp-import-results" aria-live="polite" aria-labelledby="mcp-import-results-title">
-        <h4 id="mcp-import-results-title">{m('settings.mcp.import.results')}</h4>
-        <NoteList notes={preview.notes} />
-        {preview.entries.length === 0
-          ? <p className="settings-help">{m('settings.mcp.import.noEntries')}</p>
-          : <div className="settings-resource-list">{preview.entries.map((entry, index) => (
-            <PreviewEntry entry={entry} key={`${entry.name}:${index}`} />
-          ))}</div>}
-        <p className="settings-help">{m('settings.mcp.import.noWrite')}</p>
-      </section>}
-    </div>
-  </details>;
+    </details>
+    {draft && <div className="modal-backdrop mcp-import-backdrop" role="presentation">
+      <section ref={dialogRef} className="mcp-import-dialog" role="dialog" aria-modal="true" tabIndex={-1}
+        aria-labelledby="mcp-import-dialog-title" aria-describedby="mcp-import-dialog-description">
+        <h4 id="mcp-import-dialog-title">{m('settings.mcp.import.configureTitle')}</h4>
+        <p id="mcp-import-dialog-description" className="settings-help">
+          {m('settings.mcp.import.configureDescription', { scope: m(`settings.mcp.import.scope.${draft.scope}`) })}
+        </p>
+        <form onSubmit={event => {
+          event.preventDefault();
+          void submitImport();
+        }}>
+          <label htmlFor="mcp-import-name">{m('settings.mcp.import.nameLabel')}</label>
+          <input id="mcp-import-name" data-autofocus maxLength={64} value={draft.name} disabled={writing}
+            onChange={event => setDraft(current => current ? { ...current, name: event.target.value } : current)} />
+          {draft.entry.fields.map((field, index) => {
+            const referenceMode = Boolean(draft.referenceModes[field.field]);
+            const inputId = `mcp-import-field-${draft.entryIndex}-${index}`;
+            return <fieldset className="mcp-import-field" key={field.id}>
+              <legend><code>{field.field}</code></legend>
+              {field.canReference && isReferenceableField(field.field) && <label className="mcp-import-reference-toggle">
+                <input type="checkbox" checked={referenceMode} disabled={writing}
+                  onChange={event => setDraft(current => current ? {
+                    ...current,
+                    referenceModes: { ...current.referenceModes, [field.field]: event.target.checked },
+                  } : current)} />
+                <span>{m('settings.mcp.import.useReference')}</span>
+              </label>}
+              <label htmlFor={inputId}>{m(referenceMode
+                ? 'settings.mcp.import.referenceLabel'
+                : 'settings.mcp.import.valueLabel')}</label>
+              <input id={inputId} autoComplete="off" spellCheck={false}
+                type={!referenceMode && field.kind === 'secret' ? 'password' : 'text'}
+                value={draft.values[field.field] ?? ''} disabled={writing}
+                onChange={event => setDraft(current => current ? {
+                  ...current,
+                  values: { ...current.values, [field.field]: event.target.value },
+                } : current)} />
+            </fieldset>;
+          })}
+          {draft.entry.referenceableLiteralSecretFields.length > 0 && <fieldset className="mcp-import-secret-references">
+            <legend>{m('settings.mcp.import.replaceSecrets')}</legend>
+            <p className="settings-help">{m('settings.mcp.import.replaceSecretsHelp')}</p>
+            {draft.entry.referenceableLiteralSecretFields.map((field, index) => {
+              const inputId = `mcp-import-secret-reference-${draft.entryIndex}-${index}`;
+              return <label htmlFor={inputId} key={field}>
+                <code>{field}</code>
+                <input id={inputId} type="text" autoComplete="off" spellCheck={false}
+                  placeholder={m('settings.mcp.import.optionalReference')}
+                  value={draft.secretReferences[field] ?? ''} disabled={writing}
+                  onChange={event => setDraft(current => current ? {
+                    ...current,
+                    secretReferences: { ...current.secretReferences, [field]: event.target.value },
+                  } : current)} />
+              </label>;
+            })}
+          </fieldset>}
+          {projectLiteralBlocked && <p role="alert" className="status-warning">
+            {m('settings.mcp.import.projectSecretsBlocked')}
+          </p>}
+          {draft.scope === 'global' && needsGlobalLiteralConfirmation && <label className="mcp-import-confirmation">
+            <input type="checkbox" checked={draft.literalConfirmed} disabled={writing}
+              onChange={event => setDraft(current => current ? { ...current, literalConfirmed: event.target.checked } : current)} />
+            <span>{m('settings.mcp.import.confirmLiteral')}</span>
+          </label>}
+          {confirmedRemoteNames.length > 0 && <label className="mcp-import-confirmation">
+            <input type="checkbox" checked={draft.remoteConfirmed} disabled={writing}
+              onChange={event => setDraft(current => current ? { ...current, remoteConfirmed: event.target.checked } : current)} />
+            <span>{m('settings.mcp.import.confirmRemote', { names: confirmedRemoteNames.join(', ') })}</span>
+          </label>}
+          <div className="mcp-dialog-actions">
+            <button type="button" disabled={writing} onClick={closeDraft}>{m('settings.mcp.import.cancel')}</button>
+            <button type="submit" disabled={!readyToWrite || writing}>
+              {m(writing ? 'settings.mcp.import.saving' : 'settings.mcp.import.save')}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>}
+  </>;
 }

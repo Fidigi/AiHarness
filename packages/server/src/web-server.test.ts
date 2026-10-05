@@ -295,6 +295,81 @@ describe('combined Web server', () => {
     }
   });
 
+  it('persists a reparsed MCP import atomically without returning source or host values', async () => {
+    const dataDir = path.join(webRoot, '.data');
+    const globalFile = path.join(dataDir, 'mcp.json');
+    const marker = path.join(webRoot, `mcp-import-marker-${Date.now()}`);
+    const source = `${JSON.stringify({ version: 1, mcpServers: {} }, null, 2)}\n`;
+    await writeFile(globalFile, source);
+    vi.stubEnv('MCP_IMPORT_ROUTE_TOKEN', 'HOST-SECRET-MUST-NOT-LEAK');
+    try {
+      const inventory = await fetch(`${baseUrl}/api/mcp`).then(response => response.json()) as {
+        files: Array<{ scope: string; revision?: string }>;
+      };
+      const revision = inventory.files.find(file => file.scope === 'global')!.revision!;
+      const pastedSecret = 'PASTED-IMPORT-SECRET-0123456789';
+      const text = JSON.stringify({
+        mcpServers: {
+          docs: {
+            url: 'https://docs.example.test/mcp',
+            headers: {
+              Authorization: `Bearer ${pastedSecret}`,
+              'X-Host': '${MCP_IMPORT_ROUTE_TOKEN}',
+            },
+          },
+        },
+      });
+      const needsConfirmation = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'import', scope: 'global', revision, text, syntax: 'foreign',
+          entryIndex: 0, confirmations: { literalSecret: true },
+        }),
+      });
+      expect(needsConfirmation.status).toBe(409);
+      expect(await needsConfirmation.json()).toMatchObject({ code: 'confirmation-required', uncertain: false });
+      expect(await readFile(globalFile, 'utf8')).toBe(source);
+
+      const imported = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'import', scope: 'global', revision, text, syntax: 'foreign', entryIndex: 0,
+          confirmations: { literalSecret: true, remoteHostVariables: ['MCP_IMPORT_ROUTE_TOKEN'] },
+        }),
+      });
+      expect(imported.status).toBe(200);
+      expect(imported.headers.get('cache-control')).toBe('no-store');
+      const responseText = await imported.text();
+      expect(JSON.parse(responseText)).toMatchObject({
+        added: { scope: 'global', name: 'docs' },
+        inventory: { servers: [expect.objectContaining({ name: 'docs', headerNames: ['Authorization', 'X-Host'] })] },
+      });
+      expect(responseText).not.toContain(pastedSecret);
+      expect(responseText).not.toContain('HOST-SECRET-MUST-NOT-LEAK');
+      expect(await readFile(globalFile, 'utf8')).toContain(pastedSecret);
+
+      const current = JSON.parse(responseText) as { inventory: { files: Array<{ scope: string; revision?: string }> } };
+      const rejected = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'import', scope: 'global',
+          revision: current.inventory.files.find(file => file.scope === 'global')!.revision,
+          text: JSON.stringify({ command: '<binary>', args: ['-c', `touch ${marker}`] }),
+          syntax: 'foreign', entryIndex: 0, values: { command: 'sh' }, configuration: { command: 'node' },
+        }),
+      });
+      expect(rejected.status).toBe(400);
+      expect(await rejected.json()).toMatchObject({ code: 'invalid-request' });
+      await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      vi.unstubAllEnvs();
+      await Promise.all([rm(globalFile, { force: true }), rm(marker, { force: true })]);
+    }
+  });
+
   it('serializes atomic MCP activation, removal, and opaque one-shot restoration', async () => {
     const dataDir = path.join(webRoot, '.data');
     const globalFile = path.join(dataDir, 'mcp.json');

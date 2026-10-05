@@ -1,5 +1,8 @@
 import {
   describeMcpConfigEntry,
+  insertMcpServerEntry,
+  McpConfigMutationError,
+  type McpConfigMutationTarget,
   type McpConfigScope,
   type McpExposure,
   type McpTransportKind,
@@ -176,6 +179,8 @@ export interface McpImportEntryPreview {
   fields: McpImportFieldPreview[];
   variables: McpImportVariablePreview[];
   literalSecretFields: string[];
+  /** Literal secrets that can be replaced by an explicit host-variable reference. */
+  referenceableLiteralSecretFields: string[];
   scopes: Record<McpConfigScope, McpImportScopePreview>;
   notes: McpImportNote[];
 }
@@ -200,6 +205,35 @@ export interface PreviewMcpImportOptions {
   /** Names only. Core never needs environment values to produce a preview. */
   availableVariableNames?: Iterable<string>;
   scopes?: Partial<Record<McpConfigScope, McpImportScopeContext>>;
+}
+
+export type McpImportFieldValue = string | { reference: string };
+
+export interface McpImportWriteConfirmations {
+  /** Explicit approval to retain any literal credential in the global file. */
+  literalSecret?: true;
+  /** Exact host-variable names approved for transmission by HTTP headers/OAuth. */
+  remoteHostVariables?: string[];
+}
+
+export interface ImportMcpServerOptions extends McpConfigMutationTarget {
+  text: string;
+  syntax?: McpImportSyntax;
+  entryIndex: number;
+  /** Optional user-selected replacement for the deterministic preview name. */
+  name?: string;
+  values?: Record<string, McpImportFieldValue>;
+  /** Replace paste-owned literal secrets in resolved fields with `${NAME}`. */
+  secretReferences?: Record<string, string>;
+  confirmations?: McpImportWriteConfirmations;
+  /** Names only; values never enter import policy. */
+  availableVariableNames?: Iterable<string>;
+}
+
+export interface McpServerImportResult {
+  name: string;
+  scope: McpConfigScope;
+  revision: string;
 }
 
 interface ImportCandidate {
@@ -1387,6 +1421,10 @@ function literalSecretFields(config: Record<string, unknown>): string[] {
   return fields;
 }
 
+function isResolvedFieldLabel(field: string): boolean {
+  return field.startsWith('env.') || field.startsWith('headers.') || field === 'oauth.clientSecret';
+}
+
 const PLACEHOLDER = /\$\{input:[^}\n]{1,80}\}|<[A-Za-z][^<>\n]{0,80}>|\{\{\s*[A-Za-z_][\w.-]*\s*\}\}|\bYOUR[_-][A-Za-z0-9_.-]+|\bMY_[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PAT)\b|\b(?:REPLACE[_-]?ME|CHANGE[_-]?ME|PLACEHOLDER|REDACTED)\b|\b[xX]{6,}\b/gu;
 const UNSUPPORTED_REFERENCE = /\$\{(?:env:)?([A-Za-z_][A-Za-z0-9_]*)[^}\n]*\}|\{env:([A-Za-z_][A-Za-z0-9_]*)\}|%([A-Za-z_][A-Za-z0-9_]*)%|\$([A-Za-z_][A-Za-z0-9_]*)/gu;
 
@@ -1483,11 +1521,16 @@ function scopePreview(
   return { allowed: reasons.length === 0, reasons, confirmations };
 }
 
+interface NormalizedImportCandidate {
+  config: Record<string, unknown>;
+  preview: McpImportEntryPreview;
+}
+
 function normalizedCandidate(
   candidate: ImportCandidate,
   usedNames: Set<string>,
   options: PreviewMcpImportOptions,
-): McpImportEntryPreview {
+): NormalizedImportCandidate {
   const config = structuredClone(candidate.config);
   const notes = [...candidate.notes];
   const fields = [...candidate.fields];
@@ -1666,34 +1709,38 @@ function normalizedCandidate(
     addNote(notes, note('name-taken'));
   }
   return {
-    name,
-    source: candidate.source,
-    ...(candidate.scopeHint ? { scopeHint: candidate.scopeHint } : {}),
-    complete: valid && fields.length === 0 && !reserved,
-    persisted: {
-      valid,
-      enabled: described.enabled,
-      exposure: described.exposure,
-      ...(described.transport ? { transport: described.transport } : {}),
-      ...(described.command ? { command: described.command } : {}),
-      // Preserve argument arity only. Even harmless-looking flags remain source literals.
-      ...(described.args ? { args: described.args.map(() => '•••') } : {}),
-      ...(described.url ? { url: described.url } : {}),
-      envNames: described.envNames,
-      headerNames: described.headerNames,
-      oauthFields,
-      commandFields: described.commandFields,
-      variableReferences: described.variableReferences,
-      masked: described.masked || Boolean(described.args?.length),
+    config,
+    preview: {
+      name,
+      source: candidate.source,
+      ...(candidate.scopeHint ? { scopeHint: candidate.scopeHint } : {}),
+      complete: valid && fields.length === 0 && !reserved,
+      persisted: {
+        valid,
+        enabled: described.enabled,
+        exposure: described.exposure,
+        ...(described.transport ? { transport: described.transport } : {}),
+        ...(described.command ? { command: described.command } : {}),
+        // Preserve argument arity only. Even harmless-looking flags remain source literals.
+        ...(described.args ? { args: described.args.map(() => '•••') } : {}),
+        ...(described.url ? { url: described.url } : {}),
+        envNames: described.envNames,
+        headerNames: described.headerNames,
+        oauthFields,
+        commandFields: described.commandFields,
+        variableReferences: described.variableReferences,
+        masked: described.masked || Boolean(described.args?.length),
+      },
+      fields,
+      variables,
+      literalSecretFields: literalSecrets,
+      referenceableLiteralSecretFields: literalSecrets.filter(isResolvedFieldLabel),
+      scopes: {
+        global: scopePreview('global', name, literalSecrets, valid, reserved, remoteHostVariable, globalContext),
+        project: scopePreview('project', name, literalSecrets, valid, reserved, remoteHostVariable, projectContext),
+      },
+      notes,
     },
-    fields,
-    variables,
-    literalSecretFields: literalSecrets,
-    scopes: {
-      global: scopePreview('global', name, literalSecrets, valid, reserved, remoteHostVariable, globalContext),
-      project: scopePreview('project', name, literalSecrets, valid, reserved, remoteHostVariable, projectContext),
-    },
-    notes,
   };
 }
 
@@ -1720,27 +1767,31 @@ function candidateFieldCount(candidate: ImportCandidate): number {
   return fields.size;
 }
 
-export function previewMcpImport(text: string, options: PreviewMcpImportOptions = {}): McpImportPreview {
+interface NormalizedMcpImport {
+  preview: McpImportPreview;
+  entries: NormalizedImportCandidate[];
+}
+
+function refusedImport(value: McpImportNote): NormalizedMcpImport {
+  return { preview: { ok: false, entries: [], notes: [value] }, entries: [] };
+}
+
+function normalizeMcpImport(
+  text: string,
+  options: PreviewMcpImportOptions,
+): NormalizedMcpImport {
   try {
-    if (typeof text !== 'string' || text.includes('\0')) {
-      return { ok: false, entries: [], notes: [note('unrecognized-input')] };
-    }
-    if (Buffer.byteLength(text, 'utf8') > MCP_IMPORT_MAX_BYTES) {
-      return { ok: false, entries: [], notes: [note('input-too-large')] };
-    }
+    if (typeof text !== 'string' || text.includes('\0')) return refusedImport(note('unrecognized-input'));
+    if (Buffer.byteLength(text, 'utf8') > MCP_IMPORT_MAX_BYTES) return refusedImport(note('input-too-large'));
     const withoutBom = text.replace(/^\ufeff/u, '');
-    if (PASTE_UNSAFE_CHARACTER.test(withoutBom)) {
-      return { ok: false, entries: [], notes: [note('unsafe-shell')] };
-    }
+    if (PASTE_UNSAFE_CHARACTER.test(withoutBom)) return refusedImport(note('unsafe-shell'));
     const input = normalizePaste(withoutBom);
-    if (!input) return { ok: false, entries: [], notes: [note('empty-input')] };
+    if (!input) return refusedImport(note('empty-input'));
     const result = readPaste(input, options.syntax ?? 'foreign');
-    if ('error' in result) return { ok: false, entries: [], notes: [result.error] };
-    if (result.candidates.length > MCP_IMPORT_MAX_SERVERS) {
-      return { ok: false, entries: [], notes: [note('too-many-servers')] };
-    }
+    if ('error' in result) return refusedImport(result.error);
+    if (result.candidates.length > MCP_IMPORT_MAX_SERVERS) return refusedImport(note('too-many-servers'));
     if (result.candidates.reduce((count, candidate) => count + candidateFieldCount(candidate), 0) > MCP_IMPORT_MAX_FIELDS) {
-      return { ok: false, entries: [], notes: [note('too-many-fields')] };
+      return refusedImport(note('too-many-fields'));
     }
     const refusals = result.candidates.map(candidate => usesShellEvaluator(candidate.config)
       ? 'unsafe-shell' as const
@@ -1749,7 +1800,7 @@ export function previewMcpImport(text: string, options: PreviewMcpImportOptions 
     const refusedCount = result.candidates.length - candidates.length;
     if (refusedCount > 0) {
       const refusalCodes = [...new Set(refusals.filter((code): code is 'unsafe-shell' | 'management-command' => Boolean(code)))];
-      if (candidates.length === 0) return { ok: false, entries: [], notes: [note(refusalCodes[0]!)] };
+      if (candidates.length === 0) return refusedImport(note(refusalCodes[0]!));
       addNote(result.notes, note('invalid-entry', { count: refusedCount }));
       for (const code of refusalCodes) {
         addNote(result.notes, note(code, { count: refusals.filter(item => item === code).length }));
@@ -1757,10 +1808,307 @@ export function previewMcpImport(text: string, options: PreviewMcpImportOptions 
     }
     const usedNames = new Set<string>();
     const entries = candidates.map(candidate => normalizedCandidate(candidate, usedNames, options));
-    return { ok: entries.length > 0, entries, notes: result.notes };
+    return {
+      preview: {
+        ok: entries.length > 0,
+        entries: entries.map(entry => entry.preview),
+        notes: result.notes,
+      },
+      entries,
+    };
   } catch {
-    // A route re-runs this function on attacker-controlled input. Parsing is a
-    // typed refusal rather than a source-bearing 500 under every circumstance.
-    return { ok: false, entries: [], notes: [note('unrecognized-input')] };
+    // Both preview and write re-run this path on attacker-controlled input.
+    // Refuse with a fixed diagnostic rather than surfacing source-bearing errors.
+    return refusedImport(note('unrecognized-input'));
   }
+}
+
+export function previewMcpImport(text: string, options: PreviewMcpImportOptions = {}): McpImportPreview {
+  return normalizeMcpImport(text, options).preview;
+}
+
+function importMutationError(
+  code: ConstructorParameters<typeof McpConfigMutationError>[0],
+  message: string,
+): McpConfigMutationError {
+  return new McpConfigMutationError(code, message);
+}
+
+function importFieldSlot(
+  config: Record<string, unknown>,
+  field: string,
+): { value: string; set: (value: string) => void } | undefined {
+  const direct = new Set(['command', 'cwd', 'description', 'url']);
+  if (direct.has(field) && typeof config[field] === 'string') {
+    return { value: config[field] as string, set: value => { config[field] = value; } };
+  }
+  const argument = /^args\[(\d+)\]$/u.exec(field);
+  if (argument && Array.isArray(config.args)) {
+    const index = Number(argument[1]);
+    if (Number.isSafeInteger(index) && typeof config.args[index] === 'string') {
+      return { value: config.args[index] as string, set: value => { (config.args as string[])[index] = value; } };
+    }
+  }
+  const scope = /^oauth\.scopes\[(\d+)\]$/u.exec(field);
+  if (scope && isRecord(config.oauth) && Array.isArray(config.oauth.scopes)) {
+    const scopes = config.oauth.scopes as unknown[];
+    const index = Number(scope[1]);
+    if (Number.isSafeInteger(index) && typeof scopes[index] === 'string') {
+      return {
+        value: scopes[index] as string,
+        set: value => { scopes[index] = value; },
+      };
+    }
+  }
+  if (field === 'oauth.clientId' || field === 'oauth.clientSecret') {
+    if (isRecord(config.oauth) && typeof config.oauth[field.slice('oauth.'.length)] === 'string') {
+      const key = field.slice('oauth.'.length);
+      return {
+        value: config.oauth[key] as string,
+        set: value => { (config.oauth as Record<string, unknown>)[key] = value; },
+      };
+    }
+  }
+  for (const key of ['env', 'headers'] as const) {
+    if (!isRecord(config[key])) continue;
+    for (const name of Object.keys(config[key])) {
+      if (`${key}.${name}` !== field || typeof config[key][name] !== 'string') continue;
+      return {
+        value: config[key][name] as string,
+        set: value => { (config[key] as Record<string, unknown>)[name] = value; },
+      };
+    }
+  }
+  return undefined;
+}
+
+function readFieldValues(value: unknown): Record<string, McpImportFieldValue> {
+  if (value === undefined) return {};
+  if (!isRecord(value) || Object.keys(value).length > MCP_IMPORT_MAX_FIELDS) {
+    throw importMutationError('invalid-request', 'The MCP import field values are invalid.');
+  }
+  const output: Record<string, McpImportFieldValue> = {};
+  for (const [field, given] of Object.entries(value)) {
+    if (!boundedString(field) || !field) {
+      throw importMutationError('invalid-request', 'The MCP import field values are invalid.');
+    }
+    if (boundedString(given)) {
+      Object.defineProperty(output, field, { value: given, enumerable: true });
+      continue;
+    }
+    if (!isRecord(given) || Object.keys(given).length !== 1 || !boundedString(given.reference)) {
+      throw importMutationError('invalid-request', 'The MCP import field values are invalid.');
+    }
+    Object.defineProperty(output, field, {
+      value: { reference: given.reference }, enumerable: true,
+    });
+  }
+  return output;
+}
+
+function readSecretReferences(value: unknown): Record<string, string> {
+  if (value === undefined) return {};
+  if (!isRecord(value) || Object.keys(value).length > MCP_IMPORT_MAX_FIELDS) {
+    throw importMutationError('invalid-request', 'The MCP import secret references are invalid.');
+  }
+  const output: Record<string, string> = {};
+  for (const [field, name] of Object.entries(value)) {
+    if (!boundedString(field) || !field || !boundedString(name)) {
+      throw importMutationError('invalid-request', 'The MCP import secret references are invalid.');
+    }
+    Object.defineProperty(output, field, { value: name, enumerable: true });
+  }
+  return output;
+}
+
+function readConfirmations(value: unknown): { literalSecret: boolean; remote: Set<string> } {
+  if (value === undefined) return { literalSecret: false, remote: new Set() };
+  if (!isRecord(value) || Object.keys(value).some(key => !['literalSecret', 'remoteHostVariables'].includes(key))
+    || (value.literalSecret !== undefined && value.literalSecret !== true)
+    || (value.remoteHostVariables !== undefined && (!Array.isArray(value.remoteHostVariables)
+      || value.remoteHostVariables.length > MAX_COLLECTION_ENTRIES))) {
+    throw importMutationError('invalid-request', 'The MCP import confirmations are invalid.');
+  }
+  const remote = new Set<string>();
+  for (const name of value.remoteHostVariables ?? []) {
+    if (typeof name !== 'string' || !VARIABLE_NAME.test(name) || remote.has(name)) {
+      throw importMutationError('invalid-request', 'The MCP import confirmations are invalid.');
+    }
+    remote.add(name);
+  }
+  return { literalSecret: value.literalSecret === true, remote };
+}
+
+function availableVariableSet(values: Iterable<string> | undefined): Set<string> {
+  const result = new Set<string>();
+  if (!values) return result;
+  try {
+    for (const value of values) {
+      if (typeof value === 'string' && VARIABLE_NAME.test(value)) result.add(value);
+      if (result.size > 4_096) throw new Error('too many environment names');
+    }
+  } catch {
+    throw importMutationError('invalid-request', 'The MCP import environment context is invalid.');
+  }
+  return result;
+}
+
+function resolvedImportFields(config: Record<string, unknown>): Array<{ field: string; value: string; remote: boolean }> {
+  const fields: Array<{ field: string; value: string; remote: boolean }> = [];
+  for (const key of ['env', 'headers'] as const) {
+    if (!isRecord(config[key])) continue;
+    for (const [name, value] of Object.entries(config[key])) {
+      if (typeof value === 'string') fields.push({
+        field: `${key}.${name}`, value, remote: key === 'headers',
+      });
+    }
+  }
+  if (isRecord(config.oauth) && typeof config.oauth.clientSecret === 'string') {
+    fields.push({ field: 'oauth.clientSecret', value: config.oauth.clientSecret, remote: true });
+  }
+  return fields;
+}
+
+function unresolvedImportValues(config: Record<string, unknown>): string[] {
+  const values: string[] = [];
+  for (const key of ['command', 'cwd', 'description', 'url'] as const) {
+    if (typeof config[key] === 'string') values.push(config[key] as string);
+  }
+  if (Array.isArray(config.args)) {
+    values.push(...config.args.filter((value): value is string => typeof value === 'string'));
+  }
+  if (isRecord(config.oauth)) {
+    if (typeof config.oauth.clientId === 'string') values.push(config.oauth.clientId);
+    if (Array.isArray(config.oauth.scopes)) {
+      values.push(...config.oauth.scopes.filter((value): value is string => typeof value === 'string'));
+    }
+  }
+  return values;
+}
+
+function prepareImportedEntry(
+  normalized: NormalizedImportCandidate,
+  options: ImportMcpServerOptions,
+): { name: string; config: Record<string, unknown> } {
+  const requestedName = options.name ?? normalized.preview.name;
+  if (typeof requestedName !== 'string' || !IMPORT_NAME.test(requestedName)) {
+    throw importMutationError('invalid-request', 'The MCP import server name is invalid.');
+  }
+  const values = readFieldValues(options.values);
+  const expectedFields = new Map(normalized.preview.fields.map(field => [field.id, field]));
+  if (Object.keys(values).some(field => !expectedFields.has(field))) {
+    throw importMutationError('invalid-request', 'The MCP import contains an unknown field value.');
+  }
+  const config = structuredClone(normalized.config);
+  for (const field of normalized.preview.fields) {
+    const given = values[field.id];
+    if (given === undefined || typeof given === 'string' && given.trim() === '') {
+      throw importMutationError('fields-incomplete', 'The MCP import still has values to complete.');
+    }
+    const slot = importFieldSlot(config, field.field);
+    if (!slot) throw importMutationError('import-invalid', 'The MCP import changed while fields were applied.');
+    if (typeof given === 'string') {
+      slot.set(field.canReference ? escapeLiteral(given, true) : given);
+      continue;
+    }
+    const reference = given.reference.trim();
+    if (!field.canReference || !VARIABLE_NAME.test(reference)) {
+      throw importMutationError('fields-incomplete', 'The MCP import field reference is invalid.');
+    }
+    slot.set(`\${${reference}}`);
+  }
+
+  const literalBefore = literalSecretFields(config);
+  const referenceable = new Set(literalBefore.filter(isResolvedFieldLabel));
+  const secretReferences = readSecretReferences(options.secretReferences);
+  if (Object.keys(secretReferences).some(field => !referenceable.has(field))) {
+    throw importMutationError('invalid-request', 'The MCP import contains an unknown secret reference.');
+  }
+  for (const [field, rawName] of Object.entries(secretReferences)) {
+    const name = rawName.trim();
+    if (!VARIABLE_NAME.test(name)) {
+      throw importMutationError('fields-incomplete', 'The MCP import secret reference is invalid.');
+    }
+    const slot = importFieldSlot(config, field);
+    if (!slot) throw importMutationError('import-invalid', 'The MCP import changed while secrets were applied.');
+    const authorization = field.startsWith('headers.')
+      ? /^(?:bearer|basic|token)\s+/iu.exec(slot.value)?.[0] ?? ''
+      : '';
+    slot.set(`${authorization}\${${name}}`);
+  }
+
+  if (usesShellEvaluator(config) || usesMcpManagementCommand(config)) {
+    throw importMutationError('import-invalid', 'The MCP import contains an unsafe server command.');
+  }
+  for (const field of resolvedImportFields(config)) {
+    if (field.value.startsWith('!') && commandBackedProblem(field.value)) {
+      throw importMutationError('import-invalid', 'The MCP import contains an unsafe command-backed value.');
+    }
+  }
+  if (unresolvedImportValues(config).some(value => unsupportedReferences(value).length > 0
+    || containsPlaceholder(value))) {
+    throw importMutationError('fields-incomplete', 'The MCP import still contains an unresolved value.');
+  }
+
+  const described = describeMcpConfigEntry(requestedName, config);
+  if (!described.valid) throw importMutationError('import-invalid', 'The MCP import entry is invalid.');
+
+  const resolved = resolvedImportFields(config);
+  const references = resolved.flatMap(field => {
+    const names = field.value.startsWith('!') ? unsupportedReferences(field.value) : configReferences(field.value);
+    return names.map(name => ({ ...field, name }));
+  });
+  if (references.some(reference => RESERVED_VARIABLES.has(reference.name.toUpperCase()))) {
+    throw importMutationError('reserved-variable', 'The MCP import references a reserved AiHarness variable.');
+  }
+  const available = availableVariableSet(options.availableVariableNames);
+  const remote = references
+    .filter(reference => reference.remote && available.has(reference.name))
+    .map(reference => reference.name);
+  const confirmations = readConfirmations(options.confirmations);
+  if ([...new Set(remote)].some(name => !confirmations.remote.has(name))) {
+    throw importMutationError('confirmation-required', 'The MCP import requires host-variable confirmation.');
+  }
+  const literalSecrets = literalSecretFields(config);
+  if (options.scope === 'project' && literalSecrets.length > 0) {
+    throw importMutationError('scope-blocked', 'Project MCP configuration cannot contain literal secrets.');
+  }
+  if (options.scope === 'global' && literalSecrets.length > 0 && !confirmations.literalSecret) {
+    throw importMutationError('confirmation-required', 'The MCP import requires literal-secret confirmation.');
+  }
+  return { name: requestedName, config };
+}
+
+/**
+ * Re-parse one selected paste entry, apply only bounded field/reference input,
+ * re-evaluate secret and host-variable policy, then append it with one locked
+ * atomic replacement. Neither normalized source values nor the written entry
+ * are returned to an adapter.
+ */
+export async function importMcpServer(options: ImportMcpServerOptions): Promise<McpServerImportResult> {
+  if ((options.syntax !== undefined && options.syntax !== 'foreign' && options.syntax !== 'aiharness')
+    || !Number.isSafeInteger(options.entryIndex) || options.entryIndex < 0
+    || options.entryIndex >= MCP_IMPORT_MAX_SERVERS) {
+    throw importMutationError('invalid-request', 'The MCP import request is invalid.');
+  }
+  const normalized = normalizeMcpImport(options.text, {
+    syntax: options.syntax,
+    availableVariableNames: options.availableVariableNames,
+  });
+  if (!normalized.preview.ok) {
+    throw importMutationError('import-invalid', 'No supported MCP server can be imported from this text.');
+  }
+  const selected = normalized.entries[options.entryIndex];
+  if (!selected) throw importMutationError('invalid-request', 'The selected MCP import entry does not exist.');
+  const prepared = prepareImportedEntry(selected, options);
+  const result = await insertMcpServerEntry({
+    agentDir: options.agentDir,
+    scope: options.scope,
+    expectedRevision: options.expectedRevision,
+    ...(options.cwd ? { cwd: options.cwd } : {}),
+    ...(options.trustManager ? { trustManager: options.trustManager } : {}),
+    name: prepared.name,
+    entry: prepared.config,
+  });
+  return { name: prepared.name, scope: options.scope, revision: result.revision };
 }
