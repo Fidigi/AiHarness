@@ -745,6 +745,59 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
           code: 'stale-revision', uncertain: false,
         }, 409); return;
       }
+      if (input.action === 'replace') {
+        const previewEntry = mcpImportPreview.entries[Number(input.entryIndex)];
+        const name = typeof input.name === 'string' ? input.name : previewEntry?.name;
+        const targetIndex = mcpConfig.servers.findIndex(server => (
+          server.scope === scope && server.name === input.targetName
+        ));
+        if (!previewEntry || !name) {
+          await fulfillJson(route, { error: 'Invalid MCP replacement.', code: 'import-invalid', uncertain: false }, 409); return;
+        }
+        if (targetIndex < 0) {
+          await fulfillJson(route, {
+            error: 'The MCP server no longer exists.', code: 'target-not-found', uncertain: false,
+          }, 404); return;
+        }
+        if (mcpConfig.servers.some((server, index) => (
+          index !== targetIndex && server.scope === scope && server.name === name
+        ))) {
+          await fulfillJson(route, {
+            error: 'The MCP server name is already configured.', code: 'target-conflict', uncertain: false,
+          }, 409); return;
+        }
+        mcpConfig.servers[targetIndex] = {
+          name,
+          scope,
+          sourcePath: file?.path ?? (scope === 'project' ? `${workspace.cwd}/.ai-harness/mcp.json` : '/agent/mcp.json'),
+          valid: previewEntry.persisted.valid,
+          enabled: previewEntry.persisted.enabled,
+          exposure: previewEntry.persisted.exposure,
+          ...(previewEntry.persisted.transport ? { transport: previewEntry.persisted.transport } : {}),
+          ...(previewEntry.persisted.command ? { command: previewEntry.persisted.command } : {}),
+          ...(previewEntry.persisted.args ? { args: previewEntry.persisted.args } : {}),
+          ...(previewEntry.persisted.url ? { url: previewEntry.persisted.url } : {}),
+          envNames: previewEntry.persisted.envNames,
+          headerNames: previewEntry.persisted.headerNames,
+          commandFields: previewEntry.persisted.commandFields,
+          variableReferences: previewEntry.persisted.variableReferences,
+          masked: previewEntry.persisted.masked,
+          shadowedByProject: false,
+          replacesGlobal: false,
+          problems: [],
+        };
+        if (file) {
+          file.exists = true;
+          file.contentRead = true;
+          file.problems = [];
+        }
+        bumpMcpRevision(scope);
+        reconcileMcpShadowing();
+        await fulfillJson(route, {
+          inventory: structuredClone(mcpConfig),
+          updated: { scope, previousName: String(input.targetName), name },
+        }); return;
+      }
       if (input.action === 'import') {
         const previewEntry = mcpImportPreview.entries[Number(input.entryIndex)];
         const name = typeof input.name === 'string' ? input.name : previewEntry?.name;

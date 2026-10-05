@@ -1,6 +1,19 @@
 import type { Locale, TranslationParams } from '../i18n/types';
 
 const en = {
+  'settings.mcp.edit.title': 'Replace {name}',
+  'settings.mcp.edit.help': 'Paste the complete replacement entry and review its redacted shape. Current hidden values are never loaded into this form, and omitted fields are removed. Previewing and replacing never run commands, connect, or start OAuth.',
+  'settings.mcp.edit.pasteLabel': 'Replacement MCP server text',
+  'settings.mcp.edit.placeholder': 'Paste the complete replacement URL, command, or configuration object…',
+  'settings.mcp.edit.previewFailed': 'The MCP replacement preview failed. The canonical inventory was reloaded.',
+  'settings.mcp.edit.results': 'Redacted replacement preview',
+  'settings.mcp.edit.configure': 'Configure replacement',
+  'settings.mcp.edit.writeHelp': 'Replacing re-parses the original paste on the server and atomically changes only the selected entry.',
+  'settings.mcp.edit.configureTitle': 'Configure MCP replacement',
+  'settings.mcp.edit.configureDescription': 'Replace {name} in {scope}. Omitted fields are removed.',
+  'settings.mcp.edit.cancel': 'Cancel editing',
+  'settings.mcp.edit.save': 'Replace atomically',
+  'settings.mcp.edit.saving': 'Replacing…',
   'settings.mcp.import.title': 'Paste and preview a server',
   'settings.mcp.import.help': 'Paste a URL, command, install link, or JSON/JSONC configuration. Review the redacted preview, complete required fields, then choose a scope. Previewing and saving never run commands, connect, or start OAuth.',
   'settings.mcp.import.pasteLabel': 'MCP server text',
@@ -100,6 +113,19 @@ const en = {
 export type McpImportMessageKey = keyof typeof en;
 
 const fr: Record<McpImportMessageKey, string> = {
+  'settings.mcp.edit.title': 'Remplacer {name}',
+  'settings.mcp.edit.help': 'Collez l’entrée de remplacement complète et vérifiez sa structure expurgée. Les valeurs masquées actuelles ne sont jamais chargées dans ce formulaire et les champs omis sont supprimés. La prévisualisation et le remplacement n’exécutent aucune commande, ne se connectent pas et ne démarrent pas OAuth.',
+  'settings.mcp.edit.pasteLabel': 'Texte de remplacement du serveur MCP',
+  'settings.mcp.edit.placeholder': 'Collez l’URL, la commande ou l’objet de configuration de remplacement complet…',
+  'settings.mcp.edit.previewFailed': 'L’aperçu du remplacement MCP a échoué. L’inventaire canonique a été rechargé.',
+  'settings.mcp.edit.results': 'Aperçu expurgé du remplacement',
+  'settings.mcp.edit.configure': 'Configurer le remplacement',
+  'settings.mcp.edit.writeHelp': 'Le remplacement reparcourt le collage original côté serveur et ne modifie atomiquement que l’entrée sélectionnée.',
+  'settings.mcp.edit.configureTitle': 'Configurer le remplacement MCP',
+  'settings.mcp.edit.configureDescription': 'Remplacez {name} dans {scope}. Les champs omis sont supprimés.',
+  'settings.mcp.edit.cancel': 'Annuler la modification',
+  'settings.mcp.edit.save': 'Remplacer atomiquement',
+  'settings.mcp.edit.saving': 'Remplacement…',
   'settings.mcp.import.title': 'Coller et prévisualiser un serveur',
   'settings.mcp.import.help': 'Collez une URL, une commande, un lien d’installation ou une configuration JSON/JSONC. Vérifiez l’aperçu expurgé, complétez les champs requis, puis choisissez une portée. La prévisualisation et l’enregistrement n’exécutent aucune commande, ne se connectent pas et ne démarrent pas OAuth.',
   'settings.mcp.import.pasteLabel': 'Texte du serveur MCP',
@@ -198,7 +224,7 @@ const fr: Record<McpImportMessageKey, string> = {
 
 const messages: Record<Locale, Record<McpImportMessageKey, string>> = { en, fr };
 
-/** Localized with the lazy MCP panel so import-only copy stays outside the eager entry bundle. */
+/** Localized with the lazy MCP panel so import/edit copy stays outside the eager entry bundle. */
 export function mcpImportMessage(
   locale: Locale,
   key: McpImportMessageKey,

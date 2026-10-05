@@ -349,6 +349,107 @@ test.describe('Settings and authentication', () => {
     expect(Object.keys(request?.body as object)).not.toContain('configuration');
   });
 
+  test('remplace une entrée MCP depuis le texte original et restaure le focus après renommage', async ({ page }) => {
+    const api = await installMockApi(page, {
+      mcpConfig: mcpStateInventory(),
+      mcpImportPreview: mcpImportPreviewFixture(),
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const edit = section.getByRole('button', { name: 'Edit remote-docs', exact: true });
+
+    await edit.click();
+    await expect(section.getByText('Replace remote-docs', { exact: true })).toBeVisible();
+    await expect(section.getByLabel('Replacement MCP server text')).toBeFocused();
+    await section.getByRole('button', { name: 'Cancel editing' }).click();
+    await expect(edit).toBeFocused();
+
+    await edit.click();
+    const paste = '{"mcpServers":{"docs-import":{"url":"https://docs.example.test/private?token=SOURCE-EDIT-SECRET","headers":{"Authorization":"Bearer ${DOCS_TOKEN}"}}}}';
+    await section.getByLabel('Replacement MCP server text').fill(paste);
+    await section.getByLabel('Treat resolved values as AiHarness syntax').check();
+    await section.getByRole('button', { name: 'Preview', exact: true }).click();
+    await expect(section.getByRole('heading', { name: 'Redacted replacement preview' })).toBeVisible();
+    await section.getByRole('button', { name: 'Configure replacement' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Configure MCP replacement' });
+    await expect(dialog.getByLabel('Server name')).toBeFocused();
+    await dialog.getByLabel('Server name').fill('remote-docs-v2');
+    await dialog.getByRole('group', { name: 'headers.X-Tenant' }).getByLabel('Value').fill('tenant-value');
+    await dialog.getByLabel('I confirm storing the remaining literal secret values in global configuration.').check();
+    await dialog.getByLabel(/I confirm that these host variables may be sent/u).check();
+    await dialog.getByRole('button', { name: 'Replace atomically' }).click();
+
+    await expect(section).toContainText('MCP configuration updated.');
+    await expect(section.getByRole('article', { name: 'remote-docs-v2: Configured', exact: true })).toBeVisible();
+    await expect(section.getByRole('article', { name: /remote-docs:/u })).toHaveCount(0);
+    await expect(section.getByRole('button', { name: 'Edit remote-docs-v2', exact: true })).toBeFocused();
+    await expect(section).not.toContainText('SOURCE-EDIT-SECRET');
+
+    const previewRequest = api.requests.find(item => item.path === '/api/mcp/preview'
+      && Boolean((item.body as { replacement?: unknown } | undefined)?.replacement));
+    expect(previewRequest?.body).toEqual({
+      text: paste,
+      syntax: 'aiharness',
+      cwd: '/workspace',
+      replacement: {
+        scope: 'global', name: 'remote-docs', revision: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      },
+    });
+    const request = api.requests.find(item => item.path === '/api/mcp/actions'
+      && (item.body as { action?: string } | undefined)?.action === 'replace');
+    expect(request?.body).toEqual({
+      action: 'replace', scope: 'global', revision: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      targetName: 'remote-docs', text: paste, syntax: 'aiharness', entryIndex: 0,
+      name: 'remote-docs-v2', values: { 'headers.X-Tenant': 'tenant-value' },
+      secretReferences: {},
+      confirmations: { literalSecret: true, remoteHostVariables: ['DOCS_TOKEN'] },
+      cwd: '/workspace',
+    });
+    expect(Object.keys(request?.body as object)).not.toContain('configuration');
+  });
+
+  test('invalide l’éditeur MCP et recharge après un résultat de remplacement incertain', async ({ page }) => {
+    const api = await installMockApi(page, {
+      mcpConfig: mcpStateInventory(),
+      mcpImportPreview: mcpImportPreviewFixture(),
+    });
+    await page.route('**/api/mcp/actions', async route => {
+      const body = route.request().postDataJSON() as { action?: string };
+      if (body.action !== 'replace') {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'uncertain', code: 'write-failed', uncertain: true }),
+      });
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const edit = section.getByRole('button', { name: 'Edit remote-docs', exact: true });
+    const readsBefore = api.requests.filter(request => request.path === '/api/mcp').length;
+
+    await edit.click();
+    await section.getByLabel('Replacement MCP server text').fill('npx replacement-server');
+    await section.getByRole('button', { name: 'Preview', exact: true }).click();
+    await section.getByRole('button', { name: 'Configure replacement' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Configure MCP replacement' });
+    await expect(dialog.getByLabel('Server name')).toBeFocused();
+    await dialog.getByRole('group', { name: 'headers.X-Tenant' }).getByLabel('Value').fill('tenant-value');
+    await dialog.getByLabel('I confirm storing the remaining literal secret values in global configuration.').check();
+    await dialog.getByLabel(/I confirm that these host variables may be sent/u).check();
+    await dialog.getByRole('button', { name: 'Replace atomically' }).click();
+
+    await expect(section).toContainText('The action result is uncertain and may have been committed. The inventory was reloaded.');
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/mcp').length)
+      .toBeGreaterThan(readsBefore);
+    await expect(section.getByText('Replace remote-docs', { exact: true })).toHaveCount(0);
+    await expect(edit).toBeFocused();
+    await expect(section.getByRole('article', { name: 'remote-docs: Configured', exact: true })).toBeVisible();
+  });
+
   test('active et désactive les serveurs MCP par ligne ou groupe en une requête', async ({ page }) => {
     const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
     await page.goto('/settings#mcp');

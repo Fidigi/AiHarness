@@ -153,12 +153,25 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
     response.setHeader('Cache-Control', 'no-store');
     const body: unknown = request.body;
     if (!isRecord(body)
-      || !hasOnlyKeys(body, ['cwd', 'syntax', 'text'])
+      || !hasOnlyKeys(body, ['cwd', 'replacement', 'syntax', 'text'])
       || typeof body.text !== 'string'
       || body.text.includes('\0')
       || Buffer.byteLength(body.text, 'utf8') > MCP_IMPORT_MAX_BYTES
       || (body.cwd !== undefined && typeof body.cwd !== 'string')
       || (body.syntax !== undefined && body.syntax !== 'foreign' && body.syntax !== 'aiharness')) {
+      response.status(400).json({ error: 'Aperçu d’import MCP invalide.', code: 'invalid-request' });
+      return;
+    }
+    const replacement = body.replacement;
+    if (replacement !== undefined && (!isRecord(replacement)
+      || !hasOnlyKeys(replacement, ['name', 'revision', 'scope'])
+      || !scopeOf(replacement.scope)
+      || typeof replacement.name !== 'string'
+      || replacement.name.length === 0
+      || Buffer.byteLength(replacement.name, 'utf8') > 256
+      || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/u.test(replacement.name)
+      || typeof replacement.revision !== 'string'
+      || !/^[a-f0-9]{64}$/u.test(replacement.revision))) {
       response.status(400).json({ error: 'Aperçu d’import MCP invalide.', code: 'invalid-request' });
       return;
     }
@@ -168,6 +181,11 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
         body.text,
         (body.syntax ?? 'foreign') as McpImportSyntax,
         optionalCwd(body.cwd),
+        isRecord(replacement) ? {
+          scope: scopeOf(replacement.scope)!,
+          name: replacement.name as string,
+          revision: replacement.revision as string,
+        } : undefined,
       );
       response.json(preview);
     } catch (error) {
@@ -210,6 +228,49 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
         response.json(await services.mcpInventory.importServer({
           scope,
           revision,
+          text: body.text,
+          syntax: body.syntax,
+          entryIndex: body.entryIndex as number,
+          values,
+          secretReferences,
+          confirmations,
+          ...(typeof body.name === 'string' ? { name: body.name } : {}),
+          ...(cwd ? { cwd } : {}),
+        }));
+        return;
+      }
+
+      if (body.action === 'replace') {
+        const scope = scopeOf(body.scope);
+        const revision = revisionOf(body.revision);
+        const values = importFieldValues(body.values);
+        const secretReferences = importSecretReferences(body.secretReferences);
+        const confirmations = importConfirmations(body.confirmations);
+        if (!hasOnlyKeys(body, [
+          'action', 'confirmations', 'cwd', 'entryIndex', 'name', 'revision', 'scope',
+          'secretReferences', 'syntax', 'targetName', 'text', 'values',
+        ]) || !scope || revision === undefined || values === undefined
+          || secretReferences === undefined || confirmations === undefined
+          || typeof body.targetName !== 'string'
+          || body.targetName.length === 0
+          || Buffer.byteLength(body.targetName, 'utf8') > 256
+          || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/u.test(body.targetName)
+          || typeof body.text !== 'string' || body.text.includes('\0')
+          || Buffer.byteLength(body.text, 'utf8') > MCP_IMPORT_MAX_BYTES
+          || (body.syntax !== 'foreign' && body.syntax !== 'aiharness')
+          || !Number.isSafeInteger(body.entryIndex) || (body.entryIndex as number) < 0
+          || (body.entryIndex as number) >= MCP_IMPORT_MAX_SERVERS
+          || (body.name !== undefined && (typeof body.name !== 'string'
+            || (body.name.length > 64 && body.name !== body.targetName)))
+          || (body.cwd !== undefined && typeof body.cwd !== 'string')) {
+          throw new McpConfigMutationError('invalid-request', INVALID_ACTION);
+        }
+        const services = await servicesPromise;
+        const cwd = optionalCwd(body.cwd);
+        response.json(await services.mcpInventory.replaceServer({
+          scope,
+          revision,
+          targetName: body.targetName,
           text: body.text,
           syntax: body.syntax,
           entryIndex: body.entryIndex as number,

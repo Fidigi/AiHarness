@@ -5,6 +5,7 @@ export {
   MCP_RESERVED_VARIABLE_NAMES,
   importMcpServer,
   previewMcpImport,
+  replaceMcpServer,
 } from './config-import.js';
 export type {
   ImportMcpServerOptions,
@@ -27,6 +28,8 @@ export type {
   McpImportWriteConfirmations,
   McpServerImportResult,
   PreviewMcpImportOptions,
+  ReplaceMcpServerOptions,
+  McpServerReplacementResult,
 } from './config-import.js';
 
 export {

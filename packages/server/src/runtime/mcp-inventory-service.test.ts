@@ -164,6 +164,77 @@ describe('McpInventoryService import persistence', () => {
   });
 });
 
+describe('McpInventoryService replacement persistence', () => {
+  it('returns only canonical redacted inventory and minimal replacement identity', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-replace-service-'));
+    temporaryDirectories.push(root);
+    const agentDir = path.join(root, 'agent');
+    const filePath = path.join(agentDir, 'mcp.json');
+    await mkdir(agentDir);
+    await writeFile(filePath, JSON.stringify({
+      mcpServers: { docs: { command: 'node', env: { TOKEN: 'OLD-SERVER-SECRET' } } },
+    }));
+    const workspaceManager = new WorkspaceManager({ allowedRoots: [root], defaultCwd: root });
+    await workspaceManager.initialize();
+    const trustManager = new ProjectTrustManager(path.join(agentDir, 'trust.json'));
+    await trustManager.load();
+    const service = new McpInventoryService(agentDir, workspaceManager, trustManager);
+    const inventory = await service.getOverview();
+    const pastedSecret = 'NEW-SERVICE-SECRET-0123456789';
+
+    const response = await service.replaceServer({
+      scope: 'global',
+      revision: inventory.files[0]!.revision!,
+      targetName: 'docs',
+      syntax: 'aiharness',
+      entryIndex: 0,
+      name: 'renamed-docs',
+      text: JSON.stringify({
+        mcpServers: {
+          replacement: {
+            url: 'https://docs.example.test/mcp',
+            headers: { Authorization: `Bearer ${pastedSecret}` },
+          },
+        },
+      }),
+      confirmations: { literalSecret: true },
+    });
+
+    expect(response.updated).toEqual({ scope: 'global', previousName: 'docs', name: 'renamed-docs' });
+    expect(JSON.stringify(response)).not.toContain('OLD-SERVER-SECRET');
+    expect(JSON.stringify(response)).not.toContain(pastedSecret);
+    expect(await readFile(filePath, 'utf8')).toContain(pastedSecret);
+    expect(await readFile(filePath, 'utf8')).not.toContain('OLD-SERVER-SECRET');
+  });
+
+  it('marks a canonical reload failure after a changed replacement as uncertain', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-replace-service-'));
+    temporaryDirectories.push(root);
+    const agentDir = path.join(root, 'agent');
+    const filePath = path.join(agentDir, 'mcp.json');
+    await mkdir(agentDir);
+    await writeFile(filePath, JSON.stringify({ mcpServers: { docs: { command: 'node' } } }));
+    const workspaceManager = new WorkspaceManager({ allowedRoots: [root], defaultCwd: root });
+    await workspaceManager.initialize();
+    const trustManager = new ProjectTrustManager(path.join(agentDir, 'trust.json'));
+    await trustManager.load();
+    const service = new McpInventoryService(agentDir, workspaceManager, trustManager);
+    const inventory = await service.getOverview();
+    vi.spyOn(service, 'getOverview').mockRejectedValueOnce(new Error('reload failed'));
+
+    await expect(service.replaceServer({
+      scope: 'global',
+      revision: inventory.files[0]!.revision!,
+      targetName: 'docs',
+      syntax: 'foreign',
+      entryIndex: 0,
+      text: 'npx replacement-server',
+      name: 'replacement',
+    })).rejects.toMatchObject({ code: 'write-failed', uncertain: true });
+    expect(await readFile(filePath, 'utf8')).toContain('replacement-server');
+  });
+});
+
 describe('McpInventoryService import preview', () => {
   it('passes only redacted inventory and environment names to the pure Core preview', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-preview-service-'));
@@ -225,6 +296,21 @@ describe('McpInventoryService import preview', () => {
       expect(serialized).not.toContain(pasteSecret);
       expect(serialized).not.toContain(process.env.MCP_PREVIEW_HOST_TOKEN);
       expect(serialized).not.toContain('UNTRUSTED-PROJECT-SECRET');
+
+      const inventory = await service.getOverview(project);
+      const revision = inventory.files.find(file => file.scope === 'global')!.revision!;
+      const replacement = await service.previewImport(JSON.stringify({
+        mcpServers: { existing: { command: 'node' } },
+      }), 'aiharness', project, { scope: 'global', name: 'existing', revision });
+      expect(replacement.entries[0]!.scopes.global).toEqual({
+        allowed: true,
+        reasons: [],
+        confirmations: [],
+      });
+      await expect(service.previewImport('npx other-server', 'foreign', project, {
+        scope: 'global', name: 'existing', revision: '0'.repeat(64),
+      })).rejects.toMatchObject({ code: 'stale-revision' });
+
       expect(await readFile(globalPath, 'utf8')).toBe(globalSource);
       expect(await readFile(projectPath, 'utf8')).toBe(projectSource);
     } finally {

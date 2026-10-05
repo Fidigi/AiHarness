@@ -2,6 +2,7 @@ import {
   describeMcpConfigEntry,
   insertMcpServerEntry,
   McpConfigMutationError,
+  replaceMcpServerEntry,
   type McpConfigMutationTarget,
   type McpConfigScope,
   type McpExposure,
@@ -234,6 +235,16 @@ export interface McpServerImportResult {
   name: string;
   scope: McpConfigScope;
   revision: string;
+}
+
+export interface ReplaceMcpServerOptions extends ImportMcpServerOptions {
+  /** Exact existing entry selected from the redacted inventory. */
+  targetName: string;
+}
+
+export interface McpServerReplacementResult extends McpServerImportResult {
+  previousName: string;
+  changed: boolean;
 }
 
 interface ImportCandidate {
@@ -1989,9 +2000,11 @@ function unresolvedImportValues(config: Record<string, unknown>): string[] {
 function prepareImportedEntry(
   normalized: NormalizedImportCandidate,
   options: ImportMcpServerOptions,
+  existingName?: string,
 ): { name: string; config: Record<string, unknown> } {
   const requestedName = options.name ?? normalized.preview.name;
-  if (typeof requestedName !== 'string' || !IMPORT_NAME.test(requestedName)) {
+  if (typeof requestedName !== 'string'
+    || (!IMPORT_NAME.test(requestedName) && requestedName !== existingName)) {
     throw importMutationError('invalid-request', 'The MCP import server name is invalid.');
   }
   const values = readFieldValues(options.values);
@@ -2079,13 +2092,11 @@ function prepareImportedEntry(
   return { name: requestedName, config };
 }
 
-/**
- * Re-parse one selected paste entry, apply only bounded field/reference input,
- * re-evaluate secret and host-variable policy, then append it with one locked
- * atomic replacement. Neither normalized source values nor the written entry
- * are returned to an adapter.
- */
-export async function importMcpServer(options: ImportMcpServerOptions): Promise<McpServerImportResult> {
+/** Rebuild one selected paste entry under the complete import policy. */
+function prepareSelectedImport(
+  options: ImportMcpServerOptions,
+  existingName?: string,
+): { name: string; config: Record<string, unknown> } {
   if ((options.syntax !== undefined && options.syntax !== 'foreign' && options.syntax !== 'aiharness')
     || !Number.isSafeInteger(options.entryIndex) || options.entryIndex < 0
     || options.entryIndex >= MCP_IMPORT_MAX_SERVERS) {
@@ -2100,7 +2111,17 @@ export async function importMcpServer(options: ImportMcpServerOptions): Promise<
   }
   const selected = normalized.entries[options.entryIndex];
   if (!selected) throw importMutationError('invalid-request', 'The selected MCP import entry does not exist.');
-  const prepared = prepareImportedEntry(selected, options);
+  return prepareImportedEntry(selected, options, existingName);
+}
+
+/**
+ * Re-parse one selected paste entry, apply only bounded field/reference input,
+ * re-evaluate secret and host-variable policy, then append it with one locked
+ * atomic replacement. Neither normalized source values nor the written entry
+ * are returned to an adapter.
+ */
+export async function importMcpServer(options: ImportMcpServerOptions): Promise<McpServerImportResult> {
+  const prepared = prepareSelectedImport(options);
   const result = await insertMcpServerEntry({
     agentDir: options.agentDir,
     scope: options.scope,
@@ -2111,4 +2132,30 @@ export async function importMcpServer(options: ImportMcpServerOptions): Promise<
     entry: prepared.config,
   });
   return { name: prepared.name, scope: options.scope, revision: result.revision };
+}
+
+/**
+ * Re-parse and re-authorize one pasted entry, then replace exactly one existing
+ * valid server under Core's revision lock. Existing values are never read out
+ * to the caller and omitted fields are intentionally removed.
+ */
+export async function replaceMcpServer(options: ReplaceMcpServerOptions): Promise<McpServerReplacementResult> {
+  const prepared = prepareSelectedImport(options, options.targetName);
+  const result = await replaceMcpServerEntry({
+    agentDir: options.agentDir,
+    scope: options.scope,
+    expectedRevision: options.expectedRevision,
+    ...(options.cwd ? { cwd: options.cwd } : {}),
+    ...(options.trustManager ? { trustManager: options.trustManager } : {}),
+    targetName: options.targetName,
+    name: prepared.name,
+    entry: prepared.config,
+  });
+  return {
+    previousName: options.targetName,
+    name: prepared.name,
+    scope: options.scope,
+    revision: result.revision,
+    changed: result.changed,
+  };
 }

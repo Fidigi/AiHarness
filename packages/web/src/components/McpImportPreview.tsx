@@ -14,7 +14,12 @@ import type {
 } from '@ai-harness/core';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useI18n } from '../hooks/useI18n';
-import { importMcpConfigServer, previewMcpImport } from '../services/mcp-api';
+import {
+  importMcpConfigServer,
+  previewMcpImport,
+  replaceMcpConfigServer,
+  type McpReplaceTarget,
+} from '../services/mcp-api';
 import { mcpImportMessage, type McpImportMessageKey } from './mcp-import-messages';
 
 const SOURCE_KEYS: Record<McpImportSource, McpImportMessageKey> = {
@@ -90,6 +95,11 @@ const AVAILABILITY_KEYS: Record<McpImportVariableAvailability, McpImportMessageK
   reserved: 'settings.mcp.import.variable.reserved',
 };
 
+export type McpReplacementOutcome =
+  | { status: 'success'; name: string }
+  | { status: 'failure'; uncertain: boolean }
+  | { status: 'cancel' };
+
 interface ImportDraft {
   entry: McpImportEntryPreview;
   entryIndex: number;
@@ -156,11 +166,13 @@ function PreviewEntry({
   entry,
   entryIndex,
   onConfigure,
+  replacementScope,
 }: {
   disabled: boolean;
   entry: McpImportEntryPreview;
   entryIndex: number;
   onConfigure: (entry: McpImportEntryPreview, entryIndex: number, scope: McpConfigScope) => void;
+  replacementScope?: McpConfigScope;
 }) {
   const { locale, t } = useI18n();
   const m = mcpImportMessage.bind(null, locale);
@@ -208,14 +220,16 @@ function PreviewEntry({
       <p className="settings-help">{entry.literalSecretFields.join(', ')}</p>
     </section>}
     <div className="mcp-import-scopes">
-      <ScopeResult scope="global" entry={entry} />
-      <ScopeResult scope="project" entry={entry} />
+      {(replacementScope ? [replacementScope] : ['global', 'project'] as const)
+        .map(scope => <ScopeResult scope={scope} entry={entry} key={scope} />)}
     </div>
     <div className="mcp-import-save-actions">
-      {(['global', 'project'] as const).map(scope => <button type="button" key={scope}
+      {(replacementScope ? [replacementScope] : ['global', 'project'] as const).map(scope => <button type="button" key={scope}
         disabled={disabled || !canConfigure(entry, scope)}
         onClick={() => onConfigure(entry, entryIndex, scope)}>
-        {m(scope === 'global' ? 'settings.mcp.import.saveGlobal' : 'settings.mcp.import.saveProject')}
+        {replacementScope
+          ? m('settings.mcp.edit.configure')
+          : m(scope === 'global' ? 'settings.mcp.import.saveGlobal' : 'settings.mcp.import.saveProject')}
       </button>)}
     </div>
     <NoteList notes={entry.notes} />
@@ -228,12 +242,18 @@ export function McpImportPreview({
   inventory,
   onInventory,
   onReload,
+  onReplacementOutcome,
+  onWritingChange,
+  replacement,
 }: {
   cwd?: string;
   disabled: boolean;
   inventory?: McpConfigInventory;
   onInventory: (inventory: McpConfigInventory) => void;
   onReload: () => Promise<void>;
+  onReplacementOutcome?: (outcome: McpReplacementOutcome) => void;
+  onWritingChange?: (writing: boolean) => void;
+  replacement?: McpReplaceTarget;
 }) {
   const { locale } = useI18n();
   const m = mcpImportMessage.bind(null, locale);
@@ -248,6 +268,10 @@ export function McpImportPreview({
   const request = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
+  const textRef = useRef<HTMLTextAreaElement | null>(null);
+  const replacementKey = replacement
+    ? `${replacement.scope}:${replacement.name}:${replacement.revision}`
+    : '';
   const inventoryKey = inventory?.files
     .map(file => `${file.scope}:${file.exists ? file.revision ?? 'invalid' : 'missing'}`)
     .join('|') ?? '';
@@ -261,6 +285,24 @@ export function McpImportPreview({
     request.current++;
     controller.current?.abort();
   }, []);
+
+  useEffect(() => {
+    request.current++;
+    controller.current?.abort();
+    setText('');
+    setNativeSyntax(false);
+    setPreview(undefined);
+    setDraft(undefined);
+    setError(undefined);
+    setWriteMessage(undefined);
+    setLoading(false);
+    const frame = replacementKey
+      ? window.requestAnimationFrame(() => textRef.current?.focus())
+      : undefined;
+    return () => {
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+    };
+  }, [replacementKey]);
 
   useEffect(() => {
     request.current++;
@@ -295,11 +337,20 @@ export function McpImportPreview({
         text,
         syntax: nativeSyntax ? 'aiharness' : 'foreign',
         ...(cwd ? { cwd } : {}),
+        ...(replacement ? { replacement } : {}),
       }, nextController.signal);
       if (sequence === request.current) setPreview(result);
     } catch {
       if (sequence === request.current && !nextController.signal.aborted) {
-        setError(m('settings.mcp.import.failed'));
+        setError(m(replacement ? 'settings.mcp.edit.previewFailed' : 'settings.mcp.import.failed'));
+        if (replacement) {
+          try {
+            await onReload();
+          } catch {
+            // Keep the localized failure while discarding revision-backed edit controls.
+          }
+          onReplacementOutcome?.({ status: 'failure', uncertain: false });
+        }
       }
     } finally {
       if (sequence === request.current) setLoading(false);
@@ -312,7 +363,7 @@ export function McpImportPreview({
       entry,
       entryIndex,
       scope,
-      name: entry.name,
+      name: replacement?.name ?? entry.name,
       values: Object.fromEntries(entry.fields.map(field => [field.field, ''])),
       referenceModes: Object.fromEntries(entry.fields.map(field => [field.field, false])),
       secretReferences: Object.fromEntries(entry.referenceableLiteralSecretFields.map(field => [field, ''])),
@@ -346,7 +397,7 @@ export function McpImportPreview({
     && (unreplacedLiteralFields.length > 0 || knownMissingSecretFields.length > 0);
   const fieldsReady = draft?.entry.fields.every(field => Boolean(draft.values[field.field]?.trim())) ?? false;
   const readyToWrite = Boolean(draft && inventory && draft.name.trim() && fieldsReady
-    && !projectLiteralBlocked
+    && !disabled && !projectLiteralBlocked
     && (draft.scope !== 'global' || !needsGlobalLiteralConfirmation || draft.literalConfirmed)
     && (confirmedRemoteNames.length === 0 || draft.remoteConfirmed));
 
@@ -364,15 +415,17 @@ export function McpImportPreview({
     request.current++;
     controller.current?.abort();
     setWriting(true);
+    onWritingChange?.(true);
     setError(undefined);
     setWriteMessage(undefined);
+    let failureUncertain = true;
     try {
       const file = inventory.files.find(item => item.scope === selected.scope);
-      const result = await importMcpConfigServer({
+      const writeRequest = {
         scope: selected.scope,
-        revision: file?.revision ?? null,
+        revision: replacement?.revision ?? file?.revision ?? null,
         text,
-        syntax: nativeSyntax ? 'aiharness' : 'foreign',
+        syntax: nativeSyntax ? 'aiharness' as const : 'foreign' as const,
         entryIndex: selected.entryIndex,
         name: selected.name.trim(),
         values,
@@ -382,35 +435,58 @@ export function McpImportPreview({
           ...(confirmedRemoteNames.length > 0 ? { remoteHostVariables: confirmedRemoteNames } : {}),
         },
         ...(cwd ? { cwd } : {}),
-      });
-      if (!result.success || !result.data) throw new Error('MCP import failed');
+      };
+      const result = replacement
+        ? await replaceMcpConfigServer({ ...writeRequest, targetName: replacement.name })
+        : await importMcpConfigServer(writeRequest);
+      if (!result.success || !result.data) {
+        failureUncertain = result.uncertain ?? true;
+        throw new Error('MCP import or replacement failed');
+      }
       setDraft(undefined);
       setPreview(undefined);
       setText('');
       onInventory(result.data.inventory);
-      setWriteMessage('success');
+      if (replacement) {
+        const updatedName = result.data.updated?.name;
+        if (!updatedName) throw new Error('MCP replacement identity is missing');
+        onReplacementOutcome?.({ status: 'success', name: updatedName });
+      } else {
+        setWriteMessage('success');
+      }
     } catch {
       setDraft(undefined);
       setPreview(undefined);
-      setWriteMessage('error');
+      if (!replacement) setWriteMessage('error');
       try {
         await onReload();
       } catch {
-        // Keep the generic local failure and no revision-backed import controls.
+        // Keep the generic local failure and no revision-backed mutation controls.
       }
+      if (replacement) onReplacementOutcome?.({ status: 'failure', uncertain: failureUncertain });
     } finally {
       setWriting(false);
+      onWritingChange?.(false);
     }
   };
 
   return <>
-    <details className="mcp-import-panel">
-      <summary>{m('settings.mcp.import.title')}</summary>
+    <details className="mcp-import-panel" open={replacement ? true : undefined}
+      onToggle={event => {
+        if (replacement && !event.currentTarget.open) event.currentTarget.open = true;
+      }}>
+      <summary>{replacement
+        ? m('settings.mcp.edit.title', { name: replacement.name })
+        : m('settings.mcp.import.title')}</summary>
       <div className="mcp-import-body">
-        <p className="settings-help">{m('settings.mcp.import.help')}</p>
-        <label htmlFor="mcp-import-text">{m('settings.mcp.import.pasteLabel')}</label>
-        <textarea id="mcp-import-text" rows={6} maxLength={262_144} value={text} disabled={writing}
-          placeholder={m('settings.mcp.import.placeholder')}
+        <p className="settings-help">{m(replacement
+          ? 'settings.mcp.edit.help'
+          : 'settings.mcp.import.help')}</p>
+        <label htmlFor="mcp-import-text">{m(replacement
+          ? 'settings.mcp.edit.pasteLabel'
+          : 'settings.mcp.import.pasteLabel')}</label>
+        <textarea ref={textRef} id="mcp-import-text" rows={6} maxLength={262_144} value={text} disabled={writing}
+          placeholder={m(replacement ? 'settings.mcp.edit.placeholder' : 'settings.mcp.import.placeholder')}
           onChange={event => {
             clearResult();
             setText(event.target.value);
@@ -431,6 +507,10 @@ export function McpImportPreview({
             clearResult();
             setText('');
           }}>{m('settings.mcp.import.clear')}</button>
+          {replacement && <button type="button" disabled={writing}
+            onClick={() => onReplacementOutcome?.({ status: 'cancel' })}>
+            {m('settings.mcp.edit.cancel')}
+          </button>}
         </div>
         {loading && <p role="status">{m('settings.mcp.import.previewing')}</p>}
         {error && <p role="alert" className="status-warning">{error}</p>}
@@ -439,24 +519,38 @@ export function McpImportPreview({
           {m(writeMessage === 'error' ? 'settings.mcp.import.writeFailed' : 'settings.mcp.import.saved')}
         </p>}
         {preview && <section className="mcp-import-results" aria-live="polite" aria-labelledby="mcp-import-results-title">
-          <h4 id="mcp-import-results-title">{m('settings.mcp.import.results')}</h4>
+          <h4 id="mcp-import-results-title">{m(replacement
+            ? 'settings.mcp.edit.results'
+            : 'settings.mcp.import.results')}</h4>
           <NoteList notes={preview.notes} />
           {preview.entries.length === 0
             ? <p className="settings-help">{m('settings.mcp.import.noEntries')}</p>
             : <div className="settings-resource-list">{preview.entries.map((entry, index) => (
               <PreviewEntry disabled={disabled || writing || !inventory} entry={entry} entryIndex={index}
-                key={`${entry.name}:${index}`} onConfigure={openDraft} />
+                key={`${entry.name}:${index}`} onConfigure={openDraft}
+                {...(replacement ? { replacementScope: replacement.scope } : {})} />
             ))}</div>}
-          <p className="settings-help">{m('settings.mcp.import.writeHelp')}</p>
+          <p className="settings-help">{m(replacement
+            ? 'settings.mcp.edit.writeHelp'
+            : 'settings.mcp.import.writeHelp')}</p>
         </section>}
       </div>
     </details>
     {draft && <div className="modal-backdrop mcp-import-backdrop" role="presentation">
       <section ref={dialogRef} className="mcp-import-dialog" role="dialog" aria-modal="true" tabIndex={-1}
         aria-labelledby="mcp-import-dialog-title" aria-describedby="mcp-import-dialog-description">
-        <h4 id="mcp-import-dialog-title">{m('settings.mcp.import.configureTitle')}</h4>
+        <h4 id="mcp-import-dialog-title">{m(replacement
+          ? 'settings.mcp.edit.configureTitle'
+          : 'settings.mcp.import.configureTitle')}</h4>
         <p id="mcp-import-dialog-description" className="settings-help">
-          {m('settings.mcp.import.configureDescription', { scope: m(`settings.mcp.import.scope.${draft.scope}`) })}
+          {replacement
+            ? m('settings.mcp.edit.configureDescription', {
+              name: replacement.name,
+              scope: m(`settings.mcp.import.scope.${draft.scope}`),
+            })
+            : m('settings.mcp.import.configureDescription', {
+              scope: m(`settings.mcp.import.scope.${draft.scope}`),
+            })}
         </p>
         <form onSubmit={event => {
           event.preventDefault();
@@ -523,7 +617,9 @@ export function McpImportPreview({
           <div className="mcp-dialog-actions">
             <button type="button" disabled={writing} onClick={closeDraft}>{m('settings.mcp.import.cancel')}</button>
             <button type="submit" disabled={!readyToWrite || writing}>
-              {m(writing ? 'settings.mcp.import.saving' : 'settings.mcp.import.save')}
+              {m(writing
+                ? (replacement ? 'settings.mcp.edit.saving' : 'settings.mcp.import.saving')
+                : (replacement ? 'settings.mcp.edit.save' : 'settings.mcp.import.save'))}
             </button>
           </div>
         </form>

@@ -4,6 +4,7 @@ import {
   inspectMcpConfig,
   McpConfigMutationError,
   previewMcpImport,
+  replaceMcpServer,
   type McpConfigInventory,
   type McpConfigScope,
   type McpExposure,
@@ -40,6 +41,11 @@ export interface McpMutationOverview {
   };
   added?: {
     scope: McpConfigScope;
+    name: string;
+  };
+  updated?: {
+    scope: McpConfigScope;
+    previousName: string;
     name: string;
   };
 }
@@ -83,6 +89,16 @@ export interface McpImportRequest {
   values?: Record<string, McpImportFieldValue>;
   secretReferences?: Record<string, string>;
   confirmations?: McpImportWriteConfirmations;
+}
+
+export interface McpReplacePreviewTarget {
+  scope: McpConfigScope;
+  name: string;
+  revision: string;
+}
+
+export interface McpReplaceRequest extends McpImportRequest {
+  targetName: string;
 }
 
 export interface McpInventoryServiceOptions {
@@ -129,11 +145,37 @@ export class McpInventoryService {
    * inventory metadata cross this boundary: values are never expanded or
    * returned, and preview never opens a resolver or credential store.
    */
-  async previewImport(text: string, syntax: McpImportSyntax, cwd?: string): Promise<McpImportPreview> {
+  async previewImport(
+    text: string,
+    syntax: McpImportSyntax,
+    cwd?: string,
+    replacement?: McpReplacePreviewTarget,
+  ): Promise<McpImportPreview> {
     const inventory = await this.getOverview(cwd);
     const file = (scope: McpConfigScope) => inventory.files.find(item => item.scope === scope);
+    if (replacement) {
+      if (replacement.scope === 'project'
+        && (!inventory.project || inventory.project.trustError || inventory.project.decision !== true)) {
+        throw new McpConfigMutationError(
+          inventory.project?.trustError ? 'trust-unavailable' : 'trust-required',
+          'A persisted project allow is required for this MCP replacement preview.',
+        );
+      }
+      if (file(replacement.scope)?.revision !== replacement.revision) {
+        throw new McpConfigMutationError(
+          'stale-revision',
+          'The MCP configuration changed; reload it before retrying.',
+        );
+      }
+      const target = inventory.servers.find(server => (
+        server.scope === replacement.scope && server.name === replacement.name
+      ));
+      if (!target) throw new McpConfigMutationError('target-not-found', 'The MCP server no longer exists.');
+      if (!target.valid) throw new McpConfigMutationError('target-invalid', 'The MCP server entry is invalid.');
+    }
     const names = (scope: McpConfigScope) => inventory.servers
-      .filter(server => server.scope === scope)
+      .filter(server => server.scope === scope
+        && (replacement?.scope !== scope || server.name !== replacement.name))
       .map(server => server.name);
     const available = (scope: McpConfigScope): boolean => {
       const target = file(scope);
@@ -190,6 +232,39 @@ export class McpInventoryService {
         added: { scope: imported.scope, name: imported.name },
       };
     } catch (error) {
+      throw this.postCommitFailure(error);
+    }
+  }
+
+  async replaceServer(request: McpReplaceRequest): Promise<McpMutationOverview> {
+    const canonicalCwd = await this.resolveOptionalWorkspace(request.cwd);
+    const replaced = await replaceMcpServer({
+      agentDir: this.agentDir,
+      scope: request.scope,
+      expectedRevision: request.revision,
+      targetName: request.targetName,
+      text: request.text,
+      syntax: request.syntax,
+      entryIndex: request.entryIndex,
+      availableVariableNames: Object.keys(process.env),
+      ...(request.name !== undefined ? { name: request.name } : {}),
+      ...(request.values ? { values: request.values } : {}),
+      ...(request.secretReferences ? { secretReferences: request.secretReferences } : {}),
+      ...(request.confirmations ? { confirmations: request.confirmations } : {}),
+      ...(request.scope === 'project' && canonicalCwd ? { cwd: canonicalCwd } : {}),
+      trustManager: this.trustManager,
+    });
+    try {
+      return {
+        inventory: await this.getOverview(canonicalCwd),
+        updated: {
+          scope: replaced.scope,
+          previousName: replaced.previousName,
+          name: replaced.name,
+        },
+      };
+    } catch (error) {
+      if (!replaced.changed) throw error;
       throw this.postCommitFailure(error);
     }
   }

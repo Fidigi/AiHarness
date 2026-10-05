@@ -8,7 +8,7 @@ import type {
   McpServerInventoryEntry,
 } from '@ai-harness/core';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { McpImportPreview } from './McpImportPreview';
+import { McpImportPreview, type McpReplacementOutcome } from './McpImportPreview';
 import { useI18n } from '../hooks/useI18n';
 import { getMcpConfig } from '../services/api';
 import {
@@ -17,6 +17,7 @@ import {
   setMcpConfigEnabled,
   setMcpConfigExposure,
   type McpActionResponse,
+  type McpReplaceTarget,
 } from '../services/mcp-api';
 import { useSessionStore } from '../store/session-store';
 
@@ -65,17 +66,23 @@ function fileForScope(
   return inventory.files.find(file => file.scope === scope);
 }
 
+function editKey(scope: McpConfigScope, name: string): string {
+  return encodeURIComponent(`${scope}\0${name}`);
+}
+
 function ServerCard({
   server,
   disabled,
   onToggle,
   onExposureChange,
+  onEdit,
   onRemove,
 }: {
   server: McpServerInventoryEntry;
   disabled: boolean;
   onToggle: () => void;
   onExposureChange: (exposure: McpExposure, trigger: HTMLSelectElement) => void;
+  onEdit: (trigger: HTMLButtonElement) => void;
   onRemove: (trigger: HTMLButtonElement) => void;
 }) {
   const { t } = useI18n();
@@ -117,6 +124,11 @@ function ServerCard({
       {server.masked && <small>{t('settings.mcp.masked')}</small>}
       {server.replacesGlobal && <small>{t('settings.mcp.replacesGlobal')}</small>}
       {server.valid && <div className="mcp-row-actions">
+        <button type="button" disabled={disabled} onClick={event => onEdit(event.currentTarget)}
+          data-mcp-edit-key={editKey(server.scope, server.name)}
+          aria-label={t('settings.mcp.editNamed', { name: server.name })}>
+          {t('settings.mcp.edit')}
+        </button>
         <button type="button" disabled={disabled} onClick={onToggle}
           aria-label={t(server.enabled ? 'settings.mcp.disableNamed' : 'settings.mcp.enableNamed', { name: server.name })}>
           {t(server.enabled ? 'settings.mcp.disable' : 'settings.mcp.enable')}
@@ -139,14 +151,19 @@ export function McpSettings() {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string>();
   const [busy, setBusy] = useState<string>();
+  const [importWriting, setImportWriting] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackKind>();
   const [undo, setUndo] = useState<UndoState>();
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval>();
+  const [replacement, setReplacement] = useState<McpReplaceTarget>();
   const inventoryRequest = useRef(0);
   const actionRequest = useRef(0);
   const removalReturnFocus = useRef<HTMLButtonElement | null>(null);
   const removalDialogRef = useRef<HTMLElement | null>(null);
   const undoButtonRef = useRef<HTMLButtonElement | null>(null);
+  const editReturnFocus = useRef<HTMLButtonElement | null>(null);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const refreshButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const load = useCallback(async (clear = false): Promise<void> => {
     const sequence = ++inventoryRequest.current;
@@ -163,9 +180,11 @@ export function McpSettings() {
   useEffect(() => {
     actionRequest.current++;
     setBusy(undefined);
+    setImportWriting(false);
     setFeedback(undefined);
     setUndo(undefined);
     setPendingRemoval(undefined);
+    setReplacement(undefined);
     void load(true);
     return () => {
       inventoryRequest.current++;
@@ -305,6 +324,24 @@ export function McpSettings() {
     if (request === actionRequest.current) setBusy(undefined);
   };
 
+  const finishReplacement = (outcome: McpReplacementOutcome): void => {
+    const selected = replacement;
+    setReplacement(undefined);
+    if (outcome.status === 'success') setFeedback('updated');
+    else if (outcome.status === 'failure') setFeedback(outcome.uncertain ? 'uncertain' : 'error');
+    const focusName = outcome.status === 'success' ? outcome.name : selected?.name;
+    window.requestAnimationFrame(() => {
+      const next = selected && focusName
+        ? sectionRef.current?.querySelector<HTMLButtonElement>(
+          `[data-mcp-edit-key="${editKey(selected.scope, focusName)}"]`,
+        )
+        : undefined;
+      if (next) next.focus();
+      else if (editReturnFocus.current?.isConnected) editReturnFocus.current.focus();
+      else refreshButtonRef.current?.focus();
+    });
+  };
+
   const projectFile = inventory?.files.find(file => file.scope === 'project');
   const groups = (['global', 'project'] as const).map(scope => ({
     scope,
@@ -314,13 +351,16 @@ export function McpSettings() {
 
   const feedbackKey = feedback ? `settings.mcp.mutation.${feedback}` : undefined;
 
-  return <section className="settings-section" id="mcp">
+  const controlsDisabled = Boolean(busy) || importWriting || Boolean(replacement);
+
+  return <section ref={sectionRef} className="settings-section" id="mcp">
     <div className="mcp-settings-heading">
       <div>
         <h3>{t('settings.mcp.title')}</h3>
         <p className="settings-help">{t('settings.mcp.help')}</p>
       </div>
-      <button type="button" disabled={loading || Boolean(busy)} onClick={() => void load(true)}>{t('common.refresh')}</button>
+      <button ref={refreshButtonRef} type="button" disabled={loading || controlsDisabled}
+        onClick={() => void load(true)}>{t('common.refresh')}</button>
     </div>
     {loading && !inventory && <p role="status">{t('common.loading')}…</p>}
     {loadError && <p role="alert" className="status-warning">{t('settings.mcp.loadFailed')} {loadError}</p>}
@@ -344,6 +384,9 @@ export function McpSettings() {
       inventory={inventory}
       onInventory={setInventory}
       onReload={() => load(true)}
+      onWritingChange={setImportWriting}
+      replacement={replacement}
+      onReplacementOutcome={finishReplacement}
     />
     {inventory && groups.map(group => {
       const actionable = group.servers.filter(server => server.valid);
@@ -353,11 +396,11 @@ export function McpSettings() {
       return <fieldset className="mcp-scope" data-scope={group.scope} key={group.scope}>
         <legend>{t(SCOPE_KEYS[group.scope])}</legend>
         {actionable.length > 0 && <div className="mcp-group-actions" aria-label={t('settings.mcp.groupActions')}>
-          <button type="button" disabled={Boolean(busy) || enableNames.length === 0}
+          <button type="button" disabled={controlsDisabled || enableNames.length === 0}
             onClick={() => void setEnabled(group.scope, enableNames, true, `group:${group.scope}`)}>
             {t('settings.mcp.enableAll')}
           </button>
-          <button type="button" disabled={Boolean(busy) || disableNames.length === 0}
+          <button type="button" disabled={controlsDisabled || disableNames.length === 0}
             onClick={() => void setEnabled(group.scope, disableNames, false, `group:${group.scope}`)}>
             {t('settings.mcp.disableAll')}
           </button>
@@ -369,10 +412,18 @@ export function McpSettings() {
           : <div className="settings-resource-list">{group.servers.map((server, index) => (
             <ServerCard
               server={server}
-              disabled={Boolean(busy)}
+              disabled={controlsDisabled}
               key={`${server.scope}:${server.name}:${index}`}
               onToggle={() => void setEnabled(server.scope, [server.name], !server.enabled, `row:${server.scope}:${server.name}`)}
               onExposureChange={(exposure, trigger) => void setExposure(server, exposure, trigger)}
+              onEdit={trigger => {
+                const file = fileForScope(inventory, server.scope);
+                if (!file?.revision || controlsDisabled) return;
+                editReturnFocus.current = trigger;
+                setFeedback(undefined);
+                setUndo(undefined);
+                setReplacement({ scope: server.scope, name: server.name, revision: file.revision });
+              }}
               onRemove={trigger => {
                 removalReturnFocus.current = trigger;
                 setPendingRemoval({ scope: server.scope, name: server.name, revision });

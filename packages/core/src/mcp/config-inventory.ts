@@ -831,6 +831,16 @@ export interface McpServerInsertionResult {
   revision: string;
 }
 
+/** Internal replacement input used only after Core import policy rebuilds pasted text. */
+export interface McpServerReplacementMutation extends McpServerInsertionMutation {
+  targetName: string;
+}
+
+export interface McpServerReplacementResult {
+  revision: string;
+  changed: boolean;
+}
+
 /** Server-only undo material. Adapters must never serialize entry to an untrusted client. */
 export interface McpRemovedServerRecord {
   scope: McpConfigScope;
@@ -1332,6 +1342,47 @@ export async function insertMcpServerEntry(
   });
   if (!result.revision) throw mutationError('write-failed', 'The MCP configuration revision is unavailable.', true);
   return { revision: result.revision };
+}
+
+/**
+ * Replace one valid entry in place after import policy has rebuilt and checked
+ * its successor. This helper remains outside the public MCP barrel so callers
+ * cannot bypass text re-parsing, secret policy, or confirmation checks.
+ */
+export async function replaceMcpServerEntry(
+  options: McpServerReplacementMutation,
+): Promise<McpServerReplacementResult> {
+  validateMutationName(options.targetName);
+  validateMutationName(options.name);
+  if (!isRecord(options.entry)
+    || !describeEntry(options.name, options.entry, options.scope, '').info.valid) {
+    throw mutationError('invalid-request', 'The replacement MCP server is invalid.');
+  }
+  const entry = structuredClone(options.entry);
+  const result = await mutateMcpConfig(options, config => {
+    if (!Object.hasOwn(config.servers, options.targetName)) {
+      throw mutationError('target-not-found', 'The MCP server no longer exists.');
+    }
+    const existing = config.servers[options.targetName];
+    if (!isRecord(existing)
+      || !describeEntry(options.targetName, existing, options.scope, '').info.valid) {
+      throw mutationError('target-invalid', 'The MCP server entry is invalid and was not replaced.');
+    }
+    if (options.name !== options.targetName && Object.hasOwn(config.servers, options.name)) {
+      throw mutationError('target-conflict', 'The MCP server name is already configured.');
+    }
+    if (options.name === options.targetName && JSON.stringify(existing) === JSON.stringify(entry)) {
+      return { changed: false, value: undefined };
+    }
+    const replaced = Object.fromEntries(Object.entries(config.servers).map(([name, value]) => (
+      name === options.targetName ? [options.name, entry] : [name, value]
+    )));
+    config.root.mcpServers = replaced;
+    config.servers = replaced;
+    return { changed: true, value: undefined };
+  });
+  if (!result.revision) throw mutationError('write-failed', 'The MCP configuration revision is unavailable.', true);
+  return { revision: result.revision, changed: result.changed };
 }
 
 /** Remove one literal entry. The returned raw record is server-only undo material. */

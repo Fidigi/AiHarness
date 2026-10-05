@@ -370,6 +370,129 @@ describe('combined Web server', () => {
     }
   });
 
+  it('previews and atomically replaces one MCP server without disclosing old or pasted values', async () => {
+    const dataDir = path.join(webRoot, '.data');
+    const globalFile = path.join(dataDir, 'mcp.json');
+    const marker = path.join(webRoot, `mcp-replace-marker-${Date.now()}`);
+    const source = `${JSON.stringify({
+      version: 1,
+      mcpServers: {
+        docs: { command: 'node', env: { TOKEN: 'OLD-REPLACEMENT-SECRET' } },
+        occupied: { command: 'node' },
+      },
+    }, null, 2)}\n`;
+    await writeFile(globalFile, source);
+    try {
+      const inventory = await fetch(`${baseUrl}/api/mcp`).then(response => response.json()) as {
+        files: Array<{ scope: string; revision?: string }>;
+      };
+      const revision = inventory.files.find(file => file.scope === 'global')!.revision!;
+      const pastedSecret = 'PASTED-REPLACEMENT-SECRET-0123456789';
+      const text = JSON.stringify({
+        mcpServers: {
+          replacement: {
+            url: 'https://replacement.example.test/mcp',
+            headers: { Authorization: `Bearer ${pastedSecret}` },
+          },
+        },
+      });
+      const previewResponse = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          syntax: 'aiharness',
+          replacement: { scope: 'global', name: 'docs', revision },
+        }),
+      });
+      expect(previewResponse.status).toBe(200);
+      const previewText = await previewResponse.text();
+      expect(JSON.parse(previewText)).toMatchObject({
+        entries: [{ scopes: { global: { allowed: true, reasons: [] } } }],
+      });
+      expect(previewText).not.toContain(pastedSecret);
+      expect(previewText).not.toContain('OLD-REPLACEMENT-SECRET');
+
+      const unconfirmed = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'replace', scope: 'global', revision, targetName: 'docs', text,
+          syntax: 'aiharness', entryIndex: 0, name: 'renamed-docs',
+        }),
+      });
+      expect(unconfirmed.status).toBe(409);
+      expect(await unconfirmed.json()).toMatchObject({ code: 'confirmation-required', uncertain: false });
+      expect(await readFile(globalFile, 'utf8')).toBe(source);
+
+      const replacedResponse = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'replace', scope: 'global', revision, targetName: 'docs', text,
+          syntax: 'aiharness', entryIndex: 0, name: 'renamed-docs',
+          confirmations: { literalSecret: true },
+        }),
+      });
+      expect(replacedResponse.status).toBe(200);
+      expect(replacedResponse.headers.get('cache-control')).toBe('no-store');
+      const responseText = await replacedResponse.text();
+      const replaced = JSON.parse(responseText) as {
+        inventory: { files: Array<{ scope: string; revision?: string }> };
+      };
+      expect(replaced).toMatchObject({
+        updated: { scope: 'global', previousName: 'docs', name: 'renamed-docs' },
+        inventory: {
+          servers: [
+            expect.objectContaining({ name: 'renamed-docs', headerNames: ['Authorization'] }),
+            expect.objectContaining({ name: 'occupied' }),
+          ],
+        },
+      });
+      expect(responseText).not.toContain(pastedSecret);
+      expect(responseText).not.toContain('OLD-REPLACEMENT-SECRET');
+      const persisted = await readFile(globalFile, 'utf8');
+      expect(persisted).toContain(pastedSecret);
+      expect(persisted).not.toContain('OLD-REPLACEMENT-SECRET');
+
+      const currentRevision = replaced.inventory.files.find(file => file.scope === 'global')!.revision!;
+      const smuggled = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'replace', scope: 'global', revision: currentRevision,
+          targetName: 'renamed-docs', text: 'npx safe-server', syntax: 'foreign', entryIndex: 0,
+          configuration: { command: 'node' },
+        }),
+      });
+      expect(smuggled.status).toBe(400);
+      expect(await smuggled.json()).toMatchObject({ code: 'invalid-request', uncertain: false });
+
+      const prototypeSmuggled = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: `{"action":"replace","scope":"global","revision":"${currentRevision}","targetName":"renamed-docs","text":"npx safe-server","syntax":"foreign","entryIndex":0,"__proto__":{"targetName":"occupied"}}`,
+      });
+      expect(prototypeSmuggled.status).toBe(400);
+      expect(await prototypeSmuggled.json()).toMatchObject({ code: 'invalid-request', uncertain: false });
+
+      const dangerous = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'replace', scope: 'global', revision: currentRevision,
+          targetName: 'renamed-docs', text: `npx safe-server; touch ${marker}`,
+          syntax: 'foreign', entryIndex: 0,
+        }),
+      });
+      expect(dangerous.status).toBe(409);
+      expect(await dangerous.json()).toMatchObject({ code: 'import-invalid', uncertain: false });
+      await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await Promise.all([rm(globalFile, { force: true }), rm(marker, { force: true })]);
+    }
+  });
+
   it('serializes atomic MCP activation, exposure, removal, and opaque one-shot restoration', async () => {
     const dataDir = path.join(webRoot, '.data');
     const globalFile = path.join(dataDir, 'mcp.json');

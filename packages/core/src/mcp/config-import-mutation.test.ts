@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ProjectTrustManager } from '../security/project-trust.js';
-import { importMcpServer } from './config-import.js';
+import { importMcpServer, replaceMcpServer } from './config-import.js';
 import { inspectMcpConfig } from './config-inventory.js';
 
 const temporaryDirectories: string[] = [];
@@ -236,5 +236,167 @@ describe('importMcpServer', () => {
       .rejects.toMatchObject({ code: 'target-conflict' });
     expect(Object.keys((JSON.parse(await readFile(filePath, 'utf8')) as { mcpServers: object }).mcpServers))
       .toEqual(['docs', 'changed']);
+  });
+});
+
+describe('replaceMcpServer', () => {
+  it('reparses text and replaces one entry in place while preserving siblings, style, and mode', async () => {
+    const { agentDir } = await fixture();
+    const filePath = path.join(agentDir, 'mcp.json');
+    const source = [
+      '{',
+      '\t"version": 1,',
+      '\t"futureRoot": { "retained": true },',
+      '\t"mcpServers": {',
+      '\t\t"before": { "command": "node", "env": { "TOKEN": "SIBLING-SECRET" } },',
+      '\t\t"docs": { "url": "https://old.example.test", "headers": { "Authorization": "OLD-SECRET" } },',
+      '\t\t"after": { "command": "node" }',
+      '\t}',
+      '}',
+      '',
+    ].join('\r\n');
+    await writeFile(filePath, source, { mode: 0o666 });
+    await chmod(filePath, 0o666);
+    const before = await inspectMcpConfig({ agentDir });
+    const pastedSecret = 'NEW-PASTED-SECRET-0123456789';
+    const replacement = {
+      agentDir,
+      scope: 'global' as const,
+      expectedRevision: before.files[0]!.revision!,
+      targetName: 'docs',
+      text: JSON.stringify({
+        mcpServers: {
+          replacement: {
+            url: 'https://new.example.test/mcp',
+            headers: { Authorization: `Bearer ${pastedSecret}`, 'X-Host': '${HOST_TOKEN}' },
+          },
+        },
+      }),
+      syntax: 'aiharness' as const,
+      entryIndex: 0,
+      name: 'renamed-docs',
+      availableVariableNames: ['HOST_TOKEN'],
+    };
+    await expect(replaceMcpServer({
+      ...replacement,
+      confirmations: { literalSecret: true },
+    })).rejects.toMatchObject({ code: 'confirmation-required' });
+    expect(await readFile(filePath, 'utf8')).toBe(source);
+
+    const result = await replaceMcpServer({
+      ...replacement,
+      confirmations: { literalSecret: true, remoteHostVariables: ['HOST_TOKEN'] },
+    });
+
+    expect(result).toEqual({
+      previousName: 'docs',
+      name: 'renamed-docs',
+      scope: 'global',
+      revision: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      changed: true,
+    });
+    expect(JSON.stringify(result)).not.toContain(pastedSecret);
+    expect(JSON.stringify(result)).not.toContain('OLD-SECRET');
+    const persisted = await readFile(filePath, 'utf8');
+    expect(persisted).not.toMatch(/(?<!\r)\n/u);
+    expect(persisted).toContain('\r\n\t"futureRoot"');
+    expect(Object.keys((JSON.parse(persisted) as { mcpServers: Record<string, unknown> }).mcpServers))
+      .toEqual(['before', 'renamed-docs', 'after']);
+    expect(JSON.parse(persisted)).toEqual({
+      version: 1,
+      futureRoot: { retained: true },
+      mcpServers: {
+        before: { command: 'node', env: { TOKEN: 'SIBLING-SECRET' } },
+        'renamed-docs': {
+          url: 'https://new.example.test/mcp',
+          headers: { Authorization: `Bearer ${pastedSecret}`, 'X-Host': '${HOST_TOKEN}' },
+        },
+        after: { command: 'node' },
+      },
+    });
+    expect((await stat(filePath)).mode & 0o777).toBe(0o600);
+  });
+
+  it('is byte-stable when the rebuilt entry and name are unchanged', async () => {
+    const { agentDir } = await fixture();
+    const filePath = path.join(agentDir, 'mcp.json');
+    const entry = {
+      command: 'node', args: ['server.js'], env: { TOKEN: '${TOKEN}' }, enabled: false, exposure: 'deferred',
+    };
+    const source = `${JSON.stringify({ version: 1, mcpServers: { 'docs server': entry } }, null, 2)}\n`;
+    await writeFile(filePath, source);
+    const before = await inspectMcpConfig({ agentDir });
+
+    const result = await replaceMcpServer({
+      agentDir,
+      scope: 'global',
+      expectedRevision: before.files[0]!.revision!,
+      targetName: 'docs server',
+      text: JSON.stringify({ mcpServers: { replacement: entry } }),
+      syntax: 'aiharness',
+      entryIndex: 0,
+      name: 'docs server',
+    });
+
+    expect(result).toMatchObject({
+      previousName: 'docs server', name: 'docs server', scope: 'global',
+      revision: before.files[0]!.revision, changed: false,
+    });
+    expect(await readFile(filePath, 'utf8')).toBe(source);
+  });
+
+  it('reuses project secret, trust, revision, target, and collision policy', async () => {
+    const { agentDir, project, trustManager } = await fixture();
+    const projectDirectory = path.join(project, '.ai-harness');
+    const filePath = path.join(projectDirectory, 'mcp.json');
+    await mkdir(projectDirectory);
+    const source = JSON.stringify({
+      mcpServers: { docs: { command: 'node' }, occupied: { command: 'node' }, broken: { url: 'ftp://invalid' } },
+    });
+    await writeFile(filePath, source);
+    const text = JSON.stringify({
+      mcpServers: { docs: { url: 'https://docs.example.test', headers: { Authorization: 'literal-secret-0123456789' } } },
+    });
+    await trustManager.trust(project);
+    const initial = await inspectMcpConfig({ agentDir, cwd: project, trustManager });
+    await trustManager.untrust(project);
+    const base = {
+      agentDir,
+      cwd: project,
+      trustManager,
+      scope: 'project' as const,
+      expectedRevision: initial.files.find(file => file.scope === 'project')!.revision!,
+      targetName: 'docs',
+      text,
+      syntax: 'aiharness' as const,
+      entryIndex: 0,
+    };
+
+    await expect(replaceMcpServer({
+      ...base,
+      text: 'npx public-mcp-server',
+      syntax: 'foreign',
+    })).rejects.toMatchObject({ code: 'trust-required' });
+    expect(await readFile(filePath, 'utf8')).toBe(source);
+    await trustManager.trust(project);
+    await expect(replaceMcpServer(base)).rejects.toMatchObject({ code: 'scope-blocked' });
+    await expect(replaceMcpServer({
+      ...base,
+      targetName: 'broken',
+      secretReferences: { 'headers.Authorization': 'DOCS_TOKEN' },
+    })).rejects.toMatchObject({ code: 'target-invalid' });
+    await expect(replaceMcpServer({
+      ...base,
+      name: 'occupied',
+      secretReferences: { 'headers.Authorization': 'DOCS_TOKEN' },
+    })).rejects.toMatchObject({ code: 'target-conflict' });
+
+    await writeFile(filePath, JSON.stringify({
+      mcpServers: { docs: { command: 'node' }, occupied: { command: 'node' }, changed: { command: 'node' } },
+    }));
+    await expect(replaceMcpServer({
+      ...base,
+      secretReferences: { 'headers.Authorization': 'DOCS_TOKEN' },
+    })).rejects.toMatchObject({ code: 'stale-revision' });
   });
 });

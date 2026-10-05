@@ -17,12 +17,20 @@ export interface McpMutationResponse {
   outcomes?: McpServerMutationOutcome[];
   undo?: { token: string; expiresAt: string };
   added?: { scope: McpConfigScope; name: string };
+  updated?: { scope: McpConfigScope; previousName: string; name: string };
+}
+
+export interface McpReplaceTarget {
+  scope: McpConfigScope;
+  name: string;
+  revision: string;
 }
 
 export interface McpImportPreviewRequest {
   text: string;
   syntax: McpImportSyntax;
   cwd?: string;
+  replacement?: McpReplaceTarget;
 }
 
 export interface McpImportWriteRequest {
@@ -36,6 +44,10 @@ export interface McpImportWriteRequest {
   values?: Record<string, McpImportFieldValue>;
   secretReferences?: Record<string, string>;
   confirmations?: McpImportWriteConfirmations;
+}
+
+export interface McpReplaceWriteRequest extends McpImportWriteRequest {
+  targetName: string;
 }
 
 export interface McpActionResponse {
@@ -64,6 +76,7 @@ export async function previewMcpImport(
 
 type McpActionRequest =
   | ({ action: 'import' } & McpImportWriteRequest)
+  | ({ action: 'replace' } & McpReplaceWriteRequest)
   | {
     action: 'set-enabled';
     scope: McpConfigScope;
@@ -130,6 +143,10 @@ async function postMcpAction(action: McpActionRequest): Promise<McpActionRespons
 
 export function importMcpConfigServer(request: McpImportWriteRequest): Promise<McpActionResponse> {
   return postMcpAction({ action: 'import', ...request });
+}
+
+export function replaceMcpConfigServer(request: McpReplaceWriteRequest): Promise<McpActionResponse> {
+  return postMcpAction({ action: 'replace', ...request });
 }
 
 export function setMcpConfigEnabled(

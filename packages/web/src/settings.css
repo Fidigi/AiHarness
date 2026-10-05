@@ -47,7 +47,7 @@
 .mcp-scope legend { padding: 0 .35rem; color: #e9eef8; font-weight: 600; }
 .mcp-server-card > div:last-child { max-width: 15rem; align-items: center; }
 .mcp-group-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .4rem; margin: 0 0 .5rem; }
-.mcp-row-actions { display: flex; flex-basis: 100%; justify-content: flex-end; gap: .35rem; margin-top: .2rem; }
+.mcp-row-actions { display: flex; flex-wrap: wrap; flex-basis: 100%; justify-content: flex-end; gap: .35rem; margin-top: .2rem; }
 .mcp-row-actions button, .mcp-group-actions button { min-height: 2rem; padding: .3rem .55rem; }
 .mcp-exposure-control { display: grid; gap: .2rem; width: 100%; color: #aebad0; font-size: .72rem; text-align: left; }
 .mcp-exposure-control select { width: 100%; min-height: 2rem; padding: .3rem .45rem; }

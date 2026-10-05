@@ -46,6 +46,7 @@ import {
   importMcpConfigServer,
   previewMcpImport,
   removeMcpConfigServer,
+  replaceMcpConfigServer,
   restoreMcpConfigServer,
   setMcpConfigEnabled,
   setMcpConfigExposure,
@@ -332,6 +333,49 @@ describe('Web API service', () => {
         confirmations: { remoteHostVariables: ['DOCS_TOKEN', 'TENANT_TOKEN'] },
       }),
     }));
+  });
+
+  it('posts replacement preview identity and original text without a writable configuration', async () => {
+    const revision = 'c'.repeat(64);
+    const preview = { ok: true, entries: [], notes: [] };
+    const inventory = { files: [], servers: [] };
+    const payload = {
+      inventory,
+      updated: { scope: 'global', previousName: 'docs', name: 'renamed-docs' },
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(preview), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(payload), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(previewMcpImport({
+      text: 'ORIGINAL-REPLACEMENT-PASTE',
+      syntax: 'aiharness',
+      cwd: '/workspace',
+      replacement: { scope: 'global', name: 'docs', revision },
+    })).resolves.toEqual(preview);
+    await expect(replaceMcpConfigServer({
+      scope: 'global', cwd: '/workspace', revision, targetName: 'docs',
+      text: 'ORIGINAL-REPLACEMENT-PASTE', syntax: 'aiharness', entryIndex: 0,
+      name: 'renamed-docs', values: {}, secretReferences: {}, confirmations: { literalSecret: true },
+    })).resolves.toEqual({ success: true, data: payload });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/mcp/preview', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        text: 'ORIGINAL-REPLACEMENT-PASTE', syntax: 'aiharness', cwd: '/workspace',
+        replacement: { scope: 'global', name: 'docs', revision },
+      }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/mcp/actions', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'replace', scope: 'global', cwd: '/workspace', revision, targetName: 'docs',
+        text: 'ORIGINAL-REPLACEMENT-PASTE', syntax: 'aiharness', entryIndex: 0,
+        name: 'renamed-docs', values: {}, secretReferences: {}, confirmations: { literalSecret: true },
+      }),
+    }));
+    expect(Object.keys(JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string))).not.toContain('configuration');
   });
 
   it('posts bounded MCP actions and retains typed certainty without exposing undo material', async () => {
