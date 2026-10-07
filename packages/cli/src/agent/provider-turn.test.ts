@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   AiProvider,
+  CredentialRedactor,
   ExtensionRegistry,
   type ChatOptions,
   type ChatResponse,
@@ -85,6 +86,28 @@ class OversizedEventProvider extends AiProvider {
     void onChunk('', {
       type: 'tool_call',
       data: { id: 'large', name: 'large', input: { value: 'x'.repeat(1_024) } },
+    });
+  }
+}
+
+class FragmentedSecretProvider extends AiProvider {
+  constructor(private readonly secret: string) { super({ type: 'mock' as any }); }
+  validateConfig(): boolean { return true; }
+  async chat(): Promise<ChatResponse> { return { content: 'unused' }; }
+  async streamChat(
+    _messages: Message[],
+    onChunk: StreamChunkCallback,
+    onComplete?: (response?: ChatResponse) => void,
+  ): Promise<void> {
+    const split = Math.floor(this.secret.length / 2);
+    await onChunk(`before:${this.secret.slice(0, split)}`, { type: 'text_delta' });
+    await onChunk(`${this.secret.slice(split)}:after`, {
+      type: 'tool_call',
+      data: { id: 'secret', name: 'secret', input: { value: this.secret } },
+    });
+    onComplete?.({
+      content: `before:${this.secret}:after`,
+      toolCalls: [{ id: 'secret', name: 'secret', input: { value: this.secret } }],
     });
   }
 }
@@ -175,6 +198,29 @@ describe('streamProviderTurn', () => {
       extensionRegistry: new ExtensionRegistry(),
       maxPendingStreamBytes: 128,
     })).rejects.toThrow('extension providers must await chunk callbacks');
+  });
+
+  it('redacts fragmented deltas, provider events, and final tool-call arguments', async () => {
+    const secret = 'fragmented+provider-secret';
+    const redactor = new CredentialRedactor([secret]);
+    const deltas: string[] = [];
+    const events: unknown[] = [];
+    const response = await streamProviderTurn({
+      provider: new FragmentedSecretProvider(secret),
+      providerName: 'mock',
+      messages: [{ id: 'input', role: 'user', content: secret, timestamp: new Date() }],
+      tools: [],
+      extensionRegistry: new ExtensionRegistry(),
+      redactText: value => redactor.redact(value),
+      redactJson: value => redactor.redactJson(value),
+      createTextRedactor: () => redactor.createStream(),
+      onTextDelta: delta => deltas.push(delta),
+      onProviderEvent: event => events.push(event),
+    });
+
+    expect(deltas.join('')).toBe('before:[REDACTED]:after');
+    expect(JSON.stringify({ response, events, deltas })).not.toContain(secret);
+    expect(response.toolCalls?.[0]?.input).toEqual({ value: '[REDACTED]' });
   });
 
   it('backpressures provider production on asynchronous delta consumers', async () => {

@@ -88,10 +88,7 @@ describe('EventEmitter', () => {
     });
 
     await expect(emitter.emit('system:ready')).resolves.toBeUndefined();
-    expect(errorSpy).toHaveBeenCalledWith(
-      '[EventEmitter] Error in listener for "system:ready":',
-      expect.any(Error),
-    );
+    expect(errorSpy).toHaveBeenCalledWith('[EventEmitter] listener failed.');
   });
 
   it('supports events without payloads', async () => {

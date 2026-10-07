@@ -6,6 +6,7 @@ import {
   composeInstructionSystemPrompt,
   resolveInstructionPrompt,
   resolveAgentDirectory,
+  resolvePreTrustAgentDirectory,
 } from './instruction-context.js';
 
 const temporaryDirectories: string[] = [];
@@ -84,6 +85,24 @@ describe('instruction context', () => {
     ]);
   });
 
+  it('never reads a custom agent directory located inside an untrusted project', async () => {
+    const root = await temporaryDirectory();
+    const cwd = path.join(root, 'workspace');
+    const agentDir = path.join(cwd, '.custom-agent');
+    await text(path.join(agentDir, 'SYSTEM.md'), 'untrusted custom base');
+    await text(path.join(agentDir, 'APPEND_SYSTEM.md'), 'untrusted custom addendum');
+    await text(path.join(agentDir, 'AGENTS.md'), 'untrusted custom context');
+
+    const untrusted = await resolveInstructionPrompt({ cwd, agentDir, projectTrusted: false });
+    expect(untrusted.systemPrompt).not.toContain('untrusted custom');
+    expect(untrusted.contextFiles).toEqual([]);
+
+    const trusted = await resolveInstructionPrompt({ cwd, agentDir, projectTrusted: true });
+    expect(trusted.systemPrompt).toContain('untrusted custom base');
+    expect(trusted.systemPrompt).toContain('untrusted custom addendum');
+    expect(trusted.systemPrompt).toContain('untrusted custom context');
+  });
+
   it('resolves CLI prompt values as text or existing files and preserves repeat order', async () => {
     const root = await temporaryDirectory();
     const agentDir = path.join(root, 'agent');
@@ -156,10 +175,30 @@ describe('instruction context', () => {
     await expect(resolveInstructionPrompt({ cwd, maxTotalBytes: 0 })).rejects.toThrow(/positive safe integer/i);
   });
 
+  it('keeps the pre-trust directory outside the workspace and rejects linked overrides', async () => {
+    const root = await temporaryDirectory();
+    const home = path.join(root, 'home');
+    const workspace = path.join(root, 'workspace');
+    await mkdir(home, { recursive: true });
+    await mkdir(workspace, { recursive: true });
+    const linked = path.join(root, 'linked-agent');
+    await symlink(path.join(workspace, '.agent'), linked);
+
+    expect(resolvePreTrustAgentDirectory(workspace, linked, home)).toBe(path.join(home, '.ai-harness'));
+    const homeWorkspaceFallback = resolvePreTrustAgentDirectory(home, '', home);
+    const relative = path.relative(home, homeWorkspaceFallback);
+    expect(relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..')).toBe(false);
+  });
+
   it('escapes source paths and resolves the conventional agent directory', () => {
     const home = path.join(path.sep, 'home', 'tester');
     expect(resolveAgentDirectory('', home)).toBe(path.join(home, '.ai-harness'));
     expect(resolveAgentDirectory('~/custom-agent', home)).toBe(path.join(home, 'custom-agent'));
+    expect(resolvePreTrustAgentDirectory(
+      path.join(home, 'project'),
+      path.join(home, 'project', '.custom-agent'),
+      home,
+    )).toBe(path.join(home, '.ai-harness'));
     expect(composeInstructionSystemPrompt({
       cwd: home,
       contextFiles: [{ path: '/tmp/a&"b.md', content: 'instructions' }],

@@ -2,10 +2,13 @@
 // AI Provider Tests - Real API + Mock implementations
 // ============================================================
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   AiProvider,
   OpenAiProvider,
+  OpenAiResponsesProvider,
+  getOpenAiResponsesTransportStats,
+  resetOpenAiResponsesTransportStats,
   AnthropicProvider,
   GeminiProvider,
   VertexGeminiProvider,
@@ -15,11 +18,17 @@ import {
   normalizeProviderUsage,
   ProviderFactory,
 } from './index';
+import { closeProviderNetworkDispatchers, type ProviderWebSocket } from './provider-network.js';
 import type { Message, ProviderConfig } from '../types';
 
 // ===================================================================
 // Helper functions
 // ===================================================================
+
+afterEach(async () => {
+  resetOpenAiResponsesTransportStats();
+  await closeProviderNetworkDispatchers();
+});
 
 function createMessage(role: 'user' | 'assistant', content: string): Message {
   return {
@@ -29,6 +38,189 @@ function createMessage(role: 'user' | 'assistant', content: string): Message {
     timestamp: new Date(),
   };
 }
+
+class ScriptedProviderWebSocket implements ProviderWebSocket {
+  readyState = 0;
+  readonly sent: Array<Record<string, unknown>> = [];
+  private readonly listeners = new Map<string, Set<(event: unknown) => void>>();
+  private sendIndex = 0;
+
+  constructor(private readonly scripts: Array<Array<Record<string, unknown>> | 'error'>) {
+    queueMicrotask(() => {
+      this.readyState = 1;
+      this.emit('open', {});
+    });
+  }
+
+  send(data: string): void {
+    this.sent.push(JSON.parse(data));
+    const script = this.scripts[this.sendIndex++] ?? [];
+    queueMicrotask(() => {
+      if (script === 'error') {
+        this.emit('error', new Error('untrusted remote detail'));
+        return;
+      }
+      for (const event of script) {
+        if (event.__socketError === true) this.emit('error', new Error('untrusted remote detail'));
+        else this.emit('message', { data: JSON.stringify(event) });
+      }
+    });
+  }
+
+  close(code = 1000, reason = ''): void {
+    if (this.readyState === 3) return;
+    this.readyState = 3;
+    this.emit('close', { code, reason, wasClean: true });
+  }
+
+  addEventListener(type: string, listener: (event: unknown) => void): void {
+    const listeners = this.listeners.get(type) ?? new Set();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  removeEventListener(type: string, listener: (event: unknown) => void): void {
+    this.listeners.get(type)?.delete(listener);
+  }
+
+  private emit(type: string, event: unknown): void {
+    for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
+}
+
+describe('OpenAiResponsesProvider transport', () => {
+  it('reuses a session socket and sends a bounded previous-response delta', async () => {
+    const socket = new ScriptedProviderWebSocket([
+      [
+        { type: 'response.output_text.delta', delta: 'first answer' },
+        { type: 'response.completed', response: { id: 'response-1', model: 'responses-model', usage: { input_tokens: 2, output_tokens: 2, total_tokens: 4 } } },
+      ],
+      [
+        { type: 'response.output_text.delta', delta: 'second answer' },
+        { type: 'response.completed', response: { id: 'response-2', model: 'responses-model' } },
+      ],
+    ]);
+    const factory = vi.fn(() => socket);
+    const provider = new OpenAiResponsesProvider({
+      type: 'custom-responses',
+      apiKey: 'runtime-key',
+      baseUrl: 'https://responses.example/v1',
+      model: 'responses-model',
+      transport: 'websocket-cached',
+      customHeaders: {
+        'session-id': 'untrusted-session',
+        'x-client-request-id': 'untrusted-request',
+        'OpenAI-Beta': 'untrusted-beta',
+      },
+      webSocketFactory: factory,
+      requestTimeoutMs: 2_000,
+      httpIdleTimeoutMs: 2_000,
+      websocketConnectTimeoutMs: 100,
+    });
+    const firstChunks: string[] = [];
+    await provider.streamChat(
+      [createMessage('user', 'first question')],
+      chunk => firstChunks.push(chunk),
+      undefined,
+      error => { throw error; },
+      { sessionId: 'session-websocket' },
+    );
+    const secondChunks: string[] = [];
+    await provider.streamChat(
+      [
+        createMessage('user', 'first question'),
+        createMessage('assistant', 'first answer'),
+        createMessage('user', 'second question'),
+      ],
+      chunk => secondChunks.push(chunk),
+      undefined,
+      error => { throw error; },
+      { sessionId: 'session-websocket' },
+    );
+
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(factory.mock.calls[0]?.[1].headers).toMatchObject({
+      'session-id': 'session-websocket',
+      'x-client-request-id': 'session-websocket',
+      'OpenAI-Beta': 'responses_websockets=2026-02-06',
+    });
+    expect(firstChunks.join('')).toBe('first answer');
+    expect(secondChunks.join('')).toBe('second answer');
+    expect(socket.sent[1]).toMatchObject({
+      type: 'response.create',
+      previous_response_id: 'response-1',
+      input: [{ role: 'user', content: 'second question' }],
+    });
+    expect(getOpenAiResponsesTransportStats('session-websocket')).toMatchObject({
+      websocketConnectionsCreated: 1,
+      websocketConnectionsReused: 1,
+      fullContextRequests: 1,
+      deltaRequests: 1,
+      sseFallbacks: 0,
+    });
+  });
+
+  it('does not replay a request over SSE after any WebSocket response event', async () => {
+    const socket = new ScriptedProviderWebSocket([[
+      { type: 'response.created', response: { id: 'started-1' } },
+      { __socketError: true },
+    ]]);
+    const fetcher = vi.fn();
+    global.fetch = fetcher;
+    const provider = new OpenAiResponsesProvider({
+      type: 'custom-responses', apiKey: 'runtime-key', baseUrl: 'https://responses.example/v1',
+      transport: 'websocket', webSocketFactory: () => socket,
+      websocketConnectTimeoutMs: 100, requestTimeoutMs: 2_000, httpIdleTimeoutMs: 2_000,
+    });
+    let failure: Error | undefined;
+
+    await provider.streamChat(
+      [createMessage('user', 'do not replay')],
+      () => undefined,
+      undefined,
+      error => { failure = error; },
+      { sessionId: 'started-session' },
+    );
+
+    expect(failure).toMatchObject({ message: 'The provider WebSocket connection failed.' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('falls back to SSE only before WebSocket output starts and remembers the bounded fallback', async () => {
+    const factory = vi.fn(() => new ScriptedProviderWebSocket(['error']));
+    global.fetch = vi.fn().mockImplementation(async () => new Response([
+      'data: {"type":"response.output_text.delta","delta":"fallback"}',
+      'data: {"type":"response.completed","response":{"id":"sse-1"}}',
+      '',
+    ].join('\n'), { status: 200 }));
+    const provider = new OpenAiResponsesProvider({
+      type: 'custom-responses', apiKey: 'runtime-key', baseUrl: 'https://responses.example/v1',
+      transport: 'websocket', webSocketFactory: factory,
+      websocketConnectTimeoutMs: 100, requestTimeoutMs: 2_000, httpIdleTimeoutMs: 2_000,
+    });
+    const run = async (): Promise<string> => {
+      const chunks: string[] = [];
+      await provider.streamChat(
+        [createMessage('user', 'question')],
+        chunk => chunks.push(chunk),
+        undefined,
+        error => { throw error; },
+        { sessionId: 'fallback-session' },
+      );
+      return chunks.join('');
+    };
+
+    await expect(run()).resolves.toBe('fallback');
+    await expect(run()).resolves.toBe('fallback');
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(getOpenAiResponsesTransportStats('fallback-session')).toMatchObject({
+      websocketFailures: 1,
+      sseFallbacks: 2,
+      fallbackActive: true,
+    });
+  });
+});
 
 // ===================================================================
 // MockProvider Tests (no external dependencies needed)
@@ -448,6 +640,44 @@ describe('OpenAiProvider', () => {
       expect(result.model).toBe('gpt-4o');
     });
 
+    it('does not allow custom headers to replace the runtime authorization', async () => {
+      provider = new OpenAiProvider({
+        ...config,
+        customHeaders: { Authorization: 'Bearer untrusted', 'X-Custom': 'allowed' },
+      });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          choices: [{ message: { role: 'assistant', content: 'ok' } }],
+        }),
+      });
+
+      await provider.chat([createMessage('user', 'Hello')]);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${OpenAiProvider.DEFAULT_BASE_URL}/chat/completions`,
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer sk-test-key-123',
+            'X-Custom': 'allowed',
+          }),
+        }),
+      );
+    });
+
+    it('bounds JSON returned by lightweight custom fetch shims', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          choices: [{ message: { role: 'assistant', content: 'x'.repeat(16 * 1024 * 1024) } }],
+        }),
+      });
+
+      await expect(provider.chat([createMessage('user', 'Hello')])).rejects.toThrow(
+        'The provider response exceeded the output limit.',
+      );
+    });
+
     it('normalizes cache tokens out of OpenAI input usage', async () => {
       global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
         model: 'o3',
@@ -539,6 +769,7 @@ describe('OpenAiProvider', () => {
     });
 
     it('should retry on rate limit errors (429)', async () => {
+      provider = new OpenAiProvider({ ...config, providerMaxRetries: 2, providerMaxRetryDelayMs: 1 });
       let callCount = 0;
       global.fetch = vi.fn().mockImplementation(async () => {
         callCount++;
@@ -561,6 +792,7 @@ describe('OpenAiProvider', () => {
     });
 
     it('should retry on server errors (503)', async () => {
+      provider = new OpenAiProvider({ ...config, providerMaxRetries: 1, providerMaxRetryDelayMs: 1 });
       let callCount = 0;
       global.fetch = vi.fn().mockImplementation(async () => {
         callCount++;
@@ -746,7 +978,7 @@ describe('LocalProvider', () => {
     await expect(provider.getAvailableModels()).resolves.toEqual(['qwen-35b', 'llama3.2', 'mistral']);
     expect(global.fetch).toHaveBeenCalledWith(
       'http://router:8888/v1/models',
-      expect.objectContaining({ headers: { Authorization: 'Bearer local' } }),
+      expect.objectContaining({ headers: {} }),
     );
   });
 

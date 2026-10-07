@@ -14,6 +14,9 @@ export {
   AiProvider,
   ProviderFactory,
   OpenAiProvider,
+  OpenAiResponsesProvider,
+  getOpenAiResponsesTransportStats,
+  resetOpenAiResponsesTransportStats,
   AnthropicProvider,
   GeminiProvider,
   VertexGeminiProvider,
@@ -23,8 +26,45 @@ export {
   normalizeProviderUsage,
 } from './providers/index.js';
 
+export {
+  acquireProviderWebSocket,
+  closeProviderNetworkDispatchers,
+  createProviderNetworkScope,
+  fetchProviderResponse,
+  PROVIDER_NETWORK_SCOPE,
+  ProviderNetworkError,
+} from './providers/provider-network.js';
+export type {
+  AcquireProviderWebSocketOptions,
+  ProviderFetchOptions,
+  ProviderNetworkScope,
+  ProviderWebSocket,
+  ProviderWebSocketFactory,
+  ProviderWebSocketLease,
+} from './providers/provider-network.js';
+export {
+  CredentialRedactor,
+  ProviderCredentialError,
+  ProviderCredentialService,
+  providerCredentialEnvironmentKeys,
+  redactCredentialText,
+} from './providers/credentials.js';
+export type {
+  CredentialRedactionStream,
+  ProviderApiKeyCredential,
+  ProviderCredential,
+  ProviderCredentialDescriptor,
+  ProviderCredentialServiceOptions,
+  ProviderCredentialSource,
+  ProviderOAuthCredential,
+  ProviderOAuthRefreshConfig,
+  ResolvedProviderCredential,
+  ResolveProviderCredentialOptions,
+} from './providers/credentials.js';
+
 export type {
   ChatResponse,
+  OpenAiResponsesTransportStats,
   StreamEvent,
   StreamChunkCallback,
   ChatOptions,
@@ -52,6 +92,7 @@ export {
   mergeAgentSettings,
   resolveAgentCompactionSettings,
   resolveAgentDefaultTools,
+  resolveAgentProviderNetworkSettings,
   resolveAgentResourcePaths,
   resolveAgentSettingsPath,
   selectAgentResourcePaths,
@@ -64,6 +105,7 @@ export type {
   AgentCompactionSettings,
   AgentPackageSource,
   AgentPackageSourceObject,
+  AgentProviderNetworkSettings,
   AgentQueueMode,
   AgentResourcePathField,
   AgentRetrySettings,
@@ -102,6 +144,7 @@ export type {
 export {
   SessionManager,
   JsonlSessionStore,
+  isValidSessionId,
 } from './sessions/session-manager.js';
 export type {
   SessionEntry,
@@ -170,19 +213,31 @@ export * from './prompts/index.js';
 // Extensions and package resources
 export * from './extensions/index.js';
 export * from './plugins/index.js';
+export * from './resources/index.js';
+export * from './themes/index.js';
 
 // Shared workspace security (explicit exports keep browser type-only imports tree-shakeable)
 export {
+  atomicWriteStableFile,
+  CredentialStoreError,
+  EncryptedCredentialStore,
+  credentialValuesEqual,
   FRESH_PROJECT_SCAN_DEPTH,
   FRESH_PROJECT_SCAN_MAX_DIRECTORIES,
   inspectProjectTrustResources,
+  openStableDirectoryHandle,
   ProjectTrustManager,
+  readStableDirectoryEntries,
+  readStableDirectorySnapshot,
   resolveProjectTrust,
+  StableFileError,
   WORKSPACE_BROWSE_ENTRY_LIMIT,
   WorkspaceManager,
   WorkspacePathError,
 } from './security/index.js';
 export type {
+  AtomicStableFileOptions,
+  EncryptedCredentialStoreOptions,
   DirectoryEntry,
   FreshProjectTrustBlockReason,
   FreshProjectTrustBreadth,
@@ -203,6 +258,10 @@ export type {
   ProjectTrustUpdate,
   ResolvedProjectTrust,
   ResolveProjectTrustOptions,
+  StableDirectoryListing,
+  StableDirectorySnapshot,
+  StableDirectorySnapshotEntry,
+  StableFileErrorCode,
   WorkspaceDescriptor,
   WorkspacePathKind,
 } from './security/index.js';

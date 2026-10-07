@@ -131,6 +131,34 @@ describe('shared workspace tools', () => {
     expect(listing.content).toBe('other.md\nvisible.ts');
   });
 
+  it('terminates catastrophic regular expressions at the shared grep deadline', async () => {
+    const { root, registry, context } = await setup();
+    await writeFile(path.join(root, 'hostile.txt'), `${'a'.repeat(100_000)}!\n`);
+    const startedAt = Date.now();
+
+    await expect(registry.executeTool('grep', { pattern: '(a+)+$', path: 'hostile.txt' }, context))
+      .rejects.toThrow('Regular expression evaluation exceeded its time limit.');
+    expect(Date.now() - startedAt).toBeLessThan(7_000);
+  }, 10_000);
+
+  it('cancels a worker evaluating a catastrophic regular expression', async () => {
+    const { root, registry, context } = await setup();
+    await writeFile(path.join(root, 'hostile.txt'), `${'a'.repeat(100_000)}!\n`);
+    const controller = new AbortController();
+    const execution = registry.executeTool(
+      'grep',
+      { pattern: '(a+)+$', path: 'hostile.txt' },
+      context,
+      controller.signal,
+    );
+    const timer = setTimeout(() => controller.abort(), 250);
+    try {
+      await expect(execution).rejects.toThrow('Operation aborted.');
+    } finally {
+      clearTimeout(timer);
+    }
+  }, 5_000);
+
   it('runs trusted shell commands with bounded metadata and persists the command record', async () => {
     const { root, registry, sessions, context } = await setup();
     const session = await sessions.create({ title: 'Tools', cwd: root });

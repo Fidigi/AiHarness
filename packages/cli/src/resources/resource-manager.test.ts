@@ -51,7 +51,14 @@ describe('ResourceManager', () => {
     const manager = new ResourceManager({ cwd, homeDir: home, projectTrusted: true });
     await manager.loadAll();
 
-    expect(manager.getSkill('shared')?.instructions).toBe('Projet');
+    expect(manager.getSkill('shared')).toMatchObject({
+      instructions: 'Projet',
+      provenance: { scope: 'project', source: 'auto', trusted: true },
+    });
+    expect(manager.listInventory()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'skill', name: 'shared', active: false, provenance: { scope: 'user', source: 'auto', trusted: true, origin: 'top-level', path: expect.any(String), selector: expect.any(String) } }),
+      expect.objectContaining({ kind: 'skill', name: 'shared', active: true, provenance: { scope: 'project', source: 'auto', trusted: true, origin: 'top-level', path: expect.any(String), selector: expect.any(String) } }),
+    ]));
   });
 
   it('discovers prompts and expands positional, all-argument, and default variables', async () => {
@@ -71,6 +78,7 @@ describe('ResourceManager', () => {
       'Sujet=TypeScript; niveau=simple; tout=TypeScript; défaut=TypeScript',
     );
     expect(manager.expandPrompt('explain', [])).toContain('défaut=aucun');
+    expect(manager.expandPromptLine('explain', '"Type Script"')).toContain('Sujet=Type Script');
   });
 
   it('uses the configured agent root while trust-gating project resource directories', async () => {
@@ -92,6 +100,36 @@ describe('ResourceManager', () => {
     const trusted = new ResourceManager({ cwd, homeDir: home, agentDir, projectTrusted: true });
     await trusted.loadAll();
     expect(trusted.listSkills().map(skill => skill.name)).toEqual(['project', 'user']);
+  });
+
+  it('requires an operator assertion before an agent directory inside the workspace is user scope', async () => {
+    const root = await temporaryDirectory();
+    const cwd = path.join(root, 'project');
+    const home = path.join(root, 'home');
+    const agentDir = path.join(cwd, '.custom-agent');
+    const skillFile = path.join(agentDir, 'skills', 'unsafe', 'SKILL.md');
+    await mkdir(path.dirname(skillFile), { recursive: true });
+    await writeFile(skillFile, '---\nname: unsafe\n---\nProject-controlled instructions');
+
+    const untrusted = new ResourceManager({ cwd, homeDir: home, agentDir, projectTrusted: false });
+    await untrusted.loadAll();
+    expect(untrusted.listSkills()).toEqual([]);
+
+    const operatorOwned = new ResourceManager({
+      cwd, homeDir: home, agentDir, agentDirTrusted: true, projectTrusted: false,
+    });
+    await operatorOwned.loadAll();
+    expect(operatorOwned.getSkill('unsafe')).toMatchObject({
+      instructions: 'Project-controlled instructions',
+      provenance: { scope: 'user', trusted: true },
+    });
+
+    const trusted = new ResourceManager({ cwd, homeDir: home, agentDir, projectTrusted: true });
+    await trusted.loadAll();
+    expect(trusted.getSkill('unsafe')).toMatchObject({
+      instructions: 'Project-controlled instructions',
+      provenance: { scope: 'project', trusted: true },
+    });
   });
 
   it('applies ordered resource globs, exclusions, and project precedence', async () => {
@@ -119,11 +157,16 @@ describe('ResourceManager', () => {
 
     expect(result).toMatchObject({ prompts: 1, skills: 1, errors: [] });
     expect(manager.listPrompts().map(prompt => prompt.name)).toEqual(['public']);
-    expect(manager.getSkill('shared')?.instructions).toBe('Project skill');
+    expect(manager.getSkill('shared')).toMatchObject({
+      instructions: 'Project skill',
+      provenance: { scope: 'project', source: 'settings' },
+    });
   });
 
   it('loads package skills and prompts while trust-gating project package paths', async () => {
     const root = await temporaryDirectory();
+    const cwd = path.join(root, 'workspace');
+    await mkdir(cwd, { recursive: true });
     const skillDirectory = path.join(root, 'packages', 'global', 'skills', 'review');
     const promptFile = path.join(root, 'packages', 'project', 'prompts', 'plan.md');
     await mkdir(skillDirectory, { recursive: true });
@@ -132,7 +175,7 @@ describe('ResourceManager', () => {
     await writeFile(promptFile, '---\nname: packaged-plan\n---\nPlan $@');
 
     const untrusted = new ResourceManager({
-      cwd: root,
+      cwd,
       homeDir: path.join(root, 'home'),
       projectTrusted: false,
       globalPackageSkillPaths: [skillDirectory],
@@ -143,7 +186,7 @@ describe('ResourceManager', () => {
     expect(untrusted.listPrompts()).toEqual([]);
 
     const trusted = new ResourceManager({
-      cwd: root,
+      cwd,
       homeDir: path.join(root, 'home'),
       projectTrusted: true,
       globalPackageSkillPaths: [skillDirectory],
@@ -151,6 +194,39 @@ describe('ResourceManager', () => {
     });
     await trusted.loadAll();
     expect(trusted.expandPrompt('packaged-plan', ['release'])).toBe('Plan release');
+  });
+
+  it('supports ad-hoc selectors and skips disabled or untrusted project resources before reading', async () => {
+    const root = await temporaryDirectory();
+    const skill = path.join(root, 'explicit', 'SKILL.md');
+    const prompt = path.join(root, 'explicit', 'prompt.md');
+    await mkdir(path.dirname(skill), { recursive: true });
+    await writeFile(skill, '---\nname: explicit\n---\nExplicit skill');
+    await writeFile(prompt, '---\nname: explicit-prompt\n---\nExplicit prompt');
+
+    const untrusted = new ResourceManager({
+      cwd: root, homeDir: path.join(root, 'home'), projectTrusted: false,
+      skillPaths: [skill], promptPaths: [prompt],
+    });
+    await untrusted.loadAll();
+    expect(untrusted.listInventory()).toEqual([]);
+
+    const trusted = new ResourceManager({
+      cwd: root, homeDir: path.join(root, 'home'), projectTrusted: true,
+      skillPaths: [skill], promptPaths: [prompt],
+    });
+    await trusted.loadAll();
+    expect(trusted.listInventory()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'explicit', provenance: expect.objectContaining({ scope: 'project', source: 'cli' }) }),
+      expect.objectContaining({ name: 'explicit-prompt', provenance: expect.objectContaining({ scope: 'project', source: 'cli' }) }),
+    ]));
+
+    const disabled = new ResourceManager({
+      cwd: root, homeDir: path.join(root, 'home'), projectTrusted: true,
+      skillPaths: [skill], promptPaths: [prompt], disableSkills: true, disablePrompts: true,
+    });
+    await disabled.loadAll();
+    expect(disabled.listInventory()).toEqual([]);
   });
 
   it('reports malformed or empty resources without blocking valid files', async () => {
@@ -166,5 +242,36 @@ describe('ResourceManager', () => {
 
     expect(result.skills).toBe(1);
     expect(result.errors).toHaveLength(1);
+  });
+
+  it('enforces strict skill frontmatter and directory-name identity for CLI catalogues', async () => {
+    const root = await temporaryDirectory();
+    const skills = path.join(root, '.agents', 'skills');
+    for (const name of ['valid', 'missing-description', 'mismatch']) {
+      await mkdir(path.join(skills, name), { recursive: true });
+    }
+    await writeFile(path.join(skills, 'valid', 'SKILL.md'), [
+      '---', 'name: valid', 'description: Valid skill', 'disable-model-invocation: false', '---', 'Instructions.',
+    ].join('\n'));
+    await writeFile(path.join(skills, 'missing-description', 'SKILL.md'), [
+      '---', 'name: missing-description', '---', 'Instructions.',
+    ].join('\n'));
+    await writeFile(path.join(skills, 'mismatch', 'SKILL.md'), [
+      '---', 'name: another-name', 'description: Invalid name', '---', 'Instructions.',
+    ].join('\n'));
+
+    const manager = new ResourceManager({
+      cwd: root,
+      homeDir: path.join(root, 'home'),
+      projectTrusted: true,
+      strictSkills: true,
+    });
+    const result = await manager.loadAll();
+
+    expect(manager.listSkills().map(skill => skill.name)).toEqual(['valid']);
+    expect(result.errors.map(error => error.message)).toEqual(expect.arrayContaining([
+      'Skill frontmatter requires description.',
+      'Skill name must match its directory name.',
+    ]));
   });
 });

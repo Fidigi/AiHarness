@@ -4,11 +4,17 @@
 //         /provider, /model, /export, /help, /quit
 // ============================================================
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { ExtensionRegistry, SessionManager, JsonlSessionStore } from '@ai-harness/core';
+import {
+  EncryptedCredentialStore,
+  ExtensionRegistry,
+  JsonlSessionStore,
+  ProviderCredentialService,
+  SessionManager,
+} from '@ai-harness/core';
 import { CommandHandler } from './handler';
 import type { TerminalUI } from '../tui/terminal-ui';
 
@@ -80,13 +86,18 @@ describe('CommandHandler', () => {
     manager.setStore(store);
 
     terminal = createMockTerminal();
-    handler = new CommandHandler(manager, store, terminal as any);
+    handler = new CommandHandler(manager, store, terminal as any, undefined, undefined, {
+      cwd: tempDir,
+      isProjectTrusted: () => true,
+    });
 
     // Create a default session for tests that need one
     await manager.create({ title: 'Default Session' });
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     // Cleanup temp directory
     try {
       const fs = await import('fs/promises');
@@ -747,8 +758,7 @@ describe('/export command', () => {
 
   describe('Export with file writing', () => {
     it('should export session as JSON to a specified path', async () => {
-      const tmpDir = os.tmpdir();
-      const testFile = path.join(tmpDir, `test-export-${Date.now()}.json`);
+      const testFile = path.join(tempDir, `test-export-${Date.now()}.json`);
 
       await handler.execute('/new Export Test Session');
       await captureOutput(async () => {
@@ -767,8 +777,7 @@ describe('/export command', () => {
     });
 
     it('should export session as markdown to a specified path', async () => {
-      const tmpDir = os.tmpdir();
-      const testFile = path.join(tmpDir, `test-export-${Date.now()}.md`);
+      const testFile = path.join(tempDir, `test-export-${Date.now()}.md`);
 
       await handler.execute('/new Markdown Export');
       await captureOutput(async () => {
@@ -784,7 +793,7 @@ describe('/export command', () => {
     });
 
     it('should export an escaped standalone HTML document', async () => {
-      const testFile = path.join(os.tmpdir(), `test-export-${Date.now()}.html`);
+      const testFile = path.join(tempDir, `test-export-${Date.now()}.html`);
       await handler.execute('/new HTML Export');
       const sessionId = handler.getContext().currentSessionId!;
       await manager.addMessage(sessionId, { role: 'user', content: '<script>alert(1)</script>' });
@@ -801,8 +810,7 @@ describe('/export command', () => {
     });
 
     it('should export session as JSONL to a specified path', async () => {
-      const tmpDir = os.tmpdir();
-      const testFile = path.join(tmpDir, `test-export-${Date.now()}.jsonl`);
+      const testFile = path.join(tempDir, `test-export-${Date.now()}.jsonl`);
 
       // Create a session with messages so we have content to export
       await handler.execute('/new JSONL Export');
@@ -819,6 +827,39 @@ describe('/export command', () => {
       await fs.unlink(testFile);
     });
 
+    it('supports quoted export paths containing spaces', async () => {
+      const testFile = path.join(tempDir, 'quoted export.json');
+      await handler.execute('/new Quoted Export');
+
+      await captureOutput(async () => {
+        await handler.execute(`/export json "${testFile}"`);
+      });
+
+      await expect(fs.access(testFile)).resolves.toBeUndefined();
+    });
+
+    it('rejects export destinations outside the approved workspace', async () => {
+      const outside = path.join(path.dirname(tempDir), `outside-export-${Date.now()}.json`);
+      await captureOutput(async () => {
+        await handler.execute(`/export json "${outside}"`);
+      });
+
+      await expect(fs.access(outside)).rejects.toThrow();
+    });
+
+    it('does not follow a symlink export destination', async () => {
+      const target = path.join(tempDir, 'export-target.json');
+      const linked = path.join(tempDir, 'export-link.json');
+      await fs.writeFile(target, 'unchanged');
+      await fs.symlink(target, linked);
+
+      await captureOutput(async () => {
+        await handler.execute(`/export json "${linked}"`);
+      });
+
+      await expect(fs.readFile(target, 'utf8')).resolves.toBe('unchanged');
+    });
+
     it('should return error for unsupported export format', async () => {
       const output = await captureOutput(async () => {
         await handler.execute('/export xml /tmp/test.xml');
@@ -833,8 +874,7 @@ describe('/export command', () => {
 
   describe('Import from JSONL', () => {
     it('should import a single-session JSONL file', async () => {
-      const tmpDir = os.tmpdir();
-      const testFile = path.join(tmpDir, `test-import-${Date.now()}.jsonl`);
+      const testFile = path.join(tempDir, `test-import-${Date.now()}.jsonl`);
 
       // Create a valid JSONL file manually
       await fs.writeFile(testFile, [
@@ -857,9 +897,55 @@ describe('/export command', () => {
       await fs.unlink(testFile);
     });
 
+    it('supports quoted import paths containing spaces', async () => {
+      const testFile = path.join(tempDir, 'quoted import.jsonl');
+      await fs.writeFile(testFile, JSON.stringify({
+        id: 'quoted-import-message', role: 'user', content: 'quoted', timestamp: new Date().toISOString(),
+      }));
+
+      await captureOutput(async () => {
+        await handler.execute(`/import "${testFile}"`);
+      });
+
+      expect(manager.list().some(session => session.messages.some(message => message.id === 'quoted-import-message'))).toBe(true);
+    });
+
+    it('rejects symlinked import files', async () => {
+      const target = path.join(tempDir, 'import-target.jsonl');
+      const linked = path.join(tempDir, 'import-link.jsonl');
+      await fs.writeFile(target, JSON.stringify({
+        id: 'symlink-import-message', role: 'user', content: 'unsafe', timestamp: new Date().toISOString(),
+      }));
+      await fs.symlink(target, linked);
+      const beforeCount = manager.list().length;
+
+      const output = await captureOutput(async () => {
+        await handler.execute(`/import "${linked}"`);
+      });
+
+      expect(output).toContain('Import failed');
+      expect(manager.list()).toHaveLength(beforeCount);
+    });
+
+    it('rejects import files outside the approved workspace', async () => {
+      const outside = path.join(path.dirname(tempDir), `outside-import-${Date.now()}.jsonl`);
+      await fs.writeFile(outside, JSON.stringify({
+        id: 'outside-import-message', role: 'user', content: 'unsafe', timestamp: new Date().toISOString(),
+      }));
+      const beforeCount = manager.list().length;
+      try {
+        const output = await captureOutput(async () => {
+          await handler.execute(`/import "${outside}"`);
+        });
+        expect(output).toContain('Import failed');
+        expect(manager.list()).toHaveLength(beforeCount);
+      } finally {
+        await fs.rm(outside, { force: true });
+      }
+    });
+
     it('should import a multi-session JSON array file', async () => {
-      const tmpDir = os.tmpdir();
-      const testFile = path.join(tmpDir, `test-import-${Date.now()}.json`);
+      const testFile = path.join(tempDir, `test-import-${Date.now()}.json`);
 
       // Create a valid multi-session JSON file
       await fs.writeFile(testFile, JSON.stringify([
@@ -885,6 +971,38 @@ describe('/export command', () => {
       await fs.unlink(testFile);
     });
 
+    it('prevalidates multi-session imports and rolls back creations after a later persistence failure', async () => {
+      const malformedFile = path.join(tempDir, 'malformed-multi-import.json');
+      await fs.writeFile(malformedFile, JSON.stringify([
+        { id: 'prevalidated-1', messages: [{ id: 'ok-1', role: 'user', content: 'ok', timestamp: Date.now() }] },
+        { id: 'prevalidated-2', messages: [{ id: 'bad-1', role: 'invalid', content: 'bad', timestamp: Date.now() }] },
+      ]));
+      const beforeMalformed = manager.list().length;
+      const malformedOutput = await captureOutput(() => handler.execute(`/import "${malformedFile}"`));
+      expect(malformedOutput).toContain('Import failed');
+      expect(manager.list()).toHaveLength(beforeMalformed);
+
+      const rollbackFile = path.join(tempDir, 'rollback-multi-import.json');
+      await fs.writeFile(rollbackFile, JSON.stringify([
+        { id: 'rollback-1', messages: [{ id: 'rollback-message-1', role: 'user', content: 'one', timestamp: Date.now() }] },
+        { id: 'rollback-2', messages: [{ id: 'rollback-message-2', role: 'assistant', content: 'two', timestamp: Date.now() }] },
+      ]));
+      const create = manager.create.bind(manager);
+      let createCalls = 0;
+      const createSpy = vi.spyOn(manager, 'create').mockImplementation(options => {
+        createCalls++;
+        return createCalls === 2 ? Promise.reject(new Error('simulated persistence failure')) : create(options);
+      });
+      try {
+        const rollbackOutput = await captureOutput(() => handler.execute(`/import "${rollbackFile}"`));
+        expect(rollbackOutput).toContain('Import failed');
+        expect(manager.get('rollback-1')).toBeUndefined();
+        expect(manager.get('rollback-2')).toBeUndefined();
+      } finally {
+        createSpy.mockRestore();
+      }
+    });
+
     it('should handle missing import file gracefully', async () => {
       const output = await captureOutput(async () => {
         await handler.execute('/import /nonexistent/path/file.jsonl');
@@ -893,8 +1011,7 @@ describe('/export command', () => {
     });
 
     it('should return error for empty import file', async () => {
-      const tmpDir = os.tmpdir();
-      const testFile = path.join(tmpDir, `test-import-${Date.now()}.jsonl`);
+      const testFile = path.join(tempDir, `test-import-${Date.now()}.jsonl`);
       await fs.writeFile(testFile, ''); // Empty file
 
       await captureOutput(async () => {
@@ -943,6 +1060,141 @@ describe('/export command', () => {
       
       // Original sessions should still exist
       expect(manager.list().length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('Theme and credential commands', () => {
+    it('lists and switches themes without rebuilding the handler', async () => {
+      const select = vi.fn(async (name: string) => name);
+      const themed = new CommandHandler(manager, store, terminal as any, undefined, undefined, {
+        cwd: tempDir,
+        themeControl: {
+          current: () => 'dark',
+          list: async () => [{
+            name: 'ocean', mode: 'dark', active: false, valid: true,
+            provenance: {
+              scope: 'user', source: 'package', origin: 'top-level', path: '/themes/ocean.json',
+              selector: '/themes/ocean.json', trusted: true,
+            },
+          }],
+          select,
+        },
+      });
+
+      const listed = await captureOutput(() => themed.execute('/theme'));
+      expect(listed).toContain('ocean');
+      expect(listed).toContain('user/package');
+      await themed.execute('/theme ocean');
+      expect(select).toHaveBeenCalledWith('ocean');
+    });
+
+    it('refuses OAuth before network access when persistent credential storage is unavailable', async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const authenticated = new CommandHandler(manager, store, terminal as any, undefined, undefined, {
+        cwd: tempDir,
+        credentialService: new ProviderCredentialService(),
+      });
+
+      const output = await captureOutput(() => authenticated.execute('/login openai'));
+      expect(output).toContain('stockage chiffré persistant');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('persists OAuth login metadata, logs out, and never prints the token accidentally', async () => {
+      const credentialStore = new EncryptedCredentialStore(
+        path.join(tempDir, 'credentials.enc'),
+        'correct horse battery staple',
+      );
+      const credentials = new ProviderCredentialService({ store: credentialStore });
+      await credentials.load();
+      vi.stubEnv('AI_HARNESS_OAUTH_OPENAI_DEVICE_URL', 'https://auth.example/device');
+      vi.stubEnv('AI_HARNESS_OAUTH_OPENAI_TOKEN_URL', 'https://auth.example/token');
+      vi.stubEnv('AI_HARNESS_OAUTH_OPENAI_CLIENT_ID', 'public-client');
+      const secret = 'short-oauth-secret';
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({
+          device_code: 'device-code', user_code: 'ABCD',
+          verification_uri: 'https://auth.example/activate', expires_in: 10, interval: 0.001,
+        }), { status: 200, headers: { 'content-type': 'application/json' } }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({
+          access_token: secret, refresh_token: 'refresh-value', expires_in: 3600, token_type: 'Bearer',
+        }), { status: 200, headers: { 'content-type': 'application/json' } }));
+      vi.stubGlobal('fetch', fetchMock);
+      const authTerminal = {
+        ...terminal,
+        writeOutput: (message: string) => { process.stdout.write(`${message}\n`); },
+        writeExplicitCredentialReveal: (message: string) => { process.stdout.write(`${message}\n`); },
+      };
+      const authenticated = new CommandHandler(manager, store, authTerminal as any, undefined, undefined, {
+        cwd: tempDir,
+        credentialService: credentials,
+        allowCredentialReveal: true,
+      });
+
+      const login = await captureOutput(() => authenticated.execute('/login openai'));
+      expect(login).toContain('Authentification OAuth réussie');
+      expect(login).not.toContain(secret);
+      expect(credentials.list()).toEqual([
+        expect.objectContaining({ provider: 'openai', type: 'oauth', source: 'encrypted-store', refreshable: true }),
+      ]);
+
+      const descriptors = await captureOutput(() => authenticated.execute('/credentials'));
+      expect(descriptors).toContain('openai');
+      expect(descriptors).not.toContain(secret);
+      const revealed = await captureOutput(() => authenticated.execute('/credential reveal openai'));
+      expect(revealed).toContain(secret);
+      const rejectedReveal = await captureOutput(() => authenticated.execute('/credential reveal openai extra'));
+      expect(rejectedReveal).toContain('Usage:');
+      expect(rejectedReveal).not.toContain(secret);
+      const rejectedPrefixReveal = await captureOutput(() => authenticated.execute('/cred reveal openai'));
+      expect(rejectedPrefixReveal).toContain('Ambiguous command');
+      expect(rejectedPrefixReveal).not.toContain(secret);
+
+      const logout = await captureOutput(() => authenticated.execute('/logout openai'));
+      expect(logout).toContain('supprimés');
+      expect(logout).not.toContain(secret);
+      expect(credentials.list()).toEqual([]);
+    });
+  });
+
+  describe('Share command', () => {
+    it('uses a bounded no-redirect authenticated request and validates its response', async () => {
+      vi.stubEnv('AI_HARNESS_SERVER_URL', 'https://server.example/base');
+      vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'share-auth-secret');
+      const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
+        url: '/share/public-token', expiresInHours: 2,
+      }), { status: 201, headers: { 'content-type': 'application/json' } }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const output = await captureOutput(() => handler.execute('/share 2'));
+
+      expect(output).toContain('/share/public-token');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [requestUrl, options] = fetchMock.mock.calls[0]!;
+      expect(String(requestUrl)).toMatch(/^https:\/\/server\.example\/base\/api\/sessions\/.+\/share$/u);
+      expect(options).toMatchObject({
+        method: 'POST', redirect: 'manual',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer share-auth-secret' },
+        body: JSON.stringify({ ttlHours: 2 }),
+      });
+    });
+
+    it('rejects unsafe lifetimes and does not reflect redirect bodies or follow them', async () => {
+      vi.stubEnv('AI_HARNESS_SERVER_URL', 'https://server.example');
+      const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response('hostile-response-secret', {
+        status: 302, headers: { location: 'https://attacker.invalid/' },
+      }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const invalid = await captureOutput(() => handler.execute('/share 0'));
+      expect(invalid).toContain('1 et 168');
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      const redirected = await captureOutput(() => handler.execute('/share 24'));
+      expect(redirected).toContain('(302)');
+      expect(redirected).not.toContain('hostile-response-secret');
+      expect(fetchMock).toHaveBeenCalledWith(expect.any(URL), expect.objectContaining({ redirect: 'manual' }));
     });
   });
 

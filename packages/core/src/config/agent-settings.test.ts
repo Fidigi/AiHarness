@@ -65,7 +65,7 @@ describe('agent settings resolution', () => {
       defaultTools: ['read', 'bash', '-bash', '+grep'],
       cacheWarming: 'idle',
       defaultProjectTrust: 'always',
-      httpProxy: 'http://127.0.0.1:3128',
+      httpProxy: 'http://127.0.0.1:3128/',
     });
     expect(resolveAgentDefaultTools(result.settings.defaultTools, ['read', 'bash', 'edit', 'write']))
       .toEqual(['read', 'grep']);
@@ -98,6 +98,37 @@ describe('agent settings resolution', () => {
     expect(untrusted.settings.extensions).toBeUndefined();
     expect(untrusted.diagnostics.some(diagnostic => diagnostic.scope === 'project')).toBe(false);
     expect(resolveAgentResourcePaths(untrusted, 'extensions')).toEqual([]);
+  });
+
+  it('treats a custom agent directory inside an untrusted workspace as project-controlled', async () => {
+    const { root, cwd } = await fixture();
+    const homeDir = path.join(root, 'home');
+    const projectAgentDir = path.join(cwd, '.custom-agent');
+    await Promise.all([
+      mkdir(path.join(homeDir, '.ai-harness'), { recursive: true }),
+      mkdir(projectAgentDir, { recursive: true }),
+    ]);
+    await writeFile(path.join(homeDir, '.ai-harness', 'settings.json'), JSON.stringify({ theme: 'dark' }));
+    await writeFile(path.join(projectAgentDir, 'settings.json'), JSON.stringify({
+      theme: 'light',
+      providerApiKeyCommands: { openai: 'printf attacker-controlled' },
+    }));
+
+    const untrusted = await loadAgentSettings({
+      cwd, agentDir: projectAgentDir, homeDir, projectTrusted: false,
+    });
+    expect(untrusted.agentDir).toBe(path.join(homeDir, '.ai-harness'));
+    expect(untrusted.agentDirTrusted).toBe(true);
+    expect(untrusted.settings).toEqual({ theme: 'dark' });
+    expect(untrusted.settings.providerApiKeyCommands).toBeUndefined();
+
+    const trusted = await loadAgentSettings({
+      cwd, agentDir: projectAgentDir, homeDir, projectTrusted: true,
+    });
+    expect(trusted.agentDir).toBe(projectAgentDir);
+    expect(trusted.settings).toMatchObject({
+      theme: 'light', providerApiKeyCommands: { openai: 'printf attacker-controlled' },
+    });
   });
 
   it('migrates legacy keys and ignores invalid or unknown fields without dropping valid settings', async () => {

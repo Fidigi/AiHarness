@@ -109,6 +109,14 @@ export interface ProviderConfig {
   apiKey?: string;
   model?: string;
   baseUrl?: string;
+  /** Shared network settings resolved from agent settings. */
+  transport?: 'auto' | 'sse' | 'websocket' | 'websocket-cached';
+  httpProxy?: string;
+  httpIdleTimeoutMs?: number;
+  websocketConnectTimeoutMs?: number;
+  requestTimeoutMs?: number;
+  providerMaxRetries?: number;
+  providerMaxRetryDelayMs?: number;
   [key: string]: unknown;
 }
 
@@ -225,6 +233,15 @@ export interface SkillCatalogEntry {
   trusted: boolean;
   defaultModelInvocable: boolean;
   modelInvocable: boolean;
+  /** Core discovery provenance; contains metadata only, never resource contents. */
+  provenance?: {
+    scope: 'user' | 'project' | 'temporary';
+    source: 'auto' | 'settings' | 'package' | 'cli';
+    origin: 'top-level';
+    path: string;
+    selector: string;
+    trusted: boolean;
+  };
 }
 
 export interface SkillDiagnostic {

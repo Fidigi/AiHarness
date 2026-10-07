@@ -1,9 +1,10 @@
 import path from 'node:path';
 import {
+  CredentialRedactor,
   loadAgentSettings,
   PluginService,
   ProjectTrustManager,
-  resolveAgentDirectory,
+  resolvePreTrustAgentDirectory,
   resolveProjectTrust,
   WorkspaceManager,
 } from '@ai-harness/core';
@@ -234,11 +235,24 @@ function formatUpdates(updates: PluginUpdateResult[]): string {
 
 /** Execute package administration without starting a session, provider, extension, or TUI. */
 export async function runPackageCommand(args: readonly string[]): Promise<number> {
+  const redactor = new CredentialRedactor();
+  redactor.addEnvironment(process.env);
+  for (const argument of args) {
+    try {
+      const candidate = new URL(argument);
+      if (candidate.username || candidate.password) {
+        redactor.add(argument);
+        redactor.add(candidate.username ? decodeURIComponent(candidate.username) : undefined);
+        redactor.add(candidate.password ? decodeURIComponent(candidate.password) : undefined);
+      }
+    } catch { /* Non-URL package selectors are not credentials. */ }
+  }
+  const safeText = (value: unknown): string => redactor.redact(value instanceof Error ? value.message : String(value));
   let parsed: PackageCommandArguments;
   try {
     parsed = parsePackageCommandArguments(args);
   } catch (error) {
-    process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(`Error: ${safeText(error)}\n`);
     return 2;
   }
   if (parsed.help || !parsed.action) {
@@ -248,13 +262,14 @@ export async function runPackageCommand(args: readonly string[]): Promise<number
 
   try {
     const cwd = process.cwd();
-    const agentDir = resolveAgentDirectory();
     const workspaceManager = new WorkspaceManager({ allowedRoots: [cwd], defaultCwd: cwd });
     await workspaceManager.initialize();
     const canonicalCwd = await workspaceManager.getDefaultCwd();
-    const trustManager = new ProjectTrustManager(path.join(agentDir, 'trust.json'));
+    const trustManager = new ProjectTrustManager(
+      path.join(resolvePreTrustAgentDirectory(canonicalCwd), 'trust.json'),
+    );
     await trustManager.load();
-    const bootstrapSettings = await loadAgentSettings({ cwd: canonicalCwd, projectTrusted: false, agentDir });
+    const bootstrapSettings = await loadAgentSettings({ cwd: canonicalCwd, projectTrusted: false });
     const trust = await resolveProjectTrust({
       cwd: canonicalCwd,
       trustManager,
@@ -266,6 +281,14 @@ export async function runPackageCommand(args: readonly string[]): Promise<number
       cwd: canonicalCwd,
       projectTrusted: trust.resourceTrusted,
     };
+    const resolvedSettings = await loadAgentSettings({
+      cwd: canonicalCwd,
+      projectTrusted: trust.resourceTrusted,
+    });
+    const agentDir = resolvedSettings.agentDir;
+    if (!resolvedSettings.agentDirTrusted) {
+      throw new Error('The agent data directory requires explicit project trust.');
+    }
     const service = new PluginService(
       workspaceManager,
       trustManager,
@@ -313,12 +336,12 @@ export async function runPackageCommand(args: readonly string[]): Promise<number
       }
     }
 
-    if (parsed.json) process.stdout.write(`${JSON.stringify(output)}\n`);
-    else if (Array.isArray(output)) process.stdout.write(`${formatUpdates(output)}\n`);
-    else process.stdout.write(`${formatCatalog(output, parsed.scope)}\n`);
+    if (parsed.json) process.stdout.write(`${JSON.stringify(redactor.redactJson(output))}\n`);
+    else if (Array.isArray(output)) process.stdout.write(`${redactor.redact(formatUpdates(output))}\n`);
+    else process.stdout.write(`${redactor.redact(formatCatalog(output, parsed.scope))}\n`);
     return 0;
   } catch (error) {
-    process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(`Error: ${safeText(error)}\n`);
     return 1;
   }
 }

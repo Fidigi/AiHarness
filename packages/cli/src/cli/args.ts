@@ -21,6 +21,10 @@ export interface CliArguments {
   theme?: string;
   tuiMode?: CliTerminalMode;
   extensions: string[];
+  skills: string[];
+  promptTemplates: string[];
+  noSkills: boolean;
+  noPromptTemplates: boolean;
   tools?: string[];
   excludeTools?: string[];
   noTools: boolean;
@@ -72,6 +76,10 @@ export function parseCliArguments(args: readonly string[]): CliArguments {
     resume: false,
     noSession: false,
     extensions: [],
+    skills: [],
+    promptTemplates: [],
+    noSkills: false,
+    noPromptTemplates: false,
     noTools: false,
     noBuiltinTools: false,
     noContextFiles: false,
@@ -82,17 +90,20 @@ export function parseCliArguments(args: readonly string[]): CliArguments {
 
   for (let index = 0; index < args.length; index++) {
     const raw = args[index];
+    if (!optionsEnded && raw.startsWith('@') && raw.length > 1) {
+      result.fileArgs.push(raw.slice(1));
+      continue;
+    }
     if (!optionsEnded && raw === '--') {
       optionsEnded = true;
       continue;
     }
     if (optionsEnded || !raw.startsWith('-') || raw === '-') {
+      // The first positional argument starts prompt input. Never reinterpret later
+      // prompt tokens (for example `/model --provider fake`) as process options.
+      optionsEnded = true;
       if (raw.startsWith('@') && raw.length > 1) result.fileArgs.push(raw.slice(1));
       else result.messages.push(raw);
-      continue;
-    }
-    if (raw.startsWith('@')) {
-      result.fileArgs.push(raw.slice(1));
       continue;
     }
 
@@ -134,6 +145,10 @@ export function parseCliArguments(args: readonly string[]): CliArguments {
       case '--no-session': booleanOption(); result.noSession = true; break;
       case '--theme': result.theme = value(); break;
       case '--extension': case '-e': result.extensions.push(value()); break;
+      case '--skill': result.skills.push(value()); break;
+      case '--prompt-template': result.promptTemplates.push(value()); break;
+      case '--no-skills': case '-ns': booleanOption(); result.noSkills = true; break;
+      case '--no-prompt-templates': case '-np': booleanOption(); result.noPromptTemplates = true; break;
       case '--tui-mode': {
         const mode = value();
         if (mode !== 'regular' && mode !== 'fullscreen') {
@@ -261,7 +276,7 @@ export function cliVersion(): string {
 }
 
 export function formatCliHelp(): string {
-  return `AiHarness - unified AI coding agent\n\nUsage:\n  ai-harness [options] [--] [@files...] [messages...]\n  ai-harness package <list|install|configure|enable|disable|remove|check|update|reload>\n\nOptions:\n  -p, --print                    Run supplied prompts, print only the final response, then exit\n  --mode <text|json|rpc>         Select text, JSONL event, or RPC output\n  --rpc                          Backward-compatible alias for --mode rpc\n  --provider <name>              Select a provider (requires --model or --models)\n  --model <[provider/]model>     Select an exact/fuzzy model, optionally suffixed with :thinking\n  --models <patterns>            Scope startup and cycling with IDs, fuzzy matches, globs, and :thinking\n  --list-models [search]         List configured-provider models, optionally fuzzy-filtered, then exit\n  --api-key <key>                Non-persistent credential override (requires --model or --models)\n  --thinking <level>             off|minimal|low|medium|high|xhigh|max\n  --system-prompt <text|path>    Replace the default system prompt for this run\n  --append-system-prompt <value> Append text or an existing file (repeatable)\n  -nc, --no-context-files        Disable AGENTS.md and CLAUDE.md discovery\n  -a, --approve                  Trust this project for this process only\n  -na, --no-approve              Refuse this project for this process only\n  -t, --tools <names>            Replace active tools with a comma-separated allowlist\n  -xt, --exclude-tools <names>   Disable comma-separated tool names after selection\n  -nbt, --no-builtin-tools       Disable default built-ins but retain extension tools\n  -nt, --no-tools                Disable all tools by default\n  -c, --continue                 Continue the newest session for this workspace\n  -r, --resume                   Select a stored session interactively\n  --session <path|id>            Open a session file or ID prefix\n  --session-id <id>              Open or create an exact session ID\n  --fork <path|id>               Fork a stored session before startup\n  --session-dir <dir>            Override the session storage directory\n  -n, --name <name>              Name or rename the startup session\n  --no-session                   Keep the session in memory only\n  --tui-mode <mode>              fullscreen or regular\n  --fullscreen                   Legacy fullscreen alias\n  --regular, --no-fullscreen     Legacy regular-mode aliases\n  --theme <name|file>            Select dark, light, or a custom theme file\n  -e, --extension <path>         Load an extension file or directory (repeatable)\n  -h, --help                     Show this help and exit\n  -v, --version                  Show the version and exit\n  --                             Stop option parsing\n\nPackage administration:\n  package --help                 Show package sources, scopes, filters, and action options\n  install/remove/uninstall/update/list
+  return `AiHarness - unified AI coding agent\n\nUsage:\n  ai-harness [options] [--] [@files...] [messages...]\n  ai-harness package <list|install|configure|enable|disable|remove|check|update|reload>\n\nOptions:\n  -p, --print                    Run supplied prompts, print only the final response, then exit\n  --mode <text|json|rpc>         Select text, JSONL event, or RPC output\n  --rpc                          Backward-compatible alias for --mode rpc\n  --provider <name>              Select a provider (requires --model or --models)\n  --model <[provider/]model>     Select an exact/fuzzy model, optionally suffixed with :thinking\n  --models <patterns>            Scope startup and cycling with IDs, fuzzy matches, globs, and :thinking\n  --list-models [search]         List configured-provider models, optionally fuzzy-filtered, then exit\n  --api-key <key>                Non-persistent credential override (requires --model or --models)\n  --thinking <level>             off|minimal|low|medium|high|xhigh|max\n  --system-prompt <text|path>    Replace the default system prompt for this run\n  --append-system-prompt <value> Append text or an existing file (repeatable)\n  -nc, --no-context-files        Disable AGENTS.md and CLAUDE.md discovery\n  -a, --approve                  Trust this project for this process only\n  -na, --no-approve              Refuse this project for this process only\n  -t, --tools <names>            Replace active tools with a comma-separated allowlist\n  -xt, --exclude-tools <names>   Disable comma-separated tool names after selection\n  -nbt, --no-builtin-tools       Disable default built-ins but retain extension tools\n  -nt, --no-tools                Disable all tools by default\n  -c, --continue                 Continue the newest session for this workspace\n  -r, --resume                   Select a stored session interactively\n  --session <path|id>            Open a session file or ID prefix\n  --session-id <id>              Open or create an exact session ID\n  --fork <path|id>               Fork a stored session before startup\n  --session-dir <dir>            Override the session storage directory\n  -n, --name <name>              Name or rename the startup session\n  --no-session                   Keep the session in memory only\n  --tui-mode <mode>              fullscreen or regular\n  --fullscreen                   Legacy fullscreen alias\n  --regular, --no-fullscreen     Legacy regular-mode aliases\n  --theme <name|file>            Select dark, light, or a custom theme file\n  -e, --extension <path>         Load an extension file or directory (repeatable)\n  --skill <path>                 Add a trusted skill file/directory selector (repeatable)\n  --prompt-template <path>       Add a trusted prompt file/directory selector (repeatable)\n  -ns, --no-skills               Disable skill discovery for this run\n  -np, --no-prompt-templates     Disable prompt-template discovery for this run\n  -h, --help                     Show this help and exit\n  -v, --version                  Show the version and exit\n  --                             Stop option parsing\n\nPackage administration:\n  package --help                 Show package sources, scopes, filters, and action options\n  install/remove/uninstall/update/list
                                  Short aliases for the corresponding package actions\n  config                         Short alias for package configure\n\nInput:\n  Positional messages are sent in order. @path prepends a bounded UTF-8 text file\n  or supported image to the first message. Piped stdin is prepended in print mode.\n\nConfiguration:\n  User settings load from <AI_HARNESS_AGENT_DIR>/settings.json or ~/.ai-harness/settings.json.\n  Trusted project settings load from .ai-harness/settings.json; CLI options take precedence.\n  AI_HARNESS_SESSIONS_DIR overrides settings sessionDir. Interactive startup asks only\n  when protected project resources need a decision; headless ask mode refuses safely.\n  Use /settings for effective sources and /reload after changing settings or trust.\n\nInstructions:\n  User files load from the same agent directory. Project context and .ai-harness\n  system files require trust; use /reload after changing trust interactively.\n`;
 }
 

@@ -1,4 +1,5 @@
 import type { AiProvider, ChatResponse, ChatToolDefinition } from '../providers/index.js';
+import type { CredentialRedactionStream } from '../providers/credentials.js';
 import type {
   ExtensionInteractionRequest,
   ExtensionInteractionResponse,
@@ -58,6 +59,10 @@ export interface AgentRuntimeOptions {
   isProjectTrusted?(cwd: string): boolean | Promise<boolean>;
   onUsage?(provider: string, model: string | undefined, usage: NonNullable<ChatResponse['usage']>): number | undefined;
   onNotification?(category: 'completion' | 'attention', run: AgentRunSnapshot): void | Promise<void>;
+  /** Scrub process-local credentials before errors or extension output reach memory, sessions, or APIs. */
+  redactText?(value: string): string;
+  redactJson?<T>(value: T): T;
+  createTextRedactor?(): CredentialRedactionStream;
 }
 
 interface ActiveRun {
@@ -120,20 +125,24 @@ function validateInteractionResponse(
   return { cancelled: false, value: structuredClone(value) };
 }
 
-function interactionRequest(value: ExtensionInteractionRequest): ExtensionInteractionRequest {
-  const title = String(value.title ?? '').trim().slice(0, 200);
+function interactionRequest(
+  value: ExtensionInteractionRequest,
+  redactText: (value: string) => string,
+): ExtensionInteractionRequest {
+  const redact = (input: unknown, limit: number): string => redactText(String(input ?? '').slice(0, limit));
+  const title = redact(value.title, 200).trim();
   if (!title) throw new Error('Extension interaction title is required.');
   if (!['confirm', 'input', 'select', 'editor', 'custom'].includes(value.kind)) {
     throw new Error('Unsupported extension interaction kind.');
   }
   const boundedOptions = value.options?.slice(0, 100).map(option => ({
-    value: String(option.value).slice(0, 500),
-    label: String(option.label).slice(0, 500),
-    ...(option.description ? { description: String(option.description).slice(0, 2_000) } : {}),
+    value: redact(option.value, 500),
+    label: redact(option.label, 500),
+    ...(option.description ? { description: redact(option.description, 2_000) } : {}),
   }));
   const fieldNames = new Set<string>();
   const boundedFields = value.fields?.slice(0, 50).map(field => {
-    const name = String(field.name);
+    const name = redact(field.name, 100);
     if (!/^[A-Za-z][A-Za-z0-9_-]{0,99}$/.test(name) || fieldNames.has(name)) {
       throw new Error('Extension interaction field names must be unique identifiers.');
     }
@@ -143,23 +152,23 @@ function interactionRequest(value: ExtensionInteractionRequest): ExtensionIntera
     fieldNames.add(name);
     return {
       name,
-      label: String(field.label).slice(0, 500),
+      label: redact(field.label, 500),
       type: field.type,
       ...(field.required ? { required: true } : {}),
-      ...(field.placeholder ? { placeholder: String(field.placeholder).slice(0, 1_000) } : {}),
+      ...(field.placeholder ? { placeholder: redact(field.placeholder, 1_000) } : {}),
       ...(field.options ? { options: field.options.slice(0, 100).map(option => ({
-        value: String(option.value).slice(0, 500), label: String(option.label).slice(0, 500),
+        value: redact(option.value, 500), label: redact(option.label, 500),
       })) } : {}),
     };
   });
   return {
     kind: value.kind,
     title,
-    ...(value.message ? { message: String(value.message).slice(0, 10_000) } : {}),
-    ...(value.placeholder ? { placeholder: String(value.placeholder).slice(0, 1_000) } : {}),
+    ...(value.message ? { message: redact(value.message, 10_000) } : {}),
+    ...(value.placeholder ? { placeholder: redact(value.placeholder, 1_000) } : {}),
     ...(boundedOptions?.length ? { options: boundedOptions } : {}),
     ...(boundedFields?.length ? { fields: boundedFields } : {}),
-    ...(value.output ? { output: String(value.output).slice(0, 100_000) } : {}),
+    ...(value.output ? { output: redact(value.output, 100_000) } : {}),
     ...(value.ansi ? { ansi: true } : {}),
   };
 }
@@ -180,6 +189,9 @@ export class AgentRuntime {
   private readonly isProjectTrusted: NonNullable<AgentRuntimeOptions['isProjectTrusted']>;
   private readonly onUsage?: AgentRuntimeOptions['onUsage'];
   private readonly onNotification?: AgentRuntimeOptions['onNotification'];
+  private readonly redactText: (value: string) => string;
+  private readonly redactJson: <T>(value: T) => T;
+  private readonly createTextRedactor?: () => CredentialRedactionStream;
 
   constructor(options: AgentRuntimeOptions) {
     this.sessionManager = options.sessionManager;
@@ -189,6 +201,9 @@ export class AgentRuntime {
     this.isProjectTrusted = options.isProjectTrusted ?? (() => false);
     this.onUsage = options.onUsage;
     this.onNotification = options.onNotification;
+    this.redactText = options.redactText ?? (value => value);
+    this.redactJson = options.redactJson ?? (value => value);
+    this.createTextRedactor = options.createTextRedactor;
   }
 
   async start(request: StartAgentRunRequest): Promise<AgentRunSnapshot> {
@@ -206,12 +221,24 @@ export class AgentRuntime {
       throw new Error('Un agent est déjà actif pour cette session.');
     }
 
+    const effectiveRequest: StartAgentRunRequest = {
+      ...request,
+      provider: this.redactText(request.provider),
+      input: this.redactText(request.input),
+      blocks: request.blocks ? this.redactJson(request.blocks) : undefined,
+      model: request.model ? this.redactText(request.model) : undefined,
+      systemPrompt: request.systemPrompt ? this.redactText(request.systemPrompt) : undefined,
+      allowedTools: request.allowedTools?.map(value => this.redactText(value)),
+      allowedSkills: request.allowedSkills?.map(value => this.redactText(value)),
+      allowedExtensions: request.allowedExtensions?.map(value => this.redactText(value)),
+    };
     const hook = await this.extensionRegistry.runBefore('before:agent', {
-      sessionId: request.sessionId,
-      provider: request.provider,
-      input: request.input,
+      sessionId: effectiveRequest.sessionId,
+      provider: this.redactText(effectiveRequest.provider),
+      input: effectiveRequest.input,
     });
-    if (hook.cancelled) throw new Error(hook.reason || "Exécution annulée par une extension.");
+    if (hook.cancelled) throw new Error(this.redactText(hook.reason || "Exécution annulée par une extension."));
+    hook.data = this.redactJson(hook.data);
     const providerName = hook.data.provider;
     const provider = await this.resolveProvider(providerName);
     if (!provider?.validateConfig()) throw new Error(`Provider indisponible : ${providerName}`);
@@ -226,7 +253,7 @@ export class AgentRuntime {
       workspaceId: request.workspaceId ?? session.workspaceId,
       cwd: request.cwd,
       provider: providerName,
-      model: request.model ?? session.model,
+      model: effectiveRequest.model ?? session.model,
       phase: 'queued',
       steerQueue: [],
       followUpQueue: [],
@@ -245,36 +272,36 @@ export class AgentRuntime {
     await this.sessionManager.update(session.id, {
       cwd: request.cwd,
       workspaceId: request.workspaceId,
-      agentId: request.agentId ?? runId,
-      ...(request.persistSettings === false ? {} : {
-        model: request.model,
+      agentId: effectiveRequest.agentId ?? runId,
+      ...(effectiveRequest.persistSettings === false ? {} : {
+        model: effectiveRequest.model,
         thinking: request.thinking,
         toolPreset: request.toolPreset,
-        ...(request.systemPrompt !== undefined
-          ? { metadata: { ...session.metadata, systemPrompt: request.systemPrompt } }
+        ...(effectiveRequest.systemPrompt !== undefined
+          ? { metadata: { ...session.metadata, systemPrompt: effectiveRequest.systemPrompt } }
           : {}),
       }),
     });
     await this.sessionManager.addMessage(session.id, {
       role: 'user',
       content: hook.data.input,
-      blocks: request.blocks?.length ? request.blocks : [{ type: 'text', text: hook.data.input }],
-      agentId: request.agentId ?? runId,
+      blocks: effectiveRequest.blocks?.length ? effectiveRequest.blocks : [{ type: 'text', text: hook.data.input }],
+      agentId: effectiveRequest.agentId ?? runId,
       metadata: { queueKind: 'initial' },
     }, { signal: controller.signal });
     this.runs.set(runId, active);
     this.sessionRuns.set(session.id, runId);
     this.publish(active, 'run.queued', { input: hook.data.input });
 
-    void this.execute(active, request, provider).finally(() => {
+    void this.execute(active, effectiveRequest, provider).finally(() => {
       active.resolveCompletion();
     });
-    return cloneSnapshot(snapshot);
+    return this.redactJson(cloneSnapshot(snapshot));
   }
 
   getRun(runId: string): AgentRunSnapshot | undefined {
     const run = this.runs.get(runId);
-    return run ? cloneSnapshot(run.snapshot) : undefined;
+    return run ? this.redactJson(cloneSnapshot(run.snapshot)) : undefined;
   }
 
   getSessionRun(sessionId: string): AgentRunSnapshot | undefined {
@@ -285,12 +312,12 @@ export class AgentRuntime {
   listRunning(): AgentRunSnapshot[] {
     return [...this.runs.values()]
       .filter(run => !['completed', 'failed', 'stopped'].includes(run.snapshot.phase))
-      .map(run => cloneSnapshot(run.snapshot));
+      .map(run => this.redactJson(cloneSnapshot(run.snapshot)));
   }
 
   publishSessionEvent(sessionId: string, type: AgentEventType, data: unknown): AgentEvent {
     const run = this.getSessionRun(sessionId);
-    return this.journal.publish(sessionId, type, data, run?.id);
+    return this.journal.publish(sessionId, type, this.redactJson(data), run?.id);
   }
 
   requestExtensionInteraction(
@@ -331,8 +358,8 @@ export class AgentRuntime {
     const message: QueuedAgentMessage = {
       id: crypto.randomUUID(),
       kind,
-      content: content.trim(),
-      ...(blocks?.length ? { blocks: structuredClone(blocks) } : {}),
+      content: this.redactText(content.trim()),
+      ...(blocks?.length ? { blocks: this.redactJson(structuredClone(blocks)) } : {}),
       createdAt: new Date().toISOString(),
     };
     try {
@@ -344,14 +371,14 @@ export class AgentRuntime {
       });
     }
     this.publishQueue(run);
-    return cloneSnapshot(run.snapshot);
+    return this.redactJson(cloneSnapshot(run.snapshot));
   }
 
   clearQueue(runId: string, kind?: QueuedAgentMessage['kind']): AgentRunSnapshot {
     const run = this.requireActive(runId);
     run.queue.clear(kind);
     this.publishQueue(run);
-    return cloneSnapshot(run.snapshot);
+    return this.redactJson(cloneSnapshot(run.snapshot));
   }
 
   respondToInteraction(
@@ -369,12 +396,12 @@ export class AgentRuntime {
     if (serialized && Buffer.byteLength(serialized, 'utf8') > 100_000) {
       throw new Error('Extension interaction response is too large.');
     }
-    const normalized = validateInteractionResponse(pending.request, response);
+    const normalized = this.redactJson(validateInteractionResponse(pending.request, response));
     this.interactions.delete(requestId);
     run.snapshot.extensionRequest = undefined;
     pending.settle(normalized);
     this.publish(run, 'extension.ui', { action: 'resolved', requestId, cancelled: response.cancelled === true });
-    return cloneSnapshot(run.snapshot);
+    return this.redactJson(cloneSnapshot(run.snapshot));
   }
 
   stop(runId: string): AgentRunSnapshot {
@@ -387,7 +414,7 @@ export class AgentRuntime {
     run.snapshot.completedAt = new Date().toISOString();
     this.setPhase(run, 'stopped');
     this.publish(run, 'run.stopped', { completedAt: run.snapshot.completedAt });
-    return cloneSnapshot(run.snapshot);
+    return this.redactJson(cloneSnapshot(run.snapshot));
   }
 
   private async execute(
@@ -416,7 +443,10 @@ export class AgentRuntime {
       run.snapshot.completedAt = new Date().toISOString();
       this.setPhase(run, 'completed');
       this.publish(run, 'run.completed', { completedAt: run.snapshot.completedAt });
-      void Promise.resolve(this.onNotification?.('completion', cloneSnapshot(run.snapshot))).catch(() => undefined);
+      void Promise.resolve(this.onNotification?.(
+        'completion',
+        this.redactJson(cloneSnapshot(run.snapshot)),
+      )).catch(() => undefined);
     } catch (error) {
       run.snapshot.completedAt = new Date().toISOString();
       run.snapshot.retry = undefined;
@@ -429,10 +459,13 @@ export class AgentRuntime {
           this.publish(run, 'run.stopped', { completedAt: run.snapshot.completedAt });
         }
       } else {
-        run.snapshot.error = error instanceof Error ? error.message : String(error);
+        run.snapshot.error = this.redactText(error instanceof Error ? error.message : String(error));
         this.setPhase(run, 'failed');
         this.publish(run, 'run.failed', { message: run.snapshot.error });
-        void Promise.resolve(this.onNotification?.('attention', cloneSnapshot(run.snapshot))).catch(() => undefined);
+        void Promise.resolve(this.onNotification?.(
+          'attention',
+          this.redactJson(cloneSnapshot(run.snapshot)),
+        )).catch(() => undefined);
       }
     }
   }
@@ -452,6 +485,7 @@ export class AgentRuntime {
       tools,
       maxToolRounds: request.maxToolRounds,
       signal: run.controller.signal,
+      redactText: this.redactText,
       onTurnStart: () => this.setPhase(run, 'prompting'),
       onToolCall: call => {
         run.snapshot.activeTool = {
@@ -490,6 +524,7 @@ export class AgentRuntime {
           provider,
           providerName: run.snapshot.provider,
           model: request.model,
+          sessionId: run.snapshot.sessionId,
           messages: currentMessages.length ? currentMessages : messages,
           tools: definitions,
           systemPrompt: request.systemPrompt,
@@ -499,6 +534,9 @@ export class AgentRuntime {
           maxRetries: request.maxRetries ?? 2,
           retryDelayMs: 500,
           retryMaxDelayMs: 5_000,
+          redactText: this.redactText,
+          redactJson: this.redactJson,
+          createTextRedactor: this.createTextRedactor,
           onStart: (_provider, model) => {
             this.setPhase(run, 'streaming');
             run.snapshot.retry = undefined;
@@ -526,7 +564,7 @@ export class AgentRuntime {
               attempt,
               max: maxAttempts,
               delayMs,
-              message: error instanceof Error ? error.message : String(error),
+              message: this.redactText(error instanceof Error ? error.message : String(error)),
               scheduledAt: new Date().toISOString(),
             };
             this.publish(run, 'retry.scheduled', run.snapshot.retry);
@@ -653,7 +691,7 @@ export class AgentRuntime {
     request: ExtensionInteractionRequest,
   ): Promise<ExtensionInteractionResponse> {
     if (run.snapshot.extensionRequest) throw new Error('An extension interaction is already pending for this run.');
-    const normalized = interactionRequest(request);
+    const normalized = interactionRequest(request, this.redactText);
     const snapshot: ExtensionInteractionSnapshot = {
       ...normalized,
       id: crypto.randomUUID(),
@@ -661,7 +699,10 @@ export class AgentRuntime {
     };
     run.snapshot.extensionRequest = snapshot;
     this.publish(run, 'extension.ui', { action: 'request', request: snapshot });
-    void Promise.resolve(this.onNotification?.('attention', cloneSnapshot(run.snapshot))).catch(() => undefined);
+    void Promise.resolve(this.onNotification?.(
+      'attention',
+      this.redactJson(cloneSnapshot(run.snapshot)),
+    )).catch(() => undefined);
     return new Promise(resolve => {
       let settled = false;
       const settle = (response: ExtensionInteractionResponse): void => {
@@ -699,7 +740,12 @@ export class AgentRuntime {
   }
 
   private publish<T>(run: ActiveRun, type: Parameters<AgentEventJournal['publish']>[1], data: T): void {
-    const event = this.journal.publish(run.snapshot.sessionId, type, data, run.snapshot.id);
+    const event = this.journal.publish(
+      run.snapshot.sessionId,
+      type,
+      this.redactJson(data),
+      run.snapshot.id,
+    );
     run.snapshot.lastSequence = event.sequence;
   }
 

@@ -1,7 +1,8 @@
-import { constants as fsConstants } from 'node:fs';
-import { lstat, open } from 'node:fs/promises';
+import { lstatSync } from 'node:fs';
+import { lstat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { readBoundedResourceText } from '../resources/resource-manager.js';
 
 export const CONTEXT_FILE_NAMES = [
   'AGENTS.override.md',
@@ -40,6 +41,8 @@ export interface ResolveInstructionPromptOptions {
   agentDir?: string;
   /** Gates all project/ancestor instruction sources; user-level agent-directory files remain independent. */
   projectTrusted?: boolean;
+  /** Administrator-owned composition roots can explicitly trust an in-workspace data directory. */
+  agentDirTrusted?: boolean;
   noContextFiles?: boolean;
   /** CLI-compatible text-or-existing-file replacement. */
   systemPromptInput?: string;
@@ -92,6 +95,51 @@ export function resolveAgentDirectory(
   return path.resolve(expandHome(selected, homeDir));
 }
 
+function pathContainsSymbolicLinkSync(candidate: string): boolean {
+  const absolute = path.resolve(candidate);
+  const parsed = path.parse(absolute);
+  let current = parsed.root;
+  for (const component of absolute.slice(parsed.root.length).split(path.sep).filter(Boolean)) {
+    current = path.join(current, component);
+    try {
+      if (lstatSync(current).isSymbolicLink()) return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
+ * Resolve the pre-trust data directory. A custom directory controlled by the
+ * selected workspace cannot supply its own trust database or global config.
+ */
+export function resolvePreTrustAgentDirectory(
+  cwd: string,
+  configured = process.env.AI_HARNESS_AGENT_DIR,
+  homeDir = os.homedir(),
+): string {
+  const workspace = path.resolve(cwd);
+  const selected = resolveAgentDirectory(configured, homeDir);
+  const independent = (candidate: string): boolean => {
+    const relative = path.relative(workspace, candidate);
+    const projectControlled = relative === ''
+      || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+    return !projectControlled && !pathContainsSymbolicLinkSync(candidate);
+  };
+  if (independent(selected)) return selected;
+
+  const uid = typeof process.getuid === 'function' ? process.getuid() : 'user';
+  const candidates = [
+    path.resolve(homeDir, '.ai-harness'),
+    ...(process.env.XDG_STATE_HOME ? [path.resolve(process.env.XDG_STATE_HOME, 'ai-harness')] : []),
+    path.resolve(os.tmpdir(), `ai-harness-${uid}`),
+  ];
+  const fallback = candidates.find(independent);
+  if (!fallback) throw new Error('No project-independent agent data directory is available before trust.');
+  return fallback;
+}
+
 function xmlAttribute(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -101,49 +149,10 @@ function normalizedPromptText(value: string): string {
 }
 
 async function readBoundedUtf8(filePath: string, maxBytes: number): Promise<string> {
-  const before = await lstat(filePath);
-  if (before.isSymbolicLink() || !before.isFile()) {
-    throw new Error('Instruction source must be a regular file and cannot be a symbolic link.');
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 1024 * 1024) {
+    throw new Error('Instruction source size limit must not exceed 1 MiB.');
   }
-  if (before.size > maxBytes) throw new Error(`Instruction source exceeds the ${maxBytes} byte file limit.`);
-
-  const handle = await open(
-    filePath,
-    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
-  );
-  try {
-    const opened = await handle.stat();
-    if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino) {
-      throw new Error('Instruction source changed while it was being opened.');
-    }
-    if (opened.size > maxBytes) throw new Error(`Instruction source exceeds the ${maxBytes} byte file limit.`);
-
-    const chunks: Buffer[] = [];
-    let total = 0;
-    while (true) {
-      const remaining = maxBytes + 1 - total;
-      const buffer = Buffer.allocUnsafe(Math.min(64 * 1024, remaining));
-      const { bytesRead } = await handle.read(buffer, 0, buffer.length, null);
-      if (bytesRead === 0) break;
-      total += bytesRead;
-      if (total > maxBytes) throw new Error(`Instruction source exceeds the ${maxBytes} byte file limit.`);
-      chunks.push(buffer.subarray(0, bytesRead));
-    }
-    const after = await handle.stat();
-    if (after.dev !== opened.dev || after.ino !== opened.ino || after.size !== opened.size
-      || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) {
-      throw new Error('Instruction source changed while it was being read.');
-    }
-    const bytes = Buffer.concat(chunks, total);
-    if (bytes.includes(0)) throw new Error('Instruction source must be UTF-8 text, not binary data.');
-    try {
-      return normalizedPromptText(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-    } catch {
-      throw new Error('Instruction source is not valid UTF-8 text.');
-    }
-  } finally {
-    await handle.close();
-  }
+  return normalizedPromptText(await readBoundedResourceText(filePath, maxBytes));
 }
 
 async function optionalInstructionFile(
@@ -192,6 +201,7 @@ async function loadContextFiles(
   maxBytes: number,
   maxFiles: number,
   diagnostics: InstructionDiagnostic[],
+  includeAgentFiles: boolean,
   includeProjectFiles: boolean,
 ): Promise<InstructionFile[]> {
   const files: InstructionFile[] = [];
@@ -205,7 +215,7 @@ async function loadContextFiles(
     files.push({ ...loaded, scope });
   };
 
-  add(await contextFileFromDirectory(agentDir, maxBytes, diagnostics), 'agent');
+  if (includeAgentFiles) add(await contextFileFromDirectory(agentDir, maxBytes, diagnostics), 'agent');
   if (includeProjectFiles) {
     for (const directory of ancestorDirectories(cwd)) {
       add(await contextFileFromDirectory(directory, maxBytes, diagnostics), 'ancestor');
@@ -292,6 +302,12 @@ export async function resolveInstructionPrompt(
   const maxContextFiles = positiveLimit(options.maxContextFiles, DEFAULT_MAX_CONTEXT_FILES, 'maxContextFiles');
   const cwd = path.resolve(options.cwd);
   const agentDir = resolveAgentDirectory(options.agentDir);
+  const projectTrusted = options.projectTrusted === true;
+  const agentRelative = path.relative(cwd, agentDir);
+  const agentDirProjectControlled = agentRelative === ''
+    || (!agentRelative.startsWith(`..${path.sep}`) && agentRelative !== '..' && !path.isAbsolute(agentRelative));
+  const mayReadAgentDir = options.agentDirTrusted === true || projectTrusted
+    || (!agentDirProjectControlled && !pathContainsSymbolicLinkSync(agentDir));
   const diagnostics: InstructionDiagnostic[] = [];
   const contextFiles = options.noContextFiles
     ? []
@@ -301,7 +317,8 @@ export async function resolveInstructionPrompt(
       maxFileBytes,
       maxContextFiles,
       diagnostics,
-      options.projectTrusted === true,
+      mayReadAgentDir,
+      projectTrusted,
     );
 
   let basePrompt: string | undefined;
@@ -318,8 +335,8 @@ export async function resolveInstructionPrompt(
     systemPromptSource = { kind: 'literal' };
   } else {
     const discovered = await firstInstructionFile([
-      ...(options.projectTrusted ? [path.join(cwd, '.ai-harness', 'SYSTEM.md')] : []),
-      path.join(agentDir, 'SYSTEM.md'),
+      ...(projectTrusted ? [path.join(cwd, '.ai-harness', 'SYSTEM.md')] : []),
+      ...(mayReadAgentDir ? [path.join(agentDir, 'SYSTEM.md')] : []),
     ], maxFileBytes, diagnostics);
     if (discovered) {
       basePrompt = discovered.content;
@@ -345,8 +362,8 @@ export async function resolveInstructionPrompt(
     }
   } else {
     const discovered = await firstInstructionFile([
-      ...(options.projectTrusted ? [path.join(cwd, '.ai-harness', 'APPEND_SYSTEM.md')] : []),
-      path.join(agentDir, 'APPEND_SYSTEM.md'),
+      ...(projectTrusted ? [path.join(cwd, '.ai-harness', 'APPEND_SYSTEM.md')] : []),
+      ...(mayReadAgentDir ? [path.join(agentDir, 'APPEND_SYSTEM.md')] : []),
     ], maxFileBytes, diagnostics);
     if (discovered) {
       appendSystemPrompts.push(discovered.content);

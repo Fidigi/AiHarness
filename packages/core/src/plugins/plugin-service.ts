@@ -5,12 +5,13 @@ import {
   lstat,
   mkdir,
   open,
-  readdir,
   realpath,
   rename,
   rm,
 } from 'node:fs/promises';
 import path from 'node:path';
+import { readStableDirectoryEntries } from '../security/stable-directory.js';
+import { releaseStableLockPath } from '../security/stable-lock.js';
 import { promisify } from 'node:util';
 import type {
   PluginCatalog,
@@ -31,6 +32,7 @@ import type {
 } from '../types/index.js';
 import type { ProjectTrustManager } from '../security/project-trust.js';
 import type { WorkspaceManager } from '../security/workspace-manager.js';
+import { filteredProcessEnvironment } from '../tools/process-execution.js';
 
 const execFileAsync = promisify(execFile);
 const FILE_VERSION = 1 as const;
@@ -42,6 +44,7 @@ const MAX_SCAN_DEPTH = 8;
 const MAX_RESOURCES = 1_000;
 const MAX_PATTERNS = 100;
 const MAX_STATE_BYTES = 2 * 1024 * 1024;
+const MAX_CATALOG_CACHE = 16;
 const LOCK_ATTEMPTS = 100;
 const LOCK_RETRY_MS = 20;
 const STALE_LOCK_MS = 30_000;
@@ -116,6 +119,7 @@ export interface PluginMutationInput extends PluginContextInput {
 
 export interface PluginSkillRoot {
   directory: string;
+  scope: PluginScope;
   source: string;
   displayRoot: string;
   trusted: boolean;
@@ -179,6 +183,10 @@ function pluginHash(value: string): string {
 
 function inside(root: string, candidate: string): boolean {
   return candidate === root || candidate.startsWith(`${root}${path.sep}`);
+}
+
+function isWorkspaceControlledPackage(record: StoredPlugin, context: PluginContext): boolean {
+  return Boolean(record.localPath && inside(context.cwd, path.resolve(record.localPath)));
 }
 
 function cloneCatalog(catalog: PluginCatalog): PluginCatalog {
@@ -324,6 +332,7 @@ function defaultRunner(): PluginCommandRunner {
           signal: options.signal,
           maxBuffer: 1024 * 1024,
           windowsHide: true,
+          env: filteredProcessEnvironment(),
         });
         return { stdout: result.stdout, stderr: result.stderr };
       } catch (error) {
@@ -438,9 +447,11 @@ async function scanFiles(root: string): Promise<{ files: ScannedFile[]; truncate
       truncated = true;
       return;
     }
-    let entries;
+    let entries: import('node:fs').Dirent[];
     try {
-      entries = await readdir(directory, { withFileTypes: true });
+      const listing = await readStableDirectoryEntries(directory, entriesRemaining);
+      entries = listing.entries;
+      truncated ||= listing.truncated;
     } catch {
       return;
     }
@@ -500,8 +511,8 @@ function countsFor(resources: Array<Pick<PluginResourceInfo, 'kind'>>): PluginRe
 
 async function readPackageText(filePath: string, maxBytes: number): Promise<string> {
   const before = await lstat(filePath);
-  if (!before.isFile() || before.isSymbolicLink() || before.size > maxBytes) {
-    throw new Error('Package resource is not a bounded regular file');
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1 || before.size > maxBytes) {
+    throw new Error('Package resource is not a bounded regular file without links');
   }
   const handle = await open(
     filePath,
@@ -509,7 +520,8 @@ async function readPackageText(filePath: string, maxBytes: number): Promise<stri
   );
   try {
     const opened = await handle.stat();
-    if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino || opened.size > maxBytes) {
+    if (!opened.isFile() || opened.nlink !== 1 || opened.dev !== before.dev
+      || opened.ino !== before.ino || opened.size !== before.size || opened.size > maxBytes) {
       throw new Error('Package resource changed while it was being opened');
     }
     const contents = Buffer.allocUnsafe(opened.size);
@@ -519,9 +531,12 @@ async function readPackageText(filePath: string, maxBytes: number): Promise<stri
       if (bytesRead === 0) break;
       offset += bytesRead;
     }
-    const after = await handle.stat();
-    if (offset !== opened.size || after.dev !== opened.dev || after.ino !== opened.ino
-      || after.size !== opened.size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) {
+    const [after, target] = await Promise.all([handle.stat(), lstat(filePath)]);
+    if (offset !== opened.size || after.dev !== opened.dev || after.ino !== opened.ino || after.nlink !== 1
+      || after.size !== opened.size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs
+      || !target.isFile() || target.isSymbolicLink() || target.nlink !== 1
+      || target.dev !== after.dev || target.ino !== after.ino || target.size !== after.size
+      || target.mtimeMs !== after.mtimeMs || target.ctimeMs !== after.ctimeMs) {
       throw new Error('Package resource changed while it was being read');
     }
     const bounded = contents.subarray(0, offset);
@@ -629,9 +644,9 @@ async function standaloneExtensions(
   trusted: boolean,
 ): Promise<PluginStandaloneExtensionInfo[]> {
   if (scope === 'project' && !trusted) return [];
-  let entries;
+  let entries: import('node:fs').Dirent[];
   try {
-    entries = await readdir(directory, { withFileTypes: true });
+    entries = (await readStableDirectoryEntries(directory, 201)).entries;
   } catch {
     return [];
   }
@@ -677,8 +692,9 @@ async function readBoundedStateFile(filePath: string): Promise<unknown | undefin
     if (errorCode(error) === 'ENOENT') return undefined;
     throw error;
   }
-  if (before.isSymbolicLink() || !before.isFile()) {
-    throw new Error('Plugin state must be a regular file and cannot be a symbolic link.');
+  if (before.isSymbolicLink() || !before.isFile() || before.nlink !== 1
+    || (typeof process.getuid === 'function' && before.uid !== process.getuid())) {
+    throw new Error('Plugin state must be a private regular file without links.');
   }
   if (before.size > MAX_STATE_BYTES) throw new Error('Plugin state exceeds its size limit.');
 
@@ -687,10 +703,18 @@ async function readBoundedStateFile(filePath: string): Promise<unknown | undefin
     fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
   );
   try {
-    const opened = await handle.stat();
-    if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino
-      || opened.size !== before.size || opened.size > MAX_STATE_BYTES) {
+    let opened = await handle.stat();
+    if (!opened.isFile() || opened.nlink !== 1 || opened.dev !== before.dev || opened.ino !== before.ino
+      || opened.size !== before.size || opened.size > MAX_STATE_BYTES
+      || (typeof process.getuid === 'function' && opened.uid !== process.getuid())) {
       throw new Error('Plugin state changed while it was being opened.');
+    }
+    if (process.platform !== 'win32' && (opened.mode & 0o077) !== 0) {
+      await handle.chmod(0o600);
+      opened = await handle.stat();
+      if (opened.dev !== before.dev || opened.ino !== before.ino || (opened.mode & 0o077) !== 0) {
+        throw new Error('Plugin state permissions could not be secured.');
+      }
     }
     const bytes = Buffer.allocUnsafe(opened.size);
     let offset = 0;
@@ -699,9 +723,13 @@ async function readBoundedStateFile(filePath: string): Promise<unknown | undefin
       if (bytesRead === 0) break;
       offset += bytesRead;
     }
-    const after = await handle.stat();
+    const [after, target] = await Promise.all([handle.stat(), lstat(filePath)]);
     if (offset !== opened.size || after.dev !== opened.dev || after.ino !== opened.ino
-      || after.size !== opened.size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) {
+      || after.nlink !== 1 || after.size !== opened.size
+      || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs
+      || !target.isFile() || target.isSymbolicLink() || target.nlink !== 1
+      || target.dev !== after.dev || target.ino !== after.ino || target.size !== after.size
+      || target.mtimeMs !== after.mtimeMs || target.ctimeMs !== after.ctimeMs) {
       throw new Error('Plugin state changed while it was being read.');
     }
     const contents = bytes.subarray(0, offset);
@@ -715,16 +743,47 @@ async function readBoundedStateFile(filePath: string): Promise<unknown | undefin
   }
 }
 
+async function removeStalePluginLock(
+  lockPath: string,
+  observed: Awaited<ReturnType<typeof lstat>>,
+): Promise<void> {
+  const stalePath = `${lockPath}.${process.pid}.${crypto.randomUUID()}.stale`;
+  try {
+    await rename(lockPath, stalePath);
+    const moved = await lstat(stalePath);
+    if (moved.dev !== observed.dev || moved.ino !== observed.ino || moved.nlink !== 1
+      || moved.mtimeMs !== observed.mtimeMs || Date.now() - moved.mtimeMs <= STALE_LOCK_MS) {
+      const replacement = await lstat(lockPath).catch(() => undefined);
+      if (!replacement) await rename(stalePath, lockPath).catch(() => undefined);
+      return;
+    }
+    await rm(stalePath, { force: true });
+  } catch {
+    const replacement = await lstat(lockPath).catch(() => undefined);
+    if (!replacement) await rename(stalePath, lockPath).catch(() => undefined);
+  }
+}
+
 async function acquirePluginLock(filePath: string): Promise<() => Promise<void>> {
   const lockPath = `${filePath}.lock`;
   await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
   for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt++) {
     try {
-      const handle = await open(lockPath, 'wx', 0o600);
+      const handle = await open(
+        lockPath,
+        fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | (fsConstants.O_NOFOLLOW ?? 0),
+        0o600,
+      );
       const owned = await handle.stat().catch(async error => {
         await handle.close().catch(() => undefined);
         throw error;
       });
+      if (!owned.isFile() || owned.nlink !== 1
+        || (process.platform !== 'win32' && (owned.mode & 0o077) !== 0)
+        || (typeof process.getuid === 'function' && owned.uid !== process.getuid())) {
+        await handle.close().catch(() => undefined);
+        throw new Error('Plugin state lock is unsafe.');
+      }
       const heartbeat = setInterval(() => {
         const now = new Date();
         void handle.utimes(now, now).catch(() => undefined);
@@ -733,23 +792,24 @@ async function acquirePluginLock(filePath: string): Promise<() => Promise<void>>
       return async () => {
         clearInterval(heartbeat);
         await handle.close().catch(() => undefined);
-        try {
-          const current = await lstat(lockPath);
-          if (current.dev === owned.dev && current.ino === owned.ino) await rm(lockPath, { force: true });
-        } catch (error) {
-          if (errorCode(error) !== 'ENOENT') throw error;
-        }
+        await releaseStableLockPath(lockPath, owned);
       };
     } catch (error) {
       if (errorCode(error) !== 'EEXIST') throw error;
       try {
         const info = await lstat(lockPath);
-        if (!info.isSymbolicLink() && info.isFile() && Date.now() - info.mtimeMs > STALE_LOCK_MS) {
-          await rm(lockPath, { force: true });
+        if (info.isSymbolicLink() || !info.isFile() || info.nlink !== 1
+          || (process.platform !== 'win32' && (info.mode & 0o077) !== 0)
+          || (typeof process.getuid === 'function' && info.uid !== process.getuid())) {
+          throw new Error('Plugin state lock is unsafe.');
+        }
+        if (Date.now() - info.mtimeMs > STALE_LOCK_MS) {
+          await removeStalePluginLock(lockPath, info);
           continue;
         }
       } catch (lockError) {
         if (errorCode(lockError) === 'ENOENT') continue;
+        throw lockError;
       }
       await new Promise(resolve => setTimeout(resolve, LOCK_RETRY_MS));
     }
@@ -777,8 +837,8 @@ export class PluginService {
   async load(): Promise<void> {
     try {
       await this.refreshState();
-    } catch (error) {
-      console.error('[Plugins] Refusing invalid state:', error instanceof Error ? error.message : error);
+    } catch {
+      console.error('[Plugins] Refusing invalid state.');
     }
   }
 
@@ -786,9 +846,19 @@ export class PluginService {
     await this.refreshState();
     const context = await this.context(input);
     const cached = this.catalogCache.get(context.cwd);
-    if (cached && !input.refresh && cached.projectTrusted === context.projectTrusted) return cloneCatalog(cached);
+    if (cached && !input.refresh && cached.projectTrusted === context.projectTrusted) {
+      this.catalogCache.delete(context.cwd);
+      this.catalogCache.set(context.cwd, cached);
+      return cloneCatalog(cached);
+    }
     const catalog = await this.scanCatalog(context, this.state.generation);
+    this.catalogCache.delete(context.cwd);
     this.catalogCache.set(context.cwd, catalog);
+    while (this.catalogCache.size > MAX_CATALOG_CACHE) {
+      const oldest = this.catalogCache.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      this.catalogCache.delete(oldest);
+    }
     return cloneCatalog(catalog);
   }
 
@@ -800,6 +870,13 @@ export class PluginService {
       const context = await this.context(input);
       const parsed = parsePluginSource(input.source, context.cwd);
       this.requireTrustedMutation(input.scope, context, 'installer');
+      if (parsed.localPath && inside(context.cwd, path.resolve(parsed.localPath)) && !context.projectTrusted) {
+        throw httpError(
+          'Le workspace doit être approuvé avant de lire un plugin local au projet.',
+          409,
+          'PROJECT_TRUST_REQUIRED',
+        );
+      }
       if (this.state.packages.length >= MAX_PACKAGES) {
         throw httpError('Nombre maximal de packages atteint.', 409, 'PLUGIN_LIMIT');
       }
@@ -841,7 +918,16 @@ export class PluginService {
     return this.queued(async () => {
       const context = await this.context(input);
       const record = this.findMutable(input.key, input.scope, context);
-      if (input.enabled) this.requireTrustedMutation(record.scope, context, 'activer');
+      if (input.enabled) {
+        this.requireTrustedMutation(record.scope, context, 'activer');
+        if (isWorkspaceControlledPackage(record, context) && !context.projectTrusted) {
+          throw httpError(
+            'Le workspace doit être approuvé avant d’activer ce package local.',
+            409,
+            'PROJECT_TRUST_REQUIRED',
+          );
+        }
+      }
       const previous = { enabled: record.enabled, updatedAt: record.updatedAt };
       record.enabled = input.enabled;
       record.updatedAt = new Date().toISOString();
@@ -887,7 +973,8 @@ export class PluginService {
           });
           continue;
         }
-        if (change.enabled && record.scope === 'project' && !context.projectTrusted) {
+        if (change.enabled && !context.projectTrusted
+          && (record.scope === 'project' || isWorkspaceControlledPackage(record, context))) {
           outcomes.push({
             ...change,
             state: 'failed',
@@ -1135,7 +1222,8 @@ export class PluginService {
     await this.refreshState();
     const context = await this.context(input);
     for (const record of [...this.visibleRecords(context)].reverse()) {
-      if (!record.enabled || (record.scope === 'project' && !context.projectTrusted)) continue;
+      if (!record.enabled || (!context.projectTrusted
+        && (record.scope === 'project' || isWorkspaceControlledPackage(record, context)))) continue;
       try {
         const { root, standaloneFile, displayRoot } = await this.resolveInstalled(record);
         const inventory = await inventoryPackage(root, displayRoot, standaloneFile, record.resourceFilters);
@@ -1165,7 +1253,8 @@ export class PluginService {
       || left.source.localeCompare(right.source)
     ));
     for (const record of records) {
-      if (!record.enabled || (record.scope === 'project' && !context.projectTrusted)) continue;
+      if (!record.enabled || (!context.projectTrusted
+        && (record.scope === 'project' || isWorkspaceControlledPackage(record, context)))) continue;
       try {
         const { root, standaloneFile, displayRoot } = await this.resolveInstalled(record);
         const inventory = await inventoryPackage(root, displayRoot, standaloneFile, record.resourceFilters);
@@ -1198,6 +1287,7 @@ export class PluginService {
   async getEnabledSkillRoots(input: PluginContextInput = {}): Promise<PluginSkillRoot[]> {
     return (await this.getEnabledResourceLocations('skill', input)).map(location => ({
       directory: location.path,
+      scope: location.scope,
       source: location.source,
       displayRoot: location.displayPath,
       trusted: location.trusted,
@@ -1382,11 +1472,12 @@ export class PluginService {
     const packages: PluginPackageInfo[] = [];
     const diagnostics: PluginDiagnostic[] = [];
     for (const record of this.visibleRecords(context)) {
-      const trusted = record.scope === 'global' || context.projectTrusted;
+      const workspaceControlled = isWorkspaceControlledPackage(record, context);
+      const trusted = context.projectTrusted || (record.scope === 'global' && !workspaceControlled);
       const packageDiagnostics: PluginDiagnostic[] = [];
       let inventory: PackageInventory = { resources: [], counts: structuredClone(EMPTY_COUNTS) };
       let status: PluginPackageInfo['status'] = record.enabled ? 'installed' : 'disabled';
-      if (record.scope === 'project' && !trusted) {
+      if (!trusted) {
         packageDiagnostics.push({
           severity: 'warning',
           code: 'PROJECT_TRUST_REQUIRED',

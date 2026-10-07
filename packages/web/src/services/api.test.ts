@@ -126,12 +126,30 @@ describe('Web API service', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([
       'event: text_',
       'delta\ndata: {"content":"chunk"}\n\n',
+      'event: message_end\ndata: {"content":"chunk"}\n\n',
     ])));
 
     const events = [];
     for await (const event of streamChat('mock', [])) events.push(event);
 
-    expect(events).toEqual([{ type: 'text_delta', content: 'chunk' }]);
+    expect(events).toEqual([
+      { type: 'text_delta', content: 'chunk' },
+      { type: 'message_end', content: 'chunk' },
+    ]);
+  });
+
+  it('fails closed when an SSE stream ends without a terminal event', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([
+      'event: text_delta\ndata: {"content":"partial"}\n\n',
+    ])));
+
+    const events = [];
+    for await (const event of streamChat('mock', [])) events.push(event);
+
+    expect(events).toEqual([
+      { type: 'text_delta', content: 'partial' },
+      { type: 'error', content: 'Provider stream ended without a terminal event.' },
+    ]);
   });
 
   it('parses the final SSE record even when the stream has no trailing newline', async () => {
@@ -721,6 +739,7 @@ describe('Web API service', () => {
     vi.stubGlobal('localStorage', storage);
     vi.stubGlobal('location', { protocol: 'https:', host: 'chat.example.test' });
 
+    let selectedProtocols: string | string[] | undefined;
     class MockWebSocket {
       onopen?: () => void;
       onmessage?: (event: { data: string }) => void;
@@ -728,7 +747,8 @@ describe('Web API service', () => {
       onclose?: () => void;
       readonly sent: string[] = [];
 
-      constructor(readonly url: string) {
+      constructor(readonly url: string, protocols?: string | string[]) {
+        selectedProtocols = protocols;
         queueMicrotask(() => {
           this.onopen?.();
           this.onmessage?.({ data: 'event: text_delta\ndata: {"content":"Salut"}\n' });
@@ -750,6 +770,7 @@ describe('Web API service', () => {
     }
 
     expect(getChatTransport()).toBe('websocket');
+    expect(selectedProtocols).toEqual(['aih.v1']);
     expect(storage.setItem).toHaveBeenCalledWith('ai-harness-transport', 'websocket');
     expect(events).toEqual([
       { type: 'text_delta', content: 'Salut' },

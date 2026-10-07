@@ -9,14 +9,9 @@ import {
 } from '@ai-harness/core';
 import type { RuntimeServices } from '../runtime/services.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
-import { boundedMessageLimit, serializeSessionPage } from './session-pagination.js';
+import { serializeSessionPage } from './session-pagination.js';
 import { requireCapability } from '../security/request-security.js';
-
-function sendEvent(response: Response, event: string, data: unknown, id?: string): void {
-  if (id) response.write(`id: ${id}\n`);
-  response.write(`event: ${event}\n`);
-  response.write(`data: ${JSON.stringify(data)}\n\n`);
-}
+import { SseChannel } from './sse-channel.js';
 
 function stringValue(value: unknown, name: string, options: { optional?: boolean; max?: number } = {}): string | undefined {
   if (value === undefined && options.optional) return undefined;
@@ -26,27 +21,61 @@ function stringValue(value: unknown, name: string, options: { optional?: boolean
   return value.trim();
 }
 
-function userBlocks(value: unknown): MessageContentBlock[] | undefined {
+export function userBlocks(value: unknown): MessageContentBlock[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value) || value.length > 10) throw Object.assign(new Error('Blocs de message invalides.'), { status: 400 });
   let encodedBytes = 0;
   const blocks: MessageContentBlock[] = value.map(block => {
-    if (!block || typeof block !== 'object') throw Object.assign(new Error('Bloc invalide.'), { status: 400 });
+    if (!block || typeof block !== 'object' || Array.isArray(block)) {
+      throw Object.assign(new Error('Bloc invalide.'), { status: 400 });
+    }
     const input = block as Record<string, unknown>;
-    if (input.type === 'text' && typeof input.text === 'string' && input.text.length <= 100_000) {
+    if (input.type === 'text' && typeof input.text === 'string'
+      && Buffer.byteLength(input.text) <= 100_000) {
       return { type: 'text', text: input.text };
     }
     if (input.type === 'image' && typeof input.url === 'string' && typeof input.mediaType === 'string'
-      && /^image\/[A-Za-z0-9.+-]+$/.test(input.mediaType)
-      && input.url.startsWith(`data:${input.mediaType};base64,`)) {
-      encodedBytes += input.url.length;
-      if (encodedBytes > 9_000_000) throw Object.assign(new Error('Images trop volumineuses.'), { status: 413 });
+      && /^image\/[A-Za-z0-9.+-]{1,100}$/.test(input.mediaType)) {
+      const prefix = `data:${input.mediaType};base64,`;
+      if (!input.url.startsWith(prefix)) throw Object.assign(new Error('Image invalide.'), { status: 400 });
+      const encoded = input.url.slice(prefix.length);
+      encodedBytes += Buffer.byteLength(input.url);
+      if (!encoded || encodedBytes > 9_000_000) {
+        throw Object.assign(new Error('Images trop volumineuses.'), { status: 413 });
+      }
+      if (encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
+        throw Object.assign(new Error('Image invalide.'), { status: 400 });
+      }
+      const decoded = Buffer.from(encoded, 'base64');
+      if (decoded.toString('base64') !== encoded || decoded.byteLength > 6_750_000) {
+        throw Object.assign(new Error('Image invalide.'), { status: 400 });
+      }
+      const name = input.name === undefined ? undefined : input.name;
+      if (name !== undefined && (typeof name !== 'string' || !name
+        || Buffer.byteLength(name) > 500
+        || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/u.test(name))) {
+        throw Object.assign(new Error('Nom d’image invalide.'), { status: 400 });
+      }
+      if (input.size !== undefined && (!Number.isSafeInteger(input.size) || (input.size as number) < 0
+        || input.size !== decoded.byteLength)) {
+        throw Object.assign(new Error('Taille d’image invalide.'), { status: 400 });
+      }
+      const dimension = (candidate: unknown): number | undefined => candidate === undefined
+        ? undefined
+        : Number.isSafeInteger(candidate) && (candidate as number) > 0 && (candidate as number) <= 100_000
+          ? candidate as number
+          : NaN;
+      const width = dimension(input.width);
+      const height = dimension(input.height);
+      if (Number.isNaN(width) || Number.isNaN(height)) {
+        throw Object.assign(new Error('Dimensions d’image invalides.'), { status: 400 });
+      }
       return {
-        type: 'image',
-        mediaType: input.mediaType,
-        url: input.url,
-        ...(typeof input.name === 'string' ? { name: input.name.slice(0, 500) } : {}),
-        ...(typeof input.size === 'number' ? { size: input.size } : {}),
+        type: 'image', mediaType: input.mediaType, url: input.url,
+        ...(name ? { name } : {}),
+        ...(input.size === undefined ? {} : { size: input.size as number }),
+        ...(width === undefined ? {} : { width }),
+        ...(height === undefined ? {} : { height }),
       };
     }
     throw Object.assign(new Error('Type de bloc utilisateur non autorisé.'), { status: 400 });
@@ -55,8 +84,15 @@ function userBlocks(value: unknown): MessageContentBlock[] | undefined {
 }
 
 function integerValue(value: unknown, fallback: number, min: number, max: number): number {
+  if (value === undefined) return fallback;
+  if (typeof value === 'string' && !/^(?:0|[1-9]\d*)$/u.test(value)) {
+    throw Object.assign(new Error('Invalid numeric parameter.'), { status: 400 });
+  }
   const parsed = typeof value === 'string' ? Number(value) : value;
-  return Number.isSafeInteger(parsed) ? Math.max(min, Math.min(max, parsed as number)) : fallback;
+  if (!Number.isSafeInteger(parsed) || (parsed as number) < min || (parsed as number) > max) {
+    throw Object.assign(new Error('Invalid numeric parameter.'), { status: 400 });
+  }
+  return parsed as number;
 }
 
 function initialSessionTitle(input: string): string {
@@ -182,11 +218,14 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         response.status(404).json({ error: 'Extension command not found' });
         return;
       }
-      const args = typeof request.body?.args === 'string' ? request.body.args.slice(0, 100_000) : '';
+      const rawArgs = typeof request.body?.args === 'string' ? request.body.args.slice(0, 100_000) : '';
+      const args = services.redactText(rawArgs);
       const effective = resolveEffectiveConfiguration(services, {
         projectId: session.workspaceId, sessionId: session.id, session,
       });
-      const providerName = effective.values.provider ?? String(session.providerConfig?.type ?? 'mock');
+      const providerName = services.redactText(
+        effective.values.provider ?? String(session.providerConfig?.type ?? 'mock'),
+      );
       const output = await command.handler(args, {
         sessionManager: services.sessionManager,
         currentSessionId: session.id,
@@ -202,7 +241,9 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         requestInteraction: (interaction: ExtensionInteractionRequest) => services.agentRuntime
           .requestExtensionInteraction(session.id, interaction),
       });
-      response.json({ output: typeof output === 'string' ? output.slice(0, 200_000) : '' });
+      response.json({
+        output: typeof output === 'string' ? services.redactText(output.slice(0, 200_000)) : '',
+      });
     } catch (error) {
       next(error);
     }
@@ -223,7 +264,10 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
           return [{
             name: component.name,
             placement: component.placement ?? 'status',
-            content: String(component.render({ currentSessionId: session.id, provider: effective.values.provider })).slice(0, 20_000),
+            content: services.redactText(String(component.render({
+              currentSessionId: session.id,
+              provider: effective.values.provider ? services.redactText(effective.values.provider) : undefined,
+            })).slice(0, 20_000)),
             extensionId: component.extensionId,
           }];
         } catch {
@@ -305,7 +349,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         });
       }
       const requestedModel = stringValue(body.model, 'model', { optional: true, max: 500 });
-      const requestedThinking = ['off', 'low', 'medium', 'high', 'xhigh', 'max'].includes(String(body.thinking))
+      const requestedThinking = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(String(body.thinking))
         ? body.thinking as Session['thinking']
         : undefined;
       const requestedToolPreset = ['configured', 'chat-only', 'read-only', 'default', 'full'].includes(String(body.toolPreset))
@@ -365,6 +409,8 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         ?? effective.values.systemPrompt;
       const instructions = await resolveInstructionPrompt({
         cwd,
+        agentDir: services.agentSettings.agentDir,
+        agentDirTrusted: true,
         projectTrusted: trusted,
         systemPromptText: configuredSystemPrompt,
       });
@@ -463,11 +509,16 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         response.status(404).json({ error: 'Session not found' });
         return;
       }
+      const includeCommands = request.query.includeCommands;
+      if (includeCommands !== undefined && includeCommands !== 'true' && includeCommands !== 'false') {
+        response.status(400).json({ error: 'includeCommands invalide.' });
+        return;
+      }
       response.json({
         ...services.agentRuntime.snapshot(session.id),
         session: serializeSessionPage(session, {
-          limit: boundedMessageLimit(request.query.messageLimit, 80, true),
-          includeCommands: request.query.includeCommands !== 'false',
+          limit: integerValue(request.query.messageLimit, 80, 0, 250),
+          includeCommands: includeCommands !== 'false',
         }),
       });
     } catch (error) {
@@ -507,26 +558,30 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       const providerName = typeof request.body?.provider === 'string'
         ? request.body.provider
         : effective.values.provider ?? session.providerConfig?.type ?? 'mock';
-      const instruction = typeof request.body?.instruction === 'string'
+      const rawInstruction = typeof request.body?.instruction === 'string'
         ? request.body.instruction.slice(0, 10_000)
         : 'Summarize concisely while preserving decisions, constraints, commands, and unresolved work.';
+      const instruction = services.redactText(rawInstruction);
       const before = services.sessionManager.getTokenCount(session.id);
       const firstKeptIndex = Math.max(1, session.messages.length - 2);
       const compacted = session.messages.slice(0, firstKeptIndex);
       services.agentRuntime.publishSessionEvent(session.id, 'compaction.started', { tokensBefore: before });
       const provider = services.resolveProvider(providerName);
       if (!provider) throw Object.assign(new Error(`Provider inconnu : ${providerName}`), { status: 400 });
-      const requestedModel = typeof request.body?.model === 'string' ? request.body.model : effective.values.model;
-      const summaryResponse = await provider.chat([{
+      const rawModel = typeof request.body?.model === 'string' ? request.body.model : effective.values.model;
+      const requestedModel = rawModel ? services.redactText(rawModel) : undefined;
+      const rawSummaryResponse = await provider.chat([{
         id: `compaction:${session.id}`,
         role: 'user',
-        content: compacted.map(message => `${message.role}: ${message.content}`).join('\n---\n'),
+        content: services.redactText(compacted.map(message => `${message.role}: ${message.content}`).join('\n---\n')),
         timestamp: new Date(),
       }], {
         model: requestedModel,
+        sessionId: session.id,
         systemPrompt: `You summarize an agent conversation. ${instruction}`,
         signal: controller.signal,
       });
+      const summaryResponse = services.redactJson(rawSummaryResponse);
       if (summaryResponse.usage) services.recordUsage(providerName, summaryResponse.model ?? requestedModel, summaryResponse.usage);
       const summary = summaryResponse.content.trim();
       if (!summary) throw new Error('Le provider a renvoyé un résumé vide.');
@@ -553,7 +608,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
     } catch (error) {
       const services = await servicesPromise;
       services.agentRuntime.publishSessionEvent(request.params.sessionId, 'compaction.failed', {
-        message: error instanceof Error ? error.message : 'Compaction failed',
+        message: services.redactText(error instanceof Error ? error.message : 'Compaction failed'),
       });
       next(error);
     }
@@ -616,12 +671,18 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       response.status(404).json({ error: 'Command not found' });
       return;
     }
-    const after = integerValue(request.query.after ?? request.headers['last-event-id'], 0, 0, Number.MAX_SAFE_INTEGER);
+    let after: number;
+    try { after = integerValue(request.query.after ?? request.headers['last-event-id'], 0, 0, Number.MAX_SAFE_INTEGER); }
+    catch {
+      response.status(400).json({ error: 'Invalid numeric parameter.' });
+      return;
+    }
     response.status(200);
     response.setHeader('Content-Type', 'text/event-stream');
     response.setHeader('Cache-Control', 'no-cache, no-transform');
     response.setHeader('Connection', 'keep-alive');
     response.flushHeaders?.();
+    const channel = new SseChannel(response, services.createTextRedactor());
     let sent = after;
     let replaying = true;
     const pending: import('../runtime/command-runtime.js').CommandEvent[] = [];
@@ -632,27 +693,33 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         return;
       }
       sent = event.sequence;
-      sendEvent(response, event.type, event, String(event.sequence));
+      channel.send(event.type, services.redactJson(event), event.sequence);
     };
     const unsubscribe = services.commandRuntime.subscribe(request.params.commandId, emit);
-    sendEvent(response, 'connection.ready', { snapshot });
+    channel.send('connection.ready', services.redactJson({ snapshot }));
     for (const event of services.commandRuntime.replay(request.params.commandId, after)) {
       sent = Math.max(sent, event.sequence);
-      sendEvent(response, event.type, event, String(event.sequence));
+      channel.send(event.type, services.redactJson(event), event.sequence);
     }
     replaying = false;
     pending.sort((left, right) => left.sequence - right.sequence).forEach(emit);
     const current = services.commandRuntime.get(request.params.commandId);
     if (current && current.status !== 'running') {
       unsubscribe?.();
-      response.end();
+      channel.close();
       return;
     }
-    const heartbeat = setInterval(() => response.write(': heartbeat\n\n'), 15_000);
-    request.on('close', () => {
+    const heartbeat = setInterval(() => channel.heartbeat(), 15_000);
+    let cleaned = false;
+    const cleanup = (): void => {
+      if (cleaned) return;
+      cleaned = true;
       clearInterval(heartbeat);
       unsubscribe?.();
-    });
+    };
+    request.once('close', cleanup);
+    response.once('finish', cleanup);
+    response.once('close', cleanup);
   });
 
   router.get('/sessions/:sessionId/events', async (request, response, next) => {
@@ -673,6 +740,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       response.setHeader('X-Accel-Buffering', 'no');
       response.flushHeaders?.();
 
+      const channel = new SseChannel(response, services.createTextRedactor());
       const pending: AgentEvent[] = [];
       let replaying = true;
       let sent = after;
@@ -683,26 +751,32 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
           return;
         }
         sent = event.sequence;
-        sendEvent(response, event.type, event, event.id);
+        channel.send(event.type, services.redactJson(event), event.id);
       };
       const unsubscribe = services.agentRuntime.journal.subscribe(session.id, emit);
       const replay = services.agentRuntime.journal.replay(session.id, after);
-      sendEvent(response, 'connection.ready', {
+      channel.send('connection.ready', services.redactJson({
         protocolVersion: 1,
         reset: replay.reset,
         snapshot: services.agentRuntime.snapshot(session.id),
-      });
+      }));
       for (const event of replay.events) {
         sent = Math.max(sent, event.sequence);
-        sendEvent(response, event.type, event, event.id);
+        channel.send(event.type, services.redactJson(event), event.id);
       }
       replaying = false;
       pending.sort((left, right) => left.sequence - right.sequence).forEach(emit);
-      const heartbeat = setInterval(() => response.write(': heartbeat\n\n'), 15_000);
-      request.on('close', () => {
+      const heartbeat = setInterval(() => channel.heartbeat(), 15_000);
+      let cleaned = false;
+      const cleanup = (): void => {
+        if (cleaned) return;
+        cleaned = true;
         clearInterval(heartbeat);
         unsubscribe();
-      });
+      };
+      request.once('close', cleanup);
+      response.once('finish', cleanup);
+      response.once('close', cleanup);
     } catch (error) {
       next(error);
     }

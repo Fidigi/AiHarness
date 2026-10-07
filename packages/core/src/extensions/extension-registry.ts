@@ -231,8 +231,8 @@ export class ExtensionRegistry {
     for (const cleanup of [...extension.cleanups].reverse()) {
       try {
         await cleanup();
-      } catch (error) {
-        console.error(`[ExtensionRegistry] Cleanup failed for "${id}":`, error);
+      } catch {
+        console.error('[ExtensionRegistry] Extension cleanup failed.');
       }
     }
     return true;

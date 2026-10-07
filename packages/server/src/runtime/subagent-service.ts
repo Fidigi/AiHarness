@@ -128,7 +128,7 @@ function validateProfile(input: Partial<SubagentProfile>, options: { id?: string
     throw Object.assign(new Error('Type de profil invalide.'), { status: 400, code: 'INVALID_SUBAGENT_PROFILE' });
   }
   const thinking = input.thinking;
-  if (thinking !== undefined && !['off', 'low', 'medium', 'high', 'xhigh', 'max'].includes(thinking)) {
+  if (thinking !== undefined && !['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(thinking)) {
     throw Object.assign(new Error('Niveau de réflexion invalide.'), { status: 400, code: 'INVALID_SUBAGENT_PROFILE' });
   }
   const maxTurns = input.maxTurns;
@@ -165,6 +165,8 @@ export class SubagentService {
     private readonly workspaceManager: WorkspaceManager,
     private readonly trustManager: ProjectTrustManager,
     private readonly filePath: string,
+    private readonly redactText: (value: string) => string = value => value,
+    private readonly redactJson: <T>(value: T) => T = value => value,
   ) {}
 
   async load(): Promise<void> {
@@ -179,7 +181,7 @@ export class SubagentService {
       this.file = next;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.error('[Subagents] Ignoring invalid configuration:', error instanceof Error ? error.message : error);
+        console.error(this.redactText(`[Subagents] Ignoring invalid configuration: ${error instanceof Error ? error.message : String(error)}`));
       }
     }
   }
@@ -188,7 +190,7 @@ export class SubagentService {
     const context = await this.context(input);
     const global = this.file.global ?? defaultStoredConfiguration();
     const project = context.scope === 'project' ? this.file.projects[context.projectId!] : undefined;
-    const selected = cloneStored(project ?? global);
+    const selected = this.redactJson(cloneStored(project ?? global));
     return {
       ...selected,
       ...(context.cwd ? { cwd: context.cwd } : {}),
@@ -220,7 +222,7 @@ export class SubagentService {
       if (configuration.profiles.length >= MAX_PROFILES) throw Object.assign(
         new Error('Nombre maximal de profils atteint.'), { status: 409, code: 'SUBAGENT_PROFILE_LIMIT' },
       );
-      const created = validateProfile(profile);
+      const created = validateProfile(this.redactJson(profile));
       if (configuration.profiles.some(item => item.id === created.id)) throw Object.assign(
         new Error('Ce profil existe déjà.'), { status: 409, code: 'SUBAGENT_PROFILE_EXISTS' },
       );
@@ -250,7 +252,7 @@ export class SubagentService {
       const index = configuration.profiles.findIndex(item => item.id === profileId);
       if (index < 0) throw Object.assign(new Error('Profil introuvable.'), { status: 404 });
       const current = configuration.profiles[index]!;
-      const updated = validateProfile({ ...current, ...profile, id: current.id }, {
+      const updated = validateProfile(this.redactJson({ ...current, ...profile, id: current.id }), {
         id: current.id,
         builtIn: current.builtIn,
       });
@@ -326,7 +328,7 @@ export class SubagentService {
     return {
       engineEnabled: input.engineEnabled,
       maxConcurrency: input.maxConcurrency,
-      profiles: input.profiles.map(profile => validateProfile(profile, {
+      profiles: input.profiles.map(profile => validateProfile(this.redactJson(profile), {
         id: profile.id,
         builtIn: builtInProfiles().some(item => item.id === profile.id) && profile.builtIn === true,
       })),
@@ -337,7 +339,7 @@ export class SubagentService {
   private async persist(): Promise<void> {
     await mkdir(path.dirname(this.filePath), { recursive: true });
     const temporary = `${this.filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
-    await writeFile(temporary, `${JSON.stringify(this.file, null, 2)}\n`, { mode: 0o600 });
+    await writeFile(temporary, `${JSON.stringify(this.redactJson(this.file), null, 2)}\n`, { mode: 0o600 });
     await rename(temporary, this.filePath);
   }
 }

@@ -1,11 +1,15 @@
-import { lstat, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { lstat, stat } from 'node:fs/promises';
 import nodePath from 'node:path';
+import { Worker } from 'node:worker_threads';
 import type {
   ExtensionRuntimeContext,
   ExtensionToolResult,
 } from '../extensions/extension-registry.js';
 import type { ExtensionRegistry } from '../extensions/extension-registry.js';
+import { readStableDirectoryEntries } from '../security/stable-directory.js';
+import { atomicWriteStableFile } from '../security/stable-file.js';
 import type { WorkspaceManager } from '../security/workspace-manager.js';
+import { readBoundedResourceText } from '../resources/resource-manager.js';
 import {
   DEFAULT_GREP_LINE_LENGTH,
   DEFAULT_TOOL_MAX_BYTES,
@@ -28,6 +32,10 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_WRITE_BYTES = 1_000_000;
 const MAX_SEARCH_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_SEARCH_FILES = 100_000;
+const MAX_SEARCH_DIRECTORIES = 100_000;
+const MAX_DIRECTORY_SCAN_ENTRIES = 100_000;
+const MAX_GREP_SCAN_BYTES = 64 * 1024 * 1024;
+const MAX_GREP_REGEX_MS = 5_000;
 const MAX_PROCESS_CAPTURE = 10 * 1024 * 1024;
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 
@@ -119,14 +127,16 @@ async function workspacePath(
   workspaceManager: WorkspaceManager,
   context: ExtensionRuntimeContext,
   input: string,
-  options: { mustExist?: boolean; kind?: 'file' | 'directory' | 'any' } = {},
+  options: { mustExist?: boolean; kind?: 'file' | 'directory' | 'any'; publication?: boolean } = {},
 ): Promise<string> {
   const cwd = await workspaceRoot(workspaceManager, context);
-  const resolved = await workspaceManager.resolve(input, {
-    base: cwd,
-    mustExist: options.mustExist,
-    kind: options.kind,
-  });
+  const resolved = options.publication
+    ? await workspaceManager.resolveDestination(input, { base: cwd, kind: options.kind })
+    : await workspaceManager.resolve(input, {
+        base: cwd,
+        mustExist: options.mustExist,
+        kind: options.kind,
+      });
   if (!inside(cwd, resolved)) throw new Error('Path is outside the active workspace.');
   return resolved;
 }
@@ -171,6 +181,96 @@ function headOutput(content: string): { content: string; truncation?: ToolTrunca
   };
 }
 
+const REGEX_WORKER_SOURCE = String.raw`
+  const { parentPort, workerData } = require('node:worker_threads');
+  const expression = new RegExp(workerData.pattern, workerData.ignoreCase ? 'i' : '');
+  parentPort.on('message', ({ id, text, limit }) => {
+    const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    const indexes = [];
+    for (let index = 0; index < lines.length && indexes.length < limit; index++) {
+      if (expression.test(lines[index])) indexes.push(index);
+    }
+    parentPort.postMessage({ id, indexes });
+  });
+`;
+
+class BoundedRegexMatcher {
+  private readonly worker: Worker;
+  private readonly pending = new Map<number, {
+    resolve: (indexes: number[]) => void;
+    reject: (error: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
+  private nextId = 1;
+  private closed = false;
+  private readonly aborted: () => void;
+
+  constructor(pattern: string, ignoreCase: boolean, private readonly signal?: AbortSignal) {
+    this.worker = new Worker(REGEX_WORKER_SOURCE, { eval: true, workerData: { pattern, ignoreCase } });
+    this.worker.unref();
+    this.worker.on('message', (message: { id?: unknown; indexes?: unknown }) => {
+      if (!Number.isSafeInteger(message.id) || !Array.isArray(message.indexes)) return;
+      const pending = this.pending.get(Number(message.id));
+      if (!pending) return;
+      this.pending.delete(Number(message.id));
+      clearTimeout(pending.timer);
+      const indexes = message.indexes.filter((value): value is number => Number.isSafeInteger(value) && value >= 0);
+      pending.resolve(indexes);
+    });
+    this.worker.on('error', () => this.fail(new Error('Regular expression evaluation failed.')));
+    this.aborted = () => this.fail(new Error('Operation aborted.'));
+    signal?.addEventListener('abort', this.aborted, { once: true });
+  }
+
+  match(text: string, limit: number, deadline: number): Promise<number[]> {
+    if (this.signal?.aborted) return Promise.reject(new Error('Operation aborted.'));
+    if (this.closed) return Promise.reject(new Error('Regular expression evaluation failed.'));
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      this.fail(new Error('Regular expression evaluation exceeded its time limit.'));
+      return Promise.reject(new Error('Regular expression evaluation exceeded its time limit.'));
+    }
+    const id = this.nextId++;
+    return new Promise<number[]>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        const error = new Error('Regular expression evaluation exceeded its time limit.');
+        reject(error);
+        this.fail(error);
+      }, remaining);
+      this.pending.set(id, { resolve, reject, timer });
+      try { this.worker.postMessage({ id, text, limit }); }
+      catch {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(new Error('Regular expression evaluation failed.'));
+      }
+    });
+  }
+
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.signal?.removeEventListener('abort', this.aborted);
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error('Regular expression evaluation was closed.'));
+    }
+    this.pending.clear();
+    void this.worker.terminate().catch(() => undefined);
+  }
+
+  private fail(error: Error): void {
+    if (this.closed) return;
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.pending.clear();
+    this.close();
+  }
+}
+
 async function gitAwareFiles(
   root: string,
   signal?: AbortSignal,
@@ -186,14 +286,19 @@ async function gitAwareFiles(
     });
     if (result.exitCode !== 0 || result.captureTruncated) return undefined;
     const files: SearchFile[] = [];
-    for (const relative of result.output.split('\0').filter(Boolean)) {
+    let cursor = 0;
+    while (cursor < result.output.length && files.length < MAX_SEARCH_FILES) {
       throwIfAborted(signal);
-      if (files.length >= MAX_SEARCH_FILES || relative.includes('\0')) break;
+      const separator = result.output.indexOf('\0', cursor);
+      const end = separator < 0 ? result.output.length : separator;
+      const relative = result.output.slice(cursor, end);
+      cursor = end + 1;
+      if (!relative) continue;
       const absolutePath = nodePath.resolve(root, relative);
       if (!inside(root, absolutePath)) continue;
       try {
         const info = await lstat(absolutePath);
-        if (!info.isFile() || info.isSymbolicLink()) continue;
+        if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1) continue;
       } catch { continue; }
       files.push({ absolutePath, relativePath: relative.split(nodePath.sep).join('/') });
     }
@@ -206,21 +311,29 @@ async function gitAwareFiles(
 
 async function walkedFiles(root: string, signal?: AbortSignal): Promise<SearchFile[]> {
   const files: SearchFile[] = [];
-  const visit = async (directory: string): Promise<void> => {
+  const directories = [root];
+  let scannedDirectories = 0;
+  let scannedEntries = 0;
+  while (directories.length && files.length < MAX_SEARCH_FILES && scannedEntries < MAX_SEARCH_FILES) {
     throwIfAborted(signal);
-    if (files.length >= MAX_SEARCH_FILES) return;
-    const entries = await readdir(directory, { withFileTypes: true });
-    for (const entry of entries) {
+    const directory = directories.pop()!;
+    if (++scannedDirectories > MAX_SEARCH_DIRECTORIES) break;
+    const listing = await readStableDirectoryEntries(directory, MAX_SEARCH_FILES - scannedEntries, signal);
+    scannedEntries += listing.entries.length;
+    for (const entry of listing.entries) {
       throwIfAborted(signal);
-      if (files.length >= MAX_SEARCH_FILES) return;
+      if (files.length >= MAX_SEARCH_FILES) break;
       if (entry.name === '.git' || entry.name === 'node_modules') continue;
       const absolutePath = nodePath.join(directory, entry.name);
       if (entry.isSymbolicLink()) continue;
-      if (entry.isDirectory()) await visit(absolutePath);
-      else if (entry.isFile()) files.push({ absolutePath, relativePath: relativeDisplay(root, absolutePath) });
+      if (entry.isDirectory()) {
+        if (directories.length + scannedDirectories < MAX_SEARCH_DIRECTORIES) directories.push(absolutePath);
+      } else if (entry.isFile()) {
+        files.push({ absolutePath, relativePath: relativeDisplay(root, absolutePath) });
+      }
     }
-  };
-  await visit(root);
+    if (listing.truncated) break;
+  }
   return files;
 }
 
@@ -349,14 +462,9 @@ export async function registerWorkspaceTools(
         ? undefined
         : boundedInteger(input.limit, DEFAULT_TOOL_MAX_LINES, 1, 100_000, 'limit');
       const filePath = await workspacePath(workspaceManager, context, requestedPath, { kind: 'file' });
-      const info = await stat(filePath);
-      if (info.size > MAX_FILE_BYTES) throw new Error(`File exceeds the ${formatToolBytes(MAX_FILE_BYTES)} read limit.`);
-      const bytes = await readFile(filePath);
+      const source = await readBoundedResourceText(filePath, MAX_FILE_BYTES);
       throwIfAborted(signal);
-      if (bytes.subarray(0, 8_192).includes(0)) {
-        throw new Error('Binary and image tool results are not supported by this runtime yet.');
-      }
-      const lines = bytes.toString('utf8').split('\n');
+      const lines = source.split('\n');
       const start = offset - 1;
       if (start >= lines.length) throw new Error(`Offset ${offset} is beyond the end of the file (${lines.length} lines).`);
       const end = limit === undefined ? lines.length : Math.min(lines.length, start + limit);
@@ -405,13 +513,16 @@ export async function registerWorkspaceTools(
       if (Buffer.byteLength(content, 'utf8') > MAX_WRITE_BYTES) {
         throw new Error(`Content exceeds the ${formatToolBytes(MAX_WRITE_BYTES)} write limit.`);
       }
-      const filePath = await workspacePath(workspaceManager, context, requestedPath, { mustExist: false, kind: 'file' });
       const root = await workspaceRoot(workspaceManager, context);
+      await workspaceManager.ensureDirectory(nodePath.dirname(nodePath.resolve(root, requestedPath)), { base: root });
+      const filePath = await workspacePath(workspaceManager, context, requestedPath, {
+        mustExist: false,
+        kind: 'file',
+        publication: true,
+      });
       return withMutationQueue(filePath, async () => {
         throwIfAborted(signal);
-        await mkdir(nodePath.dirname(filePath), { recursive: true });
-        throwIfAborted(signal);
-        await writeFile(filePath, content, 'utf8');
+        await atomicWriteStableFile(filePath, content, { overwrite: true, maxBytes: MAX_WRITE_BYTES });
         throwIfAborted(signal);
         return { content: `Successfully wrote ${relativeDisplay(root, filePath)}.` };
       });
@@ -451,15 +562,13 @@ export async function registerWorkspaceTools(
       const root = await workspaceRoot(workspaceManager, context);
       return withMutationQueue(filePath, async () => {
         throwIfAborted(signal);
-        const info = await stat(filePath);
-        if (info.size > MAX_FILE_BYTES) throw new Error(`File exceeds the ${formatToolBytes(MAX_FILE_BYTES)} edit limit.`);
-        const original = await readFile(filePath, 'utf8');
+        const original = await readBoundedResourceText(filePath, MAX_FILE_BYTES);
         throwIfAborted(signal);
         const updated = applyExactEdits(original, input.edits, relativeDisplay(root, filePath));
         if (Buffer.byteLength(updated, 'utf8') > MAX_WRITE_BYTES) {
           throw new Error(`Edited file exceeds the ${formatToolBytes(MAX_WRITE_BYTES)} write limit.`);
         }
-        await writeFile(filePath, updated, 'utf8');
+        await atomicWriteStableFile(filePath, updated, { overwrite: true, maxBytes: MAX_WRITE_BYTES });
         throwIfAborted(signal);
         return {
           content: `Successfully replaced ${input.edits.length} block(s) in ${relativeDisplay(root, filePath)}.`,
@@ -487,11 +596,17 @@ export async function registerWorkspaceTools(
       const limit = boundedInteger(input.limit, 500, 1, 5_000, 'limit');
       const directory = await workspacePath(workspaceManager, context, optionalString(input, 'path') ?? '.', { kind: 'directory' });
       throwIfAborted(signal);
-      const entries = await readdir(directory, { withFileTypes: true });
+      const listing = await readStableDirectoryEntries(directory, MAX_DIRECTORY_SCAN_ENTRIES, signal);
+      const entries: Array<{ name: string; directory: boolean }> = [];
+      for (const entry of listing.entries) {
+        throwIfAborted(signal);
+        entries.push({ name: entry.name, directory: entry.isDirectory() });
+      }
+      const scanTruncated = listing.truncated;
       entries.sort((left, right) => left.name.toLocaleLowerCase().localeCompare(right.name.toLocaleLowerCase()));
-      const limited = entries.slice(0, limit).map(entry => `${entry.name}${entry.isDirectory() ? '/' : ''}`);
+      const limited = entries.slice(0, limit).map(entry => `${entry.name}${entry.directory ? '/' : ''}`);
       const bounded = headOutput(limited.join('\n') || '(empty directory)');
-      const reachedLimit = entries.length > limit;
+      const reachedLimit = scanTruncated || entries.length > limit;
       return {
         content: `${bounded.content}${reachedLimit ? `\n\n[${limit} entries limit reached.]` : ''}`,
         details: {
@@ -575,28 +690,43 @@ export async function registerWorkspaceTools(
       const literal = input.literal === true;
       const contextLines = boundedInteger(input.context, 0, 0, 20, 'context');
       const limit = boundedInteger(input.limit, 100, 1, 5_000, 'limit');
-      let expression: RegExp | undefined;
       if (!literal) {
-        try { expression = new RegExp(pattern, ignoreCase ? 'i' : undefined); }
+        try { new RegExp(pattern, ignoreCase ? 'i' : undefined); }
         catch (error) { throw new Error(`Invalid regular expression: ${error instanceof Error ? error.message : String(error)}`); }
       }
       const literalPattern = ignoreCase ? pattern.toLocaleLowerCase() : pattern;
       const source = await searchFiles(workspaceManager, context, optionalString(input, 'path') ?? '.', signal);
+      const regexMatcher = literal ? undefined : new BoundedRegexMatcher(pattern, ignoreCase, signal);
+      const regexDeadline = Date.now() + MAX_GREP_REGEX_MS;
+      try {
       const output: string[] = [];
       let matches = 0;
       let linesTruncated = false;
+      let scanTruncated = false;
+      let scannedBytes = 0;
       for (const file of source.files) {
         throwIfAborted(signal);
         if (glob && !globMatches(file.relativePath, glob)) continue;
         const safeFile = await workspacePath(workspaceManager, context, file.absolutePath, { kind: 'file' });
-        const info = await stat(safeFile);
-        if (info.size > MAX_SEARCH_FILE_BYTES) continue;
-        const bytes = await readFile(safeFile);
-        if (bytes.subarray(0, 8_192).includes(0)) continue;
-        const lines = bytes.toString('utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+        let text: string;
+        try {
+          const info = await lstat(safeFile);
+          if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1
+            || info.size > MAX_SEARCH_FILE_BYTES) continue;
+          if (scannedBytes + info.size > MAX_GREP_SCAN_BYTES) {
+            scanTruncated = true;
+            break;
+          }
+          text = await readBoundedResourceText(safeFile, MAX_SEARCH_FILE_BYTES);
+          scannedBytes += Buffer.byteLength(text);
+        } catch { continue; }
+        const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+        const regexMatches = regexMatcher
+          ? new Set(await regexMatcher.match(text, limit - matches, regexDeadline))
+          : undefined;
         for (let index = 0; index < lines.length; index++) {
           const candidate = ignoreCase ? lines[index].toLocaleLowerCase() : lines[index];
-          if (expression ? !expression.test(lines[index]) : !candidate.includes(literalPattern)) continue;
+          if (regexMatches ? !regexMatches.has(index) : !candidate.includes(literalPattern)) continue;
           matches++;
           const start = Math.max(0, index - contextLines);
           const end = Math.min(lines.length - 1, index + contextLines);
@@ -610,20 +740,30 @@ export async function registerWorkspaceTools(
         }
         if (matches >= limit) break;
       }
-      if (!matches) return { content: 'No matches found.' };
+      if (!matches) return {
+        content: scanTruncated
+          ? `No matches found before the ${formatToolBytes(MAX_GREP_SCAN_BYTES)} scan limit.`
+          : 'No matches found.',
+        ...(scanTruncated ? { details: { matches: 0, scanLimitReached: MAX_GREP_SCAN_BYTES } } : {}),
+      };
       const bounded = headOutput(output.join('\n'));
       const notices: string[] = [];
       if (matches >= limit) notices.push(`${limit} matches limit reached`);
       if (linesTruncated) notices.push(`Some lines were truncated to ${DEFAULT_GREP_LINE_LENGTH} characters`);
+      if (scanTruncated) notices.push(`Search stopped at the ${formatToolBytes(MAX_GREP_SCAN_BYTES)} scan limit`);
       return {
         content: `${bounded.content}${notices.length ? `\n\n[${notices.join('. ')}.]` : ''}`,
         details: {
           matches,
           ...(matches >= limit ? { matchLimitReached: limit } : {}),
           ...(linesTruncated ? { linesTruncated: true } : {}),
+          ...(scanTruncated ? { scanLimitReached: MAX_GREP_SCAN_BYTES } : {}),
           ...(bounded.truncation ? { truncation: bounded.truncation } : {}),
         },
       };
+      } finally {
+        regexMatcher?.close();
+      }
     };
     api.registerTool({
       name: 'grep',

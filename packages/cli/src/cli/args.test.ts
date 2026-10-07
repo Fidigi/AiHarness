@@ -13,6 +13,7 @@ describe('CLI arguments', () => {
   it('parses modes, aliases, repeatable resources, tools, and startup model options', () => {
     expect(parseCliArguments([
       '--mode=text', '--tui-mode', 'regular', '-e', './one.js', '--extension=./two.js',
+      '--skill', './review', '--prompt-template=./prompts', '-ns', '-np',
       '--tools', 'read,GREP,read', '-xt', 'bash', '--provider', 'openai', '--model', 'gpt-test',
       '--models', 'openai/o*,anthropic/Claude*,openai/o*',
       '--thinking=max', '--system-prompt', './SYSTEM.md',
@@ -23,6 +24,10 @@ describe('CLI arguments', () => {
       mode: 'text',
       tuiMode: 'regular',
       extensions: ['./one.js', './two.js'],
+      skills: ['./review'],
+      promptTemplates: ['./prompts'],
+      noSkills: true,
+      noPromptTemplates: true,
       tools: ['read', 'grep'],
       excludeTools: ['bash'],
       provider: 'openai',
@@ -44,6 +49,10 @@ describe('CLI arguments', () => {
   it('honours -- termination and rejects unknown, malformed, and incompatible options', () => {
     expect(parseCliArguments(['--', '-literal', '@file.txt']).messages).toEqual(['-literal']);
     expect(parseCliArguments(['--', '-literal', '@file.txt']).fileArgs).toEqual(['file.txt']);
+    expect(parseCliArguments(['@file.txt', '--', '--literal'])).toMatchObject({
+      fileArgs: ['file.txt'],
+      messages: ['--literal'],
+    });
     expect(() => parseCliArguments(['--unknown'])).toThrow(CliArgumentError);
     expect(() => parseCliArguments(['--tui-mode', 'wide'])).toThrow(/Invalid TUI mode/);
     expect(() => parseCliArguments(['--tools', ''])).toThrow(/non-empty|at least one/i);
@@ -68,6 +77,16 @@ describe('CLI arguments', () => {
     expect(parseCliArguments(['--rpc', '--session', 'saved'])).toMatchObject({ mode: 'rpc', session: 'saved' });
     expect(parseCliArguments(['-c'])).toMatchObject({ continueSession: true });
     expect(parseCliArguments(['-r'])).toMatchObject({ resume: true });
+  });
+
+  it('does not reinterpret a slash-command payload as process options', () => {
+    const modelCommand = parseCliArguments(['/model', '--provider', 'fake']);
+    expect(modelCommand.messages).toEqual(['/model', '--provider', 'fake']);
+    expect(modelCommand.provider).toBeUndefined();
+    expect(parseCliArguments(['/export', '--help'])).toMatchObject({
+      messages: ['/export', '--help'],
+      help: false,
+    });
   });
 
   it('resolves terminal, redirected print, JSON, and RPC lifecycles', () => {

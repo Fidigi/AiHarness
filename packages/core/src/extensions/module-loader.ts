@@ -1,9 +1,13 @@
-import { lstat, readdir } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { lstat, open } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { openStableDirectoryHandle, readStableDirectoryEntries } from '../security/stable-directory.js';
 import type { ExtensionFactory } from './extension-registry.js';
 import type { ExtensionRegistry } from './extension-registry.js';
+
+const RUNNING_UNDER_VITEST = Reflect.has(globalThis, '__vitest_worker__');
 
 export interface ExtensionModuleLoaderOptions {
   cwd?: string;
@@ -24,6 +28,100 @@ export interface ExtensionModuleLoadResult {
   errors: ExtensionModuleLoadError[];
   generation: number;
   committed: boolean;
+}
+
+async function pathContainsSymbolicLink(candidate: string): Promise<boolean> {
+  const absolute = path.resolve(candidate);
+  const parsed = path.parse(absolute);
+  let current = parsed.root;
+  for (const component of absolute.slice(parsed.root.length).split(path.sep).filter(Boolean)) {
+    current = path.join(current, component);
+    try {
+      if ((await lstat(current)).isSymbolicLink()) return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+interface ExtensionFileIdentity {
+  dev: number;
+  ino: number;
+  size: number;
+  mtimeMs: number;
+  ctimeMs: number;
+}
+
+function sameExtensionIdentity(
+  value: ExtensionFileIdentity,
+  expected: ExtensionFileIdentity,
+): boolean {
+  return value.dev === expected.dev && value.ino === expected.ino && value.size === expected.size
+    && value.mtimeMs === expected.mtimeMs && value.ctimeMs === expected.ctimeMs;
+}
+
+async function importExtensionFactory(
+  filePath: string,
+  generation: number,
+): Promise<ExtensionFactory> {
+  const parentPath = path.dirname(filePath);
+  const parentHandle = await openStableDirectoryHandle(parentPath).catch(() => {
+    throw new Error('Extension module parent must be a stable regular directory');
+  });
+  let fileHandle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    const parentOpened = await parentHandle.stat();
+    const parentBefore = await lstat(parentPath);
+    if (!parentOpened.isDirectory() || !parentBefore.isDirectory() || parentBefore.isSymbolicLink()
+      || parentOpened.dev !== parentBefore.dev || parentOpened.ino !== parentBefore.ino) {
+      throw new Error('Extension module parent changed while it was being opened');
+    }
+    const anchoredPath = process.platform === 'linux'
+      ? `/proc/self/fd/${parentHandle.fd}/${path.basename(filePath)}`
+      : filePath;
+    const before = await lstat(anchoredPath);
+    if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1
+      || before.size > 5 * 1024 * 1024) {
+      throw new Error('Extension module must be a stable regular file no larger than 5 MiB');
+    }
+    fileHandle = await open(
+      anchoredPath,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
+    );
+    const opened = await fileHandle.stat();
+    if (!opened.isFile() || opened.nlink !== 1 || opened.size > 5 * 1024 * 1024
+      || !sameExtensionIdentity(opened, before)) {
+      throw new Error('Extension module changed while it was being opened');
+    }
+
+    // Linux imports through the held descriptor so a pathname replacement cannot substitute the entry module.
+    // Vitest's VM loader cannot import /proc descriptors; process-level contract tests exercise that path.
+    // Other platforms retain the same before/open/after identity checks and fail closed when instability is seen.
+    const descriptorImport = process.platform === 'linux' && !RUNNING_UNDER_VITEST;
+    const importPath = descriptorImport ? `/proc/self/fd/${fileHandle.fd}` : filePath;
+    const moduleUrl = `${pathToFileURL(importPath).href}?aiharness=${generation}`;
+    const loaded = await import(moduleUrl) as { default?: ExtensionFactory };
+
+    const [openedAfter, pathAfter, parentAfter] = await Promise.all([
+      fileHandle.stat(),
+      lstat(filePath),
+      parentHandle.stat(),
+    ]);
+    if (!openedAfter.isFile() || openedAfter.nlink !== 1 || !sameExtensionIdentity(openedAfter, opened)
+      || !pathAfter.isFile() || pathAfter.isSymbolicLink() || pathAfter.nlink !== 1
+      || !sameExtensionIdentity(pathAfter, opened)
+      || !parentAfter.isDirectory() || parentAfter.dev !== parentOpened.dev || parentAfter.ino !== parentOpened.ino) {
+      throw new Error('Extension module changed while it was being imported');
+    }
+    if (typeof loaded.default !== 'function') {
+      throw new Error('Extension module must export a default factory function');
+    }
+    return loaded.default;
+  } finally {
+    await fileHandle?.close().catch(() => undefined);
+    await parentHandle.close().catch(() => undefined);
+  }
 }
 
 /** Discovers trusted JavaScript modules and swaps their registrations transactionally. */
@@ -87,21 +185,28 @@ export class ExtensionModuleLoader {
     const files = new Set<string>();
 
     for (const candidate of candidates.slice(0, 200)) {
-      if (candidate.project && !projectTrusted) continue;
       const resolved = path.resolve(this.cwd, candidate.path);
+      const relative = path.relative(this.cwd, resolved);
+      const withinProject = relative === ''
+        || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+      const projectWithinCandidate = resolved === this.cwd || this.cwd.startsWith(`${resolved}${path.sep}`);
+      if (!projectTrusted && (candidate.project || withinProject || projectWithinCandidate)) continue;
       try {
+        if (await pathContainsSymbolicLink(resolved)) continue;
         const info = await lstat(resolved);
         if (info.isSymbolicLink()) continue;
-        if (info.isFile() && info.size <= 5 * 1024 * 1024 && this.isExtensionFile(resolved)) files.add(resolved);
+        if (info.isFile() && info.nlink === 1 && info.size <= 5 * 1024 * 1024
+          && this.isExtensionFile(resolved)) files.add(resolved);
         if (info.isDirectory()) {
           const index = await this.findIndex(resolved);
           if (index) files.add(index);
-          for (const entry of (await readdir(resolved, { withFileTypes: true })).slice(0, 1_000)) {
+          for (const entry of (await readStableDirectoryEntries(resolved, 1_000)).entries) {
             const entryPath = path.join(resolved, entry.name);
             if (entry.isFile() && this.isExtensionFile(entryPath)) {
               try {
                 const entryInfo = await lstat(entryPath);
-                if (entryInfo.isFile() && !entryInfo.isSymbolicLink() && entryInfo.size <= 5 * 1024 * 1024) files.add(entryPath);
+                if (entryInfo.isFile() && !entryInfo.isSymbolicLink() && entryInfo.nlink === 1
+                  && entryInfo.size <= 5 * 1024 * 1024) files.add(entryPath);
               } catch { /* Entry changed during discovery. */ }
             }
             if (entry.isDirectory()) {
@@ -123,16 +228,7 @@ export class ExtensionModuleLoader {
     const candidates: Array<{ id: string; factory: ExtensionFactory }> = [];
     for (const filePath of await this.discover()) {
       try {
-        const info = await lstat(filePath);
-        if (!info.isFile() || info.isSymbolicLink() || info.size > 5 * 1024 * 1024) {
-          throw new Error('Extension module must be a regular file no larger than 5 MiB');
-        }
-        const moduleUrl = `${pathToFileURL(filePath).href}?aiharness=${nextGeneration}`;
-        const loaded = await import(moduleUrl) as { default?: ExtensionFactory };
-        if (typeof loaded.default !== 'function') {
-          throw new Error('Extension module must export a default factory function');
-        }
-        candidates.push({ id: filePath, factory: loaded.default });
+        candidates.push({ id: filePath, factory: await importExtensionFactory(filePath, nextGeneration) });
       } catch (error) {
         errors.push({ path: filePath, error: error instanceof Error ? error : new Error(String(error)) });
       }
@@ -157,7 +253,8 @@ export class ExtensionModuleLoader {
       const candidate = path.join(directory, name);
       try {
         const info = await lstat(candidate);
-        if (info.isFile() && !info.isSymbolicLink() && info.size <= 5 * 1024 * 1024) return candidate;
+        if (info.isFile() && !info.isSymbolicLink() && info.nlink === 1
+          && info.size <= 5 * 1024 * 1024 && !(await pathContainsSymbolicLink(candidate))) return candidate;
       } catch {
         // Try next supported entry point.
       }

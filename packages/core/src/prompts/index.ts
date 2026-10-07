@@ -6,6 +6,7 @@ export {
   composeInstructionSystemPrompt,
   resolveInstructionPrompt,
   resolveAgentDirectory,
+  resolvePreTrustAgentDirectory,
 } from './instruction-context.js';
 export type {
   InstructionDiagnostic,

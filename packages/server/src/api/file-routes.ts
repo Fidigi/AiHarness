@@ -1,17 +1,31 @@
 import { execFile } from 'node:child_process';
-import { watch as watchFileSystem } from 'node:fs';
-import { access, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { constants as fsConstants, watch as watchFileSystem } from 'node:fs';
+import { access, lstat, open } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { promisify } from 'node:util';
 import { Router, type Request } from 'express';
+import {
+  atomicWriteStableFile,
+  filteredProcessEnvironment,
+  openStableDirectoryHandle,
+  readStableDirectoryEntries,
+  readStableDirectorySnapshot,
+  StableFileError,
+} from '@ai-harness/core';
 import type { RuntimeServices } from '../runtime/services.js';
 import { requireCapability } from '../security/request-security.js';
+import { SseChannel } from './sse-channel.js';
 
 const execFileAsync = promisify(execFile);
 const MAX_SOURCE_BYTES = 2 * 1024 * 1024;
 const MAX_UPLOAD_BYTES = 6 * 1024 * 1024;
+const MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024;
 const MAX_INDEX_ENTRIES = 100_000;
+const MAX_DIRECTORY_ENTRIES = 10_000;
+const MAX_FILE_WATCHERS = 128;
+const MAX_CONCURRENT_DOWNLOADS = 4;
+const gitEnvironment = (): NodeJS.ProcessEnv => ({ ...filteredProcessEnvironment(), LC_ALL: 'C' });
 
 function isWithin(root: string, target: string): boolean {
   return target === root || target.startsWith(`${root}${path.sep}`);
@@ -80,10 +94,23 @@ type GitStatusEntry = {
   deletions?: number;
 };
 
+function boundedNulRecords(output: string, limit: number): { records: string[]; truncated: boolean } {
+  const records: string[] = [];
+  let cursor = 0;
+  while (cursor < output.length && records.length <= limit) {
+    const separator = output.indexOf('\0', cursor);
+    const end = separator < 0 ? output.length : separator;
+    const value = output.slice(cursor, end);
+    cursor = end + 1;
+    if (value) records.push(value);
+  }
+  return { records: records.slice(0, limit), truncated: records.length > limit || cursor < output.length };
+}
+
 function parseGitStatus(output: string): GitStatusEntry[] {
-  const records = output.split('\0').filter(Boolean);
+  const { records } = boundedNulRecords(output, MAX_INDEX_ENTRIES * 2);
   const result: GitStatusEntry[] = [];
-  for (let index = 0; index < records.length; index++) {
+  for (let index = 0; index < records.length && result.length < MAX_INDEX_ENTRIES; index++) {
     const record = records[index];
     const code = record.slice(0, 2);
     const filePath = record.slice(3);
@@ -112,11 +139,14 @@ async function gitStatus(cwd: string): Promise<{
       timeout: 10_000,
       maxBuffer: 5 * 1024 * 1024,
       encoding: 'utf8',
+      env: gitEnvironment(),
     });
     const files = parseGitStatus(stdout);
     const stats = new Map<string, { additions?: number; deletions?: number }>();
     try {
-      const { stdout: diff } = await execFileAsync('git', ['-C', cwd, 'diff', '--numstat', 'HEAD'], { timeout: 10_000 });
+      const { stdout: diff } = await execFileAsync('git', ['-C', cwd, 'diff', '--numstat', 'HEAD'], {
+        timeout: 10_000, env: gitEnvironment(),
+      });
       for (const line of diff.trim().split('\n').filter(Boolean)) {
         const [added, deleted, ...nameParts] = line.split('\t');
         const filePath = nameParts.join('\t');
@@ -141,6 +171,86 @@ async function gitStatus(cwd: string): Promise<{
   }
 }
 
+async function readStableDownload(target: string, maxBytes = MAX_DOWNLOAD_BYTES): Promise<{
+  bytes: Buffer;
+  size: number;
+  modifiedAt: string;
+}> {
+  const parentPath = path.dirname(target);
+  const parentHandle = await openStableDirectoryHandle(parentPath).catch(() => {
+    throw Object.assign(new Error('Répertoire de fichier instable.'), { status: 409 });
+  });
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    const parentOpened = await parentHandle.stat();
+    const parentBefore = await lstat(parentPath);
+    if (!parentOpened.isDirectory() || !parentBefore.isDirectory() || parentBefore.isSymbolicLink()
+      || parentOpened.dev !== parentBefore.dev || parentOpened.ino !== parentBefore.ino) {
+      throw Object.assign(new Error('Répertoire de fichier instable.'), { status: 409 });
+    }
+    const anchoredTarget = process.platform === 'linux'
+      ? `/proc/self/fd/${parentHandle.fd}/${path.basename(target)}`
+      : target;
+    const before = await lstat(anchoredTarget);
+    if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1) {
+      throw Object.assign(new Error('Fichier indisponible pour le téléchargement.'), { status: 409 });
+    }
+    if (before.size > maxBytes) {
+      throw Object.assign(new Error('Fichier trop volumineux pour le téléchargement.'), {
+        status: 413,
+        stableSize: before.size,
+        stableModifiedAt: before.mtime.toISOString(),
+      });
+    }
+    handle = await open(
+      anchoredTarget,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
+    );
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.nlink !== 1 || opened.dev !== before.dev || opened.ino !== before.ino
+      || opened.size !== before.size || opened.size > maxBytes) {
+      throw Object.assign(new Error('Le fichier a changé pendant son ouverture.'), { status: 409 });
+    }
+    const bytes = Buffer.allocUnsafe(opened.size);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const result = await handle.read(bytes, offset, bytes.length - offset, offset);
+      if (result.bytesRead === 0) break;
+      offset += result.bytesRead;
+    }
+    const [after, targetAfter, parentAfter, parentPathAfter] = await Promise.all([
+      handle.stat(), lstat(anchoredTarget), parentHandle.stat(), lstat(parentPath),
+    ]);
+    if (offset !== opened.size || after.dev !== opened.dev || after.ino !== opened.ino
+      || after.nlink !== 1 || after.size !== opened.size || after.mtimeMs !== opened.mtimeMs
+      || after.ctimeMs !== opened.ctimeMs || !targetAfter.isFile() || targetAfter.isSymbolicLink()
+      || targetAfter.nlink !== 1 || targetAfter.dev !== after.dev || targetAfter.ino !== after.ino
+      || targetAfter.size !== after.size || targetAfter.mtimeMs !== after.mtimeMs
+      || targetAfter.ctimeMs !== after.ctimeMs || parentAfter.dev !== parentOpened.dev
+      || parentAfter.ino !== parentOpened.ino || !parentPathAfter.isDirectory()
+      || parentPathAfter.isSymbolicLink() || parentPathAfter.dev !== parentOpened.dev
+      || parentPathAfter.ino !== parentOpened.ino) {
+      throw Object.assign(new Error('Le fichier a changé pendant sa lecture.'), { status: 409 });
+    }
+    return { bytes, size: after.size, modifiedAt: after.mtime.toISOString() };
+  } finally {
+    await handle?.close().catch(() => undefined);
+    await parentHandle.close().catch(() => undefined);
+  }
+}
+
+function containsKnownCredential(services: RuntimeServices, bytes: Buffer): boolean {
+  const redactor = services.createTextRedactor();
+  const decoder = new TextDecoder('utf-8');
+  const chunkBytes = 64 * 1024;
+  for (let offset = 0; offset < bytes.length; offset += chunkBytes) {
+    redactor.push(decoder.decode(bytes.subarray(offset, offset + chunkBytes), { stream: true }));
+  }
+  redactor.push(decoder.decode());
+  redactor.flush();
+  return redactor.redacted;
+}
+
 function availableUploadPath(directory: string, name: string, occupied: Set<string>): string {
   const extension = path.extname(name);
   const stem = path.basename(name, extension);
@@ -148,35 +258,61 @@ function availableUploadPath(directory: string, name: string, occupied: Set<stri
     const candidate = path.join(directory, `${stem} (${suffix})${extension}`);
     if (!occupied.has(candidate)) return candidate;
   }
-  throw Object.assign(new Error(`Impossible de choisir un nom libre pour ${name}.`), { status: 409 });
+  throw Object.assign(new Error('Impossible de choisir un nom de fichier libre.'), { status: 409 });
+}
+
+async function writeStableUpload(destination: string, bytes: Buffer, overwrite: boolean): Promise<void> {
+  try {
+    await atomicWriteStableFile(destination, bytes, {
+      overwrite,
+      maxBytes: MAX_UPLOAD_BYTES,
+      mode: 0o600,
+    });
+  } catch (error) {
+    if (!(error instanceof StableFileError)) throw error;
+    throw Object.assign(new Error(error.code === 'target-exists'
+      ? 'Le fichier existe déjà.' : 'La destination d’upload est instable.'), {
+      status: error.code === 'invalid-content' ? 413 : 409,
+      ...(error.code === 'target-exists' ? { code: 'FILE_EXISTS' } : {}),
+    });
+  }
 }
 
 export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Router {
   const router = Router();
+  let activeWatchers = 0;
+  let activeDownloads = 0;
 
   router.get('/', async (request, response, next) => {
     try {
       const services = await servicesPromise;
       const { cwd, target, relativePath } = await workspaceRequest(services, request, 'directory');
-      const entries = await readdir(target, { withFileTypes: true });
+      const listing = await readStableDirectorySnapshot(target, MAX_DIRECTORY_ENTRIES);
+      const entries = listing.entries.filter(({ entry }) => entry.name !== '.git' && entry.name !== '.DS_Store');
       const status = await gitStatus(cwd);
       const statusByPath = new Map(status.files.map(file => [file.path, file]));
+      const changedDirectories = new Set<string>();
+      for (const file of status.files) {
+        const parts = file.path.split('/');
+        for (let index = 1; index < parts.length; index++) {
+          changedDirectories.add(parts.slice(0, index).join('/'));
+        }
+      }
       response.json({
         cwd,
         path: relativePath,
-        entries: entries.map(entry => {
+        truncated: listing.truncated,
+        entries: entries.map(({ entry, stats }) => {
           const entryPath = path.relative(cwd, path.join(target, entry.name)).split(path.sep).join('/');
           const exact = statusByPath.get(entryPath);
-          const descendants = entry.isDirectory()
-            ? status.files.filter(file => file.path.startsWith(`${entryPath}/`))
-            : [];
           return {
             name: entry.name,
             path: entryPath,
-            isDirectory: entry.isDirectory(),
-            isSymbolicLink: entry.isSymbolicLink(),
+            isDirectory: stats.isDirectory(),
+            isSymbolicLink: stats.isSymbolicLink(),
             hidden: entry.name.startsWith('.'),
-            ...(exact ? { gitStatus: exact.status } : descendants.length ? { gitStatus: 'changed' } : {}),
+            ...(exact ? { gitStatus: exact.status }
+              : stats.isDirectory() && changedDirectories.has(entryPath) ? { gitStatus: 'changed' } : {}),
           };
         }).sort((left, right) => Number(right.isDirectory) - Number(left.isDirectory) || left.name.localeCompare(right.name)),
       });
@@ -187,32 +323,46 @@ export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Rou
     try {
       const services = await servicesPromise;
       const { target, relativePath } = await workspaceRequest(services, request, 'file');
-      const info = await stat(target);
-      if (info.size > MAX_SOURCE_BYTES) {
+      let stable;
+      try {
+        stable = await readStableDownload(target, MAX_SOURCE_BYTES);
+      } catch (error) {
+        const boundedError = error as {
+          status?: unknown;
+          stableSize?: unknown;
+          stableModifiedAt?: unknown;
+        };
+        if (boundedError.status !== 413 || typeof boundedError.stableSize !== 'number'
+          || typeof boundedError.stableModifiedAt !== 'string') throw error;
         response.status(413).json({
           error: 'Fichier trop volumineux pour l’aperçu.',
           path: relativePath,
           name: path.basename(target),
-          size: info.size,
-          modifiedAt: info.mtime.toISOString(),
+          size: boundedError.stableSize,
+          modifiedAt: boundedError.stableModifiedAt,
           language: languageFor(target),
           binary: false,
           tooLarge: true,
-          downloadable: true,
+          downloadable: boundedError.stableSize <= MAX_DOWNLOAD_BYTES,
         });
         return;
       }
-      const bytes = await readFile(target);
-      const binary = bytes.subarray(0, 8_192).includes(0);
+      const { bytes } = stable;
+      let content: string | undefined;
+      if (!bytes.subarray(0, 8_192).includes(0)) {
+        try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+        catch { content = undefined; }
+      }
+      const binary = content === undefined;
       response.json({
         path: relativePath,
         name: path.basename(target),
-        size: info.size,
-        modifiedAt: info.mtime.toISOString(),
+        size: stable.size,
+        modifiedAt: stable.modifiedAt,
         language: languageFor(target),
         binary,
-        lineCount: binary ? undefined : bytes.toString('utf8').split('\n').length,
-        content: binary ? undefined : bytes.toString('utf8'),
+        lineCount: content === undefined ? undefined : content.split('\n').length,
+        content,
       });
     } catch (error) { next(error); }
   });
@@ -221,7 +371,30 @@ export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Rou
     try {
       const services = await servicesPromise;
       const { target } = await workspaceRequest(services, request, 'file');
-      response.download(target, path.basename(target));
+      if (activeDownloads >= MAX_CONCURRENT_DOWNLOADS) {
+        throw Object.assign(new Error('Trop de téléchargements sont actifs.'), { status: 429 });
+      }
+      activeDownloads++;
+      let released = false;
+      const release = (): void => {
+        if (released) return;
+        released = true;
+        activeDownloads--;
+      };
+      response.once('finish', release);
+      response.once('close', release);
+      const { bytes } = await readStableDownload(target);
+      if (containsKnownCredential(services, bytes)) {
+        response.status(409).json({
+          error: 'Le téléchargement a été bloqué car le fichier contient une valeur sensible active.',
+          code: 'CREDENTIAL_REDACTION_REQUIRED',
+        });
+        return;
+      }
+      const downloadName = services.redactText(path.basename(target))
+        .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/gu, '_');
+      response.attachment(downloadName || 'download.bin');
+      response.type('application/octet-stream').send(bytes);
     } catch (error) { next(error); }
   });
 
@@ -229,8 +402,17 @@ export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Rou
     try {
       const services = await servicesPromise;
       const { cwd } = await workspaceRequest(services, request, 'directory');
-      const query = typeof request.query.q === 'string' ? request.query.q.toLocaleLowerCase() : '';
-      const limit = Math.max(1, Math.min(2_000, Number(request.query.limit) || 500));
+      const rawQuery = typeof request.query.q === 'string' ? request.query.q : '';
+      if (Buffer.byteLength(rawQuery) > 4_096 || /[\u0000-\u001f\u007f]/u.test(rawQuery)) {
+        throw Object.assign(new Error('Recherche de fichiers invalide.'), { status: 400 });
+      }
+      const query = rawQuery.toLocaleLowerCase();
+      const rawLimit = request.query.limit;
+      if (rawLimit !== undefined && (typeof rawLimit !== 'string' || !/^[1-9]\d{0,3}$/u.test(rawLimit)
+        || Number(rawLimit) > 2_000)) {
+        throw Object.assign(new Error('Limite de recherche invalide.'), { status: 400 });
+      }
+      const limit = rawLimit === undefined ? 500 : Number(rawLimit);
       let files: string[];
       let sourceTruncated = false;
       try {
@@ -238,32 +420,51 @@ export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Rou
           timeout: 10_000,
           maxBuffer: 10 * 1024 * 1024,
           encoding: 'utf8',
+          env: gitEnvironment(),
         });
-        files = stdout.split('\0').filter(Boolean);
+        const discovered = boundedNulRecords(stdout, MAX_INDEX_ENTRIES);
+        sourceTruncated = discovered.truncated;
+        files = discovered.records.filter(file => (
+          !file.split('/').some(component => component === '.git' || component === '.DS_Store')
+        ));
       } catch {
         let indexedEntries = 0;
-        const walk = async (directory: string, prefix = ''): Promise<string[]> => {
-          const found: string[] = [];
-          for (const entry of await readdir(directory, { withFileTypes: true })) {
-            if (['.git', 'node_modules'].includes(entry.name)) continue;
-            if (indexedEntries >= MAX_INDEX_ENTRIES) {
-              sourceTruncated = true;
-              break;
-            }
-            const relative = path.join(prefix, entry.name);
+        files = [];
+        const directoriesToVisit: Array<{ directory: string; prefix: string }> = [{ directory: cwd, prefix: '' }];
+        while (directoriesToVisit.length && indexedEntries < MAX_INDEX_ENTRIES) {
+          const current = directoriesToVisit.pop()!;
+          const listing = await readStableDirectoryEntries(
+            current.directory,
+            MAX_INDEX_ENTRIES - indexedEntries,
+          );
+          for (const entry of listing.entries) {
+            if (['.git', '.DS_Store', 'node_modules'].includes(entry.name) || entry.isSymbolicLink()) continue;
+            const relative = path.join(current.prefix, entry.name);
             indexedEntries++;
-            if (entry.isDirectory()) found.push(...await walk(path.join(directory, entry.name), relative));
-            else if (entry.isFile()) found.push(relative);
+            if (entry.isDirectory()) {
+              directoriesToVisit.push({ directory: path.join(current.directory, entry.name), prefix: relative });
+            } else if (entry.isFile()) files.push(relative);
           }
-          return found;
-        };
-        files = await walk(cwd);
+          if (listing.truncated) {
+            sourceTruncated = true;
+            break;
+          }
+        }
+        if (directoriesToVisit.length) sourceTruncated = true;
       }
-      files = files.map(file => file.split(path.sep).join('/'));
-      const directories = [...new Set(files.flatMap(file => {
+      files = files.slice(0, MAX_INDEX_ENTRIES).map(file => file.split(path.sep).join('/'));
+      const directorySet = new Set<string>();
+      for (const file of files) {
         const parts = file.split('/');
-        return parts.slice(0, -1).map((_part, index) => `${parts.slice(0, index + 1).join('/')}/`);
-      }))];
+        for (let index = 0; index < parts.length - 1 && directorySet.size < MAX_INDEX_ENTRIES; index++) {
+          directorySet.add(`${parts.slice(0, index + 1).join('/')}/`);
+        }
+        if (directorySet.size >= MAX_INDEX_ENTRIES) {
+          sourceTruncated = true;
+          break;
+        }
+      }
+      const directories = [...directorySet];
       const matches = rankPaths(files, query);
       const directoryMatches = rankPaths(directories, query);
       response.json({
@@ -295,6 +496,7 @@ export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Rou
           timeout: 10_000,
           maxBuffer: 5 * 1024 * 1024,
           encoding: 'utf8',
+          env: gitEnvironment(),
         });
         diff = result.stdout;
       } catch (error) {
@@ -305,7 +507,7 @@ export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Rou
       let shouldCompareToEmpty = Boolean(headFailed);
       if (!diff && !shouldCompareToEmpty) {
         const { stdout } = await execFileAsync('git', ['-C', cwd, 'status', '--porcelain=v1', '--', relativePath], {
-          timeout: 10_000, encoding: 'utf8',
+          timeout: 10_000, encoding: 'utf8', env: gitEnvironment(),
         });
         shouldCompareToEmpty = stdout.startsWith('??');
       }
@@ -313,7 +515,7 @@ export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Rou
         // Untracked files (and files in a repository without HEAD) are compared to the platform null device.
         try {
           const result = await execFileAsync('git', ['-C', cwd, 'diff', '--no-index', '--binary', '--', os.devNull, relativePath], {
-            timeout: 10_000, maxBuffer: 5 * 1024 * 1024, encoding: 'utf8',
+            timeout: 10_000, maxBuffer: 5 * 1024 * 1024, encoding: 'utf8', env: gitEnvironment(),
           });
           diff = result.stdout;
         } catch (untrackedError) {
@@ -341,16 +543,40 @@ export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Rou
       const occupied = new Set<string>();
       let totalBytes = 0;
       for (const file of files as Array<{ name?: unknown; content?: unknown }>) {
-        if (typeof file.name !== 'string' || !file.name || file.name !== path.basename(file.name)
-          || typeof file.content !== 'string') throw Object.assign(new Error('Upload invalide.'), { status: 400 });
+        if (!file || typeof file !== 'object' || typeof file.name !== 'string'
+          || !file.name || file.name !== path.basename(file.name) || file.name === '.' || file.name === '..'
+          || /[. ]$/u.test(file.name)
+          || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(file.name)
+          || Buffer.byteLength(file.name) > 255
+          || /[\\/<>:"|?*\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/u.test(file.name)
+          || typeof file.content !== 'string' || file.content.length > 12 * 1024 * 1024
+          || file.content.length % 4 !== 0 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(file.content)) {
+          throw Object.assign(new Error('Upload invalide.'), { status: 400 });
+        }
         const bytes = Buffer.from(file.content, 'base64');
+        if (bytes.toString('base64') !== file.content) {
+          throw Object.assign(new Error('Upload invalide.'), { status: 400 });
+        }
         totalBytes += bytes.length;
         if (bytes.length > MAX_UPLOAD_BYTES || totalBytes > 9 * 1024 * 1024) {
           throw Object.assign(new Error('Fichier ou lot uploadé trop volumineux.'), { status: 413 });
         }
-        let destination = await services.workspaceManager.resolve(path.join(directory, file.name), { base: cwd, mustExist: false });
+        if (containsKnownCredential(services, bytes)) {
+          throw Object.assign(new Error('L’upload contient une valeur sensible active.'), {
+            status: 409,
+            code: 'CREDENTIAL_REDACTION_REQUIRED',
+          });
+        }
+        let destination = await services.workspaceManager.resolveDestination(
+          path.join(directory, file.name),
+          { base: cwd, kind: 'file' },
+        );
         if (!isWithin(cwd, destination)) throw Object.assign(new Error('Destination hors workspace.'), { status: 403 });
-        let exists = occupied.has(destination);
+        const duplicatedInBatch = occupied.has(destination);
+        if (duplicatedInBatch && collision === 'overwrite') {
+          throw Object.assign(new Error('Le lot contient des destinations dupliquées.'), { status: 409 });
+        }
+        let exists = duplicatedInBatch;
         if (!exists) {
           try { await access(destination); exists = true; } catch { /* Available. */ }
         }
@@ -371,7 +597,7 @@ export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Rou
       }
       const written: string[] = [];
       for (const file of prepared) {
-        await writeFile(file.destination, file.bytes, { flag: collision === 'overwrite' ? 'w' : 'wx', mode: 0o600 });
+        await writeStableUpload(file.destination, file.bytes, collision === 'overwrite');
         written.push(path.relative(cwd, file.destination).split(path.sep).join('/'));
       }
       response.status(201).json({ files: written, collision });
@@ -379,36 +605,141 @@ export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Rou
   });
 
   router.get('/watch', async (request, response, next) => {
+    let releaseSlot: (() => void) | undefined;
+    let watchedParentHandle: Awaited<ReturnType<typeof open>> | undefined;
+    let watchedHandle: Awaited<ReturnType<typeof open>> | undefined;
     try {
       const services = await servicesPromise;
       const { target, relativePath } = await workspaceRequest(services, request, 'file');
+      if (activeWatchers >= MAX_FILE_WATCHERS) {
+        throw Object.assign(new Error('Trop de fichiers sont actuellement surveillés.'), { status: 429 });
+      }
+      activeWatchers++;
+      let released = false;
+      releaseSlot = () => {
+        if (released) return;
+        released = true;
+        activeWatchers--;
+      };
       response.status(200);
       response.setHeader('Content-Type', 'text/event-stream');
       response.setHeader('Cache-Control', 'no-cache, no-transform');
       response.setHeader('Connection', 'keep-alive');
       response.setHeader('X-Accel-Buffering', 'no');
-      response.flushHeaders?.();
+      const channel = new SseChannel(response, services.createTextRedactor());
       let revision = 0;
-      response.write(`event: connection.ready\ndata: ${JSON.stringify({ path: relativePath, revision })}\n\n`);
+      const watchedParentPath = path.dirname(target);
+      watchedParentHandle = await openStableDirectoryHandle(watchedParentPath).catch(() => {
+        throw Object.assign(new Error('Répertoire de surveillance instable.'), { status: 409 });
+      });
+      const stableParentHandle = watchedParentHandle;
+      const watchedParentOpened = await stableParentHandle.stat();
+      const watchedParentBefore = await lstat(watchedParentPath);
+      if (!watchedParentOpened.isDirectory() || !watchedParentBefore.isDirectory()
+        || watchedParentBefore.isSymbolicLink() || watchedParentOpened.dev !== watchedParentBefore.dev
+        || watchedParentOpened.ino !== watchedParentBefore.ino) {
+        throw Object.assign(new Error('Répertoire de surveillance instable.'), { status: 409 });
+      }
+      const anchoredTarget = process.platform === 'linux'
+        ? `/proc/self/fd/${stableParentHandle.fd}/${path.basename(target)}`
+        : target;
+      const watchedBefore = await lstat(anchoredTarget);
+      if (!watchedBefore.isFile() || watchedBefore.isSymbolicLink() || watchedBefore.nlink !== 1) {
+        throw Object.assign(new Error('Fichier indisponible pour la surveillance.'), { status: 409 });
+      }
+      watchedHandle = await open(
+        anchoredTarget,
+        fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
+      );
+      const watchedOpened = await watchedHandle.stat();
+      if (!watchedOpened.isFile() || watchedOpened.nlink !== 1 || watchedOpened.dev !== watchedBefore.dev
+        || watchedOpened.ino !== watchedBefore.ino) {
+        throw Object.assign(new Error('Fichier instable pour la surveillance.'), { status: 409 });
+      }
+      const watchPath = process.platform === 'linux' ? `/proc/self/fd/${watchedHandle.fd}` : target;
       let debounce: NodeJS.Timeout | undefined;
-      const watcher = watchFileSystem(target, { persistent: false }, eventType => {
+      const watcher = watchFileSystem(watchPath, { persistent: false }, eventType => {
         if (debounce) clearTimeout(debounce);
         debounce = setTimeout(() => {
-          revision++;
-          response.write(`id: ${revision}\nevent: file.changed\ndata: ${JSON.stringify({ path: relativePath, eventType, revision })}\n\n`);
+          void (async () => {
+            if (response.writableEnded || response.destroyed) return;
+            const [current, anchoredCurrent, parentCurrent, parentPathCurrent] = await Promise.all([
+              lstat(target).catch(() => undefined),
+              lstat(anchoredTarget).catch(() => undefined),
+              stableParentHandle.stat().catch(() => undefined),
+              lstat(watchedParentPath).catch(() => undefined),
+            ]);
+            if (!current?.isFile() || current.isSymbolicLink() || current.nlink !== 1
+              || current.dev !== watchedOpened.dev || current.ino !== watchedOpened.ino
+              || !anchoredCurrent?.isFile() || anchoredCurrent.isSymbolicLink() || anchoredCurrent.nlink !== 1
+              || anchoredCurrent.dev !== watchedOpened.dev || anchoredCurrent.ino !== watchedOpened.ino
+              || !parentCurrent?.isDirectory() || parentCurrent.dev !== watchedParentOpened.dev
+              || parentCurrent.ino !== watchedParentOpened.ino || !parentPathCurrent?.isDirectory()
+              || parentPathCurrent.isSymbolicLink() || parentPathCurrent.dev !== watchedParentOpened.dev
+              || parentPathCurrent.ino !== watchedParentOpened.ino) {
+              channel.send('file.unavailable', services.redactJson({ path: relativePath }));
+              channel.close();
+              cleanup();
+              return;
+            }
+            revision++;
+            channel.send('file.changed', services.redactJson({ path: relativePath, eventType, revision }), revision);
+          })().catch(() => {
+            channel.close();
+            cleanup();
+          });
         }, 100);
       });
-      watcher.on('error', () => {
-        response.write(`event: file.unavailable\ndata: ${JSON.stringify({ path: relativePath })}\n\n`);
-        response.end();
-      });
-      const heartbeat = setInterval(() => response.write(': heartbeat\n\n'), 15_000);
-      request.on('close', () => {
+      let heartbeat: NodeJS.Timeout | undefined;
+      let cleaned = false;
+      const cleanup = (): void => {
+        if (cleaned) return;
+        cleaned = true;
         if (debounce) clearTimeout(debounce);
-        clearInterval(heartbeat);
+        if (heartbeat) clearInterval(heartbeat);
         watcher.close();
+        void watchedHandle?.close().catch(() => undefined);
+        watchedHandle = undefined;
+        void watchedParentHandle?.close().catch(() => undefined);
+        watchedParentHandle = undefined;
+        releaseSlot?.();
+      };
+      watcher.on('error', () => {
+        if (!response.writableEnded && !response.destroyed) {
+          channel.send('file.unavailable', services.redactJson({ path: relativePath }));
+          channel.close();
+        }
+        cleanup();
       });
-    } catch (error) { next(error); }
+      const [watchedAfter, watchedAnchoredAfter, watchedParentAfter, watchedParentPathAfter] = await Promise.all([
+        lstat(target), lstat(anchoredTarget), stableParentHandle.stat(), lstat(watchedParentPath),
+      ]);
+      if (!watchedAfter.isFile() || watchedAfter.isSymbolicLink() || watchedAfter.nlink !== 1
+        || watchedAfter.dev !== watchedOpened.dev || watchedAfter.ino !== watchedOpened.ino
+        || !watchedAnchoredAfter.isFile() || watchedAnchoredAfter.isSymbolicLink()
+        || watchedAnchoredAfter.nlink !== 1 || watchedAnchoredAfter.dev !== watchedOpened.dev
+        || watchedAnchoredAfter.ino !== watchedOpened.ino || !watchedParentAfter.isDirectory()
+        || watchedParentAfter.dev !== watchedParentOpened.dev || watchedParentAfter.ino !== watchedParentOpened.ino
+        || !watchedParentPathAfter.isDirectory() || watchedParentPathAfter.isSymbolicLink()
+        || watchedParentPathAfter.dev !== watchedParentOpened.dev
+        || watchedParentPathAfter.ino !== watchedParentOpened.ino) {
+        cleanup();
+        throw Object.assign(new Error('Fichier instable pour la surveillance.'), { status: 409 });
+      }
+      response.flushHeaders?.();
+      channel.send('connection.ready', services.redactJson({ path: relativePath, revision }));
+      heartbeat = setInterval(() => {
+        if (!response.writableEnded && !response.destroyed) channel.heartbeat();
+      }, 15_000);
+      request.once('close', cleanup);
+      response.once('finish', cleanup);
+      response.once('close', cleanup);
+    } catch (error) {
+      await watchedHandle?.close().catch(() => undefined);
+      await watchedParentHandle?.close().catch(() => undefined);
+      releaseSlot?.();
+      next(error);
+    }
   });
 
   return router;

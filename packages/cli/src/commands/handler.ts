@@ -6,35 +6,106 @@
 
 import chalk from 'chalk';
 import {
+  atomicWriteStableFile,
   clampPublishedThinkingLevel,
+  closeProviderNetworkDispatchers,
   collectProviderModelCatalog,
   flattenModelCatalog,
   getSupportedThinkingLevels,
+  isValidSessionId,
   resolveModelReference,
   resolveModelScope,
   SessionManager,
   JsonlSessionStore,
   AiProvider,
   ProviderFactory,
+  readBoundedResourceText,
+  WorkspaceManager,
   Message,
   Session,
 } from '@ai-harness/core';
-import type { ExtensionRegistry, ExtensionRuntimeContext, ModelCatalogEntry, ThinkingLevel } from '@ai-harness/core';
+import type {
+  AgentProviderNetworkSettings,
+  ExtensionRegistry,
+  ExtensionRuntimeContext,
+  ModelCatalogEntry,
+  ProviderCredentialService,
+  ThemeInventoryItem,
+  ThinkingLevel,
+} from '@ai-harness/core';
 import type { TerminalUI } from '../tui/terminal-ui.js';
 import { renderSessionHtml, sanitizeFilename } from '../utils/session-export.js';
 import { copyToClipboard } from '../utils/system-integration.js';
 import type { ProjectTrustManager } from '../security/project-trust.js';
 import { OAuthDeviceClient, oauthConfigFromEnv } from '../security/oauth-device.js';
 import { createConfiguredProviders } from '../providers/configured-providers.js';
-import * as fs from 'fs/promises';
 import * as path from 'path';
+
+interface ExplicitCredentialRevealOutput {
+  text: string;
+  /** Unforgeable outside this module's built-in command registry. */
+  kind: 'explicit-local-credential-reveal';
+}
+
+type CommandOutput = string | ExplicitCredentialRevealOutput;
+
+const MAX_SHARE_RESPONSE_BYTES = 256 * 1024;
+const SHARE_REQUEST_TIMEOUT_MS = 30_000;
+
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  return normalized === 'localhost' || normalized === '::1' || /^127(?:\.\d{1,3}){3}$/u.test(normalized);
+}
+
+function resolveShareServerUrl(value: string): URL | undefined {
+  if (!value || Buffer.byteLength(value) > 4_096 || /[\u0000-\u001f\u007f]/u.test(value)) return undefined;
+  try {
+    const parsed = new URL(value);
+    if ((parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLoopbackHost(parsed.hostname)))
+      || parsed.username || parsed.password || parsed.search || parsed.hash) return undefined;
+    parsed.pathname = `${parsed.pathname.replace(/\/$/u, '')}/`;
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+async function readBoundedShareResponse(response: Response): Promise<string> {
+  const declared = response.headers.get('content-length');
+  if (declared && (!/^\d+$/u.test(declared) || Number(declared) > MAX_SHARE_RESPONSE_BYTES)) {
+    throw new Error('Share response is invalid.');
+  }
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const item = await reader.read();
+      if (item.done) break;
+      total += item.value.byteLength;
+      if (total > MAX_SHARE_RESPONSE_BYTES) throw new Error('Share response is invalid.');
+      chunks.push(item.value);
+    }
+  } finally {
+    void Promise.resolve(reader.cancel()).catch(() => undefined);
+    reader.releaseLock();
+  }
+  const bytes = Buffer.allocUnsafe(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    Buffer.from(chunk).copy(bytes, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+}
 
 /** Registry of command handlers */
 interface CommandEntry {
   name: string;
   description: string;
   usage?: string;
-  handler: (args: string[], ctx: CommandContext) => Promise<string>;
+  handler: (args: string[], ctx: CommandContext) => Promise<CommandOutput>;
 }
 
 export interface CommandContext {
@@ -50,19 +121,131 @@ export interface CommandContext {
   trustManager?: ProjectTrustManager;
   isProjectTrusted?: () => boolean;
   cwd: string;
+  workspaceManager?: WorkspaceManager;
   workspaceId?: string;
   enabledToolNames?: () => readonly string[];
   modelPatterns?: readonly string[];
   settingsInfo?: () => string;
+  credentialService?: ProviderCredentialService;
+  providerCredentialValues?: ReadonlyMap<string, string>;
+  allowCredentialReveal?: boolean;
+  providerNetwork?: AgentProviderNetworkSettings;
+  themeControl?: CommandThemeControl;
+  redactText?: (value: string) => string;
+  redactJson?: <T>(value: T) => T;
+}
+
+export interface CommandThemeControl {
+  current(): string;
+  list(): Promise<ThemeInventoryItem[]>;
+  select(name: string): Promise<string>;
 }
 
 export interface CommandWorkspaceContext {
   cwd: string;
+  workspaceManager?: WorkspaceManager;
   workspaceId?: string;
   isProjectTrusted?: () => boolean;
   enabledToolNames?: () => readonly string[];
   modelPatterns?: readonly string[];
   settingsInfo?: () => string;
+  providers?: Map<string, AiProvider>;
+  credentialService?: ProviderCredentialService;
+  providerCredentialValues?: ReadonlyMap<string, string>;
+  allowCredentialReveal?: boolean;
+  providerNetwork?: AgentProviderNetworkSettings;
+  themeControl?: CommandThemeControl;
+  redactText?: (value: string) => string;
+  redactJson?: <T>(value: T) => T;
+}
+
+function safeText(ctx: CommandContext, value: string): string {
+  return ctx.redactText?.(value) ?? value;
+}
+
+function safeJson<T>(ctx: CommandContext, value: T): T {
+  return ctx.redactJson?.(value) ?? value;
+}
+
+function parseCommandLine(input: string): string[] | undefined {
+  if (typeof input !== 'string' || Buffer.byteLength(input) > 1024 * 1024 || input.includes('\0')) return undefined;
+  const result: string[] = [];
+  let token = '';
+  let quote: '"' | "'" | undefined;
+  let escaped = false;
+  let started = false;
+  const push = (): boolean => {
+    if (!started) return true;
+    if (Buffer.byteLength(token) > 64 * 1024 || result.length >= 256) return false;
+    result.push(token);
+    token = '';
+    started = false;
+    return true;
+  };
+  for (const character of input.trim()) {
+    if (escaped) {
+      token += /[\s\\"']/u.test(character) ? character : `\\${character}`;
+      started = true;
+      escaped = false;
+      continue;
+    }
+    if (character === '\\') {
+      escaped = true;
+      started = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = undefined;
+      else token += character;
+      started = true;
+      continue;
+    }
+    if ((character === '"' || character === "'") && !started) {
+      quote = character;
+      started = true;
+      continue;
+    }
+    if (/\s/u.test(character)) {
+      if (!push()) return undefined;
+      continue;
+    }
+    token += character;
+    started = true;
+  }
+  if (escaped) token += '\\';
+  if (quote || !push()) return undefined;
+  return result;
+}
+
+function commandProjectTrusted(ctx: CommandContext): boolean {
+  return ctx.isProjectTrusted?.() ?? ctx.trustManager?.isTrustedSync(ctx.cwd) ?? false;
+}
+
+async function commandWorkspaceManager(ctx: CommandContext): Promise<WorkspaceManager> {
+  if (ctx.workspaceManager) return ctx.workspaceManager;
+  const manager = new WorkspaceManager({ allowedRoots: [ctx.cwd], defaultCwd: ctx.cwd });
+  await manager.initialize();
+  ctx.workspaceManager = manager;
+  return manager;
+}
+
+async function resolveCommandPath(
+  ctx: CommandContext,
+  input: string,
+  options: { mustExist: boolean; kind?: 'file' | 'directory' | 'any' },
+): Promise<string> {
+  if (typeof input !== 'string' || !input || Buffer.byteLength(input) > 4_096
+    || /[\u0000-\u001f\u007f-\u009f]/u.test(input)) {
+    throw new Error('Invalid workspace path.');
+  }
+  const manager = await commandWorkspaceManager(ctx);
+  if (!options.mustExist) {
+    return manager.resolveDestination(input, { base: ctx.cwd, kind: options.kind });
+  }
+  if (options.kind === 'file') {
+    return manager.resolveStableFile(input, { base: ctx.cwd });
+  }
+  return manager.resolve(input, { base: ctx.cwd, mustExist: true, kind: options.kind });
 }
 
 function createExtensionContext(ctx: CommandContext): ExtensionRuntimeContext {
@@ -75,9 +258,10 @@ function createExtensionContext(ctx: CommandContext): ExtensionRuntimeContext {
     workspaceId: ctx.workspaceId,
     projectTrusted: ctx.isProjectTrusted?.() ?? ctx.trustManager?.isTrustedSync(ctx.cwd) ?? false,
     notify: (message, level = 'info') => {
-      if (level === 'error') ctx.terminal.showError(message);
-      else if (typeof ctx.terminal.writeOutput === 'function') ctx.terminal.writeOutput(message);
-      else process.stdout.write(`${message}\n`);
+      const safeMessage = safeText(ctx, message);
+      if (level === 'error') ctx.terminal.showError(safeMessage);
+      else if (typeof ctx.terminal.writeOutput === 'function') ctx.terminal.writeOutput(safeMessage);
+      else process.stdout.write(`${safeMessage}\n`);
     },
   };
 }
@@ -88,14 +272,26 @@ function syncExtensionProviders(ctx: CommandContext): void {
 
   for (const { type, definition } of ctx.extensionRegistry?.getProviderDefinitions() ?? []) {
     try {
+      const network = ctx.providerNetwork;
+      const credential = ctx.providerCredentialValues?.get(type);
       const provider = ProviderFactory.create({
         ...definition.defaultConfig,
+        ...(credential ? { apiKey: credential } : {}),
+        ...(network ? {
+          transport: network.transport,
+          ...(network.httpProxy ? { httpProxy: network.httpProxy } : {}),
+          httpIdleTimeoutMs: network.httpIdleTimeoutMs,
+          websocketConnectTimeoutMs: network.websocketConnectTimeoutMs,
+          requestTimeoutMs: network.requestTimeoutMs,
+          providerMaxRetries: network.maxRetries,
+          providerMaxRetryDelayMs: network.maxRetryDelayMs,
+        } : {}),
         type,
       } as any);
       ctx.providers.set(type, provider);
       ctx.extensionProviderNames.add(type);
     } catch (error) {
-      ctx.terminal.showError(`Failed to initialize extension provider "${type}": ${error instanceof Error ? error.message : String(error)}`);
+      ctx.terminal.showError(safeText(ctx, `Failed to initialize extension provider "${type}": ${error instanceof Error ? error.message : String(error)}`));
     }
   }
 
@@ -112,6 +308,38 @@ async function availableCommandModels(ctx: CommandContext): Promise<ModelCatalog
 
 function modelLabel(model: ModelCatalogEntry): string {
   return model.name === model.id ? model.source : model.name;
+}
+
+function importedMessage(value: unknown): Message {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Invalid imported message.');
+  }
+  const source = value as Record<string, unknown>;
+  if (!['user', 'assistant', 'system', 'tool'].includes(String(source.role))
+    || typeof source.content !== 'string') {
+    throw new Error('Invalid imported message.');
+  }
+  const timestamp = source.timestamp === undefined ? new Date() : new Date(source.timestamp as string | number);
+  if (!Number.isFinite(timestamp.getTime())) throw new Error('Invalid imported message.');
+  return {
+    id: typeof source.id === 'string' && source.id ? source.id : `import-${crypto.randomUUID()}`,
+    role: source.role as Message['role'],
+    content: source.content,
+    timestamp,
+    ...(source.blocks !== undefined ? { blocks: source.blocks as Message['blocks'] } : {}),
+    ...(source.toolCalls !== undefined ? { toolCalls: source.toolCalls as Message['toolCalls'] } : {}),
+    ...(typeof source.toolCallId === 'string' ? { toolCallId: source.toolCallId } : {}),
+    ...(typeof source.name === 'string' ? { name: source.name } : {}),
+    ...(typeof source.isError === 'boolean' ? { isError: source.isError } : {}),
+    ...(typeof source.provider === 'string' ? { provider: source.provider } : {}),
+    ...(typeof source.model === 'string' ? { model: source.model } : {}),
+    ...(source.usage && typeof source.usage === 'object' ? { usage: source.usage as Message['usage'] } : {}),
+    ...(typeof source.durationMs === 'number' ? { durationMs: source.durationMs } : {}),
+    ...(typeof source.parentMessageId === 'string' ? { parentMessageId: source.parentMessageId } : {}),
+    ...(typeof source.agentId === 'string' ? { agentId: source.agentId } : {}),
+    ...(source.metadata && typeof source.metadata === 'object' && !Array.isArray(source.metadata)
+      ? { metadata: source.metadata as Record<string, unknown> } : {}),
+  };
 }
 
 async function selectCommandModel(
@@ -388,12 +616,37 @@ const commands: CommandEntry[] = [
   Auto-save: Enabled`,
   },
   {
+    name: 'theme',
+    description: 'Lister ou sélectionner un thème terminal à chaud',
+    usage: '/theme [name]',
+    handler: async (args, ctx) => {
+      if (!ctx.themeControl) return chalk.yellow('La sélection de thème n’est pas disponible.');
+      const selected = args.join(' ').trim();
+      if (selected) {
+        const name = await ctx.themeControl.select(selected);
+        return chalk.green(`Thème actif : ${name}.`);
+      }
+      const inventory = await ctx.themeControl.list();
+      return inventory.map(theme => {
+        const marker = theme.active || theme.name === ctx.themeControl?.current() ? '●' : '○';
+        const source = `${theme.provenance.scope}/${theme.provenance.source}`;
+        return `${marker} ${theme.name} (${source})${theme.valid ? '' : ' [invalide]'}`;
+      }).join('\n');
+    },
+  },
+  {
     name: 'login',
     description: 'Authentifier un provider avec un flux OAuth device',
     usage: '/login <provider>',
     handler: async (args, ctx) => {
-      const providerName = args[0]?.toLowerCase();
+      const providerName = args[0]?.trim().toLowerCase();
       if (!providerName) return chalk.red('Usage: /login <provider>');
+      if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(providerName)) return chalk.red('Provider OAuth invalide.');
+      const credentialService = ctx.credentialService as (typeof ctx.credentialService
+        & { hasPersistentStore?: () => boolean }) | undefined;
+      if (!credentialService?.hasPersistentStore?.()) {
+        return chalk.yellow('Un stockage chiffré persistant est requis avant une authentification OAuth.');
+      }
       const config = oauthConfigFromEnv(providerName);
       if (!config) {
         return chalk.yellow(`OAuth non configuré pour ${providerName}. Définissez AI_HARNESS_OAUTH_${providerName.toUpperCase()}_{DEVICE_URL,TOKEN_URL,CLIENT_ID}.`);
@@ -401,16 +654,63 @@ const commands: CommandEntry[] = [
       const client = new OAuthDeviceClient(config);
       const prompt = await client.requestCode();
       ctx.terminal.writeOutput(`Ouvrez ${prompt.verificationUriComplete || prompt.verificationUri} et saisissez le code ${prompt.userCode}.`);
-      const token = await client.pollToken(prompt);
+      const credential = await client.pollCredential(prompt);
+      await credentialService.setOAuth(providerName, credential);
       const existing = ctx.providers.get(providerName) as unknown as { config?: Record<string, unknown> } | undefined;
       const provider = ProviderFactory.create({
         ...(existing?.config ?? {}),
         type: providerName,
-        apiKey: token,
+        apiKey: credential.accessToken,
       } as any);
       ctx.providers.set(providerName, provider);
       ctx.provider = provider;
       return chalk.green(`Authentification OAuth réussie pour ${providerName}.`);
+    },
+  },
+  {
+    name: 'logout',
+    description: 'Supprimer les identifiants enregistrés pour un provider',
+    usage: '/logout <provider>',
+    handler: async (args, ctx) => {
+      const providerName = args[0]?.trim().toLowerCase();
+      if (!providerName) return chalk.red('Usage: /logout <provider>');
+      if (!ctx.credentialService) return chalk.yellow('Le stockage sécurisé des identifiants n’est pas configuré.');
+      await ctx.credentialService.delete(providerName);
+      await closeProviderNetworkDispatchers();
+      ctx.providers.delete(providerName);
+      if ((ctx.provider as unknown as { config?: { type?: string } } | undefined)?.config?.type === providerName) {
+        ctx.provider = ctx.providers.get('mock');
+      }
+      return chalk.green(`Identifiants supprimés pour ${providerName}.`);
+    },
+  },
+  {
+    name: 'credentials',
+    description: 'Lister les descripteurs non secrets des identifiants enregistrés',
+    handler: async (_args, ctx) => {
+      if (!ctx.credentialService) return chalk.yellow('Le stockage sécurisé des identifiants n’est pas configuré.');
+      const descriptors = ctx.credentialService.list();
+      return descriptors.length
+        ? descriptors.map(item => `${item.provider} — ${item.type} (${item.source})${item.refreshable ? ' [actualisable]' : ''}`).join('\n')
+        : 'Aucun identifiant enregistré.';
+    },
+  },
+  {
+    name: 'credential',
+    description: 'Révéler explicitement un identifiant dans ce terminal local',
+    usage: '/credential reveal <provider>',
+    handler: async (args, ctx) => {
+      if (args.length !== 2 || args[0] !== 'reveal' || !args[1]) {
+        return chalk.red('Usage: /credential reveal <provider>');
+      }
+      if (!ctx.allowCredentialReveal) {
+        return chalk.red('La révélation est disponible uniquement dans un terminal interactif local.');
+      }
+      if (!ctx.credentialService) return chalk.yellow('Le stockage sécurisé des identifiants n’est pas configuré.');
+      const value = await ctx.credentialService.reveal(args[1], { cwd: ctx.cwd });
+      return value === undefined
+        ? chalk.yellow(`Aucun identifiant résolu pour ${args[1]}.`)
+        : { text: value, kind: 'explicit-local-credential-reveal' };
     },
   },
   {
@@ -462,22 +762,26 @@ const commands: CommandEntry[] = [
         ];
 
         // Use provider's chat to generate summary (non-streaming for reliability)
-        const result = await provider.chat(summaryMessages, { systemPrompt: instructionsText });
+        const result = await provider.chat(summaryMessages, {
+          systemPrompt: instructionsText,
+          sessionId: session.id,
+        });
 
         if (!result.content) {
           return chalk.red('Compaction failed: no summary generated.');
         }
 
-        // Apply compaction - replace old messages with summary
+        // Apply only scrubbed provider output so credentials never reach session persistence.
+        const summary = safeText(ctx, result.content);
         const firstKeptId = session.messages[session.messages.length - 2]?.id || '';
         await ctx.sessionManager.applyCompaction(
           session.id,
-          result.content,
+          summary,
           firstKeptId,
         );
 
         return chalk.green(`✅ Compacted ${chalk.bold(session.title || 'conversation')}\n` +
-          `   Summary: ${(result.content as string).slice(0, 100)}${(result.content as string).length > 100 ? '...' : ''}`);
+          `   Summary: ${summary.slice(0, 100)}${summary.length > 100 ? '...' : ''}`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return chalk.red(`Compaction failed: ${errorMessage}`);
@@ -615,18 +919,47 @@ const commands: CommandEntry[] = [
     handler: async (args, ctx) => {
       const sessionId = ctx.currentSessionId || ctx.sessionManager.list()[0]?.id;
       if (!sessionId) return chalk.red('Aucune session à partager.');
-      const baseUrl = (process.env.AI_HARNESS_SERVER_URL || 'http://127.0.0.1:3080').replace(/\/$/, '');
-      const response = await fetch(`${baseUrl}/api/sessions/${sessionId}/share`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(process.env.AI_HARNESS_AUTH_TOKEN ? { Authorization: `Bearer ${process.env.AI_HARNESS_AUTH_TOKEN}` } : {}),
-        },
-        body: JSON.stringify({ ttlHours: Number(args[0]) || 24 }),
-      });
-      if (!response.ok) return chalk.red(`Partage impossible (${response.status}) : ${await response.text()}`);
-      const result = await response.json() as { url: string; expiresInHours: number };
-      return chalk.green(`Lien valable ${result.expiresInHours} h : ${result.url}`);
+      if (args.length > 1 || (args[0] !== undefined && !/^\d{1,3}$/u.test(args[0]))) {
+        return chalk.red('Usage: /share [durée-heures]');
+      }
+      const ttlHours = args[0] === undefined ? 24 : Number(args[0]);
+      if (!Number.isSafeInteger(ttlHours) || ttlHours < 1 || ttlHours > 168) {
+        return chalk.red('La durée de partage doit être comprise entre 1 et 168 heures.');
+      }
+      const baseUrl = resolveShareServerUrl(process.env.AI_HARNESS_SERVER_URL || 'http://127.0.0.1:3080');
+      if (!baseUrl) return chalk.red('URL du serveur de partage invalide.');
+      const endpoint = new URL(`api/sessions/${encodeURIComponent(sessionId)}/share`, baseUrl);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(new Error('Share request timed out.')), SHARE_REQUEST_TIMEOUT_MS);
+      timeout.unref?.();
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          redirect: 'manual',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(process.env.AI_HARNESS_AUTH_TOKEN ? { Authorization: `Bearer ${process.env.AI_HARNESS_AUTH_TOKEN}` } : {}),
+          },
+          body: JSON.stringify({ ttlHours }),
+        });
+        if (!response.ok) {
+          void Promise.resolve(response.body?.cancel()).catch(() => undefined);
+          return chalk.red(`Partage impossible (${response.status}).`);
+        }
+        const text = await readBoundedShareResponse(response);
+        const result: unknown = JSON.parse(text);
+        if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Share response is invalid.');
+        const { url, expiresInHours } = result as Record<string, unknown>;
+        if (typeof url !== 'string' || Buffer.byteLength(url) > 4_096
+          || /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(url)
+          || !Number.isSafeInteger(expiresInHours) || (expiresInHours as number) < 1 || (expiresInHours as number) > 168) {
+          throw new Error('Share response is invalid.');
+        }
+        return chalk.green(`Lien valable ${expiresInHours as number} h : ${url}`);
+      } finally {
+        clearTimeout(timeout);
+      }
     },
   },
   {
@@ -659,6 +992,13 @@ const commands: CommandEntry[] = [
       if (!session) {
         session = sessions[0];
       }
+      const rawSession = session;
+      const { messages: _messages, commands: rawCommands, ...sessionMetadata } = rawSession;
+      session = {
+        ...safeJson(ctx, sessionMetadata),
+        messages: rawSession.messages.map(message => safeJson(ctx, message)),
+        ...(rawCommands ? { commands: rawCommands.map(command => safeJson(ctx, command)) } : {}),
+      } as Session;
       let content: string;
 
       switch (format) {
@@ -713,16 +1053,15 @@ const commands: CommandEntry[] = [
         }
         filename = outputPath;
       } else {
-        // Auto-generate filename in sessions directory
-        const sessionDir = path.join(process.env.HOME || '.', '.ai-harness', 'exports');
-        await fs.mkdir(sessionDir, { recursive: true });
+        // Default exports stay in the active, WorkspaceManager-confined directory.
         const extMap: Record<string, string> = { json: 'json', markdown: 'md', jsonl: 'jsonl', html: 'html' };
         const safeTitle = sanitizeFilename(session.title || 'export');
-        filename = path.join(sessionDir, `${safeTitle}-${timestamp}.${extMap[format]}`);
+        filename = `${safeTitle}-${timestamp}.${extMap[format]}`;
       }
 
-      // Write to file
-      await fs.writeFile(filename, content, 'utf-8');
+      const destination = await resolveCommandPath(ctx, filename, { mustExist: false });
+      await atomicWriteStableFile(destination, content, { overwrite: true, maxBytes: 64 * 1024 * 1024 });
+      filename = destination;
 
       return `✅ Exported session "${chalk.cyan(session.title || 'Untitled')}" as ${format} (${content.length} chars)\n   → ${chalk.green(path.basename(filename))}`;
     },
@@ -841,89 +1180,94 @@ const commands: CommandEntry[] = [
     description: 'Import sessions from a JSONL file',
     usage: '/import <path-to-jsonl-file>',
     handler: async (args, ctx) => {
-      const filePath = args[0];
+      const filePath = args.join(' ').trim();
       if (!filePath) return chalk.red('Usage: /import <path-to-jsonl-file>');
+      if (!commandProjectTrusted(ctx)) {
+        return chalk.yellow('Project trust is required before importing a workspace file.');
+      }
 
-      // Resolve the file path
-      const resolvedPath = path.resolve(filePath);
-
+      let displayName = path.basename(filePath);
       try {
-        // Read and parse JSONL file
-        const rawContent = await fs.readFile(resolvedPath, 'utf-8');
-        const lines = rawContent.split('\n').filter(line => line.trim());
-
+        const resolvedPath = await resolveCommandPath(ctx, filePath, { mustExist: true, kind: 'file' });
+        displayName = path.basename(resolvedPath);
+        const rawContent = await readBoundedResourceText(resolvedPath, 64 * 1024 * 1024);
+        const lines = rawContent.split(/\r?\n/u).filter(line => line.trim());
         if (lines.length === 0) {
-          return chalk.yellow(`No messages found in ${chalk.cyan(path.basename(resolvedPath))}`);
+          return chalk.yellow(`No messages found in ${chalk.cyan(displayName)}`);
         }
+        if (lines.length > 100_000) throw new Error('Import entry limit exceeded.');
 
-        // Try to detect format: JSON array of sessions or single-session JSONL
-        let importedCount = 0;
-
-        try {
-          // Attempt to parse as a JSON array (multi-session export)
-          const data = JSON.parse(lines.join('\n'));
-          if (Array.isArray(data)) {
-            // Multi-session format: [{id, title, messages: [...]}, ...]
-            for (const sessionData of data) {
-              if (sessionData.id && Array.isArray(sessionData.messages)) {
-                await ctx.sessionManager.create({ 
-                  id: sessionData.id,
-                  title: sessionData.title || 'Imported Session',
-                  messages: sessionData.messages.map((m: any) => ({
-                    ...m,
-                    timestamp: new Date(m.timestamp),
-                  })),
-                });
-                importedCount++;
-              }
-            }
+        const drafts: Array<{ id?: string; title: string; messages: Message[] }> = [];
+        let importedMessages = 0;
+        if (rawContent.trimStart().startsWith('[')) {
+          const data = JSON.parse(rawContent) as unknown;
+          if (!Array.isArray(data) || data.length === 0 || data.length > 10_000) {
+            throw new Error('Invalid session array.');
           }
-        } catch {
-          // Not a JSON array, try JSONL format (one message per line)
+          const importedIds = new Set<string>();
+          for (const value of data) {
+            if (!value || typeof value !== 'object' || Array.isArray(value)) {
+              throw new Error('Invalid imported session.');
+            }
+            const source = value as Record<string, unknown>;
+            if (typeof source.id !== 'string' || !isValidSessionId(source.id)
+              || importedIds.has(source.id) || !Array.isArray(source.messages)
+              || ctx.sessionManager.get(source.id)) {
+              throw new Error('Invalid or duplicate imported session.');
+            }
+            importedIds.add(source.id);
+            importedMessages += source.messages.length;
+            if (importedMessages > 100_000) throw new Error('Import message limit exceeded.');
+            if (source.title !== undefined && (typeof source.title !== 'string'
+              || Buffer.byteLength(source.title) > 4_096
+              || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/u.test(source.title))) {
+              throw new Error('Invalid imported title.');
+            }
+            drafts.push({
+              id: source.id,
+              title: source.title ?? 'Imported Session',
+              messages: source.messages.map(importedMessage),
+            });
+          }
+        } else {
           const messages: Message[] = [];
           let title = 'Imported Session';
-
           for (const line of lines) {
-            try {
-              const msgData = JSON.parse(line);
-              if (msgData.role && msgData.content !== undefined) {
-                // Check for session metadata in first message
-                if (messages.length === 0 && msgData.sessionTitle) {
-                  title = msgData.sessionTitle;
+            if (Buffer.byteLength(line) > 16 * 1024 * 1024) throw new Error('Imported message is too large.');
+            const value = JSON.parse(line) as unknown;
+            if (messages.length === 0 && value && typeof value === 'object' && !Array.isArray(value)) {
+              const requestedTitle = (value as Record<string, unknown>).sessionTitle;
+              if (requestedTitle !== undefined) {
+                if (typeof requestedTitle !== 'string' || Buffer.byteLength(requestedTitle) > 4_096
+                  || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/u.test(requestedTitle)) {
+                  throw new Error('Invalid imported title.');
                 }
-                messages.push({
-                  id: msgData.id || `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                  role: msgData.role as Message['role'],
-                  content: String(msgData.content),
-                  timestamp: msgData.timestamp ? new Date(msgData.timestamp) : new Date(),
-                  toolCalls: msgData.toolCalls,
-                  toolCallId: msgData.toolCallId,
-                  name: msgData.name,
-                  isError: msgData.isError,
-                });
+                title = requestedTitle;
               }
-            } catch {
-              // Skip malformed lines
-              continue;
             }
+            messages.push(importedMessage(value));
           }
-
-          if (messages.length > 0) {
-            await ctx.sessionManager.create({ title, messages });
-            importedCount++;
-          }
+          drafts.push({ title, messages });
         }
 
-        if (importedCount === 0) {
-          return chalk.red(`Failed to import: unrecognized format in ${chalk.cyan(path.basename(resolvedPath))}`);
+        const createdIds: string[] = [];
+        try {
+          for (const draft of drafts) {
+            const created = await ctx.sessionManager.create(draft);
+            createdIds.push(created.id);
+          }
+        } catch (error) {
+          for (const id of createdIds.reverse()) {
+            try { await ctx.sessionManager.delete(id); }
+            catch { /* Preserve the import failure while each durable rollback is attempted. */ }
+          }
+          throw error;
         }
-
+        const importedCount = drafts.length;
         const sessionType = importedCount > 1 ? 'sessions' : 'session';
-        return chalk.green(`✅ Imported ${importedCount} ${sessionType} from ${chalk.cyan(path.basename(resolvedPath))}\n   → ${chalk.dim(importedCount === 1 ? `Session: ${ctx.sessionManager.list()[0]?.title || 'Imported Session'}` : `${importedCount} sessions loaded`)}`);
-
-      } catch (error) {
-        const err = error instanceof Error ? error.message : String(error);
-        return chalk.red(`❌ Import failed: ${err}\n   File: ${chalk.cyan(resolvedPath)}`);
+        return chalk.green(`✅ Imported ${importedCount} ${sessionType} from ${chalk.cyan(displayName)}`);
+      } catch {
+        return chalk.red(`❌ Import failed: the file is unavailable, unsafe, or invalid.\n   File: ${chalk.cyan(displayName)}`);
       }
     },
   },
@@ -1074,7 +1418,7 @@ export class CommandHandler {
     trustManager?: ProjectTrustManager,
     workspace: CommandWorkspaceContext = { cwd: process.cwd() },
   ) {
-    const providers = createConfiguredProviders();
+    const providers = workspace.providers ?? createConfiguredProviders();
 
     this.ctx = {
       sessionManager,
@@ -1089,10 +1433,18 @@ export class CommandHandler {
       trustManager,
       isProjectTrusted: workspace.isProjectTrusted,
       cwd: workspace.cwd,
+      workspaceManager: workspace.workspaceManager,
       workspaceId: workspace.workspaceId,
       enabledToolNames: workspace.enabledToolNames,
       modelPatterns: workspace.modelPatterns,
       settingsInfo: workspace.settingsInfo,
+      credentialService: workspace.credentialService,
+      providerCredentialValues: workspace.providerCredentialValues,
+      allowCredentialReveal: workspace.allowCredentialReveal,
+      providerNetwork: workspace.providerNetwork,
+      themeControl: workspace.themeControl,
+      redactText: workspace.redactText,
+      redactJson: workspace.redactJson,
     };
     syncExtensionProviders(this.ctx);
   }
@@ -1112,9 +1464,13 @@ export class CommandHandler {
 
   /** Execute a command */
   async execute(input: string): Promise<void> {
-    const parts = input.slice(1).trim().split(/\s+/);
+    const parts = parseCommandLine(input.slice(1));
+    if (!parts) {
+      this.ctx.terminal.showError('Invalid or oversized command line.');
+      return;
+    }
     const commandName = parts[0]?.toLowerCase();
-    const args = parts.slice(1);
+    const args = parts.slice(1).map(value => safeText(this.ctx, value));
 
     if (!commandName) return;
 
@@ -1129,27 +1485,51 @@ export class CommandHandler {
 
     if (extensionCommand) {
       try {
-        const output = await extensionCommand.handler(args.join(' '), createExtensionContext(this.ctx));
+        const output = await extensionCommand.handler(safeText(this.ctx, args.join(' ')), createExtensionContext(this.ctx));
         if (output) this.writeOutput(output);
       } catch (error) {
-        this.ctx.terminal.showError(`Extension command failed: ${error instanceof Error ? error.message : String(error)}`);
+        this.ctx.terminal.showError(safeText(this.ctx, `Extension command failed: ${error instanceof Error ? error.message : String(error)}`));
       }
       return;
     }
 
-    const cmd = exactCommand ?? commands.find(command => command.name.startsWith(commandName));
-    if (!cmd) {
+    const prefixMatches = exactCommand ? [exactCommand]
+      : commands.filter(command => command.name.startsWith(commandName));
+    if (prefixMatches.length === 0) {
       this.writeOutput(`Unknown command: ${chalk.red(commandName)}\nType /help for available commands.`);
       return;
     }
+    if (prefixMatches.length > 1) {
+      this.writeOutput(`Ambiguous command: ${chalk.red(commandName)} (${prefixMatches.map(command => `/${command.name}`).join(', ')})`);
+      return;
+    }
 
-    const output = await cmd.handler(args, this.ctx);
-    if (output) this.writeOutput(output);
+    try {
+      const selectedCommand = prefixMatches[0]!;
+      const commandContext = selectedCommand.name === 'credential' && commandName !== 'credential'
+        ? { ...this.ctx, allowCredentialReveal: false }
+        : this.ctx;
+      const output = await selectedCommand.handler(args, commandContext);
+      if (typeof output === 'string') {
+        if (output) this.writeOutput(output);
+      } else if (output.text) {
+        const exactCredentialReveal = commandName === 'credential'
+          && args.length === 2 && args[0] === 'reveal' && Boolean(args[1]);
+        this.writeOutput(output.text, output.kind === 'explicit-local-credential-reveal' && exactCredentialReveal);
+      }
+    } catch {
+      this.ctx.terminal.showError('Command failed.');
+    }
   }
 
-  private writeOutput(output: string): void {
-    if (typeof this.ctx.terminal.writeOutput === 'function') this.ctx.terminal.writeOutput(output);
-    else process.stdout.write(`${output}\n\n`);
+  private writeOutput(output: string, sensitive = false): void {
+    if (sensitive) {
+      this.ctx.terminal.writeExplicitCredentialReveal(output);
+      return;
+    }
+    const safeOutput = safeText(this.ctx, output);
+    if (typeof this.ctx.terminal.writeOutput === 'function') this.ctx.terminal.writeOutput(safeOutput);
+    else process.stdout.write(`${safeOutput}\n\n`);
   }
 
   getContext(): CommandContext {

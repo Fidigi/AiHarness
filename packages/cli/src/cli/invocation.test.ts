@@ -79,7 +79,8 @@ describe('CLI invocation contract', () => {
   it('administers shared packages without starting the agent and loads enabled package resources', async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-packages-'));
     temporaryDirectories.push(cwd);
-    const agentDir = path.join(cwd, 'agent');
+    const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-packages-agent-'));
+    temporaryDirectories.push(agentDir);
     const packageRoot = path.join(cwd, 'review-package');
     const marker = path.join(cwd, 'package-extension-loaded');
     await mkdir(path.join(packageRoot, 'extensions'), { recursive: true });
@@ -102,22 +103,22 @@ describe('CLI invocation contract', () => {
     );
     const environment = { AI_HARNESS_AGENT_DIR: agentDir, PACKAGE_MARKER: marker };
 
-    const installed = await invoke(['package', 'install', './review-package', '--json'], undefined, environment, cwd);
+    const installed = await invoke(['package', 'install', packageRoot, '--approve', '--json'], undefined, environment, cwd);
     expect(installed).toMatchObject({ code: 0, stderr: '' });
     expect(JSON.parse(installed.stdout)).toMatchObject({
       packages: [expect.objectContaining({ packageName: '@demo/cli-package', scope: 'global', status: 'active' })],
     });
 
-    const listed = await invoke(['list', '--json'], undefined, environment, cwd);
+    const listed = await invoke(['list', '--approve', '--json'], undefined, environment, cwd);
     expect(listed.code).toBe(0);
     expect(JSON.parse(listed.stdout).packages).toHaveLength(1);
 
-    const active = await invoke(['--print', '--no-session', 'hello'], undefined, environment, cwd);
+    const active = await invoke(['--approve', '--print', '--no-session', 'hello'], undefined, environment, cwd);
     expect(active).toEqual({ code: 0, stdout: '[Mock AI Response]\n', stderr: '' });
     expect(await readFile(marker, 'utf8')).toBe('loaded');
 
     const rpc = await invoke(
-      ['--mode', 'rpc', '--no-session'],
+      ['--approve', '--mode', 'rpc', '--no-session'],
       '{"type":"get_commands","id":"packages"}\n',
       environment,
       cwd,
@@ -133,7 +134,7 @@ describe('CLI invocation contract', () => {
     });
 
     const configured = await invoke([
-      'config', '@demo/cli-package', '--extensions=', '--prompts=+prompts/review.md', '--json',
+      'config', '@demo/cli-package', '--approve', '--extensions=', '--prompts=+prompts/review.md', '--json',
     ], undefined, environment, cwd);
     expect(configured.code).toBe(0);
     expect(JSON.parse(configured.stdout).packages[0]).toMatchObject({
@@ -141,10 +142,10 @@ describe('CLI invocation contract', () => {
       resourceFilters: { extensions: [], prompts: ['+prompts/review.md'] },
     });
     await rm(marker, { force: true });
-    expect((await invoke(['--print', '--no-session', 'hello'], undefined, environment, cwd)).code).toBe(0);
+    expect((await invoke(['--approve', '--print', '--no-session', 'hello'], undefined, environment, cwd)).code).toBe(0);
     await expect(readFile(marker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
 
-    const removed = await invoke(['remove', '@demo/cli-package', '--json'], undefined, environment, cwd);
+    const removed = await invoke(['remove', '@demo/cli-package', '--approve', '--json'], undefined, environment, cwd);
     expect(removed.code).toBe(0);
     expect(JSON.parse(removed.stdout).packages).toEqual([]);
   });
@@ -193,7 +194,8 @@ describe('CLI invocation contract', () => {
   it('applies shared system and context prompts in print, JSON, and RPC modes', async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-instructions-'));
     temporaryDirectories.push(cwd);
-    const agentDir = path.join(cwd, 'agent');
+    const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-instructions-agent-'));
+    temporaryDirectories.push(agentDir);
     await writeFile(path.join(cwd, 'base.md'), '\ufefffile base');
     await writeFile(path.join(cwd, 'append.md'), 'file append');
     await writeFile(path.join(cwd, 'capture.mjs'), `
@@ -208,7 +210,7 @@ describe('CLI invocation contract', () => {
     const environment = { AI_HARNESS_AGENT_DIR: agentDir, PROMPT_CAPTURE: capture };
 
     const printed = await invoke([
-      '--print', '--no-session', '--extension', './capture.mjs',
+      '--approve', '--print', '--no-session', '--extension', './capture.mjs',
       '--system-prompt', './base.md',
       '--append-system-prompt', 'literal append', '--append-system-prompt', './append.md',
       'hello',
@@ -220,7 +222,7 @@ describe('CLI invocation contract', () => {
     expect(printPrompt.indexOf('literal append')).toBeLessThan(printPrompt.indexOf('file append'));
 
     const json = await invoke([
-      '--mode', 'json', '--no-session', '--no-context-files', '--extension', './capture.mjs',
+      '--approve', '--mode', 'json', '--no-session', '--no-context-files', '--extension', './capture.mjs',
       '--system-prompt', 'JSON base', 'hello',
     ], undefined, environment, cwd);
     expect(json.code).toBe(0);
@@ -228,7 +230,7 @@ describe('CLI invocation contract', () => {
     expect(await readFile(capture, 'utf8')).not.toContain('user-level context');
 
     const rpc = await invoke([
-      '--mode', 'rpc', '--no-session', '--extension', './capture.mjs', '--system-prompt', 'RPC base',
+      '--approve', '--mode', 'rpc', '--no-session', '--extension', './capture.mjs', '--system-prompt', 'RPC base',
     ], '{"type":"prompt","message":"hello"}\n', environment, cwd);
     expect(rpc.code).toBe(0);
     expect(await readFile(capture, 'utf8')).toContain('RPC base');
@@ -237,8 +239,8 @@ describe('CLI invocation contract', () => {
   it('applies agent settings to model scope, thinking, queues, tools, and session storage', async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-settings-'));
     temporaryDirectories.push(cwd);
-    const agentDir = path.join(cwd, 'agent');
-    await mkdir(agentDir, { recursive: true });
+    const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-settings-agent-'));
+    temporaryDirectories.push(agentDir);
     await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({
       defaultProvider: 'mock',
       defaultModel: 'mock-model-v1',
@@ -292,20 +294,22 @@ describe('CLI invocation contract', () => {
   it('applies one-process trust overrides and the global headless trust policy without persisting overrides', async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-trust-'));
     temporaryDirectories.push(cwd);
-    const agentDir = path.join(cwd, 'agent');
+    const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-trust-agent-'));
+    temporaryDirectories.push(agentDir);
     const projectConfig = path.join(cwd, '.ai-harness');
     const capture = path.join(cwd, 'captured-trust-prompt.txt');
     await mkdir(agentDir, { recursive: true });
     await mkdir(projectConfig, { recursive: true });
     await writeFile(path.join(projectConfig, 'SYSTEM.md'), 'trusted project instructions');
-    await writeFile(path.join(cwd, 'capture.mjs'), `
+    const captureExtension = path.join(agentDir, 'capture.mjs');
+    await writeFile(captureExtension, `
       import { writeFileSync } from 'node:fs';
       export default api => api.before('before:provider', data => {
         writeFileSync(process.env.PROMPT_CAPTURE, String(data.options.systemPrompt));
       });
     `);
     const environment = { AI_HARNESS_AGENT_DIR: agentDir, PROMPT_CAPTURE: capture };
-    const args = ['--print', '--no-session', '--extension', './capture.mjs', 'hello'];
+    const args = ['--print', '--no-session', '--extension', captureExtension, 'hello'];
 
     expect((await invoke(args, undefined, environment, cwd)).code).toBe(0);
     expect(await readFile(capture, 'utf8')).not.toContain('trusted project instructions');
@@ -322,10 +326,44 @@ describe('CLI invocation contract', () => {
     expect(await readFile(capture, 'utf8')).not.toContain('trusted project instructions');
   });
 
+  it('does not let an untrusted workspace masquerade as the global agent directory', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-agent-dir-trust-'));
+    temporaryDirectories.push(cwd);
+    const agentDir = path.join(cwd, '.attacker-agent');
+    const safeExtensionDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-agent-dir-capture-'));
+    temporaryDirectories.push(safeExtensionDir);
+    const capture = path.join(cwd, 'captured-agent-dir-prompt.txt');
+    const captureExtension = path.join(safeExtensionDir, 'capture.mjs');
+    await mkdir(path.join(cwd, '.ai-harness'), { recursive: true });
+    await mkdir(agentDir, { recursive: true });
+    await writeFile(path.join(cwd, '.ai-harness', 'SYSTEM.md'), 'project-controlled base');
+    await writeFile(path.join(agentDir, 'AGENTS.md'), 'project-controlled fake global context');
+    await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({ defaultProjectTrust: 'always' }));
+    await writeFile(captureExtension, `
+      import { writeFileSync } from 'node:fs';
+      export default api => api.before('before:provider', data => {
+        writeFileSync(process.env.PROMPT_CAPTURE, String(data.options.systemPrompt));
+      });
+    `);
+    const environment = { AI_HARNESS_AGENT_DIR: agentDir, PROMPT_CAPTURE: capture };
+    const args = ['--print', '--no-session', '--extension', captureExtension, 'hello'];
+
+    expect((await invoke(args, undefined, environment, cwd)).code).toBe(0);
+    const untrusted = await readFile(capture, 'utf8');
+    expect(untrusted).not.toContain('project-controlled base');
+    expect(untrusted).not.toContain('project-controlled fake global context');
+
+    expect((await invoke(['--approve', ...args], undefined, environment, cwd)).code).toBe(0);
+    const trusted = await readFile(capture, 'utf8');
+    expect(trusted).toContain('project-controlled base');
+    expect(trusted).toContain('project-controlled fake global context');
+  });
+
   it('prompts for protected resources in an interactive terminal and saves the selected decision', async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-trust-prompt-'));
     temporaryDirectories.push(cwd);
-    const agentDir = path.join(cwd, 'agent');
+    const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-trust-prompt-agent-'));
+    temporaryDirectories.push(agentDir);
     await mkdir(path.join(cwd, '.ai-harness'), { recursive: true });
     await writeFile(path.join(cwd, '.ai-harness', 'SYSTEM.md'), 'project instructions');
     const command = [
@@ -439,7 +477,7 @@ describe('CLI invocation contract', () => {
     `);
     const command = [
       process.execPath, '--import', tsxImport, entry,
-      '--tui-mode', 'regular', '--session-dir', sessionDir, '--session-id', 'queue-test',
+      '--approve', '--tui-mode', 'regular', '--session-dir', sessionDir, '--session-id', 'queue-test',
       '--extension', extensionPath, '--provider', 'slow', '--model', 'slow-model',
     ].map(shellArgument).join(' ');
     const child = spawn('/usr/bin/script', ['-qefc', command, '/dev/null'], {

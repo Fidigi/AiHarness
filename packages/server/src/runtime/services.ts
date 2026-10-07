@@ -5,14 +5,21 @@ import {
   ExtensionModuleLoader,
   ExtensionRegistry,
   JsonlSessionStore,
+  loadAgentSettings,
   normalizeProviderUsage,
   ProjectTrustManager,
   registerWorkspaceTools,
+  resolveAgentProviderNetworkSettings,
   resolveInstructionPrompt,
   SessionManager,
   WorkspaceManager,
 } from '@ai-harness/core';
-import type { AiProvider, ChatResponse } from '@ai-harness/core';
+import type {
+  AiProvider,
+  ChatResponse,
+  CredentialRedactionStream,
+  ResolvedAgentSettings,
+} from '@ai-harness/core';
 import type { AiProxyServer } from '../api/proxy.js';
 import { ConfigurationStore } from '../config/config-store.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
@@ -21,6 +28,7 @@ import { McpInventoryService } from './mcp-inventory-service.js';
 import { ModelCatalogService } from './model-catalog.js';
 import { PluginService } from './plugin-service.js';
 import { ProviderRegistryService } from './provider-registry.js';
+import { createRuntimeCloser } from './runtime-lifecycle.js';
 import { PushService } from './push-service.js';
 import { SkillCatalogService } from './skill-catalog.js';
 import { SkillRegistryService } from './skill-registry.js';
@@ -43,6 +51,7 @@ export interface RuntimeServices {
   workspaceManager: WorkspaceManager;
   trustManager: ProjectTrustManager;
   configurationStore: ConfigurationStore;
+  agentSettings: ResolvedAgentSettings;
   extensionRegistry: ExtensionRegistry;
   agentRuntime: AgentRuntime;
   commandRuntime: CommandRuntime;
@@ -63,6 +72,11 @@ export interface RuntimeServices {
   }>;
   resolveProvider(provider: string): AiProvider | undefined;
   recordUsage(provider: string, model: string | undefined, usage: NonNullable<ChatResponse['usage']>): number | undefined;
+  redactText(value: string): string;
+  redactJson<T>(value: T): T;
+  createTextRedactor(): CredentialRedactionStream;
+  /** Idempotently abort process-local work and release runtime-owned resources. */
+  close(): Promise<void>;
 }
 
 function environmentRoots(): string[] | undefined {
@@ -76,20 +90,31 @@ export async function createRuntimeServices(
 ): Promise<RuntimeServices> {
   const dataDir = options.dataDir ?? process.env.AI_HARNESS_DATA_DIR
     ?? path.join(os.homedir(), '.ai-harness');
-  const defaultCwd = options.defaultCwd ?? process.env.AI_HARNESS_DEFAULT_CWD ?? process.cwd();
+  const requestedDefaultCwd = options.defaultCwd ?? process.env.AI_HARNESS_DEFAULT_CWD ?? process.cwd();
   const sessionStore = new JsonlSessionStore(options.sessionsDir ?? path.join(dataDir, 'sessions'));
-  const sessionManager = new SessionManager();
+  const sessionManager = new SessionManager({
+    redactText: value => proxy.redactText(value),
+    redactJson: value => proxy.redactJson(value),
+  });
   sessionManager.setStore(sessionStore);
   await sessionManager.loadAllSessions();
 
   const workspaceManager = new WorkspaceManager({
     allowedRoots: options.allowedRoots ?? environmentRoots(),
-    defaultCwd,
+    defaultCwd: requestedDefaultCwd,
   });
   await workspaceManager.initialize();
+  const defaultCwd = await workspaceManager.getDefaultCwd();
 
   const trustManager = new ProjectTrustManager(options.trustFile ?? path.join(dataDir, 'trust.json'));
   await trustManager.load();
+  const providerSettings = await loadAgentSettings({
+    cwd: defaultCwd,
+    agentDir: dataDir,
+    agentDirTrusted: true,
+    projectTrusted: await trustManager.isTrusted(defaultCwd),
+  });
+  proxy.setNetworkSettings(resolveAgentProviderNetworkSettings(providerSettings.settings));
   const mcpInventory = new McpInventoryService(dataDir, workspaceManager, trustManager);
   const configurationStore = new ConfigurationStore(
     options.configurationFile ?? path.join(dataDir, 'config.json'),
@@ -99,6 +124,8 @@ export async function createRuntimeServices(
     workspaceManager,
     trustManager,
     path.join(dataDir, 'subagents.json'),
+    value => proxy.redactText(value),
+    value => proxy.redactJson(value),
   );
   await subagentService.load();
   const pluginService = new PluginService(
@@ -114,6 +141,8 @@ export async function createRuntimeServices(
     path.join(dataDir, 'provider-secrets.enc'),
   );
   await providerRegistry.load();
+  // Provider secrets discovered from encrypted storage now participate in legacy-session scrubbing.
+  await sessionManager.loadAllSessions();
   const modelCatalog = new ModelCatalogService(proxy, () => providerRegistry.getModels());
   await proxy.initializeUsage(
     path.join(dataDir, 'usage-metrics.json'),
@@ -182,14 +211,17 @@ export async function createRuntimeServices(
     resolveProvider: provider => proxy.getAgentProvider(provider),
     isProjectTrusted: cwd => trustManager.isTrusted(cwd),
     onUsage: (provider, model, usage) => proxy.recordUsage(provider, model, usage),
+    redactText: value => proxy.redactText(value),
+    redactJson: value => proxy.redactJson(value),
+    createTextRedactor: () => proxy.getCredentialRedactor().createStream(),
     onNotification: (category, run) => {
       const session = sessionManager.get(run.sessionId);
-      return pushService.notify(category, {
+      return pushService.notify(category, proxy.redactJson({
         title: session?.title || 'AiHarness',
         body: category === 'completion' ? 'Agent completed.' : run.extensionRequest?.message || run.error || 'Agent needs attention.',
         tag: `agent:${run.sessionId}:${category}`,
         url: `/chat/${encodeURIComponent(run.sessionId)}?cwd=${encodeURIComponent(run.cwd)}`,
-      });
+      }));
     },
   });
   const subagentRuntime = new SubagentRuntime(
@@ -198,9 +230,13 @@ export async function createRuntimeServices(
     sessionManager,
     async ({ cwd, basePrompt }) => (await resolveInstructionPrompt({
       cwd,
+      agentDir: providerSettings.agentDir,
+      agentDirTrusted: true,
       projectTrusted: await trustManager.isTrusted(cwd),
       systemPromptText: basePrompt,
     })).systemPrompt,
+    value => proxy.redactText(value),
+    value => proxy.redactJson(value),
   );
   await extensionRegistry.load('builtin:subagents', api => {
     api.registerTool({
@@ -296,13 +332,16 @@ export async function createRuntimeServices(
     return {
       generation: result.generation,
       loadedExtensions: result.loaded,
-      errors: result.errors.map(item => ({ path: item.path, message: item.error.message })),
+      errors: result.errors.map(item => ({
+        path: proxy.redactText(item.path),
+        message: proxy.redactText(item.error.message),
+      })),
     };
   };
   extensionRegistry.setReloadHandler(async () => { await reloadResources(); });
   const initialExtensionLoad = await reloadResources();
   for (const error of initialExtensionLoad.errors) {
-    console.error(`[ExtensionLoader] ${error.path}: ${error.message}`);
+    console.error(proxy.redactText(`[ExtensionLoader] ${error.path}: ${error.message}`));
   }
 
   sessionManager.setAutoCompactionPolicy(session => {
@@ -366,15 +405,32 @@ export async function createRuntimeServices(
     };
   });
 
+  const commandRuntime = new CommandRuntime(sessionManager, {
+    redactText: value => proxy.redactText(value),
+    redactJson: value => proxy.redactJson(value),
+    createTextRedactor: () => proxy.getCredentialRedactor().createStream(),
+  });
+  const terminalRuntime = new TerminalRuntime({
+    createRedactionStream: () => proxy.getCredentialRedactor().createStream(),
+  });
+  const close = createRuntimeCloser({
+    terminal: terminalRuntime,
+    subagents: subagentRuntime,
+    mcp: mcpInventory,
+    extensions: extensionRegistry,
+    agents: agentRuntime,
+  });
+
   return {
     sessionManager,
     sessionStore,
     workspaceManager,
     trustManager,
     configurationStore,
+    agentSettings: providerSettings,
     extensionRegistry,
     agentRuntime,
-    commandRuntime: new CommandRuntime(sessionManager),
+    commandRuntime,
     mcpInventory,
     modelCatalog,
     pluginService,
@@ -384,9 +440,13 @@ export async function createRuntimeServices(
     skillRegistry,
     subagentService,
     subagentRuntime,
-    terminalRuntime: new TerminalRuntime(),
+    terminalRuntime,
     reloadResources,
     resolveProvider: provider => proxy.getAgentProvider(provider),
     recordUsage: (provider, model, usage) => proxy.recordUsage(provider, model, usage),
+    redactText: value => proxy.redactText(value),
+    redactJson: value => proxy.redactJson(value),
+    createTextRedactor: () => proxy.getCredentialRedactor().createStream(),
+    close,
   };
 }

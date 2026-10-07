@@ -12,6 +12,7 @@ export interface InteractiveShellContext {
   getCwd(): string;
   isTrusted(cwd: string): boolean | Promise<boolean>;
   reportError(message: string): void;
+  redactText?(value: string): string;
 }
 
 /** Interactive adapter around Core's CLI/Web shell runtime. */
@@ -52,7 +53,10 @@ export class InteractiveShellController {
       return true;
     }
 
-    const writer = this.terminal.startShellCommand(parsed.command, parsed.excludedFromContext);
+    const writer = this.terminal.startShellCommand(
+      this.context.redactText?.(parsed.command) ?? parsed.command,
+      parsed.excludedFromContext,
+    );
     const onEvent = (event: ShellCommandEvent): void => {
       if (event.type === 'output' && typeof event.data.chunk === 'string') writer.write(event.data.chunk);
     };

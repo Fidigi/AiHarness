@@ -6,6 +6,8 @@
 import {
   AgentMessageQueue,
   clampPublishedThinkingLevel,
+  closeProviderNetworkDispatchers,
+  CredentialRedactor,
   DEFAULT_CODING_TOOL_NAMES,
   ExtensionRegistry,
   getSupportedThinkingLevels,
@@ -15,6 +17,7 @@ import {
   normalizeProviderUsage,
   PluginService,
   resolveInstructionPrompt,
+  resolvePreTrustAgentDirectory,
   resolveAgentCompactionSettings,
   resolveAgentDefaultTools,
   resolveAgentResourcePaths,
@@ -46,6 +49,7 @@ import { CommandHandler } from './commands/handler.js';
 import { TerminalUI } from './tui/terminal-ui.js';
 import { FullscreenUI } from './tui/fullscreen-ui.js';
 import { FullscreenInput } from './tui/fullscreen-input.js';
+import { ThemeFilteredInput } from './tui/theme-input-filter.js';
 import {
   TerminalEscapeSequence,
   TERMINAL_ESCAPE_CODE_TIMEOUT_MS,
@@ -55,7 +59,7 @@ import { KeyBindingManager } from './utils/keybinding-manager.js';
 import { ExtensionLoader } from './extensions/extension-loader.js';
 import { runToolLoop } from './agent/tool-loop.js';
 import { streamProviderTurn } from './agent/provider-turn.js';
-import { ResourceManager } from './resources/resource-manager.js';
+import { parseResourceCommandLine, ResourceManager } from './resources/resource-manager.js';
 import { editInExternalEditor } from './utils/system-integration.js';
 import { runRpcMode } from './rpc/rpc-server.js';
 import {
@@ -63,7 +67,11 @@ import {
   promptForProjectTrust,
   resolveProjectTrust,
 } from './security/project-trust.js';
-import { ThemeManager } from './tui/theme-manager.js';
+import {
+  startSystemThemeProbe,
+  ThemeManager,
+  type SystemThemeProbe,
+} from './tui/theme-manager.js';
 import {
   CliArgumentError,
   cliVersion,
@@ -78,7 +86,9 @@ import {
   createConfiguredProviders,
   resolveStartupProvider,
 } from './providers/configured-providers.js';
+import { createCliProviderRuntime } from './providers/provider-runtime.js';
 import { reserveProcessStdoutForJson, toJsonProtocolUsage } from './cli/json-output.js';
+import { cleanupCliEarlyExit } from './cli/lifecycle.js';
 import { InteractiveShellController } from './cli/shell-controller.js';
 import { formatConfiguredModelList } from './cli/model-list.js';
 import { runPackageCommand } from './cli/package-command.js';
@@ -87,6 +97,9 @@ import {
   resolveStartupSessionDirectory,
   StartupSessionSelectionCancelledError,
 } from './sessions/startup-session.js';
+
+const outputCredentialRedactor = new CredentialRedactor();
+outputCredentialRedactor.addEnvironment(process.env);
 
 interface InputDriver {
   prompt(): void;
@@ -129,7 +142,8 @@ function coreThinkingLevel(level: CliThinkingLevel | undefined): ThinkingLevel |
 function reportAgentSettingsDiagnostics(settings: ResolvedAgentSettings): void {
   for (const diagnostic of settings.diagnostics) {
     const field = diagnostic.setting ? ` [${diagnostic.setting}]` : '';
-    process.stderr.write(`Warning: Settings ignored (${diagnostic.path})${field}: ${diagnostic.message}\n`);
+    const message = `Warning: Settings ignored (${diagnostic.path})${field}: ${diagnostic.message}`;
+    process.stderr.write(`${outputCredentialRedactor.redact(message)}\n`);
   }
 }
 
@@ -174,7 +188,9 @@ async function chooseStartupSession(sessions: Session[]): Promise<Session | unde
   if (sessions.length === 0) return undefined;
   process.stdout.write('Stored sessions:\n');
   sessions.forEach((session, index) => {
-    process.stdout.write(`  ${index + 1}. ${session.title || 'Untitled'} (${session.id})${session.cwd ? ` — ${session.cwd}` : ''}\n`);
+    process.stdout.write(`${outputCredentialRedactor.redact(
+      `  ${index + 1}. ${session.title || 'Untitled'} (${session.id})${session.cwd ? ` — ${session.cwd}` : ''}`,
+    )}\n`);
   });
   const selector = await new Promise<string>(resolve => {
     const prompt = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -206,10 +222,11 @@ async function main(): Promise<void> {
     cliArguments = parseCliArguments(rawArguments);
   } catch (error) {
     const message = error instanceof CliArgumentError ? error.message : String(error);
-    process.stderr.write(`Error: ${message}\n`);
+    process.stderr.write(`Error: ${outputCredentialRedactor.redact(message)}\n`);
     process.exitCode = 2;
     return;
   }
+  outputCredentialRedactor.add(cliArguments.apiKey);
   if (cliArguments.help) {
     process.stdout.write(formatCliHelp());
     return;
@@ -220,9 +237,11 @@ async function main(): Promise<void> {
   }
   if (cliArguments.listModels) {
     try {
-      const trustManager = new ProjectTrustManager();
-      await trustManager.load();
       const cwd = process.cwd();
+      const trustManager = new ProjectTrustManager(
+        path.join(resolvePreTrustAgentDirectory(cwd), 'trust.json'),
+      );
+      await trustManager.load();
       const bootstrapSettings = await loadAgentSettings({ cwd, projectTrusted: false });
       const trust = await resolveProjectTrust({
         cwd,
@@ -231,12 +250,29 @@ async function main(): Promise<void> {
         defaultProjectTrust: bootstrapSettings.settings.defaultProjectTrust,
         includeContextFiles: !cliArguments.noContextFiles,
       });
-      reportAgentSettingsDiagnostics(await loadAgentSettings({ cwd, projectTrusted: trust.resourceTrusted }));
+      const resolvedSettings = await loadAgentSettings({ cwd, projectTrusted: trust.resourceTrusted });
+      reportAgentSettingsDiagnostics(resolvedSettings);
+      const providerRuntime = await createCliProviderRuntime(
+        resolvedSettings.agentDir,
+        resolvedSettings.settings,
+        process.env,
+        undefined,
+        resolvedSettings.agentDirTrusted,
+        [],
+        outputCredentialRedactor,
+      );
+      const providers = createConfiguredProviders(process.env, {
+        credentials: providerRuntime.values,
+        network: providerRuntime.network,
+      });
       const search = typeof cliArguments.listModels === 'string' ? cliArguments.listModels : undefined;
-      process.stdout.write(`${await formatConfiguredModelList(createConfiguredProviders(), search)}\n`);
+      process.stdout.write(`${outputCredentialRedactor.redact(await formatConfiguredModelList(providers, search))}\n`);
     } catch (error) {
-      process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`Error: ${outputCredentialRedactor.redact(message)}\n`);
       process.exitCode = 1;
+    } finally {
+      await cleanupCliEarlyExit({ closeNetwork: closeProviderNetworkDispatchers });
     }
     return;
   }
@@ -246,7 +282,8 @@ async function main(): Promise<void> {
     stdoutIsTTY: process.stdout.isTTY,
   });
   if (applicationMode === 'rpc') {
-    await runRpcMode({
+    try {
+      await runRpcMode({
       noSession: cliArguments.noSession,
       sessionDir: cliArguments.sessionDir,
       provider: cliArguments.provider,
@@ -263,21 +300,34 @@ async function main(): Promise<void> {
       fork: cliArguments.fork,
       name: cliArguments.name,
       extensions: cliArguments.extensions,
+      skills: cliArguments.skills,
+      promptTemplates: cliArguments.promptTemplates,
+      noSkills: cliArguments.noSkills,
+      noPromptTemplates: cliArguments.noPromptTemplates,
       tools: cliArguments.tools,
       excludeTools: cliArguments.excludeTools,
       noBuiltinTools: cliArguments.noBuiltinTools,
       noTools: cliArguments.noTools,
       projectTrust: cliArguments.projectTrust,
-    });
+        credentialRedactor: outputCredentialRedactor,
+      });
+    } finally {
+      await cleanupCliEarlyExit({ closeNetwork: closeProviderNetworkDispatchers });
+    }
     return;
   }
-  const jsonOutput = applicationMode === 'json' ? reserveProcessStdoutForJson() : undefined;
+  const redactOutput = (value: string): string => outputCredentialRedactor.redact(value);
+  const jsonOutput = applicationMode === 'json' ? reserveProcessStdoutForJson(
+    record => outputCredentialRedactor.redactJson(record),
+    redactOutput,
+    () => outputCredentialRedactor.createStream(),
+  ) : undefined;
   const printMode = applicationMode === 'print' || applicationMode === 'json';
   let pipedInput: string | undefined;
   if (printMode && process.stdin.isTTY !== true) {
     try { pipedInput = await readPipedStdin(); }
     catch (error) {
-      process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+      process.stderr.write(`Error: ${redactOutput(error instanceof Error ? error.message : String(error))}\n`);
       process.exitCode = 1;
       jsonOutput?.restore();
       return;
@@ -290,7 +340,9 @@ async function main(): Promise<void> {
   });
   await workspaceManager.initialize();
   const workspaceCwd = await workspaceManager.getDefaultCwd();
-  const trustManager = new ProjectTrustManager();
+  const trustManager = new ProjectTrustManager(
+    path.join(resolvePreTrustAgentDirectory(workspaceCwd), 'trust.json'),
+  );
   await trustManager.load();
   let projectTrusted = false;
   let projectResourcesTrusted = false;
@@ -315,6 +367,9 @@ async function main(): Promise<void> {
     return resolved;
   };
   let settingsResolution = await resolveSettingsForTrust(true);
+  let providerRuntime: Awaited<ReturnType<typeof createCliProviderRuntime>>;
+  let configuredProviders: Map<string, import('@ai-harness/core').AiProvider>;
+  let commandHandler: CommandHandler;
   const reloadAgentSettings = async (): Promise<void> => {
     settingsResolution = await resolveSettingsForTrust();
   };
@@ -333,7 +388,10 @@ async function main(): Promise<void> {
     settingsResolution.settings.sessionDir,
   );
   const store = new JsonlSessionStore(sessionDirectory, !cliArguments.noSession);
-  const sessionManager = new SessionManager();
+  const sessionManager = new SessionManager({
+    redactText: value => outputCredentialRedactor.redact(value),
+    redactJson: value => outputCredentialRedactor.redactJson(value),
+  });
   sessionManager.setCompactionSettings(resolveAgentCompactionSettings(settingsResolution.settings));
   if (!cliArguments.noSession) {
     sessionManager.setStore(store);
@@ -344,13 +402,26 @@ async function main(): Promise<void> {
     workspaceCwd,
     isProjectTrusted(),
   );
-  const pluginService = new PluginService(
+  let pluginServiceAgentDir = settingsResolution.agentDir;
+  let pluginService = new PluginService(
     workspaceManager,
     trustManager,
-    path.join(settingsResolution.agentDir, 'plugins.json'),
-    settingsResolution.agentDir,
+    path.join(pluginServiceAgentDir, 'plugins.json'),
+    pluginServiceAgentDir,
   );
-  await pluginService.load();
+  const refreshPluginService = async (): Promise<void> => {
+    if (pluginServiceAgentDir !== settingsResolution.agentDir) {
+      pluginServiceAgentDir = settingsResolution.agentDir;
+      pluginService = new PluginService(
+        workspaceManager,
+        trustManager,
+        path.join(pluginServiceAgentDir, 'plugins.json'),
+        pluginServiceAgentDir,
+      );
+    }
+    if (settingsResolution.agentDirTrusted) await pluginService.load();
+  };
+  await refreshPluginService();
   type PackagePaths = Record<PluginResourceKind, { global: string[]; project: string[] }>;
   const emptyPackagePaths = (): PackagePaths => ({
     extension: { global: [], project: [] },
@@ -360,6 +431,7 @@ async function main(): Promise<void> {
   });
   const loadPackagePaths = async (): Promise<PackagePaths> => {
     const result = emptyPackagePaths();
+    if (!settingsResolution.agentDirTrusted) return result;
     try {
       await Promise.all((['extension', 'skill', 'prompt', 'theme'] as PluginResourceKind[]).map(async kind => {
         const locations = await pluginService.getEnabledResourceLocations(kind, {
@@ -370,19 +442,35 @@ async function main(): Promise<void> {
         for (const location of locations) result[kind][location.scope].push(location.path);
       }));
     } catch (error) {
-      process.stderr.write(`Warning: Package resources ignored: ${error instanceof Error ? error.message : String(error)}\n`);
+      process.stderr.write(`${outputCredentialRedactor.redact(
+        `Warning: Package resources ignored: ${error instanceof Error ? error.message : String(error)}`,
+      )}\n`);
     }
     return result;
   };
   let packagePaths = await loadPackagePaths();
 
-  const configuredTheme = cliArguments.theme ?? settingsResolution.settings.theme;
-  const packageThemes = [...packagePaths.theme.global, ...packagePaths.theme.project];
-  const theme = await ThemeManager.load(
-    configuredTheme === 'system' ? 'auto' : configuredTheme,
-    packageThemes,
+  let activeThemeSelection = cliArguments.theme ?? settingsResolution.settings.theme ?? 'auto';
+  let themeSelectedInteractively = false;
+  const packageThemeSources = () => [
+    ...packagePaths.theme.global.map(themePath => ({
+      path: themePath, scope: 'user' as const, source: 'package' as const, trusted: true,
+    })),
+    ...packagePaths.theme.project.map(themePath => ({
+      path: themePath, scope: 'project' as const, source: 'package' as const,
+      trusted: mayLoadProjectResources(),
+    })),
+  ];
+  let theme = await ThemeManager.load(
+    activeThemeSelection,
+    packageThemeSources(),
+    process.env,
+    { cwd: workspaceCwd, projectTrusted: mayLoadProjectResources() },
   ).catch(error => {
-    console.error(`Thème ignoré : ${error instanceof Error ? error.message : String(error)}`);
+    console.error(outputCredentialRedactor.redact(
+      `Thème ignoré : ${error instanceof Error ? error.message : String(error)}`,
+    ));
+    activeThemeSelection = 'dark';
     return ThemeManager.load('dark');
   });
   const fullscreenSupported = !printMode && FullscreenUI.isSupported();
@@ -392,10 +480,16 @@ async function main(): Promise<void> {
     fullscreenSupported,
     settingsResolution.settings.tuiMode,
   );
+  const terminalOptions = {
+    title: 'AiHarness CLI',
+    theme,
+    redactText: (value: string) => outputCredentialRedactor.redact(value),
+    createTextRedactor: () => outputCredentialRedactor.createStream(),
+  };
   const fullscreenTerminal = !printMode && terminalMode === 'fullscreen'
-    ? new FullscreenUI({ title: 'AiHarness CLI', theme })
+    ? new FullscreenUI(terminalOptions)
     : null;
-  const terminal: TerminalUI = fullscreenTerminal ?? new TerminalUI({ title: 'AiHarness CLI', theme });
+  const terminal: TerminalUI = fullscreenTerminal ?? new TerminalUI(terminalOptions);
   let streamWriter: ReturnType<TerminalUI['startStreaming']> | null = null;
   let isStreaming = false;
   let isMultiLineMode = false;
@@ -403,6 +497,29 @@ async function main(): Promise<void> {
   let conversationRunning = false;
   let foregroundInputRunning = false;
   let activeAbortController: AbortController | null = null;
+  let systemThemeProbe: SystemThemeProbe | undefined;
+  let filteredTerminalInput: ThemeFilteredInput | undefined;
+  const activateSystemThemeProbe = async (): Promise<void> => {
+    systemThemeProbe?.close();
+    systemThemeProbe = undefined;
+    if (printMode || activeThemeSelection !== 'system') return;
+    const probe = startSystemThemeProbe({
+      input: process.stdin,
+      output: process.stdout,
+      environment: process.env,
+      onTheme: detected => {
+        if (systemThemeProbe !== probe || activeThemeSelection !== 'system' || shuttingDown) return;
+        theme = detected;
+        terminal.setTheme(detected);
+      },
+    });
+    systemThemeProbe = probe;
+    const detected = await probe.initial;
+    if (systemThemeProbe === probe && activeThemeSelection === 'system') {
+      theme = detected;
+      terminal.setTheme(detected);
+    }
+  };
   const interactiveQueue = new AgentMessageQueue<InteractiveQueuedInput>({
     steeringMode: settingsResolution.settings.steeringMode,
     followUpMode: settingsResolution.settings.followUpMode,
@@ -415,17 +532,20 @@ async function main(): Promise<void> {
     replaceValue: () => undefined,
   };
   const reportError = (message: string): void => {
-    if (printMode) process.stderr.write(`Error: ${message}\n`);
-    else terminal.showError(message);
+    const safeMessage = redactOutput(message);
+    if (printMode) process.stderr.write(`Error: ${safeMessage}\n`);
+    else terminal.showError(safeMessage);
   };
   const reportOutput = (message: string): void => {
-    if (!printMode) terminal.writeOutput(message);
+    if (!printMode) terminal.writeOutput(redactOutput(message));
   };
 
   const createResourceManager = (): ResourceManager => new ResourceManager({
     cwd: workspaceCwd,
     agentDir: settingsResolution.agentDir,
+    agentDirTrusted: settingsResolution.agentDirTrusted,
     projectTrusted: settingsResolution.projectTrusted,
+    strictSkills: true,
     globalSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'global'),
     projectSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'project'),
     globalPromptPaths: resolveAgentResourcePaths(settingsResolution, 'prompts', undefined, 'global'),
@@ -434,6 +554,10 @@ async function main(): Promise<void> {
     projectPackageSkillPaths: packagePaths.skill.project,
     globalPackagePromptPaths: packagePaths.prompt.global,
     projectPackagePromptPaths: packagePaths.prompt.project,
+    skillPaths: cliArguments.skills,
+    promptPaths: cliArguments.promptTemplates,
+    disableSkills: cliArguments.noSkills,
+    disablePrompts: cliArguments.noPromptTemplates,
   });
   let resourceManager = createResourceManager();
   const resourceLoadResult = await resourceManager.loadAll();
@@ -441,6 +565,26 @@ async function main(): Promise<void> {
 
   const extensionRegistry = new ExtensionRegistry();
   extensionRegistry.attachSessionManager(sessionManager);
+  let earlyCleanupPromise: Promise<void> | undefined;
+  const cleanupEarlyExit = (
+    additional: readonly (() => void | Promise<void>)[] = [],
+  ): Promise<void> => {
+    if (earlyCleanupPromise) return earlyCleanupPromise;
+    const filteredInput = filteredTerminalInput;
+    filteredTerminalInput = undefined;
+    const themeProbe = systemThemeProbe;
+    systemThemeProbe = undefined;
+    earlyCleanupPromise = cleanupCliEarlyExit({
+      input: inputDriver,
+      filteredInput,
+      themeProbe,
+      extensions: extensionRegistry,
+      jsonOutput,
+      closeNetwork: closeProviderNetworkDispatchers,
+      additional,
+    });
+    return earlyCleanupPromise;
+  };
   await registerWorkspaceTools(extensionRegistry, workspaceManager, {
     shellPath: () => settingsResolution.settings.shellPath,
     shellCommandPrefix: () => settingsResolution.settings.shellCommandPrefix,
@@ -449,6 +593,8 @@ async function main(): Promise<void> {
   const reloadInstructionPrompt = async (): Promise<void> => {
     const resolved = await resolveInstructionPrompt({
       cwd: workspaceCwd,
+      agentDir: settingsResolution.agentDir,
+      agentDirTrusted: settingsResolution.agentDirTrusted,
       projectTrusted: mayLoadProjectResources(),
       noContextFiles: cliArguments.noContextFiles,
       systemPromptInput: cliArguments.systemPrompt,
@@ -456,7 +602,7 @@ async function main(): Promise<void> {
     });
     instructionSystemPrompt = resolved.systemPrompt;
     for (const diagnostic of resolved.diagnostics) {
-      const message = `Instruction ignorée (${diagnostic.path}) : ${diagnostic.message}`;
+      const message = redactOutput(`Instruction ignorée (${diagnostic.path}) : ${diagnostic.message}`);
       if (printMode) process.stderr.write(`Warning: ${message}\n`);
       else terminal.writeOutput(`Avertissement : ${message}`);
     }
@@ -465,22 +611,23 @@ async function main(): Promise<void> {
     await reloadInstructionPrompt();
   } catch (error) {
     reportError(error instanceof Error ? error.message : String(error));
-    await extensionRegistry.shutdown();
     process.exitCode = 2;
-    jsonOutput?.restore();
+    await cleanupEarlyExit();
     return;
   }
   const extensionLoader = new ExtensionLoader(extensionRegistry, {
     paths: async () => [
       ...configuredExtensionPaths(cliArguments.extensions, settingsResolution),
-      ...(await pluginService.getEnabledExtensionFiles({
+      ...(settingsResolution.agentDirTrusted ? await pluginService.getEnabledExtensionFiles({
         cwd: workspaceCwd,
         projectId: workspaceDescriptor.id,
         projectTrusted: mayLoadProjectResources(),
       }).catch(error => {
-        process.stderr.write(`Warning: Package extensions ignored: ${error instanceof Error ? error.message : String(error)}\n`);
+        process.stderr.write(`${outputCredentialRedactor.redact(
+          `Warning: Package extensions ignored: ${error instanceof Error ? error.message : String(error)}`,
+        )}\n`);
         return [];
-      })),
+      }) : []),
     ],
     isProjectTrusted: mayLoadProjectResources,
   });
@@ -510,10 +657,71 @@ async function main(): Promise<void> {
 
   extensionRegistry.setReloadHandler(async () => {
     await reloadAgentSettings();
+    await refreshPluginService();
+    const refreshedStoreId = `${settingsResolution.agentDirTrusted ? 'persistent' : 'memory'}:${path.resolve(settingsResolution.agentDir)}`;
+    const refreshedRuntime = await createCliProviderRuntime(
+      settingsResolution.agentDir,
+      settingsResolution.settings,
+      process.env,
+      providerRuntime.credentialStoreId === refreshedStoreId ? providerRuntime.credentials : undefined,
+      settingsResolution.agentDirTrusted,
+      extensionRegistry.getProviderDefinitions().map(item => item.type),
+      outputCredentialRedactor,
+    );
+    const refreshedProviders = createConfiguredProviders(process.env, {
+      credentials: refreshedRuntime.values,
+      network: refreshedRuntime.network,
+    });
+    const commandContext = commandHandler.getContext();
+    for (const name of [...configuredProviders.keys()]) {
+      if (!commandContext.extensionProviderNames.has(name)) configuredProviders.delete(name);
+    }
+    for (const [name, provider] of refreshedProviders) configuredProviders.set(name, provider);
+    providerRuntime = refreshedRuntime;
+    commandContext.credentialService = refreshedRuntime.credentials;
+    commandContext.providerCredentialValues = refreshedRuntime.values;
+    commandContext.providerNetwork = refreshedRuntime.network;
+    const refreshedModelSettings = applyAgentModelSettings({
+      provider: cliArguments.provider,
+      model: cliArguments.model,
+      models: cliArguments.models,
+      apiKey: cliArguments.apiKey,
+    }, settingsResolution.settings);
+    const refreshedStartup = await resolveStartupProvider(configuredProviders, refreshedModelSettings.selection);
+    commandContext.provider = refreshedStartup.provider;
+    commandContext.modelPatterns = refreshedModelSettings.modelPatterns;
+    const refreshedModel = refreshedStartup.model ?? refreshedStartup.provider.getConfiguredModel();
+    commandContext.thinkingLevel = clampPublishedThinkingLevel(
+      coreThinkingLevel(cliArguments.thinking)
+        ?? refreshedStartup.thinkingLevel
+        ?? resolveAgentThinkingLevel(settingsResolution.settings, refreshedStartup.providerName, refreshedModel)
+        ?? commandContext.thinkingLevel,
+      getSupportedThinkingLevels(refreshedStartup.providerName, refreshedModel),
+    );
+    sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
+      settingsResolution.settings,
+      refreshedStartup.providerName,
+      refreshedModel,
+    ));
     interactiveQueue.setMode('steer', settingsResolution.settings.steeringMode ?? 'one-at-a-time');
     interactiveQueue.setMode('follow-up', settingsResolution.settings.followUpMode ?? 'one-at-a-time');
     await reloadInstructionPrompt();
     packagePaths = await loadPackagePaths();
+    if (!themeSelectedInteractively) {
+      activeThemeSelection = cliArguments.theme ?? settingsResolution.settings.theme ?? 'auto';
+    }
+    try {
+      theme = await ThemeManager.load(
+        activeThemeSelection,
+        packageThemeSources(),
+        process.env,
+        { cwd: workspaceCwd, projectTrusted: mayLoadProjectResources() },
+      );
+      terminal.setTheme(theme);
+      await activateSystemThemeProbe();
+    } catch (error) {
+      reportError(`Thème ignoré : ${error instanceof Error ? error.message : String(error)}`);
+    }
     resourceManager = createResourceManager();
     const resources = await resourceManager.loadAll();
     for (const error of resources.errors) reportError(`Ressource : ${error.message}`);
@@ -550,9 +758,8 @@ async function main(): Promise<void> {
   try { selectedTools(); }
   catch (error) {
     reportError(error instanceof Error ? error.message : String(error));
-    await extensionRegistry.shutdown();
     process.exitCode = 2;
-    jsonOutput?.restore();
+    await cleanupEarlyExit();
     return;
   }
 
@@ -562,8 +769,30 @@ async function main(): Promise<void> {
     models: cliArguments.models,
     apiKey: cliArguments.apiKey,
   }, settingsResolution.settings);
+  try {
+    providerRuntime = await createCliProviderRuntime(
+      settingsResolution.agentDir,
+      settingsResolution.settings,
+      process.env,
+      undefined,
+      settingsResolution.agentDirTrusted,
+      extensionRegistry.getProviderDefinitions().map(item => item.type),
+      outputCredentialRedactor,
+    );
+  } catch (error) {
+    reportError(error instanceof Error ? error.message : String(error));
+    process.exitCode = 2;
+    await cleanupEarlyExit();
+    return;
+  }
+  // Credentials loaded from the encrypted store may only become known here; scrub legacy rows now.
+  if (!cliArguments.noSession) await sessionManager.loadAllSessions();
+  configuredProviders = createConfiguredProviders(process.env, {
+    credentials: providerRuntime.values,
+    network: providerRuntime.network,
+  });
 
-  const commandHandler = new CommandHandler(
+  commandHandler = new CommandHandler(
     sessionManager,
     store,
     terminal,
@@ -571,11 +800,42 @@ async function main(): Promise<void> {
     trustManager,
     {
       cwd: workspaceCwd,
+      workspaceManager,
       workspaceId: workspaceDescriptor.id,
       isProjectTrusted,
       enabledToolNames: () => selectedTools().map(tool => tool.name),
       modelPatterns: effectiveModelSettings.modelPatterns,
       settingsInfo: () => formatAgentSettingsSummary(settingsResolution),
+      providers: configuredProviders,
+      credentialService: providerRuntime.credentials,
+      providerCredentialValues: providerRuntime.values,
+      allowCredentialReveal: applicationMode === 'interactive'
+        && process.stdin.isTTY === true && process.stdout.isTTY === true,
+      providerNetwork: providerRuntime.network,
+      redactText: redactOutput,
+      redactJson: value => outputCredentialRedactor.redactJson(value),
+      themeControl: {
+        current: () => theme.name,
+        list: () => ThemeManager.inventory(
+          packageThemeSources(),
+          theme.name,
+          { cwd: workspaceCwd, projectTrusted: mayLoadProjectResources() },
+        ),
+        select: async selection => {
+          const selected = await ThemeManager.load(
+            selection,
+            packageThemeSources(),
+            process.env,
+            { cwd: workspaceCwd, projectTrusted: mayLoadProjectResources() },
+          );
+          activeThemeSelection = selection;
+          themeSelectedInteractively = true;
+          theme = selected;
+          terminal.setTheme(selected);
+          await activateSystemThemeProbe();
+          return theme.name;
+        },
+      },
     },
   );
   let ctx = commandHandler.getContext();
@@ -598,9 +858,8 @@ async function main(): Promise<void> {
     ));
   } catch (error) {
     reportError(error instanceof Error ? error.message : String(error));
-    await extensionRegistry.shutdown();
     process.exitCode = 2;
-    jsonOutput?.restore();
+    await cleanupEarlyExit();
     return;
   }
 
@@ -613,9 +872,8 @@ async function main(): Promise<void> {
     );
   } catch (error) {
     reportError(error instanceof Error ? error.message : String(error));
-    await extensionRegistry.shutdown();
     process.exitCode = 1;
-    jsonOutput?.restore();
+    await cleanupEarlyExit();
     return;
   }
   const remainingInitialMessages = [...cliArguments.messages];
@@ -631,13 +889,12 @@ async function main(): Promise<void> {
   initialPrompts.push(...remainingInitialMessages.map(content => ({ content })));
   if (printMode && initialPrompts.length === 0) {
     reportError('Print and JSON modes require a prompt, @file, or piped input.');
-    await extensionRegistry.shutdown();
     process.exitCode = 2;
-    jsonOutput?.restore();
+    await cleanupEarlyExit();
     return;
   }
 
-  const keyBindings = new KeyBindingManager();
+  const keyBindings = new KeyBindingManager(redactOutput);
   if (!printMode) {
     const helpAction = {
       description: 'Afficher l’aide',
@@ -672,8 +929,7 @@ async function main(): Promise<void> {
       reportError(error instanceof Error ? error.message : String(error));
       process.exitCode = 2;
     }
-    await extensionRegistry.shutdown();
-    jsonOutput?.restore();
+    await cleanupEarlyExit();
     return;
   }
   let currentSessionId = startupSession.id;
@@ -746,12 +1002,12 @@ async function main(): Promise<void> {
   const startupHistory = [
     ...(sessionManager.get(currentSessionId)?.messages ?? []).map(message => ({
       type: message.role === 'user' || message.role === 'assistant' ? message.role : 'system' as const,
-      content: message.content,
+      content: redactOutput(message.content),
       timestamp: message.timestamp,
     })),
     ...(sessionManager.get(currentSessionId)?.commands ?? []).map(command => ({
       type: 'command' as const,
-      content: `$ ${command.command}\n${command.output ?? ''}\n[${command.status}${command.exitCode === undefined ? '' : ` · exit ${command.exitCode}`}]`,
+      content: redactOutput(`$ ${command.command}\n${command.output ?? ''}\n[${command.status}${command.exitCode === undefined ? '' : ` · exit ${command.exitCode}`}]`),
       timestamp: command.timestamp,
     })),
   ].sort((left, right) => left.timestamp.getTime() - right.timestamp.getTime());
@@ -764,14 +1020,18 @@ async function main(): Promise<void> {
     getCwd: () => workspaceCwd,
     isTrusted: () => isProjectTrusted(),
     reportError,
+    redactText: redactOutput,
   }, {
     shellPath: () => settingsResolution.settings.shellPath,
     commandPrefix: () => settingsResolution.settings.shellCommandPrefix,
+    redactText: redactOutput,
+    redactJson: value => outputCredentialRedactor.redactJson(value),
+    createTextRedactor: () => outputCredentialRedactor.createStream(),
   });
 
   const sessionPrompt = (): string => {
     const title = sessionManager.get(currentSessionId)?.title;
-    return title ? `${title}: ` : '> ';
+    return title ? `${redactOutput(title)}: ` : '> ';
   };
 
   const refreshPrompt = (): void => {
@@ -799,9 +1059,8 @@ async function main(): Promise<void> {
     activeAbortController?.abort();
     shellController.abort();
     streamWriter?.cancel();
-    inputDriver?.close();
     terminal.exitMessage(message);
-    void shellController.close().finally(() => extensionRegistry.shutdown()).finally(() => {
+    void cleanupEarlyExit([() => shellController.close()]).finally(() => {
       if (exitCode !== undefined) process.exit(exitCode);
     });
   };
@@ -863,11 +1122,18 @@ async function main(): Promise<void> {
     }
 
     if (options.allowCommands !== false && trimmed.startsWith('/')) {
-      const [resourceCommand, ...resourceArgs] = trimmed.slice(1).split(/\s+/);
+      let resourceParts: string[];
+      try { resourceParts = parseResourceCommandLine(trimmed.slice(1)); }
+      catch (error) {
+        reportError(error instanceof Error ? error.message : String(error));
+        refreshPrompt();
+        return undefined;
+      }
+      const [resourceCommand = '', ...resourceArgs] = resourceParts;
       if (resourceCommand === 'skills') {
         const skills = resourceManager.listSkills();
         reportOutput(skills.length
-          ? skills.map(skill => `• ${skill.name} — ${skill.description}${skill.disableModelInvocation ? ' [explicite uniquement]' : ''}`).join('\n')
+          ? skills.map(skill => `• ${skill.name} — ${skill.description}${skill.disableModelInvocation ? ' [explicite uniquement]' : ''} [${skill.provenance.scope}/${skill.provenance.source}]`).join('\n')
           : 'Aucun skill découvert.');
         refreshPrompt();
         return undefined;
@@ -875,8 +1141,16 @@ async function main(): Promise<void> {
       if (resourceCommand === 'prompts') {
         const prompts = resourceManager.listPrompts();
         reportOutput(prompts.length
-          ? prompts.map(prompt => `• /${prompt.name}${prompt.description ? ` — ${prompt.description}` : ''}`).join('\n')
+          ? prompts.map(prompt => `• /${prompt.name}${prompt.description ? ` — ${prompt.description}` : ''} [${prompt.provenance.scope}/${prompt.provenance.source}]`).join('\n')
           : 'Aucun prompt découvert.');
+        refreshPrompt();
+        return undefined;
+      }
+      if (resourceCommand === 'resources') {
+        const inventory = resourceManager.listInventory();
+        reportOutput(inventory.length
+          ? inventory.map(item => `${item.active ? '●' : '○'} ${item.kind}:${item.name} [${item.provenance.scope}/${item.provenance.source}]`).join('\n')
+          : 'Aucune ressource découverte.');
         refreshPrompt();
         return undefined;
       }
@@ -937,17 +1211,20 @@ async function main(): Promise<void> {
         try {
           const agentHook = await extensionRegistry.runBefore('before:agent', {
             sessionId: currentSessionId,
-            provider: providerName,
-            input: queued.content,
+            provider: redactOutput(providerName),
+            input: redactOutput(queued.content),
           });
           if (agentHook.cancelled) {
             throw new Error(agentHook.reason ?? "Requête annulée par un hook d'extension.");
           }
-          const userInput = agentHook.data.input.trim();
+          const safeHookData = outputCredentialRedactor.redactJson(agentHook.data);
+          const userInput = safeHookData.input.trim();
           if (!userInput) throw new Error("Requête annulée : le hook d'extension a produit une entrée vide.");
           const userBlocks: MessageContentBlock[] = [
             { type: 'text', text: userInput },
-            ...(queued.imageBlocks ?? []).filter(block => block.type !== 'text'),
+            ...outputCredentialRedactor.redactJson(
+              (queued.imageBlocks ?? []).filter(block => block.type !== 'text'),
+            ),
           ];
           if (announceJson) await jsonOutput?.events.startAgent(userInput, userBlocks);
           await sessionManager.addMessage(currentSessionId, {
@@ -986,6 +1263,7 @@ async function main(): Promise<void> {
 
       let activeToolCall: ToolCall | undefined;
       let activeToolOutput = '';
+      let activeToolRedactor = outputCredentialRedactor.createStream();
       let finalContent = '';
       let continueConversation = true;
       while (continueConversation) {
@@ -1004,7 +1282,9 @@ async function main(): Promise<void> {
           projectTrusted: isProjectTrusted(),
           onProcessOutput: chunk => {
             if (!activeToolCall) return;
-            activeToolOutput = truncateToolTail(activeToolOutput + chunk).content;
+            const safeChunk = activeToolRedactor.push(chunk);
+            if (!safeChunk) return;
+            activeToolOutput = truncateToolTail(activeToolOutput + safeChunk).content;
             return jsonOutput?.events.toolExecutionUpdate(activeToolCall, activeToolOutput);
           },
           notify: (message, level = 'info') => {
@@ -1017,6 +1297,7 @@ async function main(): Promise<void> {
           provider,
           providerName,
           model: providerModel,
+          sessionId: currentSessionId,
           messages,
           tools,
           systemPrompt: instructionSystemPrompt,
@@ -1027,6 +1308,9 @@ async function main(): Promise<void> {
             ? 0 : settingsResolution.settings.retry?.maxRetries ?? 3,
           retryDelayMs: settingsResolution.settings.retry?.baseDelayMs ?? 2_000,
           retryMaxDelayMs: settingsResolution.settings.retry?.maxAgentDelayMs ?? 60_000,
+          redactText: redactOutput,
+          redactJson: value => outputCredentialRedactor.redactJson(value),
+          createTextRedactor: () => outputCredentialRedactor.createStream(),
           onStart: (effectiveProvider, effectiveModel) => {
             streamWriter = printMode ? null : terminal.startStreaming();
             isStreaming = true;
@@ -1062,6 +1346,7 @@ async function main(): Promise<void> {
         onToolCall: call => {
           activeToolCall = call;
           activeToolOutput = '';
+          activeToolRedactor = outputCredentialRedactor.createStream();
           const event = jsonOutput?.events.toolExecutionStart(call);
           if (!printMode) {
             terminal.addTranscriptEntry({ type: 'command', content: `[Tool] ${call.name}` });
@@ -1069,8 +1354,13 @@ async function main(): Promise<void> {
           }
           return event;
         },
-        onToolResult: result => {
-          const event = jsonOutput?.events.toolExecutionEnd(result);
+        onToolResult: async result => {
+          const finalChunk = activeToolRedactor.flush();
+          if (activeToolCall && finalChunk) {
+            activeToolOutput = truncateToolTail(activeToolOutput + finalChunk).content;
+            await jsonOutput?.events.toolExecutionUpdate(activeToolCall, activeToolOutput);
+          }
+          const event = await jsonOutput?.events.toolExecutionEnd(result);
           activeToolCall = undefined;
           activeToolOutput = '';
           if (!printMode) terminal.displayCommand(result.call.name, result.content);
@@ -1084,6 +1374,7 @@ async function main(): Promise<void> {
             if (!printMode && content) terminal.addTranscriptEntry({ type: 'assistant', content });
           },
           signal: operationController.signal,
+          redactText: redactOutput,
         });
 
         await extensionRegistry.emit('agent:end', {
@@ -1210,6 +1501,7 @@ async function main(): Promise<void> {
       ...commandHandler.getCommandNames(),
       'skills',
       'prompts',
+      'resources',
       ...(settingsResolution.settings.enableSkillCommands === false
         ? [] : resourceManager.listSkills().map(skill => `skill:${skill.name}`)),
       ...resourceManager.listPrompts().map(prompt => prompt.name),
@@ -1227,22 +1519,18 @@ async function main(): Promise<void> {
           imageBlocks: prompt.images,
         });
       }
-      if (applicationMode === 'print') process.stdout.write(`${finalContent ?? ''}\n`);
+      if (applicationMode === 'print') process.stdout.write(`${redactOutput(finalContent ?? '')}\n`);
     } catch (error) {
-      process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+      process.stderr.write(`Error: ${redactOutput(error instanceof Error ? error.message : String(error))}\n`);
       process.exitCode = 1;
     } finally {
-      let cleanupError: unknown;
-      try { await extensionRegistry.shutdown(); }
-      catch (error) { cleanupError = error ?? new Error('Extension shutdown failed.'); }
-      try { await jsonOutput?.flush(); }
-      catch (error) { cleanupError ??= error ?? new Error('JSON output flush failed.'); }
-      jsonOutput?.restore();
-      if (cleanupError) throw cleanupError;
+      await cleanupEarlyExit();
     }
     return;
   }
 
+  await activateSystemThemeProbe();
+  filteredTerminalInput = new ThemeFilteredInput(process.stdin);
   if (fullscreenTerminal) {
     const fullscreenInput = new FullscreenInput(fullscreenTerminal, {
       onLine: dispatchLine,
@@ -1260,14 +1548,14 @@ async function main(): Promise<void> {
           fullscreenTerminal.enter();
         }
       },
-    });
+    }, filteredTerminalInput);
     inputDriver = fullscreenInput;
     if (settingsResolution.settings.quietStartup !== true) terminal.welcome();
     fullscreenInput.setPrompt(sessionPrompt());
     fullscreenInput.start();
   } else {
     const rl = readline.createInterface({
-      input: process.stdin,
+      input: filteredTerminalInput,
       output: process.stdout,
       prompt: sessionPrompt(),
       completer: (line: string): [string[], string] => [completeCommands(line), line],
@@ -1323,12 +1611,12 @@ async function main(): Promise<void> {
       if (key.ctrl && key.name === 'c') return; // readline emits SIGINT below.
       keyBindings.handleKeypress(key);
     };
-    process.stdin.prependListener('keypress', regularKeypress);
+    filteredTerminalInput.prependListener('keypress', regularKeypress);
     inputDriver = {
       prompt: () => rl.prompt(),
       close: () => {
         escapeSequence.cancel();
-        process.stdin.removeListener('keypress', regularKeypress);
+        filteredTerminalInput?.removeListener('keypress', regularKeypress);
         rl.close();
       },
       setPrompt: prompt => rl.setPrompt(prompt),
@@ -1368,6 +1656,8 @@ async function main(): Promise<void> {
 
 main().catch(error => {
   if (process.stdout.isTTY) process.stdout.write('\u001b[?25h\u001b[?1049l');
-  console.error(chalk.red('Erreur fatale :'), error);
+  console.error(chalk.red('Erreur fatale :'), outputCredentialRedactor.redact(
+    error instanceof Error ? error.message : String(error),
+  ));
   process.exitCode = 1;
 });

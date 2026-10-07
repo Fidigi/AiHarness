@@ -1,5 +1,52 @@
 import { describe, expect, it } from 'vitest';
-import { JsonEventStream, toJsonProtocolMessage } from './json-output.js';
+import { CredentialRedactor } from '@ai-harness/core';
+import {
+  JsonEventStream,
+  reserveProcessStdoutForJsonLines,
+  toJsonProtocolMessage,
+} from './json-output.js';
+
+describe('JSON process output', () => {
+  it('keeps stdout JSON-only and redacts fragmented accidental stdout/stderr writes', async () => {
+    const originalStdout = process.stdout.write;
+    const originalStderr = process.stderr.write;
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const capture = (target: string[]) => ((
+      chunk: string | Uint8Array,
+      encodingOrCallback?: BufferEncoding | ((error?: Error | null) => void),
+      callback?: (error?: Error | null) => void,
+    ) => {
+      target.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString());
+      const completed = typeof encodingOrCallback === 'function' ? encodingOrCallback : callback;
+      completed?.(null);
+      return true;
+    }) as typeof process.stdout.write;
+    process.stdout.write = capture(stdout);
+    process.stderr.write = capture(stderr);
+    const redactor = new CredentialRedactor(['fragmented-secret']);
+    const output = reserveProcessStdoutForJsonLines(
+      () => redactor.createStream(),
+      value => redactor.redact(value),
+    );
+    try {
+      process.stdout.write('extension fragmented-');
+      process.stdout.write('secret\n');
+      process.stderr.write('diagnostic fragmented-');
+      process.stderr.write('secret\n');
+      await output.write({ type: 'safe' });
+      await output.flush();
+    } finally {
+      output.restore();
+      process.stdout.write = originalStdout;
+      process.stderr.write = originalStderr;
+    }
+
+    expect(stdout.join('')).toBe('{"type":"safe"}\n');
+    expect(stderr.join('')).not.toContain('fragmented-secret');
+    expect(stderr.join('')).toBe('extension [REDACTED]\ndiagnostic [REDACTED]\n');
+  });
+});
 
 describe('JsonEventStream', () => {
   it('projects normalized persisted usage with shared model pricing', () => {
@@ -140,6 +187,24 @@ describe('JsonEventStream', () => {
         aborted: false, willRetry: false,
       },
     ]);
+  });
+
+  it('redacts untrusted provider failures in every error lifecycle record', () => {
+    const records: Array<Record<string, unknown>> = [];
+    const redact = (value: string): string => value.replaceAll('runtime-secret', '[REDACTED]');
+    const stream = new JsonEventStream(record => records.push(record), redact);
+    stream.startAgent('fail', undefined);
+    stream.startTurn();
+    stream.startAssistant('extension', 'model');
+    stream.finishAssistantError(new Error('remote runtime-secret'));
+    stream.retryStart(1, 2, 5, new Error('retry runtime-secret'));
+    stream.retryEnd(false, 1, new Error('final runtime-secret'));
+    stream.summarizationRetryScheduled(1, 2, 5, new Error('summary runtime-secret'));
+    stream.compactionEnd('manual', { error: new Error('compact runtime-secret') });
+
+    const serialized = JSON.stringify(records);
+    expect(serialized).not.toContain('runtime-secret');
+    expect(serialized).toContain('[REDACTED]');
   });
 
   it('closes a failed assistant response and settles the run', () => {

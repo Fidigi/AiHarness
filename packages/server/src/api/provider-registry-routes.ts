@@ -1,8 +1,7 @@
 import { Router } from 'express';
-import type { ProviderAuthStatus } from '@ai-harness/core';
+import type { ProviderAuthStatus, ProviderCredentialService } from '@ai-harness/core';
 import type { AiProxyServer } from './proxy.js';
 import type { RuntimeServices } from '../runtime/services.js';
-import type { EncryptedCredentialStore } from '../security/credential-store.js';
 import { requireCapability } from '../security/request-security.js';
 import { ProviderOAuthService } from '../runtime/provider-oauth.js';
 
@@ -27,10 +26,14 @@ function identifier(value: unknown, name: string): string {
 export function createProviderRegistryRouter(
   servicesPromise: Promise<RuntimeServices>,
   proxy: AiProxyServer,
-  credentialStore: () => EncryptedCredentialStore | undefined,
+  credentialService: () => ProviderCredentialService | undefined,
+  oauth = new ProviderOAuthService(proxy, credentialService),
 ): Router {
   const router = Router();
-  const oauth = new ProviderOAuthService(proxy, credentialStore);
+  router.use((_request, response, next) => {
+    response.setHeader('Cache-Control', 'no-store');
+    next();
+  });
 
   router.get('/auth', async (_request, response, next) => {
     try {
@@ -82,8 +85,8 @@ export function createProviderRegistryRouter(
         return;
       }
       let models: string[] = [];
-      try { models = await provider.getAvailableModels(); } catch (error) {
-        response.status(502).json({ error: error instanceof Error ? error.message : String(error), code: 'PROVIDER_TEST_FAILED' });
+      try { models = await provider.getAvailableModels(); } catch {
+        response.status(502).json({ error: 'Provider test failed.', code: 'PROVIDER_TEST_FAILED' });
         return;
       }
       response.json({ ok: true, models: models.slice(0, 500), checkedAt: new Date().toISOString() });
@@ -126,7 +129,7 @@ export function createProviderRegistryRouter(
         return;
       }
       proxy.removeProvider(id);
-      await credentialStore()?.delete(id);
+      await credentialService()?.delete(id);
       response.json({ success: true, type: id, connected: false });
     } catch (error) { next(error); }
   });

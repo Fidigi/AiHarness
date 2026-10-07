@@ -9,11 +9,14 @@ import {
 import type { ExtensionRegistry } from '../extensions/extension-registry.js';
 import type { Message } from '../types/index.js';
 import { calculatePublishedModelCost } from '../providers/model-metadata.js';
+import type { CredentialRedactionStream } from '../providers/credentials.js';
 
 export interface StreamProviderTurnOptions {
   provider: AiProvider;
   providerName: string;
   model?: string;
+  /** Stable conversation identity for provider transports with bounded continuation caches. */
+  sessionId?: string;
   messages: Message[];
   tools: ChatToolDefinition[];
   systemPrompt?: string;
@@ -37,6 +40,12 @@ export interface StreamProviderTurnOptions {
   maxPendingStreamBytes?: number;
   /** Hard guard for the number of concurrently queued provider callbacks. */
   maxPendingStreamEvents?: number;
+  /** Scrub a complete untrusted provider/extension string before it crosses a boundary. */
+  redactText?(value: string): string;
+  /** Scrub nested provider events and final responses. */
+  redactJson?<T>(value: T): T;
+  /** Build independent stateful scrubbers for text/reasoning chunk boundaries. */
+  createTextRedactor?(): CredentialRedactionStream;
 }
 
 function abortableDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
@@ -60,6 +69,15 @@ function abortableDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
  * preserving streamed text/reasoning deltas for any frontend adapter.
  */
 export async function streamProviderTurn(options: StreamProviderTurnOptions): Promise<ChatResponse> {
+  const safeText = (value: string): string => options.redactText?.(value) ?? value;
+  const safeJson = <T>(value: T): T => options.redactJson?.(value) ?? value;
+  const safeError = (value: unknown): unknown => {
+    if (!options.redactText) return value;
+    const message = safeText(value instanceof Error ? value.message : String(value));
+    const error = new Error(message);
+    if (value instanceof Error && value.name && value.name !== 'Error') error.name = safeText(value.name);
+    return error;
+  };
   const maxRetries = options.maxRetries ?? 2;
   if (!Number.isSafeInteger(maxRetries) || maxRetries < 0 || maxRetries > 10) {
     throw new Error('maxRetries must be an integer between 0 and 10.');
@@ -77,12 +95,13 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
   }
 
   const providerHook = await options.extensionRegistry.runBefore('before:provider', {
-    provider: options.providerName,
-    model: options.model,
-    messages: options.messages,
+    provider: safeText(options.providerName),
+    model: options.model ? safeText(options.model) : undefined,
+    messages: safeJson(options.messages),
     options: {
-      model: options.model,
-      systemPrompt: options.systemPrompt,
+      model: options.model ? safeText(options.model) : undefined,
+      sessionId: options.sessionId ? safeText(options.sessionId) : undefined,
+      systemPrompt: options.systemPrompt ? safeText(options.systemPrompt) : undefined,
       tools: options.tools,
       thinking: options.thinking,
       signal: options.signal,
@@ -93,15 +112,21 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
   }
 
   const callStartedAt = Date.now();
+  providerHook.data = safeJson(providerHook.data);
   await options.extensionRegistry.emit('provider:call:start', {
-    provider: providerHook.data.provider,
-    model: providerHook.data.model,
+    provider: safeText(providerHook.data.provider),
+    model: providerHook.data.model ? safeText(providerHook.data.model) : undefined,
   });
-  await options.onStart?.(providerHook.data.provider, providerHook.data.model);
+  await options.onStart?.(
+    safeText(providerHook.data.provider),
+    providerHook.data.model ? safeText(providerHook.data.model) : undefined,
+  );
 
   const maxAttempts = maxRetries + 1;
   let streamedContent = '';
   let streamedReasoning = '';
+  const contentRedactor = options.createTextRedactor?.();
+  const reasoningRedactor = options.createTextRedactor?.();
   let response: ChatResponse | undefined;
   let retrying = false;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -136,14 +161,16 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
         pendingDeliveryBytes += deliveryBytes;
         const operation = deliveryTail.then(async () => {
           if (deliveryFailure) throw deliveryFailure;
-          if (event) await options.onProviderEvent?.(event);
+          if (event) await options.onProviderEvent?.(safeJson(event));
           if (chunk) {
-            streamedContent += chunk;
-            await options.onTextDelta?.(chunk);
+            const safeChunk = contentRedactor?.push(chunk) ?? safeText(chunk);
+            streamedContent += safeChunk;
+            if (safeChunk) await options.onTextDelta?.(safeChunk);
           }
           if (reasoningDelta) {
-            streamedReasoning += reasoningDelta;
-            await options.onReasoningDelta?.(reasoningDelta);
+            const safeReasoning = reasoningRedactor?.push(reasoningDelta) ?? safeText(reasoningDelta);
+            streamedReasoning += safeReasoning;
+            if (safeReasoning) await options.onReasoningDelta?.(safeReasoning);
           }
         });
         deliveryTail = operation.then(
@@ -180,13 +207,20 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
       if (providerFailure) throw providerFailure;
       if (deliveryFailure) throw deliveryFailure;
       if (streamError) throw streamError;
-      response = completedResponse ?? { content: streamedContent };
+      const finalContent = contentRedactor?.flush() ?? '';
+      const finalReasoning = reasoningRedactor?.flush() ?? '';
+      streamedContent += finalContent;
+      streamedReasoning += finalReasoning;
+      if (finalContent) await options.onTextDelta?.(finalContent);
+      if (finalReasoning) await options.onReasoningDelta?.(finalReasoning);
+      response = safeJson(completedResponse ?? { content: streamedContent });
       if (retrying) await options.onRetryEnd?.({ success: true, attempt });
       break;
     } catch (error) {
+      const outwardError = safeError(error);
       await options.extensionRegistry.emit('provider:call:error', {
-        provider: providerHook.data.provider,
-        error: error instanceof Error ? error.message : String(error),
+        provider: safeText(providerHook.data.provider),
+        error: outwardError instanceof Error ? outwardError.message : String(outwardError),
       });
       const canRetry = !attemptProducedOutput
         && !callbackDeliveryFailed
@@ -194,35 +228,36 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
         && !options.retrySignal?.aborted
         && attempt < maxAttempts;
       if (!canRetry) {
-        if (retrying) await options.onRetryEnd?.({ success: false, attempt, finalError: error });
-        await options.onError?.(error);
-        throw error;
+        if (retrying) await options.onRetryEnd?.({ success: false, attempt, finalError: outwardError });
+        await options.onError?.(outwardError);
+        throw outwardError;
       }
       retrying = true;
       const delayMs = Math.min(
         retryMaxDelayMs,
         retryDelayMs * 2 ** (attempt - 1),
       );
-      await options.onRetryStart?.({ attempt, maxAttempts, delayMs, error });
+      await options.onRetryStart?.({ attempt, maxAttempts, delayMs, error: outwardError });
       try {
         const retryWaitSignal = options.signal && options.retrySignal
           ? AbortSignal.any([options.signal, options.retrySignal])
           : options.retrySignal ?? options.signal;
         await abortableDelay(delayMs, retryWaitSignal);
       } catch (delayError) {
-        await options.onRetryEnd?.({ success: false, attempt, finalError: delayError });
-        await options.onError?.(delayError);
-        throw delayError;
+        const outwardDelayError = safeError(delayError);
+        await options.onRetryEnd?.({ success: false, attempt, finalError: outwardDelayError });
+        await options.onError?.(outwardDelayError);
+        throw outwardDelayError;
       }
     }
   }
 
   if (!response) throw new Error('Provider did not return a response.');
-  response = {
+  response = safeJson({
     ...response,
     content: streamedContent || response.content,
     ...(response.reasoning || !streamedReasoning ? {} : { reasoning: streamedReasoning }),
-  };
+  });
   const normalizedUsage = normalizeProviderUsage(response.usage);
   if (normalizedUsage) {
     response = {

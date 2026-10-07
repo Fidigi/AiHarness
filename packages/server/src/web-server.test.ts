@@ -49,8 +49,10 @@ async function requestWithHost(
 describe('combined Web server', () => {
   let webRoot = '';
   let baseUrl = '';
+  const previousMasterKey = process.env.AI_HARNESS_MASTER_KEY;
 
   beforeAll(async () => {
+    process.env.AI_HARNESS_MASTER_KEY = 'web-server-test-master-key';
     webRoot = await mkdtemp(path.join(os.tmpdir(), 'ai-harness-web-'));
     await writeFile(path.join(webRoot, 'index.html'), html);
     const server = await start({
@@ -74,6 +76,8 @@ describe('combined Web server', () => {
   afterAll(async () => {
     await stop();
     await rm(webRoot, { recursive: true, force: true });
+    if (previousMasterKey === undefined) delete process.env.AI_HARNESS_MASTER_KEY;
+    else process.env.AI_HARNESS_MASTER_KEY = previousMasterKey;
   });
 
   it('serves the Web bundle from the root', async () => {
@@ -1122,10 +1126,9 @@ describe('combined Web server', () => {
     expect(JSON.stringify(catalog)).not.toContain('Never exposed instructions');
     expect(catalog.skills).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'global-review', scope: 'global', trusted: true, modelInvocable: true }),
-      expect.objectContaining({ name: 'project-review', scope: 'project', trusted: false, modelInvocable: false }),
     ]));
+    expect(catalog.skills.find(skill => skill.name === 'project-review')).toBeUndefined();
     const globalKey = catalog.skills.find(skill => skill.name === 'global-review')!.key;
-    const projectKey = catalog.skills.find(skill => skill.name === 'project-review')!.key;
 
     const unknown = await fetch(`${baseUrl}/api/skills/enabled`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -1138,15 +1141,14 @@ describe('combined Web server', () => {
     });
     expect(globalResponse.status).toBe(200);
     expect((await globalResponse.json() as { enabledScope: string }).enabledScope).toBe('global');
-    const rejected = await fetch(`${baseUrl}/api/skills/enabled`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd: webRoot, projectId: workspace.id, enabledSkills: [projectKey] }),
-    });
-    expect(rejected.status).toBe(409);
     await fetch(`${baseUrl}/api/workspaces/trust`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd: webRoot, confirm: true }),
     });
+    const trustedCatalog = await fetch(
+      `${baseUrl}/api/skills?cwd=${encodeURIComponent(webRoot)}&projectId=${workspace.id}&refresh=true`,
+    ).then(response => response.json()) as typeof catalog;
+    const projectKey = trustedCatalog.skills.find(skill => skill.name === 'project-review')!.key;
     const updatedResponse = await fetch(`${baseUrl}/api/skills/enabled`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd: webRoot, projectId: workspace.id, enabledSkills: [globalKey, projectKey] }),
@@ -1656,6 +1658,29 @@ describe('combined Web server', () => {
     expect(await tooLarge.json()).toMatchObject({ path: 'large.log', tooLarge: true, downloadable: true });
     expect((await fetch(`${baseUrl}/api/files/content?cwd=${encodeURIComponent(webRoot)}&path=..`)).status).toBe(403);
 
+    const safeDownload = await fetch(`${baseUrl}/api/files/download?cwd=${encodeURIComponent(webRoot)}&path=source.ts`);
+    expect(safeDownload.status).toBe(200);
+    expect(await safeDownload.text()).toBe('export const value = 1;\n');
+
+    const downloadSecret = 'download-boundary-secret-do-not-emit';
+    const configured = await fetch(`${baseUrl}/api/provider-registry/custom`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: 'download-redaction-test', name: 'Download redaction test',
+        baseUrl: 'https://provider.example.test/v1', dialect: 'openai-completions', apiKey: downloadSecret,
+      }),
+    });
+    expect(configured.status).toBe(201);
+    await writeFile(path.join(webRoot, 'credential-download.bin'), Buffer.concat([
+      Buffer.alloc(64 * 1024 - 7, 65), Buffer.from(downloadSecret), Buffer.from([0, 1, 2]),
+    ]));
+    const blockedDownload = await fetch(
+      `${baseUrl}/api/files/download?cwd=${encodeURIComponent(webRoot)}&path=credential-download.bin`,
+    );
+    expect(blockedDownload.status).toBe(409);
+    expect(await blockedDownload.text()).not.toContain(downloadSecret);
+    await fetch(`${baseUrl}/api/provider-registry/custom/download-redaction-test`, { method: 'DELETE' });
+
     const index = await fetch(`${baseUrl}/api/files/index?cwd=${encodeURIComponent(webRoot)}&q=sre`).then(response => response.json()) as { files: string[]; directories: string[] };
     expect(index.files).toContain('source.ts');
     const directories = await fetch(`${baseUrl}/api/files/index?cwd=${encodeURIComponent(webRoot)}&q=nest&limit=1`).then(response => response.json()) as { directories: string[] };
@@ -1682,11 +1707,19 @@ describe('combined Web server', () => {
     await writeFile(path.join(repository, 'deleted.txt'), 'removed content\n');
     await writeFile(path.join(repository, 'binary.bin'), Buffer.from([0, 1, 2, 3]));
     await writeFile(path.join(repository, 'renamed-old.txt'), 'renamed\n');
-    await execFileAsync('git', ['-C', repository, 'add', 'tracked.txt', 'deleted.txt', 'binary.bin', 'renamed-old.txt']);
+    await mkdir(path.join(repository, 'ignored-looking'));
+    await writeFile(path.join(repository, 'ignored-looking', 'tracked.md'), 'tracked despite ignore\n');
+    await writeFile(path.join(repository, '.gitignore'), 'ignored-looking/\nignored.tmp\n');
+    await execFileAsync('git', ['-C', repository, 'add',
+      'tracked.txt', 'deleted.txt', 'binary.bin', 'renamed-old.txt', '.gitignore']);
+    await execFileAsync('git', ['-C', repository, 'add', '-f', 'ignored-looking/tracked.md']);
     await execFileAsync('git', ['-C', repository, 'commit', '-qm', 'fixture']);
     await writeFile(path.join(repository, 'tracked.txt'), 'before\nafter\n');
     await writeFile(path.join(repository, 'binary.bin'), Buffer.from([0, 4, 5, 6]));
     await writeFile(path.join(repository, 'untracked.txt'), 'new file\n');
+    await writeFile(path.join(repository, 'ignored.tmp'), 'ignored\n');
+    await writeFile(path.join(repository, 'ignored-looking', 'untracked.md'), 'ignored\n');
+    await writeFile(path.join(repository, '.DS_Store'), 'hidden metadata\n');
     await rm(path.join(repository, 'deleted.txt'));
     await execFileAsync('git', ['-C', repository, 'mv', 'renamed-old.txt', 'renamed-new.txt']);
     await fetch(`${baseUrl}/api/workspaces/trust`, {
@@ -1702,6 +1735,15 @@ describe('combined Web server', () => {
       expect.objectContaining({ name: 'untracked.txt', gitStatus: 'untracked' }),
       expect.objectContaining({ name: 'binary.bin', gitStatus: 'modified' }),
       expect.objectContaining({ name: 'renamed-new.txt', gitStatus: 'renamed' }),
+    ]));
+    expect(listing.entries.map(entry => entry.name)).not.toEqual(expect.arrayContaining(['.git', '.DS_Store']));
+    const indexed = await fetch(`${baseUrl}/api/files/index?cwd=${encodeURIComponent(repository)}&q=&limit=2000`)
+      .then(response => response.json()) as { files: string[] };
+    expect(indexed.files).toEqual(expect.arrayContaining([
+      'ignored-looking/tracked.md', 'untracked.txt',
+    ]));
+    expect(indexed.files).not.toEqual(expect.arrayContaining([
+      'ignored.tmp', 'ignored-looking/untracked.md', '.DS_Store',
     ]));
     const status = await fetch(`${baseUrl}/api/files/git/status?cwd=${encodeURIComponent(repository)}`).then(response => response.json()) as {
       files: Array<{ path: string; originalPath?: string; additions?: number; deletions?: number }>;
@@ -1987,6 +2029,13 @@ describe('combined Web server', () => {
     expect((await fetch(`${baseUrl}/api/auth/logout`, { method: 'POST', headers: { Cookie: cookie } })).status).toBe(200);
     expect(await fetch(`${baseUrl}/api/auth/status`, { headers: { Cookie: cookie } }).then(response => response.json()))
       .toMatchObject({ authenticated: false });
+    const untrustedForwardedLogin = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https' },
+      body: JSON.stringify({ token: 'admin-token' }),
+    });
+    expect(untrustedForwardedLogin.headers.get('set-cookie')).not.toContain('Secure');
+    vi.stubEnv('AI_HARNESS_TRUST_PROXY', '1');
     const secureLogin = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https' },
@@ -2164,12 +2213,11 @@ describe('combined Web server', () => {
       body: JSON.stringify({ cwd: webRoot, confirm: true }),
     });
     const projectInstructions = path.join(webRoot, 'AGENTS.override.md');
-    const agentDirectory = path.join(webRoot, '.capture-agent');
+    const agentDirectory = path.join(webRoot, '.data');
     await writeFile(projectInstructions, 'ephemeral server-side project instructions');
     await mkdir(agentDirectory, { recursive: true });
     await writeFile(path.join(agentDirectory, 'SYSTEM.md'), 'server-side global system prompt');
     await writeFile(path.join(agentDirectory, 'AGENTS.md'), 'server-side global context');
-    vi.stubEnv('AI_HARNESS_AGENT_DIR', agentDirectory);
     const created = await fetch(`${baseUrl}/api/sessions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: 'Inherited run', cwd: webRoot }),
@@ -2302,7 +2350,8 @@ describe('combined Web server', () => {
 
     await fetch(`${baseUrl}/api/sessions/${created.id}`, { method: 'DELETE' });
     await rm(projectInstructions, { force: true });
-    await rm(agentDirectory, { recursive: true, force: true });
+    await rm(path.join(agentDirectory, 'SYSTEM.md'), { force: true });
+    await rm(path.join(agentDirectory, 'AGENTS.md'), { force: true });
     await fetch(`${baseUrl}/api/configuration/scope`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scope: 'project', scopeId: created.workspaceId, values: {} }),

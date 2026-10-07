@@ -3,7 +3,6 @@ import {
   lstat,
   mkdir,
   open,
-  opendir,
   realpath,
   rename,
   rm,
@@ -11,6 +10,8 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { CONTEXT_FILE_NAMES, resolveAgentDirectory } from '../prompts/instruction-context.js';
+import { readStableDirectorySnapshot } from './stable-directory.js';
+import { releaseStableLockPath } from './stable-lock.js';
 
 const TRUST_FILE_VERSION = 2 as const;
 const MAX_TRUST_FILE_BYTES = 256 * 1024;
@@ -459,16 +460,20 @@ async function findNestedTrustProject(
       directoriesRead++;
 
       try {
-        const directory = await opendir(candidate.path);
-        for await (const entry of directory) {
+        if (pathsInspected >= MAX_FRESH_PROJECT_PATHS) return { kind: 'scan-limit', path: cwd };
+        const listing = await readStableDirectorySnapshot(
+          candidate.path,
+          Math.max(1, MAX_FRESH_PROJECT_PATHS - pathsInspected),
+        );
+        if (!sameFreshScanIdentity(listing.stats, candidate.identity)) {
+          return { kind: 'scan-unreadable', path: candidate.path };
+        }
+        if (listing.truncated) return { kind: 'scan-limit', path: cwd };
+        for (const { entry, stats } of listing.entries) {
           pathsInspected++;
-          if (pathsInspected > MAX_FRESH_PROJECT_PATHS) {
-            return { kind: 'scan-limit', path: cwd };
-          }
           const entryPath = path.join(candidate.path, entry.name);
-          const info = await lstat(entryPath).catch(() => undefined);
-          const identity = info && freshScanIdentity(info);
-          if (!info || !identity) return { kind: 'scan-unreadable', path: entryPath };
+          const identity = freshScanIdentity(stats);
+          if (!identity) return { kind: 'scan-unreadable', path: entryPath };
           observed.set(entryPath, identity);
           if (identity.kind !== 'directory' || FRESH_PROJECT_SCAN_SKIP.has(entry.name)) continue;
           if (candidate.depth >= FRESH_PROJECT_SCAN_DEPTH) {
@@ -533,8 +538,9 @@ async function readBoundedTrustFile(filePath: string): Promise<unknown | undefin
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw error;
   }
-  if (before.isSymbolicLink() || !before.isFile()) {
-    throw new Error('Trust store must be a regular file and cannot be a symbolic link.');
+  if (before.isSymbolicLink() || !before.isFile() || before.nlink !== 1
+    || (typeof process.getuid === 'function' && before.uid !== process.getuid())) {
+    throw new Error('Trust store must be a private regular file without links.');
   }
   if (before.size > MAX_TRUST_FILE_BYTES) {
     throw new Error(`Trust store exceeds the ${MAX_TRUST_FILE_BYTES} byte limit.`);
@@ -545,9 +551,18 @@ async function readBoundedTrustFile(filePath: string): Promise<unknown | undefin
     fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
   );
   try {
-    const opened = await handle.stat();
-    if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino) {
+    let opened = await handle.stat();
+    if (!opened.isFile() || opened.nlink !== 1 || opened.dev !== before.dev || opened.ino !== before.ino
+      || opened.size !== before.size
+      || (typeof process.getuid === 'function' && opened.uid !== process.getuid())) {
       throw new Error('Trust store changed while it was being opened.');
+    }
+    if (process.platform !== 'win32' && (opened.mode & 0o077) !== 0) {
+      await handle.chmod(0o600);
+      opened = await handle.stat();
+      if (opened.dev !== before.dev || opened.ino !== before.ino || (opened.mode & 0o077) !== 0) {
+        throw new Error('Trust store permissions could not be secured.');
+      }
     }
     const chunks: Buffer[] = [];
     let total = 0;
@@ -562,9 +577,12 @@ async function readBoundedTrustFile(filePath: string): Promise<unknown | undefin
       }
       chunks.push(buffer.subarray(0, bytesRead));
     }
-    const after = await handle.stat();
-    if (after.dev !== opened.dev || after.ino !== opened.ino || after.size !== opened.size
-      || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) {
+    const [after, target] = await Promise.all([handle.stat(), lstat(filePath)]);
+    if (after.dev !== opened.dev || after.ino !== opened.ino || after.nlink !== 1 || after.size !== opened.size
+      || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs
+      || !target.isFile() || target.isSymbolicLink() || target.nlink !== 1
+      || target.dev !== after.dev || target.ino !== after.ino || target.size !== after.size
+      || target.mtimeMs !== after.mtimeMs || target.ctimeMs !== after.ctimeMs) {
       throw new Error('Trust store changed while it was being read.');
     }
     const bytes = Buffer.concat(chunks, total);
@@ -622,8 +640,40 @@ async function loadTrustDecisions(filePath: string): Promise<Map<string, boolean
   return parseTrustFile(await readBoundedTrustFile(filePath));
 }
 
+async function ensurePrivateTrustDirectory(directory: string): Promise<void> {
+  const absolute = path.resolve(directory);
+  const parsed = path.parse(absolute);
+  let current = parsed.root;
+  for (const component of absolute.slice(parsed.root.length).split(path.sep).filter(Boolean)) {
+    current = path.join(current, component);
+    try { await mkdir(current, { mode: 0o700 }); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+    const info = await lstat(current);
+    if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Trust store directory is unsafe.');
+  }
+  const handle = await open(
+    absolute,
+    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_DIRECTORY ?? 0),
+  );
+  try {
+    let info = await handle.stat();
+    if (!info.isDirectory() || (typeof process.getuid === 'function' && info.uid !== process.getuid())) {
+      throw new Error('Trust store directory is unsafe.');
+    }
+    if (process.platform !== 'win32' && (info.mode & 0o077) !== 0) {
+      await handle.chmod(0o700);
+      info = await handle.stat();
+      if ((info.mode & 0o077) !== 0) throw new Error('Trust store directory is unsafe.');
+    }
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+}
+
 async function persistTrustDecisions(filePath: string, decisions: ReadonlyMap<string, boolean>): Promise<void> {
-  await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
+  await ensurePrivateTrustDirectory(path.dirname(filePath));
   const temporary = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
   const sorted = Object.fromEntries([...decisions.entries()].sort(([left], [right]) => left.localeCompare(right)));
   const value: TrustFileV2 = { version: TRUST_FILE_VERSION, decisions: sorted };
@@ -632,30 +682,98 @@ async function persistTrustDecisions(filePath: string, decisions: ReadonlyMap<st
     throw new Error(`Trust store exceeds the ${MAX_TRUST_FILE_BYTES} byte limit.`);
   }
 
-  const handle = await open(temporary, 'wx', 0o600);
+  const existing = await lstat(filePath).catch(error => {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  });
+  if (existing && (!existing.isFile() || existing.isSymbolicLink() || existing.nlink !== 1
+    || (process.platform !== 'win32' && (existing.mode & 0o077) !== 0)
+    || (typeof process.getuid === 'function' && existing.uid !== process.getuid()))) {
+    throw new Error('Trust store must be a private regular file without links.');
+  }
+  const handle = await open(
+    temporary,
+    fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | (fsConstants.O_NOFOLLOW ?? 0),
+    0o600,
+  );
   let closed = false;
   try {
     await handle.writeFile(contents, 'utf8');
     await handle.sync();
+    const staged = await handle.stat();
+    if (!staged.isFile() || staged.nlink !== 1 || staged.size !== Buffer.byteLength(contents)
+      || (process.platform !== 'win32' && (staged.mode & 0o077) !== 0)
+      || (typeof process.getuid === 'function' && staged.uid !== process.getuid())) {
+      throw new Error('Trust store staging file changed unexpectedly.');
+    }
+    const current = await lstat(filePath).catch(error => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw error;
+    });
+    if ((existing && (!current || current.dev !== existing.dev || current.ino !== existing.ino
+      || current.size !== existing.size || current.mtimeMs !== existing.mtimeMs || current.ctimeMs !== existing.ctimeMs
+      || !current.isFile() || current.isSymbolicLink() || current.nlink !== 1))
+      || (!existing && current)) {
+      throw new Error('Trust store changed while it was being replaced.');
+    }
     await handle.close();
     closed = true;
     await rename(temporary, filePath);
+    const committed = await lstat(filePath);
+    if (!committed.isFile() || committed.isSymbolicLink() || committed.nlink !== 1
+      || committed.dev !== staged.dev || committed.ino !== staged.ino || committed.size !== staged.size) {
+      throw new Error('Trust store changed while it was committed.');
+    }
+    const directory = await open(path.dirname(filePath), fsConstants.O_RDONLY).catch(() => undefined);
+    await directory?.sync().catch(() => undefined);
+    await directory?.close().catch(() => undefined);
   } finally {
     if (!closed) await handle.close().catch(() => undefined);
-    await rm(temporary, { force: true });
+    await rm(temporary, { force: true }).catch(() => undefined);
+  }
+}
+
+async function removeStaleTrustLock(
+  lockPath: string,
+  observed: Awaited<ReturnType<typeof lstat>>,
+): Promise<void> {
+  const stalePath = `${lockPath}.${process.pid}.${crypto.randomUUID()}.stale`;
+  try {
+    await rename(lockPath, stalePath);
+    const moved = await lstat(stalePath);
+    if (moved.dev !== observed.dev || moved.ino !== observed.ino || moved.nlink !== 1
+      || moved.mtimeMs !== observed.mtimeMs || Date.now() - moved.mtimeMs <= STALE_LOCK_MS) {
+      const replacement = await lstat(lockPath).catch(() => undefined);
+      if (!replacement) await rename(stalePath, lockPath).catch(() => undefined);
+      return;
+    }
+    await rm(stalePath, { force: true });
+  } catch {
+    const replacement = await lstat(lockPath).catch(() => undefined);
+    if (!replacement) await rename(stalePath, lockPath).catch(() => undefined);
   }
 }
 
 async function acquireTrustLock(filePath: string): Promise<() => Promise<void>> {
   const lockPath = `${filePath}.lock`;
-  await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
+  await ensurePrivateTrustDirectory(path.dirname(filePath));
   for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt++) {
     try {
-      const handle = await open(lockPath, 'wx', 0o600);
+      const handle = await open(
+        lockPath,
+        fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | (fsConstants.O_NOFOLLOW ?? 0),
+        0o600,
+      );
       const owned = await handle.stat().catch(async error => {
         await handle.close().catch(() => undefined);
         throw error;
       });
+      if (!owned.isFile() || owned.nlink !== 1
+        || (process.platform !== 'win32' && (owned.mode & 0o077) !== 0)
+        || (typeof process.getuid === 'function' && owned.uid !== process.getuid())) {
+        await handle.close().catch(() => undefined);
+        throw new Error('Trust store lock is unsafe.');
+      }
       const heartbeat = setInterval(() => {
         const now = new Date();
         void handle.utimes(now, now).catch(() => undefined);
@@ -664,25 +782,24 @@ async function acquireTrustLock(filePath: string): Promise<() => Promise<void>> 
       return async () => {
         clearInterval(heartbeat);
         await handle.close().catch(() => undefined);
-        try {
-          const current = await lstat(lockPath);
-          if (current.dev === owned.dev && current.ino === owned.ino) {
-            await rm(lockPath, { force: true });
-          }
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-        }
+        await releaseStableLockPath(lockPath, owned);
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
       try {
         const info = await lstat(lockPath);
-        if (!info.isSymbolicLink() && info.isFile() && Date.now() - info.mtimeMs > STALE_LOCK_MS) {
-          await rm(lockPath, { force: true });
+        if (info.isSymbolicLink() || !info.isFile() || info.nlink !== 1
+          || (process.platform !== 'win32' && (info.mode & 0o077) !== 0)
+          || (typeof process.getuid === 'function' && info.uid !== process.getuid())) {
+          throw new Error('Trust store lock is unsafe.');
+        }
+        if (Date.now() - info.mtimeMs > STALE_LOCK_MS) {
+          await removeStaleTrustLock(lockPath, info);
           continue;
         }
       } catch (lockError) {
         if ((lockError as NodeJS.ErrnoException).code === 'ENOENT') continue;
+        throw lockError;
       }
       await new Promise(resolve => setTimeout(resolve, LOCK_RETRY_MS));
     }

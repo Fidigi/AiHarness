@@ -2,6 +2,7 @@
 // Terminal UI Tests
 // ============================================================
 
+import { CredentialRedactor } from '@ai-harness/core';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TerminalUI } from './terminal-ui';
 
@@ -20,6 +21,33 @@ describe('TerminalUI', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('redacts every normal terminal boundary across chunks and reserves the explicit reveal bypass', () => {
+    const secret = 'terminal-boundary-secret';
+    const redactor = new CredentialRedactor([secret]);
+    const protectedTerminal = new TerminalUI({
+      redactText: value => redactor.redact(value),
+      createTextRedactor: () => redactor.createStream(),
+    });
+
+    protectedTerminal.displayUserMessage(`typed ${secret}`);
+    protectedTerminal.writeOutput(`command ${secret}`);
+    const stream = protectedTerminal.startStreaming();
+    stream.write('terminal-boundary-');
+    stream.write('secret');
+    stream.finish();
+
+    const normalOutput = [
+      ...vi.mocked(console.log).mock.calls.flat().map(String),
+      ...vi.mocked(process.stdout.write).mock.calls.map(call => String(call[0])),
+    ].join('');
+    expect(normalOutput).not.toContain(secret);
+    expect(normalOutput).toContain('[REDACTED]');
+
+    vi.mocked(process.stdout.write).mockClear();
+    protectedTerminal.writeExplicitCredentialReveal(secret);
+    expect(vi.mocked(process.stdout.write).mock.calls.map(call => String(call[0])).join('')).toContain(secret);
   });
 
   // Welcome tests

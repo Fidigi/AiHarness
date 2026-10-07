@@ -1,4 +1,28 @@
 export {
+  CredentialStoreError,
+  EncryptedCredentialStore,
+  credentialValuesEqual,
+} from './credential-store.js';
+export type { EncryptedCredentialStoreOptions } from './credential-store.js';
+export {
+  atomicWriteStableFile,
+  StableFileError,
+} from './stable-file.js';
+export type {
+  AtomicStableFileOptions,
+  StableFileErrorCode,
+} from './stable-file.js';
+export {
+  openStableDirectoryHandle,
+  readStableDirectoryEntries,
+  readStableDirectorySnapshot,
+} from './stable-directory.js';
+export type {
+  StableDirectoryListing,
+  StableDirectorySnapshot,
+  StableDirectorySnapshotEntry,
+} from './stable-directory.js';
+export {
   FRESH_PROJECT_SCAN_DEPTH,
   FRESH_PROJECT_SCAN_MAX_DIRECTORIES,
   inspectProjectTrustResources,

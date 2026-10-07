@@ -8,6 +8,7 @@ import {
   resolveModelReference,
   resolveModelScope,
   type AiProvider,
+  type AgentProviderNetworkSettings,
   type AgentSettings,
   type ProviderConfig,
   type ThinkingLevel,
@@ -75,45 +76,89 @@ function attempt(
   catch { /* Ignore providers whose environment configuration is incomplete. */ }
 }
 
-/** One environment resolver shared by interactive, print, and RPC CLI paths. */
-export function createConfiguredProviders(env: NodeJS.ProcessEnv = process.env): Map<string, AiProvider> {
+export interface CreateConfiguredProvidersOptions {
+  /** Process-local resolved secrets. They are never copied into descriptors or sessions. */
+  credentials?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
+  network?: AgentProviderNetworkSettings;
+}
+
+function configuredCredential(
+  provider: string,
+  envValue: string | undefined,
+  credentials: CreateConfiguredProvidersOptions['credentials'],
+): string | undefined {
+  if (envValue) return envValue;
+  if (!credentials) return undefined;
+  if (typeof (credentials as ReadonlyMap<string, string>).get === 'function') {
+    return (credentials as ReadonlyMap<string, string>).get(provider);
+  }
+  return (credentials as Readonly<Record<string, string>>)[provider];
+}
+
+function networkConfig(network?: AgentProviderNetworkSettings): Partial<ProviderConfig> {
+  return network ? {
+    transport: network.transport,
+    ...(network.httpProxy ? { httpProxy: network.httpProxy } : {}),
+    httpIdleTimeoutMs: network.httpIdleTimeoutMs,
+    websocketConnectTimeoutMs: network.websocketConnectTimeoutMs,
+    requestTimeoutMs: network.requestTimeoutMs,
+    providerMaxRetries: network.maxRetries,
+    providerMaxRetryDelayMs: network.maxRetryDelayMs,
+  } : {};
+}
+
+/** One credential/network resolver shared by interactive, print, JSON, and RPC CLI paths. */
+export function createConfiguredProviders(
+  env: NodeJS.ProcessEnv = process.env,
+  options: CreateConfiguredProvidersOptions = {},
+): Map<string, AiProvider> {
   const providers = new Map<string, AiProvider>();
-  attempt(providers, 'mock', { type: 'mock' as any, apiKey: '', model: env.MOCK_MODEL || 'mock-model' });
-  attempt(providers, 'openai', env.OPENAI_API_KEY
-    ? { type: 'openai' as any, apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL }
+  const network = networkConfig(options.network);
+  const openAiKey = configuredCredential('openai', env.OPENAI_API_KEY, options.credentials);
+  const anthropicKey = configuredCredential('anthropic', env.ANTHROPIC_API_KEY, options.credentials);
+  const googleKey = configuredCredential('google', env.GEMINI_API_KEY || env.GOOGLE_API_KEY, options.credentials);
+  const azureKey = configuredCredential('azure', env.AZURE_OPENAI_API_KEY, options.credentials);
+  const vertexKey = configuredCredential('vertex', env.GOOGLE_VERTEX_ACCESS_TOKEN, options.credentials);
+  const localKey = configuredCredential('local', env.LOCAL_API_KEY || env.LLAMA_API_KEY, options.credentials);
+
+  attempt(providers, 'mock', { ...network, type: 'mock' as any, apiKey: '', model: env.MOCK_MODEL || 'mock-model' });
+  attempt(providers, 'openai', openAiKey
+    ? { ...network, type: 'openai' as any, apiKey: openAiKey, model: env.OPENAI_MODEL }
     : undefined);
-  attempt(providers, 'anthropic', env.ANTHROPIC_API_KEY
-    ? { type: 'anthropic' as any, apiKey: env.ANTHROPIC_API_KEY, model: env.ANTHROPIC_MODEL }
+  attempt(providers, 'anthropic', anthropicKey
+    ? { ...network, type: 'anthropic' as any, apiKey: anthropicKey, model: env.ANTHROPIC_MODEL }
     : undefined);
-  const googleKey = env.GEMINI_API_KEY || env.GOOGLE_API_KEY;
   attempt(providers, 'google', googleKey
-    ? { type: 'google' as any, apiKey: googleKey, model: env.GEMINI_MODEL || 'gemini-2.0-flash' }
+    ? { ...network, type: 'google' as any, apiKey: googleKey, model: env.GEMINI_MODEL || 'gemini-2.0-flash' }
     : undefined);
-  attempt(providers, 'azure', env.AZURE_OPENAI_API_KEY && env.AZURE_OPENAI_ENDPOINT
+  attempt(providers, 'azure', azureKey && env.AZURE_OPENAI_ENDPOINT
     ? {
+        ...network,
         type: 'azure' as any,
-        apiKey: env.AZURE_OPENAI_API_KEY,
+        apiKey: azureKey,
         baseUrl: env.AZURE_OPENAI_ENDPOINT,
         deployment: env.AZURE_OPENAI_DEPLOYMENT,
         model: env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o',
         apiVersion: env.AZURE_OPENAI_API_VERSION,
       }
     : undefined);
-  attempt(providers, 'vertex', env.GOOGLE_VERTEX_ACCESS_TOKEN && env.GOOGLE_CLOUD_PROJECT
+  attempt(providers, 'vertex', vertexKey && env.GOOGLE_CLOUD_PROJECT
     ? {
+        ...network,
         type: 'vertex' as any,
-        apiKey: env.GOOGLE_VERTEX_ACCESS_TOKEN,
+        apiKey: vertexKey,
         project: env.GOOGLE_CLOUD_PROJECT,
         location: env.GOOGLE_CLOUD_LOCATION,
         model: env.VERTEX_MODEL || 'gemini-2.0-flash',
       }
     : undefined);
   attempt(providers, 'bedrock', env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
-    ? { type: 'bedrock' as any, region: env.AWS_REGION, model: env.BEDROCK_MODEL }
+    ? { ...network, type: 'bedrock' as any, region: env.AWS_REGION, model: env.BEDROCK_MODEL }
     : undefined);
   attempt(providers, 'local', {
+    ...network,
     type: 'local' as any,
-    apiKey: env.LOCAL_API_KEY || env.LLAMA_API_KEY || 'local',
+    ...(localKey ? { apiKey: localKey } : {}),
     baseUrl: env.LOCAL_BASE_URL || env.LLAMA_BASE_URL || 'http://localhost:11434/v1',
     model: env.LOCAL_MODEL || env.LLAMA_MODEL || 'local-model',
   });

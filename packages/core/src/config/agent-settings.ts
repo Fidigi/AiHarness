@@ -3,7 +3,10 @@ import { lstat, open } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { ThinkingLevel } from '../providers/index.js';
-import { resolveAgentDirectory } from '../prompts/instruction-context.js';
+import {
+  resolveAgentDirectory,
+  resolvePreTrustAgentDirectory,
+} from '../prompts/instruction-context.js';
 
 export type AgentSettingsScope = 'global' | 'project';
 export type AgentTuiMode = 'regular' | 'fullscreen';
@@ -32,6 +35,17 @@ export interface AgentRetrySettings {
     maxRetries?: number;
     maxRetryDelayMs?: number;
   };
+}
+
+/** Effective network policy passed to every built-in or extension provider. */
+export interface AgentProviderNetworkSettings {
+  transport: 'auto' | 'sse' | 'websocket' | 'websocket-cached';
+  httpProxy?: string;
+  httpIdleTimeoutMs: number;
+  websocketConnectTimeoutMs: number;
+  requestTimeoutMs: number;
+  maxRetries: number;
+  maxRetryDelayMs: number;
 }
 
 export interface AgentPackageSourceObject {
@@ -98,6 +112,8 @@ export interface AgentSettings {
   shellPath?: string;
   shellCommandPrefix?: string;
   npmCommand?: string[];
+  /** Commands are trusted configuration; their stdout is cached only in process memory. */
+  providerApiKeyCommands?: Record<string, string>;
   packages?: AgentPackageSource[];
   extensions?: string[];
   skills?: string[];
@@ -126,6 +142,8 @@ export interface AgentSettingProvenance {
 
 export interface ResolvedAgentSettings {
   agentDir: string;
+  /** False when this directory is workspace-controlled and project trust is absent. */
+  agentDirTrusted: boolean;
   cwd: string;
   projectTrusted: boolean;
   paths: Record<AgentSettingsScope, string>;
@@ -142,6 +160,8 @@ export interface LoadAgentSettingsOptions {
   agentDir?: string;
   homeDir?: string;
   projectTrusted?: boolean;
+  /** Trusted composition roots may mark an administrator-owned data directory explicitly. */
+  agentDirTrusted?: boolean;
   /** Defaults to `<cwd>/.ai-harness/settings.json`. */
   projectSettingsPath?: string;
   maxFileBytes?: number;
@@ -244,18 +264,23 @@ const settingsSchema = object({
   markdown: object({ codeBlockIndent: text(128), mermaid: enumeration('off', 'final', 'streaming') }),
   transport: enumeration('auto', 'sse', 'websocket', 'websocket-cached'),
   httpProxy: text(4_096, true),
-  httpIdleTimeoutMs: integer(),
-  websocketConnectTimeoutMs: integer(),
+  httpIdleTimeoutMs: integer(0, 3_600_000),
+  websocketConnectTimeoutMs: integer(0, 3_600_000),
   retry: object({
     enabled: bool,
     maxRetries: integer(0, 10),
-    baseDelayMs: integer(),
-    maxAgentDelayMs: integer(),
-    provider: object({ timeoutMs: integer(), maxRetries: integer(0, 10), maxRetryDelayMs: integer() }),
+    baseDelayMs: integer(0, 3_600_000),
+    maxAgentDelayMs: integer(0, 3_600_000),
+    provider: object({
+      timeoutMs: integer(0, 3_600_000),
+      maxRetries: integer(0, 10),
+      maxRetryDelayMs: integer(0, 3_600_000),
+    }),
   }),
   shellPath: text(4_096, true),
   shellCommandPrefix: text(100_000),
   npmCommand: list(text(4_096, true), 64),
+  providerApiKeyCommands: record(text(16_384, true), 128, 64),
   packages: list(packageSource),
   extensions: pathList,
   skills: pathList,
@@ -424,27 +449,99 @@ function validateSettings(
 ): AgentSettings {
   const migrated = migrateSettings(input);
   const validated = validateValue(migrated, settingsSchema, '', scope, filePath, diagnostics);
-  return validated === INVALID ? {} : validated as AgentSettings;
+  if (validated === INVALID) return {};
+  const settings = validated as AgentSettings;
+  if (settings.httpProxy !== undefined) {
+    try {
+      const proxy = new URL(settings.httpProxy);
+      if (!['http:', 'https:'].includes(proxy.protocol) || proxy.hash) throw new Error('invalid');
+      settings.httpProxy = proxy.toString();
+    } catch {
+      delete settings.httpProxy;
+      addDiagnostic(diagnostics, {
+        scope,
+        path: filePath,
+        setting: 'httpProxy',
+        message: 'Invalid setting "httpProxy": expected an HTTP(S) URL without a fragment.',
+      });
+    }
+  }
+  if (settings.npmCommand?.length === 0) {
+    delete settings.npmCommand;
+    addDiagnostic(diagnostics, {
+      scope,
+      path: filePath,
+      setting: 'npmCommand',
+      message: 'Invalid setting "npmCommand": expected a non-empty command array.',
+    });
+  }
+  if (settings.providerApiKeyCommands) {
+    const commands: Record<string, string> = {};
+    for (const [provider, command] of Object.entries(settings.providerApiKeyCommands)) {
+      const normalized = provider.trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(normalized)) {
+        addDiagnostic(diagnostics, {
+          scope,
+          path: filePath,
+          setting: `providerApiKeyCommands.${provider}`,
+          message: 'Invalid provider credential command identifier.',
+        });
+        continue;
+      }
+      commands[normalized] = command;
+    }
+    settings.providerApiKeyCommands = commands;
+  }
+  return settings;
 }
 
 async function readBoundedSettingsFile(filePath: string, maxBytes: number): Promise<Record<string, unknown> | undefined> {
+  const absolute = path.resolve(filePath);
+  const parsedPath = path.parse(absolute);
+  let current = parsedPath.root;
+  for (const component of path.dirname(absolute).slice(parsedPath.root.length).split(path.sep).filter(Boolean)) {
+    current = path.join(current, component);
+    try {
+      const parent = await lstat(current);
+      if (!parent.isDirectory() || parent.isSymbolicLink()) {
+        throw new Error('Settings source parent directories cannot be symbolic links.');
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw error;
+    }
+  }
   let before;
   try {
-    before = await lstat(filePath);
+    before = await lstat(absolute);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw error;
   }
-  if (before.isSymbolicLink() || !before.isFile()) {
+  if (before.isSymbolicLink() || !before.isFile() || before.nlink > 1) {
     throw new Error('Settings source must be a regular file and cannot be a symbolic link.');
   }
   if (before.size > maxBytes) throw new Error(`Settings source exceeds the ${maxBytes} byte limit.`);
 
-  const handle = await open(
-    filePath,
-    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
+  const parentPath = path.dirname(absolute);
+  const parentBefore = await lstat(parentPath);
+  const parentHandle = await open(
+    parentPath,
+    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_DIRECTORY ?? 0),
   );
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
+    const parentOpened = await parentHandle.stat();
+    if (!parentOpened.isDirectory() || parentOpened.dev !== parentBefore.dev || parentOpened.ino !== parentBefore.ino) {
+      throw new Error('Settings source parent changed while it was being opened.');
+    }
+    const anchoredPath = process.platform === 'linux'
+      ? `/proc/self/fd/${parentHandle.fd}/${path.basename(absolute)}`
+      : absolute;
+    handle = await open(
+      anchoredPath,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
+    );
     const opened = await handle.stat();
     if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino
       || opened.size !== before.size || opened.mtimeMs !== before.mtimeMs || opened.ctimeMs !== before.ctimeMs) {
@@ -479,7 +576,8 @@ async function readBoundedSettingsFile(filePath: string, maxBytes: number): Prom
     if (!isObject(parsed)) throw new Error('Settings source root must be a JSON object.');
     return parsed;
   } finally {
-    await handle.close();
+    await handle?.close().catch(() => undefined);
+    await parentHandle.close().catch(() => undefined);
   }
 }
 
@@ -590,19 +688,35 @@ function buildProvenance(
   return provenance;
 }
 
+function pathIsInside(root: string, candidate: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+}
+
 /**
  * Load bounded agent settings without creating files. Project files are never opened
- * until the caller has resolved canonical project trust.
+ * until the caller has resolved canonical project trust. A custom global directory
+ * located inside the project is project-controlled and receives the same gate.
  */
 export async function loadAgentSettings(options: LoadAgentSettingsOptions): Promise<ResolvedAgentSettings> {
   const cwd = path.resolve(options.cwd);
   const homeDir = options.homeDir ?? os.homedir();
-  const agentDir = resolveAgentDirectory(options.agentDir, homeDir);
+  const configuredValue = options.agentDir ?? process.env.AI_HARNESS_AGENT_DIR;
+  const configuredAgentDir = resolveAgentDirectory(configuredValue, homeDir);
   const projectTrusted = options.projectTrusted === true;
+  // An environment/configured "global" directory below the workspace is still
+  // controlled by that project. Before trust, fall back to the real user scope
+  // rather than opening settings, credentials, plugins, themes or prompts there.
+  const agentDir = projectTrusted || options.agentDirTrusted === true
+    ? configuredAgentDir
+    : resolvePreTrustAgentDirectory(cwd, options.agentDir, homeDir);
   const maxBytes = options.maxFileBytes ?? DEFAULT_MAX_SETTINGS_BYTES;
-  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
-    throw new Error('maxFileBytes must be a positive safe integer.');
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 1024 * 1024) {
+    throw new Error('maxFileBytes must be a positive safe integer no larger than 1 MiB.');
   }
+  const agentDirTrusted = options.agentDirTrusted === true
+    || projectTrusted
+    || !pathIsInside(cwd, agentDir);
   const paths = {
     global: path.join(agentDir, 'settings.json'),
     project: options.projectSettingsPath === undefined
@@ -610,7 +724,9 @@ export async function loadAgentSettings(options: LoadAgentSettingsOptions): Prom
       : resolveAgentSettingsPath(options.projectSettingsPath, cwd, homeDir),
   };
   const diagnostics: AgentSettingsDiagnostic[] = [];
-  const globalSettings = await loadLayer('global', paths.global, maxBytes, diagnostics);
+  const globalSettings = agentDirTrusted
+    ? await loadLayer('global', paths.global, maxBytes, diagnostics)
+    : {};
   let projectSettings: AgentSettings = {};
   if (projectTrusted) {
     projectSettings = await loadLayer('project', paths.project, maxBytes, diagnostics);
@@ -629,6 +745,7 @@ export async function loadAgentSettings(options: LoadAgentSettingsOptions): Prom
   const settings = mergeAgentSettings(globalSettings, projectSettings);
   return {
     agentDir,
+    agentDirTrusted,
     cwd,
     projectTrusted,
     paths,
@@ -680,6 +797,20 @@ export function resolveAgentThinkingLevel(
 ): ThinkingLevel | undefined {
   return (provider && model ? settings.modelThinkingLevels?.[`${provider}/${model}`] : undefined)
     ?? settings.defaultThinkingLevel;
+}
+
+/** Resolve bounded provider network defaults independently from agent-level retry. */
+export function resolveAgentProviderNetworkSettings(settings: AgentSettings): AgentProviderNetworkSettings {
+  const httpIdleTimeoutMs = settings.httpIdleTimeoutMs ?? 300_000;
+  return {
+    transport: settings.transport ?? 'auto',
+    ...(settings.httpProxy ? { httpProxy: settings.httpProxy } : {}),
+    httpIdleTimeoutMs,
+    websocketConnectTimeoutMs: settings.websocketConnectTimeoutMs ?? 15_000,
+    requestTimeoutMs: settings.retry?.provider?.timeoutMs ?? httpIdleTimeoutMs,
+    maxRetries: settings.retry?.provider?.maxRetries ?? 0,
+    maxRetryDelayMs: settings.retry?.provider?.maxRetryDelayMs ?? 60_000,
+  };
 }
 
 function expandHome(value: string, homeDir: string): string {

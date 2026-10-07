@@ -22,6 +22,7 @@ import {
 import type {
   AiProvider,
   ChatToolDefinition,
+  CredentialRedactionStream,
   ExtensionRegistry,
   ExtensionRuntimeContext,
   Message,
@@ -38,7 +39,7 @@ import { runToolLoop } from '../agent/tool-loop.js';
 import { streamProviderTurn } from '../agent/provider-turn.js';
 import { JsonEventStream, toJsonProtocolMessage } from '../cli/json-output.js';
 import { renderSessionHtml, sanitizeFilename } from '../utils/session-export.js';
-import type { ResourceManager } from '../resources/resource-manager.js';
+import { parseResourceCommandLine, type ResourceManager } from '../resources/resource-manager.js';
 
 export interface RpcControllerContext {
   provider: AiProvider;
@@ -73,6 +74,10 @@ export interface RpcControllerContext {
   scopedModels?: Array<{ provider: string; id: string; thinkingLevel?: ThinkingLevel }>;
   /** CLI model ID/name globs resolved against each refreshed catalogue. */
   scopedModelPatterns?: string[];
+  /** Process-local credential scrubber for JSON/RPC events and persisted tool output. */
+  redactText?: (value: string) => string;
+  redactJson?: <T>(value: T) => T;
+  createTextRedactor?: () => CredentialRedactionStream;
 }
 
 export interface RpcCommandRequest {
@@ -338,7 +343,10 @@ export class RpcController {
       followUpMode: context.followUpMode,
     });
     this.autoRetryEnabled = context.retryEnabled ?? true;
-    this.events = new JsonEventStream(record => this.emit(record));
+    this.events = new JsonEventStream(
+      record => this.emit(record),
+      context.redactText,
+    );
   }
 
   async initialize(): Promise<void> {
@@ -433,6 +441,26 @@ export class RpcController {
     });
   }
 
+  /** Let accepted work finish on clean JSONL EOF without turning EOF into cancellation. */
+  async drain(timeoutMs = 30_000): Promise<void> {
+    const work = [this.activeBash?.done, this.activeRun?.done].filter(
+      (item): item is Promise<void> => item !== undefined,
+    );
+    if (work.length === 0) return;
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        Promise.allSettled(work).then(() => undefined),
+        new Promise<void>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('RPC shutdown drain timed out.')), timeoutMs);
+          timer.unref?.();
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   async close(): Promise<void> {
     this.retryAbortController?.abort();
     this.summarizationAbortController?.abort();
@@ -454,7 +482,8 @@ export class RpcController {
       if (this.eventFailure) throw this.eventFailure;
       switch (command) {
         case 'prompt': {
-          const message = requiredString(request.message, 'message');
+          const rawMessage = requiredString(request.message, 'message');
+          const message = this.context.redactText?.(rawMessage) ?? rawMessage;
           if (await this.executeExtensionCommand(message)) {
             return success(id, command, { disposition: 'handled' });
           }
@@ -610,7 +639,8 @@ export class RpcController {
             throw new Error('Bash is disabled by the active tool selection.');
           }
           if (this.activeBash) throw new Error('A bash command is already running.');
-          const shellCommand = requiredString(request.command, 'command');
+          const rawShellCommand = requiredString(request.command, 'command');
+          const shellCommand = this.context.redactText?.(rawShellCommand) ?? rawShellCommand;
           if (request.excludeFromContext !== undefined && typeof request.excludeFromContext !== 'boolean') {
             throw new Error('excludeFromContext must be a boolean.');
           }
@@ -625,6 +655,7 @@ export class RpcController {
           let captureTruncated = false;
           let retainFullOutput = false;
           let bashOutputTail = Promise.resolve();
+          const bashRedactor = this.context.createTextRedactor?.();
           const capture = (delta: string): void => {
             capturedChunks.push(Buffer.from(delta));
             capturedBytes += Buffer.byteLength(delta);
@@ -642,6 +673,20 @@ export class RpcController {
             }
           };
           const capturedOutput = (): string => Buffer.concat(capturedChunks, capturedBytes).toString('utf8');
+          const deliverOutput = async (delta: string): Promise<void> => {
+            if (!delta) return;
+            capture(delta);
+            await outputCapture.write(delta);
+            await this.emit({
+              type: 'bash_execution_update',
+              ...(id ? { id } : {}),
+              delta,
+            });
+          };
+          const flushOutput = async (): Promise<void> => {
+            const finalDelta = bashRedactor?.flush() ?? '';
+            if (finalDelta) await deliverOutput(finalDelta);
+          };
           let finishBash!: () => void;
           const bashDone = new Promise<void>(resolve => { finishBash = resolve; });
           const activeBash: ActiveBash = { controller, done: bashDone };
@@ -657,33 +702,31 @@ export class RpcController {
               providerName: this.context.providerName,
               processOutputPath: fullOutputPath,
               onProcessOutput: delta => {
-                bashOutputTail = bashOutputTail.then(async () => {
-                  capture(delta);
-                  await outputCapture.write(delta);
-                  await this.emit({
-                    type: 'bash_execution_update',
-                    ...(id ? { id } : {}),
-                    delta,
-                  });
-                });
+                bashOutputTail = bashOutputTail.then(() => deliverOutput(
+                  bashRedactor?.push(delta) ?? this.context.redactText?.(delta) ?? delta,
+                ));
                 return bashOutputTail;
               },
             }, controller.signal);
             await bashOutputTail;
-            const details = result.details && typeof result.details === 'object'
-              ? result.details as Record<string, unknown>
+            await flushOutput();
+            const safeResult = this.context.redactJson?.(result) ?? result;
+            const details = safeResult.details && typeof safeResult.details === 'object'
+              ? safeResult.details as Record<string, unknown>
               : {};
             const truncated = details.truncated === true;
             retainFullOutput = truncated;
             return success(id, command, {
-              output: result.content,
-              exitCode: typeof details.exitCode === 'number' ? details.exitCode : result.isError ? 1 : 0,
+              output: safeResult.content,
+              exitCode: typeof details.exitCode === 'number' ? details.exitCode : safeResult.isError ? 1 : 0,
               cancelled: false,
               truncated,
               ...(truncated ? { fullOutputPath } : {}),
             });
           } catch (error) {
             if (controller.signal.aborted) {
+              await bashOutputTail;
+              await flushOutput();
               const truncation = truncateToolTail(capturedOutput());
               const truncated = captureTruncated || truncation.truncated;
               retainFullOutput = truncated;
@@ -817,14 +860,24 @@ export class RpcController {
                 name: prompt.name,
                 description: prompt.description,
                 source: 'prompt',
-                sourceInfo: { path: prompt.filePath, source: 'auto', scope: 'project', origin: 'top-level' },
+                sourceInfo: {
+                  path: prompt.provenance.path,
+                  source: prompt.provenance.source,
+                  scope: prompt.provenance.scope,
+                  origin: prompt.provenance.origin,
+                },
               })) ?? []),
               ...(this.context.enableSkillCommands === false ? []
                 : this.context.resourceManager?.listSkills().map(skill => ({
                   name: `skill:${skill.name}`,
                   description: skill.description,
                   source: 'skill',
-                  sourceInfo: { path: skill.filePath, source: 'auto', scope: 'project', origin: 'top-level' },
+                  sourceInfo: {
+                    path: skill.provenance.path,
+                    source: skill.provenance.source,
+                    scope: skill.provenance.scope,
+                    origin: skill.provenance.origin,
+                  },
                 })) ?? []),
             ],
           });
@@ -878,7 +931,7 @@ export class RpcController {
   private expandResourceCommand(message: string): string {
     const trimmed = message.trim();
     if (!trimmed.startsWith('/') || !this.context.resourceManager) return message;
-    const [name = '', ...args] = trimmed.slice(1).split(/\s+/);
+    const [name = '', ...args] = parseResourceCommandLine(trimmed.slice(1));
     if (this.context.enableSkillCommands !== false && name.startsWith('skill:')
       && this.context.resourceManager.getSkill(name.slice('skill:'.length))) {
       return this.context.resourceManager.invokeSkill(name.slice('skill:'.length), args.join(' '));
@@ -890,19 +943,25 @@ export class RpcController {
   }
 
   private async preparePrompt(message: unknown, imagesValue: unknown): Promise<PreparedPrompt> {
-    const content = this.expandResourceCommand(requiredString(message, 'message'));
-    const images = optionalImages(imagesValue);
+    const expanded = this.expandResourceCommand(requiredString(message, 'message'));
+    const content = this.context.redactText?.(expanded) ?? expanded;
+    const rawImages = optionalImages(imagesValue);
+    const images = this.context.redactJson?.(rawImages) ?? rawImages;
     if (!content.trim() && images.length === 0) throw new Error('message must not be empty.');
     if (!this.context.provider.validateConfig()) {
       throw new Error(`Provider is not configured: ${this.context.providerName}`);
     }
     const hook = await this.context.extensionRegistry.runBefore('before:agent', {
       sessionId: this.currentSessionId,
-      provider: this.context.providerName,
+      provider: this.context.redactText?.(this.context.providerName) ?? this.context.providerName,
       input: content,
     });
-    if (hook.cancelled) throw new Error(hook.reason ?? "Requête annulée par un hook d'extension.");
-    const transformed = hook.data.input;
+    if (hook.cancelled) {
+      const reason = hook.reason ?? "Requête annulée par un hook d'extension.";
+      throw new Error(this.context.redactText?.(reason) ?? reason);
+    }
+    const safeHookData = this.context.redactJson?.(hook.data) ?? hook.data;
+    const transformed = safeHookData.input;
     if (!transformed.trim() && images.length === 0) throw new Error("Requête annulée : le hook d'extension a produit une entrée vide.");
     return {
       content: transformed,
@@ -951,6 +1010,7 @@ export class RpcController {
 
           let activeToolCall: ToolCall | undefined;
           let activeToolOutput = '';
+          let activeToolRedactor = this.context.createTextRedactor?.();
           lastContent = await runToolLoop({
             sessionManager: this.context.sessionManager,
             sessionId: this.currentSessionId,
@@ -963,7 +1023,11 @@ export class RpcController {
               providerName: this.context.providerName,
               onProcessOutput: delta => {
                 if (!activeToolCall) return;
-                activeToolOutput = truncateToolTail(activeToolOutput + delta).content;
+                const safeDelta = activeToolRedactor?.push(delta)
+                  ?? this.context.redactText?.(delta)
+                  ?? delta;
+                if (!safeDelta) return;
+                activeToolOutput = truncateToolTail(activeToolOutput + safeDelta).content;
                 return this.events.toolExecutionUpdate(activeToolCall, activeToolOutput);
               },
             },
@@ -975,6 +1039,7 @@ export class RpcController {
                   provider: this.context.provider,
                   providerName: this.context.providerName,
                   model: this.model,
+                  sessionId: this.currentSessionId,
                   messages: this.withBashContext(messages),
                   tools,
                   systemPrompt: this.context.systemPrompt,
@@ -982,6 +1047,9 @@ export class RpcController {
                   signal,
                   retrySignal: retryController.signal,
                   extensionRegistry: this.context.extensionRegistry,
+                  redactText: this.context.redactText,
+                  redactJson: this.context.redactJson,
+                  createTextRedactor: this.context.createTextRedactor,
                   onStart: (provider, model) => this.events.startAssistant(provider, model),
                   onTextDelta: delta => this.events.textDelta(delta),
                   onReasoningDelta: delta => this.events.reasoningDelta(delta),
@@ -1009,12 +1077,18 @@ export class RpcController {
             onToolCall: call => {
               activeToolCall = call;
               activeToolOutput = '';
+              activeToolRedactor = this.context.createTextRedactor?.();
               return this.events.toolExecutionStart(call);
             },
-            onToolResult: result => {
+            onToolResult: async result => {
+              const finalDelta = activeToolRedactor?.flush() ?? '';
+              if (activeToolCall && finalDelta) {
+                activeToolOutput = truncateToolTail(activeToolOutput + finalDelta).content;
+                await this.events.toolExecutionUpdate(activeToolCall, activeToolOutput);
+              }
               activeToolCall = undefined;
               activeToolOutput = '';
-              return this.events.toolExecutionEnd(result);
+              await this.events.toolExecutionEnd(result);
             },
             onTurnEnd: () => this.events.endTurn(),
             beforeNextTurn: async () => {
@@ -1029,6 +1103,7 @@ export class RpcController {
             },
             signal,
             provider: this.context.providerName,
+            redactText: this.context.redactText,
           });
 
           prompt = this.takeNextSteering();
@@ -1044,9 +1119,10 @@ export class RpcController {
       }
     } catch (error) {
       await this.events.failAgent(error, signal.aborted).catch(() => undefined);
+      const message = error instanceof Error ? error.message : String(error);
       await this.context.extensionRegistry.emit('agent:error', {
         sessionId: this.currentSessionId,
-        error: error instanceof Error ? error.message : String(error),
+        error: this.context.redactText?.(message) ?? message,
       });
     } finally {
       this.retryActive = false;
@@ -1085,7 +1161,8 @@ export class RpcController {
       if (!stats.isFile() || stats.nlink > 1) throw new Error('HTML export path must be a regular, unlinked file.');
       await handle.chmod(0o600);
       await handle.truncate(0);
-      await handle.writeFile(renderSessionHtml(session), { encoding: 'utf8' });
+      const safeSession = this.context.redactJson?.(session) ?? session;
+      await handle.writeFile(renderSessionHtml(safeSession), { encoding: 'utf8' });
       await handle.sync();
     } finally {
       await handle.close();
@@ -1137,10 +1214,13 @@ export class RpcController {
     this.compacting = true;
     await this.events.compactionStart('manual');
     try {
-      const instruction = customInstructions?.trim()
+      const rawInstruction = customInstructions?.trim()
         || 'Summarize this conversation concisely, preserving key information, decisions, and context.';
-      const summaryResponse = await this.summarizeWithRetry('manual', signal => this.context.provider.chat([
-        ...session.messages.map(cloneMessage),
+      const instruction = this.context.redactText?.(rawInstruction) ?? rawInstruction;
+      const safeMessages = this.context.redactJson?.(session.messages.map(cloneMessage))
+        ?? session.messages.map(cloneMessage);
+      const rawSummaryResponse = await this.summarizeWithRetry('manual', signal => this.context.provider.chat([
+        ...safeMessages,
         {
           id: '__compact__',
           role: 'user',
@@ -1149,10 +1229,12 @@ export class RpcController {
         },
       ], {
         model: this.model,
+        sessionId: this.currentSessionId,
         thinking: coreThinkingLevel(this.thinking),
         systemPrompt: instruction,
         signal,
       }));
+      const summaryResponse = this.context.redactJson?.(rawSummaryResponse) ?? rawSummaryResponse;
       if (!summaryResponse.content.trim()) throw new Error('Compaction failed: no summary generated.');
       const firstKeptEntryId = session.messages.at(-2)?.id;
       if (!firstKeptEntryId) throw new Error('Compaction requires at least two retained messages.');
@@ -1220,7 +1302,7 @@ export class RpcController {
   private emit(record: Record<string, unknown>): Promise<void> {
     const operation = this.eventTail.then(async () => {
       if (this.eventFailure) throw this.eventFailure;
-      await this.emitRaw(record);
+      await this.emitRaw(this.context.redactJson?.(record) ?? record);
     });
     this.eventTail = operation.then(
       () => undefined,

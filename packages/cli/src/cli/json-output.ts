@@ -6,6 +6,7 @@ import type {
   ToolCall,
   ToolExecutionResult,
   TokenUsage,
+  CredentialRedactionStream,
 } from '@ai-harness/core';
 
 interface JsonRecord {
@@ -251,7 +252,10 @@ export class JsonEventStream {
   private turnOpen = false;
   private runOpen = false;
 
-  constructor(private readonly emit: (record: JsonRecord) => void | Promise<void>) {}
+  constructor(
+    private readonly emit: (record: JsonRecord) => void | Promise<void>,
+    private readonly redactText: (value: string) => string = value => value,
+  ) {}
 
   sessionHeader(session: { id: string; createdAt: Date; cwd?: string }, cwd: string): Promise<void> {
     return Promise.resolve(this.emit({
@@ -373,7 +377,7 @@ export class JsonEventStream {
       state,
       { content: state.text, reasoning: state.reasoning },
       aborted ? 'aborted' : 'error',
-      error instanceof Error ? error.message : String(error),
+      this.redactText(error instanceof Error ? error.message : String(error)),
     );
     const write = this.emit({ type: 'message_end', message });
     this.runMessages.push(message);
@@ -462,7 +466,7 @@ export class JsonEventStream {
       attempt,
       maxAttempts,
       delayMs,
-      errorMessage: error instanceof Error ? error.message : String(error),
+      errorMessage: this.redactText(error instanceof Error ? error.message : String(error)),
     }));
   }
 
@@ -472,7 +476,7 @@ export class JsonEventStream {
       success,
       attempt,
       ...(!success && finalError !== undefined
-        ? { finalError: finalError instanceof Error ? finalError.message : String(finalError) }
+        ? { finalError: this.redactText(finalError instanceof Error ? finalError.message : String(finalError)) }
         : {}),
     }));
   }
@@ -488,7 +492,7 @@ export class JsonEventStream {
       attempt,
       maxAttempts,
       delayMs,
-      errorMessage: error instanceof Error ? error.message : String(error),
+      errorMessage: this.redactText(error instanceof Error ? error.message : String(error)),
     }));
   }
 
@@ -522,7 +526,7 @@ export class JsonEventStream {
       aborted: options.aborted ?? false,
       willRetry: options.willRetry ?? false,
       ...(options.error !== undefined
-        ? { errorMessage: options.error instanceof Error ? options.error.message : String(options.error) }
+        ? { errorMessage: this.redactText(options.error instanceof Error ? options.error.message : String(options.error)) }
         : {}),
     }));
   }
@@ -621,16 +625,55 @@ function writeRawChunk(
 }
 
 /** Reserve stdout for a serialized, backpressure-aware JSONL protocol and redirect accidental writes to stderr. */
-export function reserveProcessStdoutForJsonLines(): ProcessJsonLinesOutput {
+export function reserveProcessStdoutForJsonLines(
+  createTextRedactor?: () => CredentialRedactionStream,
+  redactText: (value: string) => string = value => value,
+): ProcessJsonLinesOutput {
   const stdout = process.stdout;
+  const stderr = process.stderr;
   const originalWrite = stdout.write;
+  const originalStderrWrite = stderr.write;
   const rawWrite = originalWrite.bind(stdout);
-  const stderrWrite = process.stderr.write.bind(process.stderr);
-  const redirectedWrite = ((chunk: string | Uint8Array, encodingOrCallback?: BufferEncoding | ((error?: Error | null) => void), callback?: (error?: Error | null) => void): boolean => {
-    if (typeof encodingOrCallback === 'string') return stderrWrite(chunk, encodingOrCallback, callback);
-    return stderrWrite(chunk, encodingOrCallback);
-  }) as typeof stdout.write;
+  const rawStderrWrite = originalStderrWrite.bind(stderr);
+  const stdoutRedactor = createTextRedactor?.();
+  const stderrRedactor = createTextRedactor?.();
+  let redirectedFlushed = false;
+  const filteredWrite = (
+    redactor: CredentialRedactionStream | undefined,
+    chunk: string | Uint8Array,
+    encodingOrCallback?: BufferEncoding | ((error?: Error | null) => void),
+    callback?: (error?: Error | null) => void,
+  ): boolean => {
+    const encoding = typeof encodingOrCallback === 'string' ? encodingOrCallback : undefined;
+    const completed = typeof encodingOrCallback === 'function' ? encodingOrCallback : callback;
+    const text = typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString(encoding ?? 'utf8');
+    const safe = redactor?.push(text) ?? redactText(text);
+    if (!safe) {
+      completed?.(null);
+      return true;
+    }
+    return encoding ? rawStderrWrite(safe, encoding, completed) : rawStderrWrite(safe, completed);
+  };
+  const flushRedirected = (): void => {
+    if (redirectedFlushed) return;
+    redirectedFlushed = true;
+    for (const redactor of [stdoutRedactor, stderrRedactor]) {
+      const suffix = redactor?.flush() ?? '';
+      if (suffix) rawStderrWrite(suffix);
+    }
+  };
+  const redirectedWrite = ((
+    chunk: string | Uint8Array,
+    encodingOrCallback?: BufferEncoding | ((error?: Error | null) => void),
+    callback?: (error?: Error | null) => void,
+  ): boolean => filteredWrite(stdoutRedactor, chunk, encodingOrCallback, callback)) as typeof stdout.write;
+  const redactedStderrWrite = ((
+    chunk: string | Uint8Array,
+    encodingOrCallback?: BufferEncoding | ((error?: Error | null) => void),
+    callback?: (error?: Error | null) => void,
+  ): boolean => filteredWrite(stderrRedactor, chunk, encodingOrCallback, callback)) as typeof stderr.write;
   stdout.write = redirectedWrite;
+  stderr.write = redactedStderrWrite;
 
   let tail = Promise.resolve();
   let failure: Error | undefined;
@@ -661,6 +704,7 @@ export function reserveProcessStdoutForJsonLines(): ProcessJsonLinesOutput {
       await pending;
       if (pending === tail) break;
     }
+    flushRedirected();
     if (failure) throw failure;
   };
 
@@ -668,7 +712,9 @@ export function reserveProcessStdoutForJsonLines(): ProcessJsonLinesOutput {
     write,
     flush,
     restore: () => {
+      flushRedirected();
       if (stdout.write === redirectedWrite) stdout.write = originalWrite;
+      if (stderr.write === redactedStderrWrite) stderr.write = originalStderrWrite;
     },
   };
 }
@@ -679,10 +725,14 @@ export interface ProcessJsonOutput {
   restore(): void;
 }
 
-export function reserveProcessStdoutForJson(): ProcessJsonOutput {
-  const output = reserveProcessStdoutForJsonLines();
+export function reserveProcessStdoutForJson(
+  redactRecord: (record: Record<string, unknown>) => Record<string, unknown> = record => record,
+  redactText: (value: string) => string = value => value,
+  createTextRedactor?: () => CredentialRedactionStream,
+): ProcessJsonOutput {
+  const output = reserveProcessStdoutForJsonLines(createTextRedactor, redactText);
   return {
-    events: new JsonEventStream(output.write),
+    events: new JsonEventStream(record => output.write(redactRecord(record)), redactText),
     flush: output.flush,
     restore: output.restore,
   };

@@ -40,7 +40,12 @@ function scopeOf(value: unknown): McpConfigScope | undefined {
 
 function revisionOf(value: unknown): string | null | undefined {
   if (value === null) return null;
-  return typeof value === 'string' ? value : undefined;
+  return typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value) ? value : undefined;
+}
+
+function serverName(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && Buffer.byteLength(value, 'utf8') <= 256
+    && !/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/u.test(value);
 }
 
 function exposureOf(value: unknown): McpExposure | undefined {
@@ -52,11 +57,12 @@ function importFieldValues(value: unknown): Record<string, McpImportFieldValue> 
   if (!isRecord(value) || Object.keys(value).length > MCP_IMPORT_MAX_FIELDS) return undefined;
   const output: Record<string, McpImportFieldValue> = {};
   for (const [field, given] of Object.entries(value)) {
-    if (!field || Buffer.byteLength(field, 'utf8') > 16 * 1024) return undefined;
+    if (!field || Buffer.byteLength(field, 'utf8') > 16 * 1024 || /[\u0000-\u001f\u007f]/u.test(field)) return undefined;
     if (typeof given === 'string' && Buffer.byteLength(given, 'utf8') <= 16 * 1024) {
       Object.defineProperty(output, field, { value: given, enumerable: true });
     } else if (isRecord(given) && hasOnlyKeys(given, ['reference'])
-      && typeof given.reference === 'string' && given.reference.length <= 256) {
+      && typeof given.reference === 'string' && Buffer.byteLength(given.reference, 'utf8') <= 256
+      && !/[\u0000-\u001f\u007f]/u.test(given.reference)) {
       Object.defineProperty(output, field, {
         value: { reference: given.reference }, enumerable: true,
       });
@@ -70,8 +76,9 @@ function importSecretReferences(value: unknown): Record<string, string> | undefi
   if (!isRecord(value) || Object.keys(value).length > MCP_IMPORT_MAX_FIELDS) return undefined;
   const output: Record<string, string> = {};
   for (const [field, name] of Object.entries(value)) {
-    if (!field || Buffer.byteLength(field, 'utf8') > 16 * 1024
-      || typeof name !== 'string' || name.length > 256) return undefined;
+    if (!field || Buffer.byteLength(field, 'utf8') > 16 * 1024 || /[\u0000-\u001f\u007f]/u.test(field)
+      || typeof name !== 'string' || Buffer.byteLength(name, 'utf8') > 256
+      || /[\u0000-\u001f\u007f]/u.test(name)) return undefined;
     Object.defineProperty(output, field, { value: name, enumerable: true });
   }
   return output;
@@ -83,7 +90,8 @@ function importConfirmations(value: unknown): McpImportWriteConfirmations | unde
     || (value.literalSecret !== undefined && value.literalSecret !== true)
     || (value.remoteHostVariables !== undefined && (!Array.isArray(value.remoteHostVariables)
       || value.remoteHostVariables.length > 128
-      || !value.remoteHostVariables.every(name => typeof name === 'string' && name.length <= 256)))) {
+      || !value.remoteHostVariables.every(name => typeof name === 'string'
+        && Buffer.byteLength(name, 'utf8') <= 256 && !/[\u0000-\u001f\u007f]/u.test(name))))) {
     return undefined;
   }
   return {
@@ -171,9 +179,7 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
     const body: unknown = request.body;
     const scope = isRecord(body) ? scopeOf(body.scope) : undefined;
     if (!isRecord(body) || !hasOnlyKeys(body, ['cwd', 'name', 'scope']) || !scope
-      || typeof body.name !== 'string' || body.name.length === 0
-      || Buffer.byteLength(body.name, 'utf8') > 256
-      || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/u.test(body.name)
+      || !serverName(body.name)
       || (body.cwd !== undefined && body.cwd !== null && (
         typeof body.cwd !== 'string' || body.cwd.length > 4_096 || /[\u0000-\u001f\u007f]/u.test(body.cwd)
       ))) {
@@ -227,10 +233,7 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
     if (replacement !== undefined && (!isRecord(replacement)
       || !hasOnlyKeys(replacement, ['name', 'revision', 'scope'])
       || !scopeOf(replacement.scope)
-      || typeof replacement.name !== 'string'
-      || replacement.name.length === 0
-      || Buffer.byteLength(replacement.name, 'utf8') > 256
-      || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/u.test(replacement.name)
+      || !serverName(replacement.name)
       || typeof replacement.revision !== 'string'
       || !/^[a-f0-9]{64}$/u.test(replacement.revision))) {
       response.status(400).json({ error: 'Aperçu d’import MCP invalide.', code: 'invalid-request' });
@@ -280,7 +283,7 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
           || (body.syntax !== 'foreign' && body.syntax !== 'aiharness')
           || !Number.isSafeInteger(body.entryIndex) || (body.entryIndex as number) < 0
           || (body.entryIndex as number) >= MCP_IMPORT_MAX_SERVERS
-          || (body.name !== undefined && (typeof body.name !== 'string' || body.name.length > 64))
+          || (body.name !== undefined && (!serverName(body.name) || body.name.length > 64))
           || (body.trustProject !== undefined && body.trustProject !== true)
           || (body.trustProject === true && scope !== 'project')
           || (body.cwd !== undefined && typeof body.cwd !== 'string')) {
@@ -315,16 +318,13 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
           'secretReferences', 'syntax', 'targetName', 'text', 'values',
         ]) || !scope || revision === undefined || values === undefined
           || secretReferences === undefined || confirmations === undefined
-          || typeof body.targetName !== 'string'
-          || body.targetName.length === 0
-          || Buffer.byteLength(body.targetName, 'utf8') > 256
-          || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/u.test(body.targetName)
+          || !serverName(body.targetName)
           || typeof body.text !== 'string' || body.text.includes('\0')
           || Buffer.byteLength(body.text, 'utf8') > MCP_IMPORT_MAX_BYTES
           || (body.syntax !== 'foreign' && body.syntax !== 'aiharness')
           || !Number.isSafeInteger(body.entryIndex) || (body.entryIndex as number) < 0
           || (body.entryIndex as number) >= MCP_IMPORT_MAX_SERVERS
-          || (body.name !== undefined && (typeof body.name !== 'string'
+          || (body.name !== undefined && (!serverName(body.name)
             || (body.name.length > 64 && body.name !== body.targetName)))
           || (body.cwd !== undefined && typeof body.cwd !== 'string')) {
           throw new McpConfigMutationError('invalid-request', INVALID_ACTION);
@@ -352,7 +352,8 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
         const revision = revisionOf(body.revision);
         if (!hasOnlyKeys(body, ['action', 'cwd', 'enabled', 'names', 'revision', 'scope'])
           || !scope || revision === undefined || typeof body.enabled !== 'boolean'
-          || !Array.isArray(body.names) || !body.names.every(name => typeof name === 'string')
+          || !Array.isArray(body.names) || body.names.length > MCP_IMPORT_MAX_SERVERS
+          || !body.names.every(serverName)
           || (body.cwd !== undefined && typeof body.cwd !== 'string')) {
           throw new McpConfigMutationError('invalid-request', INVALID_ACTION);
         }
@@ -373,7 +374,7 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
         const revision = revisionOf(body.revision);
         const exposure = exposureOf(body.exposure);
         if (!hasOnlyKeys(body, ['action', 'cwd', 'exposure', 'name', 'revision', 'scope'])
-          || !scope || revision === undefined || !exposure || typeof body.name !== 'string'
+          || !scope || revision === undefined || !exposure || !serverName(body.name)
           || (body.cwd !== undefined && typeof body.cwd !== 'string')) {
           throw new McpConfigMutationError('invalid-request', INVALID_ACTION);
         }
@@ -393,7 +394,7 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
         const scope = scopeOf(body.scope);
         const revision = revisionOf(body.revision);
         if (!hasOnlyKeys(body, ['action', 'cwd', 'name', 'revision', 'scope'])
-          || !scope || revision === undefined || typeof body.name !== 'string'
+          || !scope || revision === undefined || !serverName(body.name)
           || (body.cwd !== undefined && typeof body.cwd !== 'string')) {
           throw new McpConfigMutationError('invalid-request', INVALID_ACTION);
         }

@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import type { FetchLike, Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { executeShellCommand, filteredProcessEnvironment, ProcessAbortedError } from '../tools/process-execution.js';
 import type {
   McpConfigInventory,
@@ -27,6 +27,8 @@ export const MCP_TEST_STATUS_LIMIT = 500;
 const STDERR_MAX_BYTES = 64 * 1024;
 const RESULT_TEXT_MAX_CHARS = 2_000;
 const DESCRIPTION_MAX_CHARS = 300;
+const MCP_TEST_MAX_TRANSPORT_BYTES = 8 * 1024 * 1024;
+const MCP_TEST_MAX_TRANSPORT_CHUNK_BYTES = 1024 * 1024;
 const RESERVED_VARIABLES = new Set([
   'AI_HARNESS_AUTH_TOKEN',
   'AI_HARNESS_ADMIN_TOKEN',
@@ -232,6 +234,61 @@ async function resolveRuntimeConfig(
   return { config, resolvedSecrets };
 }
 
+const boundedMcpFetch: FetchLike = async (input, init) => {
+  const response = await fetch(input, { ...init, redirect: 'manual' });
+  const contentLength = response.headers.get('content-length');
+  if (contentLength !== null && (!/^(?:0|[1-9]\d*)$/u.test(contentLength)
+    || Number(contentLength) > MCP_TEST_MAX_TRANSPORT_BYTES)) {
+    void response.body?.cancel('mcp-response-limit').catch(() => undefined);
+    throw new Error('The MCP test response exceeded its size limit.');
+  }
+  if (!response.body) return response;
+  const reader = response.body.getReader();
+  let transported = 0;
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      let item: Awaited<ReturnType<typeof reader.read>>;
+      try { item = await reader.read(); }
+      catch {
+        void reader.cancel('mcp-response-read-failed').catch(() => undefined);
+        try { reader.releaseLock(); } catch { /* The source may still be settling. */ }
+        controller.error(new Error('The MCP test response could not be read.'));
+        return;
+      }
+      if (item.done) {
+        try { reader.releaseLock(); } catch { /* The source may already have released it. */ }
+        controller.close();
+        return;
+      }
+      transported += item.value.byteLength;
+      if (item.value.byteLength > MCP_TEST_MAX_TRANSPORT_CHUNK_BYTES
+        || transported > MCP_TEST_MAX_TRANSPORT_BYTES) {
+        void reader.cancel('mcp-response-limit').catch(() => undefined);
+        try { reader.releaseLock(); } catch { /* Cancellation may still be settling. */ }
+        controller.error(new Error('The MCP test response exceeded its size limit.'));
+        return;
+      }
+      controller.enqueue(item.value);
+    },
+    cancel(reason) {
+      void reader.cancel(reason).catch(() => undefined);
+      try { reader.releaseLock(); } catch { /* Cancellation may still be settling. */ }
+    },
+  });
+  const wrapped = new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+  try {
+    Object.defineProperties(wrapped, {
+      url: { value: response.url },
+      redirected: { value: response.redirected },
+    });
+  } catch { /* URL metadata is advisory; status and Location remain authoritative. */ }
+  return wrapped;
+};
+
 function safeEnvironment(configured: Record<string, string>): Record<string, string> {
   const environment = Object.create(null) as Record<string, string>;
   for (const [name, value] of Object.entries(filteredProcessEnvironment())) {
@@ -433,7 +490,9 @@ export async function connectMcpServerForTest(
     } else {
       const config = resolvedConfig as McpHttpRuntimeConfig;
       transport = new StreamableHTTPClientTransport(new URL(config.url), {
-        requestInit: { headers: config.headers },
+        requestInit: { headers: config.headers, redirect: 'manual' },
+        redirectPolicy: 'same-origin',
+        fetch: boundedMcpFetch,
         reconnectionOptions: {
           maxReconnectionDelay: 500,
           initialReconnectionDelay: 100,

@@ -18,6 +18,26 @@ describe('configured CLI providers', () => {
 
     expect([...providers.keys()]).toEqual(['mock', 'openai', 'anthropic', 'google', 'local']);
     expect([...providers.values()].every(provider => provider.validateConfig())).toBe(true);
+    expect((providers.get('local') as unknown as { config: { apiKey?: string } }).config.apiKey)
+      .toBeUndefined();
+  });
+
+  it('applies process-local stored credentials and one shared network policy', () => {
+    const providers = createConfiguredProviders({}, {
+      credentials: new Map([['openai', 'stored-secret']]),
+      network: {
+        transport: 'sse', httpProxy: 'http://proxy.test/', httpIdleTimeoutMs: 12,
+        websocketConnectTimeoutMs: 34, requestTimeoutMs: 56, maxRetries: 2, maxRetryDelayMs: 78,
+      },
+    });
+    const provider = providers.get('openai');
+    expect(provider?.validateConfig()).toBe(true);
+    expect(provider?.getNetworkSettings()).toEqual({
+      transport: 'sse', httpIdleTimeoutMs: 12, websocketConnectTimeoutMs: 34,
+      requestTimeoutMs: 56, maxRetries: 2, maxRetryDelayMs: 78, proxyConfigured: true,
+    });
+    expect(JSON.stringify(provider?.getNetworkSettings())).not.toContain('proxy.test');
+    expect(JSON.stringify(provider?.getNetworkSettings())).not.toContain('stored-secret');
   });
 
   it('resolves qualified and fuzzy models with thinking suffixes and rejects conflicts', async () => {

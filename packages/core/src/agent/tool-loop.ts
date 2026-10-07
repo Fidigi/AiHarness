@@ -32,6 +32,8 @@ export interface ToolLoopOptions {
   maxToolResultLength?: number;
   signal?: AbortSignal;
   provider?: string;
+  /** Process-local scrubber applied before extension/tool output is persisted or emitted. */
+  redactText?(value: string): string;
 }
 
 function normalizeUsage(usage: ChatResponse['usage']): TokenUsage | undefined {
@@ -159,11 +161,12 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
           options.toolContext,
           options.signal,
         );
-        content = result.content;
+        content = options.redactText?.(result.content) ?? result.content;
         isError = Boolean(result.isError);
       } catch (error) {
         isError = true;
-        content = error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
+        content = options.redactText?.(message) ?? message;
       }
 
       throwIfAborted();

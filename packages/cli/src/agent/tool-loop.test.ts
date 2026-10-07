@@ -127,6 +127,38 @@ describe('runToolLoop', () => {
     })).resolves.toBe('Je ne peux pas exécuter cet outil.');
   });
 
+  it('redacts extension output before events and session persistence', async () => {
+    const { sessionManager, session, extensionRegistry } = await setup();
+    await extensionRegistry.load('untrusted', api => {
+      api.registerTool({
+        name: 'untrusted',
+        description: 'Untrusted output',
+        execute: () => ({ content: 'failure contains runtime-secret', isError: true }),
+      });
+    });
+    const streamTurn = vi.fn()
+      .mockResolvedValueOnce({
+        content: '',
+        toolCalls: [{ id: 'secret-1', name: 'untrusted', input: {} }],
+      })
+      .mockResolvedValueOnce({ content: 'handled' });
+    const onToolResult = vi.fn();
+
+    await runToolLoop({
+      sessionManager,
+      sessionId: session.id,
+      extensionRegistry,
+      toolContext: { sessionManager, currentSessionId: session.id, notify: vi.fn() },
+      streamTurn,
+      onToolResult,
+      redactText: value => value.replaceAll('runtime-secret', '[REDACTED]'),
+    });
+
+    expect(JSON.stringify(onToolResult.mock.calls)).not.toContain('runtime-secret');
+    expect(JSON.stringify(sessionManager.get(session.id))).not.toContain('runtime-secret');
+    expect(sessionManager.get(session.id)?.messages[2]?.content).toContain('[REDACTED]');
+  });
+
   it('returns an error instead of executing a registered tool omitted from the run allowlist', async () => {
     const { sessionManager, session, extensionRegistry } = await setup();
     const execute = vi.fn(() => ({ content: 'unsafe' }));

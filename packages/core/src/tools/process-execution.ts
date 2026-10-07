@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process';
-import { chmod, lstat, mkdtemp, open, readdir, rm, type FileHandle } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { chmod, lstat, mkdtemp, open, rename, rm, type FileHandle } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { readStableDirectoryEntries } from '../security/stable-directory.js';
 import {
   DEFAULT_TOOL_MAX_BYTES,
   formatToolBytes,
@@ -10,7 +12,33 @@ import {
 
 const DEFAULT_PROCESS_CAPTURE_BYTES = 10 * 1024 * 1024;
 const PROCESS_KILL_GRACE_MS = 500;
-const SENSITIVE_ENV_NAME = /(?:^|_)(?:API_?KEY|ACCESS_?KEY(?:_ID)?|PRIVATE_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?|AUTH(?:ORIZATION)?|COOKIE)(?:$|_)/i;
+const MAX_PROCESS_TIMEOUT_MS = 60 * 60_000;
+const MAX_PROCESS_CAPTURE_BYTES = 64 * 1024 * 1024;
+const MAX_PROCESS_ARGUMENTS = 4_096;
+const MAX_PROCESS_ARGUMENT_BYTES = 1024 * 1024;
+const PROCESS_OUTPUT_SINK_TIMEOUT_MS = 5_000;
+const MAX_TEMPORARY_OUTPUT_BYTES = 64 * 1024 * 1024;
+const MAX_TEMPORARY_OUTPUT_RETENTION_MS = 30 * 24 * 60 * 60_000;
+const SENSITIVE_ENV_NAME = /(?:^|_)(?:API_?KEY|ACCESS_?KEY(?:_ID)?|PRIVATE_?KEY|MASTER_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?|AUTH(?:ORIZATION)?|COOKIE|DSN|CONNECTION_?STRING)(?:$|_)/i;
+const SENSITIVE_ENV_CHANNEL = /^(?:HTTP|HTTPS|ALL)_PROXY$|^SSH_AUTH_SOCK$/i;
+const SENSITIVE_URL_PARAMETER = /(?:^|_)(?:token|secret|password|passwd|api_?key|credential)(?:$|_)/i;
+
+/** Classify inherited process variables that can act as credential channels. */
+export function isSensitiveEnvironmentEntry(name: string, value: string | undefined): boolean {
+  if (SENSITIVE_ENV_NAME.test(name) || SENSITIVE_ENV_CHANNEL.test(name)) return true;
+  if (!value) return false;
+  // Oversized inherited values are unusual and cannot be inspected safely within the
+  // environment-classification budget, so fail closed instead of forwarding them.
+  if (value.length > 64 * 1024) return true;
+  try {
+    const parsed = new URL(value);
+    if (parsed.username || parsed.password) return true;
+    for (const key of parsed.searchParams.keys()) if (SENSITIVE_URL_PARAMETER.test(key)) return true;
+  } catch {
+    if (/(?:^|[;\s])(?:password|passwd|token|secret|api_?key)\s*=/iu.test(value)) return true;
+  }
+  return false;
+}
 
 export type ProcessOutputStream = 'stdout' | 'stderr';
 
@@ -72,7 +100,7 @@ export class ProcessAbortedError extends Error {
 export function filteredProcessEnvironment(agentEnvironment = false): NodeJS.ProcessEnv {
   return {
     ...Object.fromEntries(
-      Object.entries(process.env).filter(([name]) => !SENSITIVE_ENV_NAME.test(name)),
+      Object.entries(process.env).filter(([name, value]) => !isSensitiveEnvironmentEntry(name, value)),
     ),
     ...(agentEnvironment ? { AI_HARNESS_AGENT: '1' } : {}),
   };
@@ -159,12 +187,26 @@ function boundedUtf8Tail(chunks: Buffer[], bytes: number, maximum: number): {
  */
 export async function executeProcess(input: ExecuteProcessOptions): Promise<ProcessExecutionResult> {
   if (input.signal?.aborted) throw new ProcessAbortedError(emptyAbortedResult());
-  if (!Number.isSafeInteger(input.timeoutMs) || input.timeoutMs < 1) {
-    throw new Error('Process timeout must be a positive safe integer.');
+  if (!Number.isSafeInteger(input.timeoutMs) || input.timeoutMs < 1
+    || input.timeoutMs > MAX_PROCESS_TIMEOUT_MS) {
+    throw new Error('Process timeout must be a bounded positive safe integer.');
   }
   const maxCaptureBytes = input.maxCaptureBytes ?? DEFAULT_PROCESS_CAPTURE_BYTES;
-  if (!Number.isSafeInteger(maxCaptureBytes) || maxCaptureBytes < 1) {
-    throw new Error('Process capture limit must be a positive safe integer.');
+  if (!Number.isSafeInteger(maxCaptureBytes) || maxCaptureBytes < 1
+    || maxCaptureBytes > MAX_PROCESS_CAPTURE_BYTES) {
+    throw new Error('Process capture limit must be a bounded positive safe integer.');
+  }
+  if (typeof input.executable !== 'string' || !input.executable
+    || Buffer.byteLength(input.executable) > 32 * 1024 || input.executable.includes('\0')
+    || typeof input.cwd !== 'string' || !input.cwd || Buffer.byteLength(input.cwd) > 32 * 1024
+    || input.cwd.includes('\0') || !Array.isArray(input.args) || input.args.length > MAX_PROCESS_ARGUMENTS) {
+    throw new Error('Process invocation is invalid.');
+  }
+  let argumentBytes = 0;
+  for (const argument of input.args) {
+    if (typeof argument !== 'string' || argument.includes('\0')) throw new Error('Process invocation is invalid.');
+    argumentBytes += Buffer.byteLength(argument);
+    if (argumentBytes > MAX_PROCESS_ARGUMENT_BYTES) throw new Error('Process invocation is invalid.');
   }
 
   const startedAt = Date.now();
@@ -184,6 +226,7 @@ export async function executeProcess(input: ExecuteProcessOptions): Promise<Proc
     let aborted = false;
     let settled = false;
     let forceKill: NodeJS.Timeout | undefined;
+    let forcedCompletion: NodeJS.Timeout | undefined;
     let outputError: Error | undefined;
     let outputTail = Promise.resolve();
 
@@ -199,26 +242,63 @@ export async function executeProcess(input: ExecuteProcessOptions): Promise<Proc
       stream.pause();
       outputTail = outputTail
         .then(async () => {
-          if (!outputError) await input.onOutput?.(chunk, source);
+          if (outputError || !input.onOutput) return;
+          let timer: NodeJS.Timeout | undefined;
+          const deadline = new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => reject(new Error('Process output sink timed out.')),
+              PROCESS_OUTPUT_SINK_TIMEOUT_MS);
+            timer.unref?.();
+          });
+          try { await Promise.race([Promise.resolve(input.onOutput(chunk, source)), deadline]); }
+          finally { if (timer) clearTimeout(timer); }
         })
         .catch(error => {
           outputError ??= error instanceof Error ? error : new Error(String(error));
           forceKill ??= terminateProcess(child, detached);
+          scheduleForcedCompletion();
         })
         .finally(() => stream.resume());
     };
     const cleanup = (): void => {
       clearTimeout(timeout);
       if (forceKill) clearTimeout(forceKill);
+      if (forcedCompletion) clearTimeout(forcedCompletion);
       input.signal?.removeEventListener('abort', abort);
+    };
+    const finish = (code: number | null): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      child.stdout.destroy();
+      child.stderr.destroy();
+      if (outputError) {
+        reject(outputError);
+        return;
+      }
+      const result: ProcessExecutionResult = {
+        output: capturedOutput(),
+        exitCode: aborted ? 130 : timedOut ? 124 : code ?? 1,
+        durationMs: Date.now() - startedAt,
+        captureTruncated,
+        timedOut: timedOut && !aborted,
+      };
+      if (aborted) reject(new ProcessAbortedError(result));
+      else resolve(result);
+    };
+    const scheduleForcedCompletion = (): void => {
+      if (forcedCompletion || settled) return;
+      forcedCompletion = setTimeout(() => finish(child.exitCode), PROCESS_KILL_GRACE_MS + 1_000);
+      forcedCompletion.unref?.();
     };
     const abort = (): void => {
       aborted = true;
       forceKill ??= terminateProcess(child, detached);
+      scheduleForcedCompletion();
     };
     const timeout = setTimeout(() => {
       timedOut = true;
       forceKill ??= terminateProcess(child, detached);
+      scheduleForcedCompletion();
     }, input.timeoutMs);
     timeout.unref();
     input.signal?.addEventListener('abort', abort, { once: true });
@@ -235,23 +315,9 @@ export async function executeProcess(input: ExecuteProcessOptions): Promise<Proc
       reject(error);
     });
     child.once('close', code => {
-      void outputTail.then(() => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        if (outputError) {
-          reject(outputError);
-          return;
-        }
-        const result: ProcessExecutionResult = {
-          output: capturedOutput(),
-          exitCode: aborted ? 130 : timedOut ? 124 : code ?? 1,
-          durationMs: Date.now() - startedAt,
-          captureTruncated,
-          timedOut: timedOut && !aborted,
-        };
-        if (aborted) reject(new ProcessAbortedError(result));
-        else resolve(result);
+      void outputTail.then(() => finish(code)).catch(error => {
+        outputError ??= error instanceof Error ? error : new Error(String(error));
+        finish(code);
       });
     });
   });
@@ -325,30 +391,67 @@ export const DEFAULT_PROCESS_OUTPUT_PREFIX = 'ai-harness-process-output-';
 function validateOutputOptions(options: TemporaryProcessOutputOptions): { prefix: string; retentionMs: number } {
   const prefix = options.prefix ?? DEFAULT_PROCESS_OUTPUT_PREFIX;
   const retentionMs = options.retentionMs ?? DEFAULT_PROCESS_OUTPUT_RETENTION_MS;
-  if (!/^[A-Za-z0-9._-]+-$/.test(prefix)) throw new Error('Temporary process output prefix is invalid.');
-  if (!Number.isSafeInteger(retentionMs) || retentionMs < 1) {
-    throw new Error('Temporary process output retention must be a positive safe integer.');
+  if (!/^[A-Za-z0-9._-]+-$/u.test(prefix) || Buffer.byteLength(prefix) > 64) {
+    throw new Error('Temporary process output prefix is invalid.');
+  }
+  if (!Number.isSafeInteger(retentionMs) || retentionMs < 1
+    || retentionMs > MAX_TEMPORARY_OUTPUT_RETENTION_MS) {
+    throw new Error('Temporary process output retention must be a bounded positive safe integer.');
   }
   return { prefix, retentionMs };
+}
+
+interface TemporaryDirectoryIdentity { dev: number | bigint; ino: number | bigint }
+
+async function removeIdentifiedOutputDirectory(
+  outputDirectory: string,
+  expected: TemporaryDirectoryIdentity,
+): Promise<void> {
+  const quarantine = path.join(
+    path.dirname(outputDirectory),
+    `.${path.basename(outputDirectory)}.cleanup-${process.pid}-${randomBytes(8).toString('hex')}`,
+  );
+  try {
+    await rename(outputDirectory, quarantine);
+  } catch {
+    return;
+  }
+  const claimed = await lstat(quarantine).catch(() => undefined);
+  if (!claimed?.isDirectory() || claimed.isSymbolicLink()
+    || claimed.dev !== expected.dev || claimed.ino !== expected.ino) {
+    // Never delete an entry that replaced the snapshotted directory. Best-effort
+    // restoration avoids disrupting a concurrently created legitimate output.
+    const sourceExists = await lstat(outputDirectory).then(() => true, () => false);
+    if (!sourceExists) await rename(quarantine, outputDirectory).catch(() => undefined);
+    return;
+  }
+  await rm(quarantine, { recursive: true, force: true }).catch(() => undefined);
 }
 
 export async function cleanupExpiredProcessOutputs(options: TemporaryProcessOutputOptions = {}): Promise<void> {
   const { prefix, retentionMs } = validateOutputOptions(options);
   const temporaryDirectory = os.tmpdir();
-  const names = await readdir(temporaryDirectory).catch(() => []);
   const expiry = Date.now() - retentionMs;
-  await Promise.all(names.filter(name => name.startsWith(prefix)).map(async name => {
-    const outputDirectory = path.join(temporaryDirectory, name);
+  const listing = await readStableDirectoryEntries(temporaryDirectory, 10_000).catch(() => undefined);
+  if (!listing || listing.truncated) return;
+  for (const entry of listing.entries) {
+    if (!entry.name.startsWith(prefix)) continue;
+    const outputDirectory = path.join(temporaryDirectory, entry.name);
     const stats = await lstat(outputDirectory).catch(() => undefined);
-    if (stats?.isDirectory() && !stats.isSymbolicLink() && stats.mtimeMs < expiry) {
-      await rm(outputDirectory, { recursive: true, force: true }).catch(() => undefined);
+    if (stats?.isDirectory() && !stats.isSymbolicLink() && stats.mtimeMs < expiry
+      && (typeof process.getuid !== 'function' || stats.uid === process.getuid())) {
+      await removeIdentifiedOutputDirectory(outputDirectory, stats);
     }
-  }));
+  }
 }
 
-function scheduleOutputRemoval(outputDirectory: string, retentionMs: number): void {
+function scheduleOutputRemoval(
+  outputDirectory: string,
+  retentionMs: number,
+  identity: TemporaryDirectoryIdentity,
+): void {
   const timer = setTimeout(() => {
-    void rm(outputDirectory, { recursive: true, force: true });
+    void removeIdentifiedOutputDirectory(outputDirectory, identity);
   }, retentionMs);
   timer.unref();
 }
@@ -360,20 +463,39 @@ export async function createTemporaryProcessOutput(
   await cleanupExpiredProcessOutputs({ prefix, retentionMs });
   const outputDirectory = await mkdtemp(path.join(os.tmpdir(), prefix));
   await chmod(outputDirectory, 0o700);
+  const directoryIdentity = await lstat(outputDirectory);
+  if (!directoryIdentity.isDirectory() || directoryIdentity.isSymbolicLink()
+    || (typeof process.getuid === 'function' && directoryIdentity.uid !== process.getuid())) {
+    throw new Error('Temporary process output directory is unsafe.');
+  }
   const filePath = path.join(outputDirectory, 'output.log');
   let handle: FileHandle | undefined = await open(filePath, 'wx', 0o600).catch(async error => {
-    await rm(outputDirectory, { recursive: true, force: true });
+    await removeIdentifiedOutputDirectory(outputDirectory, directoryIdentity);
     throw error;
   });
   let writeTail = Promise.resolve();
+  let writtenBytes = 0;
+  let outputExceeded = false;
+  let writeFailed = false;
   let finalized: Promise<string | undefined> | undefined;
 
   return {
     filePath,
     write(chunk: string): Promise<void> {
       if (!handle || finalized) return Promise.reject(new Error('Temporary process output is already closed.'));
-      const operation = writeTail.then(async () => { await handle!.write(chunk); });
-      writeTail = operation.catch(() => undefined);
+      if (typeof chunk !== 'string' || Buffer.byteLength(chunk) > 1024 * 1024) {
+        return Promise.reject(new Error('Temporary process output chunk is invalid.'));
+      }
+      const operation = writeTail.then(async () => {
+        const bytes = Buffer.byteLength(chunk);
+        if (writeFailed || outputExceeded || writtenBytes + bytes > MAX_TEMPORARY_OUTPUT_BYTES) {
+          outputExceeded = true;
+          throw new Error('Temporary process output exceeded its size limit.');
+        }
+        await handle!.writeFile(chunk);
+        writtenBytes += bytes;
+      });
+      writeTail = operation.catch(() => { writeFailed = true; });
       return operation;
     },
     finalize(retain: boolean): Promise<string | undefined> {
@@ -383,10 +505,10 @@ export async function createTemporaryProcessOutput(
         handle = undefined;
         await activeHandle?.close();
         if (!retain) {
-          await rm(outputDirectory, { recursive: true, force: true });
+          await removeIdentifiedOutputDirectory(outputDirectory, directoryIdentity);
           return undefined;
         }
-        scheduleOutputRemoval(outputDirectory, retentionMs);
+        scheduleOutputRemoval(outputDirectory, retentionMs, directoryIdentity);
         return filePath;
       })();
       return finalized;

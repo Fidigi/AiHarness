@@ -3,7 +3,7 @@
 import path from 'node:path';
 import { openExternalTarget } from '@ai-harness/core';
 import { fileURLToPath } from 'node:url';
-import { start, stop } from './index.js';
+import { getProxy, start, stop } from './index.js';
 import { parseWebCliArgs, webCliHelp } from './web-cli-options.js';
 
 function browserUrl(hostname: string, port: number): string {
@@ -14,7 +14,7 @@ function browserUrl(hostname: string, port: number): string {
 
 function openBrowser(url: string): void {
   void openExternalTarget(url, 'url').catch(error => {
-    console.warn(`[Web] Ouverture automatique impossible : ${error instanceof Error ? error.message : String(error)}`);
+    console.warn(getProxy().redactText(`[Web] Ouverture automatique impossible : ${error instanceof Error ? error.message : String(error)}`));
   });
 }
 
@@ -29,12 +29,12 @@ async function runWebCli(): Promise<void> {
   const webRoot = path.resolve(currentDirectory, '../../web/dist');
   const result = await start({ port: options.port, host: options.hostname, webRoot });
   const url = browserUrl(options.hostname, result.port);
-  console.log(`[Web] AiHarness Web disponible sur ${url}`);
+  console.log(getProxy().redactText(`[Web] AiHarness Web disponible sur ${url}`));
 
   if (!options.noOpen) openBrowser(url);
 
   const shutdown = (signal: string): void => {
-    console.log(`\n[Web] Arrêt (${signal})…`);
+    console.log(getProxy().redactText(`\n[Web] Arrêt (${signal})…`));
     void stop().finally(() => process.exit(0));
   };
   process.once('SIGINT', () => shutdown('SIGINT'));
@@ -42,6 +42,6 @@ async function runWebCli(): Promise<void> {
 }
 
 runWebCli().catch(error => {
-  console.error(`[Web] ${error instanceof Error ? error.message : String(error)}`);
+  console.error(getProxy().redactText(`[Web] ${error instanceof Error ? error.message : String(error)}`));
   process.exit(1);
 });

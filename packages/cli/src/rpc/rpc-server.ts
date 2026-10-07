@@ -2,6 +2,7 @@ import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import type { Readable } from 'node:stream';
 import {
+  CredentialRedactor,
   DEFAULT_CODING_TOOL_NAMES,
   ExtensionRegistry,
   JsonlSessionStore,
@@ -13,6 +14,7 @@ import {
   WorkspaceManager,
   registerWorkspaceTools,
   resolveInstructionPrompt,
+  resolvePreTrustAgentDirectory,
   resolveProjectTrust,
   resolveAgentCompactionSettings,
   resolveAgentDefaultTools,
@@ -35,6 +37,7 @@ import {
   createConfiguredProviders,
   resolveStartupProvider,
 } from '../providers/configured-providers.js';
+import { createCliProviderRuntime } from '../providers/provider-runtime.js';
 import { resolveStartupSession, resolveStartupSessionDirectory } from '../sessions/startup-session.js';
 import { ResourceManager } from '../resources/resource-manager.js';
 import { RpcExtensionUiBridge } from './rpc-extension-ui.js';
@@ -82,6 +85,10 @@ export interface RpcStartupOptions {
   fork?: string;
   name?: string;
   extensions?: string[];
+  skills?: string[];
+  promptTemplates?: string[];
+  noSkills?: boolean;
+  noPromptTemplates?: boolean;
   tools?: string[];
   excludeTools?: string[];
   noBuiltinTools?: boolean;
@@ -89,6 +96,8 @@ export interface RpcStartupOptions {
   projectTrust?: boolean;
   input?: Readable;
   output?: (record: Record<string, unknown>) => void | Promise<void>;
+  /** Internal process-local redactor shared with the CLI composition root. */
+  credentialRedactor?: CredentialRedactor;
 }
 
 export async function handleRpcRequest(request: RpcRequest, context: RpcContext): Promise<RpcResponse> {
@@ -184,10 +193,13 @@ async function* jsonLines(input: Readable): AsyncGenerator<string> {
   if (buffer) yield buffer.endsWith('\r') ? buffer.slice(0, -1) : buffer;
 }
 
-function reportSettingsDiagnostics(settings: ResolvedAgentSettings): void {
+function reportSettingsDiagnostics(
+  settings: ResolvedAgentSettings,
+  redact: (value: string) => string,
+): void {
   for (const diagnostic of settings.diagnostics) {
     const field = diagnostic.setting ? ` [${diagnostic.setting}]` : '';
-    process.stderr.write(`Warning: Settings ignored (${diagnostic.path})${field}: ${diagnostic.message}\n`);
+    process.stderr.write(`${redact(`Warning: Settings ignored (${diagnostic.path})${field}: ${diagnostic.message}`)}\n`);
   }
 }
 
@@ -204,14 +216,20 @@ function rpcExtensionPaths(paths: readonly string[], settings: ResolvedAgentSett
  * owns framing and startup; RpcController owns stateful command execution.
  */
 export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void> {
-  const reservedOutput = options.output ? undefined : reserveProcessStdoutForJsonLines();
+  const redactor = options.credentialRedactor ?? new CredentialRedactor();
+  redactor.add(options.apiKey);
+  redactor.addEnvironment(process.env);
+  const reservedOutput = options.output ? undefined : reserveProcessStdoutForJsonLines(
+    () => redactor.createStream(),
+    value => redactor.redact(value),
+  );
   const outputSink = options.output ?? reservedOutput!.write;
   let outputTail: Promise<void> = Promise.resolve();
   let outputFailure: unknown;
   const output = (record: Record<string, unknown>): Promise<void> => {
     const operation = outputTail.then(async () => {
       if (outputFailure) throw outputFailure;
-      await outputSink(record);
+      await outputSink(redactor.redactJson(record));
     });
     outputTail = operation.then(
       () => undefined,
@@ -221,8 +239,15 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     return operation;
   };
   const input = options.input ?? process.stdin;
-  const extensionUi = new RpcExtensionUiBridge(output);
-  const sessionManager = new SessionManager();
+  const extensionUi = new RpcExtensionUiBridge(
+    output,
+    value => redactor.redact(value),
+    value => redactor.redactJson(value),
+  );
+  const sessionManager = new SessionManager({
+    redactText: value => redactor.redact(value),
+    redactJson: value => redactor.redactJson(value),
+  });
   const extensionRegistry = new ExtensionRegistry();
   let controller: RpcController | undefined;
   const stopForSignal = (): void => {
@@ -242,7 +267,9 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     const workspaceManager = new WorkspaceManager({ allowedRoots: [cwd], defaultCwd: cwd });
     await workspaceManager.initialize();
     const canonicalCwd = await workspaceManager.getDefaultCwd();
-    const trustManager = new ProjectTrustManager();
+    const trustManager = new ProjectTrustManager(
+      path.join(resolvePreTrustAgentDirectory(canonicalCwd), 'trust.json'),
+    );
     await trustManager.load();
     const bootstrapSettings = await loadAgentSettings({ cwd: canonicalCwd, projectTrusted: false });
     const projectTrust = await resolveProjectTrust({
@@ -258,7 +285,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       cwd: canonicalCwd,
       projectTrusted: projectResourcesTrusted,
     });
-    reportSettingsDiagnostics(settingsResolution);
+    reportSettingsDiagnostics(settingsResolution, value => redactor.redact(value));
     const workspaceDescriptor = await workspaceManager.describe(canonicalCwd, projectTrusted);
     const pluginService = new PluginService(
       workspaceManager,
@@ -266,20 +293,27 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       path.join(settingsResolution.agentDir, 'plugins.json'),
       settingsResolution.agentDir,
     );
-    await pluginService.load();
+    if (settingsResolution.agentDirTrusted) await pluginService.load();
     const packageContext = {
       cwd: canonicalCwd,
       projectId: workspaceDescriptor.id,
       projectTrusted: projectResourcesTrusted,
     };
-    const [packageSkills, packagePrompts, packageExtensions] = await Promise.all([
-      pluginService.getEnabledResourceLocations('skill', packageContext),
-      pluginService.getEnabledResourceLocations('prompt', packageContext),
-      pluginService.getEnabledExtensionFiles(packageContext),
-    ]).catch(error => {
-      process.stderr.write(`Warning: Package resources ignored: ${error instanceof Error ? error.message : String(error)}\n`);
-      return [[], [], []] as const;
-    });
+    let packageSkills: Awaited<ReturnType<PluginService['getEnabledResourceLocations']>> = [];
+    let packagePrompts: Awaited<ReturnType<PluginService['getEnabledResourceLocations']>> = [];
+    let packageExtensions: Awaited<ReturnType<PluginService['getEnabledExtensionFiles']>> = [];
+    if (settingsResolution.agentDirTrusted) {
+      try {
+        [packageSkills, packagePrompts, packageExtensions] = await Promise.all([
+          pluginService.getEnabledResourceLocations('skill', packageContext),
+          pluginService.getEnabledResourceLocations('prompt', packageContext),
+          pluginService.getEnabledExtensionFiles(packageContext),
+        ]);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`${redactor.redact(`Warning: Package resources ignored: ${message}`)}\n`);
+      }
+    }
     const sessionDirectory = resolveStartupSessionDirectory(
       {
         session: options.session,
@@ -297,18 +331,22 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
 
     const instructions = await resolveInstructionPrompt({
       cwd: canonicalCwd,
+      agentDir: settingsResolution.agentDir,
+      agentDirTrusted: settingsResolution.agentDirTrusted,
       projectTrusted: projectResourcesTrusted,
       noContextFiles: options.noContextFiles,
       systemPromptInput: options.systemPrompt,
       appendSystemPromptInputs: options.appendSystemPrompts,
     });
     for (const diagnostic of instructions.diagnostics) {
-      process.stderr.write(`Warning: Instruction ignored (${diagnostic.path}): ${diagnostic.message}\n`);
+      process.stderr.write(`${redactor.redact(`Warning: Instruction ignored (${diagnostic.path}): ${diagnostic.message}`)}\n`);
     }
     const resourceManager = new ResourceManager({
       cwd: canonicalCwd,
       agentDir: settingsResolution.agentDir,
+      agentDirTrusted: settingsResolution.agentDirTrusted,
       projectTrusted: projectResourcesTrusted,
+      strictSkills: true,
       globalSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'global'),
       projectSkillPaths: resolveAgentResourcePaths(settingsResolution, 'skills', undefined, 'project'),
       globalPromptPaths: resolveAgentResourcePaths(settingsResolution, 'prompts', undefined, 'global'),
@@ -317,16 +355,33 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       projectPackageSkillPaths: packageSkills.filter(item => item.scope === 'project').map(item => item.path),
       globalPackagePromptPaths: packagePrompts.filter(item => item.scope === 'global').map(item => item.path),
       projectPackagePromptPaths: packagePrompts.filter(item => item.scope === 'project').map(item => item.path),
+      skillPaths: options.skills,
+      promptPaths: options.promptTemplates,
+      disableSkills: options.noSkills,
+      disablePrompts: options.noPromptTemplates,
     });
     const resourceLoadResult = await resourceManager.loadAll();
     for (const failure of resourceLoadResult.errors) {
-      process.stderr.write(`Resource: ${failure.message}\n`);
+      process.stderr.write(`${redactor.redact(`Resource: ${failure.message}`)}\n`);
     }
     await registerWorkspaceTools(extensionRegistry, workspaceManager, {
       shellPath: settingsResolution.settings.shellPath,
       shellCommandPrefix: settingsResolution.settings.shellCommandPrefix,
     });
-    const providers = createConfiguredProviders();
+    const providerRuntime = await createCliProviderRuntime(
+      settingsResolution.agentDir,
+      settingsResolution.settings,
+      process.env,
+      undefined,
+      settingsResolution.agentDirTrusted,
+      [],
+      redactor,
+    );
+    if (!options.noSession) await sessionManager.loadAllSessions();
+    const providers = createConfiguredProviders(process.env, {
+      credentials: providerRuntime.values,
+      network: providerRuntime.network,
+    });
     const effectiveModels = applyAgentModelSettings({
       provider: options.provider,
       model: options.model,
@@ -349,7 +404,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     });
     const extensionLoadResult = await extensionLoader.loadAll();
     for (const failure of extensionLoadResult.errors) {
-      process.stderr.write(`Extension ${failure.path}: ${failure.error.message}\n`);
+      process.stderr.write(`${redactor.redact(`Extension ${failure.path}: ${failure.error.message}`)}\n`);
     }
     const registeredTools = extensionRegistry.getTools();
     const unknownTools = unknownToolNames(registeredTools, options.tools, options.excludeTools);
@@ -407,6 +462,9 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       tools: toChatToolDefinitions(selectedTools),
       thinking: startupThinking,
       scopedModelPatterns: effectiveModels.modelPatterns,
+      redactText: value => redactor.redact(value),
+      redactJson: value => redactor.redactJson(value),
+      createTextRedactor: () => redactor.createStream(),
       steeringMode: settingsResolution.settings.steeringMode,
       followUpMode: settingsResolution.settings.followUpMode,
       retryEnabled: settingsResolution.settings.retry?.enabled,
@@ -481,6 +539,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     }
     await Promise.allSettled([...pending]);
     if (taskFailure) throw taskFailure;
+    await controller.drain();
   } catch (error) {
     runError = error ?? new Error('RPC mode failed.');
   } finally {

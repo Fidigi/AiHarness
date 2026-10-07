@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { link, mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -27,12 +27,24 @@ describe('WorkspaceManager', () => {
     await mkdir(outside);
     await writeFile(path.join(root, 'nested', 'file.txt'), 'safe');
     await symlink(outside, path.join(root, 'escape'));
+    await symlink(path.join(root, 'nested', 'file.txt'), path.join(root, 'linked-file'));
+    await link(path.join(root, 'nested', 'file.txt'), path.join(root, 'hardlinked-file'));
     const manager = new WorkspaceManager({ allowedRoots: [root], defaultCwd: root, homeDir: root });
     await manager.initialize();
 
     await expect(manager.resolve('~/nested/file.txt', { kind: 'file' })).resolves.toBe(path.join(root, 'nested', 'file.txt'));
     await expect(manager.resolve('../outside')).rejects.toMatchObject<Partial<WorkspacePathError>>({ code: 'OUTSIDE_ALLOWED_ROOTS' });
     await expect(manager.resolve(path.join(root, 'escape'))).rejects.toMatchObject<Partial<WorkspacePathError>>({ code: 'OUTSIDE_ALLOWED_ROOTS' });
+    await expect(manager.resolveDestination('linked-file', { kind: 'file' }))
+      .rejects.toMatchObject<Partial<WorkspacePathError>>({ code: 'INVALID_PATH' });
+    await expect(manager.resolveStableFile('hardlinked-file'))
+      .rejects.toMatchObject<Partial<WorkspacePathError>>({ code: 'INVALID_PATH' });
+    await expect(manager.resolveDestination('../outside/new.txt', { kind: 'file' }))
+      .rejects.toMatchObject<Partial<WorkspacePathError>>({ code: 'OUTSIDE_ALLOWED_ROOTS' });
+    await expect(manager.resolveDestination('new.txt', { kind: 'file' }))
+      .resolves.toBe(path.join(root, 'new.txt'));
+    await expect(manager.ensureDirectory('deep/tree', { base: root }))
+      .resolves.toBe(path.join(root, 'deep', 'tree'));
 
     const created = await manager.createDirectory(root, 'created');
     expect(created).toBe(path.join(root, 'created'));
@@ -75,6 +87,7 @@ describe('WorkspaceManager', () => {
 
     const manager = new WorkspaceManager({ allowedRoots: [base], defaultCwd: repository });
     await manager.initialize();
+    await expect(manager.describe(repository, false)).resolves.toEqual(expect.not.objectContaining({ git: expect.anything() }));
     await expect(manager.describe(repository, true)).resolves.toMatchObject({
       trusted: true,
       git: { root: repository, branch: 'main', detached: false },

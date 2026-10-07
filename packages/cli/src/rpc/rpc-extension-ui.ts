@@ -16,9 +16,14 @@ interface PendingInteraction {
 export class RpcExtensionUiBridge {
   private readonly pending = new Map<string, PendingInteraction>();
 
-  constructor(private readonly emit: (record: Record<string, unknown>) => void | Promise<void>) {}
+  constructor(
+    private readonly emit: (record: Record<string, unknown>) => void | Promise<void>,
+    private readonly redactText: (value: string) => string = value => value,
+    private readonly redactJson: <T>(value: T) => T = value => value,
+  ) {}
 
   request(request: ExtensionInteractionRequest): Promise<ExtensionInteractionResponse> {
+    request = this.redactJson(request);
     if (request.kind === 'custom' || request.signal?.aborted) return Promise.resolve({ cancelled: true });
     if (request.timeoutMs !== undefined
       && (!Number.isSafeInteger(request.timeoutMs) || request.timeoutMs < 1)) {
@@ -70,7 +75,7 @@ export class RpcExtensionUiBridge {
         type: 'extension_ui_request',
         id: randomUUID(),
         method: 'notify',
-        message,
+        message: this.redactText(message),
         notifyType: level === 'success' ? 'info' : level,
       })).catch(() => undefined);
     } catch {
@@ -80,7 +85,7 @@ export class RpcExtensionUiBridge {
 
   handleResponse(value: unknown): boolean {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    const response = value as Record<string, unknown>;
+    const response = this.redactJson(value as Record<string, unknown>);
     if (response.type !== 'extension_ui_response' || typeof response.id !== 'string') return false;
     const pending = this.pending.get(response.id);
     if (!pending) return true;

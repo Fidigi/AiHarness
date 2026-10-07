@@ -44,7 +44,7 @@ function validateValues(input: unknown): ScopedConfigurationValues {
     const key = rawKey as keyof ScopedConfigurationValues;
     if (STRING_KEYS.has(key)) {
       if (typeof value !== 'string' || value.length > 100_000) invalidConfiguration(`Valeur invalide pour ${rawKey}.`);
-      if (key === 'thinking' && !['off', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value)) {
+      if (key === 'thinking' && !['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value)) {
         invalidConfiguration('Niveau de réflexion invalide.');
       }
       if (key === 'toolPreset' && !['configured', 'chat-only', 'read-only', 'default', 'full'].includes(value)) {

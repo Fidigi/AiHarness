@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import type { SessionManager } from '../sessions/session-manager.js';
+import type { CredentialRedactionStream } from '../providers/credentials.js';
 import {
   createTemporaryProcessOutput,
   executeShellCommand,
@@ -49,10 +50,15 @@ export interface ShellCommandRuntimeOptions {
   outputTruncation?: 'head' | 'tail';
   shellPath?: string | (() => string | undefined);
   commandPrefix?: string | (() => string | undefined);
+  redactText?(value: string): string;
+  redactJson?<T>(value: T): T;
+  createTextRedactor?(): CredentialRedactionStream;
 }
 
 interface ActiveCommand {
   snapshot: ShellCommandSnapshot;
+  executionCommand: string;
+  executionCwd: string;
   controller: AbortController;
   events: ShellCommandEvent[];
   listeners: Set<(event: ShellCommandEvent) => void>;
@@ -110,6 +116,9 @@ export class ShellCommandRuntime {
   private readonly outputTruncation: 'head' | 'tail';
   private readonly shellPath?: string | (() => string | undefined);
   private readonly commandPrefix?: string | (() => string | undefined);
+  private readonly redactText: (value: string) => string;
+  private readonly redactJson: <T>(value: T) => T;
+  private readonly createTextRedactor?: () => CredentialRedactionStream;
 
   constructor(
     private readonly sessions: SessionManager,
@@ -124,6 +133,9 @@ export class ShellCommandRuntime {
     this.outputTruncation = options.outputTruncation ?? 'head';
     this.shellPath = options.shellPath;
     this.commandPrefix = options.commandPrefix;
+    this.redactText = options.redactText ?? (value => value);
+    this.redactJson = options.redactJson ?? (value => value);
+    this.createTextRedactor = options.createTextRedactor;
   }
 
   start(
@@ -141,8 +153,8 @@ export class ShellCommandRuntime {
       snapshot: {
         id,
         sessionId: input.sessionId,
-        command: input.command,
-        cwd: input.cwd,
+        command: this.redactText(input.command),
+        cwd: this.redactText(input.cwd),
         excludedFromContext: input.excludedFromContext,
         status: 'running',
         startedAt: new Date().toISOString(),
@@ -150,6 +162,8 @@ export class ShellCommandRuntime {
         truncated: false,
         lastSequence: 0,
       },
+      executionCommand: input.command,
+      executionCwd: input.cwd,
       controller: new AbortController(),
       events: [],
       listeners: new Set(listener ? [listener] : []),
@@ -211,6 +225,20 @@ export class ShellCommandRuntime {
     let completeOutput: TemporaryProcessOutput | undefined;
     let terminalEvent: ShellCommandEvent['type'] = 'exit';
     let terminalData: Record<string, unknown> = {};
+    const outputRedactors: Partial<Record<ProcessOutputStream, CredentialRedactionStream>> = {
+      stdout: this.createTextRedactor?.(),
+      stderr: this.createTextRedactor?.(),
+    };
+    const deliverOutput = async (chunk: string, stream: ProcessOutputStream): Promise<void> => {
+      if (!chunk) return;
+      await completeOutput?.write(chunk);
+      this.output(active, chunk, stream);
+    };
+    const flushOutput = async (): Promise<void> => {
+      for (const stream of ['stdout', 'stderr'] as const) {
+        await deliverOutput(outputRedactors[stream]?.flush() ?? '', stream);
+      }
+    };
     try {
       if (this.retainFullOutput) {
         completeOutput = await createTemporaryProcessOutput({
@@ -219,17 +247,17 @@ export class ShellCommandRuntime {
         });
       }
       const result = await executeShellCommand({
-        command: active.snapshot.command,
-        cwd: active.snapshot.cwd,
+        command: active.executionCommand,
+        cwd: active.executionCwd,
         signal: active.controller.signal,
         timeoutMs: this.commandTimeoutMs,
         maxCaptureBytes: this.maxOutputBytes,
         shellPath: typeof this.shellPath === 'function' ? this.shellPath() : this.shellPath,
         commandPrefix: typeof this.commandPrefix === 'function' ? this.commandPrefix() : this.commandPrefix,
-        onOutput: async (chunk, stream) => {
-          await completeOutput?.write(chunk);
-          this.output(active, chunk, stream);
-        },
+        onOutput: (chunk, stream) => deliverOutput(
+          outputRedactors[stream]?.push(chunk) ?? this.redactText(chunk),
+          stream,
+        ),
       });
       active.snapshot.durationMs = result.durationMs;
       active.snapshot.exitCode = result.exitCode;
@@ -251,7 +279,7 @@ export class ShellCommandRuntime {
         terminalEvent = 'cancelled';
         terminalData = { exitCode: 130 };
       } else {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = this.redactText(error instanceof Error ? error.message : String(error));
         active.snapshot.status = 'failed';
         active.snapshot.exitCode ??= 1;
         active.snapshot.durationMs ??= Date.now() - new Date(active.snapshot.startedAt).getTime();
@@ -262,10 +290,11 @@ export class ShellCommandRuntime {
     }
 
     try {
+      await flushOutput();
       const retainedPath = await completeOutput?.finalize(active.snapshot.truncated);
       if (retainedPath) active.snapshot.fullOutputPath = retainedPath;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = this.redactText(error instanceof Error ? error.message : String(error));
       active.snapshot.status = 'failed';
       active.snapshot.exitCode ??= 1;
       terminalEvent = 'error';
@@ -290,7 +319,7 @@ export class ShellCommandRuntime {
     } catch (error) {
       active.snapshot.status = 'failed';
       this.publish(active, 'error', {
-        message: error instanceof Error ? error.message : String(error),
+        message: this.redactText(error instanceof Error ? error.message : String(error)),
         exitCode: active.snapshot.exitCode,
       });
     }
@@ -317,7 +346,11 @@ export class ShellCommandRuntime {
   }
 
   private publish(active: ActiveCommand, type: ShellCommandEvent['type'], data: Record<string, unknown>): void {
-    const event: ShellCommandEvent = { sequence: ++active.snapshot.lastSequence, type, data };
+    const event: ShellCommandEvent = {
+      sequence: ++active.snapshot.lastSequence,
+      type,
+      data: this.redactJson(data),
+    };
     active.events.push(event);
     if (active.events.length > this.maxEvents) active.events.splice(0, active.events.length - this.maxEvents);
     for (const listener of active.listeners) {
@@ -335,6 +368,6 @@ export class ShellCommandRuntime {
   }
 
   private clone(snapshot: ShellCommandSnapshot): ShellCommandSnapshot {
-    return structuredClone(snapshot);
+    return this.redactJson(structuredClone(snapshot));
   }
 }

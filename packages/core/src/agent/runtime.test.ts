@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
 import { AiProvider, MockProvider, type ChatOptions, type ChatResponse } from '../providers/index.js';
+import { CredentialRedactor } from '../providers/credentials.js';
 import { SessionManager } from '../sessions/session-manager.js';
 import type { Message } from '../types/index.js';
 import { AgentRuntime, type AgentRuntimeOptions } from './runtime.js';
@@ -50,6 +51,24 @@ class RetryProvider extends AiProvider {
     }
     onChunk('recovered');
     onComplete?.({ content: 'recovered' });
+  }
+}
+
+class FragmentedCredentialProvider extends AiProvider {
+  messages: Message[] = [];
+  constructor(private readonly secret: string) { super({ type: 'mock' as never }); }
+  validateConfig(): boolean { return true; }
+  async chat(): Promise<ChatResponse> { return { content: 'unused' }; }
+  async streamChat(
+    messages: Message[],
+    onChunk: (chunk: string) => void | Promise<void>,
+    onComplete?: (response?: ChatResponse) => void,
+  ): Promise<void> {
+    this.messages = structuredClone(messages);
+    const split = Math.floor(this.secret.length / 2);
+    await onChunk(`before:${this.secret.slice(0, split)}`);
+    await onChunk(`${this.secret.slice(split)}:after`);
+    onComplete?.({ content: `before:${this.secret}:after` });
   }
 }
 
@@ -176,6 +195,41 @@ describe('AgentRuntime', () => {
       replay.events.map(event => event.sequence).sort((left, right) => left - right),
     );
     expect(runtime.journal.replay(session.id, replay.events.at(-2)!.sequence).events).toHaveLength(1);
+  });
+
+  it('redacts known credentials before provider input, streaming events, and session persistence', async () => {
+    const secret = 'agent+runtime-secret';
+    const provider = new FragmentedCredentialProvider(secret);
+    const redactor = new CredentialRedactor([secret]);
+    const sessionManager = new SessionManager();
+    const session = await sessionManager.create({ cwd: process.cwd() });
+    const runtime = new AgentRuntime({
+      sessionManager,
+      extensionRegistry: new ExtensionRegistry(),
+      resolveProvider: () => provider,
+      isProjectTrusted: () => true,
+      redactText: value => redactor.redact(value),
+      redactJson: value => redactor.redactJson(value),
+      createTextRedactor: () => redactor.createStream(),
+    });
+
+    const started = await runtime.start({
+      sessionId: session.id,
+      cwd: process.cwd(),
+      provider: 'mock',
+      input: `do not persist ${secret}`,
+    });
+    await runtime.wait(started.id);
+
+    const boundary = JSON.stringify({
+      session: sessionManager.get(session.id),
+      events: runtime.journal.replay(session.id),
+      run: runtime.getRun(started.id),
+    });
+    expect(boundary).not.toContain(secret);
+    expect(boundary).not.toContain(encodeURIComponent(secret));
+    expect(boundary).toContain('[REDACTED]');
+    expect(JSON.stringify(provider.messages)).not.toContain(secret);
   });
 
   it('validates declarative extension interaction responses before resuming a tool', async () => {
