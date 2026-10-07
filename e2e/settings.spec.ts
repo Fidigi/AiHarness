@@ -848,22 +848,22 @@ test.describe('Settings and authentication', () => {
     await installMockApi(page);
     await page.goto('/settings');
     const appearance = settingsSection(page, 'Appearance');
-    await appearance.locator('select').selectOption('pine');
+    await appearance.getByLabel(/^Theme/u).selectOption('pine');
     await appearance.locator('input[type=range]').nth(0).fill('1200');
     await appearance.locator('input[type=range]').nth(1).fill('18');
     await appearance.locator('input[type=checkbox]').nth(0).check();
     await appearance.locator('input[type=checkbox]').nth(1).check();
 
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'pine');
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ai-harness-preferences-v3') || '{}')))
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ai-harness-preferences-v4') || '{}')))
       .toMatchObject({
-        version: 3, theme: 'pine', contentWidth: 1200, fontSize: 18, reasoningOpen: true, sound: true,
+        version: 4, theme: 'pine', sendMode: 'enter', contentWidth: 1200, fontSize: 18, reasoningOpen: true, sound: true,
         soundEvents: { completion: true, attention: true },
         notificationEvents: { completion: true, attention: true },
         pushEvents: { completion: true, attention: true },
       });
     await page.reload();
-    const theme = settingsSection(page, 'Appearance').locator('select');
+    const theme = settingsSection(page, 'Appearance').getByLabel(/^Theme/u);
     await expect(theme).toHaveValue('pine');
     await expect(theme.locator('option')).toHaveText(['System', 'Light', 'Dark', 'Mist', 'Rose', 'Pine']);
     await theme.selectOption('system');

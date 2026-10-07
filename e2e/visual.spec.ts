@@ -178,7 +178,7 @@ test.describe('Régression visuelle des préférences d’apparence', () => {
       await page.addStyleTag({ content: '#plugins { display: none !important; }' });
       const appearance = page.getByRole('heading', { name: 'Appearance', exact: true }).locator('..');
       await appearance.scrollIntoViewIfNeeded();
-      await expect(appearance.locator('select')).toHaveValue(scenario.theme);
+      await expect(appearance.getByLabel(/^Theme/u)).toHaveValue(scenario.theme);
       await expect(appearance.locator('input[type=range]').nth(0)).toHaveValue('1200');
       await expect(appearance.locator('input[type=range]').nth(1)).toHaveValue('18');
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
