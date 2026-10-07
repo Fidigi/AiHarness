@@ -774,7 +774,7 @@ Deployments can enforce top-priority values with `AI_HARNESS_DEFAULT_MODEL`, `AI
 
 ### Composer, Commands and Compaction
 
-The composer is multiline and auto-sizing. `Enter` sends, `Shift+Enter` adds a line, and `↑`/`↓` recalls history when the input has one line. IME input is not sent while composition is active.
+The composer is multiline and auto-sizing. By default, `Enter` sends and `Shift+Enter` adds a line. **Settings → Appearance → Send key** can instead require `Ctrl+Enter` or `Cmd+Enter`, leaving plain `Enter` for a new line. The choice is persisted in browser preferences; neither active IME composition nor Safari's IME confirmation key submits. `↑`/`↓` recalls history when the input has one line.
 
 Type `@` to fuzzy-search workspace files **and** directories. The palette accepts `↑`/`↓`, `Enter`, `Tab`, `Escape` and the mouse. It first filters the local index, then queries the server if that index was truncated; a path containing spaces is inserted in quotes automatically.
 

@@ -33,6 +33,35 @@ test.describe('Conversation detached agent', () => {
     expect(api.requests.some(request => request.path === '/api/chat/stream')).toBe(false);
   });
 
+  test('persiste le mode Ctrl/Cmd+Entrée, conserve les retours à la ligne et envoie sans intercepter l’IME', async ({ page }) => {
+    const api = await installMockApi(page);
+    await page.goto('/settings#appearance');
+
+    const sendMode = page.getByRole('combobox', { name: 'Send key' });
+    await sendMode.selectOption('mod-enter');
+    await page.reload();
+    await expect(sendMode).toHaveValue('mod-enter');
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'New chat' }).click();
+    const input = page.getByPlaceholder(/Type your message/);
+    await input.fill('First line');
+    await input.press('Enter');
+    await expect(input).toHaveValue('First line\n');
+    expect(api.requests.some(request => request.path === '/api/agent/runs')).toBe(false);
+
+    await input.fill('IME confirmation stays in the composer');
+    await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 229, bubbles: true });
+    await expect(input).toHaveValue('IME confirmation stays in the composer');
+    expect(api.requests.some(request => request.path === '/api/agent/runs')).toBe(false);
+
+    await input.press('Control+Enter');
+    await expect(page).toHaveURL(/\/chat\/e2e-session-1/);
+    await expect(page.locator('.message.user')).toContainText('IME confirmation stays in the composer');
+    expect(api.requests.find(request => request.path === '/api/agent/runs')?.body)
+      .toMatchObject({ input: 'IME confirmation stays in the composer' });
+  });
+
   test('utilise le fournisseur et les réglages choisis sans renvoyer tout l’historique', async ({ page }) => {
     const api = await installMockApi(page, {
       sessions: [mockSession('streamed-session', 'Conversation SSE', [

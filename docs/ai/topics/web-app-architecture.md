@@ -15,7 +15,7 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 | `packages/web/src/index.tsx` | React root, `I18nProvider`, global styles and service worker bootstrap |
 | `packages/web/src/App.tsx` | Auth bootstrap, route/deep-link restoration and top-level data hydration |
 | `packages/web/src/store/session-store.ts` | Sessions, windows, drafts, runs, catalogues and bounded workspace cache |
-| `packages/web/src/store/preferences.ts` | Versioned appearance, layout, notification, panel and keybinding state |
+| `packages/web/src/store/preferences.ts` | Versioned appearance, send-key, layout, notification, panel and keybinding state |
 | `packages/web/src/services/api.ts`, `packages/web/src/services/mcp-api.ts` | Credential-aware fetch, REST/SSE contracts and Settings-lazy MCP one-shot Test, import/replacement preview, persistence and local mutation requests |
 | `packages/web/src/components/ChatView.tsx` | Detached runs, history, composer, queues, settings and reconciliation |
 | `packages/web/src/components/{Sidebar,WorkspacePanel,TerminalPanel}.tsx` | Navigation, files/Git and PTY surfaces |
@@ -31,7 +31,7 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 | `draft:*` conversation | Browser until first `POST /api/agent/runs` |
 | Workspace cache | Per-tab `sessionStorage`, schema v2, 2 MiB and bounded entries |
 | Scroll restoration | Separate per-workspace map, 24 entries and 24-hour expiry |
-| Preferences | `localStorage`, schema v3 with v1/v2 migration and cross-tab updates |
+| Preferences | `localStorage`, schema v4 with v1/v2/v3 migration, validated Enter or Mod+Enter send mode, and cross-tab updates |
 | PTY tabs | Per-tab and keyed by workspace; server owns processes and replay |
 | Credentials | Provider secrets stay server-side; auth uses HttpOnly cookie or legacy per-tab bearer, never workspace cache/preferences |
 
@@ -106,7 +106,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 ## Associated Tests
 
 - `packages/web/src/store/session-store.test.ts` plus `.remote.test.ts` and `.integration.test.ts` — hydration, windows, drafts, cache and run state
-- `packages/web/src/store/preferences.test.ts` — schema migration and validation
+- `packages/web/src/store/preferences.test.ts` and `packages/web/src/components/composer-submit.test.ts` — schema migration, preference validation, newline shortcuts and IME-safe send decisions
 - `packages/web/src/services/api.test.ts` — shared REST/SSE credential and response contracts
 - `packages/web/src/services/{push,pwa,keyboard,notices}.test.ts` — global browser services
 - `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including minimal-config-free MCP Test requests and identity/cwd/capability/tool reports, locked/redacted inventory, atomic import/replacement, fresh-project trust-plus-first-write, grouped activation, exposure, focus, undo and failure reconciliation

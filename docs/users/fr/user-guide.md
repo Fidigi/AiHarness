@@ -779,7 +779,7 @@ Les déploiements peuvent imposer les valeurs les plus prioritaires avec `AI_HAR
 
 ### Composer, commandes et compaction
 
-Le composer est multiligne et auto-dimensionné. `Entrée` envoie, `Maj+Entrée` ajoute une ligne, et `↑`/`↓` rappelle l’historique lorsqu’il ne contient qu’une ligne. Les entrées IME ne sont pas envoyées pendant la composition.
+Le composer est multiligne et auto-dimensionné. Par défaut, `Entrée` envoie et `Maj+Entrée` ajoute une ligne. **Réglages → Apparence → Touche d’envoi** permet d’exiger plutôt `Ctrl+Entrée` ou `Cmd+Entrée`, de sorte qu’`Entrée` seule ajoute une ligne. Le choix est conservé dans les préférences du navigateur ; ni une composition IME active ni sa touche de confirmation sous Safari ne déclenchent l’envoi. `↑`/`↓` rappelle l’historique lorsque la saisie ne contient qu’une ligne.
 
 Saisissez `@` pour rechercher de façon floue les fichiers **et** dossiers du workspace. La palette accepte `↑`/`↓`, `Entrée`, `Tab`, `Escape` et la souris. Elle filtre d’abord l’index local puis interroge le serveur si cet index était tronqué ; un chemin contenant des espaces est automatiquement inséré entre guillemets.
 

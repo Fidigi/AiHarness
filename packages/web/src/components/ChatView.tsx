@@ -12,6 +12,7 @@ import { useSessionStore } from '../store/session-store';
 import { usePreferences } from '../store/preferences';
 import MarkdownContent from './MarkdownContent';
 import { SubagentPanel } from './SubagentPanel';
+import { composerKeySubmits } from './composer-submit';
 import { publishNotice, type NoticeLevel } from '../services/notices';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import {
@@ -280,6 +281,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const settingMutationVersions = useRef(new Map<string, number>());
   const effectiveRefreshVersion = useRef(0);
   const composingRef = useRef(false);
+  const lastCompositionEndRef = useRef(0);
   const streamContent = useRef(new Map<string, string>());
   const streamReasoning = useRef(new Map<string, string>());
   const mentionMatch = input.match(/(^|\s)@(?:"([^"]*)|([^\s"]*))$/);
@@ -1189,6 +1191,13 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    const enterKey = event.key === 'Enter' && !event.shiftKey;
+    const recentlyComposed = Date.now() - lastCompositionEndRef.current < 100;
+    const isComposing = composingRef.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229;
+    if (enterKey && (isComposing || recentlyComposed)) {
+      if (recentlyComposed) event.preventDefault();
+      return;
+    }
     if (suggestionCount && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
       event.preventDefault();
       setPaletteIndex(index => event.key === 'ArrowDown'
@@ -1196,12 +1205,19 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         : (index - 1 + suggestionCount) % suggestionCount);
       return;
     }
-    if (suggestionCount && (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey && !composingRef.current))) {
+    if (suggestionCount && (event.key === 'Tab' || enterKey)) {
       event.preventDefault();
       selectSuggestion();
       return;
     }
-    if (event.key === 'Enter' && !event.shiftKey && !composingRef.current) {
+    if (composerKeySubmits({
+      key: event.key,
+      shiftKey: event.shiftKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      isComposing,
+      keyCode: event.nativeEvent.keyCode,
+    }, preferences.sendMode)) {
       event.preventDefault();
       void sendMessage();
       return;
@@ -1810,7 +1826,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             }
           }}
           onCompositionStart={() => { composingRef.current = true; }}
-          onCompositionEnd={() => { composingRef.current = false; }}
+          onCompositionEnd={() => {
+            composingRef.current = false;
+            lastCompositionEndRef.current = Date.now();
+          }}
           placeholder={t('chat.inputPlaceholder', { provider: activeProviderType })}
           aria-label={t('chat.inputLabel')}
           autoFocus

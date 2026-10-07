@@ -445,6 +445,13 @@ function SettingsView() {
               ))}
             </select>
           </label>
+          <label>{t('settings.sendMode')}
+            <select value={preferences.sendMode}
+              onChange={event => setPreferences({ sendMode: event.target.value as typeof preferences.sendMode })}>
+              <option value="enter">{t('settings.sendMode.enter')}</option>
+              <option value="mod-enter">{t('settings.sendMode.modEnter')}</option>
+            </select>
+          </label>
           <label>{t('settings.contentWidth', { width: preferences.contentWidth })}
             <input type="range" min="820" max="2000" step="20" value={preferences.contentWidth}
               onChange={event => setPreferences({ contentWidth: Number(event.target.value) })} />
