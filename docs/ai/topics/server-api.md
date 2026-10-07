@@ -16,7 +16,8 @@ The browser contract is summarized in [`web-app-architecture.md`](./web-app-arch
 | `packages/server/src/runtime/services.ts` | Shared service construction, extension reload and shutdown |
 | `packages/server/src/api/agent-routes.ts` | Detached runs, queues, state/events, interactions, commands and compaction |
 | `packages/server/src/api/mcp-routes.ts`, `packages/server/src/runtime/mcp-inventory-service.ts` | Canonical workspace adapter for Core's redacted MCP inventory, explicit bounded one-shot Test, non-mutating import/replacement preview and atomic local actions; owns capability/shape checks, config-keyed status decoration, shutdown and bounded opaque undo storage |
-| `packages/server/src/api/*-routes.ts` | Workspace, files, terminals, configuration, models, tools, packages and child agents |
+| `packages/server/src/api/{workspace-routes,workspace-file-manager}.ts` | Bounded workspace browsing/direct-child creation, Git worktree force classification, and loopback-only host file-manager policy |
+| `packages/server/src/api/*-routes.ts` | Files, terminals, configuration, models, tools, packages and child agents |
 | `packages/server/src/api/websocket.ts` | Minimal RFC 6455 legacy chat transport |
 | `packages/server/src/security/request-security.ts` | Auth context, capabilities, Origin checks, limits and safe errors |
 | `packages/server/src/web-cli.ts` | Combined API/static production launcher |
@@ -29,7 +30,7 @@ The browser contract is summarized in [`web-app-architecture.md`](./web-app-arch
 | App status | `GET /api/app-update` with optional refresh query |
 | Sessions | `GET|POST /api/sessions`; fixed `/tree`, `/search`; `GET|PATCH|DELETE /:id`; messages/info/export/share/fork/clone/auto-name |
 | Agent | `POST /api/agent/runs`; `GET /runs/:runId`; stop/queue; `/sessions/:sessionId/state|events|compact|capabilities|extensions|commands|interactions` |
-| Workspaces/files | `/api/workspaces/default|validate|browse|trust|worktrees`; `/api/files`, content/download/index/upload/watch and Git status/diff |
+| Workspaces/files | `/api/workspaces/default|validate|browse|file-manager|trust|worktrees`; `/api/files`, content/download/index/upload/watch and Git status/diff |
 | Terminals | `/api/terminals` plus per-terminal events/input/resize/delete |
 | Configuration | `/api/configuration` and legacy `/api/settings` alias; effective values include provenance |
 | Models | `GET /api/models`; `PATCH /api/models/enabled` |
@@ -42,6 +43,14 @@ The browser contract is summarized in [`web-app-architecture.md`](./web-app-arch
 `GET /api/sessions/:id/export` is a read, not a POST. Detached state and SSE are keyed by `sessionId`, while stop and queue mutations are keyed by `runId`. Child runs use `/api/subagents/runs`, not `/spawn` or a generic `/:id` route.
 
 Workspace descriptors returned by `default`, `validate` and worktree creation distinguish resource-sensitive `trusted` from `operationTrusted`. The latter is true only for a readable persisted allow decision and is the gate clients must use before agent, file, terminal or project-configuration operations; a fresh folder that currently has no trust-requiring resource can therefore be `trusted: true` while remaining `operationTrusted: false`.
+
+## Workspace Filesystem Invariants
+
+`GET /api/workspaces/browse` canonicalizes the directory through Core and returns at most 500 entries plus `truncated`. `POST /api/workspaces/browse` requires `workspace:write`, accepts exactly bounded `{ parent, name }`, and asks Core to create one direct child only. Separators, traversal names, control/format characters, escaping links, existing targets and unknown request keys are rejected with stable codes.
+
+`GET /api/workspaces/file-manager` is a no-store availability probe. `POST` additionally requires `workspace:write`, accepts exactly `{ cwd }`, resolves that directory through `WorkspaceManager`, and launches only when both the HTTP Host and socket peer are loopback and the platform is macOS, Windows or Linux. Core passes one argument to a platform command without a shell, bounds startup, and allowlists desktop environment variables rather than inheriting provider/server secrets. Unsupported, remote, invalid-path and launch failures are explicit and do not expose process details.
+
+Worktree removal first rejects local changes as `409 force-required`. The browser must obtain a second explicit confirmation and resend `force: true`; Core canonicalizes linked paths against the repository worktree inventory before invoking Git.
 
 ## Detached Agent Flow
 

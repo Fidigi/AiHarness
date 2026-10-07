@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { createServer } from 'node:http';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { createServer, request as requestHttp } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -9,6 +9,42 @@ import { start, stop } from './index.js';
 
 const html = '<!doctype html><html><head><title>AiHarness Test</title></head><body>Web bundle</body></html>';
 const execFileAsync = promisify(execFile);
+const openDirectory = vi.fn(async (_directory: string) => undefined);
+
+async function requestWithHost(
+  baseUrl: string,
+  method: 'GET' | 'POST',
+  route: string,
+  host: string,
+  body?: unknown,
+): Promise<{ status: number; body: unknown }> {
+  const target = new URL(baseUrl);
+  const serialized = body === undefined ? undefined : JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const request = requestHttp({
+      hostname: target.hostname,
+      port: target.port,
+      path: route,
+      method,
+      headers: {
+        Host: host,
+        ...(serialized ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(serialized) } : {}),
+      },
+    }, response => {
+      const chunks: Buffer[] = [];
+      response.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      response.on('end', () => {
+        try {
+          resolve({ status: response.statusCode ?? 0, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    request.once('error', reject);
+    request.end(serialized);
+  });
+}
 
 describe('combined Web server', () => {
   let webRoot = '';
@@ -25,12 +61,14 @@ describe('combined Web server', () => {
       allowedRoots: [webRoot],
       defaultCwd: webRoot,
       enableMockProvider: true,
+      fileManager: { platform: 'linux', openDirectory },
     });
     baseUrl = `http://127.0.0.1:${server.port}`;
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    openDirectory.mockClear();
   });
 
   afterAll(async () => {
@@ -54,6 +92,86 @@ describe('combined Web server', () => {
     const response = await fetch(`${baseUrl}/api/providers`);
     expect(response.status).toBe(200);
     expect(await response.text()).toContain('openai');
+  });
+
+  it('creates one direct child through bounded workspace browsing and rejects malformed or escaping input', async () => {
+    const parent = path.join(webRoot, `directory-parent-${Date.now()}`);
+    await mkdir(parent);
+    const created = await fetch(`${baseUrl}/api/workspaces/browse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent, name: 'created-child' }),
+    });
+    expect(created.status).toBe(201);
+    const createdPath = path.join(parent, 'created-child');
+    expect(await created.json()).toEqual({ path: createdPath });
+    expect((await stat(createdPath)).isDirectory()).toBe(true);
+
+    const listing = await fetch(`${baseUrl}/api/workspaces/browse?path=${encodeURIComponent(parent)}`);
+    expect(await listing.json()).toMatchObject({
+      cwd: parent,
+      truncated: false,
+      entries: [expect.objectContaining({ name: 'created-child', path: createdPath, isDirectory: true })],
+    });
+    const duplicate = await fetch(`${baseUrl}/api/workspaces/browse`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent, name: 'created-child' }),
+    });
+    expect(duplicate.status).toBe(409);
+    expect(await duplicate.json()).toMatchObject({ code: 'already-exists' });
+    const traversal = await fetch(`${baseUrl}/api/workspaces/browse`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent, name: '../escape' }),
+    });
+    expect(traversal.status).toBe(400);
+    expect(await traversal.json()).toMatchObject({ code: 'invalid-path' });
+    const smuggled = await fetch(`${baseUrl}/api/workspaces/browse`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent, name: 'hidden-child', recursive: true }),
+    });
+    expect(smuggled.status).toBe(400);
+    await expect(stat(path.join(parent, 'hidden-child'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('opens only canonical allowed directories in a loopback host file manager', async () => {
+    const availability = await fetch(`${baseUrl}/api/workspaces/file-manager`);
+    expect(availability.status).toBe(200);
+    expect(availability.headers.get('cache-control')).toBe('no-store');
+    expect(await availability.json()).toEqual({ available: true });
+
+    const opened = await fetch(`${baseUrl}/api/workspaces/file-manager`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: webRoot }),
+    });
+    expect(opened.status).toBe(200);
+    expect(await opened.json()).toEqual({ opened: true });
+    expect(openDirectory).toHaveBeenCalledWith(webRoot);
+    openDirectory.mockClear();
+
+    openDirectory.mockRejectedValueOnce(new Error('desktop failure /secret/path'));
+    const failedLaunch = await fetch(`${baseUrl}/api/workspaces/file-manager`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: webRoot }),
+    });
+    expect(failedLaunch.status).toBe(503);
+    expect(await failedLaunch.json()).toEqual({
+      error: 'The host file manager could not be started.', code: 'launch-failed',
+    });
+    openDirectory.mockClear();
+
+    const outside = await fetch(`${baseUrl}/api/workspaces/file-manager`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: path.dirname(webRoot) }),
+    });
+    expect(outside.status).toBe(403);
+    expect(await outside.json()).toMatchObject({ code: 'outside-allowed-roots' });
+    expect(openDirectory).not.toHaveBeenCalled();
+
+    const remote = await requestWithHost(baseUrl, 'GET', '/api/workspaces/file-manager', 'example.test');
+    expect(remote.body).toEqual({ available: false, reason: 'remote-request' });
+    const remoteOpen = await requestWithHost(
+      baseUrl, 'POST', '/api/workspaces/file-manager', 'example.test', { cwd: webRoot },
+    );
+    expect(remoteOpen.status).toBe(403);
+    expect(remoteOpen.body).toMatchObject({ code: 'remote-request' });
+    expect(openDirectory).not.toHaveBeenCalled();
   });
 
   it('shares resource-sensitive exact, inherited, and refused trust status across workspace routes', async () => {
@@ -1653,9 +1771,23 @@ describe('combined Web server', () => {
       expect.objectContaining({ path: checkout, branch: 'integration-worktree' }),
     ]));
 
-    const removed = await fetch(`${baseUrl}/api/workspaces/worktrees`, {
+    await writeFile(path.join(checkout, 'local-change.txt'), 'uncommitted');
+    const refused = await fetch(`${baseUrl}/api/workspaces/worktrees`, {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd: repository, path: checkout, confirm: true }),
+    });
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ code: 'force-required' });
+    const smuggledForce = await fetch(`${baseUrl}/api/workspaces/worktrees`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: repository, path: checkout, confirm: true, force: 'true' }),
+    });
+    expect(smuggledForce.status).toBe(400);
+    expect(await smuggledForce.json()).toMatchObject({ code: 'invalid-request' });
+
+    const removed = await fetch(`${baseUrl}/api/workspaces/worktrees`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: repository, path: checkout, confirm: true, force: true }),
     });
     expect(removed.status).toBe(200);
     expect(await removed.json()).toEqual({ success: true });

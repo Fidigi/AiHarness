@@ -133,10 +133,11 @@ export async function getAppUpdateStatus(refresh = false): Promise<ApiResponse<A
 }
 
 /** Standardized response wrapper */
-interface ApiResponse<T> {
+export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+  code?: string;
 }
 
 export interface SessionMessagePageInfo {
@@ -174,6 +175,12 @@ export interface WorkspaceBrowseResponse {
   cwd: string;
   parent?: string;
   entries: Array<{ name: string; path: string; isDirectory: boolean; isSymbolicLink: boolean }>;
+  truncated?: boolean;
+}
+
+export interface FileManagerAvailability {
+  available: boolean;
+  reason?: 'remote-request' | 'unsupported-platform';
 }
 
 /** Provider configuration from backend */
@@ -1115,6 +1122,52 @@ export async function browseWorkspace(path?: string, parent = false): Promise<Ap
   }
 }
 
+export async function createWorkspaceDirectory(parent: string, name: string): Promise<ApiResponse<{ path: string }>> {
+  try {
+    const response = await apiFetch(`${API_BASE}/workspaces/browse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent, name }),
+    });
+    const data = await response.json().catch(() => ({})) as { path?: string; error?: string; code?: string };
+    if (!response.ok || !data.path) return {
+      success: false,
+      error: data.error || `HTTP ${response.status}`,
+      code: data.code,
+    };
+    return { success: true, data: { path: data.path } };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to create directory' };
+  }
+}
+
+export async function getFileManagerAvailability(signal?: AbortSignal): Promise<ApiResponse<FileManagerAvailability>> {
+  try {
+    const response = await apiFetch(`${API_BASE}/workspaces/file-manager`, { signal, cache: 'no-store' });
+    const data = await response.json().catch(() => ({})) as FileManagerAvailability & { error?: string };
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'File manager availability failed' };
+  }
+}
+
+export async function openWorkspaceInFileManager(cwd: string): Promise<ApiResponse<void>> {
+  try {
+    const response = await apiFetch(`${API_BASE}/workspaces/file-manager`, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd }),
+    });
+    const data = await response.json().catch(() => ({})) as { error?: string; code?: string };
+    if (!response.ok) return { success: false, error: data.error || `HTTP ${response.status}`, code: data.code };
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to open the file manager' };
+  }
+}
+
 export async function listWorktrees(cwd: string, signal?: AbortSignal): Promise<ApiResponse<GitWorktree[]>> {
   try {
     const response = await apiFetch(`${API_BASE}/workspaces/worktrees?cwd=${encodeURIComponent(cwd)}`, { signal });
@@ -1154,8 +1207,12 @@ export async function removeWorktree(cwd: string, path: string, force = false): 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd, path, force, confirm: true }),
     });
-    const data = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    const data = await response.json().catch(() => ({})) as { error?: string; code?: string };
+    if (!response.ok) return {
+      success: false,
+      error: data.error || `HTTP ${response.status}`,
+      code: data.code,
+    };
     return { success: true };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to remove worktree' };

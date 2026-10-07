@@ -174,6 +174,7 @@ export {
   inspectProjectTrustResources,
   ProjectTrustManager,
   resolveProjectTrust,
+  WORKSPACE_BROWSE_ENTRY_LIMIT,
   WorkspaceManager,
   WorkspacePathError,
 } from './security/index.js';
@@ -201,6 +202,9 @@ export type {
   WorkspaceDescriptor,
   WorkspacePathKind,
 } from './security/index.js';
+
+// Host desktop integration
+export * from './system/index.js';
 
 // Utils
 export * from './utils/index.js';

@@ -21,7 +21,7 @@ html[data-theme="light"] .login-view .login-error { color: #a51f38; }
 /* Workspace and conversation navigation */
 .workspace-selector { padding: .65rem; border-bottom: 1px solid #0f3460; }
 .workspace-label { display: block; padding: 0 .35rem .35rem; color: #aab8d0; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; }
-.workspace-button { width: 100%; padding: .6rem; border: 1px solid #30466e; border-radius: 7px; color: #eee; background: #1a1a2e; text-align: left; cursor: pointer; overflow: hidden; }
+.workspace-button { width: 100%; min-width: 0; flex: 1; padding: .6rem; border: 1px solid #30466e; border-radius: 7px; color: #eee; background: #1a1a2e; text-align: left; cursor: pointer; overflow: hidden; }
 .workspace-button span, .workspace-button small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-button small { margin-top: .2rem; color: #b2bdd0; }
 .trust-warning { display: block; padding: .4rem 0 0; border: 0; color: #ffca65; background: transparent; font-size: .75rem; text-align: left; cursor: pointer; }

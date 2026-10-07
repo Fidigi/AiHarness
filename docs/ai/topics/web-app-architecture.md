@@ -16,9 +16,9 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 | `packages/web/src/App.tsx` | Auth bootstrap, route/deep-link restoration and top-level data hydration |
 | `packages/web/src/store/session-store.ts` | Sessions, windows, drafts, runs, catalogues and bounded workspace cache |
 | `packages/web/src/store/preferences.ts` | Versioned appearance, send-key, layout, notification, panel and keybinding state |
-| `packages/web/src/services/api.ts`, `packages/web/src/services/mcp-api.ts` | Credential-aware fetch, REST/SSE contracts and Settings-lazy MCP one-shot Test, import/replacement preview, persistence and local mutation requests |
+| `packages/web/src/services/api.ts`, `packages/web/src/services/mcp-api.ts` | Credential-aware fetch, REST/SSE contracts, workspace creation/file-manager/force-retry operations, and Settings-lazy MCP one-shot Test, import/replacement preview, persistence and local mutation requests |
 | `packages/web/src/components/ChatView.tsx` | Detached runs, history, composer, queues, settings and reconciliation |
-| `packages/web/src/components/{Sidebar,WorkspacePanel,TerminalPanel}.tsx` | Navigation, files/Git and PTY surfaces |
+| `packages/web/src/components/{Sidebar,WorkspacePanel,TerminalPanel}.tsx` | Lazy navigation with bounded folder creation/host opening/worktree force retry, files/Git and PTY surfaces |
 | `packages/web/src/components/SettingsView.tsx` | Lazy Settings route and administration sections |
 | `packages/web/src/components/{McpSettings,McpImportPreview}.tsx` | Redacted global/project MCP groups and explicit Test reports, paste preview, field/reference completion, scope/confirmation-gated atomic import or replacement, trust lock, row/group activation, per-server exposure, confirmed removal, temporary undo and file diagnostics |
 | `packages/web/src/components/PluginSettings.tsx` | Project/global package inventory, individual and one-request group activation, partial-result and reload-pending feedback |
@@ -59,6 +59,8 @@ local draft -> effective configuration -> POST /api/agent/runs
 - Keep full export server-side.
 
 ## Workspace and Terminal Boundaries
+
+Sidebar directory reads are sequence guarded and visibly report the server's 500-entry truncation. Its focus-trapped creation dialog submits one direct-child name and navigates into the server-returned canonical folder. A host-file-manager button appears only after the no-store availability probe succeeds; it submits only the current cwd. Dirty worktree removal sends `force: false`, then asks separately before the one explicit `force: true` retry.
 
 A cwd change aborts stale requests, clears old file/search results, and keys React state so old PTY/file surfaces unmount before target state restores. Browser paths are never trusted directly: Server resolves them with `WorkspaceManager` and applies project trust before mutations or execution. Workspace descriptors keep resource-sensitive `trusted` separate from persisted-decision `operationTrusted`; Sidebar prompts, file/search surfaces and project configuration gates use the latter (with a compatibility fallback only when older descriptors omit it), so an implicitly safe empty folder cannot silently authorize an operation.
 
@@ -110,7 +112,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 - `packages/web/src/services/api.test.ts` — shared REST/SSE credential and response contracts
 - `packages/web/src/services/{push,pwa,keyboard,notices}.test.ts` — global browser services
 - `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including minimal-config-free MCP Test requests and identity/cwd/capability/tool reports, locked/redacted inventory, atomic import/replacement, fresh-project trust-plus-first-write, grouped activation, exposure, focus, undo and failure reconciliation
-- `e2e/accessibility.spec.ts`, `e2e/performance.spec.ts`, and `e2e/visual.spec.ts` — a11y, bounds and baselines
+- `e2e/accessibility.spec.ts`, `e2e/performance.spec.ts`, and `e2e/visual.spec.ts` — a11y, bounds and baselines, including desktop/mobile Light/Dark workspace creation dialogs
 - `e2e/live-server.spec.ts` — real browser-to-server smoke path
 
 ## Common Changes

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { openExternalTarget } from '@ai-harness/core';
 import { fileURLToPath } from 'node:url';
 import { start, stop } from './index.js';
 import { parseWebCliArgs, webCliHelp } from './web-cli-options.js';
@@ -13,13 +13,9 @@ function browserUrl(hostname: string, port: number): string {
 }
 
 function openBrowser(url: string): void {
-  const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
-  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
-  const child = spawn(command, args, { detached: true, stdio: 'ignore' });
-  child.once('error', error => {
-    console.warn(`[Web] Ouverture automatique impossible : ${error.message}`);
+  void openExternalTarget(url, 'url').catch(error => {
+    console.warn(`[Web] Ouverture automatique impossible : ${error instanceof Error ? error.message : String(error)}`);
   });
-  child.unref();
 }
 
 async function runWebCli(): Promise<void> {

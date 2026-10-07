@@ -56,6 +56,50 @@ test.describe('Régression visuelle confiance et PWA', () => {
   }
 });
 
+test.describe('Régression visuelle du sélecteur de workspace', () => {
+  for (const scenario of mcpScenarios) {
+    test(`${scenario.name} garde la création bornée et le gestionnaire hôte lisibles`, async ({ page }) => {
+      await page.setViewportSize({ width: scenario.width, height: scenario.height });
+      await page.addInitScript(({ theme }) => {
+        localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({
+          version: 4, theme, sendMode: 'enter', contentWidth: 1000, fontSize: 16,
+          reasoningOpen: false, sound: false, notifications: false, selectionActions: true,
+          filesOpen: true, sidebarVisible: true, lastSettingsSection: 'appearance', keybindings: {},
+        }));
+      }, { theme: scenario.theme });
+      await installMockApi(page, {
+        fileManagerAvailable: true,
+        workspaceBrowse: {
+          '/workspace': {
+            cwd: '/workspace',
+            truncated: true,
+            entries: [
+              { name: 'docs', path: '/workspace/docs', isDirectory: true, isSymbolicLink: false },
+              { name: 'packages', path: '/workspace/packages', isDirectory: true, isSymbolicLink: false },
+              { name: 'README.md', path: '/workspace/README.md', isDirectory: false, isSymbolicLink: false },
+            ],
+          },
+        },
+      });
+
+      await page.goto('/');
+      if (scenario.width <= 959) await page.getByRole('button', { name: 'Toggle navigation' }).click();
+      await page.locator('.workspace-button').click();
+      const picker = page.getByRole('dialog', { name: 'Choose a workspace' });
+      await picker.getByRole('button', { name: 'New folder' }).click();
+      const createDialog = page.getByRole('dialog', { name: 'Create a folder' });
+      await createDialog.getByLabel('Folder name').fill('release-notes');
+      await expect(createDialog.getByRole('button', { name: 'Create folder' })).toBeEnabled();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
+      await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
+      await page.evaluate(() => document.fonts.ready);
+      await expect(page).toHaveScreenshot(`workspace-picker-${scenario.name}.png`, {
+        animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
+      });
+    });
+  }
+});
+
 test.describe('Régression visuelle de l’authentification Web', () => {
   for (const scenario of scenarios) {
     test(`${scenario.name} garde la connexion lisible et centrée`, async ({ page }) => {

@@ -4,7 +4,6 @@
 
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
 import WorkspacePanel from './components/WorkspacePanel';
 import LoginView from './components/LoginView';
@@ -19,6 +18,7 @@ import { readPreferences, usePreferences } from './store/preferences';
 import { matchesShortcut } from './services/keyboard';
 
 const SettingsView = lazy(() => import('./components/SettingsView'));
+const Sidebar = lazy(() => import('./components/Sidebar'));
 const TerminalPanel = lazy(() => import('./components/TerminalPanel'));
 
 function App() {
@@ -203,7 +203,8 @@ function App() {
   if (!authenticated) return <LoginView onLogin={() => setAuthenticated(true)} />;
 
   return (
-    <div className={`app ${sidebarVisible ? '' : 'sidebar-hidden'}`}>
+    <Suspense fallback={<div className="app-loading" role="status">{t('common.loading')}…</div>}>
+      <div className={`app ${sidebarVisible ? '' : 'sidebar-hidden'}`}>
       <button className="mobile-menu" onClick={() => setSidebarOpen(open => !open)}
         aria-expanded={sidebarOpen} aria-label={t('sidebar.toggle')}><span className="menu-icon" aria-hidden="true" /></button>
       {!location.pathname.startsWith('/settings') && <button className="mobile-files" onClick={() => {
@@ -236,7 +237,8 @@ function App() {
       <SubagentMonitor />
       <StatusCenter />
       <PwaStatus />
-    </div>
+      </div>
+    </Suspense>
   );
 }
 

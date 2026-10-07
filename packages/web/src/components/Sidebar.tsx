@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { GitWorktree, WorkspaceDescriptor } from '@ai-harness/core';
+import '../sidebar.css';
 import type { SessionSearchResult } from '../services/api';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   autoNameSession,
   browseWorkspace,
+  createWorkspaceDirectory,
   createWorktree,
   deleteSession,
+  getFileManagerAvailability,
   listWorktrees,
+  openWorkspaceInFileManager,
   removeWorktree,
   searchSessions,
   setWorkspaceTrust,
@@ -78,6 +82,13 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
   const [pathInput, setPathInput] = useState('');
   const [directories, setDirectories] = useState<Array<{ name: string; path: string }>>([]);
   const [parent, setParent] = useState<string>();
+  const [browseTruncated, setBrowseTruncated] = useState(false);
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [folderName, setFolderName] = useState('');
+  const [folderCreating, setFolderCreating] = useState(false);
+  const [folderError, setFolderError] = useState('');
+  const [fileManagerAvailable, setFileManagerAvailable] = useState(false);
+  const [fileManagerOpening, setFileManagerOpening] = useState(false);
   const [error, setError] = useState('');
   const [renaming, setRenaming] = useState<string>();
   const [renameValue, setRenameValue] = useState('');
@@ -92,6 +103,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
   const sidebarRef = useRef<HTMLElement>(null);
   const trustDialogRef = useRef<HTMLElement>(null);
   const pickerDialogRef = useRef<HTMLElement>(null);
+  const createFolderDialogRef = useRef<HTMLElement>(null);
   const browseSequence = useRef(0);
   const autoNameAbortRef = useRef<AbortController | undefined>(undefined);
 
@@ -99,7 +111,8 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
   const selectedSessionId = sessionIdFromPathname(location.pathname) ?? activeSessionId;
   useFocusTrap(modal && !pendingWorkspace && !pickerOpen, sidebarRef, () => onRequestClose?.());
   useFocusTrap(Boolean(pendingWorkspace), trustDialogRef, () => setPendingWorkspace(undefined));
-  useFocusTrap(pickerOpen, pickerDialogRef, () => setPickerOpen(false));
+  useFocusTrap(pickerOpen && !createFolderOpen, pickerDialogRef, () => setPickerOpen(false));
+  useFocusTrap(createFolderOpen, createFolderDialogRef, () => setCreateFolderOpen(false));
 
   useEffect(() => {
     autoNameAbortRef.current?.abort();
@@ -107,6 +120,14 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
     setAutoNaming(undefined);
     return () => autoNameAbortRef.current?.abort();
   }, [workspace?.id]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void getFileManagerAvailability(controller.signal).then(result => {
+      if (!controller.signal.aborted) setFileManagerAvailable(Boolean(result.success && result.data?.available));
+    });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     if (search.trim().length < 2) {
@@ -162,6 +183,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
     }
     setPathInput(result.data.cwd);
     setParent(result.data.parent);
+    setBrowseTruncated(Boolean(result.data.truncated));
     setDirectories(result.data.entries.filter(entry => entry.isDirectory).map(entry => ({
       name: entry.name,
       path: entry.path,
@@ -233,9 +255,38 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
 
   const removeTree = async (tree: GitWorktree) => {
     if (!workspace || !window.confirm(t('workspace.worktreeDeleteConfirmation', { path: tree.path }))) return;
-    const result = await removeWorktree(workspace.cwd, tree.path);
+    let result = await removeWorktree(workspace.cwd, tree.path);
+    if (!result.success && result.code === 'force-required') {
+      if (!window.confirm(t('workspace.worktreeForceConfirmation', { path: tree.path }))) return;
+      result = await removeWorktree(workspace.cwd, tree.path, true);
+    }
     if (!result.success) setError(result.error || t('workspace.worktreeDeleteFailed'));
     else setWorktrees(items => items.filter(item => item.path !== tree.path));
+  };
+
+  const createFolder = async () => {
+    const name = folderName.trim();
+    if (!name || folderCreating) return;
+    setFolderCreating(true);
+    setFolderError('');
+    const result = await createWorkspaceDirectory(pathInput, name);
+    setFolderCreating(false);
+    if (!result.success || !result.data) {
+      setFolderError(t('workspace.folderCreateFailed'));
+      return;
+    }
+    setCreateFolderOpen(false);
+    setFolderName('');
+    await browse(result.data.path);
+  };
+
+  const openFileManager = async () => {
+    if (!workspace || fileManagerOpening) return;
+    setFileManagerOpening(true);
+    setError('');
+    const result = await openWorkspaceInFileManager(workspace.cwd);
+    setFileManagerOpening(false);
+    if (!result.success) setError(t('workspace.fileManagerFailed'));
   };
 
   const commitRename = async (id: string) => {
@@ -309,14 +360,23 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
 
       <section className="workspace-selector">
         <span className="workspace-label">{t('workspace.label')}</span>
-        <button className="workspace-button" onClick={() => {
-          setPathInput(workspace?.cwd ?? '');
-          setPickerOpen(true);
-          void browse(workspace?.cwd);
-        }} title={workspace?.cwd}>
-          <span>{workspace?.name ?? t('workspace.loading')}</span>
-          <small>{workspace?.git?.branch ?? workspace?.cwd ?? ''}</small>
-        </button>
+        <div className="workspace-control">
+          <button className="workspace-button" onClick={() => {
+            setPathInput(workspace?.cwd ?? '');
+            setPickerOpen(true);
+            void browse(workspace?.cwd);
+          }} title={workspace?.cwd}>
+            <span>{workspace?.name ?? t('workspace.loading')}</span>
+            <small>{workspace?.git?.branch ?? workspace?.cwd ?? ''}</small>
+          </button>
+          {workspace && fileManagerAvailable && (
+            <button className="workspace-file-manager" disabled={fileManagerOpening}
+              onClick={() => void openFileManager()} title={t('workspace.fileManager')}
+              aria-label={t('workspace.fileManager')}>
+              {fileManagerOpening ? '…' : '↗'}
+            </button>
+          )}
+        </div>
         {workspace && !operationTrusted(workspace) && (
           <button className="trust-warning" onClick={() => {
             setError('');
@@ -455,9 +515,10 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
       )}
 
       {pickerOpen && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={event => {
-          if (event.target === event.currentTarget) setPickerOpen(false);
-        }}>
+        <div className="modal-backdrop" role="presentation" aria-hidden={createFolderOpen || undefined}
+          inert={createFolderOpen || undefined} onMouseDown={event => {
+            if (event.target === event.currentTarget) setPickerOpen(false);
+          }}>
           <section ref={pickerDialogRef} className="directory-picker" role="dialog" aria-modal="true" tabIndex={-1} aria-labelledby="workspace-picker-title">
             <header>
               <h2 id="workspace-picker-title">{t('workspace.choose')}</h2>
@@ -486,11 +547,49 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
                 </li>
               ))}
             </ul>
+            {browseTruncated && <p className="directory-truncated" role="status">{t('workspace.browseTruncated')}</p>}
             {error && <p role="alert">{error}</p>}
             <footer>
+              <button onClick={() => {
+                setFolderName('');
+                setFolderError('');
+                setCreateFolderOpen(true);
+              }}>{t('workspace.folderCreate')}</button>
+              <span className="directory-footer-spacer" />
               <button onClick={() => setPickerOpen(false)}>{t('common.cancel')}</button>
               <button className="primary" onClick={() => void chooseWorkspace()}>{t('workspace.use')}</button>
             </footer>
+          </section>
+        </div>
+      )}
+
+      {createFolderOpen && (
+        <div className="modal-backdrop directory-create-backdrop" role="presentation" onMouseDown={event => {
+          if (event.target === event.currentTarget && !folderCreating) setCreateFolderOpen(false);
+        }}>
+          <section ref={createFolderDialogRef} className="trust-dialog directory-create-dialog" role="dialog"
+            aria-modal="true" tabIndex={-1} aria-labelledby="workspace-folder-create-title">
+            <h2 id="workspace-folder-create-title">{t('workspace.folderCreateTitle')}</h2>
+            <p>{t('workspace.folderCreateHelp')}</p>
+            <code>{pathInput}</code>
+            <form onSubmit={event => {
+              event.preventDefault();
+              void createFolder();
+            }}>
+              <label>{t('workspace.folderName')}
+                <input data-autofocus value={folderName} maxLength={255} disabled={folderCreating}
+                  onChange={event => setFolderName(event.target.value)} />
+              </label>
+              {folderError && <p role="alert">{folderError}</p>}
+              <footer>
+                <button type="button" disabled={folderCreating} onClick={() => setCreateFolderOpen(false)}>
+                  {t('common.cancel')}
+                </button>
+                <button className="primary" type="submit" disabled={folderCreating || !folderName.trim()}>
+                  {folderCreating ? t('workspace.folderCreating') : t('workspace.folderCreateAction')}
+                </button>
+              </footer>
+            </form>
           </section>
         </div>
       )}

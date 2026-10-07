@@ -734,11 +734,13 @@ To add a language pack or modify interface text, see the [internationalization g
 
 ### Workspaces, Trust and Worktrees
 
-The workspace button opens a directory browser. It accepts an absolute path or `~`, supports navigation to the parent, and remembers recent projects. The `?cwd=` parameter makes a workspace shareable without creating a conversation.
+The workspace button opens a directory browser. It accepts an absolute path or `~`, supports navigation to the parent, and remembers recent projects. A listing shows at most 500 entries and tells you when to continue by entering a path. **New folder** opens a focused dialog that creates exactly one direct child, then navigates into the canonical folder; separators, traversal and paths outside configured roots are rejected. The `?cwd=` parameter makes a workspace shareable without creating a conversation.
+
+On a locally opened, supported macOS, Windows or Linux server, the adjacent **Open workspace in file manager** button asks the host desktop to reveal the canonical workspace. It is intentionally absent for remote requests or unsupported hosts. The route is administrator-only, loopback-only and never invokes a shell.
 
 Approval is deliberate: verify the displayed canonical path before confirming. Web and CLI use the same Core store: an allow or refusal may be exact or inherited from the nearest parent. A revocation through the Web API saves an exact refusal so an older parent allow cannot silently reactivate the project. An active allow enables project resources, tools, commands and writes. A path outside allowed roots or an escaping symlink is rejected.
 
-In a Git repository, the selector shows the branch and worktrees. The adjacent **+** button creates a worktree from an existing or new branch. Removing a worktree requires confirmation. Running agents stay bound to the cwd where they started. Switching immediately clears stale search and explorer results, unmounts PTY surfaces from the old cwd, then separately restores drafts, provider/models, skills, plugins, child-agent profiles, trust and tabs for the target workspace.
+In a Git repository, the selector shows the branch and worktrees. The adjacent **+** button creates a worktree from an existing or new branch. Removing a worktree requires confirmation. If Git detects local changes, AiHarness leaves it intact and asks for a separate force confirmation before retrying with the explicit force flag. Running agents stay bound to the cwd where they started. Switching immediately clears stale search and explorer results, unmounts PTY surfaces from the old cwd, then separately restores drafts, provider/models, skills, plugins, child-agent profiles, trust and tabs for the target workspace.
 
 Useful server variables:
 

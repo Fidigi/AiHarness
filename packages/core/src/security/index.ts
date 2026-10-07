@@ -26,6 +26,7 @@ export type {
   ResolveProjectTrustOptions,
 } from './project-trust.js';
 export {
+  WORKSPACE_BROWSE_ENTRY_LIMIT,
   WorkspaceManager,
   WorkspacePathError,
 } from './workspace-manager.js';

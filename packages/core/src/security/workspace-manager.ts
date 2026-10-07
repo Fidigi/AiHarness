@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { lstat, readdir, realpath, stat } from 'node:fs/promises';
+import { lstat, mkdir, opendir, realpath, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+export const WORKSPACE_BROWSE_ENTRY_LIMIT = 500;
 
 export type WorkspacePathKind = 'any' | 'file' | 'directory';
 
@@ -42,7 +43,7 @@ export interface GitWorktree {
 
 export class WorkspacePathError extends Error {
   constructor(
-    readonly code: 'INVALID_PATH' | 'OUTSIDE_ALLOWED_ROOTS' | 'NOT_FOUND' | 'WRONG_KIND' | 'GIT_ERROR',
+    readonly code: 'INVALID_PATH' | 'OUTSIDE_ALLOWED_ROOTS' | 'NOT_FOUND' | 'WRONG_KIND' | 'ALREADY_EXISTS' | 'FORCE_REQUIRED' | 'GIT_ERROR',
     message: string,
   ) {
     super(message);
@@ -151,12 +152,24 @@ export class WorkspaceManager {
     };
   }
 
-  async browse(input: string, parent = false): Promise<{ cwd: string; parent?: string; entries: DirectoryEntry[] }> {
+  async browse(input: string, parent = false): Promise<{
+    cwd: string;
+    parent?: string;
+    entries: DirectoryEntry[];
+    truncated: boolean;
+  }> {
     const requested = await this.resolve(input, { kind: 'directory' });
     const cwd = parent
       ? await this.resolve(path.dirname(requested), { kind: 'directory' })
       : requested;
-    const entries = await Promise.all((await readdir(cwd, { withFileTypes: true })).map(async entry => {
+    const entries: DirectoryEntry[] = [];
+    let truncated = false;
+    const directory = await opendir(cwd);
+    for await (const entry of directory) {
+      if (entries.length >= WORKSPACE_BROWSE_ENTRY_LIMIT) {
+        truncated = true;
+        break;
+      }
       const entryPath = path.join(cwd, entry.name);
       const symbolic = entry.isSymbolicLink();
       let isDirectory = entry.isDirectory();
@@ -168,8 +181,8 @@ export class WorkspaceManager {
           isDirectory = false;
         }
       }
-      return { name: entry.name, path: entryPath, isDirectory, isSymbolicLink: symbolic };
-    }));
+      entries.push({ name: entry.name, path: entryPath, isDirectory, isSymbolicLink: symbolic });
+    }
     entries.sort((left, right) => Number(right.isDirectory) - Number(left.isDirectory)
       || left.name.localeCompare(right.name));
     const parentPath = path.dirname(cwd);
@@ -177,7 +190,32 @@ export class WorkspaceManager {
       cwd,
       ...(parentPath !== cwd && this.roots.some(root => inside(root, parentPath)) ? { parent: parentPath } : {}),
       entries,
+      truncated,
     };
+  }
+
+  /** Create exactly one direct child under a canonical allowed directory. */
+  async createDirectory(parent: string, name: string): Promise<string> {
+    const reservedWindowsName = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(name);
+    if (!name || name !== name.trim() || name === '.' || name === '..' || name.endsWith('.')
+      || reservedWindowsName || Buffer.byteLength(name, 'utf8') > 255
+      || /[\\/<>:"|?*\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/u.test(name)) {
+      throw new WorkspacePathError('INVALID_PATH', 'Nom de répertoire invalide.');
+    }
+    const canonicalParent = await this.resolve(parent, { kind: 'directory' });
+    const destination = await this.resolve(path.join(canonicalParent, name), { mustExist: false });
+    if (path.dirname(destination) !== canonicalParent) {
+      throw new WorkspacePathError('OUTSIDE_ALLOWED_ROOTS', 'Le répertoire doit être un enfant direct.');
+    }
+    try {
+      await mkdir(destination, { mode: 0o755 });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        throw new WorkspacePathError('ALREADY_EXISTS', 'Un fichier ou répertoire porte déjà ce nom.');
+      }
+      throw new WorkspacePathError('INVALID_PATH', 'Création du répertoire impossible.');
+    }
+    return this.resolve(destination, { kind: 'directory' });
   }
 
   async gitInfo(cwd: string): Promise<WorkspaceDescriptor['git'] | undefined> {
@@ -261,12 +299,31 @@ export class WorkspaceManager {
     if (!known.some(item => item.path === target)) {
       throw new WorkspacePathError('GIT_ERROR', 'Worktree inconnu pour ce dépôt.');
     }
+    if (!force) {
+      try {
+        const { stdout } = await execFileAsync('git', ['-C', target, 'status', '--porcelain', '--untracked-files=normal'], {
+          timeout: 10_000,
+          env: { ...process.env, LC_ALL: 'C' },
+        });
+        if (stdout.trim()) {
+          throw new WorkspacePathError('FORCE_REQUIRED', 'Le worktree contient des modifications locales.');
+        }
+      } catch (error) {
+        if (error instanceof WorkspacePathError) throw error;
+        throw new WorkspacePathError('GIT_ERROR', 'État du worktree indisponible.');
+      }
+    }
     try {
       await execFileAsync('git', ['-C', canonicalCwd, 'worktree', 'remove', ...(force ? ['--force'] : []), target], {
         timeout: 30_000,
+        env: { ...process.env, LC_ALL: 'C' },
       });
     } catch (error) {
-      throw new WorkspacePathError('GIT_ERROR', error instanceof Error ? error.message : 'Suppression du worktree impossible.');
+      const details = error as Error & { stderr?: string };
+      if (!force && /force|modified|untracked|dirty/i.test(`${details.message}\n${details.stderr ?? ''}`)) {
+        throw new WorkspacePathError('FORCE_REQUIRED', 'La suppression exige une confirmation forcée.');
+      }
+      throw new WorkspacePathError('GIT_ERROR', 'Suppression du worktree impossible.');
     }
   }
 

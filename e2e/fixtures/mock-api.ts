@@ -80,6 +80,7 @@ export interface MockWorkspaceBrowse {
   cwd: string;
   parent?: string;
   entries: Array<{ name: string; path: string; isDirectory: boolean; isSymbolicLink: boolean }>;
+  truncated?: boolean;
 }
 export interface RecordedApiRequest {
   method: string;
@@ -143,6 +144,8 @@ export interface MockApiOptions {
   paletteItems?: Array<{ name: string; description: string; source: 'builtin' | 'extension' | 'prompt' | 'skill'; usage?: string }>;
   workspaceBrowse?: Record<string, MockWorkspaceBrowse>;
   worktrees?: MockWorktree[];
+  worktreeForceRequired?: string[];
+  fileManagerAvailable?: boolean;
 }
 export interface MockApiController {
   requests: RecordedApiRequest[];
@@ -414,6 +417,8 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
   const worktrees = structuredClone(options.worktrees ?? [
     { path: workspace.cwd, branch: workspace.git.branch, bare: false, detached: false },
   ]);
+  const workspaceBrowse = structuredClone(options.workspaceBrowse ?? {});
+  const worktreeForceRequired = new Set(options.worktreeForceRequired ?? []);
   const providers = structuredClone(options.providers ?? [{ type: 'mock', configured: true }]);
   let modelCatalog = structuredClone(options.modelCatalog ?? mockModelCatalog(providers));
   let mcpConfig = structuredClone(options.mcpConfig ?? {
@@ -1294,11 +1299,38 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     }
     if (url.pathname === '/api/workspaces/browse' && method === 'GET') {
       const cwd = normalizeWorkspacePath(url.searchParams.get('path'));
-      const configured = options.workspaceBrowse?.[cwd];
+      const configured = workspaceBrowse[cwd];
       const parent = cwd !== workspace.cwd && cwd.startsWith(`${workspace.cwd}/`)
         ? cwd.slice(0, cwd.lastIndexOf('/')) || workspace.cwd
         : undefined;
-      await fulfillJson(route, configured ?? { cwd, ...(parent ? { parent } : {}), entries: [] }); return;
+      await fulfillJson(route, configured ?? { cwd, ...(parent ? { parent } : {}), entries: [], truncated: false }); return;
+    }
+    if (url.pathname === '/api/workspaces/browse' && method === 'POST') {
+      const input = body as { parent?: string; name?: string };
+      const parent = normalizeWorkspacePath(input.parent);
+      const name = input.name?.trim();
+      if (!name || /[\\/]/.test(name) || name === '.' || name === '..') {
+        await fulfillJson(route, { error: 'Invalid directory name', code: 'invalid-path' }, 400); return;
+      }
+      const created = `${parent.replace(/\/$/, '')}/${name}`;
+      const listing = workspaceBrowse[parent] ?? { cwd: parent, entries: [] };
+      if (listing.entries.some(entry => entry.name === name)) {
+        await fulfillJson(route, { error: 'A file or directory already has this name.', code: 'already-exists' }, 409); return;
+      }
+      listing.entries.push({ name, path: created, isDirectory: true, isSymbolicLink: false });
+      workspaceBrowse[parent] = listing;
+      workspaceBrowse[created] = { cwd: created, parent, entries: [] };
+      await fulfillJson(route, { path: created }, 201); return;
+    }
+    if (url.pathname === '/api/workspaces/file-manager' && method === 'GET') {
+      await fulfillJson(route, { available: options.fileManagerAvailable === true,
+        ...(options.fileManagerAvailable === true ? {} : { reason: 'remote-request' }) }); return;
+    }
+    if (url.pathname === '/api/workspaces/file-manager' && method === 'POST') {
+      if (options.fileManagerAvailable !== true) {
+        await fulfillJson(route, { error: 'File manager unavailable', code: 'remote-request' }, 403); return;
+      }
+      await fulfillJson(route, { opened: true }); return;
     }
     if (url.pathname === '/api/workspaces/worktrees' && method === 'GET') {
       await fulfillJson(route, worktrees); return;
@@ -1311,9 +1343,14 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       await fulfillJson(route, describeWorkspace(path), 201); return;
     }
     if (url.pathname === '/api/workspaces/worktrees' && method === 'DELETE') {
-      const input = body as { path?: string; confirm?: boolean };
-      const index = worktrees.findIndex(item => item.path === normalizeWorkspacePath(input.path));
+      const input = body as { path?: string; confirm?: boolean; force?: boolean };
+      const target = normalizeWorkspacePath(input.path);
+      const index = worktrees.findIndex(item => item.path === target);
       if (index < 0 || input.confirm !== true) { await fulfillJson(route, { error: 'Unknown worktree' }, 400); return; }
+      if (worktreeForceRequired.has(target) && input.force !== true) {
+        await fulfillJson(route, { error: 'Worktree removal requires force confirmation.', code: 'force-required' }, 409); return;
+      }
+      worktreeForceRequired.delete(target);
       worktrees.splice(index, 1);
       await fulfillJson(route, { success: true }); return;
     }

@@ -739,11 +739,13 @@ le [guide d'internationalisation](../../contributors/fr/i18n.md).
 
 ### Workspaces, confiance et worktrees
 
-Le bouton de workspace ouvre un navigateur de répertoires. Il accepte un chemin absolu ou `~`, permet de remonter au parent et mémorise les projets récents. Le paramètre `?cwd=` rend le workspace partageable sans créer de conversation.
+Le bouton de workspace ouvre un navigateur de répertoires. Il accepte un chemin absolu ou `~`, permet de remonter au parent et mémorise les projets récents. Une liste affiche au plus 500 entrées et signale lorsqu’il faut poursuivre en saisissant un chemin. **Nouveau dossier** ouvre un dialogue avec focus contraint qui crée exactement un enfant direct, puis navigue dans son chemin canonique ; séparateurs, traversées et sorties des racines configurées sont refusés. Le paramètre `?cwd=` rend le workspace partageable sans créer de conversation.
+
+Lorsque le serveur est ouvert localement sur macOS, Windows ou Linux pris en charge, le bouton adjacent **Ouvrir le workspace dans le gestionnaire de fichiers** demande au bureau de l’hôte d’afficher le workspace canonique. Il est volontairement absent pour une requête distante ou un hôte non pris en charge. La route est réservée à l’administrateur, limitée au loopback et n’invoque jamais de shell.
 
 L’approbation est volontaire : vérifiez le chemin canonique affiché avant de confirmer. Le Web et le CLI utilisent le même registre Core : une autorisation ou un refus peut être exact ou hérité du dossier parent le plus proche. Une révocation par l’API Web enregistre un refus exact afin qu’une ancienne autorisation parente ne réactive pas silencieusement le projet. Une autorisation active les ressources, outils, commandes et écritures dans ce projet. Un chemin hors des racines autorisées ou un lien symbolique sortant est refusé.
 
-Dans un dépôt Git, le sélecteur affiche la branche et les worktrees. Le bouton **+** adjacent permet de créer un worktree depuis une branche existante ou une nouvelle branche. La suppression d’un worktree demande confirmation. Les agents déjà lancés restent liés au cwd avec lequel ils ont démarré. Une bascule vide immédiatement les résultats de recherche et l’explorer devenus obsolètes, démonte les surfaces PTY de l’ancien cwd puis restaure séparément brouillons, provider/modèles, skills, plugins, profils de sous-agent, confiance et onglets du workspace cible.
+Dans un dépôt Git, le sélecteur affiche la branche et les worktrees. Le bouton **+** adjacent permet de créer un worktree depuis une branche existante ou une nouvelle branche. La suppression d’un worktree demande confirmation. Si Git détecte des modifications locales, AiHarness le conserve et demande une seconde confirmation de forçage avant de réessayer avec l’option explicite. Les agents déjà lancés restent liés au cwd avec lequel ils ont démarré. Une bascule vide immédiatement les résultats de recherche et l’explorer devenus obsolètes, démonte les surfaces PTY de l’ancien cwd puis restaure séparément brouillons, provider/modèles, skills, plugins, profils de sous-agent, confiance et onglets du workspace cible.
 
 Variables serveur utiles :
 

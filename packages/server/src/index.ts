@@ -18,6 +18,7 @@ import { EncryptedCredentialStore } from './security/credential-store.js';
 import { handleWebSocketUpgrade } from './api/websocket.js';
 import { createAgentRouter } from './api/agent-routes.js';
 import { createWorkspaceRouter } from './api/workspace-routes.js';
+import type { WorkspaceFileManagerOptions } from './api/workspace-file-manager.js';
 import { createFileRouter } from './api/file-routes.js';
 import { createConfigurationRouter } from './api/config-routes.js';
 import { createMcpRouter } from './api/mcp-routes.js';
@@ -62,6 +63,8 @@ export interface ServerConfig extends RuntimeServiceOptions {
   /** Injectable provider controller for integration tests and embedders. */
   proxy?: AiProxyServer;
   enableMockProvider?: boolean;
+  /** Injectable host desktop integration for tests and embedders. */
+  fileManager?: WorkspaceFileManagerOptions;
 }
 
 const DEFAULT_PORT = 3099;
@@ -266,7 +269,7 @@ export function createApp(config?: ServerConfig): express.Application {
 
   // Detached agent, workspace and scoped non-secret configuration routes.
   app.use('/api/agent', requireCapability('chat'), createAgentRouter(servicesPromise));
-  app.use('/api/workspaces', requireCapability('workspace:read'), createWorkspaceRouter(servicesPromise));
+  app.use('/api/workspaces', requireCapability('workspace:read'), createWorkspaceRouter(servicesPromise, config?.fileManager));
   app.use('/api/files', requireCapability('files:read'), createFileRouter(servicesPromise));
   app.use('/api/mcp', requireCapability('workspace:read'), createMcpRouter(servicesPromise));
   app.use('/api/terminals', requireCapability('terminal'), createTerminalRouter(servicesPromise));
