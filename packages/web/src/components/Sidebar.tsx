@@ -55,6 +55,10 @@ function sessionIdFromPathname(pathname: string): string | undefined {
   }
 }
 
+function operationTrusted(workspace: WorkspaceDescriptor): boolean {
+  return workspace.operationTrusted ?? workspace.trusted;
+}
+
 function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -127,7 +131,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
   }, [search, workspace?.cwd]);
 
   useEffect(() => {
-    if (!workspace?.git) {
+    if (!workspace?.git || !operationTrusted(workspace)) {
       setWorktrees([]);
       return;
     }
@@ -178,7 +182,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
       setError(result.error || t('workspace.invalid'));
       return;
     }
-    if (!result.data.trusted) {
+    if (!operationTrusted(result.data)) {
       setPickerOpen(false);
       setPendingWorkspace(result.data);
       return;
@@ -194,13 +198,17 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
       setError(trust.error || t('workspace.trustFailed'));
       return;
     }
-    await activateWorkspace({ ...pendingWorkspace, trusted: true });
+    await activateWorkspace({ ...pendingWorkspace, trusted: true, operationTrusted: true });
   };
 
   const switchWorktree = async (cwd: string) => {
     const result = await validateWorkspace(cwd);
     if (!result.success || !result.data) {
       setError(result.error || t('workspace.invalid'));
+      return;
+    }
+    if (!operationTrusted(result.data)) {
+      setPendingWorkspace(result.data);
       return;
     }
     await setWorkspace(result.data);
@@ -216,7 +224,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
     }
     const created = result.data;
     setWorktreeOpen(false);
-    if (!created.trusted) {
+    if (!operationTrusted(created)) {
       setPendingWorkspace(created);
       return;
     }
@@ -309,7 +317,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
           <span>{workspace?.name ?? t('workspace.loading')}</span>
           <small>{workspace?.git?.branch ?? workspace?.cwd ?? ''}</small>
         </button>
-        {workspace && !workspace.trusted && (
+        {workspace && !operationTrusted(workspace) && (
           <button className="trust-warning" onClick={() => {
             setError('');
             setPendingWorkspace(workspace);
@@ -317,7 +325,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
             ⚠ {t('workspace.untrusted')}
           </button>
         )}
-        {workspace?.git && (
+        {workspace?.git && operationTrusted(workspace) && (
           <div className="worktree-switcher">
             <select value={workspace.cwd} aria-label={t('workspace.worktree')}
               onChange={event => void switchWorktree(event.target.value)}>

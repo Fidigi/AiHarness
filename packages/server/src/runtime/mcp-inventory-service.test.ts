@@ -144,6 +144,52 @@ describe('McpInventoryService import persistence', () => {
     expect(await readFile(path.join(agentDir, 'mcp.json'), 'utf8')).toContain(pastedSecret);
   });
 
+  it('persists fresh-project trust with the first project import and revalidates races', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-import-service-'));
+    temporaryDirectories.push(root);
+    const agentDir = path.join(root, 'agent');
+    const project = path.join(root, 'project');
+    const racedProject = path.join(root, 'raced-project');
+    await Promise.all([mkdir(agentDir), mkdir(project), mkdir(racedProject)]);
+    const workspaceManager = new WorkspaceManager({ allowedRoots: [root], defaultCwd: project });
+    await workspaceManager.initialize();
+    const trustManager = new ProjectTrustManager(path.join(agentDir, 'trust.json'));
+    await trustManager.load();
+    const service = new McpInventoryService(agentDir, workspaceManager, trustManager);
+
+    const preview = await service.previewImport('npx public-mcp-server', 'foreign', project);
+    expect(preview.entries[0]!.scopes.project).toEqual({
+      allowed: true,
+      reasons: [],
+      confirmations: ['fresh-project-trust'],
+    });
+    const response = await service.importServer({
+      scope: 'project',
+      cwd: project,
+      revision: null,
+      trustProject: true,
+      syntax: 'foreign',
+      entryIndex: 0,
+      text: 'npx public-mcp-server',
+    });
+    expect(response.added).toEqual({ scope: 'project', name: 'public' });
+    expect(response.inventory.project).toMatchObject({
+      contentTrusted: true,
+      decision: true,
+      decisionPath: project,
+      inherited: false,
+    });
+
+    await service.previewImport('npx raced-mcp-server', 'foreign', racedProject);
+    await mkdir(path.join(racedProject, '.ai-harness'));
+    await writeFile(path.join(racedProject, '.ai-harness', 'settings.json'), '{}');
+    await expect(service.importServer({
+      scope: 'project', cwd: racedProject, revision: null, trustProject: true,
+      syntax: 'foreign', entryIndex: 0, text: 'npx raced-mcp-server',
+    })).rejects.toMatchObject({ code: 'folder-not-fresh', trustKept: false });
+    await expect(trustManager.getDecision(racedProject)).resolves.toBeUndefined();
+  });
+
   it('marks a canonical reload failure after import as uncertain', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-import-service-'));
     temporaryDirectories.push(root);
@@ -289,7 +335,7 @@ describe('McpInventoryService import preview', () => {
         },
         project: {
           allowed: false,
-          reasons: ['trust-required', 'literal-secret'],
+          reasons: ['folder-not-fresh', 'literal-secret'],
           confirmations: ['remote-host-variable'],
         },
       });
@@ -318,7 +364,7 @@ describe('McpInventoryService import preview', () => {
     }
   });
 
-  it('uses a fresh persisted trust decision before offering project scope', async () => {
+  it('offers explicit trust-plus-write only for a fresh project, then uses a persisted decision', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-preview-service-'));
     temporaryDirectories.push(root);
     const agentDir = path.join(root, 'agent');
@@ -333,9 +379,9 @@ describe('McpInventoryService import preview', () => {
 
     const before = await service.previewImport('npx public-mcp-server', 'foreign', project);
     expect(before.entries[0]!.scopes.project).toEqual({
-      allowed: false,
-      reasons: ['trust-required'],
-      confirmations: [],
+      allowed: true,
+      reasons: [],
+      confirmations: ['fresh-project-trust'],
     });
 
     const secondManager = new ProjectTrustManager(trustPath);

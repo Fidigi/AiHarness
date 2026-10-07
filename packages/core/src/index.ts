@@ -169,6 +169,8 @@ export * from './plugins/index.js';
 
 // Shared workspace security (explicit exports keep browser type-only imports tree-shakeable)
 export {
+  FRESH_PROJECT_SCAN_DEPTH,
+  FRESH_PROJECT_SCAN_MAX_DIRECTORIES,
   inspectProjectTrustResources,
   ProjectTrustManager,
   resolveProjectTrust,
@@ -177,6 +179,12 @@ export {
 } from './security/index.js';
 export type {
   DirectoryEntry,
+  FreshProjectTrustBlockReason,
+  FreshProjectTrustBreadth,
+  FreshProjectTrustBreadthKind,
+  FreshProjectTrustOptions,
+  FreshProjectTrustStatus,
+  FreshProjectTrustWriteResult,
   GitWorktree,
   ProjectTrustDecision,
   ProjectTrustDecisionEntry,

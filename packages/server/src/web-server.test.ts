@@ -250,7 +250,7 @@ describe('combined Web server', () => {
         }],
         scopes: {
           global: { allowed: false, reasons: ['name-taken'] },
-          project: { allowed: false, reasons: ['trust-required', 'literal-secret'] },
+          project: { allowed: false, reasons: ['folder-not-fresh', 'literal-secret'] },
         },
       });
       for (const value of [pastedSecret, 'HOST-VALUE-MUST-NOT-LEAK', 'PROJECT-SOURCE-MUST-NOT-LEAK', 'source-path']) {
@@ -367,6 +367,102 @@ describe('combined Web server', () => {
     } finally {
       vi.unstubAllEnvs();
       await Promise.all([rm(globalFile, { force: true }), rm(marker, { force: true })]);
+    }
+  });
+
+  it('requires explicit fresh-project trust for the first MCP write and reconciles rollback', async () => {
+    const project = path.join(webRoot, `mcp-fresh-project-${Date.now()}`);
+    const racedProject = path.join(webRoot, `mcp-raced-project-${Date.now()}`);
+    const failedProject = path.join(webRoot, `mcp-failed-project-${Date.now()}`);
+    await Promise.all([mkdir(project), mkdir(racedProject), mkdir(failedProject)]);
+    const body = (cwd: string, extra: Record<string, unknown> = {}) => JSON.stringify({
+      action: 'import',
+      scope: 'project',
+      cwd,
+      revision: null,
+      text: 'npx fresh-mcp-server',
+      syntax: 'foreign',
+      entryIndex: 0,
+      ...extra,
+    });
+    try {
+      const preview = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'npx fresh-mcp-server', cwd: project }),
+      });
+      expect(preview.status).toBe(200);
+      const previewBody = await preview.json() as {
+        entries: Array<{ scopes: { project: { allowed: boolean; reasons: string[]; confirmations: string[] } } }>;
+      };
+      expect(previewBody.entries[0]?.scopes.project).toEqual({
+        allowed: true,
+        reasons: [],
+        confirmations: ['fresh-project-trust'],
+      });
+
+      const unconfirmed = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body(project),
+      });
+      expect(unconfirmed.status).toBe(403);
+      expect(await unconfirmed.json()).toMatchObject({ code: 'trust-required' });
+
+      const invalidConfirmation = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: body(project, { trustProject: false }),
+      });
+      expect(invalidConfirmation.status).toBe(400);
+      expect(await invalidConfirmation.json()).toMatchObject({ code: 'invalid-request' });
+
+      const imported = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: body(project, { trustProject: true }),
+      });
+      expect(imported.status).toBe(200);
+      expect(await imported.json()).toMatchObject({
+        added: { scope: 'project', name: 'fresh' },
+        inventory: { project: { contentTrusted: true, decision: true, decisionPath: project } },
+      });
+      expect(await readFile(path.join(project, '.ai-harness', 'mcp.json'), 'utf8'))
+        .toContain('fresh-mcp-server');
+      const validated = await fetch(`${baseUrl}/api/workspaces/validate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: project }),
+      });
+      expect(await validated.json()).toMatchObject({ trusted: true, operationTrusted: true });
+
+      await mkdir(path.join(racedProject, '.ai-harness'));
+      await writeFile(path.join(racedProject, '.ai-harness', 'settings.json'), '{}');
+      const raced = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: body(racedProject, { trustProject: true }),
+      });
+      expect(raced.status).toBe(409);
+      expect(await raced.json()).toMatchObject({ code: 'folder-not-fresh', uncertain: false });
+      expect(await fetch(`${baseUrl}/api/workspaces/trust?cwd=${encodeURIComponent(racedProject)}`)
+        .then(response => response.json())).toMatchObject({ decision: null, operationTrusted: false });
+
+      await mkdir(path.join(failedProject, '.ai-harness'));
+      await mkdir(path.join(failedProject, '.ai-harness', 'mcp.json.lock'));
+      const failed = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: body(failedProject, { trustProject: true }),
+      });
+      expect(failed.status).toBe(409);
+      expect(await failed.json()).toMatchObject({ code: 'unsafe-path', uncertain: false });
+      expect(await fetch(`${baseUrl}/api/workspaces/trust?cwd=${encodeURIComponent(failedProject)}`)
+        .then(response => response.json())).toMatchObject({ decision: null, operationTrusted: false });
+
+      const broadPreview = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'npx broad-mcp-server', cwd: webRoot }),
+      });
+      const broadPreviewBody = await broadPreview.json() as {
+        entries: Array<{ scopes: { project: { reasons: string[] } } }>;
+      };
+      expect(broadPreviewBody.entries[0]?.scopes.project.reasons).toEqual(['trust-too-broad']);
+    } finally {
+      await Promise.all([project, racedProject, failedProject]
+        .map(directory => rm(directory, { recursive: true, force: true })));
     }
   });
 

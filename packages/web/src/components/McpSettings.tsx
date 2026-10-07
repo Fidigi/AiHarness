@@ -52,6 +52,12 @@ interface PendingRemoval {
   revision: string | null;
 }
 
+interface PendingControlFocus {
+  kind: 'edit' | 'exposure';
+  scope: McpConfigScope;
+  name: string;
+}
+
 function serverState(server: McpServerInventoryEntry): 'invalid' | 'shadowed' | 'disabled' | 'configured' {
   if (!server.valid) return 'invalid';
   if (server.shadowedByProject) return 'shadowed';
@@ -81,7 +87,7 @@ function ServerCard({
   server: McpServerInventoryEntry;
   disabled: boolean;
   onToggle: () => void;
-  onExposureChange: (exposure: McpExposure, trigger: HTMLSelectElement) => void;
+  onExposureChange: (exposure: McpExposure) => void;
   onEdit: (trigger: HTMLButtonElement) => void;
   onRemove: (trigger: HTMLButtonElement) => void;
 }) {
@@ -114,8 +120,9 @@ function ServerCard({
       {server.valid ? <label className="mcp-exposure-control">
         <span>{t('settings.mcp.exposureLabel')}</span>
         <select value={server.exposure} disabled={disabled}
+          data-mcp-exposure-key={editKey(server.scope, server.name)}
           aria-label={t('settings.mcp.exposureNamed', { name: server.name })}
-          onChange={event => onExposureChange(event.currentTarget.value as McpExposure, event.currentTarget)}>
+          onChange={event => onExposureChange(event.currentTarget.value as McpExposure)}>
           {(['direct', 'codemode', 'deferred'] as const).map(exposure => (
             <option value={exposure} key={exposure}>{t(`settings.mcp.exposure.${exposure}`)}</option>
           ))}
@@ -147,6 +154,7 @@ function ServerCard({
 export function McpSettings() {
   const { t } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
+  const refreshWorkspace = useSessionStore(state => state.refreshWorkspace);
   const [inventory, setInventory] = useState<McpConfigInventory>();
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string>();
@@ -156,6 +164,7 @@ export function McpSettings() {
   const [undo, setUndo] = useState<UndoState>();
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval>();
   const [replacement, setReplacement] = useState<McpReplaceTarget>();
+  const [pendingControlFocus, setPendingControlFocus] = useState<PendingControlFocus>();
   const inventoryRequest = useRef(0);
   const actionRequest = useRef(0);
   const removalReturnFocus = useRef<HTMLButtonElement | null>(null);
@@ -177,6 +186,10 @@ export function McpSettings() {
     setLoading(false);
   }, [workspace?.cwd]);
 
+  const reloadCanonical = useCallback(async (): Promise<void> => {
+    await Promise.all([load(true), refreshWorkspace()]);
+  }, [load, refreshWorkspace]);
+
   useEffect(() => {
     actionRequest.current++;
     setBusy(undefined);
@@ -185,12 +198,13 @@ export function McpSettings() {
     setUndo(undefined);
     setPendingRemoval(undefined);
     setReplacement(undefined);
+    setPendingControlFocus(undefined);
     void load(true);
     return () => {
       inventoryRequest.current++;
       actionRequest.current++;
     };
-  }, [load, workspace?.trusted]);
+  }, [load, workspace?.operationTrusted, workspace?.trusted]);
 
   useEffect(() => {
     if (!undo) return;
@@ -211,6 +225,34 @@ export function McpSettings() {
     () => { if (!busy) closeRemoval(true); },
     removalReturnFocus,
   );
+
+  useEffect(() => {
+    if (!pendingControlFocus || busy || importWriting || replacement || loading) return;
+    const target = pendingControlFocus;
+    const attribute = target.kind === 'edit' ? 'data-mcp-edit-key' : 'data-mcp-exposure-key';
+    let attempts = 30;
+    let frame = 0;
+    const tryFocus = (): void => {
+      const next = sectionRef.current?.querySelector<HTMLButtonElement | HTMLSelectElement>(
+        `[${attribute}="${editKey(target.scope, target.name)}"]`,
+      );
+      if (next && !next.disabled) {
+        next.focus();
+        setPendingControlFocus(current => current === target ? undefined : current);
+        return;
+      }
+      attempts--;
+      if (attempts > 0) {
+        frame = window.requestAnimationFrame(tryFocus);
+        return;
+      }
+      const fallback = editReturnFocus.current?.isConnected ? editReturnFocus.current : refreshButtonRef.current;
+      fallback?.focus();
+      setPendingControlFocus(current => current === target ? undefined : current);
+    };
+    frame = window.requestAnimationFrame(tryFocus);
+    return () => window.cancelAnimationFrame(frame);
+  }, [busy, importWriting, inventory, loading, pendingControlFocus, replacement]);
 
   const reconcileFailure = async (result: McpActionResponse): Promise<void> => {
     setFeedback(result.uncertain ? 'uncertain' : 'error');
@@ -246,7 +288,6 @@ export function McpSettings() {
   const setExposure = async (
     server: McpServerInventoryEntry,
     exposure: McpExposure,
-    trigger: HTMLSelectElement,
   ): Promise<void> => {
     if (!inventory || busy || exposure === server.exposure) return;
     const request = ++actionRequest.current;
@@ -270,9 +311,7 @@ export function McpSettings() {
     }
     if (request === actionRequest.current) {
       setBusy(undefined);
-      window.requestAnimationFrame(() => {
-        if (trigger.isConnected) trigger.focus();
-      });
+      setPendingControlFocus({ kind: 'exposure', scope: server.scope, name: server.name });
     }
   };
 
@@ -330,16 +369,11 @@ export function McpSettings() {
     if (outcome.status === 'success') setFeedback('updated');
     else if (outcome.status === 'failure') setFeedback(outcome.uncertain ? 'uncertain' : 'error');
     const focusName = outcome.status === 'success' ? outcome.name : selected?.name;
-    window.requestAnimationFrame(() => {
-      const next = selected && focusName
-        ? sectionRef.current?.querySelector<HTMLButtonElement>(
-          `[data-mcp-edit-key="${editKey(selected.scope, focusName)}"]`,
-        )
-        : undefined;
-      if (next) next.focus();
-      else if (editReturnFocus.current?.isConnected) editReturnFocus.current.focus();
-      else refreshButtonRef.current?.focus();
-    });
+    if (selected && focusName) {
+      setPendingControlFocus({ kind: 'edit', scope: selected.scope, name: focusName });
+    } else {
+      refreshButtonRef.current?.focus();
+    }
   };
 
   const projectFile = inventory?.files.find(file => file.scope === 'project');
@@ -378,12 +412,15 @@ export function McpSettings() {
       {inventory.project.trustError ? t('settings.mcp.trustUnavailable') : t('settings.mcp.untrustedProject')}
     </p>}
     <McpImportPreview
-      key={`${workspace?.cwd ?? 'global'}:${workspace?.trusted ? 'trusted' : 'untrusted'}`}
+      key={`${workspace?.cwd ?? 'global'}:${(workspace?.operationTrusted ?? workspace?.trusted) ? 'allowed' : 'blocked'}`}
       cwd={workspace?.cwd}
       disabled={Boolean(busy)}
       inventory={inventory}
-      onInventory={setInventory}
-      onReload={() => load(true)}
+      onInventory={next => {
+        setInventory(next);
+        void refreshWorkspace();
+      }}
+      onReload={reloadCanonical}
       onWritingChange={setImportWriting}
       replacement={replacement}
       onReplacementOutcome={finishReplacement}
@@ -415,7 +452,7 @@ export function McpSettings() {
               disabled={controlsDisabled}
               key={`${server.scope}:${server.name}:${index}`}
               onToggle={() => void setEnabled(server.scope, [server.name], !server.enabled, `row:${server.scope}:${server.name}`)}
-              onExposureChange={(exposure, trigger) => void setExposure(server, exposure, trigger)}
+              onExposureChange={exposure => void setExposure(server, exposure)}
               onEdit={trigger => {
                 const file = fileForScope(inventory, server.scope);
                 if (!file?.revision || controlsDisabled) return;

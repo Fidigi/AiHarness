@@ -65,6 +65,8 @@ export interface SessionState {
   createSession: (title?: string) => void;
   createRemoteSession: (title?: string) => Promise<string | undefined>;
   hydrateWorkspace: (requestedCwd?: string) => Promise<void>;
+  /** Revalidate the selected workspace without optimistic trust changes or fallback selection. */
+  refreshWorkspace: () => Promise<void>;
   setWorkspace: (workspace: WorkspaceDescriptor) => Promise<void>;
   hydrateSessions: () => Promise<void>;
   replaceSession: (localId: string, session: ApiSession) => void;
@@ -609,6 +611,21 @@ export const useSessionStore = create<AppState>((set, get) => ({
     const recent = [fallback.data, ...stored.recent.filter(item => item.cwd !== fallback.data!.cwd)].slice(0, 8);
     set({ workspace: fallback.data, recentWorkspaces: recent });
     writeWorkspaceState(fallback.data, recent);
+  },
+
+  refreshWorkspace: async () => {
+    const workspace = get().workspace;
+    if (!workspace) return;
+    const sequence = ++workspaceHydrationSequence;
+    const refreshed = await validateWorkspace(workspace.cwd);
+    if (sequence !== workspaceHydrationSequence || !refreshed.success || !refreshed.data
+      || get().workspace?.cwd !== workspace.cwd) return;
+    const recent = [
+      refreshed.data,
+      ...get().recentWorkspaces.filter(item => item.cwd !== refreshed.data!.cwd),
+    ].slice(0, 8);
+    set({ workspace: refreshed.data, recentWorkspaces: recent });
+    writeWorkspaceState(refreshed.data, recent);
   },
 
   setWorkspace: async workspace => {

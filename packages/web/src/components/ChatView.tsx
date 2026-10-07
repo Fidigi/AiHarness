@@ -351,7 +351,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   useEffect(() => () => compactionController.current?.abort(), [currentSession?.id]);
 
   useEffect(() => {
-    if (!workspace?.trusted) {
+    if (!(workspace?.operationTrusted ?? workspace?.trusted)) {
       setFileIndex({ items: [], truncated: false });
       return;
     }
@@ -367,10 +367,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       });
     });
     return () => controller.abort();
-  }, [workspace?.cwd, workspace?.trusted]);
+  }, [workspace?.cwd, workspace?.operationTrusted, workspace?.trusted]);
 
   useEffect(() => {
-    if (mentionQuery === undefined || !workspace?.trusted || !fileIndex.truncated || !mentionQuery) {
+    if (mentionQuery === undefined || !(workspace?.operationTrusted ?? workspace?.trusted) || !fileIndex.truncated || !mentionQuery) {
       setRemoteFileSuggestions([]);
       return;
     }
@@ -388,7 +388,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [fileIndex.truncated, mentionQuery, workspace?.cwd, workspace?.trusted]);
+  }, [fileIndex.truncated, mentionQuery, workspace?.cwd, workspace?.operationTrusted, workspace?.trusted]);
 
   useLayoutEffect(() => {
     const sessionId = currentSession?.id;
@@ -830,7 +830,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   ).slice(0, 10);
   const suggestionCount = paletteResults.length || fileResults.length;
   const busyCompacting = compacting || automaticCompacting;
-  const canSend = Boolean((input.trim() || attachments.length) && currentSession && workspace && !starting && !busyCompacting);
+  const workspaceOperationTrusted = Boolean(workspace
+    && (workspace.operationTrusted ?? workspace.trusted));
+  const canSend = Boolean((input.trim() || attachments.length) && currentSession && workspaceOperationTrusted
+    && !starting && !busyCompacting);
   const status = busyCompacting
     ? t('chat.status.compacting')
     : starting

@@ -2,7 +2,11 @@ import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { lstat, mkdir, open, realpath, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
-import type { ProjectTrustManager } from '../security/project-trust.js';
+import type {
+  FreshProjectTrustBlockReason,
+  FreshProjectTrustOptions,
+  ProjectTrustManager,
+} from '../security/project-trust.js';
 
 /** Configuration bodies are bounded before parsing, including user-owned global configuration. */
 export const MCP_CONFIG_MAX_BYTES = 1024 * 1024;
@@ -82,6 +86,10 @@ export interface McpServerInventoryEntry {
   problems: string[];
 }
 
+export type McpFreshProjectTrustStatus =
+  | { allowed: true }
+  | { allowed: false; reason: FreshProjectTrustBlockReason };
+
 export interface McpProjectInventory {
   cwd: string;
   /** Project content is readable only after an effective persisted allow decision. */
@@ -91,6 +99,8 @@ export interface McpProjectInventory {
   decisionPath?: string;
   inherited: boolean;
   trustError: boolean;
+  /** Eligibility for one explicit fresh-folder trust-plus-first-write transaction. */
+  trustAndWrite?: McpFreshProjectTrustStatus;
 }
 
 export interface McpConfigInventory {
@@ -103,6 +113,8 @@ export interface InspectMcpConfigOptions {
   agentDir: string;
   cwd?: string;
   trustManager?: ProjectTrustManager;
+  /** Omit to inspect inventory without offering a combined trust-plus-write step. */
+  freshProjectTrust?: FreshProjectTrustOptions;
 }
 
 interface ParsedEntry {
@@ -118,6 +130,11 @@ interface FileReadResult {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function* withProtectedPath(first: string, rest?: Iterable<string>): Iterable<string> {
+  yield first;
+  if (rest) yield* rest;
 }
 
 function problem(reason: McpConfigProblemReason, message: string): McpConfigProblem {
@@ -726,6 +743,20 @@ export async function inspectMcpConfig(
       ...(status?.decisionPath ? { decisionPath: status.decisionPath } : {}),
       inherited: status?.inherited ?? false,
       trustError,
+      ...(options.freshProjectTrust ? {
+        trustAndWrite: options.trustManager
+          ? await (async (): Promise<McpFreshProjectTrustStatus> => {
+            const fresh = await options.trustManager!.getFreshProjectTrustStatus(cwd, {
+              ...options.freshProjectTrust,
+              protectedPaths: withProtectedPath(
+                options.agentDir,
+                options.freshProjectTrust!.protectedPaths,
+              ),
+            });
+            return fresh.allowed ? fresh : { allowed: false, reason: fresh.reason };
+          })()
+          : { allowed: false as const, reason: 'trust-unavailable' as const },
+      } : {}),
     };
     const currentProjectRead = await readProjectFile(cwd, contentTrusted, trustError);
     projectRead = currentProjectRead;
@@ -750,8 +781,10 @@ export async function inspectMcpConfig(
 }
 
 export type McpConfigMutationErrorCode =
+  | 'folder-not-fresh'
   | 'invalid-request'
   | 'trust-required'
+  | 'trust-too-broad'
   | 'trust-unavailable'
   | 'unsafe-path'
   | 'invalid-config'
@@ -771,12 +804,20 @@ export type McpConfigMutationErrorCode =
 export class McpConfigMutationError extends Error {
   readonly code: McpConfigMutationErrorCode;
   readonly uncertain: boolean;
+  /** A combined fresh-project write failed and its exact allow could not be removed. */
+  readonly trustKept: boolean;
 
-  constructor(code: McpConfigMutationErrorCode, message: string, uncertain = false) {
+  constructor(
+    code: McpConfigMutationErrorCode,
+    message: string,
+    uncertain = false,
+    trustKept = false,
+  ) {
     super(message);
     this.name = 'McpConfigMutationError';
     this.code = code;
     this.uncertain = uncertain;
+    this.trustKept = trustKept;
   }
 }
 
@@ -825,6 +866,8 @@ export interface McpServerRemovalMutation extends McpConfigMutationTarget {
 export interface McpServerInsertionMutation extends McpConfigMutationTarget {
   name: string;
   entry: unknown;
+  /** Internal fresh-project guard run only after the MCP lock is held. */
+  beforeLockedRead?: () => Promise<void>;
 }
 
 export interface McpServerInsertionResult {
@@ -892,8 +935,9 @@ function mutationError(
   code: McpConfigMutationErrorCode,
   message: string,
   uncertain = false,
+  trustKept = false,
 ): McpConfigMutationError {
-  return new McpConfigMutationError(code, message, uncertain);
+  return new McpConfigMutationError(code, message, uncertain, trustKept);
 }
 
 function validateExpectedRevision(value: unknown): asserts value is string | null {
@@ -1200,6 +1244,7 @@ function classifyReadFailure(file: McpConfigFileInventory): McpConfigMutationErr
 async function mutateMcpConfig<T>(
   options: McpConfigMutationTarget,
   apply: (config: MutableConfig) => { changed: boolean; value: T },
+  beforeLockedRead?: () => Promise<void>,
 ): Promise<MutationResult<T>> {
   const target = await resolveMutationPath(options);
   const release = await acquireMcpConfigLock(target.filePath);
@@ -1207,6 +1252,7 @@ async function mutateMcpConfig<T>(
     if (target.scope === 'project') {
       await requireProjectMutationTrust(target.cwd!, options.trustManager);
     }
+    await beforeLockedRead?.();
     const parent = await lstat(target.directory);
     if (parent.isSymbolicLink() || !parent.isDirectory()) {
       throw mutationError('unsafe-path', 'The MCP configuration directory is not safe.');
@@ -1339,7 +1385,7 @@ export async function insertMcpServerEntry(
     config.root.mcpServers = inserted;
     config.servers = inserted;
     return { changed: true, value: undefined };
-  });
+  }, options.beforeLockedRead);
   if (!result.revision) throw mutationError('write-failed', 'The MCP configuration revision is unavailable.', true);
   return { revision: result.revision };
 }

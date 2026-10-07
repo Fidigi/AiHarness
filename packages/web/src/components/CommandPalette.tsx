@@ -57,7 +57,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
   useFocusTrap(true, dialog, onClose);
 
   useEffect(() => {
-    if (!workspace?.trusted || query.trim().length < 1) {
+    if (!(workspace?.operationTrusted ?? workspace?.trusted) || query.trim().length < 1) {
       setFiles([]);
       return;
     }
@@ -66,7 +66,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       if (!controller.signal.aborted && result.success && result.data) setFiles(result.data.files);
     }), 120);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [query, workspace?.cwd, workspace?.trusted]);
+  }, [query, workspace?.cwd, workspace?.operationTrusted, workspace?.trusted]);
 
   const needle = query.trim().toLocaleLowerCase();
   const entries: PaletteEntry[] = [

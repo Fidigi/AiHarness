@@ -10,6 +10,14 @@ function withOperationTrust(status: ProjectTrustStatus): ProjectTrustStatus & { 
   };
 }
 
+async function describeWorkspace(services: RuntimeServices, cwd: string) {
+  const status = await services.trustManager.getStatus(cwd);
+  return {
+    ...await services.workspaceManager.describe(cwd, status.trusted),
+    operationTrusted: status.decision === true && status.decisionError === undefined,
+  };
+}
+
 export function createWorkspaceRouter(servicesPromise: Promise<RuntimeServices>): Router {
   const router = Router();
 
@@ -26,7 +34,7 @@ export function createWorkspaceRouter(servicesPromise: Promise<RuntimeServices>)
     try {
       const services = await servicesPromise;
       const cwd = await services.workspaceManager.getDefaultCwd();
-      response.json(await services.workspaceManager.describe(cwd, await services.trustManager.isTrusted(cwd)));
+      response.json(await describeWorkspace(services, cwd));
     } catch (error) {
       next(error);
     }
@@ -40,7 +48,7 @@ export function createWorkspaceRouter(servicesPromise: Promise<RuntimeServices>)
         return;
       }
       const cwd = await services.workspaceManager.resolve(request.body.cwd, { kind: 'directory' });
-      response.json(await services.workspaceManager.describe(cwd, await services.trustManager.isTrusted(cwd)));
+      response.json(await describeWorkspace(services, cwd));
     } catch (error) {
       next(error);
     }
@@ -92,10 +100,7 @@ export function createWorkspaceRouter(servicesPromise: Promise<RuntimeServices>)
         startPoint: typeof startPoint === 'string' ? startPoint : undefined,
       });
       const createdPath = await services.workspaceManager.resolve(path, { kind: 'directory' });
-      response.status(201).json(await services.workspaceManager.describe(
-        createdPath,
-        await services.trustManager.isTrusted(createdPath),
-      ));
+      response.status(201).json(await describeWorkspace(services, createdPath));
     } catch (error) {
       next(error);
     }

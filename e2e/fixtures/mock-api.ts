@@ -119,6 +119,7 @@ export interface MockApiOptions {
     error?: { code: 'disabled' | 'unavailable' | 'invalid-response'; message: string };
   };
   workspaceTrusted?: boolean;
+  workspaceOperationTrusted?: boolean;
   indexedFiles?: string[];
   indexedDirectories?: string[];
   fileIndexTruncated?: boolean;
@@ -400,7 +401,11 @@ export function mockSession(
 }
 
 export async function installMockApi(page: Page, options: MockApiOptions = {}): Promise<MockApiController> {
-  const workspace = { ...WORKSPACE, trusted: options.workspaceTrusted ?? true };
+  const workspace = {
+    ...WORKSPACE,
+    trusted: options.workspaceTrusted ?? true,
+    operationTrusted: options.workspaceOperationTrusted ?? options.workspaceTrusted ?? true,
+  };
   const workspaceFiles = structuredClone(options.workspaceFiles ?? []);
   const indexedFiles = options.indexedFiles ?? workspaceFiles.map(file => file.path);
   const indexedDirectories = options.indexedDirectories ?? [];
@@ -416,8 +421,9 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     ],
     servers: [],
     project: {
-      cwd: workspace.cwd, contentTrusted: workspace.trusted, requiresTrust: false,
-      decision: workspace.trusted ? true : null, inherited: false, trustError: false,
+      cwd: workspace.cwd, contentTrusted: workspace.operationTrusted, requiresTrust: false,
+      decision: workspace.operationTrusted ? true : null, inherited: false, trustError: false,
+      ...(!workspace.operationTrusted ? { trustAndWrite: { allowed: true as const } } : {}),
     },
   } satisfies McpConfigInventory);
   const mcpImportPreview = structuredClone(options.mcpImportPreview ?? {
@@ -531,6 +537,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       cwd,
       name: cwd.split('/').filter(Boolean).at(-1) || cwd,
       trusted: workspace.trusted,
+      operationTrusted: workspace.operationTrusted,
       git: { root: workspace.cwd, branch: worktree?.branch ?? 'main', detached: worktree?.detached ?? false },
     };
   };
@@ -833,6 +840,19 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
           file.exists = true;
           file.contentRead = true;
           file.problems = [];
+        }
+        if (scope === 'project' && input.trustProject === true && mcpConfig.project) {
+          workspace.trusted = true;
+          workspace.operationTrusted = true;
+          mcpConfig.project = {
+            ...mcpConfig.project,
+            contentTrusted: true,
+            requiresTrust: true,
+            decision: true,
+            decisionPath: workspace.cwd,
+            inherited: false,
+            trustError: false,
+          };
         }
         bumpMcpRevision(scope);
         reconcileMcpShadowing();
@@ -1266,6 +1286,17 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     if (url.pathname === '/api/workspaces/trust') {
       const input = (body as { cwd?: string } | undefined)?.cwd ?? url.searchParams.get('cwd');
       workspace.trusted = method !== 'DELETE';
+      workspace.operationTrusted = method !== 'DELETE';
+      if (mcpConfig.project) {
+        mcpConfig.project = {
+          ...mcpConfig.project,
+          contentTrusted: workspace.operationTrusted,
+          decision: workspace.operationTrusted ? true : false,
+          decisionPath: workspace.cwd,
+          inherited: false,
+          trustError: false,
+        };
+      }
       skillCatalog = {
         ...skillCatalog,
         projectTrusted: workspace.trusted,
@@ -1293,7 +1324,11 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
           ? trustedPluginDefaults.standaloneExtensions
           : pluginCatalog.standaloneExtensions.filter(extension => extension.scope === 'global'),
       });
-      await fulfillJson(route, { cwd: normalizeWorkspacePath(input), trusted: workspace.trusted }); return;
+      await fulfillJson(route, {
+        cwd: normalizeWorkspacePath(input),
+        trusted: workspace.trusted,
+        operationTrusted: workspace.operationTrusted,
+      }); return;
     }
 
     if (url.pathname === '/api/files' && method === 'GET') {

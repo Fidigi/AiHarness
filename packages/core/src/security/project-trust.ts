@@ -3,6 +3,7 @@ import {
   lstat,
   mkdir,
   open,
+  opendir,
   realpath,
   rename,
   rm,
@@ -20,6 +21,11 @@ const MAX_ANCESTOR_DIRECTORIES = 64;
 const LOCK_ATTEMPTS = 100;
 const LOCK_RETRY_MS = 20;
 const STALE_LOCK_MS = 30_000;
+const TRUST_LOCK_HEARTBEAT_MS = 5_000;
+export const FRESH_PROJECT_SCAN_DEPTH = 4;
+export const FRESH_PROJECT_SCAN_MAX_DIRECTORIES = 2_000;
+const FRESH_PROJECT_SCAN_SKIP = new Set(['.agents', '.ai-harness', '.git', 'node_modules']);
+const MAX_FRESH_PROJECT_PATHS = 256;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 
 const PROJECT_CONFIG_RESOURCES = [
@@ -92,6 +98,57 @@ export interface ProjectTrustPromptRequest {
   status: ProjectTrustStatus;
   parentPath?: string;
 }
+
+export type FreshProjectTrustBlockReason =
+  | 'folder-not-fresh'
+  | 'trust-too-broad'
+  | 'trust-unavailable';
+
+export type FreshProjectTrustBreadthKind =
+  | 'contains-home'
+  | 'contains-known-folder'
+  | 'contains-project'
+  | 'contains-protected-path'
+  | 'home'
+  | 'root'
+  | 'scan-limit'
+  | 'scan-unreadable';
+
+export interface FreshProjectTrustBreadth {
+  kind: FreshProjectTrustBreadthKind;
+  path: string;
+}
+
+export type FreshProjectTrustStatus =
+  | { allowed: true }
+  | {
+    allowed: false;
+    reason: FreshProjectTrustBlockReason;
+    breadth?: FreshProjectTrustBreadth;
+  };
+
+export interface FreshProjectTrustOptions {
+  /** Other workspace/session roots that must not silently inherit this allow. */
+  knownFolders?: Iterable<string>;
+  /** Data, credential, or runtime roots that must never inherit this allow. */
+  protectedPaths?: Iterable<string>;
+  homeDir?: string;
+}
+
+export type FreshProjectTrustWriteResult<T> =
+  | { ok: true; value: T }
+  | {
+    ok: false;
+    reason: FreshProjectTrustBlockReason;
+    breadth?: FreshProjectTrustBreadth;
+  }
+  | {
+    ok: false;
+    reason: 'write-failed';
+    writeError: unknown;
+    rollbackError?: unknown;
+    trustKept: boolean;
+  };
 
 export interface ResolveProjectTrustOptions {
   cwd: string;
@@ -265,6 +322,209 @@ export async function inspectProjectTrustResources(
   };
 }
 
+async function existingCanonicalDirectory(value: string): Promise<string> {
+  if (!value || Buffer.byteLength(value, 'utf8') > MAX_TRUST_PATH_BYTES
+    || CONTROL_CHARACTERS.test(value)) {
+    throw new Error('Fresh project trust requires a bounded directory path.');
+  }
+  const canonical = await realpath(path.resolve(value));
+  const info = await lstat(canonical);
+  if (!info.isDirectory()) throw new Error('Fresh project trust requires an existing directory.');
+  return canonical;
+}
+
+async function somethingAt(candidate: string): Promise<boolean> {
+  try {
+    await lstat(candidate);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ENOENT';
+  }
+}
+
+/** Project-owned metadata in one directory that a parent allow would cover. */
+async function hasOwnTrustRelevantEntries(directory: string): Promise<boolean> {
+  const configDirectory = path.join(directory, '.ai-harness');
+  try {
+    const info = await lstat(configDirectory);
+    if (info.isSymbolicLink() || !info.isDirectory()) return true;
+    for (const [name] of PROJECT_CONFIG_RESOURCES) {
+      if (await somethingAt(path.join(configDirectory, name))) return true;
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return true;
+  }
+
+  if (await somethingAt(path.join(directory, '.agents', 'skills'))
+    || await somethingAt(path.join(directory, 'prompts'))) return true;
+  for (const name of CONTEXT_FILE_NAMES) {
+    if (await somethingAt(path.join(directory, name))) return true;
+  }
+  return false;
+}
+
+function boundedPathValues(values: Iterable<string> | undefined): string[] {
+  if (!values) return [];
+  const output: string[] = [];
+  for (const value of values) {
+    if (typeof value !== 'string' || !value
+      || Buffer.byteLength(value, 'utf8') > MAX_TRUST_PATH_BYTES
+      || CONTROL_CHARACTERS.test(value)) {
+      throw new Error('Fresh project trust paths must be bounded strings.');
+    }
+    output.push(value);
+    if (output.length > MAX_FRESH_PROJECT_PATHS) {
+      throw new Error('Fresh project trust has too many protected paths.');
+    }
+  }
+  return output;
+}
+
+async function boundedCanonicalPaths(values: Iterable<string> | undefined): Promise<string[]> {
+  const output: string[] = [];
+  for (const value of boundedPathValues(values)) output.push(await canonicalPath(value));
+  return [...new Set(output)];
+}
+
+interface FreshScanIdentity {
+  dev: number;
+  ino: number;
+  kind: 'directory' | 'file';
+  mtimeMs: number;
+  ctimeMs: number;
+}
+
+interface FreshScanDirectory {
+  path: string;
+  depth: number;
+  identity: FreshScanIdentity;
+}
+
+function freshScanIdentity(info: Awaited<ReturnType<typeof lstat>>): FreshScanIdentity | undefined {
+  if (info.isSymbolicLink()) return undefined;
+  const kind = info.isDirectory() ? 'directory' : (info.isFile() ? 'file' : undefined);
+  return kind ? {
+    dev: Number(info.dev),
+    ino: Number(info.ino),
+    kind,
+    mtimeMs: Number(info.mtimeMs),
+    ctimeMs: Number(info.ctimeMs),
+  } : undefined;
+}
+
+function sameFreshScanIdentity(
+  info: Awaited<ReturnType<typeof lstat>>,
+  expected: FreshScanIdentity,
+): boolean {
+  const current = freshScanIdentity(info);
+  return Boolean(current
+    && current.dev === expected.dev
+    && current.ino === expected.ino
+    && current.kind === expected.kind
+    && current.mtimeMs === expected.mtimeMs
+    && current.ctimeMs === expected.ctimeMs);
+}
+
+async function findNestedTrustProject(
+  cwd: string,
+  decisions: ReadonlyMap<string, boolean>,
+): Promise<FreshProjectTrustBreadth | undefined> {
+  const rootInfo = await lstat(cwd).catch(() => undefined);
+  const rootIdentity = rootInfo && freshScanIdentity(rootInfo);
+  if (!rootInfo || !rootIdentity || rootIdentity.kind !== 'directory') {
+    return { kind: 'scan-unreadable', path: cwd };
+  }
+
+  let directoriesRead = 0;
+  let pathsInspected = 0;
+  const observed = new Map<string, FreshScanIdentity>([[cwd, rootIdentity]]);
+  let level: FreshScanDirectory[] = [{ path: cwd, depth: 0, identity: rootIdentity }];
+  while (level.length > 0) {
+    const next: FreshScanDirectory[] = [];
+    for (const candidate of level) {
+      const before = await lstat(candidate.path).catch(() => undefined);
+      if (!before || !sameFreshScanIdentity(before, candidate.identity)) {
+        return { kind: 'scan-unreadable', path: candidate.path };
+      }
+      const protectingDecision = candidate.depth > 0
+        ? nearestDecision(decisions, candidate.path)
+        : undefined;
+      if (protectingDecision && protectingDecision.path !== cwd) continue;
+      if (candidate.depth > 0 && await hasOwnTrustRelevantEntries(candidate.path)) {
+        return { kind: 'contains-project', path: candidate.path };
+      }
+      if (directoriesRead >= FRESH_PROJECT_SCAN_MAX_DIRECTORIES) {
+        return { kind: 'scan-limit', path: cwd };
+      }
+      directoriesRead++;
+
+      try {
+        const directory = await opendir(candidate.path);
+        for await (const entry of directory) {
+          pathsInspected++;
+          if (pathsInspected > MAX_FRESH_PROJECT_PATHS) {
+            return { kind: 'scan-limit', path: cwd };
+          }
+          const entryPath = path.join(candidate.path, entry.name);
+          const info = await lstat(entryPath).catch(() => undefined);
+          const identity = info && freshScanIdentity(info);
+          if (!info || !identity) return { kind: 'scan-unreadable', path: entryPath };
+          observed.set(entryPath, identity);
+          if (identity.kind !== 'directory' || FRESH_PROJECT_SCAN_SKIP.has(entry.name)) continue;
+          if (candidate.depth >= FRESH_PROJECT_SCAN_DEPTH) {
+            return { kind: 'scan-limit', path: entryPath };
+          }
+          next.push({ path: entryPath, depth: candidate.depth + 1, identity });
+        }
+      } catch {
+        return { kind: 'scan-unreadable', path: candidate.path };
+      }
+
+      const after = await lstat(candidate.path).catch(() => undefined);
+      if (!after || !sameFreshScanIdentity(after, candidate.identity)) {
+        return { kind: 'scan-unreadable', path: candidate.path };
+      }
+    }
+    level = next;
+  }
+
+  for (const [observedPath, identity] of observed) {
+    const current = await lstat(observedPath).catch(() => undefined);
+    if (!current || !sameFreshScanIdentity(current, identity)) {
+      return { kind: 'scan-unreadable', path: observedPath };
+    }
+  }
+  return undefined;
+}
+
+async function freshProjectTrustBreadth(
+  cwd: string,
+  trustFile: string,
+  options: FreshProjectTrustOptions,
+  decisions: ReadonlyMap<string, boolean>,
+): Promise<FreshProjectTrustBreadth | undefined> {
+  if (path.dirname(cwd) === cwd) return { kind: 'root', path: cwd };
+  const home = await canonicalPath(options.homeDir ?? os.homedir());
+  if (cwd === home) return { kind: 'home', path: cwd };
+  if (insideOrEqual(cwd, home)) return { kind: 'contains-home', path: home };
+
+  const protectedPaths = await boundedCanonicalPaths([
+    path.dirname(trustFile),
+    ...await boundedCanonicalPaths(options.protectedPaths),
+  ]);
+  for (const protectedPath of protectedPaths) {
+    if (insideOrEqual(cwd, protectedPath)) {
+      return { kind: 'contains-protected-path', path: protectedPath };
+    }
+  }
+  for (const knownFolder of await boundedCanonicalPaths(options.knownFolders)) {
+    if (knownFolder !== cwd && insideOrEqual(cwd, knownFolder)) {
+      return { kind: 'contains-known-folder', path: knownFolder };
+    }
+  }
+  return findNestedTrustProject(cwd, decisions);
+}
+
 async function readBoundedTrustFile(filePath: string): Promise<unknown | undefined> {
   let before;
   try {
@@ -396,7 +656,13 @@ async function acquireTrustLock(filePath: string): Promise<() => Promise<void>> 
         await handle.close().catch(() => undefined);
         throw error;
       });
+      const heartbeat = setInterval(() => {
+        const now = new Date();
+        void handle.utimes(now, now).catch(() => undefined);
+      }, TRUST_LOCK_HEARTBEAT_MS);
+      heartbeat.unref?.();
       return async () => {
+        clearInterval(heartbeat);
         await handle.close().catch(() => undefined);
         try {
           const current = await lstat(lockPath);
@@ -477,6 +743,35 @@ export class ProjectTrustManager {
     };
   }
 
+  /**
+   * Whether an exact allow can be created safely as part of one first project
+   * write. This is stricter than ordinary trust: the folder must have no
+   * trust-requiring resource or effective decision, and the allow must not
+   * silently reach a broad/sensitive/nested folder.
+   */
+  async getFreshProjectTrustStatus(
+    projectPath: string,
+    options: FreshProjectTrustOptions = {},
+  ): Promise<FreshProjectTrustStatus> {
+    try {
+      const cwd = await existingCanonicalDirectory(projectPath);
+      const inspection = await inspectProjectTrustResources(cwd);
+      const snapshot = await this.readFresh();
+      if (snapshot.decisionError) return { allowed: false, reason: 'trust-unavailable' };
+      if (inspection.requiresTrust || nearestDecision(snapshot.decisions, cwd)) {
+        return { allowed: false, reason: 'folder-not-fresh' };
+      }
+      const breadth = await freshProjectTrustBreadth(cwd, this.filePath, options, snapshot.decisions);
+      if (breadth) return { allowed: false, reason: 'trust-too-broad', breadth };
+      const verifiedInspection = await inspectProjectTrustResources(cwd);
+      return verifiedInspection.requiresTrust
+        ? { allowed: false, reason: 'folder-not-fresh' }
+        : { allowed: true };
+    } catch {
+      return { allowed: false, reason: 'trust-unavailable' };
+    }
+  }
+
   /** Return the effective saved allow; use resolveProjectTrust for resource-sensitive process policy. */
   async isTrusted(projectPath: string): Promise<boolean> {
     return (await this.getDecision(projectPath))?.decision === true;
@@ -532,12 +827,163 @@ export class ProjectTrustManager {
         }
         if (next.size > MAX_TRUST_DECISIONS) throw new Error('Trust store contains too many decisions.');
         await persistTrustDecisions(this.filePath, next);
-        const sequence = ++this.readSequence;
-        this.appliedSequence = sequence;
-        this.decisions = next;
-        this.decisionError = undefined;
+        this.applySnapshot(next);
       } finally {
         await release();
+      }
+    });
+  }
+
+  /**
+   * Persist an exact allow, run one write while the trust-store lock is held,
+   * and remove only that allow if the write fails. Cooperative CLI/Web
+   * processes serialize on the same inter-process lock; folder identity,
+   * resources, decisions, breadth, and nested projects are rechecked after
+   * waiting for it. The operation receives a guard for a second check after
+   * acquiring its own write lock.
+   */
+  async trustFreshProjectAndRun<T>(
+    projectPath: string,
+    operation: (revalidate: () => Promise<FreshProjectTrustStatus>) => Promise<T> | T,
+    options: FreshProjectTrustOptions = {},
+  ): Promise<FreshProjectTrustWriteResult<T>> {
+    let cwd: string;
+    let identity: { dev: number; ino: number };
+    let transactionOptions: FreshProjectTrustOptions;
+    try {
+      transactionOptions = {
+        ...options,
+        knownFolders: boundedPathValues(options.knownFolders),
+        protectedPaths: boundedPathValues(options.protectedPaths),
+      };
+      cwd = await existingCanonicalDirectory(projectPath);
+      const info = await lstat(cwd);
+      identity = { dev: info.dev, ino: info.ino };
+    } catch {
+      return { ok: false, reason: 'trust-unavailable' };
+    }
+
+    return this.queued(async (): Promise<FreshProjectTrustWriteResult<T>> => {
+      const release = await acquireTrustLock(this.filePath).catch(() => undefined);
+      if (!release) return { ok: false, reason: 'trust-unavailable' };
+      try {
+        const current = await lstat(cwd).catch(() => undefined);
+        if (!current || !current.isDirectory()
+          || current.dev !== identity.dev || current.ino !== identity.ino) {
+          return { ok: false, reason: 'folder-not-fresh' };
+        }
+
+        let decisions: Map<string, boolean>;
+        try {
+          decisions = await loadTrustDecisions(this.filePath);
+        } catch {
+          return { ok: false, reason: 'trust-unavailable' };
+        }
+        let inspection: ProjectTrustInspection;
+        try {
+          inspection = await inspectProjectTrustResources(cwd);
+        } catch {
+          return { ok: false, reason: 'trust-unavailable' };
+        }
+        if (inspection.requiresTrust || nearestDecision(decisions, cwd)) {
+          return { ok: false, reason: 'folder-not-fresh' };
+        }
+        let breadth: FreshProjectTrustBreadth | undefined;
+        try {
+          breadth = await freshProjectTrustBreadth(cwd, this.filePath, transactionOptions, decisions);
+        } catch {
+          return { ok: false, reason: 'trust-unavailable' };
+        }
+        if (breadth) return { ok: false, reason: 'trust-too-broad', breadth };
+        let verifiedInspection: ProjectTrustInspection;
+        try {
+          verifiedInspection = await inspectProjectTrustResources(cwd);
+        } catch {
+          return { ok: false, reason: 'trust-unavailable' };
+        }
+        if (verifiedInspection.requiresTrust) {
+          return { ok: false, reason: 'folder-not-fresh' };
+        }
+        const verifiedIdentity = await lstat(cwd).catch(() => undefined);
+        if (!verifiedIdentity || !verifiedIdentity.isDirectory()
+          || verifiedIdentity.dev !== identity.dev || verifiedIdentity.ino !== identity.ino) {
+          return { ok: false, reason: 'folder-not-fresh' };
+        }
+
+        const trusted = new Map(decisions);
+        trusted.set(cwd, true);
+        try {
+          await persistTrustDecisions(this.filePath, trusted);
+          this.applySnapshot(trusted);
+        } catch {
+          return { ok: false, reason: 'trust-unavailable' };
+        }
+
+        const revalidate = async (): Promise<FreshProjectTrustStatus> => {
+          const latestIdentity = await lstat(cwd).catch(() => undefined);
+          if (!latestIdentity || !latestIdentity.isDirectory()
+            || latestIdentity.dev !== identity.dev || latestIdentity.ino !== identity.ino) {
+            return { allowed: false, reason: 'folder-not-fresh' };
+          }
+          let latestDecisions: Map<string, boolean>;
+          try {
+            latestDecisions = await loadTrustDecisions(this.filePath);
+          } catch {
+            return { allowed: false, reason: 'trust-unavailable' };
+          }
+          const exact = nearestDecision(latestDecisions, cwd);
+          if (!exact || exact.path !== cwd || exact.decision !== true) {
+            return { allowed: false, reason: 'folder-not-fresh' };
+          }
+          try {
+            const latestInspection = await inspectProjectTrustResources(cwd);
+            if (latestInspection.requiresTrust) {
+              return { allowed: false, reason: 'folder-not-fresh' };
+            }
+            const latestBreadth = await freshProjectTrustBreadth(
+              cwd,
+              this.filePath,
+              transactionOptions,
+              latestDecisions,
+            );
+            if (latestBreadth) {
+              return { allowed: false, reason: 'trust-too-broad', breadth: latestBreadth };
+            }
+            const verifiedInspection = await inspectProjectTrustResources(cwd);
+            if (verifiedInspection.requiresTrust) {
+              return { allowed: false, reason: 'folder-not-fresh' };
+            }
+            const verifiedIdentity = await lstat(cwd).catch(() => undefined);
+            return !verifiedIdentity || !verifiedIdentity.isDirectory()
+              || verifiedIdentity.dev !== identity.dev || verifiedIdentity.ino !== identity.ino
+              ? { allowed: false, reason: 'folder-not-fresh' }
+              : { allowed: true };
+          } catch {
+            return { allowed: false, reason: 'trust-unavailable' };
+          }
+        };
+
+        try {
+          return { ok: true, value: await operation(revalidate) };
+        } catch (writeError) {
+          const rolledBack = new Map(decisions);
+          try {
+            await persistTrustDecisions(this.filePath, rolledBack);
+            this.applySnapshot(rolledBack);
+            return { ok: false, reason: 'write-failed', writeError, trustKept: false };
+          } catch (rollbackError) {
+            this.applySnapshot(trusted);
+            return {
+              ok: false,
+              reason: 'write-failed',
+              writeError,
+              rollbackError,
+              trustKept: true,
+            };
+          }
+        }
+      } finally {
+        await release().catch(() => undefined);
       }
     });
   }
@@ -553,6 +999,13 @@ export class ProjectTrustManager {
     return [...this.decisions.entries()]
       .map(([decisionPath, decision]) => ({ path: decisionPath, decision }))
       .sort((left, right) => left.path.localeCompare(right.path));
+  }
+
+  private applySnapshot(decisions: Map<string, boolean>): void {
+    const sequence = ++this.readSequence;
+    this.appliedSequence = sequence;
+    this.decisions = decisions;
+    this.decisionError = undefined;
   }
 
   private async readFresh(): Promise<{ decisions: Map<string, boolean>; decisionError?: string }> {

@@ -100,8 +100,10 @@ function mutationStatus(error: McpConfigMutationError): number {
     case 'trust-unavailable': return 503;
     case 'target-not-found': return 404;
     case 'lock-timeout': return 423;
+    case 'folder-not-fresh':
     case 'invalid-config':
     case 'stale-revision':
+    case 'trust-too-broad':
     case 'target-conflict':
     case 'target-invalid':
     case 'import-invalid':
@@ -121,6 +123,7 @@ function sendMutationError(response: Response, error: unknown): void {
       error: error.message,
       code: error.code,
       uncertain: error.uncertain,
+      ...(error.trustKept ? { trustKept: true } : {}),
     });
     return;
   }
@@ -211,7 +214,7 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
         const confirmations = importConfirmations(body.confirmations);
         if (!hasOnlyKeys(body, [
           'action', 'confirmations', 'cwd', 'entryIndex', 'name', 'revision', 'scope',
-          'secretReferences', 'syntax', 'text', 'values',
+          'secretReferences', 'syntax', 'text', 'trustProject', 'values',
         ]) || !scope || revision === undefined || values === undefined
           || secretReferences === undefined || confirmations === undefined
           || typeof body.text !== 'string' || body.text.includes('\0')
@@ -220,6 +223,8 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
           || !Number.isSafeInteger(body.entryIndex) || (body.entryIndex as number) < 0
           || (body.entryIndex as number) >= MCP_IMPORT_MAX_SERVERS
           || (body.name !== undefined && (typeof body.name !== 'string' || body.name.length > 64))
+          || (body.trustProject !== undefined && body.trustProject !== true)
+          || (body.trustProject === true && scope !== 'project')
           || (body.cwd !== undefined && typeof body.cwd !== 'string')) {
           throw new McpConfigMutationError('invalid-request', INVALID_ACTION);
         }
@@ -235,6 +240,7 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
           secretReferences,
           confirmations,
           ...(typeof body.name === 'string' ? { name: body.name } : {}),
+          ...(body.trustProject === true ? { trustProject: true as const } : {}),
           ...(cwd ? { cwd } : {}),
         }));
         return;

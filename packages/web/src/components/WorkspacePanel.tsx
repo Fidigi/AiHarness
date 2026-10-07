@@ -92,9 +92,11 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   const uploadAbortRef = useRef<AbortController | undefined>(undefined);
   const openFileAbortRef = useRef<AbortController | undefined>(undefined);
   const refreshAbortRef = useRef<AbortController | undefined>(undefined);
+  const workspaceOperationTrusted = Boolean(workspace
+    && (workspace.operationTrusted ?? workspace.trusted));
 
   const refresh = async () => {
-    if (!workspace?.trusted) return;
+    if (!workspaceOperationTrusted || !workspace) return;
     refreshAbortRef.current?.abort();
     const controller = new AbortController();
     refreshAbortRef.current = controller;
@@ -132,10 +134,10 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
       openFileAbortRef.current?.abort();
       refreshAbortRef.current?.abort();
     };
-  }, [workspace?.cwd, workspace?.trusted]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workspace?.cwd, workspaceOperationTrusted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!workspace || query.trim().length < 1) {
+    if (!workspace || !workspaceOperationTrusted || query.trim().length < 1) {
       setSearchResult([]);
       return;
     }
@@ -147,10 +149,10 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
       });
     }, 180);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [query, workspace]);
+  }, [query, workspace?.cwd, workspaceOperationTrusted]);
 
   const uploadSelectedFiles = async (files: File[]) => {
-    if (!workspace || !files.length) return;
+    if (!workspace || !workspaceOperationTrusted || !files.length) return;
     uploadAbortRef.current?.abort();
     const controller = new AbortController();
     uploadAbortRef.current = controller;
@@ -169,7 +171,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   };
 
   const openFile = async (rawPath: string, targetTab: ViewerTab = 'source', requestedLine?: number) => {
-    if (!workspace) return;
+    if (!workspace || !workspaceOperationTrusted) return;
     setError('');
     const match = rawPath.match(/^(.*?)(?:#L(\d+))?$/i);
     const filePath = match?.[1] || rawPath;
@@ -216,10 +218,10 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     };
     window.addEventListener('aih-open-file', openLinkedFile);
     return () => window.removeEventListener('aih-open-file', openLinkedFile);
-  }, [workspace?.cwd]); // The handler always targets the active workspace.
+  }, [workspace?.cwd, workspaceOperationTrusted]); // The handler always targets the active workspace.
 
   useEffect(() => {
-    if (!selected || !workspace?.trusted) return;
+    if (!selected || !workspace || !workspaceOperationTrusted) return;
     const controller = new AbortController();
     let current = true;
     void (async () => {
@@ -251,7 +253,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
       current = false;
       controller.abort();
     };
-  }, [selected?.path, workspace?.cwd, workspace?.trusted]); // Watch follows only the currently opened file.
+  }, [selected?.path, workspace?.cwd, workspaceOperationTrusted]); // Watch follows only the currently opened file.
 
   useEffect(() => {
     if (!selected || !targetLine) return;
@@ -312,7 +314,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
         </div>
       </header>
 
-      {!workspace.trusted ? <p className="panel-empty">{t('files.trustRequired')}</p> : (
+      {!workspaceOperationTrusted ? <p className="panel-empty">{t('files.trustRequired')}</p> : (
         <>
           <div className="file-toolbar">
             <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('files.search')} />

@@ -82,6 +82,8 @@ export interface McpImportRequest {
   scope: McpConfigScope;
   cwd?: string;
   revision: string | null;
+  /** Explicitly request the one-time fresh-project trust-plus-write transaction. */
+  trustProject?: true;
   text: string;
   syntax: McpImportSyntax;
   entryIndex: number;
@@ -135,7 +137,13 @@ export class McpInventoryService {
     const canonicalCwd = await this.resolveOptionalWorkspace(cwd);
     return inspectMcpConfig({
       agentDir: this.agentDir,
-      ...(canonicalCwd ? { cwd: canonicalCwd } : {}),
+      ...(canonicalCwd ? {
+        cwd: canonicalCwd,
+        freshProjectTrust: {
+          knownFolders: this.workspaceManager.getAllowedRoots(),
+          protectedPaths: [this.agentDir],
+        },
+      } : {}),
       trustManager: this.trustManager,
     });
   }
@@ -193,7 +201,19 @@ export class McpInventoryService {
     } else if (inventory.project.trustError) {
       project = { available: false, unavailableReason: 'trust-unavailable', names: [] };
     } else if (!inventory.project.contentTrusted || inventory.project.decision !== true) {
-      project = { available: false, unavailableReason: 'trust-required', names: [] };
+      const fresh = inventory.project.trustAndWrite;
+      if (fresh?.allowed && available('project')) {
+        project = {
+          available: true,
+          names: names('project'),
+          confirmations: ['fresh-project-trust'],
+        };
+      } else {
+        const unavailableReason = fresh && !fresh.allowed
+          ? fresh.reason
+          : 'trust-required';
+        project = { available: false, unavailableReason, names: [] };
+      }
     } else {
       const projectAvailable = available('project');
       project = {
@@ -224,6 +244,12 @@ export class McpInventoryService {
       ...(request.secretReferences ? { secretReferences: request.secretReferences } : {}),
       ...(request.confirmations ? { confirmations: request.confirmations } : {}),
       ...(request.scope === 'project' && canonicalCwd ? { cwd: canonicalCwd } : {}),
+      ...(request.trustProject === true ? {
+        trustFreshProject: {
+          knownFolders: this.workspaceManager.getAllowedRoots(),
+          protectedPaths: [this.agentDir],
+        },
+      } : {}),
       trustManager: this.trustManager,
     });
     try {

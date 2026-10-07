@@ -317,8 +317,8 @@ describe('Web API service', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(importMcpConfigServer({
-      scope: 'project', cwd: '/workspace', revision: null, syntax: 'foreign', entryIndex: 0,
-      text: 'ORIGINAL-PASTE', name: 'docs',
+      scope: 'project', cwd: '/workspace', revision: null, trustProject: true,
+      syntax: 'foreign', entryIndex: 0, text: 'ORIGINAL-PASTE', name: 'docs',
       values: { 'headers.X-Tenant': { reference: 'TENANT_TOKEN' } },
       secretReferences: { 'headers.Authorization': 'DOCS_TOKEN' },
       confirmations: { remoteHostVariables: ['DOCS_TOKEN', 'TENANT_TOKEN'] },
@@ -326,7 +326,7 @@ describe('Web API service', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/mcp/actions', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({
-        action: 'import', scope: 'project', cwd: '/workspace', revision: null,
+        action: 'import', scope: 'project', cwd: '/workspace', revision: null, trustProject: true,
         syntax: 'foreign', entryIndex: 0, text: 'ORIGINAL-PASTE', name: 'docs',
         values: { 'headers.X-Tenant': { reference: 'TENANT_TOKEN' } },
         secretReferences: { 'headers.Authorization': 'DOCS_TOKEN' },
@@ -394,7 +394,7 @@ describe('Web API service', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(removal), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ inventory }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
-        error: 'Reload required.', code: 'stale-revision', uncertain: false,
+        error: 'Reload required.', code: 'stale-revision', uncertain: false, trustKept: true,
       }), { status: 409 }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -408,7 +408,7 @@ describe('Web API service', () => {
       .resolves.toEqual({ success: true, data: { inventory } });
     await expect(setMcpConfigEnabled('global', ['docs'], true, 'b'.repeat(64)))
       .resolves.toEqual({
-        success: false, error: 'Reload required.', code: 'stale-revision', uncertain: false,
+        success: false, error: 'Reload required.', code: 'stale-revision', uncertain: false, trustKept: true,
       });
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/mcp/actions', expect.objectContaining({
       method: 'POST',

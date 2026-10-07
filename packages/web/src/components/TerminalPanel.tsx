@@ -153,6 +153,8 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
 
 export default function TerminalPanel({ initialOpen = false }: { initialOpen?: boolean }) {
   const workspace = useSessionStore(state => state.workspace);
+  const workspaceOperationTrusted = Boolean(workspace
+    && (workspace.operationTrusted ?? workspace.trusted));
   const { t } = useI18n();
   const initial = useMemo(() => workspace ? readState(workspace.id) : { version: 1 as const, open: false, ids: [] }, [workspace?.id]);
   const initialOpenRef = useRef(initialOpen);
@@ -164,7 +166,11 @@ export default function TerminalPanel({ initialOpen = false }: { initialOpen?: b
   const active = terminals.find(terminal => terminal.id === activeId) ?? terminals[0];
 
   useEffect(() => {
-    if (!workspace) return;
+    if (!workspace || !workspaceOperationTrusted) {
+      setTerminals([]);
+      setError('');
+      return;
+    }
     const stored = readState(workspace.id);
     setOpen(initialOpenRef.current || stored.open);
     initialOpenRef.current = false;
@@ -195,7 +201,7 @@ export default function TerminalPanel({ initialOpen = false }: { initialOpen?: b
       setActiveId(id => id && next.some(item => item.id === id) ? id : next[0]?.id);
     })();
     return () => { current = false; };
-  }, [workspace?.cwd, workspace?.id, t]);
+  }, [workspace?.cwd, workspace?.id, workspaceOperationTrusted, t]);
 
   useEffect(() => {
     const toggle = () => setOpen(value => !value);
@@ -209,12 +215,12 @@ export default function TerminalPanel({ initialOpen = false }: { initialOpen?: b
   }, []);
 
   useEffect(() => {
-    if (!workspace) return;
+    if (!workspace || !workspaceOperationTrusted) return;
     writeState(workspace.id, { version: 1, open, activeId: active?.id, ids: terminals.map(item => item.id) });
-  }, [active?.id, open, terminals, workspace]);
+  }, [active?.id, open, terminals, workspace, workspaceOperationTrusted]);
 
   const add = async () => {
-    if (!workspace) return;
+    if (!workspace || !workspaceOperationTrusted) return;
     setError('');
     const result = await createTerminal({ cwd: workspace.cwd, name: `${t('terminal.title')} ${terminals.length + 1}` });
     if (!result.success || !result.data) {
@@ -237,7 +243,7 @@ export default function TerminalPanel({ initialOpen = false }: { initialOpen?: b
     setActiveId(id => id === terminal.id ? terminals.find(item => item.id !== terminal.id)?.id : id);
   };
 
-  if (!workspace) return null;
+  if (!workspace || !workspaceOperationTrusted) return null;
   if (!open) {
     return <button className="terminal-launcher" onClick={() => {
       if (terminals.length) setOpen(true);

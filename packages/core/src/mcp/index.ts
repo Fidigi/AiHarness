@@ -53,6 +53,7 @@ export type {
   McpConfigProblemReason,
   McpConfigScope,
   McpExposure,
+  McpFreshProjectTrustStatus,
   McpProjectInventory,
   McpRemovedServerRecord,
   McpServerActivationMutation,

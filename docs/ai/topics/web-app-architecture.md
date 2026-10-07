@@ -20,7 +20,7 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 | `packages/web/src/components/ChatView.tsx` | Detached runs, history, composer, queues, settings and reconciliation |
 | `packages/web/src/components/{Sidebar,WorkspacePanel,TerminalPanel}.tsx` | Navigation, files/Git and PTY surfaces |
 | `packages/web/src/components/SettingsView.tsx` | Lazy Settings route and administration sections |
-| `packages/web/src/components/{McpSettings,McpImportPreview}.tsx` | Redacted global/project MCP groups, paste preview, field/reference completion, scope/confirmation-gated atomic import or whole-entry replacement, trust lock, row/group activation, per-server exposure, confirmed removal, temporary undo and file diagnostics |
+| `packages/web/src/components/{McpSettings,McpImportPreview}.tsx` | Redacted global/project MCP groups, paste preview, field/reference completion, scope/confirmation-gated atomic import—including fresh-project trust-plus-first-write—or whole-entry replacement, trust lock, row/group activation, per-server exposure, confirmed removal, temporary undo and file diagnostics |
 | `packages/web/src/components/PluginSettings.tsx` | Project/global package inventory, individual and one-request group activation, partial-result and reload-pending feedback |
 
 ## State Boundaries
@@ -60,7 +60,7 @@ local draft -> effective configuration -> POST /api/agent/runs
 
 ## Workspace and Terminal Boundaries
 
-A cwd change aborts stale requests, clears old file/search results, and keys React state so old PTY/file surfaces unmount before target state restores. Browser paths are never trusted directly: Server resolves them with `WorkspaceManager` and applies project trust before mutations or execution.
+A cwd change aborts stale requests, clears old file/search results, and keys React state so old PTY/file surfaces unmount before target state restores. Browser paths are never trusted directly: Server resolves them with `WorkspaceManager` and applies project trust before mutations or execution. Workspace descriptors keep resource-sensitive `trusted` separate from persisted-decision `operationTrusted`; Sidebar prompts, file/search surfaces and project configuration gates use the latter (with a compatibility fallback only when older descriptors omit it), so an implicitly safe empty folder cannot silently authorize an operation.
 
 `WorkspacePanel` owns lazy tree/index, Git state/diffs, bounded uploads, file watching, and source/media/Markdown views. `TerminalPanel` dynamically loads xterm, resumes bounded ANSI output by UTF-8 offset, and stores tab IDs per workspace.
 
@@ -82,7 +82,7 @@ See [`extensions.md`](./extensions.md) for server-side ownership and interaction
 
 `McpImportPreview` keeps pasted text only in component state and sends the original text, explicit foreign/AiHarness syntax choice and current cwd to the administrator preview route—never a browser-built configuration object. Text/syntax/workspace/inventory changes abort or invalidate stale requests. Returned cards contain only source kind, normalized name, masked target, structural field names, variable names, fixed notes and per-scope eligibility/confirmations. Literal env/header/OAuth values, argument text, source excerpts and writable normalized configuration never render.
 
-A scope action opens a focus-trapped completion dialog. It collects a bounded target name, only the missing fields reported by Core, optional host-variable substitutions for reference-capable secret locations, and explicit confirmations for remaining global literals and named remote variables. The write request resends the original paste and these choices; Core reparses it and the browser never submits an approved normalized entry. Success replaces inventory with the server response and clears the paste. Every failure closes stale revision-backed controls and reloads canonical inventory; UI errors remain localized and generic.
+A scope action opens a focus-trapped completion dialog. It collects a bounded target name, only the missing fields reported by Core, optional host-variable substitutions for reference-capable secret locations, and explicit confirmations for remaining global literals and named remote variables. When Core marks a decision-free folder safe for its first project resource, the same dialog also requires a distinct fresh-project trust confirmation; only then does the import request include `trustProject: true`. The write request resends the original paste and these choices; Core reparses it and the browser never submits an approved normalized entry. Other mutation controls stay disabled while the dialog is open. Success replaces inventory with the server response and clears the paste. Every success or failure refreshes selected-workspace trust from Server, while failures close stale revision-backed controls and reload canonical inventory; trust is never changed optimistically and UI errors remain localized and generic.
 
 A valid row's **Edit** action reuses that pipeline in a fixed scope. It sends only target scope/name/revision with the complete replacement paste for preview, never loads current hidden values into inputs, and warns that omitted fields are removed. The write uses the original text and bounded completion/confirmation choices plus `targetName`; the canonical response supplies only previous/new identity and redacted inventory. Other mutation controls remain disabled while an edit is open. Cancel, rename success and failure restore focus to the selected or canonical replacement row, with Refresh as a safe fallback.
 
@@ -107,7 +107,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 - `packages/web/src/store/preferences.test.ts` — schema migration and validation
 - `packages/web/src/services/api.test.ts` — REST/SSE contracts, including MCP import/replacement preview, original-text persistence, exposure/action bodies, typed errors and uncertain timeouts
 - `packages/web/src/services/{push,pwa,keyboard,notices}.test.ts` — global browser services
-- `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including locked/redacted MCP inventory, non-mutating paste/replacement preview, completion/confirmation-gated atomic import/replacement, grouped activation, exposure selection, focus, undo and failure reconciliation
+- `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including locked/redacted MCP inventory, non-mutating paste/replacement preview, completion/confirmation-gated atomic import/replacement, fresh-project trust-plus-first-write, grouped activation, exposure selection, focus, undo and failure reconciliation
 - `e2e/accessibility.spec.ts`, `e2e/performance.spec.ts`, and `e2e/visual.spec.ts` — a11y, bounds and baselines
 - `e2e/live-server.spec.ts` — real browser-to-server smoke path
 

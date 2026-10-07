@@ -75,16 +75,19 @@ const NOTE_KEYS: Record<McpImportNoteCode, McpImportMessageKey> = {
 
 const SCOPE_REASON_KEYS: Record<McpImportScopeBlockReason, McpImportMessageKey> = {
   'config-unavailable': 'settings.mcp.import.scopeReason.configUnavailable',
+  'folder-not-fresh': 'settings.mcp.import.scopeReason.folderNotFresh',
   'invalid-entry': 'settings.mcp.import.scopeReason.invalidEntry',
   'literal-secret': 'settings.mcp.import.scopeReason.literalSecret',
   'name-taken': 'settings.mcp.import.scopeReason.nameTaken',
   'no-project': 'settings.mcp.import.scopeReason.noProject',
   'reserved-variable': 'settings.mcp.import.scopeReason.reservedVariable',
   'trust-required': 'settings.mcp.import.scopeReason.trustRequired',
+  'trust-too-broad': 'settings.mcp.import.scopeReason.trustTooBroad',
   'trust-unavailable': 'settings.mcp.import.scopeReason.trustUnavailable',
 };
 
 const SCOPE_CONFIRMATION_KEYS: Record<McpImportScopeConfirmation, McpImportMessageKey> = {
+  'fresh-project-trust': 'settings.mcp.import.scopeConfirmation.freshProjectTrust',
   'literal-secret': 'settings.mcp.import.scopeConfirmation.literalSecret',
   'remote-host-variable': 'settings.mcp.import.scopeConfirmation.remoteHostVariable',
 };
@@ -110,6 +113,7 @@ interface ImportDraft {
   secretReferences: Record<string, string>;
   literalConfirmed: boolean;
   remoteConfirmed: boolean;
+  trustConfirmed: boolean;
 }
 
 function isReferenceableField(field: string): boolean {
@@ -265,6 +269,7 @@ export function McpImportPreview({
   const [loading, setLoading] = useState(false);
   const [writing, setWriting] = useState(false);
   const [draft, setDraft] = useState<ImportDraft>();
+  const draftOpen = Boolean(draft);
   const request = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
@@ -285,6 +290,11 @@ export function McpImportPreview({
     request.current++;
     controller.current?.abort();
   }, []);
+
+  useEffect(() => {
+    onWritingChange?.(draftOpen || writing);
+    return () => onWritingChange?.(false);
+  }, [draftOpen, onWritingChange, writing]);
 
   useEffect(() => {
     request.current++;
@@ -369,6 +379,7 @@ export function McpImportPreview({
       secretReferences: Object.fromEntries(entry.referenceableLiteralSecretFields.map(field => [field, ''])),
       literalConfirmed: false,
       remoteConfirmed: false,
+      trustConfirmed: false,
     });
   };
 
@@ -393,12 +404,15 @@ export function McpImportPreview({
   const missingLiteralFields = draft?.entry.fields.filter(field => !draft.referenceModes[field.field]) ?? [];
   const knownMissingSecretFields = missingLiteralFields.filter(field => field.kind === 'secret');
   const needsGlobalLiteralConfirmation = unreplacedLiteralFields.length > 0 || missingLiteralFields.length > 0;
+  const needsFreshProjectTrust = draft?.scope === 'project'
+    && draft.entry.scopes.project.confirmations.includes('fresh-project-trust');
   const projectLiteralBlocked = draft?.scope === 'project'
     && (unreplacedLiteralFields.length > 0 || knownMissingSecretFields.length > 0);
   const fieldsReady = draft?.entry.fields.every(field => Boolean(draft.values[field.field]?.trim())) ?? false;
   const readyToWrite = Boolean(draft && inventory && draft.name.trim() && fieldsReady
     && !disabled && !projectLiteralBlocked
     && (draft.scope !== 'global' || !needsGlobalLiteralConfirmation || draft.literalConfirmed)
+    && (!needsFreshProjectTrust || draft.trustConfirmed)
     && (confirmedRemoteNames.length === 0 || draft.remoteConfirmed));
 
   const submitImport = async (): Promise<void> => {
@@ -415,7 +429,6 @@ export function McpImportPreview({
     request.current++;
     controller.current?.abort();
     setWriting(true);
-    onWritingChange?.(true);
     setError(undefined);
     setWriteMessage(undefined);
     let failureUncertain = true;
@@ -434,6 +447,7 @@ export function McpImportPreview({
           ...(selected.scope === 'global' && needsGlobalLiteralConfirmation ? { literalSecret: true as const } : {}),
           ...(confirmedRemoteNames.length > 0 ? { remoteHostVariables: confirmedRemoteNames } : {}),
         },
+        ...(!replacement && needsFreshProjectTrust ? { trustProject: true as const } : {}),
         ...(cwd ? { cwd } : {}),
       };
       const result = replacement
@@ -466,7 +480,6 @@ export function McpImportPreview({
       if (replacement) onReplacementOutcome?.({ status: 'failure', uncertain: failureUncertain });
     } finally {
       setWriting(false);
-      onWritingChange?.(false);
     }
   };
 
@@ -613,6 +626,11 @@ export function McpImportPreview({
             <input type="checkbox" checked={draft.remoteConfirmed} disabled={writing}
               onChange={event => setDraft(current => current ? { ...current, remoteConfirmed: event.target.checked } : current)} />
             <span>{m('settings.mcp.import.confirmRemote', { names: confirmedRemoteNames.join(', ') })}</span>
+          </label>}
+          {needsFreshProjectTrust && <label className="mcp-import-confirmation mcp-import-trust-confirmation">
+            <input type="checkbox" checked={draft.trustConfirmed} disabled={writing}
+              onChange={event => setDraft(current => current ? { ...current, trustConfirmed: event.target.checked } : current)} />
+            <span>{m('settings.mcp.import.confirmFreshProjectTrust')}</span>
           </label>}
           <div className="mcp-dialog-actions">
             <button type="button" disabled={writing} onClick={closeDraft}>{m('settings.mcp.import.cancel')}</button>

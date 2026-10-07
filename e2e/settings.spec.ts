@@ -4,6 +4,8 @@ import {
   MCP_FILE_PROBLEM_MESSAGES,
   MCP_FILE_PROBLEM_REASONS,
   mcpFileProblemInventory,
+  mcpFreshProjectInventory,
+  mcpFreshProjectPreviewFixture,
   mcpImportPreviewFixture,
   mcpStateInventory,
 } from './fixtures/mcp';
@@ -347,6 +349,83 @@ test.describe('Settings and authentication', () => {
       cwd: '/workspace',
     });
     expect(Object.keys(request?.body as object)).not.toContain('configuration');
+  });
+
+  test('confirme confiance et première écriture MCP dans un dossier projet neuf', async ({ page }) => {
+    const api = await installMockApi(page, {
+      workspaceTrusted: true,
+      workspaceOperationTrusted: false,
+      mcpConfig: mcpFreshProjectInventory(),
+      mcpImportPreview: mcpFreshProjectPreviewFixture(),
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    await section.getByText('Paste and preview a server').click();
+    const paste = 'npx -y fresh-mcp-tools';
+    await section.getByLabel('MCP server text').fill(paste);
+    await section.getByRole('button', { name: 'Preview', exact: true }).click();
+    await expect(section).toContainText('Explicit confirmation is required to trust this fresh folder');
+    await section.getByRole('button', { name: 'Configure project import' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Configure MCP import' });
+    await expect(section.getByRole('button', { name: 'Refresh' })).toBeDisabled();
+    const trust = dialog.getByLabel(/I trust this fresh project folder/u);
+    await expect(dialog.getByRole('button', { name: 'Save atomically' })).toBeDisabled();
+    await trust.check();
+    await expect(dialog.getByRole('button', { name: 'Save atomically' })).toBeEnabled();
+    await dialog.getByRole('button', { name: 'Save atomically' }).click();
+
+    await expect(dialog).toHaveCount(0);
+    await expect(section.getByRole('article', { name: 'fresh-tools: Configured', exact: true })).toBeVisible();
+    const request = api.requests.find(item => item.path === '/api/mcp/actions'
+      && (item.body as { action?: string } | undefined)?.action === 'import');
+    expect(request?.body).toMatchObject({
+      action: 'import', scope: 'project', cwd: '/workspace', revision: null,
+      trustProject: true, text: paste, entryIndex: 0,
+    });
+    expect(Object.keys(request?.body as object)).not.toContain('configuration');
+    await expect.poll(() => api.requests.some(item => item.path === '/api/workspaces/validate')).toBe(true);
+    expect(api.requests.some(item => item.path === '/api/workspaces/trust')).toBe(false);
+  });
+
+  test('recharge inventaire et confiance après un échec de transaction MCP projet', async ({ page }) => {
+    const api = await installMockApi(page, {
+      workspaceTrusted: true,
+      workspaceOperationTrusted: false,
+      mcpConfig: mcpFreshProjectInventory(),
+      mcpImportPreview: mcpFreshProjectPreviewFixture(),
+    });
+    await page.route('**/api/mcp/actions', async route => {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: 'Internal rollback detail must not render.',
+          code: 'write-failed',
+          uncertain: false,
+          trustKept: true,
+        }),
+      });
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    await section.getByText('Paste and preview a server').click();
+    await section.getByLabel('MCP server text').fill('npx -y fresh-mcp-tools');
+    await section.getByRole('button', { name: 'Preview', exact: true }).click();
+    await section.getByRole('button', { name: 'Configure project import' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Configure MCP import' });
+    await dialog.getByLabel(/I trust this fresh project folder/u).check();
+    const readsBefore = api.requests.filter(request => request.path === '/api/mcp').length;
+    await dialog.getByRole('button', { name: 'Save atomically' }).click();
+
+    await expect(dialog).toHaveCount(0);
+    await expect(section).toContainText('The MCP import failed. The canonical inventory was reloaded.');
+    await expect(section).not.toContainText('Internal rollback detail must not render.');
+    await expect(section.getByRole('article', { name: /fresh-tools: Configured/u })).toHaveCount(0);
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/mcp').length)
+      .toBeGreaterThan(readsBefore);
+    await expect.poll(() => api.requests.some(request => request.path === '/api/workspaces/validate'))
+      .toBe(true);
   });
 
   test('remplace une entrée MCP depuis le texte original et restaure le focus après renommage', async ({ page }) => {

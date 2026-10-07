@@ -259,7 +259,7 @@ export function PluginSettings() {
           <select value={scope} aria-label={t('settings.plugins.scope')}
             onChange={event => setScope(event.target.value as PluginScope)}>
             <option value="global">{t('settings.plugins.scope.global')}</option>
-            <option value="project" disabled={catalog ? !catalog.projectTrusted : !workspace?.trusted}>
+            <option value="project" disabled={catalog ? !catalog.projectTrusted : !(workspace?.operationTrusted ?? workspace?.trusted)}>
               {t('settings.plugins.scope.project')}
             </option>
           </select>

@@ -44,9 +44,11 @@ export interface McpImportWriteRequest {
   values?: Record<string, McpImportFieldValue>;
   secretReferences?: Record<string, string>;
   confirmations?: McpImportWriteConfirmations;
+  /** Explicitly trust a fresh project as part of this first write. */
+  trustProject?: true;
 }
 
-export interface McpReplaceWriteRequest extends McpImportWriteRequest {
+export interface McpReplaceWriteRequest extends Omit<McpImportWriteRequest, 'trustProject'> {
   targetName: string;
 }
 
@@ -57,6 +59,8 @@ export interface McpActionResponse {
   code?: string;
   /** True means the server may have committed before the client observed failure. */
   uncertain?: boolean;
+  /** The first project write failed and its exact trust allow could not be removed. */
+  trustKept?: boolean;
 }
 
 export async function previewMcpImport(
@@ -116,6 +120,7 @@ async function postMcpAction(action: McpActionRequest): Promise<McpActionRespons
       error?: string;
       code?: string;
       uncertain?: boolean;
+      trustKept?: boolean;
     };
     if (!response.ok) {
       return {
@@ -123,6 +128,7 @@ async function postMcpAction(action: McpActionRequest): Promise<McpActionRespons
         error: data.error || `HTTP ${response.status}`,
         code: data.code ?? 'request-failed',
         uncertain: data.uncertain ?? false,
+        ...(data.trustKept ? { trustKept: true } : {}),
       };
     }
     return { success: true, data };

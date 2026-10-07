@@ -14,6 +14,8 @@ export interface WorkspaceDescriptor {
   cwd: string;
   name: string;
   trusted: boolean;
+  /** Persisted effective allow suitable for trust-requiring operations. */
+  operationTrusted?: boolean;
   git?: {
     root: string;
     branch?: string;

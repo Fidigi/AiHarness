@@ -1,9 +1,17 @@
 export {
+  FRESH_PROJECT_SCAN_DEPTH,
+  FRESH_PROJECT_SCAN_MAX_DIRECTORIES,
   inspectProjectTrustResources,
   ProjectTrustManager,
   resolveProjectTrust,
 } from './project-trust.js';
 export type {
+  FreshProjectTrustBlockReason,
+  FreshProjectTrustBreadth,
+  FreshProjectTrustBreadthKind,
+  FreshProjectTrustOptions,
+  FreshProjectTrustStatus,
+  FreshProjectTrustWriteResult,
   ProjectTrustDecision,
   ProjectTrustDecisionEntry,
   ProjectTrustDefault,

@@ -130,6 +130,56 @@ export function mcpImportPreviewFixture(): McpImportPreview {
   };
 }
 
+/** A fresh folder that is safe only through explicit trust-plus-first-write confirmation. */
+export function mcpFreshProjectInventory(): McpConfigInventory {
+  return {
+    files: [
+      { scope: 'global', path: GLOBAL_PATH, exists: false, contentRead: false, problems: [] },
+      { scope: 'project', path: PROJECT_PATH, exists: false, contentRead: false, problems: [] },
+    ],
+    project: {
+      cwd: '/workspace', contentTrusted: false, requiresTrust: false, decision: null,
+      inherited: false, trustError: false, trustAndWrite: { allowed: true },
+    },
+    servers: [],
+  };
+}
+
+export function mcpFreshProjectPreviewFixture(): McpImportPreview {
+  return {
+    ok: true,
+    entries: [{
+      name: 'fresh-tools',
+      source: 'command-line',
+      complete: true,
+      persisted: {
+        valid: true,
+        enabled: true,
+        exposure: 'direct',
+        transport: 'stdio',
+        command: 'npx',
+        args: ['-y', 'fresh-mcp-tools'],
+        envNames: [],
+        headerNames: [],
+        oauthFields: [],
+        commandFields: [],
+        variableReferences: [],
+        masked: false,
+      },
+      fields: [],
+      variables: [],
+      literalSecretFields: [],
+      referenceableLiteralSecretFields: [],
+      scopes: {
+        global: { allowed: true, reasons: [], confirmations: [] },
+        project: { allowed: true, reasons: [], confirmations: ['fresh-project-trust'] },
+      },
+      notes: [],
+    }],
+    notes: [],
+  };
+}
+
 /** A semantically shaped response for one exhaustive, localized file-problem browser case. */
 export function mcpFileProblemInventory(reason: McpConfigProblemReason): McpConfigInventory {
   const trustProblem = reason === 'trust-required' || reason === 'trust-unavailable';

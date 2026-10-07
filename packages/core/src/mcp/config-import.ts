@@ -9,6 +9,10 @@ import {
   type McpTransportKind,
   type McpVariableReference,
 } from './config-inventory.js';
+import type {
+  FreshProjectTrustOptions,
+  FreshProjectTrustStatus,
+} from '../security/project-trust.js';
 import { splitMcpShellWords } from './import-shell.js';
 
 /** Paste bodies are intentionally smaller than configuration files. */
@@ -154,15 +158,20 @@ export interface McpImportPersistedPreview {
 
 export type McpImportScopeBlockReason =
   | 'config-unavailable'
+  | 'folder-not-fresh'
   | 'invalid-entry'
   | 'literal-secret'
   | 'name-taken'
   | 'no-project'
   | 'reserved-variable'
   | 'trust-required'
+  | 'trust-too-broad'
   | 'trust-unavailable';
 
-export type McpImportScopeConfirmation = 'literal-secret' | 'remote-host-variable';
+export type McpImportScopeConfirmation =
+  | 'fresh-project-trust'
+  | 'literal-secret'
+  | 'remote-host-variable';
 
 export interface McpImportScopePreview {
   allowed: boolean;
@@ -196,9 +205,16 @@ export interface McpImportScopeContext {
   available: boolean;
   unavailableReason?: Extract<
     McpImportScopeBlockReason,
-    'config-unavailable' | 'no-project' | 'trust-required' | 'trust-unavailable'
+    | 'config-unavailable'
+    | 'folder-not-fresh'
+    | 'no-project'
+    | 'trust-required'
+    | 'trust-too-broad'
+    | 'trust-unavailable'
   >;
   names?: Iterable<string>;
+  /** Adapter-discovered confirmation that Core should display but never infer from source text. */
+  confirmations?: Iterable<McpImportScopeConfirmation>;
 }
 
 export interface PreviewMcpImportOptions {
@@ -229,6 +245,8 @@ export interface ImportMcpServerOptions extends McpConfigMutationTarget {
   confirmations?: McpImportWriteConfirmations;
   /** Names only; values never enter import policy. */
   availableVariableNames?: Iterable<string>;
+  /** Presence is the caller's explicit request to trust a fresh project and perform its first write. */
+  trustFreshProject?: FreshProjectTrustOptions;
 }
 
 export interface McpServerImportResult {
@@ -237,7 +255,7 @@ export interface McpServerImportResult {
   revision: string;
 }
 
-export interface ReplaceMcpServerOptions extends ImportMcpServerOptions {
+export interface ReplaceMcpServerOptions extends Omit<ImportMcpServerOptions, 'trustFreshProject'> {
   /** Exact existing entry selected from the redacted inventory. */
   targetName: string;
 }
@@ -288,6 +306,11 @@ function addNote(notes: McpImportNote[], value: McpImportNote): void {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function* withProtectedPath(first: string, rest?: Iterable<string>): Iterable<string> {
+  yield first;
+  if (rest) yield* rest;
 }
 
 function boundedString(value: unknown): value is string {
@@ -1527,6 +1550,9 @@ function scopePreview(
   if (scope === 'project' && literalSecrets.length) reasons.push('literal-secret');
   if (reserved) reasons.push('reserved-variable');
   const confirmations: McpImportScopeConfirmation[] = [];
+  for (const confirmation of context.confirmations ?? []) {
+    if (!confirmations.includes(confirmation)) confirmations.push(confirmation);
+  }
   if (scope === 'global' && literalSecrets.length) confirmations.push('literal-secret');
   if (remoteHostVariable) confirmations.push('remote-host-variable');
   return { allowed: reasons.length === 0, reasons, confirmations };
@@ -2121,16 +2147,81 @@ function prepareSelectedImport(
  * are returned to an adapter.
  */
 export async function importMcpServer(options: ImportMcpServerOptions): Promise<McpServerImportResult> {
+  if (options.trustFreshProject !== undefined && (options.scope !== 'project'
+    || typeof options.cwd !== 'string' || !options.cwd
+    || !options.trustManager || options.expectedRevision !== null)) {
+    throw importMutationError('invalid-request', 'The fresh-project MCP import request is invalid.');
+  }
   const prepared = prepareSelectedImport(options);
-  const result = await insertMcpServerEntry({
+  const write = (revalidate?: () => Promise<FreshProjectTrustStatus>) => insertMcpServerEntry({
     agentDir: options.agentDir,
     scope: options.scope,
     expectedRevision: options.expectedRevision,
     ...(options.cwd ? { cwd: options.cwd } : {}),
     ...(options.trustManager ? { trustManager: options.trustManager } : {}),
+    ...(revalidate ? {
+      beforeLockedRead: async () => {
+        const fresh = await revalidate();
+        if (fresh.allowed) return;
+        if (fresh.reason === 'folder-not-fresh') {
+          throw importMutationError('folder-not-fresh', 'The project folder is no longer fresh.');
+        }
+        if (fresh.reason === 'trust-too-broad') {
+          throw importMutationError('trust-too-broad', 'Trusting this project folder would have broader reach.');
+        }
+        throw importMutationError('trust-unavailable', 'Project trust is unavailable for this MCP import.');
+      },
+    } : {}),
     name: prepared.name,
     entry: prepared.config,
   });
+
+  let result: Awaited<ReturnType<typeof write>>;
+  if (options.trustFreshProject !== undefined) {
+    const transaction = await options.trustManager!.trustFreshProjectAndRun(
+      options.cwd!,
+      revalidate => write(revalidate),
+      {
+        ...options.trustFreshProject,
+        protectedPaths: withProtectedPath(
+          options.agentDir,
+          options.trustFreshProject.protectedPaths,
+        ),
+      },
+    );
+    if (!transaction.ok) {
+      if (transaction.reason === 'folder-not-fresh') {
+        throw importMutationError('folder-not-fresh', 'The project folder is no longer fresh.');
+      }
+      if (transaction.reason === 'trust-too-broad') {
+        throw importMutationError('trust-too-broad', 'Trusting this project folder would have broader reach.');
+      }
+      if (transaction.reason === 'trust-unavailable') {
+        throw importMutationError('trust-unavailable', 'Project trust is unavailable for this MCP import.');
+      }
+      if (transaction.reason !== 'write-failed') {
+        throw importMutationError('trust-unavailable', 'Project trust is unavailable for this MCP import.');
+      }
+      const writeError = transaction.writeError;
+      if (writeError instanceof McpConfigMutationError) {
+        throw new McpConfigMutationError(
+          writeError.code,
+          writeError.message,
+          writeError.uncertain,
+          transaction.trustKept,
+        );
+      }
+      throw new McpConfigMutationError(
+        'write-failed',
+        'The MCP configuration could not be written.',
+        true,
+        transaction.trustKept,
+      );
+    }
+    result = transaction.value;
+  } else {
+    result = await write();
+  }
   return { name: prepared.name, scope: options.scope, revision: result.revision };
 }
 

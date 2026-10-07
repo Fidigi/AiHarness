@@ -184,6 +184,95 @@ describe('importMcpServer', () => {
     await expect(lstat(path.join(project, '.ai-harness'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('combines explicit fresh-project trust with the first import and rolls it back on write failure', async () => {
+    const { agentDir, project, trustManager } = await fixture();
+    const root = path.dirname(project);
+    const result = await importMcpServer({
+      agentDir,
+      cwd: project,
+      trustManager,
+      scope: 'project',
+      expectedRevision: null,
+      text: 'npx public-mcp-server',
+      entryIndex: 0,
+      trustFreshProject: { knownFolders: [project], protectedPaths: [agentDir] },
+    });
+    expect(result).toMatchObject({ scope: 'project', name: 'public' });
+    await expect(trustManager.getStatus(project)).resolves.toMatchObject({
+      decision: true,
+      decisionPath: project,
+      inherited: false,
+    });
+    expect(JSON.parse(await readFile(path.join(project, '.ai-harness', 'mcp.json'), 'utf8')))
+      .toMatchObject({ mcpServers: { public: { command: 'npx' } } });
+
+    const failedProject = path.join(root, 'failed-project');
+    await mkdir(path.join(failedProject, '.ai-harness'), { recursive: true });
+    await mkdir(path.join(failedProject, '.ai-harness', 'mcp.json.lock'));
+    await expect(importMcpServer({
+      agentDir,
+      cwd: failedProject,
+      trustManager,
+      scope: 'project',
+      expectedRevision: null,
+      text: 'npx rollback-mcp-server',
+      entryIndex: 0,
+      trustFreshProject: { knownFolders: [failedProject] },
+    })).rejects.toMatchObject({ code: 'unsafe-path', trustKept: false });
+    await expect(trustManager.getDecision(failedProject)).resolves.toBeUndefined();
+    await expect(readFile(path.join(failedProject, '.ai-harness', 'mcp.json')))
+      .rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('revalidates fresh-folder resources and import policy before introducing trust', async () => {
+    const { agentDir, project, trustManager } = await fixture();
+    await mkdir(path.join(project, '.ai-harness'));
+    await writeFile(path.join(project, '.ai-harness', 'settings.json'), '{}');
+    const request = {
+      agentDir,
+      cwd: project,
+      trustManager,
+      scope: 'project' as const,
+      expectedRevision: null,
+      text: 'npx public-mcp-server',
+      entryIndex: 0,
+      trustFreshProject: { knownFolders: [project] },
+    };
+    await expect(importMcpServer(request)).rejects.toMatchObject({ code: 'folder-not-fresh' });
+    await expect(trustManager.getDecision(project)).resolves.toBeUndefined();
+
+    const secretProject = path.join(path.dirname(project), 'secret-project');
+    await mkdir(secretProject);
+    await expect(importMcpServer({
+      ...request,
+      cwd: secretProject,
+      text: 'API_TOKEN=literal-secret-value-0123456789 npx docs-mcp',
+      trustFreshProject: { knownFolders: [secretProject] },
+    })).rejects.toMatchObject({ code: 'scope-blocked' });
+    await expect(trustManager.getDecision(secretProject)).resolves.toBeUndefined();
+
+    const racedProject = path.join(path.dirname(project), 'raced-project');
+    const racedConfig = path.join(racedProject, '.ai-harness');
+    const racedLock = path.join(racedConfig, 'mcp.json.lock');
+    await mkdir(racedConfig, { recursive: true });
+    await writeFile(racedLock, 'busy');
+    const racedImport = importMcpServer({
+      ...request,
+      cwd: racedProject,
+      trustFreshProject: { knownFolders: [racedProject] },
+    });
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if ((await trustManager.getDecision(racedProject))?.decision === true) break;
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    expect(await trustManager.getDecision(racedProject)).toMatchObject({ decision: true, path: racedProject });
+    await writeFile(path.join(racedConfig, 'settings.json'), '{}');
+    await rm(racedLock);
+    await expect(racedImport).rejects.toMatchObject({ code: 'folder-not-fresh', trustKept: false });
+    await expect(trustManager.getDecision(racedProject)).resolves.toBeUndefined();
+    await expect(readFile(path.join(racedConfig, 'mcp.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('rejects missing, unknown, reserved, and unsafe field input without creating a file', async () => {
     const { agentDir } = await fixture();
     const text = JSON.stringify({ command: '<binary>', args: ['-c', 'run'], env: { TOKEN: 'YOUR_TOKEN' } });
