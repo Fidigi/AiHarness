@@ -128,7 +128,7 @@ The built-in `spawn_subagent` tool, available in presets that permit reading, st
 
 ### Custom Providers and OAuth
 
-ProviderRegistryService persists non-secret definitions in providers.json, their secrets in provider-secrets.enc only with AI_HARNESS_MASTER_KEY (otherwise memory). OpenAI Completions/Responses, Anthropic and Google dialects adapted to proxy, testable and discoverable. Custom models enrich capabilities, context, price and compatibility. ProviderOAuthService keeps device code server-side, imposes HTTPS endpoints and bounded responses/timeouts, then stores token directly in vault or proxy memory without returning it to browser.
+ProviderRegistryService persists non-secret definitions in providers.json and keeps API keys and headers in separate namespaces of provider-secrets.enc. Any secret-bearing mutation requires the AI_HARNESS_MASTER_KEY-backed persistent store and is rolled back if durable publication fails. OpenAI Completions/Responses, Anthropic and Google dialects are adapted to the shared bounded proxy, testable and discoverable. Custom models enrich capabilities, context, price and compatibility. ProviderOAuthService keeps the device code server-side, imposes HTTPS endpoints plus bounded responses/timeouts, and refuses before network access when persistent encrypted storage is unavailable; it persists and validates the token before runtime activation without returning it to the browser.
 
 ### Web Push Notifications
 
@@ -145,6 +145,6 @@ PushService generates VAPID keys and keeps up to 1000 subscriptions in push.enc 
 - distinct capabilities for read, workspace/file write, terminal, configuration, credentials and packages administration;
 - Origin verification on mutations and WebSocket upgrades;
 - JSON/upload limits, in-memory rate limiting and neutralized 5xx messages;
-- WebSocket authentication by cookie, Bearer or subprotocol (query token only compatible with legacy clients).
+- WebSocket authentication by cookie, Authorization Bearer or encoded bearer subprotocol; query strings are rejected, bearer material is never reflected, and only `aih.v1` is negotiated.
 
 In multi-replica deployment, reverse proxy must also apply rate limits and HTTPS.

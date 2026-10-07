@@ -162,7 +162,7 @@ Saisissez ensuite un message et validez avec Entrée. La réponse est affichée 
 | `--session-dir <dossier>` | remplace le dossier de stockage/recherche des sessions |
 | `-n`, `--name <nom>` | nomme ou renomme la session de démarrage |
 | `--no-session` | conserve la conversation uniquement en mémoire |
-| `--theme dark` / `--theme light` | sélectionne un thème intégré |
+| `--theme dark` / `--theme light` / `--theme system` | sélectionne un thème intégré ; `system` interroge sûrement la palette du terminal |
 | `--theme <fichier.json>` | charge un thème personnalisé |
 | `--extension <fichier-ou-dossier>` | charge une extension JavaScript explicite ; option répétable |
 
@@ -186,13 +186,13 @@ Les prompts positionnels sont envoyés dans l’ordre. `@chemin` est résolu dan
 
 La résolution teste l’ID complet avant d’interpréter son dernier deux-points comme suffixe de raisonnement : les ID contenant `/` ou `:` restent donc valides. Un ID nu partagé entre plusieurs providers n’est résolu que si exactement un provider correspondant est configuré ; sinon, qualifiez-le. La recherche floue privilégie un alias non daté ou `-latest`, puis l’ID lexicalement le plus récent. Les motifs de portée sont ordonnés, dédupliqués et prennent en charge les globs `*`, `?` et crochets sans distinction de casse ; le premier résultat disponible démarre le run sauf sélection différente par `--model`, puis `/model cycle` et RPC réutilisent cette portée. La découverte est bornée en durée et en nombre de résultats. Les catalogues et sessions ne conservent jamais `--api-key`, mais un secret passé en argument peut rester visible dans l’historique du shell ou la liste des processus : préférez les variables d’environnement du provider pour un credential durable.
 
-Sans sélecteur de session, chaque invocation démarre une nouvelle session. `--resume` exige un terminal interactif ; utilisez `--session` ou `--continue` pour l’automatisation print/JSON. Un chemin de session explicite prévaut ; sinon l’ordre du stockage est `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, le réglage `sessionDir`, puis le dossier par défaut. Les sélecteurs incompatibles échouent avant l’exécution.
+Sans sélecteur de session, chaque invocation démarre une nouvelle session. `--resume` exige un terminal interactif ; utilisez `--session` ou `--continue` pour l’automatisation print/JSON. Un chemin de session explicite prévaut ; sinon l’ordre du stockage est `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, le réglage `sessionDir`, puis le dossier par défaut. Les sélecteurs incompatibles échouent avant l’exécution. Les ID sont limités à 256 octets, chaque fichier JSONL à 64 Mio et la découverte à 10 000 fichiers. Les fichiers sont privés, ouverts sans suivi et lus avec contrôle de stabilité ; append/save/delete sont sérialisés par verrou entre processus coopérants et les réécritures sont atomiques. La découverte tardive d’un credential provoque aussi la réécriture expurgée des anciennes sessions.
 
 La variable `AI_HARNESS_TUI_MODE=regular|fullscreen` permet aussi de définir le mode. L’option en ligne de commande reste prioritaire sur les réglages.
 
 ### Réglages de l’agent
 
-Le CLI et RPC utilisent le résolveur de réglages du Core AiHarness. Ils lisent les réglages utilisateur dans `<répertoire-agent>/settings.json` (`AI_HARNESS_AGENT_DIR`, sinon `~/.ai-harness`), puis superposent `<workspace>/.ai-harness/settings.json` après résolution positive de la confiance du projet. Aucun contenu de réglage projet n’est lu avant cette résolution ; un `sessionDir` projet ne participe à la priorité de stockage qu’après résolution positive de la confiance. Les sources doivent être des fichiers JSON UTF-8 réguliers, non symboliques, de 256 Kio au plus ; un champ invalide ou inconnu produit un avertissement sans afficher sa valeur. Ces réglages sont en lecture seule : AiHarness ne réécrit jamais les fichiers.
+Le CLI et RPC utilisent le résolveur de réglages du Core AiHarness. Avant confiance, `AI_HARNESS_AGENT_DIR` n’est accepté que si son chemin canonique est sans lien symbolique et extérieur au workspace ; sinon Core choisit un répertoire indépendant home/XDG/temporaire lié à l’UID, ou s’arrête sûrement. Un projet ne peut donc pas fournir lui-même son `trust.json`, ses réglages ou credentials. Le résolveur lit `<répertoire-agent>/settings.json`, puis superpose `<workspace>/.ai-harness/settings.json` après résolution positive de la confiance du projet. Aucun contenu de réglage projet n’est lu avant cette résolution ; un `sessionDir` projet ne participe à la priorité de stockage qu’après confiance. Les sources doivent être des fichiers JSON UTF-8 réguliers, sans lien symbolique ni lien dur, de 256 Kio au plus par défaut ; un champ invalide ou inconnu produit un avertissement sans afficher sa valeur. Ces réglages sont en lecture seule : AiHarness ne réécrit jamais les fichiers.
 
 Voici un point de départ :
 
@@ -214,7 +214,7 @@ Voici un point de départ :
 }
 ```
 
-Sont aussi appliqués : `modelThinkingLevels` exact, les `modelOverrides` de compaction, `defaultProjectTrust` global (`ask`, `always` ou `never`), `externalEditor`, `quietStartup: true`, `shellPath`, `shellCommandPrefix`, les chemins locaux d’extensions/skills/prompts, `enableSkillCommands` et les modificateurs projet de `defaultTools`. Les runs Web détachés et approuvés résolvent aussi `steeringMode` et `followUpMode` au démarrage via le même chargeur et ordonnanceur Core. Les options CLI explicites restent prioritaires. `/settings` affiche les valeurs effectives et leurs sources `global`/`project`. `/reload` recharge les décisions persistées, réglages, instructions, ressources, extensions, outils par défaut, modes des files interactives et callbacks shell ; les choix de confiance limités au processus restent inchangés. Redémarrez pour changer le dossier de sessions, le modèle initial, le renderer/thème, les modes de file RPC, la compaction ou les retries. L’installation de packages, les commutateurs d’extensions intégrées, les thèmes ressources, la génération de résumés de branche, codemode, les réglages réseau/proxy/transport/retry provider, les options terminal/image/Markdown détaillées, la télémétrie et les avertissements ne sont pas encore appliqués.
+Sont aussi appliqués : `modelThinkingLevels` exact, les `modelOverrides` de compaction, `defaultProjectTrust` global (`ask`, `always` ou `never`), `externalEditor`, `quietStartup: true`, `shellPath`, `shellCommandPrefix`, les chemins locaux d’extensions/skills/prompts, `enableSkillCommands`, les modificateurs projet de `defaultTools`, la politique réseau provider et les commandes de credentials de confiance. Les runs Web détachés et approuvés résolvent aussi `steeringMode` et `followUpMode` au démarrage via le même chargeur et ordonnanceur Core. Les options CLI explicites restent prioritaires. `/settings` affiche les valeurs effectives et leurs sources `global`/`project`, jamais la valeur du proxy ni les commandes de credentials. `/reload` recharge confiance, réglages, credentials, réseau/providers/modèle/thinking, instructions, ressources, extensions, outils, files, callbacks shell et thème actif ; les choix de confiance limités au processus restent inchangés. Redémarrez pour changer le dossier de sessions, le type de renderer terminal ou les valeurs initiales RPC. Les commutateurs d’extensions intégrées, la génération de résumés de branche, codemode, les options terminal/image/Markdown détaillées, la télémétrie et les avertissements ne sont pas encore appliqués.
 
 ### Instructions du projet et prompts système
 
@@ -295,7 +295,10 @@ Pour exécuter directement une commande dans le workspace approuvé, préfixez-l
 | `/model <[provider/]nom[:thinking]>` | choisit un modèle exact/flou, y compris parmi les providers configurés |
 | `/model cycle` | passe au modèle suivant de la portée `--models` ordonnée, ou du catalogue du provider actif |
 | `/thinking [off|minimal|low|medium|high|xhigh|max]` | affiche ou change le niveau de raisonnement |
-| `/login <provider>` | lance un flux OAuth Device configuré |
+| `/credentials` | liste les descripteurs et origines des credentials, jamais leurs valeurs |
+| `/credential reveal <provider>` | révèle une valeur seulement dans un terminal local interactif |
+| `/login <provider>` | lance un flux OAuth Device borné et configuré |
+| `/logout <provider>` | supprime le credential mémoire/chiffré de ce provider |
 | `/config` | affiche l’emplacement des sessions |
 | `/settings` | affiche les réglages effectifs de l’agent et leurs sources |
 
@@ -310,7 +313,26 @@ export AI_HARNESS_OAUTH_OPENAI_CLIENT_ID='...'
 export AI_HARNESS_OAUTH_OPENAI_SCOPE='...' # facultatif
 ```
 
-Le préfixe suit la forme `AI_HARNESS_OAUTH_<PROVIDER>_*`.
+Le préfixe suit la forme `AI_HARNESS_OAUTH_<PROVIDER>_*`. Avec `AI_HARNESS_MASTER_KEY`, les credentials sont chiffrés dans le répertoire agent indépendant et approuvé. Les credentials d’environnement, les commandes `providerApiKeyCommands` de confiance et les valeurs CLI explicites peuvent rester locales au processus sans cette clé, mais `/login` refuse avant tout accès réseau si le stockage chiffré persistant n’est pas disponible. L’ordre de résolution est : variables d’environnement provider, commandes de credentials de confiance, mémoire, puis stockage chiffré. Une commande de credential est une configuration exécutable : sa stdout bornée reste seulement en mémoire.
+
+Les réglages réseau provider sont appliqués à l’exécution :
+
+```json
+{
+  "transport": "websocket-cached",
+  "httpProxy": "http://127.0.0.1:8080",
+  "httpIdleTimeoutMs": 300000,
+  "websocketConnectTimeoutMs": 15000,
+  "retry": {
+    "provider": { "timeoutMs": 300000, "maxRetries": 1, "maxRetryDelayMs": 5000 }
+  },
+  "providerApiKeyCommands": {
+    "openai": "security find-generic-password -w -s openai"
+  }
+}
+```
+
+`auto` utilise le WebSocket OpenAI Responses avec un cache borné par session lorsqu’il est pris en charge, et ne se replie vers SSE qu’avant le premier événement WebSocket. Proxy HTTP(S), délais de handshake/requête/inactivité et retries sont bornés ; les erreurs ne répètent jamais URL, corps distant, headers ou credentials proxy. Les secrets runtime connus sont retirés des sessions, outils, sorties shell/terminal, diagnostics, JSON/RPC, HTTP, SSE et WebSocket, y compris encodés ou répartis entre plusieurs chunks. La commande locale exacte `/credential reveal` est l’unique exception volontaire.
 
 ### Outils de code intégrés
 
@@ -373,7 +395,7 @@ export AI_HARNESS_AUTH_TOKEN='...'       # si le serveur est protégé
 export AI_HARNESS_ISSUES_URL='https://github.com/Fidigi/AiHarness/issues/new'
 ```
 
-Les liens de partage expirent après 24 heures par défaut ; la durée acceptée est limitée à 1–168 heures et les liens sont perdus au redémarrage du serveur.
+Les liens de partage expirent après 24 heures par défaut ; la durée acceptée est limitée à 1–168 heures et les liens sont perdus au redémarrage du serveur. Le CLI refuse les URL HTTP distantes, les credentials intégrés à l’URL et les redirections ; utilisez HTTPS pour tout serveur qui n’est pas loopback. La réponse est bornée et validée avant affichage.
 
 ### Skills et prompts
 
@@ -382,6 +404,8 @@ Le CLI découvre les skills `SKILL.md` dans :
 - `~/.agents/skills/` et `<répertoire-agent>/skills/` (par défaut : `~/.ai-harness/skills/`) ;
 - les dossiers approuvés `<projet>/.agents/skills/` et `<projet>/.ai-harness/skills/` ;
 - les sélecteurs utilisateur/projet `skills` supplémentaires de `settings.json`.
+
+Chaque skill CLI exige un frontmatter YAML avec `name` et `description`. Le `name` normalisé doit correspondre au répertoire parent, et le champ facultatif `disable-model-invocation` est strictement booléen.
 
 Exemple `~/.ai-harness/skills/relecture/SKILL.md` :
 
@@ -449,7 +473,7 @@ Un thème personnalisé est un fichier JSON :
 }
 ```
 
-Chargez-le avec `--theme ./mon-theme.json`. Sans option, `AI_HARNESS_THEME=dark|light|auto` et `COLORFGBG` participent à la détection.
+Chargez-le avec `--theme ./mon-theme.json`, changez-le en direct avec `/theme [nom]`, ou utilisez `--theme system`. Le thème système applique immédiatement un fallback lisible, interroge pendant 100 ms au plus les couleurs de premier plan, fond et ANSI d’un TTY, puis accepte les réponses tardives et notifications light/dark valides. Les réponses du probe sont filtrées avant readline et l’éditeur plein écran. Un thème personnalisé peut aussi déclarer des `vars` bornées, les tokens riches Markdown/outils/syntaxe, des couleurs nommées, des indices ANSI `0`–`255` et des couleurs d’export facultatives. Un thème situé dans le workspace reste bloqué avant confiance, même sélectionné explicitement. `AI_HARNESS_THEME=dark|light|auto` et `COLORFGBG` restent des entrées de fallback.
 
 Un fichier de raccourcis peut réaffecter les actions `app.help` et `terminal.clear` :
 
@@ -594,7 +618,7 @@ export AI_HARNESS_OAUTH_OPENAI_SCOPE='...' # facultatif
 
 Remplacez `OPENAI` par le nom du provider en majuscules. Les endpoints OAuth doivent être HTTPS, sans credentials intégrés. L’annulation invalide le Device Flow local ; reconnecter remplace le token précédent.
 
-**Manage compatible providers** accepte un identifiant stable, un nom, une URL HTTP(S), le dialecte OpenAI Chat Completions, OpenAI Responses, Anthropic Messages ou Google Generative Language, une clé facultative et des headers JSON. Vous pouvez tester la connexion, importer les modèles annoncés, déconnecter ou supprimer l’entrée. AiHarness n’exécute volontairement aucune commande shell pour obtenir un secret.
+**Manage compatible providers** accepte un identifiant stable, un nom, une URL HTTP(S) sans userinfo/query/fragment, le dialecte OpenAI Chat Completions, OpenAI Responses, Anthropic Messages ou Google Generative Language, une clé facultative et des headers JSON. Vous pouvez tester la connexion, importer les modèles annoncés, déconnecter ou supprimer l’entrée. Ce formulaire navigateur ne fournit ni ne lance aucune commande de credential ; seul un réglage `providerApiKeyCommands` de confiance, détenu par l’opérateur, peut en exécuter une sur l’hôte.
 
 **Custom models** permet d’ajouter à n’importe quel provider un ID et un nom, les capacités raisonnement/images/outils, fenêtre de contexte, sortie maximale, prix par million de tokens entrée/sortie/cache et paramètres de compatibilité JSON. Les métadonnées personnalisées prévalent sur le catalogue publié. Un test de connexion vérifie explicitement l’entrée ; un modèle sans tool calls désactive les outils pour le run.
 
@@ -860,7 +884,7 @@ Le bouton `⌘` ou le raccourci `Ctrl+Maj+T` charge puis ouvre un vrai terminal 
 
 La taille suit le panneau. `Ctrl+Maj+C` copie la sélection xterm et `Ctrl+Maj+V` colle le presse-papiers lorsque le navigateur l’autorise. Les onglets et le terminal actif sont mémorisés dans `sessionStorage` par workspace pour l’onglet navigateur courant. Après un rechargement ou une coupure réseau, le client reprend le journal ANSI à son dernier offset ; il signale explicitement si la partie la plus ancienne a été évincée du journal borné.
 
-Le serveur limite le nombre de PTY, la taille des entrées et les dimensions. Création, saisie, redimensionnement et fermeture exigent la capacité terminal ainsi qu’un workspace canonique approuvé. L’environnement initial est construit par liste blanche et n’hérite pas des tokens d’authentification ni des clés provider du serveur. Tous les PTY encore actifs sont arrêtés avec le serveur. Un terminal permet néanmoins d’exécuter des commandes avec les droits de l’utilisateur système du serveur : ne donnez la capacité terminal qu’à un administrateur de confiance.
+Le serveur limite le nombre de PTY, la taille des entrées et les dimensions. Création, saisie, redimensionnement et fermeture exigent la capacité terminal ainsi qu’un workspace canonique approuvé. L’environnement initial est construit par liste blanche et n’hérite pas des tokens d’authentification ni des clés provider du serveur. La sortie de chaque PTY traverse son propre redactor stateful avant le journal de replay, les abonnés ou SSE, y compris lorsqu’un credential est réparti entre plusieurs chunks. Tous les PTY encore actifs sont arrêtés avec le serveur. Un terminal permet néanmoins d’exécuter des commandes avec les droits de l’utilisateur système du serveur : ne donnez la capacité terminal qu’à un administrateur de confiance.
 
 ### Écrans mobiles et tablettes
 
@@ -940,7 +964,7 @@ Le token utilisateur permet chat, sessions et lectures ; le rôle administrateu
 export AI_HARNESS_MASTER_KEY="$(openssl rand -hex 32)"
 ```
 
-Sans `AI_HARNESS_MASTER_KEY`, les clés envoyées depuis Settings, les secrets de providers personnalisés et les souscriptions Push restent seulement en mémoire jusqu’au redémarrage. Les clés fournies directement par variables d’environnement restent la méthode recommandée en production. Les fichiers chiffrés ne sont jamais servis au navigateur ; changer la clé maître rend leur ancien contenu illisible et entraîne une rotation sûre des données Push.
+Sans `AI_HARNESS_MASTER_KEY`, Settings refuse avant activation les mutations de clés intégrées, d’OAuth provider et de secrets de providers personnalisés ; aucun succès n’est annoncé pour un credential volatil. Les credentials d’environnement ou de commande restent des alternatives locales au processus, tandis que les souscriptions Push demeurent volatiles jusqu’au redémarrage. Les fichiers chiffrés ne sont jamais servis au navigateur ; changer la clé maître rend leur ancien contenu illisible et entraîne une rotation sûre des données Push.
 
 Pour les liens `/share`, configurez l’URL publique correcte :
 

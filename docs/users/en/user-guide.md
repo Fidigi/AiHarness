@@ -162,7 +162,7 @@ Then type a message and press Enter. The response displays progressively.
 | `--session-dir <directory>` | overrides the session storage/lookup directory |
 | `-n`, `--name <name>` | names or renames the startup session |
 | `--no-session` | keeps conversation in memory only |
-| `--theme dark` / `--theme light` | selects a built-in theme |
+| `--theme dark` / `--theme light` / `--theme system` | selects a built-in theme; `system` probes the terminal palette safely |
 | `--theme <file.json>` | loads a custom theme |
 | `--extension <file-or-folder>` | loads an explicit JavaScript extension; repeatable option |
 
@@ -186,13 +186,13 @@ Positional prompts are sent in order. `@path` resolves inside the startup worksp
 
 Model resolution checks the complete ID before treating its last colon as a thinking suffix, so IDs containing `/` or `:` remain valid. A bare ID shared by providers resolves only when exactly one matching provider is configured; otherwise qualify it. Fuzzy lookup prefers an undated/`-latest` alias, then the lexically newest ID. Scope patterns are ordered, deduplicated and support case-insensitive `*`, `?` and bracket globs; their first available match starts the run unless `--model` selects another, and `/model cycle` plus RPC reuse that scope. Discovery is timeout- and result-bounded. Catalogues and sessions never retain `--api-key`, but command-line secrets may remain visible in shell history or process listings, so prefer provider environment variables for durable credentials.
 
-Without a session selector, each invocation starts a new session. `--resume` requires an interactive terminal; use `--session` or `--continue` in print/JSON automation. An explicit session path wins; otherwise storage precedence is `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, settings `sessionDir`, then the default directory. Incompatible selectors fail before execution.
+Without a session selector, each invocation starts a new session. `--resume` requires an interactive terminal; use `--session` or `--continue` in print/JSON automation. An explicit session path wins; otherwise storage precedence is `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, settings `sessionDir`, then the default directory. Incompatible selectors fail before execution. Session IDs are capped at 256 bytes, each JSONL file at 64 MiB, and discovery at 10,000 files. Files are private, no-follow and stable-read checked; append/save/delete operations are lock-serialized across cooperating processes and rewrites are atomic. Newly discovered credentials also trigger redacted rewrites of legacy session content.
 
 The `AI_HARNESS_TUI_MODE=regular|fullscreen` variable also sets the mode. The command-line option takes priority over settings.
 
 ### Agent Settings
 
-The CLI and RPC use AiHarness's Core settings resolver. They read user settings from `<agent-directory>/settings.json` (`AI_HARNESS_AGENT_DIR`, otherwise `~/.ai-harness`) and, after project trust resolves, overlay `<workspace>/.ai-harness/settings.json`. No project setting body is read before trust; a project `sessionDir` participates in storage precedence only after trust resolves. Files must be regular nonsymlink UTF-8 JSON and are capped at 256 KiB; invalid or unknown fields produce a warning without printing their values. Settings are read-only: AiHarness never rewrites them.
+The CLI and RPC use AiHarness's Core settings resolver. Before trust, `AI_HARNESS_AGENT_DIR` is accepted only when its canonical path is symlink-free and outside the workspace; otherwise Core selects an independent home/XDG/UID-temporary directory or stops safely. This prevents a project from supplying its own `trust.json`, settings or credentials. The resolver reads `<agent-directory>/settings.json` and, after project trust resolves, overlays `<workspace>/.ai-harness/settings.json`. No project setting body is read before trust; a project `sessionDir` participates in storage precedence only after trust resolves. Files must be regular, hardlink-free, nonsymlink UTF-8 JSON and are capped at 256 KiB by default; invalid or unknown fields produce a warning without printing their values. Settings are read-only: AiHarness never rewrites them.
 
 A useful starting file is:
 
@@ -214,7 +214,7 @@ A useful starting file is:
 }
 ```
 
-Also implemented are exact `modelThinkingLevels`, compaction `modelOverrides`, global `defaultProjectTrust` (`ask`, `always`, or `never`), `externalEditor`, `quietStartup: true`, `shellPath`, `shellCommandPrefix`, local extension/skill/prompt paths, `enableSkillCommands`, and project `defaultTools` modifiers. Detached trusted Web runs also resolve `steeringMode` and `followUpMode` at run start through the same Core loader and scheduler. Explicit CLI options take priority. Use `/settings` to inspect effective values and `global`/`project` sources. `/reload` refreshes persisted trust decisions, settings, instructions, resources, extensions, tool defaults, interactive queue modes and shell callbacks; process-only trust choices remain unchanged. Restart to change the session directory, startup model, renderer/theme, RPC queue defaults, compaction or retry policy. Package installation, built-in extension switches, custom theme resources, branch-summary generation, codemode, network/proxy/transport/provider retry, detailed terminal/image/Markdown options, telemetry and warning settings are not yet applied.
+Also implemented are exact `modelThinkingLevels`, compaction `modelOverrides`, global `defaultProjectTrust` (`ask`, `always`, or `never`), `externalEditor`, `quietStartup: true`, `shellPath`, `shellCommandPrefix`, local extension/skill/prompt paths, `enableSkillCommands`, project `defaultTools` modifiers, provider network policy and trusted credential commands. Detached trusted Web runs also resolve `steeringMode` and `followUpMode` at run start through the same Core loader and scheduler. Explicit CLI options take priority. Use `/settings` to inspect effective values and `global`/`project` sources; proxy values and credential commands are never displayed. `/reload` refreshes persisted trust, settings, credentials, network/provider/model/thinking state, instructions, resources, extensions, tool defaults, queue modes, shell callbacks and the active theme; process-only trust choices remain unchanged. Restart to change the session directory, terminal renderer kind or RPC startup defaults. Package installation, built-in extension switches, branch-summary generation, codemode, detailed terminal/image/Markdown options, telemetry and warning settings are not yet applied.
 
 ### Project Instructions and System Prompts
 
@@ -295,7 +295,10 @@ Prefix input with `!` to run a command directly in the trusted workspace. Its pr
 | `/model <[provider/]name[:thinking]>` | chooses an exact/fuzzy model, including across configured providers |
 | `/model cycle` | switches to the next model in the ordered `--models` scope, or the active provider catalogue |
 | `/thinking [off\|minimal\|low\|medium\|high\|xhigh\|max]` | displays or changes thinking level |
-| `/login <provider>` | starts an OAuth Device Flow if configured |
+| `/credentials` | lists credential descriptors and origins without values |
+| `/credential reveal <provider>` | reveals one value only in an interactive local terminal |
+| `/login <provider>` | starts a bounded OAuth Device Flow if configured |
+| `/logout <provider>` | removes that provider's memory/encrypted credential |
 | `/config` | displays session location |
 | `/settings` | displays effective agent settings and source scopes |
 
@@ -310,7 +313,26 @@ export AI_HARNESS_OAUTH_OPENAI_CLIENT_ID='...'
 export AI_HARNESS_OAUTH_OPENAI_SCOPE='...' # optional
 ```
 
-The prefix follows the form `AI_HARNESS_OAUTH_<PROVIDER>_*`.
+The prefix follows the form `AI_HARNESS_OAUTH_<PROVIDER>_*`. With `AI_HARNESS_MASTER_KEY`, credentials are encrypted in the independently trusted agent directory. Environment, trusted `providerApiKeyCommands` and explicit CLI credentials may remain process-local without it, but `/login` refuses before network access unless the encrypted persistent store is available. Resolution order is provider environment variables, trusted credential commands, memory, then encrypted storage. A credential command is executable configuration: its bounded stdout is cached only in memory.
+
+Provider network settings are applied at runtime:
+
+```json
+{
+  "transport": "websocket-cached",
+  "httpProxy": "http://127.0.0.1:8080",
+  "httpIdleTimeoutMs": 300000,
+  "websocketConnectTimeoutMs": 15000,
+  "retry": {
+    "provider": { "timeoutMs": 300000, "maxRetries": 1, "maxRetryDelayMs": 5000 }
+  },
+  "providerApiKeyCommands": {
+    "openai": "security find-generic-password -w -s openai"
+  }
+}
+```
+
+`auto` uses OpenAI Responses WebSocket with a bounded per-session cache when supported and falls back to SSE only before the first WebSocket event. HTTP(S) proxying, handshake/request/idle deadlines and retry delays are bounded; failures never echo URLs, remote bodies, headers or proxy credentials. Known runtime secrets are removed from sessions, tools, shell/terminal output, diagnostics, JSON/RPC, HTTP, SSE and WebSocket output, including encoded values or values split across chunks. The exact local `/credential reveal` command is the only intentional exception.
 
 ### Built-in Coding Tools
 
@@ -373,7 +395,7 @@ export AI_HARNESS_AUTH_TOKEN='...'       # if the server is protected
 export AI_HARNESS_ISSUES_URL='https://github.com/Fidigi/AiHarness/issues/new'
 ```
 
-Share links expire after 24 hours by default; accepted duration is limited to 1-168 hours and links are lost on server restart.
+Share links expire after 24 hours by default; accepted duration is limited to 1–168 hours and links are lost on server restart. The CLI refuses remote plain-HTTP server URLs, embedded URL credentials and redirects; use HTTPS for every non-loopback server. Its response is size-bounded and validated before display.
 
 ### Skills and Prompts
 
@@ -382,6 +404,8 @@ The CLI discovers `SKILL.md` files in:
 - `~/.agents/skills/` and `<agent-directory>/skills/` (default: `~/.ai-harness/skills/`);
 - trusted `<project>/.agents/skills/` and `<project>/.ai-harness/skills/`;
 - additional user/project `skills` selectors from `settings.json`.
+
+Every CLI skill requires YAML frontmatter with `name` and `description`. The normalized `name` must match the containing directory, and optional `disable-model-invocation` is strictly Boolean.
 
 Example `~/.ai-harness/skills/review/SKILL.md`:
 
@@ -449,7 +473,7 @@ A custom theme is a JSON file:
 }
 ```
 
-Load it with `--theme ./my-theme.json`. Without the option, `AI_HARNESS_THEME=dark|light|auto` and `COLORFGBG` participate in detection.
+Load it with `--theme ./my-theme.json`, switch live with `/theme [name]`, or use `--theme system`. The system theme immediately uses a readable fallback, asks a TTY for foreground/background and ANSI colors for at most 100 ms, then accepts valid late palette and light/dark notifications. Probe replies are filtered out before readline/fullscreen key handling. Custom themes may also define bounded `vars`, rich Markdown/tool/syntax tokens, named colors, ANSI indices `0`–`255`, and optional export colors. A theme path inside the workspace is blocked until project trust even when selected explicitly. `AI_HARNESS_THEME=dark|light|auto` and `COLORFGBG` remain fallback inputs.
 
 A keybindings file can reassign `app.help` and `terminal.clear` actions:
 
@@ -594,7 +618,7 @@ export AI_HARNESS_OAUTH_OPENAI_SCOPE='...' # optional
 
 Replace OPENAI with the provider name in uppercase. OAuth endpoints must be HTTPS, without embedded credentials. Cancellation invalidates the local Device Flow; reconnecting replaces the previous token.
 
-**Manage compatible providers** accepts a stable identifier, name, HTTP(S) URL, dialect (OpenAI Chat Completions, OpenAI Responses, Anthropic Messages or Google Generative Language), optional key and JSON headers. You can test connectivity, import announced models, disconnect or delete entries. AiHarness deliberately executes no shell commands to obtain secrets.
+**Manage compatible providers** accepts a stable identifier, name, HTTP(S) URL without userinfo/query/fragment, dialect (OpenAI Chat Completions, OpenAI Responses, Anthropic Messages or Google Generative Language), optional key and JSON headers. You can test connectivity, import announced models, disconnect or delete entries. This browser form never supplies or starts a credential command; only an operator-owned trusted `providerApiKeyCommands` setting can do so on the host.
 
 **Custom models** lets you add any provider an ID and name, reasoning/image/tool capabilities, context window, max output, per-million-token input/output/cache prices and JSON compatibility settings. Custom metadata takes precedence over the published catalog. A connectivity test explicitly validates the entry; a model without tool calls disables tools for the run.
 
@@ -855,7 +879,7 @@ The Cmd button or shortcut Ctrl+Shift+T loads then opens a real PTY terminal in 
 
 Size follows panel. Ctrl+Shift+C copies xterm selection and Ctrl+Shift+V pastes clipboard when browser allows it. Tabs and active terminal are remembered in `sessionStorage` by workspace for current browser tab. After reload or network cut, client resumes ANSI journal at last offset; explicitly signals if oldest part evicted from bounded journal.
 
-Server limits PTY count, input size and dimensions. Creation, input, resize and close demand terminal capability plus approved canonical workspace. Initial environment built by whitelist and does not inherit server auth tokens nor provider keys. All active PTY stop with server. A terminal can still execute commands with server system user rights: only give terminal capability to trusted administrators.
+Server limits PTY count, input size and dimensions. Creation, input, resize and close demand terminal capability plus approved canonical workspace. Initial environment built by whitelist and does not inherit server auth tokens nor provider keys. PTY output passes through a per-terminal stateful credential redactor before replay storage, subscribers or SSE, including secrets split across chunks. All active PTYs stop with the server. A terminal can still execute commands with server system user rights: only give terminal capability to trusted administrators.
 
 ### Mobile and Tablet Screens
 
@@ -935,7 +959,7 @@ User token allows chat, sessions and reads; admin role required for trust/worktr
 export AI_HARNESS_MASTER_KEY="$(openssl rand -hex 32)"
 ```
 
-Without `AI_HARNESS_MASTER_KEY`, keys sent from Settings, custom provider secrets and Push subscriptions stay in memory only until restart. Keys provided directly via environment variables remain recommended method in production. Encrypted files never served to browser; changing master key makes old content unreadable and triggers secure Push data rotation.
+Without `AI_HARNESS_MASTER_KEY`, Settings refuses built-in key, provider OAuth and custom-provider secret mutations before activation; it does not report success for a volatile credential. Environment/command credentials remain process-local alternatives, while Push subscriptions stay volatile until restart. Encrypted files are never served to the browser; changing the master key makes old credential content unreadable and triggers secure Push data rotation.
 
 For `/share` links, configure correct public URL:
 

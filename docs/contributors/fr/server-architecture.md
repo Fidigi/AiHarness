@@ -128,7 +128,7 @@ L'outil intégré `spawn_subagent`, disponible avec les presets autorisant la le
 
 ### Providers personnalisés et OAuth
 
-`ProviderRegistryService` persiste les définitions non secrètes dans `providers.json`, et leurs secrets dans `provider-secrets.enc` uniquement avec `AI_HARNESS_MASTER_KEY` (sinon en mémoire). Les dialectes OpenAI Completions/Responses, Anthropic et Google sont adaptés au proxy, testables et découvrables. Les modèles personnalisés enrichissent capacités, contexte, prix et compatibilité. `ProviderOAuthService` garde le device code côté serveur, impose endpoints HTTPS et réponses/délais bornés, puis stocke directement le token dans le coffre ou la mémoire du proxy sans le retourner au navigateur.
+`ProviderRegistryService` persiste les définitions non secrètes dans `providers.json` et sépare clés API et headers dans deux espaces de noms de `provider-secrets.enc`. Toute mutation contenant un secret exige le stockage persistant protégé par `AI_HARNESS_MASTER_KEY` et est annulée si la publication durable échoue. Les dialectes OpenAI Completions/Responses, Anthropic et Google sont adaptés au proxy borné partagé, testables et découvrables. Les modèles personnalisés enrichissent capacités, contexte, prix et compatibilité. `ProviderOAuthService` garde le device code côté serveur, impose endpoints HTTPS et réponses/délais bornés, et refuse avant le réseau si le stockage chiffré persistant est indisponible ; il persiste et valide le token avant son activation runtime sans le retourner au navigateur.
 
 ### Notifications Web Push
 
@@ -145,6 +145,6 @@ L'outil intégré `spawn_subagent`, disponible avec les presets autorisant la le
 - capacités distinctes pour lecture, écriture workspace/fichiers, terminal, configuration, credentials et administration des packages ;
 - vérification d'`Origin` sur les mutations et upgrades WebSocket ;
 - limites JSON/upload, rate limiting en mémoire et messages 5xx neutralisés ;
-- authentification WebSocket par cookie, Bearer ou sous-protocole (le query token reste seulement compatible avec les anciens clients).
+- authentification WebSocket par cookie, header Authorization Bearer ou sous-protocole bearer encodé ; toute query string est refusée, le bearer n’est jamais réfléchi et seul `aih.v1` est négocié.
 
 Dans un déploiement multi-réplique, le reverse proxy doit aussi appliquer limites de débit et HTTPS.

@@ -53,7 +53,9 @@ SessionManager.addCommand -> append command -> advance leaf -> update memory/eve
 SessionManager.getRawEntries -> complete journal, including pre-compaction and abandoned entries
 ```
 
-The manager maintains the same journal semantics in process memory under `--no-session`. Saving metadata merges known entries without deleting durable descendants, although v2 metadata updates still rewrite the file rather than using an append-only metadata revision. Await every write before reporting success. `JsonlSessionStore` validates IDs, opens only regular non-symlink files, and forces owner-only permissions.
+The manager maintains the same journal semantics in process memory under `--no-session`. Saving metadata merges known entries without deleting durable descendants, although v2 metadata updates still rewrite the file rather than using an append-only metadata revision. Rewrites use owner-only exclusive staging, `fsync`, atomic rename and directory synchronization. Appends, rewrites and deletes share a bounded per-session heartbeat lock across cooperating processes, so a metadata save cannot discard a concurrent append. Await every write before reporting success.
+
+`JsonlSessionStore` limits IDs to 256 bytes, each file to 64 MiB and inventory to 10,000 files. It creates a private `0700` directory without traversing symbolic-link components, opens only stable UTF-8 regular files with one link, checks inode/device/size/timestamps around reads, and forces files to `0600`. Inventory uses the shared bounded stable-directory handle/listing and deterministic O(n log n) ordering.
 
 CLI and RPC choose storage in this order: an explicit `--session <path>` parent, `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, merged agent setting `sessionDir`, then `~/.ai-harness/sessions`. Project `sessionDir` participates only after project trust resolves; no project settings body is read before trust. `--no-session` bypasses the store regardless of the resolved directory.
 
@@ -83,7 +85,8 @@ Lists return metadata rather than full histories. Session state starts with a bo
 
 ## Invariants
 
-- Redact provider secrets before disk or API serialization.
+- Redact provider, tool, extension and shell content before disk or API serialization; stateful redactors join credentials split across chunks.
+- After credentials are discovered late, reload and atomically rewrite legacy JSONL so raw and encoded historical values do not survive on disk.
 - Round-trip rich blocks, tool metadata, normalized usage/cost, compaction usage, workspace/agent metadata, settings, and parent links.
 - Keep message IDs stable across JSONL, API windows, SSE replay, and Web reconciliation.
 - Use `SessionManager` for domain mutations; do not mutate its internal maps.
@@ -91,7 +94,7 @@ Lists return metadata rather than full histories. Session state starts with a bo
 
 ## Associated Tests
 
-- `packages/core/src/sessions/session-manager.test.ts` — JSONL, IDs, writes, branches, clones and context
+- `packages/core/src/sessions/session-manager.test.ts` — JSONL, IDs, 64 MiB/inventory/path bounds, stable reads, atomic rewrites, concurrent independent-store append/save locking, redaction, branches, clones and context
 - `packages/core/src/sessions/serialization.test.ts` — dates, rich data, redaction and legacy files
 - `packages/core/src/sessions/compaction.test.ts` — estimates, policy and compaction targets
 - `packages/server/src/api/session-pagination.test.ts` — bounded stable windows
