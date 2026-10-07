@@ -86,6 +86,9 @@ export default function exampleExtension(api) {
 
 ## API disponible
 
+Chaque factory reçoit `api.version`. La version `1` est aussi exportée sous le nom `AI_HARNESS_EXTENSION_API_VERSION` par `@ai-harness/core` ; une extension doit refuser une version majeure non prise en charge avant d’enregistrer son comportement.
+
+- `version` : version majeure courante du contrat d’extension propre à AiHarness.
 - `registerCommand(name, definition)` : ajoute une commande `/name`.
 - `registerTool(definition)` : ajoute un outil exécutable. Les outils sont listés par `/tools` et peuvent être testés avec `/tool <nom> <json>`.
 - `registerProvider(type, definition)` : ajoute une factory de provider sélectionnable avec `/provider <type>`.
@@ -152,3 +155,4 @@ Le déchargement retire automatiquement les commandes, outils, providers, pannea
 - Le CLI et le serveur Web chargent des générations d’extensions séparées : `/reload` recharge uniquement le processus CLI, tandis que l’API Web possède ses propres routes de reload.
 - Les panneaux CLI enregistrés avec `registerUI` sont textuels et visibles uniquement en mode plein écran ; le serveur restitue séparément ses widgets texte et interactions déclaratives.
 - Les modules exécutables sont du code Node de confiance exécuté dans le processus hôte, sans sandbox de sécurité.
+- Les règles de compatibilité publique et de probes golden sont décrites dans la [politique des contrats publics AiHarness](./public-contract-policy.md).

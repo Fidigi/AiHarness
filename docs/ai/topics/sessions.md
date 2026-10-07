@@ -4,7 +4,7 @@
 
 ## Overview
 
-Sessions are the shared conversation record for CLI and Server. Core owns the runtime `Session` contract, the custom JSONL v2 journal, active/abandoned branches, forks/clones, effective model context, compaction, and JSON wire serialization.
+Sessions are the shared conversation record for CLI and Server. Core owns the runtime `Session` contract, the custom JSONL v2 journal, active/abandoned branches, forks/clones, effective model context, compaction, and JSON wire serialization. The persisted v2 marker is independent from `AI_HARNESS_CORE_API_VERSION`; advancing one does not silently advance the other.
 
 Provider and tool turns described in [`providers.md`](./providers.md) are persisted incrementally. Web hydration and pagination must preserve the same IDs, dates, revisions, and branch relationships.
 
@@ -97,6 +97,7 @@ Lists return metadata rather than full histories. Session state starts with a bo
 - `packages/server/src/api/session-pagination.test.ts` — bounded stable windows
 - `packages/server/src/web-server.test.ts` — session HTTP, persistence, import/export and cascade behavior
 - `packages/web/src/store/session-store.test.ts` and `e2e/sessions.spec.ts` — hydration and browser lifecycle
+- `tests/functional-parity/functional-parity.test.ts` — current tree projection, unversioned read/rewrite migration and malformed/future-line rejection through the public Core entry point
 
 ## Common Changes
 

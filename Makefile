@@ -40,6 +40,7 @@ help: ## Afficher cette aide
 	@echo "    make test              Lancer tous les tests unitaires"
 	@echo "    make test-watch        Lancer les tests en mode watch"
 	@echo "    make test-coverage     Lancer les tests avec couverture"
+	@echo "    make test-parity       Lancer les contrats CLI/JSON/RPC/session/extension/SDK"
 	@echo "    make test-e2e          Lancer les tests e2e (Playwright)"
 	@echo "    make typecheck         Vérifier les types TypeScript"
 	@echo ""
@@ -119,7 +120,7 @@ clean: clean-containers clean-images ## Nettoyage complet (images + conteneurs)
 # TESTS UNITAIRES (Vitest)
 # =============================================================================
 
-.PHONY: test test-watch test-coverage typecheck
+.PHONY: test test-watch test-coverage test-parity typecheck
 
 typecheck: ## Vérifier les types TypeScript dans Docker (rebuild inclus)
 	@printf "$(GREEN)[TYPECHECK] Build de l'image + vérification TypeScript...$(NC)\n"
@@ -168,6 +169,18 @@ test-coverage: ## Lancer les tests avec couverture dans Docker (rebuild inclus)
 		-e CI=true \
 		$(IMAGE_TEST_RUN) \
 		npm run test:coverage
+
+test-parity: ## Lancer le harnais de parité fonctionnelle dans Docker
+	@printf "$(GREEN)[TEST] Contrats fonctionnels CLI/JSON/RPC/session/extension/SDK...$(NC)\n"
+	docker build -f .docker/Dockerfile.test \
+		--target test-runner \
+		-t $(IMAGE_TEST_RUN) \
+		.
+	docker run --rm \
+		--name $(CONTAINER_PREFIX)-parity-$(RUN_ID) \
+		-e CI=true \
+		$(IMAGE_TEST_RUN) \
+		npm run test:parity
 
 # =============================================================================
 # TESTS E2E (Playwright)

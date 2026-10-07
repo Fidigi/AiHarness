@@ -19,11 +19,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:parity": "vitest run tests/functional-parity",
     "test:e2e": "playwright test",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write \"**/*.{ts,tsx,json,yml}\"",
-    "typecheck": "npm run build --workspace @ai-harness/core && npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run build --workspace @ai-harness/core && npm run typecheck --workspaces --if-present && npm run typecheck:parity",
+    "typecheck:parity": "tsc --noEmit -p tests/functional-parity/tsconfig.json",
     "clean": "npm run clean --workspaces --if-present && rm -rf node_modules dist .turbo"
   },
   "devDependencies": {

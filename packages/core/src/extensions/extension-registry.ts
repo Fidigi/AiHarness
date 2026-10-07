@@ -1,5 +1,6 @@
 import type { AiProvider, ChatOptions } from '../providers/index.js';
 import { ProviderFactory } from '../providers/index.js';
+import { AI_HARNESS_EXTENSION_API_VERSION } from '../public-api-version.js';
 import type { Message, ProviderConfig, Session } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import { EventEmitter, type EventHandler, type EventMap } from '../utils/event-emitter.js';
@@ -153,6 +154,8 @@ export interface ExtensionInfo {
 }
 
 export interface ExtensionAPI {
+  /** Major version of this AiHarness-owned extension contract. */
+  readonly version: typeof AI_HARNESS_EXTENSION_API_VERSION;
   registerCommand(name: string, command: ExtensionCommand): void;
   registerTool(tool: ExtensionTool): void;
   registerProvider(type: string, provider: ExtensionProvider): void;
@@ -420,6 +423,7 @@ export class ExtensionRegistry {
 
   private createApi(extension: LoadedExtension): ExtensionAPI {
     return {
+      version: AI_HARNESS_EXTENSION_API_VERSION,
       registerCommand: (name, command) => {
         const normalized = this.normalizeName(name);
         this.assertAvailable(this.commands, normalized, 'command');

@@ -9,6 +9,7 @@ export default defineConfig({
       'packages/cli/src/**/*.test.ts',
       'packages/server/src/**/*.test.ts',
       'packages/web/src/**/*.test.ts',
+      'tests/functional-parity/**/*.test.ts',
     ],
     exclude: [
       '**/node_modules/**',

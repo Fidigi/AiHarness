@@ -70,6 +70,7 @@ Development ports differ from the combined launcher:
 | `Makefile` | Authoritative Docker build and validation workflow; E2E artifacts and Docker-generated baselines are copied out of the completed container |
 | `.docker/` | Test, production, and lockfile Dockerfiles |
 | `e2e/*.spec.ts`, `e2e/fixtures/`, `e2e/*-snapshots/` | Playwright journeys with reusable intercepted API fixtures, a real-server smoke path and Docker-generated visual baselines |
+| `tests/functional-parity/` | Manifest-driven public CLI/JSON/RPC/session/extension/SDK probes with reviewed positive and negative goldens |
 | `docs/` | User, architecture, extension, container, and agent documentation |
 
 Use npm from the repository root so workspace packages are linked consistently. Treat `package-lock.json` as authoritative for dependency changes.
@@ -80,7 +81,7 @@ Start at `packages/core/src/index.ts`, which defines the public package exports.
 
 | Area | Files | Responsibility |
 |---|---|---|
-| Shared contracts | `src/types/index.ts` | `Message`, `Session`, provider/model metadata and pricing, OAuth/custom providers, tools, skill registry, plugins/sub-agents, extension interactions and run snapshots |
+| Shared contracts | `src/{index,public-api-version}.ts`, `src/types/index.ts` | Versioned public entry point plus `Message`, `Session`, provider/model metadata and pricing, OAuth/custom providers, tools, skill registry, plugins/sub-agents, extension interactions and run snapshots |
 | Provider abstraction | `src/providers/index.ts`, `src/providers/model-metadata.ts` | `AiProvider`, factory/built-ins, streaming/reasoning, retries, discovery, usage/cache normalization and shared non-secret published model metadata |
 | Model catalogue | `src/providers/model-catalog.ts` | Shared published/configured/discovered/custom assembly, bounded discovery, exact/fuzzy/full-ID-first lookup, ordered scopes and non-secret protocol descriptors |
 | Session persistence | `src/sessions/session-manager.ts`, `src/sessions/serialization.ts` | `SessionManager`, v2 JSONL/wire format, commands, branches, cloning, summaries, per-session setting overrides, effective context and secret redaction |
@@ -92,7 +93,7 @@ Start at `packages/core/src/index.ts`, which defines the public package exports.
 | MCP configuration and explicit test | `src/mcp/{config-inventory,config-import,import-shell,server-test}.ts` | File-only JSON/JSONC parsing, strict diagnostics, persisted-trust project gate, redacted descriptors, bounded paste conversion/reparse and atomic local mutations; plus the shared CLI/Web one-shot stdio/HTTP connection tester with fresh target lookup, sanitized environments, bounded requests/pagination/closure, command-value serialization, result redaction and config-keyed in-memory status; no session MCP host yet |
 | Plugin packages | `src/plugins/plugin-service.ts` | Shared CLI/Web npm/Git/local source policy, staging, trust/scopes, per-resource filters, bounded group activation with per-entry outcomes, symlink-free inventory, checks/updates, rollback, locked owner-only atomic state and sanitized catalogues |
 | Workspace security | `src/security/` | Canonical allowed roots, symlink boundary, 500-entry directory browsing, one-direct-child creation, bounded project-resource inventory and nested breadth scan, shared exact/inherited allow/refuse trust decisions, serialized fresh-folder trust-plus-write with exact rollback, and force-classified Git/worktree operations |
-| Extension API/loader | `src/extensions/{extension-registry,module-loader}.ts` | Owned commands/tools/providers/plain-text UI, hooks/listeners, bounded symlink-free discovery and atomic managed generations |
+| Extension API/loader | `src/extensions/{extension-registry,module-loader}.ts` | Versioned owned commands/tools/providers/plain-text UI, hooks/listeners, bounded symlink-free discovery and atomic managed generations |
 | Host integration | `src/system/open-external.ts` | Shared shell-free macOS/Windows/Linux URL or directory opener with a bounded spawn and secret-free environment |
 | Utilities | `src/utils/index.ts`, `src/utils/event-emitter.ts` | IDs, formatting, retry helpers, typed event infrastructure |
 
@@ -122,7 +123,7 @@ Session files are versioned JSONL (current schema: v2). Entry types include `met
 | Headless RPC | `src/rpc/{rpc-server,rpc-controller,rpc-extension-ui}.ts` | Strict LF-framed command/response/events, next-turn steering/follow-up, cached/scoped models, usage-aware raw session trees, bounded provider and shell streaming, expiring retained output, extension dialogs, and deprecated method/params compatibility |
 | Integration helpers | `src/utils/` | Keybindings, exports, clipboard, external editor |
 
-The CLI has regular, fullscreen, print, one-shot JSON event, and RPC paths. A change to shared conversation behavior may need coverage in more than one path. Interactive and RPC steering/follow-up delivery plus detached Web queues use Core's bounded all/one-at-a-time scheduler; trusted Web runs resolve the same Core delivery-mode settings at startup, while terminal adapters only own key dispatch, lone-Escape/Alt+Enter disambiguation, cancellation feedback and editor restoration. All paths resolve Core's same model, instruction, agent-settings and project-trust contracts: startup model/scopes, thinking, tools, compaction/retry, session directory, resources, shell behavior, supported TUI preferences, nearest saved allow/refuse decisions and `defaultProjectTrust` use explicit CLI → environment/process → trusted project → agent-setting precedence where applicable. Interactive startup prompts only when bounded metadata discovery finds protected project resources; `--approve`/`--no-approve` and headless RPC use one-process decisions without mutating the shared store. Documented context filenames and replace/append flags feed every provider turn; `/settings` reports effective source scopes and `/reload` refreshes settings, trust, instructions, resources, extensions, tools, and shell callbacks for interactive runs. Startup-only session/model/TUI values still require a restart. `/model` and RPC cycle against the shared ordered scope, and `--list-models` reports settings diagnostics but exits before session/resource startup. Built-in command metadata lives in `commands/handler.ts`, while user-visible help also exists in both TUI implementations.
+The CLI has regular, fullscreen, print, one-shot JSON event, and RPC paths. A change to shared conversation behavior may need coverage in more than one path. The repository-owned functional-parity manifest invokes the real CLI process and consumes only AiHarness public interfaces; its narrow canonicalizer may replace temporary roots, UUIDs, timestamps, durations and generated workspace IDs, but preserves protocol records, order, values, framing and channel assignment. The bilingual [public contract policy](../contributors/en/public-contract-policy.md) governs golden changes, migrations and Core/extension major markers. Interactive and RPC steering/follow-up delivery plus detached Web queues use Core's bounded all/one-at-a-time scheduler; trusted Web runs resolve the same Core delivery-mode settings at startup, while terminal adapters only own key dispatch, lone-Escape/Alt+Enter disambiguation, cancellation feedback and editor restoration. All paths resolve Core's same model, instruction, agent-settings and project-trust contracts: startup model/scopes, thinking, tools, compaction/retry, session directory, resources, shell behavior, supported TUI preferences, nearest saved allow/refuse decisions and `defaultProjectTrust` use explicit CLI → environment/process → trusted project → agent-setting precedence where applicable. Interactive startup prompts only when bounded metadata discovery finds protected project resources; `--approve`/`--no-approve` and headless RPC use one-process decisions without mutating the shared store. Documented context filenames and replace/append flags feed every provider turn; `/settings` reports effective source scopes and `/reload` refreshes settings, trust, instructions, resources, extensions, tools, and shell callbacks for interactive runs. Startup-only session/model/TUI values still require a restart. `/model` and RPC cycle against the shared ordered scope, and `--list-models` reports settings diagnostics but exits before session/resource startup. Built-in command metadata lives in `commands/handler.ts`, while user-visible help also exists in both TUI implementations.
 
 Project extensions are executable code. User extensions are loaded from `~/.ai-harness/extensions`; project extensions and project package resources require project trust. CLI discovery/orchestration remains in `cli/src/extensions`, while bounded `ExtensionModuleLoader` and package lifecycle/state/inventory implementations are shared from Core. Top-level package actions exit before agent startup; enabled package extensions, skills and prompts feed interactive/print/JSON/RPC startup and reload, while package themes can be selected by filename stem. The server uses the same Core service and module loader through thin adapters during explicit startup/reload to atomically host enabled standalone/package extensions and their declarative Web surfaces; catalogue GETs and list operations never execute extension code or contact npm/Git.
 
@@ -420,7 +421,7 @@ Check root scripts, package scripts, both `copy-assets.mjs` files, `web-cli.ts`,
 - Use `import type` for type-only dependencies when practical.
 - Keep public core APIs exported through `packages/core/src/index.ts`.
 - Prefer shared typed contracts over duplicated ad hoc shapes, but do not expose server- or React-specific concerns from `core`.
-- Keep tests next to source as `*.test.ts` or `*.test.tsx`. The root Vitest config is the canonical all-package test configuration.
+- Keep implementation tests next to source as `*.test.ts` or `*.test.tsx`. Cross-package public-contract probes are the deliberate exception under `tests/functional-parity/`; the root Vitest config remains the canonical all-package configuration.
 - Mock network calls in unit tests. Provider tests must not depend on real credentials or external services.
 - Preserve streaming semantics: chunks are incremental, final content is assembled once, and errors must terminate cleanly without double completion.
 - Treat session IDs and request input as untrusted at HTTP, RPC, import, and extension boundaries.
@@ -447,7 +448,7 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 | `docs/ai/acceptance/`, `docs/ai/workflows/` | English | Agents | Versioned | Acceptance criteria and task-specific documentation workflows |
 | `docs/audit/documentation/AUDIT-1` | English | Agents + humans | Versioned | Current documentation audit; plain path intentionally omits `.md` |
 | `docs/users/{fr,en}/` | French/English | End users | Versioned | Complete user guides, container guidance and language indexes |
-| `docs/contributors/{fr,en}/` | French/English | Contributors | Versioned | Parallel architecture, extension and i18n guides |
+| `docs/contributors/{fr,en}/` | French/English | Contributors | Versioned | Parallel architecture, extension, public-contract/parity and i18n guides |
 | `docs/screenshots/` | English/French | Humans | Versioned | Playwright-derived documented product states and capture inventory |
 | `README.md`, `CHANGELOG.md` | English/French | Everyone | Versioned | Product overview and history; changelog planning notes are not a roadmap |
 
@@ -473,6 +474,7 @@ The `Makefile` explicitly requires tests and type checks to run in Docker. Do no
 make lint-docs       # Validate local Markdown targets, anchors and versioning boundaries
 make typecheck       # Build the test image and run workspace TypeScript checks
 make test            # Build the test image and run all root Vitest tests
+make test-parity     # Run focused public CLI/JSON/RPC/session/extension/SDK golden probes
 make test-e2e        # Build the test image and run Playwright with Chromium
 make test-coverage   # Optional full coverage run
 make build-prod      # Build the complete production image
@@ -480,7 +482,7 @@ make build-prod      # Build the complete production image
 
 Use `make lockfile` after an intentional dependency or package metadata change; it regenerates `package-lock.json` in Docker.
 
-For a focused Playwright test during iteration, pass arguments through the Makefile, for example `make test-e2e E2E_ARGS='e2e/performance.spec.ts -g "virtualise" --retries=0'`. The E2E container receives a 1 GiB shared-memory ceiling by default to prevent Chromium worker crashes; override `E2E_DOCKER_ARGS` only for a runner-specific need. For focused Vitest work, use `make shell` and run the relevant npm command inside that container. Final validation should still use the standard targets below.
+For a focused Playwright test during iteration, pass arguments through the Makefile, for example `make test-e2e E2E_ARGS='e2e/performance.spec.ts -g "virtualise" --retries=0'`. The E2E container receives a 1 GiB shared-memory ceiling by default to prevent Chromium worker crashes; override `E2E_DOCKER_ARGS` only for a runner-specific need. Use `make test-parity` for the focused public-contract harness. For other focused Vitest work, use `make shell` and run the relevant npm command inside that container. Final validation should still use the standard targets below.
 
 ### Validation matrix
 
@@ -488,7 +490,7 @@ For a focused Playwright test during iteration, pass arguments through the Makef
 |---|---|
 | Documentation only | Check claims/commands against source; run `make lint-docs` and `git diff --check` |
 | Core types/providers/sessions/extensions | `make typecheck` and `make test` |
-| CLI behavior/TUI/RPC/resources/security | `make typecheck` and `make test` |
+| CLI behavior/TUI/RPC/resources/security | `make typecheck`, `make test-parity`, and `make test` |
 | Server/API/auth/credentials/WebSocket | `make typecheck` and `make test` |
 | React components/store/API client/CSS | `make typecheck`, `make test`, and `make test-e2e` |
 | Cross-package streaming or session flow | `make typecheck`, `make test`, and `make test-e2e` |

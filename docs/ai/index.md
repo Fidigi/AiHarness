@@ -55,6 +55,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → packages/cli/src/index.ts (composition root)
 → packages/cli/src/commands/handler.ts (command router)
 → packages/cli/src/tui/*.ts (UI implementations)
+→ tests/functional-parity/ (public contract probes and reviewed goldens)
 ```
 
 **A server API endpoint** → Load only `server-api.md` + `project-map.md` §§3–4
@@ -112,6 +113,7 @@ These files do NOT belong to the agent documentation system:
 | Web architecture | Contributors | [FR](../contributors/fr/web-architecture.md) / [EN](../contributors/en/web-architecture.md) |
 | CLI extensions | Contributors | [FR](../contributors/fr/extensions-cli.md) / [EN](../contributors/en/extensions-cli.md) |
 | Web extensions | Contributors | [FR](../contributors/fr/extensions-web.md) / [EN](../contributors/en/extensions-web.md) |
+| Public contracts and parity | Contributors | [FR](../contributors/fr/public-contract-policy.md) / [EN](../contributors/en/public-contract-policy.md) |
 | Internationalization | Contributors | [FR](../contributors/fr/i18n.md) / [EN](../contributors/en/i18n.md) |
 | User/contributor navigation | Humans | [`users/README.md`](../users/README.md) / [`contributors/README.md`](../contributors/README.md) |
 | Screenshot inventory | Humans | [`screenshots/README.md`](../screenshots/README.md) |

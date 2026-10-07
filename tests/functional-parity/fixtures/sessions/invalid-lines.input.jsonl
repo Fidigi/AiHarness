@@ -1,0 +1,6 @@
+{broken json
+{"id":"future-metadata","type":"metadata","version":99,"timestamp":1680000000000,"createdAt":1680000000000,"updatedAt":1680000000000}
+{"id":"negative-usage","type":"message","version":2,"timestamp":1680000001000,"role":"assistant","content":"Invalid usage","usage":{"totalTokens":-1}}
+{"id":"future-message","type":"message","version":3,"timestamp":1680000002000,"role":"assistant","content":"Future format"}
+{"id":"valid-legacy","type":"message","timestamp":1680000003000,"role":"user","content":"Valid fallback"}
+{"id":"unknown-entry","type":"custom","timestamp":1680000004000,"content":"Unknown"}

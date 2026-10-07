@@ -6,7 +6,7 @@
 
 `ai-harness` has two interactive terminal renderers, a final-text print path, a one-shot JSONL event path, and a bidirectional JSONL RPC path. All execution modes reuse Core provider hooks, bounded retry, persistence, active-tool selection, and the multi-turn tool loop. RPC adds a typed command/response and asynchronous event adapter while retaining the former `method`/`params` requests as deprecated compatibility input.
 
-Conversation persistence follows [`sessions.md`](./sessions.md), while extension hooks follow [`extensions.md`](./extensions.md). The built-in workspace tools are implemented once in Core and registered by both CLI and server startup. Core also owns package installation/state/inventory, model catalogue assembly/discovery/resolution, bounded all/one-at-a-time steering and follow-up scheduling, direct shell parsing, bounded process execution, cancellation, replay and command persistence; the CLI, RPC and Web/Server surfaces provide presentation or transport adapters around those contracts. Instruction discovery, system-prompt composition, protected-resource inventory and exact/inherited allow/refuse trust decisions likewise live once in Core and feed CLI plus Web/server adapters.
+Conversation persistence follows [`sessions.md`](./sessions.md), while extension hooks follow [`extensions.md`](./extensions.md). The built-in workspace tools are implemented once in Core and registered by both CLI and server startup. Core also owns package installation/state/inventory, model catalogue assembly/discovery/resolution, bounded all/one-at-a-time steering and follow-up scheduling, direct shell parsing, bounded process execution, cancellation, replay and command persistence; the CLI, RPC and Web/Server surfaces provide presentation or transport adapters around those contracts. Instruction discovery, system-prompt composition, protected-resource inventory and exact/inherited allow/refuse trust decisions likewise live once in Core and feed CLI plus Web/server adapters. The [public contract policy](../../contributors/en/public-contract-policy.md) defines compatibility and the independent golden harness for these surfaces.
 
 ## Architecture
 
@@ -51,6 +51,7 @@ packages/cli/src/index.ts
 | `packages/cli/src/tui/{mode,theme-manager}.ts` | Mode precedence and built-in/custom themes |
 | `packages/cli/src/rpc/{rpc-server,rpc-controller,rpc-extension-ui}.ts` | Strict-LF dispatch, state/queue/session commands and extension-dialog bridge |
 | `packages/cli/src/resources/resource-manager.ts` | Markdown prompts/resources, frontmatter and expansion |
+| `tests/functional-parity/` | Manifest-driven process, transcript, session, extension and SDK golden probes |
 
 ## Execution Modes
 
@@ -130,6 +131,14 @@ ai-harness --system-prompt ./SYSTEM.md \
   --append-system-prompt ./review-rules.md
 ai-harness --print --no-context-files --system-prompt "Answer concisely." "Explain this diff"
 ```
+
+## Public Contract and Parity Policy
+
+AiHarness owns its executable syntax, JSON/RPC envelopes, session schema, extension API and Core exports. Functional comparison never requires a reference package import or a drop-in foreign interface. `AI_HARNESS_CORE_API_VERSION` and `AI_HARNESS_EXTENSION_API_VERSION` are currently `1`; extension factories receive the latter as `api.version`. Session JSONL is v2, and the JSON event header is v3. The legacy RPC `method`/`params` shape is migration input only.
+
+`tests/functional-parity/fixtures/manifest.json` maps behavior-level scenarios to every `CLI-RUN-*`, `CLI-SES-03–04`, `CLI-EXT-02` and `CLI-AUT-*` audit family requested by the harness. Checked-in positive and negative goldens cover process exits/channels, JSON/RPC transcripts, current and legacy sessions, extension loading/interactions, and built-package TypeScript/runtime probes. Mapping a criterion means its public boundary is guarded; it does not close behavior that remains incomplete inside that criterion.
+
+Canonicalization is intentionally narrow: temporary paths, UUIDs, timestamps, measured durations, generated workspace IDs and JSON object-key order are unstable. Event order, record count, payload meaning, usage, failures, exit status and stdout/stderr assignment remain exact. Goldens have no implicit update mode and must be edited and reviewed deliberately. Run the focused Docker target with `make test-parity`; the root `make test` includes the same suite.
 
 ## JSON Event Contract
 
@@ -217,6 +226,7 @@ Reads, searches, and CLI `@path` inputs are canonicalized inside the active work
 - `packages/cli/src/tui/mode.test.ts` — flag/environment/capability precedence
 - `packages/core/src/agent/{message-queue,runtime}.test.ts` — common queue modes/bounds plus detached Web scheduling
 - `packages/cli/src/tui/{terminal-ui,fullscreen-ui,fullscreen-input,theme-manager}.test.ts` — rendering, concurrent input, queue shortcuts/editor restoration and themes
+- `tests/functional-parity/functional-parity.test.ts` — positive/negative CLI and automation goldens, stdout purity, session migration, extension API versioning and built-package SDK probes
 
 ## Common Changes
 
@@ -230,7 +240,7 @@ Update both interactive paths where behavior is shared. Test narrow dimensions, 
 
 ### Change RPC
 
-Keep stdout strictly JSONL, validate untrusted IDs/params, update RPC tests and automation documentation, and preserve cancellation/persistence semantics.
+Keep stdout strictly JSONL, validate untrusted IDs/params, update RPC tests, affected functional-parity transcripts and automation documentation, and preserve cancellation/persistence semantics. A deliberate golden change follows the bilingual public contract policy and requires migration/version handling when breaking.
 
 ## Related Domains
 

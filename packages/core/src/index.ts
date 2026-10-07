@@ -2,7 +2,11 @@
 // Core Package - Main Entry Point
 // ============================================================
 
-// Types
+// Public contract versions and types
+export {
+  AI_HARNESS_CORE_API_VERSION,
+  AI_HARNESS_EXTENSION_API_VERSION,
+} from './public-api-version.js';
 export * from './types/index.js';
 
 // Providers

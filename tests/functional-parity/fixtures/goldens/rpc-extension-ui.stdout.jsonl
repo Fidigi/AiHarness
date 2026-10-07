@@ -1,0 +1,2 @@
+{"id":"<UUID>","message":"Continue?","method":"confirm","timeout":5000,"title":"Contract confirmation","type":"extension_ui_request"}
+{"command":"prompt","data":{"disposition":"handled"},"id":"extension-ui","success":true,"type":"response"}

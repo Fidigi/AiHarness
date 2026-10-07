@@ -33,10 +33,11 @@ Core PluginService -> install/locked state/filtered inventory/bounded batch stat
 
 ## Extension Contracts
 
-`ExtensionAPI` supports:
+`ExtensionAPI` is an AiHarness-owned versioned contract. Core exports `AI_HARNESS_EXTENSION_API_VERSION` (`1`) and supplies the same literal as `api.version` before an extension registers behavior.
 
 | Registration | Contract |
 |---|---|
+| `version` | Read-only extension API major used for compatibility checks |
 | `registerCommand` | Slash command handler with runtime context |
 | `registerTool` | Model/manual tool with JSON schema, AbortSignal and structured result |
 | `registerProvider` | Runtime `AiProvider` factory and optional defaults |
@@ -99,13 +100,14 @@ Never accept extension-provided React, DOM, script, style, or arbitrary HTML. Fo
 
 ## Associated Tests
 
-- `packages/core/src/extensions/extension-registry.test.ts` — ownership, hooks, tools, providers, UI and atomic replacement
+- `packages/core/src/extensions/extension-registry.test.ts` — API version, ownership, hooks, tools, providers, UI and atomic replacement
 - `packages/cli/src/extensions/extension-loader.test.ts` — explicit path parsing and loader behavior
 - `packages/core/src/plugins/plugin-service.test.ts` — source validation, filters, trust, bounded one-write group activation, partial outcomes, concurrency, inventory and transactional package state
 - `packages/cli/src/cli/{package-command,invocation}.test.ts` — strict command parsing and real package resource startup
 - `packages/server/src/web-server.test.ts` — plugin/reload HTTP, trust and runtime integration
 - `e2e/settings.spec.ts` — package administration flows
 - `e2e/chat.spec.ts` and `e2e/accessibility.spec.ts` — widgets, interactions, focus and response handling
+- `tests/functional-parity/functional-parity.test.ts` — native extension positive/negative fixtures, RPC interaction and public type/runtime probes
 
 ## Common Changes
 

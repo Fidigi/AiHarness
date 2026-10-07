@@ -1,0 +1,1 @@
+Error: Unknown option: --contract-option-does-not-exist. Use --help for available options.

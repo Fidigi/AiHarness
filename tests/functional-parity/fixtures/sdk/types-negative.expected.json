@@ -1,0 +1,12 @@
+{
+  "success": false,
+  "diagnostics": [
+    {
+      "code": 2305,
+      "category": "error",
+      "line": 1,
+      "column": 15,
+      "message": "Module '\"@ai-harness/core\"' has no exported member 'CompatibilitySessionAlias'."
+    }
+  ]
+}

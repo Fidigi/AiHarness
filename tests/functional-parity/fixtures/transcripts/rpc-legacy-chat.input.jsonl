@@ -1,0 +1,1 @@
+{"id":"legacy-chat","method":"chat.send","params":{"sessionId":"contract-rpc","content":"Hello from legacy input"}}

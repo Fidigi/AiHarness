@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MockProvider, ProviderFactory } from '../providers';
 import { SessionManager } from '../sessions/session-manager';
+import { AI_HARNESS_EXTENSION_API_VERSION } from '../public-api-version';
 import { ExtensionRegistry, type ExtensionRuntimeContext } from './extension-registry';
 
 function context(sessionManager = new SessionManager()): ExtensionRuntimeContext {
@@ -11,6 +12,15 @@ function context(sessionManager = new SessionManager()): ExtensionRuntimeContext
 }
 
 describe('ExtensionRegistry', () => {
+  it('supplies the versioned public API to extension factories', async () => {
+    const registry = new ExtensionRegistry();
+    let observedVersion: number | undefined;
+
+    await registry.load('version-probe', api => { observedVersion = api.version; });
+
+    expect(observedVersion).toBe(AI_HARNESS_EXTENSION_API_VERSION);
+  });
+
   it('loads, invokes and unloads extension commands', async () => {
     const registry = new ExtensionRegistry();
     await registry.load('hello', api => {

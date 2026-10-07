@@ -86,6 +86,9 @@ export default function exampleExtension(api) {
 
 ## Available API
 
+Every factory receives `api.version`. Version `1` is also exported as `AI_HARNESS_EXTENSION_API_VERSION` from `@ai-harness/core`; extensions should reject an unsupported major before registering behavior.
+
+- `version`: current major version of the AiHarness-owned extension contract.
 - `registerCommand(name, definition)`: adds a `/name` command.
 - `registerTool(definition)`: adds an executable tool. Tools are listed by `/tools` and can be tested with `/tool <name> <json>`.
 - `registerProvider(type, definition)`: adds a provider factory selectable with `/provider <type>`.
@@ -152,3 +155,4 @@ Unloading automatically removes commands, tools, providers, UI panels and listen
 - The CLI and Web server load separate extension generations: `/reload` reloads only the CLI process, while the Web API has its own reload routes.
 - CLI panels registered with `registerUI` are text-only and visible only in fullscreen mode; the server separately returns its text widgets and declarative interactions.
 - Executable modules are trusted Node code run in the host process, without a security sandbox.
+- Public compatibility and golden-probe rules are defined in the [AiHarness public contract policy](./public-contract-policy.md).

@@ -1,0 +1,2 @@
+{"id":"legacy-user","type":"message","timestamp":1690000000000,"role":"user","content":"Legacy question"}
+{"id":"legacy-assistant","type":"message","timestamp":1690000001000,"role":"assistant","content":"Legacy answer","parentMessageId":"legacy-user"}
