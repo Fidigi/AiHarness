@@ -7,10 +7,12 @@ import type {
   McpImportSyntax,
   McpImportWriteConfirmations,
   McpServerMutationOutcome,
+  McpServerTestResult,
 } from '@ai-harness/core';
 import { apiFetch } from './api';
 
 export const MCP_ACTION_TIMEOUT_MS = 15_000;
+export const MCP_TEST_CLIENT_TIMEOUT_MS = 25_000;
 
 export interface McpMutationResponse {
   inventory: McpConfigInventory;
@@ -50,6 +52,20 @@ export interface McpImportWriteRequest {
 
 export interface McpReplaceWriteRequest extends Omit<McpImportWriteRequest, 'trustProject'> {
   targetName: string;
+}
+
+export interface McpTestResponse {
+  scope: McpConfigScope;
+  name: string;
+  configKey: string;
+  result: McpServerTestResult;
+}
+
+export interface McpTestRequestResponse {
+  success: boolean;
+  data?: McpTestResponse;
+  error?: string;
+  code?: string;
 }
 
 export interface McpActionResponse {
@@ -141,6 +157,46 @@ async function postMcpAction(action: McpActionRequest): Promise<McpActionRespons
       error: error instanceof Error ? error.message : 'The MCP action failed.',
       code: 'network-error',
       uncertain: true,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function testMcpConfigServer(
+  scope: McpConfigScope,
+  name: string,
+  cwd?: string,
+): Promise<McpTestRequestResponse> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MCP_TEST_CLIENT_TIMEOUT_MS);
+  try {
+    const response = await apiFetch('/api/mcp/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope, name, ...(cwd ? { cwd } : {}) }),
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => ({})) as McpTestResponse & {
+      error?: string;
+      code?: string;
+    };
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || `HTTP ${response.status}`,
+        code: data.code ?? 'request-failed',
+      };
+    }
+    return { success: true, data };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      return { success: false, error: 'The MCP test timed out.', code: 'timeout' };
+    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'The MCP test failed.',
+      code: 'network-error',
     };
   } finally {
     clearTimeout(timeout);

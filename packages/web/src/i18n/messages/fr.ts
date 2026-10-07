@@ -397,7 +397,7 @@ export const frLocale: LocalePlugin = {
     'settings.skills.metadata': 'Source et confiance du skill',
     'settings.skills.untrusted': 'non approuvé',
     'settings.mcp.title': 'Serveurs MCP',
-    'settings.mcp.help': 'Inspectez sous forme expurgée les configurations globale et des projets approuvés, remplacez des entrées depuis un texte vérifié, modifiez localement leur activation et l’exposition de leurs outils, ou supprimez leurs entrées. Ces actions ne résolvent aucune valeur, n’exécutent aucune commande, ne démarrent aucun serveur, n’ouvrent aucune connexion réseau et ne touchent pas aux identifiants OAuth.',
+    'settings.mcp.help': 'Inspectez et modifiez la configuration expurgée. Tester relit explicitement une entrée, peut résoudre ses valeurs, exécuter ses commandes, démarrer son processus ou contacter son URL une fois, puis le ferme ; cette action ne démarre jamais la connexion OAuth.',
     'settings.mcp.loadFailed': 'Impossible de charger l’inventaire de configuration MCP.',
     'settings.mcp.enable': 'Activer',
     'settings.mcp.disable': 'Désactiver',

@@ -30,6 +30,65 @@ const SAFE_COMMAND_NAMES = new Set([
 export type McpConfigScope = 'global' | 'project';
 export type McpTransportKind = 'stdio' | 'http';
 export type McpExposure = 'direct' | 'codemode' | 'deferred';
+export type McpServerTestState = 'connected' | 'needs-auth' | 'failed';
+
+export interface McpServerTestTool {
+  name: string;
+  description?: string;
+  readOnly: boolean;
+  exposure: McpExposure;
+}
+
+export interface McpServerTestResult {
+  state: McpServerTestState;
+  testedAt: string;
+  durationMs: number;
+  tools: McpServerTestTool[];
+  toolCount: number;
+  resources: number;
+  resourceTemplates: number;
+  prompts: number;
+  /** True when one or more paged capability lists exceeded the response bound. */
+  truncated?: true;
+  timedOut?: true;
+  queueTimedOut?: true;
+  queuedMs?: number;
+  cwd?: string;
+  stderr?: string;
+  error?: string;
+  serverInfo?: {
+    name: string;
+    version: string;
+    title?: string;
+  };
+}
+
+interface McpRuntimeConfigBase {
+  description?: string;
+  enabled?: boolean;
+  exposure?: McpExposure;
+}
+
+export interface McpStdioRuntimeConfig extends McpRuntimeConfigBase {
+  command: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  type?: 'stdio';
+}
+
+export interface McpHttpRuntimeConfig extends McpRuntimeConfigBase {
+  url: string;
+  headers?: Record<string, string>;
+  oauth?: {
+    clientId?: string;
+    clientSecret?: string;
+    scopes?: string[];
+  };
+  type?: 'http' | 'streamable-http';
+}
+
+export type McpServerRuntimeConfig = McpStdioRuntimeConfig | McpHttpRuntimeConfig;
 
 export type McpConfigProblemReason =
   | 'invalid-shape'
@@ -69,6 +128,8 @@ export interface McpServerInventoryEntry {
   name: string;
   scope: McpConfigScope;
   sourcePath: string;
+  /** Opaque key for this exact parsed entry; runtime status is valid only while it matches. */
+  configKey: string;
   valid: boolean;
   enabled: boolean;
   exposure: McpExposure;
@@ -84,6 +145,48 @@ export interface McpServerInventoryEntry {
   shadowedByProject: boolean;
   replacesGlobal: boolean;
   problems: string[];
+  /** Last bounded connection test for this exact in-memory configuration generation. */
+  testStatus?: McpServerTestResult;
+}
+
+export type McpServerTargetErrorCode =
+  | 'invalid-request'
+  | 'trust-required'
+  | 'trust-unavailable'
+  | 'config-unavailable'
+  | 'server-not-found'
+  | 'server-invalid'
+  | 'working-directory-unavailable';
+
+/** Fixed, value-free target lookup errors safe for CLI and HTTP adapters. */
+export class McpServerTargetError extends Error {
+  constructor(readonly code: McpServerTargetErrorCode, message: string) {
+    super(message);
+    this.name = 'McpServerTargetError';
+  }
+}
+
+export interface McpServerTestTarget {
+  scope: McpConfigScope;
+  name: string;
+  sourcePath: string;
+  configKey: string;
+  config: McpServerRuntimeConfig;
+  /** Canonical directory used by a stdio process and reported by a test. */
+  cwd: string;
+}
+
+export interface ReadMcpServerTargetOptions {
+  agentDir: string;
+  scope: McpConfigScope;
+  name: string;
+  /** Required for a project entry; also defines the default stdio working directory. */
+  cwd?: string;
+  /** Default working directory when no selected project is supplied. */
+  defaultCwd: string;
+  trustManager?: ProjectTrustManager;
+  /** Adapter-owned canonical boundary for a configured relative or absolute cwd. */
+  resolveWorkingDirectory?: (configured: string, base: string) => Promise<string>;
 }
 
 export type McpFreshProjectTrustStatus =
@@ -172,6 +275,10 @@ function boundedString(value: unknown): value is string {
 
 function contentRevision(bytes: Uint8Array): string {
   return createHmac('sha256', MCP_CONFIG_REVISION_KEY).update(bytes).digest('hex');
+}
+
+function entryRevision(name: string, value: unknown): string {
+  return contentRevision(Buffer.from(JSON.stringify([name, value]), 'utf8'));
 }
 
 async function readRegularFile(
@@ -658,6 +765,7 @@ function describeEntry(
       name: escapedDisplay(rawName),
       scope,
       sourcePath,
+      configKey: entryRevision(rawName, value),
       valid: problems.length === 0,
       enabled: config.enabled !== false,
       exposure: config.exposure === 'codemode' || config.exposure === 'deferred'
@@ -702,6 +810,15 @@ async function canonicalDirectory(input: string): Promise<string> {
     if (errorCode(error) === 'ENOENT') return resolved;
     throw error;
   }
+}
+
+async function canonicalRuntimeDirectory(input: string): Promise<string> {
+  const canonical = await realpath(path.resolve(input));
+  const info = await lstat(canonical);
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error('MCP runtime roots must be regular directories.');
+  }
+  return canonical;
 }
 
 /**
@@ -777,6 +894,103 @@ export async function inspectMcpConfig(
     servers: [...globalEntries, ...projectEntries]
       .map(entry => ({ ...entry.info, sourcePath: escapedDisplay(entry.info.sourcePath, 4_096) })),
     ...(project ? { project } : {}),
+  };
+}
+
+function targetError(code: McpServerTargetErrorCode, message: string): McpServerTargetError {
+  return new McpServerTargetError(code, message);
+}
+
+async function requirePersistedProjectTrust(
+  cwd: string,
+  trustManager: ProjectTrustManager | undefined,
+): Promise<void> {
+  if (!trustManager) {
+    throw targetError('trust-unavailable', 'Project trust is unavailable for this MCP server.');
+  }
+  let status: Awaited<ReturnType<ProjectTrustManager['getStatus']>>;
+  try {
+    status = await trustManager.getStatus(cwd, { includeContextFiles: false });
+  } catch {
+    throw targetError('trust-unavailable', 'Project trust is unavailable for this MCP server.');
+  }
+  if (status.decisionError) {
+    throw targetError('trust-unavailable', 'Project trust is unavailable for this MCP server.');
+  }
+  if (status.decision !== true) {
+    throw targetError('trust-required', 'A persisted project allow is required to test this MCP server.');
+  }
+}
+
+/**
+ * Read one fresh, validated MCP entry for an explicit runtime operation. Unlike
+ * the inventory, this returns the raw configuration only to trusted Core code.
+ * Project bodies and configured working directories are re-authorized here.
+ */
+export async function readMcpServerTestTarget(
+  options: ReadMcpServerTargetOptions,
+): Promise<McpServerTestTarget> {
+  if (!validName(options.name)) {
+    throw targetError('invalid-request', 'The MCP server name is invalid.');
+  }
+  const agentDir = await canonicalDirectory(options.agentDir);
+  const defaultCwd = await canonicalRuntimeDirectory(options.defaultCwd).catch(() => {
+    throw targetError('working-directory-unavailable', 'The MCP server working directory is unavailable.');
+  });
+
+  let read: FileReadResult;
+  let projectCwd: string | undefined;
+  if (options.scope === 'project') {
+    if (!options.cwd) throw targetError('invalid-request', 'A project cwd is required for this MCP server.');
+    projectCwd = await canonicalRuntimeDirectory(options.cwd).catch(() => {
+      throw targetError('invalid-request', 'The project cwd is invalid.');
+    });
+    await requirePersistedProjectTrust(projectCwd, options.trustManager);
+    read = await readProjectFile(projectCwd, true, false);
+  } else {
+    read = await readRegularFile(path.join(agentDir, 'mcp.json'), 'global');
+  }
+
+  if (read.text === undefined) {
+    const code = read.info.exists ? 'config-unavailable' : 'server-not-found';
+    throw targetError(code, read.info.exists
+      ? 'The MCP configuration cannot be read safely.'
+      : 'The MCP server is not configured.');
+  }
+  const entries = parseConfig(read.info, read.text);
+  if (read.info.problems.length > 0) {
+    throw targetError('config-unavailable', 'The MCP configuration cannot be parsed safely.');
+  }
+  const selected = entries.find(([name]) => name === options.name);
+  if (!selected) throw targetError('server-not-found', 'The MCP server is not configured.');
+  const [name, value] = selected;
+  const described = describeEntry(name, value, options.scope, read.info.path);
+  if (!described.info.valid || !isRecord(value)) {
+    throw targetError('server-invalid', 'The MCP server configuration is invalid.');
+  }
+  const config = structuredClone(value) as unknown as McpServerRuntimeConfig;
+  let cwd = projectCwd ?? defaultCwd;
+  if ('command' in config && config.cwd) {
+    try {
+      const resolved = options.resolveWorkingDirectory
+        ? await options.resolveWorkingDirectory(config.cwd, cwd)
+        : path.resolve(cwd, config.cwd);
+      cwd = await canonicalRuntimeDirectory(resolved);
+    } catch {
+      throw targetError('working-directory-unavailable', 'The MCP server working directory is unavailable.');
+    }
+  }
+  if (options.scope === 'project' || options.cwd !== undefined) {
+    await requirePersistedProjectTrust(cwd, options.trustManager);
+  }
+
+  return {
+    scope: options.scope,
+    name,
+    sourcePath: read.info.path,
+    configKey: described.info.configKey,
+    config,
+    cwd,
   };
 }
 

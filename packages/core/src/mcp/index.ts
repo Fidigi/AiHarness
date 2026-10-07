@@ -34,6 +34,7 @@ export type {
 
 export {
   inspectMcpConfig,
+  readMcpServerTestTarget,
   MCP_CONFIG_MAX_BYTES,
   MCP_CONFIG_MAX_MUTATIONS,
   MCP_CONFIG_MAX_SERVERS,
@@ -52,6 +53,7 @@ export type {
   McpConfigProblem,
   McpConfigProblemReason,
   McpConfigScope,
+  McpHttpRuntimeConfig,
   McpExposure,
   McpFreshProjectTrustStatus,
   McpProjectInventory,
@@ -62,11 +64,40 @@ export type {
   McpServerExposureResult,
   McpServerInventoryEntry,
   McpServerMutationOutcome,
+  McpServerRuntimeConfig,
+  McpServerTargetErrorCode,
+  McpServerTestResult,
+  McpServerTestState,
+  McpServerTestTarget,
+  McpServerTestTool,
+  McpStdioRuntimeConfig,
   McpServerMutationOutcomeStatus,
   McpServerRemovalMutation,
   McpServerRemovalResult,
   McpServerRestoreResult,
   McpTransportKind,
+  ReadMcpServerTargetOptions,
   RestoreMcpServerOptions,
   McpVariableReference,
 } from './config-inventory.js';
+export { McpServerTargetError } from './config-inventory.js';
+
+export {
+  connectMcpServerForTest,
+  MCP_TEST_CLOSE_WAIT_MS,
+  MCP_TEST_COMMAND_TIMEOUT_MS,
+  MCP_TEST_DEADLINE_MS,
+  MCP_TEST_MAX_PAGED_ITEMS,
+  MCP_TEST_MAX_PAGES,
+  MCP_TEST_MAX_TOOLS,
+  MCP_TEST_REQUEST_TIMEOUT_MS,
+  MCP_TEST_STATUS_LIMIT,
+  McpServerTester,
+  mcpTestRunsCommand,
+} from './server-test.js';
+export type {
+  McpServerTestConnect,
+  McpServerTestConnectOptions,
+  McpServerTesterOptions,
+  McpServerTestValidate,
+} from './server-test.js';

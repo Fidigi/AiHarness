@@ -3,7 +3,10 @@ import {
   importMcpServer,
   inspectMcpConfig,
   McpConfigMutationError,
+  McpServerTargetError,
+  McpServerTester,
   previewMcpImport,
+  readMcpServerTestTarget,
   replaceMcpServer,
   type McpConfigInventory,
   type McpConfigScope,
@@ -15,6 +18,7 @@ import {
   type McpImportWriteConfirmations,
   type McpRemovedServerRecord,
   type McpServerMutationOutcome,
+  type McpServerTestResult,
   type ProjectTrustManager,
   removeMcpServer,
   restoreMcpServer,
@@ -108,6 +112,7 @@ export interface McpInventoryServiceOptions {
   undoMaxRecords?: number;
   now?: () => number;
   createToken?: () => string;
+  tester?: McpServerTester;
 }
 
 export class McpInventoryService {
@@ -116,6 +121,7 @@ export class McpInventoryService {
   private readonly undoMaxRecords: number;
   private readonly now: () => number;
   private readonly createToken: () => string;
+  private readonly tester: McpServerTester;
 
   constructor(
     private readonly agentDir: string,
@@ -131,11 +137,12 @@ export class McpInventoryService {
       : MCP_UNDO_MAX_RECORDS;
     this.now = options.now ?? Date.now;
     this.createToken = options.createToken ?? randomUUID;
+    this.tester = options.tester ?? new McpServerTester();
   }
 
   async getOverview(cwd?: string): Promise<McpConfigInventory> {
     const canonicalCwd = await this.resolveOptionalWorkspace(cwd);
-    return inspectMcpConfig({
+    const inventory = await inspectMcpConfig({
       agentDir: this.agentDir,
       ...(canonicalCwd ? {
         cwd: canonicalCwd,
@@ -146,6 +153,59 @@ export class McpInventoryService {
       } : {}),
       trustManager: this.trustManager,
     });
+    return this.tester.decorateInventory(inventory);
+  }
+
+  async testServer(request: {
+    scope: McpConfigScope;
+    name: string;
+    cwd?: string;
+    signal?: AbortSignal;
+  }): Promise<{ scope: McpConfigScope; name: string; configKey: string; result: McpServerTestResult }> {
+    let canonicalCwd: string | undefined;
+    try {
+      canonicalCwd = await this.resolveOptionalWorkspace(request.cwd);
+      if (request.scope === 'project' && !canonicalCwd) {
+        throw new McpServerTargetError('invalid-request', 'A project cwd is required for this MCP server.');
+      }
+    } catch (error) {
+      if (error instanceof McpServerTargetError) throw error;
+      throw new McpServerTargetError('invalid-request', 'The MCP project selection is invalid.');
+    }
+    const defaultCwd = canonicalCwd ?? await this.workspaceManager.getDefaultCwd();
+    const readTarget = () => readMcpServerTestTarget({
+      agentDir: this.agentDir,
+      scope: request.scope,
+      name: request.name,
+      defaultCwd,
+      trustManager: this.trustManager,
+      ...(canonicalCwd ? { cwd: canonicalCwd } : {}),
+      resolveWorkingDirectory: (configured, base) => this.workspaceManager.resolve(configured, {
+        base,
+        kind: 'directory',
+      }),
+    });
+    const target = await readTarget();
+    const validate = async (): Promise<void> => {
+      const current = await readTarget();
+      if (current.sourcePath !== target.sourcePath || current.configKey !== target.configKey
+        || current.cwd !== target.cwd) {
+        throw new McpServerTargetError(
+          'server-invalid',
+          'The MCP server configuration changed; retry the test.',
+        );
+      }
+    };
+    return {
+      scope: target.scope,
+      name: target.name,
+      configKey: target.configKey,
+      result: await this.tester.test(target, request.signal, validate),
+    };
+  }
+
+  shutdown(): Promise<void> {
+    return this.tester.shutdown();
   }
 
   /**

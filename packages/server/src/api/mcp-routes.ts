@@ -3,6 +3,7 @@ import {
   MCP_IMPORT_MAX_FIELDS,
   MCP_IMPORT_MAX_SERVERS,
   McpConfigMutationError,
+  McpServerTargetError,
   type McpConfigScope,
   type McpExposure,
   type McpImportFieldValue,
@@ -117,6 +118,19 @@ function mutationStatus(error: McpConfigMutationError): number {
   }
 }
 
+function testTargetStatus(error: McpServerTargetError): number {
+  switch (error.code) {
+    case 'invalid-request': return 400;
+    case 'trust-required': return 403;
+    case 'server-not-found': return 404;
+    case 'trust-unavailable': return 503;
+    case 'config-unavailable':
+    case 'server-invalid':
+    case 'working-directory-unavailable': return 409;
+    default: return 500;
+  }
+}
+
 function sendMutationError(response: Response, error: unknown): void {
   if (error instanceof McpConfigMutationError) {
     response.status(mutationStatus(error)).json({
@@ -149,6 +163,50 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
       } else {
         next(error);
       }
+    }
+  });
+
+  router.post('/test', requireCapability('configuration'), async (request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
+    const body: unknown = request.body;
+    const scope = isRecord(body) ? scopeOf(body.scope) : undefined;
+    if (!isRecord(body) || !hasOnlyKeys(body, ['cwd', 'name', 'scope']) || !scope
+      || typeof body.name !== 'string' || body.name.length === 0
+      || Buffer.byteLength(body.name, 'utf8') > 256
+      || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/u.test(body.name)
+      || (body.cwd !== undefined && body.cwd !== null && (
+        typeof body.cwd !== 'string' || body.cwd.length > 4_096 || /[\u0000-\u001f\u007f]/u.test(body.cwd)
+      ))) {
+      response.status(400).json({ error: 'Test MCP invalide.', code: 'invalid-request' });
+      return;
+    }
+    const controller = new AbortController();
+    const abortDisconnectedClient = (): void => {
+      if (!response.writableEnded) controller.abort('client-disconnected');
+    };
+    response.once('close', abortDisconnectedClient);
+    if (response.destroyed) abortDisconnectedClient();
+    try {
+      const services = await servicesPromise;
+      const cwd = optionalCwd(body.cwd);
+      const result = await services.mcpInventory.testServer({
+        scope,
+        name: body.name,
+        ...(cwd ? { cwd } : {}),
+        signal: controller.signal,
+      });
+      if (!controller.signal.aborted && !response.destroyed) response.json(result);
+    } catch (error) {
+      if (controller.signal.aborted || response.destroyed) return;
+      if (error instanceof McpServerTargetError) {
+        response.status(testTargetStatus(error)).json({ error: error.message, code: error.code });
+      } else if (error instanceof McpConfigMutationError && error.code === 'invalid-request') {
+        response.status(400).json({ error: CWD_INVALID, code: 'invalid-request' });
+      } else {
+        response.status(500).json({ error: 'Le test MCP a échoué.', code: 'test-failed' });
+      }
+    } finally {
+      response.off('close', abortDisconnectedClient);
     }
   });
 

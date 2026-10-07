@@ -397,7 +397,7 @@ export const enLocale: LocalePlugin = {
     'settings.skills.metadata': 'Skill source and trust metadata',
     'settings.skills.untrusted': 'untrusted',
     'settings.mcp.title': 'MCP servers',
-    'settings.mcp.help': 'Inspect redacted global and trusted-project configuration files, replace entries from reviewed text, change local activation and tool exposure, or remove entries. These actions never resolve values, run commands, start servers, open network connections, or touch OAuth credentials.',
+    'settings.mcp.help': 'Inspect and edit redacted configuration. Test explicitly rereads one entry, may resolve its values, run configured commands, start its process or contact its URL once, then closes it; it never starts OAuth sign-in.',
     'settings.mcp.loadFailed': 'Failed to load the MCP configuration inventory.',
     'settings.mcp.enable': 'Enable',
     'settings.mcp.disable': 'Disable',

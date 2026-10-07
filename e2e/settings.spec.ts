@@ -265,6 +265,30 @@ test.describe('Settings and authentication', () => {
     await expect(section).toContainText(MCP_FILE_PROBLEM_MESSAGES['invalid-shape']);
   });
 
+  test('teste une entrée MCP sans envoyer sa configuration et détaille capacités, cwd et outils', async ({ page }) => {
+    const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const card = section.getByRole('article', { name: 'remote-docs: Configured', exact: true });
+
+    await card.getByRole('button', { name: 'Test remote-docs', exact: true }).click();
+    const report = card.getByRole('region', { name: 'Last connection test for remote-docs' });
+    await expect(report).toContainText('Connected');
+    await expect(report).toContainText('Server: docs-fixture 1.2.3');
+    await expect(report).toContainText('Working directory:');
+    await expect(report).toContainText('/workspace');
+    await expect(report).toContainText('2 tools · 3 resources · 1 templates · 2 prompts');
+    await expect(report).toContainText('search_docs');
+    await expect(report).toContainText('Search documentation');
+    await expect(report).toContainText('read-only hint · deferred tools');
+    await expect(report).toContainText('publish_note');
+    await expect(report).toContainText('may write · deferred tools');
+
+    const request = api.requests.find(item => item.path === '/api/mcp/test');
+    expect(request?.body).toEqual({ scope: 'global', name: 'remote-docs', cwd: '/workspace' });
+    expect(Object.keys(request?.body as object)).not.toContain('configuration');
+  });
+
   test('reparcourt le texte MCP côté serveur et affiche seulement un aperçu expurgé', async ({ page }) => {
     const api = await installMockApi(page, {
       mcpConfig: mcpStateInventory(),

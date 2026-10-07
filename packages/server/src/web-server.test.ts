@@ -195,6 +195,112 @@ describe('combined Web server', () => {
     }
   });
 
+  it('tests a fresh MCP entry server-side, redacts results, and exposes status only while its config matches', async () => {
+    const dataDir = path.join(webRoot, '.data');
+    const globalFile = path.join(dataDir, 'mcp.json');
+    const fixture = path.resolve(process.cwd(), 'packages/core/src/mcp/fixtures/test-server.mjs');
+    const marker = path.join(webRoot, `mcp-test-smuggled-${Date.now()}`);
+    const project = path.join(webRoot, `mcp-test-project-${Date.now()}`);
+    const projectDirectory = path.join(project, '.ai-harness');
+    const secret = 'ROUTE-MCP-TEST-SECRET-0123456789';
+    await mkdir(projectDirectory, { recursive: true });
+    await Promise.all([
+      writeFile(globalFile, JSON.stringify({
+        mcpServers: {
+          fixture: {
+            command: process.execPath,
+            args: [fixture],
+            env: { MCP_TEST_SECRET: secret },
+            exposure: 'codemode',
+            enabled: false,
+          },
+        },
+      })),
+      writeFile(path.join(projectDirectory, 'mcp.json'), JSON.stringify({
+        mcpServers: { local: { command: 'sh', args: ['-c', `touch ${marker}`] } },
+      })),
+    ]);
+    try {
+      const smuggled = await fetch(`${baseUrl}/api/mcp/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scope: 'global', name: 'fixture', configuration: { command: 'sh', args: ['-c', `touch ${marker}`] },
+        }),
+      });
+      expect(smuggled.status).toBe(400);
+      await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+
+      const invalidCwd = await fetch(`${baseUrl}/api/mcp/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'global', name: 'fixture', cwd: 'x'.repeat(4_097) }),
+      });
+      expect(invalidCwd.status).toBe(400);
+      expect(await invalidCwd.json()).toMatchObject({ code: 'invalid-request' });
+
+      const response = await fetch(`${baseUrl}/api/mcp/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'global', name: 'fixture' }),
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      const text = await response.text();
+      expect(text).not.toContain(secret);
+      expect(JSON.parse(text)).toMatchObject({
+        scope: 'global',
+        name: 'fixture',
+        configKey: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        result: {
+          state: 'connected',
+          toolCount: 2,
+          resources: 1,
+          resourceTemplates: 1,
+          prompts: 1,
+          tools: [
+            { name: 'lookup', description: 'Looks up •••', readOnly: true, exposure: 'codemode' },
+            { name: 'mutate', readOnly: false, exposure: 'codemode' },
+          ],
+        },
+      });
+
+      const overviewText = await fetch(`${baseUrl}/api/mcp`).then(value => value.text());
+      expect(overviewText).not.toContain(secret);
+      expect(JSON.parse(overviewText)).toMatchObject({
+        servers: [{ name: 'fixture', testStatus: { state: 'connected', toolCount: 2 } }],
+      });
+      await writeFile(globalFile, JSON.stringify({
+        mcpServers: { fixture: { command: process.execPath, args: [fixture, '--changed'] } },
+      }));
+      const changed = await fetch(`${baseUrl}/api/mcp`).then(value => value.json()) as {
+        servers: Array<{ testStatus?: unknown }>;
+      };
+      expect(changed.servers[0]?.testStatus).toBeUndefined();
+
+      const untrusted = await fetch(`${baseUrl}/api/mcp/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'project', name: 'local', cwd: project }),
+      });
+      expect(untrusted.status).toBe(403);
+      expect(await untrusted.json()).toMatchObject({ code: 'trust-required' });
+      await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+
+      const missing = await fetch(`${baseUrl}/api/mcp/test`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'global', name: 'missing' }),
+      });
+      expect(missing.status).toBe(404);
+    } finally {
+      await Promise.all([
+        rm(globalFile, { force: true }),
+        rm(project, { recursive: true, force: true }),
+        rm(marker, { force: true }),
+      ]);
+    }
+  });
+
   it('previews MCP paste server-side without writes, resolution, execution, or source-value disclosure', async () => {
     const dataDir = path.join(webRoot, '.data');
     const globalFile = path.join(dataDir, 'mcp.json');

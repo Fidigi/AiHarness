@@ -912,6 +912,7 @@ export async function stop(): Promise<void> {
   activeServices = undefined;
   if (services) await services.then(async value => {
     value.terminalRuntime.shutdown();
+    await value.mcpInventory.shutdown();
     await value.subagentRuntime.shutdown();
     await value.extensionRegistry.shutdown();
     await proxyServer?.flushUsage();

@@ -22,7 +22,9 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
   "devDependencies": {
     "@types/node": "^26.0.0",
     "typescript": "^5.9.3",

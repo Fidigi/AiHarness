@@ -26,6 +26,7 @@ export const MCP_FILE_PROBLEM_REASONS = Object.keys(MCP_FILE_PROBLEM_MESSAGES) a
 function server(overrides: Partial<McpServerInventoryEntry> & Pick<McpServerInventoryEntry, 'name' | 'scope'>): McpServerInventoryEntry {
   return {
     sourcePath: overrides.scope === 'global' ? GLOBAL_PATH : PROJECT_PATH,
+    configKey: `${overrides.scope === 'global' ? '1' : '2'}`.repeat(64),
     valid: true,
     enabled: true,
     exposure: 'direct',

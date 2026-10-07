@@ -9,6 +9,7 @@ import type {
 } from '@ai-harness/core';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { McpImportPreview, type McpReplacementOutcome } from './McpImportPreview';
+import { mcpTestMessage, type McpTestMessageKey } from './mcp-test-messages';
 import { useI18n } from '../hooks/useI18n';
 import { getMcpConfig } from '../services/api';
 import {
@@ -16,6 +17,7 @@ import {
   restoreMcpConfigServer,
   setMcpConfigEnabled,
   setMcpConfigExposure,
+  testMcpConfigServer,
   type McpActionResponse,
   type McpReplaceTarget,
 } from '../services/mcp-api';
@@ -76,9 +78,63 @@ function editKey(scope: McpConfigScope, name: string): string {
   return encodeURIComponent(`${scope}\0${name}`);
 }
 
+function testedAt(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+function McpTestReport({ server }: { server: McpServerInventoryEntry }) {
+  const { locale, t } = useI18n();
+  const status = server.testStatus;
+  if (!status) return null;
+  return <section className="mcp-test-report"
+    aria-label={mcpTestMessage(locale, 'settings.mcp.test.reportNamed', { name: server.name })}>
+    <div className="mcp-test-summary">
+      <strong className={status.state === 'connected' ? 'status-success' : 'status-warning'}>
+        {mcpTestMessage(locale, `settings.mcp.test.state.${status.state}` as McpTestMessageKey)}
+      </strong>
+      <small>{mcpTestMessage(locale, 'settings.mcp.test.timing', {
+        testedAt: testedAt(status.testedAt),
+        duration: status.durationMs,
+      })}</small>
+    </div>
+    {status.serverInfo && <small>{mcpTestMessage(locale, 'settings.mcp.test.serverInfo', {
+      name: status.serverInfo.name,
+      version: status.serverInfo.version,
+    })}{status.serverInfo.title ? ` · ${status.serverInfo.title}` : ''}</small>}
+    {status.cwd && <small>{mcpTestMessage(locale, 'settings.mcp.test.cwd')} <code>{status.cwd}</code></small>}
+    <small>{mcpTestMessage(locale, 'settings.mcp.test.capabilities', {
+      tools: status.toolCount,
+      resources: status.resources,
+      templates: status.resourceTemplates,
+      prompts: status.prompts,
+    })}</small>
+    {status.truncated && <small className="status-warning">{mcpTestMessage(locale, 'settings.mcp.test.truncated')}</small>}
+    {status.timedOut && <small className="status-warning">{mcpTestMessage(locale, 'settings.mcp.test.timedOut')}</small>}
+    {status.queueTimedOut && <small className="status-warning">{mcpTestMessage(locale, 'settings.mcp.test.queueTimedOut')}</small>}
+    {status.state === 'needs-auth' && <small className="status-warning">{mcpTestMessage(locale, 'settings.mcp.test.needsAuth')}</small>}
+    {status.tools.length > 0 && <ul className="mcp-test-tools">
+      {status.tools.map((tool, index) => <li key={`${tool.name}:${index}`}>
+        <code>{tool.name}</code>
+        {tool.description && <span>{tool.description}</span>}
+        <small>{mcpTestMessage(locale, tool.readOnly ? 'settings.mcp.test.readOnly' : 'settings.mcp.test.mayWrite')}
+          {' · '}{t(`settings.mcp.exposure.${tool.exposure}`)}</small>
+      </li>)}
+    </ul>}
+    {status.error && <pre className="mcp-test-output"
+      aria-label={mcpTestMessage(locale, 'settings.mcp.test.error')}>{status.error}</pre>}
+    {status.stderr && <details className="mcp-test-stderr">
+      <summary>{mcpTestMessage(locale, 'settings.mcp.test.stderr')}</summary>
+      <pre>{status.stderr}</pre>
+    </details>}
+  </section>;
+}
+
 function ServerCard({
   server,
   disabled,
+  testing,
+  onTest,
   onToggle,
   onExposureChange,
   onEdit,
@@ -86,12 +142,14 @@ function ServerCard({
 }: {
   server: McpServerInventoryEntry;
   disabled: boolean;
+  testing: boolean;
+  onTest: () => void;
   onToggle: () => void;
   onExposureChange: (exposure: McpExposure) => void;
   onEdit: (trigger: HTMLButtonElement) => void;
   onRemove: (trigger: HTMLButtonElement) => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const state = serverState(server);
   const target = server.transport === 'stdio'
     ? [server.command, ...(server.args ?? [])].filter(Boolean).join(' ')
@@ -113,7 +171,7 @@ function ServerCard({
         {server.problems.map((diagnostic, index) => <li key={`${index}:${diagnostic}`}>{diagnostic}</li>)}
       </ul>}
     </div>
-    <div>
+    <div className="mcp-server-controls">
       <span className={state === 'configured' ? 'status-success' : 'status-warning'}>
         {t(`settings.mcp.state.${state}`)}
       </span>
@@ -131,6 +189,10 @@ function ServerCard({
       {server.masked && <small>{t('settings.mcp.masked')}</small>}
       {server.replacesGlobal && <small>{t('settings.mcp.replacesGlobal')}</small>}
       {server.valid && <div className="mcp-row-actions">
+        <button type="button" disabled={disabled} onClick={onTest}
+          aria-label={mcpTestMessage(locale, 'settings.mcp.test.named', { name: server.name })}>
+          {mcpTestMessage(locale, testing ? 'settings.mcp.test.testing' : 'settings.mcp.test.action')}
+        </button>
         <button type="button" disabled={disabled} onClick={event => onEdit(event.currentTarget)}
           data-mcp-edit-key={editKey(server.scope, server.name)}
           aria-label={t('settings.mcp.editNamed', { name: server.name })}>
@@ -147,18 +209,21 @@ function ServerCard({
         </button>
       </div>}
     </div>
+    <McpTestReport server={server} />
   </article>;
 }
 
-/** Local MCP configuration administration. It never connects, resolves values, runs commands, or initializes OAuth. */
+/** Local MCP administration plus an explicit, bounded one-shot connection test. */
 export function McpSettings() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
   const refreshWorkspace = useSessionStore(state => state.refreshWorkspace);
   const [inventory, setInventory] = useState<McpConfigInventory>();
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string>();
   const [busy, setBusy] = useState<string>();
+  const [testing, setTesting] = useState<string>();
+  const [testError, setTestError] = useState<string>();
   const [importWriting, setImportWriting] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackKind>();
   const [undo, setUndo] = useState<UndoState>();
@@ -167,6 +232,7 @@ export function McpSettings() {
   const [pendingControlFocus, setPendingControlFocus] = useState<PendingControlFocus>();
   const inventoryRequest = useRef(0);
   const actionRequest = useRef(0);
+  const testRequest = useRef(0);
   const removalReturnFocus = useRef<HTMLButtonElement | null>(null);
   const removalDialogRef = useRef<HTMLElement | null>(null);
   const undoButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -192,7 +258,10 @@ export function McpSettings() {
 
   useEffect(() => {
     actionRequest.current++;
+    testRequest.current++;
     setBusy(undefined);
+    setTesting(undefined);
+    setTestError(undefined);
     setImportWriting(false);
     setFeedback(undefined);
     setUndo(undefined);
@@ -203,6 +272,7 @@ export function McpSettings() {
     return () => {
       inventoryRequest.current++;
       actionRequest.current++;
+      testRequest.current++;
     };
   }, [load, workspace?.operationTrusted, workspace?.trusted]);
 
@@ -258,6 +328,33 @@ export function McpSettings() {
     setFeedback(result.uncertain ? 'uncertain' : 'error');
     // A client timeout or transport failure may happen after commit; never retain stale mutation controls.
     await load(true);
+  };
+
+  const testServer = async (server: McpServerInventoryEntry): Promise<void> => {
+    if (!inventory || busy || testing || importWriting || replacement || !server.valid) return;
+    const request = ++testRequest.current;
+    const key = `${server.scope}:${server.name}`;
+    setTesting(key);
+    setTestError(undefined);
+    setFeedback(undefined);
+    setUndo(undefined);
+    const response = await testMcpConfigServer(server.scope, server.name, workspace?.cwd);
+    if (request !== testRequest.current) return;
+    if (response.success && response.data) {
+      const tested = response.data;
+      setInventory(current => current ? {
+        ...current,
+        servers: current.servers.map(item => item.scope === tested.scope
+          && item.name === tested.name && item.configKey === tested.configKey
+          ? { ...item, testStatus: tested.result }
+          : item),
+      } : current);
+      // A fresh inventory also detects edits or trust changes that raced the test.
+      await load(false);
+    } else {
+      setTestError(response.error ?? mcpTestMessage(locale, 'settings.mcp.test.failed'));
+    }
+    if (request === testRequest.current) setTesting(undefined);
   };
 
   const setEnabled = async (
@@ -385,7 +482,7 @@ export function McpSettings() {
 
   const feedbackKey = feedback ? `settings.mcp.mutation.${feedback}` : undefined;
 
-  const controlsDisabled = Boolean(busy) || importWriting || Boolean(replacement);
+  const controlsDisabled = Boolean(busy) || Boolean(testing) || importWriting || Boolean(replacement);
 
   return <section ref={sectionRef} className="settings-section" id="mcp">
     <div className="mcp-settings-heading">
@@ -398,6 +495,9 @@ export function McpSettings() {
     </div>
     {loading && !inventory && <p role="status">{t('common.loading')}…</p>}
     {loadError && <p role="alert" className="status-warning">{t('settings.mcp.loadFailed')} {loadError}</p>}
+    {testError && <p role="alert" className="status-warning mcp-action-feedback">
+      {mcpTestMessage(locale, 'settings.mcp.test.failed')} {testError}
+    </p>}
     {feedbackKey && <p role="status" aria-live="polite"
       className={feedback === 'error' || feedback === 'uncertain' ? 'status-warning mcp-action-feedback' : 'status-success mcp-action-feedback'}>
       {t(feedbackKey)}
@@ -450,7 +550,9 @@ export function McpSettings() {
             <ServerCard
               server={server}
               disabled={controlsDisabled}
+              testing={testing === `${server.scope}:${server.name}`}
               key={`${server.scope}:${server.name}:${index}`}
+              onTest={() => void testServer(server)}
               onToggle={() => void setEnabled(server.scope, [server.name], !server.enabled, `row:${server.scope}:${server.name}`)}
               onExposureChange={exposure => void setExposure(server, exposure)}
               onEdit={trigger => {

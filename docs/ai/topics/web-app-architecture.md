@@ -16,11 +16,11 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 | `packages/web/src/App.tsx` | Auth bootstrap, route/deep-link restoration and top-level data hydration |
 | `packages/web/src/store/session-store.ts` | Sessions, windows, drafts, runs, catalogues and bounded workspace cache |
 | `packages/web/src/store/preferences.ts` | Versioned appearance, layout, notification, panel and keybinding state |
-| `packages/web/src/services/api.ts`, `packages/web/src/services/mcp-api.ts` | Credential-aware fetch, REST/SSE contracts and Settings-lazy MCP import/replacement preview, persistence and local mutation requests |
+| `packages/web/src/services/api.ts`, `packages/web/src/services/mcp-api.ts` | Credential-aware fetch, REST/SSE contracts and Settings-lazy MCP one-shot Test, import/replacement preview, persistence and local mutation requests |
 | `packages/web/src/components/ChatView.tsx` | Detached runs, history, composer, queues, settings and reconciliation |
 | `packages/web/src/components/{Sidebar,WorkspacePanel,TerminalPanel}.tsx` | Navigation, files/Git and PTY surfaces |
 | `packages/web/src/components/SettingsView.tsx` | Lazy Settings route and administration sections |
-| `packages/web/src/components/{McpSettings,McpImportPreview}.tsx` | Redacted global/project MCP groups, paste preview, field/reference completion, scope/confirmation-gated atomic import—including fresh-project trust-plus-first-write—or whole-entry replacement, trust lock, row/group activation, per-server exposure, confirmed removal, temporary undo and file diagnostics |
+| `packages/web/src/components/{McpSettings,McpImportPreview}.tsx` | Redacted global/project MCP groups and explicit Test reports, paste preview, field/reference completion, scope/confirmation-gated atomic import or replacement, trust lock, row/group activation, per-server exposure, confirmed removal, temporary undo and file diagnostics |
 | `packages/web/src/components/PluginSettings.tsx` | Project/global package inventory, individual and one-request group activation, partial-result and reload-pending feedback |
 
 ## State Boundaries
@@ -78,7 +78,9 @@ See [`extensions.md`](./extensions.md) for server-side ownership and interaction
 
 `PluginSettings` groups packages by Project and Global scope. **Enable all** and **Disable all** send only changed rows in one bounded API request rather than looping over cards. The returned catalogue replaces local state; ordered Core outcomes produce changed/unchanged/refused feedback, so a refused untrusted project enable does not hide successful entries. Package filters are not rewritten. Executable changes retain a visible pending notice until the separate atomic resource reload succeeds.
 
-`McpSettings` requests the selected workspace through `getMcpConfig()`, reloads on cwd/trust changes, and keeps the returned inventory in component state only. It labels entries as Configured, Disabled, Invalid, or Replaced by project—never Connected—and renders only the already-redacted target, env/header names, command-backed field names and variable references returned by Core. A present untrusted project file shows a lock notice and no project names or values. File diagnostics use typed reasons translated in both built-in locales; server entry diagnostics are fixed, value-free schema messages.
+`McpSettings` requests the selected workspace through `getMcpConfig()`, reloads on cwd/trust changes, and keeps the returned inventory in component state only. Configuration labels remain Configured, Disabled, Invalid, or Replaced by project; Connected is shown only inside a distinct successful Test report. Cards render only already-redacted targets, env/header names, command-backed field names and variable references returned by Core. A present untrusted project file shows a lock notice and no project names or values. File diagnostics use typed localized reasons; server entry diagnostics are fixed, value-free schema messages.
+
+A valid row’s **Test** action sends only scope/name/current cwd to the administrator route—never the descriptor or configuration. All mutation/import controls are disabled while it runs. A successful bounded response shows tested time/duration, server identity, transport context and canonical cwd when applicable, capability counts, truncation/timeout state, and each bounded tool’s name, one-line description, read-only annotation and effective exposure. Error and stderr text is server-redacted and bounded; `needs-auth` explains that sign-in is a separate explicit action rather than starting OAuth. The component may attach the matching result immediately, then reloads canonical inventory so config/trust races and stale status are reconciled. Workspace changes invalidate pending UI results. A disabled but valid entry remains testable.
 
 `McpImportPreview` keeps pasted text only in component state and sends the original text, explicit foreign/AiHarness syntax choice and current cwd to the administrator preview route—never a browser-built configuration object. Text/syntax/workspace/inventory changes abort or invalidate stale requests. Returned cards contain only source kind, normalized name, masked target, structural field names, variable names, fixed notes and per-scope eligibility/confirmations. Literal env/header/OAuth values, argument text, source excerpts and writable normalized configuration never render.
 
@@ -88,7 +90,7 @@ A valid row's **Edit** action reuses that pipeline in a fixed scope. It sends on
 
 Valid rows can be edited, enabled, disabled, assigned `direct`, `codemode` or `deferred` tool exposure, or removed; each scope also has one-request bounded activation controls. Requests include the opaque revision from the last inventory. A removal uses an accessible confirmation dialog and only a short-lived opaque undo token crosses into the browser; the literal removed entry stays in server memory. Busy controls serialize browser intent; focus returns after cancellation and exposure changes or moves to Undo after removal, and any uncertain timeout/network result triggers a canonical reload because the write may already have committed. Server responses replace local inventory rather than applying speculative patches.
 
-This panel still has no non-import add, Test/sign-in or runtime controls beyond reviewed single-entry import/replacement and local metadata flows. Do not implement a browser-side parser or resolver: source files, literal values, environment access and command handling stay entirely on the Server/Core side.
+This panel still has no non-import add, MCP sign-in or long-lived runtime controls. Test is deliberately one-shot and cannot invoke tools. Do not implement a browser-side parser, resolver or transport: source files, literal/resolved values, environment access, command handling, trust and connection cleanup stay entirely on the Server/Core side.
 
 ## PWA, Push, and i18n
 
@@ -105,9 +107,9 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 
 - `packages/web/src/store/session-store.test.ts` plus `.remote.test.ts` and `.integration.test.ts` — hydration, windows, drafts, cache and run state
 - `packages/web/src/store/preferences.test.ts` — schema migration and validation
-- `packages/web/src/services/api.test.ts` — REST/SSE contracts, including MCP import/replacement preview, original-text persistence, exposure/action bodies, typed errors and uncertain timeouts
+- `packages/web/src/services/api.test.ts` — shared REST/SSE credential and response contracts
 - `packages/web/src/services/{push,pwa,keyboard,notices}.test.ts` — global browser services
-- `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including locked/redacted MCP inventory, non-mutating paste/replacement preview, completion/confirmation-gated atomic import/replacement, fresh-project trust-plus-first-write, grouped activation, exposure selection, focus, undo and failure reconciliation
+- `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including minimal-config-free MCP Test requests and identity/cwd/capability/tool reports, locked/redacted inventory, atomic import/replacement, fresh-project trust-plus-first-write, grouped activation, exposure, focus, undo and failure reconciliation
 - `e2e/accessibility.spec.ts`, `e2e/performance.spec.ts`, and `e2e/visual.spec.ts` — a11y, bounds and baselines
 - `e2e/live-server.spec.ts` — real browser-to-server smoke path
 

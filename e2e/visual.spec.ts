@@ -335,7 +335,10 @@ test.describe('Régression visuelle de l’inventaire MCP', () => {
       await section.getByLabel('MCP server text').fill('https://docs.example.test/mcp');
       await section.getByRole('button', { name: 'Preview', exact: true }).click();
       await expect(section.getByRole('article', { name: 'docs-import' })).toBeVisible();
-      await expect(section.getByRole('article', { name: 'remote-docs: Configured', exact: true })).toBeVisible();
+      const testedServer = section.getByRole('article', { name: 'remote-docs: Configured', exact: true });
+      await expect(testedServer).toBeVisible();
+      await testedServer.getByRole('button', { name: 'Test remote-docs', exact: true }).click();
+      await expect(testedServer.getByRole('region', { name: 'Last connection test for remote-docs' })).toContainText('Connected');
       await expect(section.getByRole('article', { name: 'local-tools: Disabled', exact: true })).toBeVisible();
       await expect(section.getByRole('article', { name: 'shared: Replaced by project', exact: true })).toBeVisible();
       await expect(section.getByRole('article', { name: 'bad\\u202ename: Invalid', exact: true })).toBeVisible();

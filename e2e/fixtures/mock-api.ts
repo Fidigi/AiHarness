@@ -5,6 +5,7 @@ import type {
   ExtensionInteractionSnapshot,
   McpConfigInventory,
   McpImportPreview,
+  McpServerTestResult,
   ModelCatalog,
   ModelCatalogEntry,
   PluginCatalog,
@@ -92,6 +93,7 @@ export interface MockApiOptions {
   modelCatalog?: ModelCatalog;
   mcpConfig?: McpConfigInventory;
   mcpImportPreview?: McpImportPreview;
+  mcpTestResult?: McpServerTestResult;
   pluginCatalog?: PluginCatalog;
   skillCatalog?: SkillCatalog;
   skillRegistry?: SkillRegistry;
@@ -431,6 +433,21 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     entries: [],
     notes: [{ code: 'no-server', severity: 'error' }],
   } satisfies McpImportPreview);
+  const mcpTestResult = structuredClone(options.mcpTestResult ?? {
+    state: 'connected',
+    testedAt: DEFAULT_DATE,
+    durationMs: 84,
+    tools: [
+      { name: 'search_docs', description: 'Search documentation', readOnly: true, exposure: 'deferred' },
+      { name: 'publish_note', description: 'Publish a note', readOnly: false, exposure: 'deferred' },
+    ],
+    toolCount: 2,
+    resources: 3,
+    resourceTemplates: 1,
+    prompts: 2,
+    cwd: '/workspace',
+    serverInfo: { name: 'docs-fixture', version: '1.2.3', title: 'Documentation' },
+  } satisfies McpServerTestResult);
   let mcpRevisionSequence = 1;
   for (const file of mcpConfig.files) {
     if (file.exists && file.contentRead && !file.revision) {
@@ -714,6 +731,23 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     if (url.pathname === '/api/mcp' && method === 'GET') { await fulfillJson(route, mcpConfig); return; }
     if (url.pathname === '/api/mcp/preview' && method === 'POST') {
       await fulfillJson(route, mcpImportPreview); return;
+    }
+    if (url.pathname === '/api/mcp/test' && method === 'POST') {
+      const input = body as Record<string, unknown>;
+      const scope = input.scope === 'project' ? 'project' : 'global';
+      const server = mcpConfig.servers.find(item => item.scope === scope && item.name === input.name);
+      if (!server || !server.configKey) {
+        await fulfillJson(route, { error: 'The MCP server is not configured.', code: 'server-not-found' }, 404);
+        return;
+      }
+      server.testStatus = structuredClone(mcpTestResult);
+      await fulfillJson(route, {
+        scope,
+        name: server.name,
+        configKey: server.configKey,
+        result: structuredClone(mcpTestResult),
+      });
+      return;
     }
     if (url.pathname === '/api/mcp/actions' && method === 'POST') {
       const input = body as Record<string, any>;
