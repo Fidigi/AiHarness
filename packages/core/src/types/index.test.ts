@@ -3,7 +3,8 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest';
-import { ProviderType, Role, Message, Session } from './index';
+import type { Role, Message, Session } from './index';
+import { ProviderType } from './index';
 
 describe('Types', () => {
   describe('ProviderType enum', () => {

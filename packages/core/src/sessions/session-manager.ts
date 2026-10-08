@@ -14,7 +14,8 @@ import { constants as fsConstants } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { EventEmitter, EventHandler, EventMap } from '../utils/event-emitter.js';
+import type { EventHandler, EventMap } from '../utils/event-emitter.js';
+import { EventEmitter } from '../utils/event-emitter.js';
 import { readStableDirectoryEntries } from '../security/stable-directory.js';
 import { releaseStableLockPath } from '../security/stable-lock.js';
 
@@ -2575,7 +2576,13 @@ export class SessionManager {
       : sessions;
 
     // Build tree structure
-    const sessionMap = new Map<string, any>();
+    const sessionMap = new Map<string, {
+      id: string;
+      title: string;
+      parentId?: string;
+      depth: number;
+      messages: number;
+    }>();
     for (const session of filteredSessions) {
       sessionMap.set(session.id, {
         id: session.id,
@@ -2609,7 +2616,7 @@ export class SessionManager {
       }
     }
     // Cyclic or malformed legacy roots remain visible at depth zero without recursion.
-    return Array.from(sessionMap.values()).sort((a: any, b: any) => a.depth - b.depth);
+    return Array.from(sessionMap.values()).sort((a, b) => a.depth - b.depth);
   }
 
   /** Get all sessions in a branch (including forks) */

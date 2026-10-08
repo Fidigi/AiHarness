@@ -419,12 +419,12 @@ export class WorkspaceManager {
   }): Promise<void> {
     const cwd = await this.resolve(input.cwd, { kind: 'directory' });
     const destination = await this.resolve(input.path, { mustExist: false });
-    if (Buffer.byteLength(input.branch) > 255 || !/^[A-Za-z0-9._\/-]+$/.test(input.branch)
+    if (Buffer.byteLength(input.branch) > 255 || !/^[A-Za-z0-9._/-]+$/.test(input.branch)
       || input.branch.startsWith('-')) {
       throw new WorkspacePathError('INVALID_PATH', 'Nom de branche invalide.');
     }
     const startPoint = input.startPoint || 'HEAD';
-    if (Buffer.byteLength(startPoint) > 255 || !/^[A-Za-z0-9._\/-]+$/.test(startPoint)
+    if (Buffer.byteLength(startPoint) > 255 || !/^[A-Za-z0-9._/-]+$/.test(startPoint)
       || startPoint.startsWith('-')) {
       throw new WorkspacePathError('INVALID_PATH', 'Point de départ Git invalide.');
     }

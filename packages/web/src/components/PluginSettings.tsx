@@ -89,7 +89,7 @@ export function PluginSettings() {
     setBatchFailures([]);
     setReloadPending(false);
     void load();
-  }, [workspace?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workspace?.id]);
 
   const runAction = async (
     action: PluginMutationAction,

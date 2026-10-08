@@ -114,7 +114,7 @@ describe('runToolLoop', () => {
       })
       .mockImplementationOnce(async messages => {
         expect(messages[2]).toMatchObject({ role: 'tool', name: 'missing', isError: true });
-        expect(messages[2].content).toContain('Unknown extension tool');
+        expect(messages[2].content).toContain('Tool is not enabled for this run');
         return { content: 'Je ne peux pas exécuter cet outil.' };
       });
 

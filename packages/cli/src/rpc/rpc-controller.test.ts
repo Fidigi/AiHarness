@@ -2,9 +2,36 @@ import { chmod, link, lstat, mkdir, mkdtemp, readFile, rm, stat, symlink, utimes
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { ExtensionRegistry, MockProvider, SessionManager } from '@ai-harness/core';
+import {
+  AiProvider,
+  ExtensionRegistry,
+  MockProvider,
+  SessionManager,
+  type ChatResponse,
+  type Message,
+} from '@ai-harness/core';
 import { ResourceManager } from '../resources/resource-manager';
 import { RpcController, type RpcControllerContext } from './rpc-controller';
+
+class RpcToolProvider extends AiProvider {
+  constructor() { super({ type: 'mock' as never }); }
+  validateConfig(): boolean { return true; }
+  async chat(): Promise<ChatResponse> { return { content: 'unused' }; }
+  async streamChat(
+    messages: Message[],
+    _onChunk: (chunk: string) => void,
+    onComplete?: (response?: ChatResponse) => void,
+  ): Promise<void> {
+    if (!messages.some(message => message.role === 'tool')) {
+      onComplete?.({
+        content: '',
+        toolCalls: [{ id: 'mcp-rpc', name: 'mcp__docs__lookup', input: { query: 'rpc' } }],
+      });
+      return;
+    }
+    onComplete?.({ content: 'done' });
+  }
+}
 
 class CapturingProvider extends MockProvider {
   systemPrompt?: string;
@@ -112,6 +139,37 @@ describe('RPC command controller', () => {
     await controller.handle({ type: 'prompt', message: 'hello' });
     await vi.waitFor(() => expect(records.some(record => record.type === 'agent_settled')).toBe(true));
     expect(provider.systemPrompt).toBe('resolved RPC instructions');
+  });
+
+  it('prepares and executes session-scoped dynamic tools for every RPC prompt', async () => {
+    const { controller, context, records } = createController();
+    const provider = new RpcToolProvider();
+    context.provider = provider;
+    context.toolContext.provider = provider;
+    const execute = vi.fn(async () => ({ content: 'rpc lookup result' }));
+    context.prepareDynamicTools = vi.fn(async () => ({
+      tools: [{
+        name: 'mcp__docs__lookup',
+        description: 'MCP docs lookup',
+        parameters: { type: 'object', properties: { query: { type: 'string' } } },
+      }],
+      execute,
+    }));
+    await controller.initialize();
+
+    await controller.handle({ type: 'prompt', message: 'look it up' });
+    await vi.waitFor(() => expect(records.some(record => record.type === 'agent_settled')).toBe(true));
+
+    expect(context.prepareDynamicTools).toHaveBeenCalledWith('rpc-test-session', expect.any(AbortSignal));
+    expect(execute).toHaveBeenCalledWith(
+      'mcp__docs__lookup',
+      { query: 'rpc' },
+      expect.objectContaining({ currentSessionId: 'rpc-test-session' }),
+      expect.any(AbortSignal),
+    );
+    expect(context.sessionManager.get('rpc-test-session')?.messages.map(message => message.role)).toEqual([
+      'user', 'assistant', 'tool', 'assistant',
+    ]);
   });
 
   it('handles extension commands immediately without starting an agent run', async () => {

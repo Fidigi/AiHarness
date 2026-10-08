@@ -421,7 +421,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
   const worktreeForceRequired = new Set(options.worktreeForceRequired ?? []);
   const providers = structuredClone(options.providers ?? [{ type: 'mock', configured: true }]);
   let modelCatalog = structuredClone(options.modelCatalog ?? mockModelCatalog(providers));
-  let mcpConfig = structuredClone(options.mcpConfig ?? {
+  const mcpConfig = structuredClone(options.mcpConfig ?? {
     files: [
       { scope: 'global', path: '/agent/mcp.json', exists: false, contentRead: false, problems: [] },
       { scope: 'project', path: `${workspace.cwd}/.ai-harness/mcp.json`, exists: false, contentRead: false, problems: [] },

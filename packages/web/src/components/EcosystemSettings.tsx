@@ -259,7 +259,8 @@ export function CustomModelSettings() {
           }}>{t('common.edit')}</button>
           <button type="button" onClick={async () => {
             const result = await testCustomModel(model.key);
-            result.success ? publishNotice(t('settings.connectionOk', { count: 1 }), { level: 'success' }) : error(result.error);
+            if (result.success) publishNotice(t('settings.connectionOk', { count: 1 }), { level: 'success' });
+            else error(result.error);
           }}>{t('settings.testConnection')}</button>
           <button type="button" onClick={async () => {
             const result = await deleteCustomModel(model.key);

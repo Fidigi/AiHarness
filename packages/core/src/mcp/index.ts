@@ -65,6 +65,7 @@ export type {
   McpServerInventoryEntry,
   McpServerMutationOutcome,
   McpServerRuntimeConfig,
+  McpServerRuntimeStatus,
   McpServerTargetErrorCode,
   McpServerTestResult,
   McpServerTestState,
@@ -101,3 +102,22 @@ export type {
   McpServerTesterOptions,
   McpServerTestValidate,
 } from './server-test.js';
+
+export {
+  MCP_EXTENSION_ID,
+  MCP_RUNTIME_IDLE_MS,
+  MCP_RUNTIME_MAX_INPUT_BYTES,
+  MCP_RUNTIME_MAX_OUTPUT_CHARS,
+  MCP_RUNTIME_MAX_SERVERS,
+  MCP_RUNTIME_MAX_TOOLS,
+  MCP_RUNTIME_STARTUP_WAIT_MS,
+  McpSessionHost,
+} from './session-host.js';
+export type {
+  McpHostConnect,
+  McpHostConnection,
+  McpHostConnectOptions,
+  McpSessionHostOptions,
+  PrepareMcpSessionOptions,
+  PreparedMcpTools,
+} from './session-host.js';

@@ -7,6 +7,7 @@ import {
   ExtensionRegistry,
   JsonlSessionStore,
   loadAgentSettings,
+  McpSessionHost,
   normalizeProviderUsage,
   PluginService,
   ProjectTrustManager,
@@ -250,6 +251,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
   });
   const extensionRegistry = new ExtensionRegistry();
   let controller: RpcController | undefined;
+  let mcpHost: McpSessionHost | undefined;
   const stopForSignal = (): void => {
     if (controller) void controller.close().catch(() => undefined);
     input.destroy();
@@ -284,6 +286,14 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     const settingsResolution = await loadAgentSettings({
       cwd: canonicalCwd,
       projectTrusted: projectResourcesTrusted,
+    });
+    mcpHost = new McpSessionHost({
+      agentDir: settingsResolution.agentDir,
+      trustManager,
+      resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, {
+        base,
+        kind: 'directory',
+      }),
     });
     reportSettingsDiagnostics(settingsResolution, value => redactor.redact(value));
     const workspaceDescriptor = await workspaceManager.describe(canonicalCwd, projectTrusted);
@@ -407,13 +417,14 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       process.stderr.write(`${redactor.redact(`Extension ${failure.path}: ${failure.error.message}`)}\n`);
     }
     const registeredTools = extensionRegistry.getTools();
-    const unknownTools = unknownToolNames(registeredTools, options.tools, options.excludeTools);
+    const unknownTools = unknownToolNames(registeredTools, options.tools, options.excludeTools)
+      .filter(name => !name.startsWith('mcp__'));
     if (unknownTools.length) throw new Error(`Unknown tool name(s): ${unknownTools.join(', ')}.`);
     const configuredDefaults = resolveAgentDefaultTools(
       settingsResolution.settings.defaultTools,
       DEFAULT_CODING_TOOL_NAMES,
     );
-    const selectedTools = selectRegisteredTools(registeredTools, {
+    const toolSelectionOptions = {
       allowedTools: options.tools,
       excludedTools: options.excludeTools,
       defaultTools: configuredDefaults ?? DEFAULT_CODING_TOOL_NAMES,
@@ -421,7 +432,8 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       includeNonBuiltInByDefault: true,
       noBuiltInTools: options.noBuiltinTools,
       noTools: options.noTools,
-    });
+    };
+    const selectedTools = selectRegisteredTools(registeredTools, toolSelectionOptions);
 
     const startupSession = await resolveStartupSession({
       sessionManager,
@@ -460,6 +472,31 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       model: startupModel,
       systemPrompt: instructions.systemPrompt,
       tools: toChatToolDefinitions(selectedTools),
+      prepareDynamicTools: async (sessionId, signal) => {
+        try {
+          const session = sessionManager.get(sessionId);
+          const prepared = await mcpHost!.prepareForPrompt({
+            sessionId,
+            cwd: session?.cwd ?? canonicalCwd,
+            preset: session?.toolPreset,
+            signal,
+          });
+          const selected = selectRegisteredTools(prepared.tools, toolSelectionOptions);
+          return {
+            tools: toChatToolDefinitions(selected),
+            execute: (name, input, context, executionSignal) => prepared.execute(
+              name, input, context, executionSignal,
+            ),
+            release: () => signal.aborted
+              ? mcpHost!.releaseSession(sessionId)
+              : mcpHost!.finishPrompt(sessionId),
+          };
+        } catch (error) {
+          if (signal.aborted) await mcpHost!.releaseSession(sessionId);
+          else mcpHost!.finishPrompt(sessionId);
+          throw error;
+        }
+      },
       thinking: startupThinking,
       scopedModelPatterns: effectiveModels.modelPatterns,
       redactText: value => redactor.redact(value),
@@ -542,32 +579,33 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     await controller.drain();
   } catch (error) {
     runError = error ?? new Error('RPC mode failed.');
-  } finally {
-    if (input === process.stdin) {
-      process.off('SIGINT', stopForSignal);
-      process.off('SIGTERM', stopForSignal);
-    }
-    let cleanupError: unknown;
-    try { extensionUi.close(); } catch (error) { cleanupError = error ?? new Error('RPC UI cleanup failed.'); }
-    try { await controller?.close(); } catch (error) { cleanupError ??= error ?? new Error('RPC controller cleanup failed.'); }
-    try { await extensionRegistry.shutdown(); } catch (error) { cleanupError ??= error ?? new Error('Extension shutdown failed.'); }
-    try {
-      await outputTail;
-      if (outputFailure) throw outputFailure;
-      await reservedOutput?.flush();
-    } catch (error) {
-      cleanupError ??= error ?? new Error('RPC output flush failed.');
-    }
-    reservedOutput?.restore();
-    if (runError && cleanupError && runError !== cleanupError) {
-      const runMessage = runError instanceof Error ? runError.message : String(runError);
-      const cleanupMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
-      throw new AggregateError(
-        [runError, cleanupError],
-        `RPC mode failed: ${runMessage}; cleanup failed: ${cleanupMessage}`,
-      );
-    }
-    if (runError) throw runError;
-    if (cleanupError) throw cleanupError;
   }
+
+  if (input === process.stdin) {
+    process.off('SIGINT', stopForSignal);
+    process.off('SIGTERM', stopForSignal);
+  }
+  let cleanupError: unknown;
+  try { extensionUi.close(); } catch (error) { cleanupError = error ?? new Error('RPC UI cleanup failed.'); }
+  try { await controller?.close(); } catch (error) { cleanupError ??= error ?? new Error('RPC controller cleanup failed.'); }
+  try { await mcpHost?.shutdown(); } catch (error) { cleanupError ??= error ?? new Error('MCP shutdown failed.'); }
+  try { await extensionRegistry.shutdown(); } catch (error) { cleanupError ??= error ?? new Error('Extension shutdown failed.'); }
+  try {
+    await outputTail;
+    if (outputFailure) throw outputFailure;
+    await reservedOutput?.flush();
+  } catch (error) {
+    cleanupError ??= error ?? new Error('RPC output flush failed.');
+  }
+  reservedOutput?.restore();
+  if (runError && cleanupError && runError !== cleanupError) {
+    const runMessage = runError instanceof Error ? runError.message : String(runError);
+    const cleanupMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+    throw new AggregateError(
+      [runError, cleanupError],
+      `RPC mode failed: ${runMessage}; cleanup failed: ${cleanupMessage}`,
+    );
+  }
+  if (runError) throw runError;
+  if (cleanupError) throw cleanupError;
 }

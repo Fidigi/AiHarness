@@ -37,12 +37,12 @@ const RESERVED_VARIABLES = new Set([
 const VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const AUTH_SCHEME = /^(?:bearer|basic|token)$/iu;
 
-interface ResolvedRuntimeConfig {
+export interface ResolvedRuntimeConfig {
   config: McpServerRuntimeConfig;
   resolvedSecrets: string[];
 }
 
-interface TestRun extends Omit<McpServerTestResult, 'testedAt'> {}
+type TestRun = Omit<McpServerTestResult, 'testedAt'>;
 
 export interface McpServerTestConnectOptions {
   requestTimeoutMs: number;
@@ -93,7 +93,7 @@ function clip(text: string, maximum: number): string {
   return text.length > maximum ? `${text.slice(0, maximum - 1)}…` : text;
 }
 
-function appendBoundedTail(current: Buffer, chunk: Buffer, maximum: number): Buffer {
+export function appendBoundedTail(current: Buffer, chunk: Buffer, maximum: number): Buffer {
   const combined = Buffer.concat([current, chunk]);
   if (combined.length <= maximum) return combined;
   let start = combined.length - maximum;
@@ -203,7 +203,7 @@ async function resolveValue(
   return resolved;
 }
 
-async function resolveRuntimeConfig(
+export async function resolveRuntimeConfig(
   target: McpServerTestTarget,
   signal: AbortSignal,
   commandTimeoutMs: number,
@@ -234,7 +234,7 @@ async function resolveRuntimeConfig(
   return { config, resolvedSecrets };
 }
 
-const boundedMcpFetch: FetchLike = async (input, init) => {
+export const boundedMcpFetch: FetchLike = async (input, init) => {
   const response = await fetch(input, { ...init, redirect: 'manual' });
   const contentLength = response.headers.get('content-length');
   if (contentLength !== null && (!/^(?:0|[1-9]\d*)$/u.test(contentLength)
@@ -289,7 +289,7 @@ const boundedMcpFetch: FetchLike = async (input, init) => {
   return wrapped;
 };
 
-function safeEnvironment(configured: Record<string, string>): Record<string, string> {
+export function safeEnvironment(configured: Record<string, string>): Record<string, string> {
   const environment = Object.create(null) as Record<string, string>;
   for (const [name, value] of Object.entries(filteredProcessEnvironment())) {
     if (value !== undefined) environment[name] = value;
@@ -319,7 +319,7 @@ function addSecret(set: Set<string>, value: string | undefined): void {
   }
 }
 
-function createRedactor(
+export function createRedactor(
   raw: McpServerRuntimeConfig,
   resolved: McpServerRuntimeConfig,
   resolvedSecrets: readonly string[],
@@ -354,24 +354,25 @@ function createRedactor(
   return text => ordered.reduce((current, secret) => current.split(secret).join('•••'), text);
 }
 
-function safeText(text: string, redact: (value: string) => string, maximum: number): string {
-  return clip(redact(text.slice(0, 64 * 1024)), maximum);
+export function safeText(text: string, redact: (value: string) => string, maximum: number): string {
+  // Redact before truncating so a credential crossing the output boundary cannot leak a prefix.
+  return clip(redact(text).slice(0, 64 * 1024), maximum);
 }
 
-function isNeedsAuth(error: unknown): boolean {
+export function isNeedsAuth(error: unknown): boolean {
   if (error instanceof UnauthorizedError) return true;
   const value = error as { code?: unknown; status?: unknown; statusCode?: unknown; name?: unknown } | undefined;
   return value?.code === 401 || value?.status === 401 || value?.statusCode === 401
     || value?.name === 'UnauthorizedError';
 }
 
-interface PagedResult<T> {
+export interface PagedResult<T> {
   items: T[];
   count: number;
   truncated: boolean;
 }
 
-async function collectPages<T>(
+export async function collectPages<T>(
   request: (cursor: string | undefined) => Promise<{ items: T[]; nextCursor?: string }>,
 ): Promise<PagedResult<T>> {
   const items: T[] = [];
@@ -423,7 +424,7 @@ function describeTool(
   };
 }
 
-async function closeClient(
+export async function closeClient(
   client: Client,
   transport: Transport,
   waitMs: number,
@@ -463,7 +464,7 @@ export async function connectMcpServerForTest(
   let transport: Transport | undefined;
   let stdio: StdioClientTransport | undefined;
   let stderr: Buffer = Buffer.alloc(0);
-  let rawConfig = target.config;
+  const rawConfig = target.config;
   let resolvedConfig = target.config;
   let resolvedSecrets: string[] = [];
   try {

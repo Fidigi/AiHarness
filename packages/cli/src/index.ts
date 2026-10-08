@@ -11,9 +11,11 @@ import {
   DEFAULT_CODING_TOOL_NAMES,
   ExtensionRegistry,
   getSupportedThinkingLevels,
+  inspectMcpConfig,
   JsonlSessionStore,
   loadAgentSettings,
   loadPromptFiles,
+  McpSessionHost,
   normalizeProviderUsage,
   PluginService,
   resolveInstructionPrompt,
@@ -33,9 +35,11 @@ import {
 } from '@ai-harness/core';
 import type {
   AgentMessageQueueKind,
+  AiProvider,
   Message,
   MessageContentBlock,
   PluginResourceKind,
+  PreparedMcpTools,
   ResolvedAgentSettings,
   Session,
   SessionEntry,
@@ -92,6 +96,7 @@ import { cleanupCliEarlyExit } from './cli/lifecycle.js';
 import { InteractiveShellController } from './cli/shell-controller.js';
 import { formatConfiguredModelList } from './cli/model-list.js';
 import { runPackageCommand } from './cli/package-command.js';
+import { runMcpCommand } from './cli/mcp-command.js';
 import {
   resolveStartupSession,
   resolveStartupSessionDirectory,
@@ -210,6 +215,10 @@ async function chooseStartupSession(sessions: Session[]): Promise<Session | unde
 
 async function main(): Promise<void> {
   const rawArguments = process.argv.slice(2);
+  if (rawArguments[0] === 'mcp') {
+    process.exitCode = await runMcpCommand(rawArguments.slice(1));
+    return;
+  }
   const packageCommand = rawArguments[0] === 'package' || rawArguments[0] === 'packages';
   const directPackageCommand = ['install', 'remove', 'uninstall', 'update', 'list', 'config'].includes(rawArguments[0] ?? '');
   if (packageCommand || directPackageCommand) {
@@ -368,8 +377,6 @@ async function main(): Promise<void> {
   };
   let settingsResolution = await resolveSettingsForTrust(true);
   let providerRuntime: Awaited<ReturnType<typeof createCliProviderRuntime>>;
-  let configuredProviders: Map<string, import('@ai-harness/core').AiProvider>;
-  let commandHandler: CommandHandler;
   const reloadAgentSettings = async (): Promise<void> => {
     settingsResolution = await resolveSettingsForTrust();
   };
@@ -565,6 +572,14 @@ async function main(): Promise<void> {
 
   const extensionRegistry = new ExtensionRegistry();
   extensionRegistry.attachSessionManager(sessionManager);
+  const mcpHost = new McpSessionHost({
+    agentDir: settingsResolution.agentDir,
+    trustManager,
+    resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, {
+      base,
+      kind: 'directory',
+    }),
+  });
   let earlyCleanupPromise: Promise<void> | undefined;
   const cleanupEarlyExit = (
     additional: readonly (() => void | Promise<void>)[] = [],
@@ -581,7 +596,7 @@ async function main(): Promise<void> {
       extensions: extensionRegistry,
       jsonOutput,
       closeNetwork: closeProviderNetworkDispatchers,
-      additional,
+      additional: [() => mcpHost.shutdown(), ...additional],
     });
     return earlyCleanupPromise;
   };
@@ -737,15 +752,12 @@ async function main(): Promise<void> {
   }
   await registerSkillTool();
 
-  const selectedTools = () => {
-    const registered = extensionRegistry.getTools();
-    const unknown = unknownToolNames(registered, cliArguments.tools, cliArguments.excludeTools);
-    if (unknown.length) throw new Error(`Unknown tool name(s): ${unknown.join(', ')}.`);
+  const toolSelectionOptions = () => {
     const configuredDefaults = resolveAgentDefaultTools(
       settingsResolution.settings.defaultTools,
       DEFAULT_CODING_TOOL_NAMES,
     );
-    return selectRegisteredTools(registered, {
+    return {
       allowedTools: cliArguments.tools,
       excludedTools: cliArguments.excludeTools,
       defaultTools: configuredDefaults ?? DEFAULT_CODING_TOOL_NAMES,
@@ -753,8 +765,18 @@ async function main(): Promise<void> {
       includeNonBuiltInByDefault: true,
       noBuiltInTools: cliArguments.noBuiltinTools,
       noTools: cliArguments.noTools,
-    });
+    };
   };
+  const selectedTools = () => {
+    const registered = extensionRegistry.getTools();
+    const unknown = unknownToolNames(registered, cliArguments.tools, cliArguments.excludeTools)
+      .filter(name => !name.startsWith('mcp__'));
+    if (unknown.length) throw new Error(`Unknown tool name(s): ${unknown.join(', ')}.`);
+    return selectRegisteredTools(registered, toolSelectionOptions());
+  };
+  const selectedMcpTools = (prepared: PreparedMcpTools) => (
+    selectRegisteredTools(prepared.tools, toolSelectionOptions())
+  );
   try { selectedTools(); }
   catch (error) {
     reportError(error instanceof Error ? error.message : String(error));
@@ -787,12 +809,12 @@ async function main(): Promise<void> {
   }
   // Credentials loaded from the encrypted store may only become known here; scrub legacy rows now.
   if (!cliArguments.noSession) await sessionManager.loadAllSessions();
-  configuredProviders = createConfiguredProviders(process.env, {
+  const configuredProviders: Map<string, AiProvider> = createConfiguredProviders(process.env, {
     credentials: providerRuntime.values,
     network: providerRuntime.network,
   });
 
-  commandHandler = new CommandHandler(
+  const commandHandler = new CommandHandler(
     sessionManager,
     store,
     terminal,
@@ -812,6 +834,20 @@ async function main(): Promise<void> {
       allowCredentialReveal: applicationMode === 'interactive'
         && process.stdin.isTTY === true && process.stdout.isTTY === true,
       providerNetwork: providerRuntime.network,
+      mcpControl: {
+        overview: async () => mcpHost.decorateInventory(await inspectMcpConfig({
+          agentDir: settingsResolution.agentDir,
+          cwd: workspaceCwd,
+          trustManager,
+        })),
+        prepare: (sessionId, preset) => mcpHost.prepareForPrompt({
+          sessionId,
+          cwd: workspaceCwd,
+          preset,
+        }),
+        finish: sessionId => mcpHost.finishPrompt(sessionId),
+        reconnect: sessionId => mcpHost.reconnect(sessionId),
+      },
       redactText: redactOutput,
       redactJson: value => outputCredentialRedactor.redactJson(value),
       themeControl: {
@@ -1267,16 +1303,40 @@ async function main(): Promise<void> {
       let finalContent = '';
       let continueConversation = true;
       while (continueConversation) {
+        const currentSession = sessionManager.get(currentSessionId);
+        const mcpPrepared = await mcpHost.prepareForPrompt({
+          sessionId: currentSessionId,
+          cwd: workspaceCwd,
+          preset: currentSession?.toolPreset,
+          signal: operationController.signal,
+        });
+        const registeredTools = selectedTools();
+        const registeredNames = new Set(registeredTools.map(tool => tool.name));
+        const mcpTools = selectedMcpTools(mcpPrepared)
+          .filter(tool => !registeredNames.has(tool.name));
+        const enabledMcpNames = new Set(mcpTools.map(tool => tool.name));
         finalContent = await runToolLoop({
         sessionManager,
         sessionId: currentSessionId,
         extensionRegistry,
-        tools: toChatToolDefinitions(selectedTools()),
+        tools: toChatToolDefinitions([...registeredTools, ...mcpTools]),
+        executeTool: (name, input, context, signal) => enabledMcpNames.has(name.toLowerCase())
+          ? extensionRegistry.executeHostedTool(
+              name,
+              input,
+              context,
+              (hostInput, hostContext, hostSignal) => mcpPrepared.execute(
+                name, hostInput, hostContext, hostSignal,
+              ),
+              signal,
+            )
+          : extensionRegistry.executeTool(name, input, context, signal),
         toolContext: {
           sessionManager,
           currentSessionId,
           provider,
           providerName,
+          toolPreset: currentSession?.toolPreset,
           cwd: workspaceCwd,
           workspaceId: workspaceDescriptor.id,
           projectTrusted: isProjectTrusted(),
@@ -1402,6 +1462,8 @@ async function main(): Promise<void> {
       if (!isStreaming && !activeAbortController?.signal.aborted) reportError(errorMessage);
       return undefined;
     } finally {
+      if (activeAbortController?.signal.aborted) await mcpHost.releaseSession(currentSessionId);
+      else mcpHost.finishPrompt(currentSessionId);
       if (!printMode && (interactiveQueue.size() > 0 || unprocessedQueuedInputs.length > 0)) {
         const restored = restoreQueuedInput(inputDriver.getValue(), unprocessedQueuedInputs);
         if (restored !== undefined) inputDriver.replaceValue(restored);

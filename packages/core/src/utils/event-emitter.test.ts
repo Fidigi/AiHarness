@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EventEmitter, EventMap } from './event-emitter';
+import type { EventMap } from './event-emitter';
+import { EventEmitter } from './event-emitter';
 
 describe('EventEmitter', () => {
   let emitter: EventEmitter<EventMap>;

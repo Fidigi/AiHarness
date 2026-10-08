@@ -5,7 +5,7 @@
 // ============================================================
 
 import chalk from 'chalk';
-import readline from 'readline';
+import type { Interface, Key } from 'readline';
 import { ThemeManager, type TerminalTheme } from './theme-manager.js';
 
 interface TerminalTextRedactor {
@@ -468,12 +468,12 @@ ${chalk.bold('Main environment variables:')}
   // ===================================================================
 
   /** Set the readline instance for keyboard handling */
-  setReadline(_rl: readline.Interface): void {
+  setReadline(_rl: Interface): void {
     // Kept as a compatibility hook for future fullscreen TUI integration.
   }
 
   /** Handle keypress events in TUI mode */
-  handleKeypress(key: any, _input?: string): boolean {
+  handleKeypress(key: Key, _input?: string): boolean {
     // Ctrl+C - interrupt or exit
     if (key.ctrl && key.name === 'c') {
       if (this.isStreaming) {
@@ -600,7 +600,7 @@ ${chalk.bold('Main environment variables:')}
       
       // Highlight the matching portion (truncate if too long)
       const matchEnd = searchFrom + query.length;
-      let displayMatch = content.slice(searchFrom, matchEnd);
+      const displayMatch = content.slice(searchFrom, matchEnd);
       if (displayMatch.length > 100) {
         result += chalk.bgYellow.black(displayMatch.slice(0, 50) + '...');
       } else {
@@ -613,7 +613,7 @@ ${chalk.bold('Main environment variables:')}
     }
 
     // Add the rest of the content (truncated if too long)
-    let remaining = content.slice(lastIndex);
+    const remaining = content.slice(lastIndex);
     if (remaining.length > 200) {
       result += '...' + chalk.dim(remaining.slice(-150));
     } else {

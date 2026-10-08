@@ -2,7 +2,8 @@ import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { atomicWriteStableFile, StableFileError } from './stable-file.js';
+import type { StableFileError } from './stable-file.js';
+import { atomicWriteStableFile } from './stable-file.js';
 
 const roots: string[] = [];
 

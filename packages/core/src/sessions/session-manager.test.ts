@@ -14,7 +14,6 @@ import { CredentialRedactor } from '../providers/credentials.js';
 import {
   SessionManager,
   JsonlSessionStore,
-  SessionEntry,
 } from './session-manager';
 
 // ===================================================================
@@ -794,6 +793,7 @@ describe('SessionManager with JSONL Persistence', () => {
 
       const sessions = manager.list();
       expect(sessions.length).toBe(2);
+      expect(sessions[0].id).toBe(session2.id);
       expect(sessions[0].title).toBe('New Session');
     });
   });
@@ -1235,10 +1235,16 @@ describe('Token Estimation', () => {
     // Access the internal class through a test session
     const manager = new SessionManager();
 
-    const shortText = 'Hi';
-    const longText = 'This is a much longer piece of text that should have more tokens estimated because it contains many more characters and words in total.';
+    const shortSession = await manager.create();
+    await manager.addMessage(shortSession.id, { role: 'user', content: 'Hi' });
+    const longSession = await manager.create();
+    await manager.addMessage(longSession.id, {
+      role: 'user',
+      content: 'This is a much longer piece of text that should have more tokens estimated because it contains many more characters and words in total.',
+    });
 
     expect(manager.getTokenCount('non-existent')).toBe(0);
+    expect(manager.getTokenCount(longSession.id)).toBeGreaterThan(manager.getTokenCount(shortSession.id));
   });
 });
 
@@ -1265,7 +1271,7 @@ describe('Auto-Compaction', () => {
   describe('setAutoCompactionCallback()', () => {
     it('should set the callback for auto-compaction', async () => {
       let callbackCalled = false;
-      manager.setAutoCompactionCallback(async (sessionId, toCompact, keptEntries) => {
+      manager.setAutoCompactionCallback(async (sessionId, toCompact, _keptEntries) => {
         callbackCalled = true;
         return `Summary of ${toCompact.length} compacted messages`;
       });
@@ -1436,7 +1442,7 @@ describe('Auto-Compaction', () => {
     it('should trigger compaction when threshold exceeded and callback is set', async () => {
       let summaryGenerated = '';
       
-      manager.setAutoCompactionCallback(async (sessionId, toCompact, keptEntries) => {
+      manager.setAutoCompactionCallback(async (sessionId, toCompact, _keptEntries) => {
         summaryGenerated = `Auto-summary: ${toCompact.length} messages compacted`;
         return summaryGenerated;
       });
@@ -1497,7 +1503,7 @@ describe('Auto-Compaction', () => {
     it('should automatically compact when threshold is exceeded', async () => {
       let summaryText = '';
       
-      manager.setAutoCompactionCallback(async (sessionId, toCompact, keptEntries) => {
+      manager.setAutoCompactionCallback(async (sessionId, toCompact, _keptEntries) => {
         summaryText = `Summary of ${toCompact.length} messages`;
         return summaryText;
       });

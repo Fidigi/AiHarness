@@ -1,9 +1,10 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import type {
+  CredentialRedactor} from '@ai-harness/core';
 import {
   AnthropicProvider,
   atomicWriteStableFile,
-  CredentialRedactor,
   GeminiProvider,
   OpenAiProvider,
   OpenAiResponsesProvider,

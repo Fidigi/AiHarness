@@ -178,9 +178,11 @@ interface LoadedExtension {
   cleanups: Array<() => void | Promise<void>>;
 }
 
-type StoredBeforeHook = BeforeHookHandler<any>;
+type StoredBeforeHook = BeforeHookHandler<BeforeHookMap[keyof BeforeHookMap]>;
+type SessionEvent = 'session:create' | 'session:delete' | 'session:update' | 'session:switch'
+  | 'message:add' | 'message:clear' | 'compaction:start' | 'compaction:end' | 'compaction:error';
 
-const SESSION_EVENTS: Array<keyof EventMap> = [
+const SESSION_EVENTS: SessionEvent[] = [
   'session:create',
   'session:delete',
   'session:update',
@@ -306,25 +308,47 @@ export class ExtensionRegistry {
   ): Promise<ExtensionToolResult> {
     const tool = this.tools.get(this.normalizeName(name))?.value;
     if (!tool) throw new Error(`Unknown extension tool: ${name}`);
-    if (signal?.aborted) throw new Error(`Tool execution aborted: ${name}`);
+    return this.executeHostedTool(
+      tool.name,
+      input,
+      context,
+      (hostInput, hostContext, hostSignal) => tool.execute(
+        hostInput as Record<string, unknown>, hostContext, hostSignal,
+      ),
+      signal,
+    );
+  }
 
-    const hook = await this.runBefore('before:tool', { tool: tool.name, input, context });
+  /** Apply the same hooks/events to a session-hosted tool that is not in the static registry. */
+  async executeHostedTool(
+    name: string,
+    input: unknown,
+    context: ExtensionRuntimeContext,
+    execute: (
+      input: unknown,
+      context: ExtensionRuntimeContext,
+      signal?: AbortSignal,
+    ) => ExtensionToolResult | Promise<ExtensionToolResult>,
+    signal?: AbortSignal,
+  ): Promise<ExtensionToolResult> {
+    if (signal?.aborted) throw new Error(`Tool execution aborted: ${name}`);
+    const hook = await this.runBefore('before:tool', { tool: name, input, context });
     if (hook.cancelled) {
-      throw new Error(hook.reason || `Tool execution cancelled by extension hook: ${tool.name}`);
+      throw new Error(hook.reason || `Tool execution cancelled by extension hook: ${name}`);
     }
 
-    await this.emit('tool:call', { tool: tool.name, input: hook.data.input });
+    await this.emit('tool:call', { tool: name, input: hook.data.input });
     try {
-      const result = await tool.execute(hook.data.input as Record<string, unknown>, hook.data.context, signal);
+      const result = await execute(hook.data.input, hook.data.context, signal);
       await this.emit('tool:result', {
-        tool: tool.name,
+        tool: name,
         isError: Boolean(result.isError),
         contentLength: result.content.length,
       });
       return result;
     } catch (error) {
       await this.emit('tool:error', {
-        tool: tool.name,
+        tool: name,
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
@@ -377,7 +401,8 @@ export class ExtensionRegistry {
     for (const entry of this.beforeHooks.get(event) ?? []) {
       let result: BeforeHookResult<BeforeHookMap[K]>;
       try {
-        result = await entry.value(transformed);
+        const handler = entry.value as unknown as BeforeHookHandler<BeforeHookMap[K]>;
+        result = await handler(transformed);
       } catch (error) {
         throw new Error(
           `Extension hook "${String(event)}" failed in "${entry.owner}": ${error instanceof Error ? error.message : String(error)}`,
@@ -396,11 +421,12 @@ export class ExtensionRegistry {
     this.detachSessionEvents?.();
     const detach: Array<() => void> = [];
 
-    for (const event of SESSION_EVENTS) {
-      const handler: EventHandler<any> = data => this.lifecycle.emit(event as any, data);
-      sessionManager.on(event as any, handler);
-      detach.push(() => sessionManager.off(event as any, handler));
-    }
+    const attach = <K extends SessionEvent>(event: K): void => {
+      const handler: EventHandler<EventMap[K]> = data => this.lifecycle.emit(event, data);
+      sessionManager.on(event, handler);
+      detach.push(() => sessionManager.off(event, handler));
+    };
+    for (const event of SESSION_EVENTS) attach(event);
     this.detachSessionEvents = () => detach.forEach(remove => remove());
   }
 
@@ -460,7 +486,10 @@ export class ExtensionRegistry {
       },
       before: (event, handler) => {
         const hooks = this.beforeHooks.get(event) ?? [];
-        const entry: Owned<StoredBeforeHook> = { owner: extension.id, value: handler };
+        const entry: Owned<StoredBeforeHook> = {
+          owner: extension.id,
+          value: handler as unknown as StoredBeforeHook,
+        };
         hooks.push(entry);
         this.beforeHooks.set(event, hooks);
         const unsubscribe = () => {

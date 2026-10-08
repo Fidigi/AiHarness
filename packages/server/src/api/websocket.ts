@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
+import type { Request } from 'express';
 import { sanitizedProxyChatOptions, type AiProxyServer } from './proxy.js';
 import { authenticateUpgrade, isAllowedOrigin } from '../security/request-security.js';
 
@@ -176,7 +177,7 @@ export function handleWebSocketUpgrade(
     socket.destroy();
     return;
   }
-  if (!isAllowedOrigin(request as unknown as import('express').Request)) {
+  if (!isAllowedOrigin(request as unknown as Request)) {
     socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
     socket.destroy();
     return;

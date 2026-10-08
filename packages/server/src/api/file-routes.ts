@@ -690,13 +690,13 @@ export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Rou
           });
         }, 100);
       });
-      let heartbeat: NodeJS.Timeout | undefined;
+      const watchState = { heartbeat: undefined as NodeJS.Timeout | undefined };
       let cleaned = false;
       const cleanup = (): void => {
         if (cleaned) return;
         cleaned = true;
         if (debounce) clearTimeout(debounce);
-        if (heartbeat) clearInterval(heartbeat);
+        if (watchState.heartbeat) clearInterval(watchState.heartbeat);
         watcher.close();
         void watchedHandle?.close().catch(() => undefined);
         watchedHandle = undefined;
@@ -728,7 +728,7 @@ export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Rou
       }
       response.flushHeaders?.();
       channel.send('connection.ready', services.redactJson({ path: relativePath, revision }));
-      heartbeat = setInterval(() => {
+      watchState.heartbeat = setInterval(() => {
         if (!response.writableEnded && !response.destroyed) channel.heartbeat();
       }, 15_000);
       request.once('close', cleanup);

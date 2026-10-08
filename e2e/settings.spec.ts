@@ -265,6 +265,24 @@ test.describe('Settings and authentication', () => {
     await expect(section).toContainText(MCP_FILE_PROBLEM_MESSAGES['invalid-shape']);
   });
 
+  test('affiche l’état de connexion MCP persistant sans le confondre avec la configuration', async ({ page }) => {
+    const inventory = mcpStateInventory();
+    inventory.servers[0] = {
+      ...inventory.servers[0]!,
+      runtimeStatus: {
+        state: 'connected',
+        sessionId: 'session-runtime',
+        updatedAt: '2026-10-08T12:00:00.000Z',
+        toolCount: 2,
+      },
+    };
+    await installMockApi(page, { mcpConfig: inventory });
+    await page.goto('/settings#mcp');
+
+    const card = page.locator('#mcp').getByRole('article', { name: 'remote-docs: Configured', exact: true });
+    await expect(card).toContainText('Connected · 2 tools');
+  });
+
   test('teste une entrée MCP sans envoyer sa configuration et détaille capacités, cwd et outils', async ({ page }) => {
     const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
     await page.goto('/settings#mcp');

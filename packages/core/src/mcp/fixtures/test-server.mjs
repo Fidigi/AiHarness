@@ -52,6 +52,18 @@ lines.on('line', line => {
     case 'prompts/list':
       result = { prompts: [{ name: 'explain', description: 'Explain a fixture' }] };
       break;
+    case 'tools/call':
+      if (request.params?.name === 'lookup') {
+        result = {
+          content: [{ type: 'text', text: `lookup:${JSON.stringify(request.params?.arguments ?? {})}${reportedSecret ? `:${reportedSecret}` : ''}` }],
+        };
+      } else if (request.params?.name === 'mutate') {
+        result = { content: [{ type: 'text', text: 'mutated' }] };
+      } else {
+        send({ jsonrpc: '2.0', id: request.id, error: { code: -32602, message: 'Unknown tool' } });
+        return;
+      }
+      break;
     case 'ping':
       result = {};
       break;

@@ -48,6 +48,7 @@ describe('calculateRetryDelay()', () => {
 
     // Delays should be increasing (with jitter they might not be strictly ordered)
     expect(delay0).toBeGreaterThanOrEqual(750);   // ~1000 * 0.75 min
+    expect(delay1).toBeGreaterThan(delay0);
     expect(delay2).toBeLessThanOrEqual(5000);      // Capped at maxDelayMs
   });
 

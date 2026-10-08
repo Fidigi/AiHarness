@@ -3,9 +3,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { EncryptedCredentialStore } from '../security/credential-store.js';
+import type {
+  ProviderCredentialError} from './credentials.js';
 import {
   CredentialRedactor,
-  ProviderCredentialError,
   ProviderCredentialService,
   redactCredentialText,
 } from './credentials.js';

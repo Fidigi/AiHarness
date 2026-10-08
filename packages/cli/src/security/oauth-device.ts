@@ -186,7 +186,7 @@ export class OAuthDeviceClient {
           }),
           signal: requestSignal,
         });
-      } catch (error) {
+      } catch {
         if (signal?.aborted) throw new Error('Authentification OAuth annulée.');
         throw new Error('OAuth token exchange failed.');
       }

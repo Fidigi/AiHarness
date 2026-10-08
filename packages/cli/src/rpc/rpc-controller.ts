@@ -25,6 +25,7 @@ import type {
   CredentialRedactionStream,
   ExtensionRegistry,
   ExtensionRuntimeContext,
+  ExtensionToolResult,
   Message,
   MessageContentBlock,
   Session,
@@ -41,6 +42,17 @@ import { JsonEventStream, toJsonProtocolMessage } from '../cli/json-output.js';
 import { renderSessionHtml, sanitizeFilename } from '../utils/session-export.js';
 import { parseResourceCommandLine, type ResourceManager } from '../resources/resource-manager.js';
 
+export interface RpcDynamicTools {
+  tools: ChatToolDefinition[];
+  execute(
+    name: string,
+    input: unknown,
+    context: ExtensionRuntimeContext,
+    signal?: AbortSignal,
+  ): ExtensionToolResult | Promise<ExtensionToolResult>;
+  release?(): void | Promise<void>;
+}
+
 export interface RpcControllerContext {
   provider: AiProvider;
   /** Configured providers available to model-list and model-switch RPC commands. */
@@ -55,6 +67,8 @@ export interface RpcControllerContext {
   model?: string;
   systemPrompt?: string;
   tools?: ChatToolDefinition[];
+  /** Resolve session-scoped tools (for example persistent MCP tools) before each prompt. */
+  prepareDynamicTools?(sessionId: string, signal: AbortSignal): Promise<RpcDynamicTools>;
   hooks?: { emit(event: string, data: Record<string, unknown>): Promise<void> };
   thinking?: ThinkingLevel;
   providerModels?: () => unknown[] | Promise<unknown[]>;
@@ -990,8 +1004,19 @@ export class RpcController {
 
   private async execute(initialPrompt: PreparedPrompt, signal: AbortSignal): Promise<void> {
     let nextAgentPrompt: PreparedPrompt | undefined = initialPrompt;
+    let activeDynamicTools: RpcDynamicTools | undefined;
     try {
       while (nextAgentPrompt) {
+        const dynamicTools = await this.context.prepareDynamicTools?.(this.currentSessionId, signal);
+        activeDynamicTools = dynamicTools;
+        const staticTools = this.context.tools ?? this.context.extensionRegistry.getTools().map(tool => ({
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters ?? { type: 'object', properties: {} },
+        }));
+        const staticNames = new Set(staticTools.map(tool => tool.name.toLowerCase()));
+        const uniqueDynamicTools = dynamicTools?.tools.filter(tool => !staticNames.has(tool.name.toLowerCase())) ?? [];
+        const dynamicNames = new Set(uniqueDynamicTools.map(tool => tool.name.toLowerCase()));
         await this.events.startAgent(nextAgentPrompt.content, nextAgentPrompt.blocks);
         await this.context.extensionRegistry.emit('agent:start', {
           sessionId: this.currentSessionId,
@@ -1015,7 +1040,20 @@ export class RpcController {
             sessionManager: this.context.sessionManager,
             sessionId: this.currentSessionId,
             extensionRegistry: this.context.extensionRegistry,
-            tools: this.context.tools,
+            tools: [...staticTools, ...uniqueDynamicTools],
+            executeTool: (name, input, context, executionSignal) => (
+              dynamicTools && dynamicNames.has(name.toLowerCase())
+                ? this.context.extensionRegistry.executeHostedTool(
+                    name,
+                    input,
+                    context,
+                    (hostInput, hostContext, hostSignal) => dynamicTools.execute(
+                      name, hostInput, hostContext, hostSignal,
+                    ),
+                    executionSignal,
+                  )
+                : this.context.extensionRegistry.executeTool(name, input, context, executionSignal)
+            ),
             toolContext: {
               ...this.context.toolContext,
               currentSessionId: this.currentSessionId,
@@ -1115,6 +1153,8 @@ export class RpcController {
           contentLength: lastContent.length,
         });
         await this.events.endAgent();
+        await activeDynamicTools?.release?.();
+        activeDynamicTools = undefined;
         nextAgentPrompt = this.takeNextQueued();
       }
     } catch (error) {
@@ -1125,6 +1165,7 @@ export class RpcController {
         error: this.context.redactText?.(message) ?? message,
       });
     } finally {
+      await activeDynamicTools?.release?.();
       this.retryActive = false;
     }
   }

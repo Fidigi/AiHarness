@@ -9,6 +9,7 @@ import type {
 import type { Message, MessageContentBlock, Session } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import type { AgentQueueMode } from '../config/agent-settings.js';
+import type { McpSessionHost, PreparedMcpTools } from '../mcp/session-host.js';
 import { selectRegisteredTools, toChatToolDefinitions } from '../tools/tool-selection.js';
 import { streamProviderTurn } from './provider-turn.js';
 import { AgentAbortError, runToolLoop } from './tool-loop.js';
@@ -45,6 +46,7 @@ export interface StartAgentRunRequest {
   maxRetries?: number;
   agentId?: string;
   allowedTools?: string[];
+  excludedTools?: string[];
   allowedSkills?: string[];
   allowedExtensions?: string[];
   steeringMode?: AgentQueueMode;
@@ -63,6 +65,8 @@ export interface AgentRuntimeOptions {
   redactText?(value: string): string;
   redactJson?<T>(value: T): T;
   createTextRedactor?(): CredentialRedactionStream;
+  /** Optional shared persistent MCP host used by CLI/RPC/Web adapters. */
+  mcpHost?: McpSessionHost;
 }
 
 interface ActiveRun {
@@ -78,6 +82,12 @@ interface PendingInteraction {
   sessionId: string;
   request: ExtensionInteractionSnapshot;
   settle(response: ExtensionInteractionResponse): void;
+}
+
+interface PreparedRunTools {
+  definitions: ChatToolDefinition[];
+  mcp?: PreparedMcpTools;
+  enabledMcpNames: Set<string>;
 }
 
 function invalidInteractionResponse(message: string): never {
@@ -192,6 +202,7 @@ export class AgentRuntime {
   private readonly redactText: (value: string) => string;
   private readonly redactJson: <T>(value: T) => T;
   private readonly createTextRedactor?: () => CredentialRedactionStream;
+  private readonly mcpHost?: McpSessionHost;
 
   constructor(options: AgentRuntimeOptions) {
     this.sessionManager = options.sessionManager;
@@ -204,6 +215,7 @@ export class AgentRuntime {
     this.redactText = options.redactText ?? (value => value);
     this.redactJson = options.redactJson ?? (value => value);
     this.createTextRedactor = options.createTextRedactor;
+    this.mcpHost = options.mcpHost;
   }
 
   async start(request: StartAgentRunRequest): Promise<AgentRunSnapshot> {
@@ -229,6 +241,7 @@ export class AgentRuntime {
       model: request.model ? this.redactText(request.model) : undefined,
       systemPrompt: request.systemPrompt ? this.redactText(request.systemPrompt) : undefined,
       allowedTools: request.allowedTools?.map(value => this.redactText(value)),
+      excludedTools: request.excludedTools?.map(value => this.redactText(value)),
       allowedSkills: request.allowedSkills?.map(value => this.redactText(value)),
       allowedExtensions: request.allowedExtensions?.map(value => this.redactText(value)),
     };
@@ -239,6 +252,7 @@ export class AgentRuntime {
     });
     if (hook.cancelled) throw new Error(this.redactText(hook.reason || "Exécution annulée par une extension."));
     hook.data = this.redactJson(hook.data);
+    effectiveRequest.input = hook.data.input;
     const providerName = hook.data.provider;
     const provider = await this.resolveProvider(providerName);
     if (!provider?.validateConfig()) throw new Error(`Provider indisponible : ${providerName}`);
@@ -282,13 +296,6 @@ export class AgentRuntime {
           : {}),
       }),
     });
-    await this.sessionManager.addMessage(session.id, {
-      role: 'user',
-      content: hook.data.input,
-      blocks: effectiveRequest.blocks?.length ? effectiveRequest.blocks : [{ type: 'text', text: hook.data.input }],
-      agentId: effectiveRequest.agentId ?? runId,
-      metadata: { queueKind: 'initial' },
-    }, { signal: controller.signal });
     this.runs.set(runId, active);
     this.sessionRuns.set(session.id, runId);
     this.publish(active, 'run.queued', { input: hook.data.input });
@@ -428,12 +435,22 @@ export class AgentRuntime {
 
     try {
       let hasPrompt = true;
+      let initial = true;
+      let queued: QueuedAgentMessage[] = [];
       while (hasPrompt) {
-        await this.executePrompt(run, request, provider);
+        const preparedTools = await this.prepareRunTools(run, request);
+        if (initial) {
+          await this.persistInitial(run, request);
+          initial = false;
+        } else {
+          await this.persistQueued(run, request, queued);
+          queued = [];
+        }
+        await this.executePrompt(run, request, provider, preparedTools);
         if (run.controller.signal.aborted) throw new AgentAbortError();
         const batch = this.takeNextQueued(run);
         if (batch) {
-          await this.persistQueued(run, request, batch.items);
+          queued = batch.items;
           this.setPhase(run, 'prompting');
         } else {
           hasPrompt = false;
@@ -467,6 +484,12 @@ export class AgentRuntime {
           this.redactJson(cloneSnapshot(run.snapshot)),
         )).catch(() => undefined);
       }
+    } finally {
+      if (run.controller.signal.aborted) {
+        await this.mcpHost?.releaseSession(run.snapshot.sessionId);
+      } else {
+        this.mcpHost?.finishPrompt(run.snapshot.sessionId);
+      }
     }
   }
 
@@ -474,15 +497,28 @@ export class AgentRuntime {
     run: ActiveRun,
     request: StartAgentRunRequest,
     provider: AiProvider,
+    preparedTools: PreparedRunTools,
   ): Promise<void> {
-    const tools = this.selectTools(request.toolPreset, request.allowedTools, request.allowedExtensions);
     await runToolLoop({
       sessionManager: this.sessionManager,
       sessionId: run.snapshot.sessionId,
       extensionRegistry: this.extensionRegistry,
       toolContext: await this.toolContext(run, provider, request),
       provider: run.snapshot.provider,
-      tools,
+      tools: preparedTools.definitions,
+      executeTool: (name, input, context, signal) => (
+        preparedTools.mcp && preparedTools.enabledMcpNames.has(name.toLowerCase())
+          ? this.extensionRegistry.executeHostedTool(
+              name,
+              input,
+              context,
+              (hostInput, hostContext, hostSignal) => preparedTools.mcp!.execute(
+                name, hostInput, hostContext, hostSignal,
+              ),
+              signal,
+            )
+          : this.extensionRegistry.executeTool(name, input, context, signal)
+      ),
       maxToolRounds: request.maxToolRounds,
       signal: run.controller.signal,
       redactText: this.redactText,
@@ -584,6 +620,16 @@ export class AgentRuntime {
     await this.persistQueued(run, request, this.takeQueued(run, 'steer'));
   }
 
+  private async persistInitial(run: ActiveRun, request: StartAgentRunRequest): Promise<void> {
+    await this.sessionManager.addMessage(run.snapshot.sessionId, {
+      role: 'user',
+      content: request.input,
+      blocks: request.blocks?.length ? request.blocks : [{ type: 'text', text: request.input }],
+      agentId: request.agentId ?? run.snapshot.id,
+      metadata: { queueKind: 'initial' },
+    }, { signal: run.controller.signal });
+  }
+
   private async persistQueued(
     run: ActiveRun,
     request: StartAgentRunRequest,
@@ -645,25 +691,60 @@ export class AgentRuntime {
       }));
   }
 
-  /** Return the exact registered tools available under a session preset. */
+  /** Return registered tools plus MCP tools already prepared for this session. */
   getTools(
     preset: Session['toolPreset'],
     allowedTools?: string[],
     allowedExtensions?: string[],
+    sessionId?: string,
   ): ReturnType<ExtensionRegistry['getTools']> {
-    return selectRegisteredTools(this.extensionRegistry.getTools(), {
+    const registered = selectRegisteredTools(this.extensionRegistry.getTools(), {
       preset,
       allowedTools,
       allowedExtensions,
     });
+    const prepared = sessionId ? this.mcpHost?.getPreparedTools(sessionId, preset) : undefined;
+    const dynamic = selectRegisteredTools(prepared?.tools ?? [], {
+      preset: preset === 'read-only' ? 'default' : preset,
+      allowedTools,
+      allowedExtensions,
+    });
+    const registeredNames = new Set(registered.map(tool => tool.name));
+    return [...registered, ...dynamic.filter(tool => !registeredNames.has(tool.name))];
   }
 
-  private selectTools(
-    preset: Session['toolPreset'],
-    allowedTools?: string[],
-    allowedExtensions?: string[],
-  ): ChatToolDefinition[] {
-    return toChatToolDefinitions(this.getTools(preset, allowedTools, allowedExtensions));
+  private async prepareRunTools(
+    run: ActiveRun,
+    request: StartAgentRunRequest,
+  ): Promise<PreparedRunTools> {
+    const registered = selectRegisteredTools(this.extensionRegistry.getTools(), {
+      preset: request.toolPreset,
+      allowedTools: request.allowedTools,
+      excludedTools: request.excludedTools,
+      allowedExtensions: request.allowedExtensions,
+    });
+    if (!this.mcpHost || request.toolPreset === 'chat-only' || request.allowedTools?.length === 0) {
+      return { definitions: toChatToolDefinitions(registered), enabledMcpNames: new Set() };
+    }
+    const mcp = await this.mcpHost.prepareForPrompt({
+      sessionId: run.snapshot.sessionId,
+      cwd: run.snapshot.cwd,
+      preset: request.toolPreset,
+      signal: run.controller.signal,
+    });
+    const selected = selectRegisteredTools(mcp.tools, {
+      preset: request.toolPreset === 'read-only' ? 'default' : request.toolPreset,
+      allowedTools: request.allowedTools,
+      excludedTools: request.excludedTools,
+      allowedExtensions: request.allowedExtensions,
+    });
+    const registeredNames = new Set(registered.map(tool => tool.name));
+    const unique = selected.filter(tool => !registeredNames.has(tool.name));
+    return {
+      definitions: toChatToolDefinitions([...registered, ...unique]),
+      mcp,
+      enabledMcpNames: new Set(unique.map(tool => tool.name)),
+    };
   }
 
   private async toolContext(

@@ -15,24 +15,26 @@ import {
   isValidSessionId,
   resolveModelReference,
   resolveModelScope,
-  SessionManager,
-  JsonlSessionStore,
-  AiProvider,
   ProviderFactory,
   readBoundedResourceText,
-  WorkspaceManager,
-  Message,
-  Session,
+  WorkspaceManager
 } from '@ai-harness/core';
 import type {
   AgentProviderNetworkSettings,
   ExtensionRegistry,
   ExtensionRuntimeContext,
+  McpConfigInventory,
+  PreparedMcpTools,
   ModelCatalogEntry,
   ProviderCredentialService,
   ThemeInventoryItem,
   ThinkingLevel,
-} from '@ai-harness/core';
+
+  SessionManager,
+  JsonlSessionStore,
+  AiProvider,
+  Message,
+  Session} from '@ai-harness/core';
 import type { TerminalUI } from '../tui/terminal-ui.js';
 import { renderSessionHtml, sanitizeFilename } from '../utils/session-export.js';
 import { copyToClipboard } from '../utils/system-integration.js';
@@ -131,6 +133,7 @@ export interface CommandContext {
   allowCredentialReveal?: boolean;
   providerNetwork?: AgentProviderNetworkSettings;
   themeControl?: CommandThemeControl;
+  mcpControl?: CommandMcpControl;
   redactText?: (value: string) => string;
   redactJson?: <T>(value: T) => T;
 }
@@ -139,6 +142,13 @@ export interface CommandThemeControl {
   current(): string;
   list(): Promise<ThemeInventoryItem[]>;
   select(name: string): Promise<string>;
+}
+
+export interface CommandMcpControl {
+  overview(): Promise<McpConfigInventory>;
+  prepare(sessionId: string, preset?: Session['toolPreset']): Promise<PreparedMcpTools>;
+  finish(sessionId: string): void;
+  reconnect(sessionId: string): Promise<void>;
 }
 
 export interface CommandWorkspaceContext {
@@ -155,6 +165,7 @@ export interface CommandWorkspaceContext {
   allowCredentialReveal?: boolean;
   providerNetwork?: AgentProviderNetworkSettings;
   themeControl?: CommandThemeControl;
+  mcpControl?: CommandMcpControl;
   redactText?: (value: string) => string;
   redactJson?: <T>(value: T) => T;
 }
@@ -287,7 +298,7 @@ function syncExtensionProviders(ctx: CommandContext): void {
           providerMaxRetryDelayMs: network.maxRetryDelayMs,
         } : {}),
         type,
-      } as any);
+      });
       ctx.providers.set(type, provider);
       ctx.extensionProviderNames.add(type);
     } catch (error) {
@@ -295,7 +306,7 @@ function syncExtensionProviders(ctx: CommandContext): void {
     }
   }
 
-  const activeType = (ctx.provider as any)?.config?.type as string | undefined;
+  const activeType = ctx.provider?.getProviderType();
   if (activeType && !ctx.providers.has(activeType)) ctx.provider = ctx.providers.get('mock');
 }
 
@@ -494,7 +505,8 @@ const commands: CommandEntry[] = [
       // Create a fresh empty session with same ID
       const title = session.title || 'Untitled';
       const newSession = { ...session, messages: [], createdAt: new Date(), updatedAt: new Date() };
-      ctx.sessionManager['sessions'].set(newSession.id, newSession as any);
+      const sessionCache = ctx.sessionManager as unknown as { sessions: Map<string, Session> };
+      sessionCache.sessions.set(newSession.id, newSession);
 
       return chalk.green(`Cleared ${chalk.bold(title)} — conversation is now empty.`);
     },
@@ -519,8 +531,7 @@ const commands: CommandEntry[] = [
 
         // Also check by type string in config
         for (const [, p] of ctx.providers) {
-          const providerConfig = p['config'] as any;
-          if (providerConfig?.type === providerName) {
+          if (p.getProviderType() === providerName) {
             newProvider = p;
             break;
           }
@@ -533,7 +544,7 @@ const commands: CommandEntry[] = [
 
         // Try creating a new one from default configs
         if (providerName === 'mock' && !ctx.providers.has('mock')) {
-          const mockProvider = ProviderFactory.create({ type: 'mock', apiKey: '' } as any);
+          const mockProvider = ProviderFactory.create({ type: 'mock', apiKey: '' });
           ctx.providers.set('mock', mockProvider);
           ctx.provider = mockProvider;
           return `Switched to provider: ${chalk.cyan('mock')} (for testing)`;
@@ -661,7 +672,7 @@ const commands: CommandEntry[] = [
         ...(existing?.config ?? {}),
         type: providerName,
         apiKey: credential.accessToken,
-      } as any);
+      });
       ctx.providers.set(providerName, provider);
       ctx.provider = provider;
       return chalk.green(`Authentification OAuth réussie pour ${providerName}.`);
@@ -1306,6 +1317,47 @@ const commands: CommandEntry[] = [
     },
   },
   {
+    name: 'mcp',
+    description: 'Inspect persistent MCP servers and session tools',
+    usage: '/mcp [status|tools|reconnect]',
+    handler: async (args, ctx) => {
+      if (!ctx.mcpControl) return chalk.yellow('MCP runtime is not configured.');
+      const action = args[0]?.toLowerCase() || 'status';
+      if (action === 'status' || action === 'list') {
+        const inventory = await ctx.mcpControl.overview();
+        if (inventory.servers.length === 0) return chalk.yellow('No MCP servers configured.');
+        return inventory.servers.map(server => {
+          const configured = !server.valid ? 'invalid'
+            : server.shadowedByProject ? 'shadowed'
+              : !server.enabled ? 'disabled' : 'configured';
+          const runtime = server.runtimeStatus
+            ? ` · ${server.runtimeStatus.state}${server.runtimeStatus.toolCount === undefined ? '' : ` (${server.runtimeStatus.toolCount} tools)`}`
+            : '';
+          return `${server.runtimeStatus?.state === 'connected' ? chalk.green('●') : chalk.dim('○')} ${chalk.cyan(server.name)} [${server.scope}] — ${configured}${runtime}`;
+        }).join('\n');
+      }
+      if (!ctx.currentSessionId) return chalk.red('An active session is required.');
+      const session = ctx.sessionManager.get(ctx.currentSessionId);
+      if (action === 'reconnect') {
+        await ctx.mcpControl.reconnect(ctx.currentSessionId);
+      } else if (action !== 'tools') {
+        return chalk.red('Usage: /mcp [status|tools|reconnect]');
+      }
+      try {
+        const prepared = await ctx.mcpControl.prepare(ctx.currentSessionId, session?.toolPreset);
+        if (prepared.tools.length === 0) {
+          return action === 'reconnect'
+            ? chalk.yellow('MCP connections reset; no direct tools are ready yet.')
+            : chalk.yellow('No direct MCP tools are ready.');
+        }
+        const heading = action === 'reconnect' ? `${chalk.green('MCP connections refreshed.')}\n` : '';
+        return `${heading}${prepared.tools.map(tool => `${chalk.green('●')} ${chalk.cyan(tool.name)} — ${tool.mcp.server}/${tool.mcp.tool}${tool.readOnly ? ' [read-only]' : ''}`).join('\n')}`;
+      } finally {
+        ctx.mcpControl.finish(ctx.currentSessionId);
+      }
+    },
+  },
+  {
     name: 'tools',
     description: 'List built-in and extension tools',
     handler: async (_args, ctx) => {
@@ -1443,6 +1495,7 @@ export class CommandHandler {
       allowCredentialReveal: workspace.allowCredentialReveal,
       providerNetwork: workspace.providerNetwork,
       themeControl: workspace.themeControl,
+      mcpControl: workspace.mcpControl,
       redactText: workspace.redactText,
       redactJson: workspace.redactJson,
     };

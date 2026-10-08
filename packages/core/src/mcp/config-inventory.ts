@@ -63,6 +63,15 @@ export interface McpServerTestResult {
   };
 }
 
+/** Process-local state of a persistent MCP connection owned by an agent session. */
+export interface McpServerRuntimeStatus {
+  state: 'connecting' | 'connected' | 'needs-auth' | 'failed' | 'disconnected' | 'closed';
+  sessionId: string;
+  updatedAt: string;
+  toolCount?: number;
+  error?: string;
+}
+
 interface McpRuntimeConfigBase {
   description?: string;
   enabled?: boolean;
@@ -145,8 +154,10 @@ export interface McpServerInventoryEntry {
   shadowedByProject: boolean;
   replacesGlobal: boolean;
   problems: string[];
-  /** Last bounded connection test for this exact in-memory configuration generation. */
+  /** Last bounded one-shot connection test for this exact configuration generation. */
   testStatus?: McpServerTestResult;
+  /** Latest persistent session-host connection state for this configuration generation. */
+  runtimeStatus?: McpServerRuntimeStatus;
 }
 
 export type McpServerTargetErrorCode =

@@ -129,6 +129,11 @@ function isActivePhase(phase?: string): boolean {
   return Boolean(phase && !['completed', 'failed', 'stopped'].includes(phase));
 }
 
+function displayToolName(name: string): string {
+  const match = /^mcp__([^_]+(?:_[^_]+)*)__([^_]+(?:_[^_]+)*?)(?:__[a-f0-9]{10})?$/u.exec(name);
+  return match ? `MCP ${match[1]} / ${match[2]}` : name;
+}
+
 interface FileSuggestion {
   path: string;
   isDirectory: boolean;
@@ -847,7 +852,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           message: currentRun.retry.message,
         })
       : currentRun?.phase === 'tool' && currentRun.activeTool
-        ? t('chat.status.toolNamed', { tool: currentRun.activeTool.name })
+        ? t('chat.status.toolNamed', { tool: displayToolName(currentRun.activeTool.name) })
         : active
           ? t(`chat.status.${currentRun?.phase}`)
           : undefined;
@@ -1575,7 +1580,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             <summary>{t('chat.activeTools', { count: capabilities.tools.length })}</summary>
             {capabilities.tools.map(tool => (
               <details key={tool.name} className="tool-definition">
-                <summary>{tool.name}</summary>
+                <summary>{displayToolName(tool.name)}</summary>
                 <p>{tool.description}</p>
                 <pre>{JSON.stringify(tool.parameters, null, 2)}</pre>
               </details>
@@ -1620,7 +1625,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
               const tool = message.blocks?.find(block => block.type === 'tool_call' || block.type === 'tool_result');
               const kind = tool ? 'tool' : message.role;
               const preview = tool && 'name' in tool
-                ? `${tool.type === 'tool_call' ? 'Tool' : 'Result'}: ${tool.name || message.name || 'tool'}`
+                ? `${tool.type === 'tool_call' ? 'Tool' : 'Result'}: ${displayToolName(tool.name || message.name || 'tool')}`
                 : message.content.replace(/\s+/g, ' ').slice(0, 44) || message.role;
               return (
                 <Fragment key={`minimap:${message.id}`}>
@@ -2007,8 +2012,8 @@ function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationF
           const content = block.type === 'tool_call' ? JSON.stringify(block.input, null, 2)
             : (block.type === 'tool_result' ? block.content : block.output) ?? '';
           const fullContent = block.type === 'tool_result' ? block.fullContent : undefined;
-          const summary = block.type === 'tool_call' ? `${t('chat.toolCall')}: ${block.name}`
-            : block.type === 'tool_result' ? `${block.isError ? t('chat.toolError') : t('chat.toolResult')}: ${block.name || ''}`
+          const summary = block.type === 'tool_call' ? `${t('chat.toolCall')}: ${displayToolName(block.name)}`
+            : block.type === 'tool_result' ? `${block.isError ? t('chat.toolError') : t('chat.toolResult')}: ${displayToolName(block.name || '')}`
               : `${t('chat.command')}: ${block.command}`;
           return <ProcessBlock className="tool-block" key={`tool-${index}`} summary={summary}
             content={content} fullContent={fullContent} truncated={block.type === 'tool_result' && block.truncated}

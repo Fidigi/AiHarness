@@ -156,6 +156,12 @@ function asDate(value: Date | string): Date {
   return value instanceof Date ? new Date(value.getTime()) : new Date(value);
 }
 
+function omitRecordKey<T>(source: Readonly<Record<string, T>>, key: string): Record<string, T> {
+  const result = { ...source };
+  delete result[key];
+  return result;
+}
+
 function normalizeRanges(ranges: LoadedMessageRange[]): LoadedMessageRange[] {
   const sorted = ranges
     .filter(range => range.end > range.start)
@@ -502,10 +508,7 @@ function writeSessionViewCache(state: SessionCacheState): void {
       const id = Object.keys(attachments).at(-1)!;
       const remaining = attachments[id]!.slice(0, -1);
       if (remaining.length) attachments = { ...attachments, [id]: remaining };
-      else {
-        const { [id]: _removed, ...rest } = attachments;
-        attachments = rest;
-      }
+      else attachments = omitRecordKey(attachments, id);
       payload = serialize();
     }
     while (exceedsBudget() && localDrafts.length > 1) {
@@ -740,9 +743,9 @@ export const useSessionStore = create<AppState>((set, get) => ({
   })),
 
   removeSession: sessionId => set(state => {
-    const { [sessionId]: _draft, ...drafts } = state.drafts;
-    const { [sessionId]: _attachments, ...attachments } = state.attachments;
-    const { [sessionId]: _run, ...runs } = state.runs;
+    const drafts = omitRecordKey(state.drafts, sessionId);
+    const attachments = omitRecordKey(state.attachments, sessionId);
+    const runs = omitRecordKey(state.runs, sessionId);
     return {
       sessions: state.sessions.filter(session => session.id !== sessionId),
       activeSessionId: state.activeSessionId === sessionId
@@ -811,10 +814,7 @@ export const useSessionStore = create<AppState>((set, get) => ({
   })),
 
   setRun: (sessionId, run) => set(state => {
-    if (!run) {
-      const { [sessionId]: _removed, ...runs } = state.runs;
-      return { runs };
-    }
+    if (!run) return { runs: omitRecordKey(state.runs, sessionId) };
     const previous = state.runs[sessionId];
     if (previous?.id === run.id && previous.lastSequence > run.lastSequence) return state;
     const terminal = ['completed', 'failed', 'stopped'].includes(run.phase);

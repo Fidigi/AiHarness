@@ -13,6 +13,7 @@ Conversation persistence follows [`sessions.md`](./sessions.md), while extension
 ```text
 packages/cli/src/index.ts
   |-> package command -> Core PluginService -> shared plugins.json
+  |-> mcp command -> Core inventory/mutations/Test -> shared mcp.json
   |-> Core model catalogue -> startup selection / --list-models / scoped cycling
   |-> Core instruction resolver -> composed provider system prompt
   |-> --mode rpc / --rpc -> rpc/rpc-server.ts
@@ -22,7 +23,7 @@ packages/cli/src/index.ts
          |-> active Enter / Alt+Enter -> Core AgentMessageQueue -> next turn/task
          |-> lone Escape -> active-operation cancellation + queued-input restoration
          |-> ! / !! -> CLI shell adapter -> Core ShellCommandRuntime
-         `-> resource/command dispatch -> Core runToolLoop -> provider
+         `-> resource/command dispatch -> Core runToolLoop + McpSessionHost -> provider
 ```
 
 ## Main Entry Points
@@ -35,6 +36,8 @@ packages/cli/src/index.ts
 | `packages/cli/src/cli/shell-controller.ts` | Interactive `!`/`!!` trust, streaming, cancellation and TUI adapter |
 | `packages/cli/src/cli/model-list.ts` | Configured-provider `--list-models` metadata table and fuzzy filtering |
 | `packages/cli/src/cli/package-command.ts` | Strict top-level package parsing, scopes, filters and Core service adapter |
+| `packages/cli/src/cli/mcp-command.ts` | Thin top-level list/test/add/activation/exposure/removal adapter over Core MCP contracts |
+| `packages/core/src/mcp/session-host.ts` | Persistent per-session stdio/HTTP connections and direct tool declarations/invocation shared by CLI, RPC and Web |
 | `packages/cli/src/providers/configured-providers.ts` | Shared interactive/print/JSON/RPC provider environment and startup model resolution |
 | `packages/cli/src/sessions/startup-session.ts` | New/continue/resume/open/fork/exact-ID/name selection and session-directory precedence |
 | `packages/cli/src/commands/handler.ts` | Built-in command registry and execution context |
@@ -100,6 +103,25 @@ Implemented runtime settings are startup provider/model, `enabledModels`, defaul
 Interactive `/reload` re-reads saved trust and settings, credentials, network policy, provider/model/thinking selection, package inventory, instructions, resource selectors, extensions, skill commands, default-tool additions, steering/follow-up delivery modes, shell callbacks and the active theme. Session-only and command-line trust decisions remain process-local across reload. Session directory, terminal renderer kind, RPC queue defaults and existing persisted-session location remain startup values. Built-in extension switches, branch-summary generation, codemode, cache warming, configurable npm commands, detailed terminal/image/Markdown options, updates, telemetry and warnings are not yet applied by the CLI.
 
 Configured skill and prompt paths resolve relative to the declaring agent directory or project `.ai-harness` directory. Ordered plain/`+` includes and exact/glob `-`/`!` exclusions are applied around automatic user/project roots. Discovery is trust-gated, symlink-free, bounded to 10,000 files, and each Markdown source is a race-checked, hardlink-free UTF-8 regular file capped at 1 MiB. Core records metadata-only scope/source/origin/selector/trust provenance. CLI, RPC and Server skill catalogues require frontmatter with non-empty `name` and `description`; the normalized name must exactly match its directory, and `disable-model-invocation`, when present, must be `true` or `false`. Local extension includes and ordered exclusions are honored; extension files are revalidated as bounded nonlinked regular files before import. Enabled package extensions, skills, prompts and themes join the same interactive/print/JSON/RPC startup and reload paths; a selected package theme can be addressed by its JSON filename stem. Built-in extension switches and settings extension include globs remain outside the current custom loader.
+
+## MCP Administration and Runtime
+
+MCP configuration is shared with the Web server: global entries live in `<agent-dir>/mcp.json`, project entries in `<cwd>/.ai-harness/mcp.json`, and project reads or writes require a saved exact/inherited allow. Process-only `--approve` does not unlock MCP project bodies. Top-level administration exits before providers, sessions, extensions or the TUI:
+
+```bash
+ai-harness mcp list --global
+ai-harness mcp list --project --json
+ai-harness mcp add docs --url https://docs.example.test/mcp
+ai-harness mcp add local -- node ./server.mjs
+ai-harness mcp test local
+ai-harness mcp disable local
+ai-harness mcp exposure docs deferred
+ai-harness mcp remove local
+```
+
+`list` is file-only and value-free. `test` rereads one exact target and uses Core's bounded short-lived diagnostic. Add/mutation commands use the same schema, revision, trust, lock and atomic writer as Settings; the adapter never serializes removed entry data. `ai-harness mcp --help` is authoritative. MCP OAuth login/logout is not implemented.
+
+Interactive `/mcp` reports the current process-local persistent states; `/mcp tools` prepares and lists direct tools, and `/mcp reconnect` closes the session's records before a fresh preparation. Interactive, print/JSON and modern RPC prompts all use Core's `McpSessionHost`. It rereads config/trust before every prompt, reuses unchanged exact connections, awaits only `direct` servers, and exposes provider-safe names such as `mcp__docs__lookup`; normalized collisions receive stable hash suffixes. Session `chat-only` exposes none, while `read-only` accepts only server-declared `readOnlyHint` tools. Disabled, codemode and deferred tools are not direct declarations. Tool calls pass through the same Core hooks/events and persistence loop as static tools, with bounded/redacted results and cancellation. Connections close after the post-prompt idle window or process shutdown.
 
 ## Package Administration
 
@@ -190,6 +212,7 @@ input
   |-> ! / !! -> trust check -> Core shell runtime -> stream + persist command
   `-> prompt/resource expansion or built-in/extension command
        -> before:agent -> persist user message
+       -> Core McpSessionHost refresh -> direct declarations
        -> Core runToolLoop
             -> before:provider -> provider stream
             -> before:tool -> tool -> persisted call/result

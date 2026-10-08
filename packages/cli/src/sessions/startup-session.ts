@@ -1,9 +1,10 @@
 import { lstat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import type {
+  SessionManager} from '@ai-harness/core';
 import {
   JsonlSessionStore,
-  SessionManager,
   type Session,
 } from '@ai-harness/core';
 import type { CliArguments } from '../cli/args.js';

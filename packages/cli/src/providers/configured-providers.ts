@@ -121,20 +121,20 @@ export function createConfiguredProviders(
   const vertexKey = configuredCredential('vertex', env.GOOGLE_VERTEX_ACCESS_TOKEN, options.credentials);
   const localKey = configuredCredential('local', env.LOCAL_API_KEY || env.LLAMA_API_KEY, options.credentials);
 
-  attempt(providers, 'mock', { ...network, type: 'mock' as any, apiKey: '', model: env.MOCK_MODEL || 'mock-model' });
+  attempt(providers, 'mock', { ...network, type: 'mock', apiKey: '', model: env.MOCK_MODEL || 'mock-model' });
   attempt(providers, 'openai', openAiKey
-    ? { ...network, type: 'openai' as any, apiKey: openAiKey, model: env.OPENAI_MODEL }
+    ? { ...network, type: 'openai', apiKey: openAiKey, model: env.OPENAI_MODEL }
     : undefined);
   attempt(providers, 'anthropic', anthropicKey
-    ? { ...network, type: 'anthropic' as any, apiKey: anthropicKey, model: env.ANTHROPIC_MODEL }
+    ? { ...network, type: 'anthropic', apiKey: anthropicKey, model: env.ANTHROPIC_MODEL }
     : undefined);
   attempt(providers, 'google', googleKey
-    ? { ...network, type: 'google' as any, apiKey: googleKey, model: env.GEMINI_MODEL || 'gemini-2.0-flash' }
+    ? { ...network, type: 'google', apiKey: googleKey, model: env.GEMINI_MODEL || 'gemini-2.0-flash' }
     : undefined);
   attempt(providers, 'azure', azureKey && env.AZURE_OPENAI_ENDPOINT
     ? {
         ...network,
-        type: 'azure' as any,
+        type: 'azure',
         apiKey: azureKey,
         baseUrl: env.AZURE_OPENAI_ENDPOINT,
         deployment: env.AZURE_OPENAI_DEPLOYMENT,
@@ -145,7 +145,7 @@ export function createConfiguredProviders(
   attempt(providers, 'vertex', vertexKey && env.GOOGLE_CLOUD_PROJECT
     ? {
         ...network,
-        type: 'vertex' as any,
+        type: 'vertex',
         apiKey: vertexKey,
         project: env.GOOGLE_CLOUD_PROJECT,
         location: env.GOOGLE_CLOUD_LOCATION,
@@ -153,11 +153,11 @@ export function createConfiguredProviders(
       }
     : undefined);
   attempt(providers, 'bedrock', env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
-    ? { ...network, type: 'bedrock' as any, region: env.AWS_REGION, model: env.BEDROCK_MODEL }
+    ? { ...network, type: 'bedrock', region: env.AWS_REGION, model: env.BEDROCK_MODEL }
     : undefined);
   attempt(providers, 'local', {
     ...network,
-    type: 'local' as any,
+    type: 'local',
     ...(localKey ? { apiKey: localKey } : {}),
     baseUrl: env.LOCAL_BASE_URL || env.LLAMA_BASE_URL || 'http://localhost:11434/v1',
     model: env.LOCAL_MODEL || env.LLAMA_MODEL || 'local-model',

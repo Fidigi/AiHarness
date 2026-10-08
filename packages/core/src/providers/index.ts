@@ -4,7 +4,8 @@
 // token usage tracking, model registry
 // ============================================================
 
-import { Message, ProviderConfig, ProviderType, ToolCall, TokenUsage } from '../types/index.js';
+import type { Message, ProviderConfig, ToolCall, TokenUsage } from '../types/index.js';
+import { ProviderType } from '../types/index.js';
 import type { AgentProviderNetworkSettings } from '../config/agent-settings.js';
 import { createHash, randomUUID } from 'node:crypto';
 import {
@@ -545,7 +546,7 @@ export class OpenAiProvider extends AiProvider {
     const model = options?.model || (this.config.model as string) || 'gpt-4o';
 
     // Build messages, prepending system prompt if provided
-    let finalMessages = this.buildMessages(messages);
+    const finalMessages = this.buildMessages(messages);
     if (options?.systemPrompt) {
       finalMessages.unshift({ role: 'system', content: options.systemPrompt });
     }
@@ -914,6 +915,13 @@ type ResponsesContinuation = {
 };
 
 type ResponsesToolFragment = { id: string; name: string; arguments: string };
+type ProviderResponseRecord = Record<string, unknown>;
+
+function providerResponseRecord(value: unknown): ProviderResponseRecord | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as ProviderResponseRecord
+    : undefined;
+}
 
 type ResponsesAccumulator = {
   content: string;
@@ -1043,15 +1051,16 @@ function setResponsesTool(
 }
 
 function responsesUsage(value: unknown): ChatResponse['usage'] | undefined {
-  if (!value || typeof value !== 'object') return undefined;
-  const usage = value as Record<string, any>;
+  const usage = providerResponseRecord(value);
+  if (!usage) return undefined;
   const tokenCount = (input: unknown): number => {
     const number = Number(input);
     return Number.isFinite(number) && number > 0 ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(number)) : 0;
   };
   const promptTokens = tokenCount(usage.input_tokens);
   const completionTokens = tokenCount(usage.output_tokens);
-  const cacheReadTokens = Math.min(promptTokens, tokenCount(usage.input_tokens_details?.cached_tokens));
+  const details = providerResponseRecord(usage.input_tokens_details);
+  const cacheReadTokens = Math.min(promptTokens, tokenCount(details?.cached_tokens));
   return {
     promptTokens: promptTokens - cacheReadTokens,
     completionTokens,
@@ -1074,24 +1083,28 @@ function parseResponsesTool(item: unknown): ResponsesToolFragment | undefined {
   };
 }
 
-function responseOutputText(response: Record<string, any>): string {
+function responseOutputText(response: ProviderResponseRecord): string {
   if (typeof response.output_text === 'string') return response.output_text;
-  return (Array.isArray(response.output) ? response.output : [])
-    .flatMap((item: any) => Array.isArray(item?.content) ? item.content : [])
-    .filter((item: any) => item?.type === 'output_text' && typeof item.text === 'string')
-    .map((item: any) => item.text)
-    .join('');
+  const content = (Array.isArray(response.output) ? response.output : []).flatMap(item => {
+    const record = providerResponseRecord(item);
+    return record && Array.isArray(record.content) ? record.content : [];
+  });
+  return content.flatMap(item => {
+    const record = providerResponseRecord(item);
+    return record?.type === 'output_text' && typeof record.text === 'string' ? [record.text] : [];
+  }).join('');
 }
 
 async function applyResponsesEvent(
-  event: Record<string, any>,
+  event: ProviderResponseRecord,
   state: ResponsesAccumulator,
   onChunk: StreamChunkCallback,
 ): Promise<void> {
   if (++state.events > 1_024) throw new ResponsesProtocolError('too_many_events');
   const type = typeof event.type === 'string' ? event.type : '';
   if (type === 'error' || type === 'response.failed') {
-    const error = event.error ?? event.response?.error;
+    const response = providerResponseRecord(event.response);
+    const error = providerResponseRecord(event.error) ?? providerResponseRecord(response?.error);
     const remoteCode = typeof error?.code === 'string' ? error.code : '';
     const code = ['previous_response_not_found', 'websocket_connection_limit_reached'].includes(remoteCode)
       ? remoteCode
@@ -1138,7 +1151,7 @@ async function applyResponsesEvent(
     setResponsesTool(state, key, tool);
   }
   if (['response.completed', 'response.done', 'response.incomplete'].includes(type)) {
-    const response = event.response && typeof event.response === 'object' ? event.response as Record<string, any> : {};
+    const response = providerResponseRecord(event.response) ?? {};
     state.responseId = typeof response.id === 'string' ? response.id : state.responseId;
     state.model = typeof response.model === 'string' ? response.model : state.model;
     state.usage = responsesUsage(response.usage) ?? state.usage;
@@ -1200,9 +1213,9 @@ async function* responsesWebSocketEvents(
   socket: ProviderWebSocket,
   signal: AbortSignal | undefined,
   idleTimeoutMs: number,
-): AsyncGenerator<Record<string, any>> {
+): AsyncGenerator<ProviderResponseRecord> {
   const effectiveIdleTimeoutMs = idleTimeoutMs > 0 ? Math.min(idleTimeoutMs, 10 * 60_000) : 120_000;
-  const queue: Array<{ event: Record<string, any>; bytes: number }> = [];
+  const queue: Array<{ event: ProviderResponseRecord; bytes: number }> = [];
   let queuedBytes = 0;
   let transportedBytes = 0;
   let wake: (() => void) | undefined;
@@ -1221,9 +1234,10 @@ async function* responsesWebSocketEvents(
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         throw new ResponsesProtocolError('invalid_websocket_json');
       }
-      queue.push({ event: parsed as Record<string, any>, bytes });
+      const parsedRecord = parsed as ProviderResponseRecord;
+      queue.push({ event: parsedRecord, bytes });
       queuedBytes += bytes;
-      if (['response.completed', 'response.done', 'response.incomplete'].includes(String((parsed as Record<string, any>).type))) {
+      if (['response.completed', 'response.done', 'response.incomplete'].includes(String(parsedRecord.type))) {
         done = true;
       }
     } catch (error) {
@@ -1496,7 +1510,7 @@ export class OpenAiResponsesProvider extends AiProvider {
     let retriedContinuation = false;
     let retriedConnectionLimit = false;
     while (true) {
-      stats && stats.websocketAttempts++;
+      if (stats) stats.websocketAttempts++;
       let lease: ProviderWebSocketLease;
       try {
         lease = await acquireProviderWebSocket(
@@ -1515,10 +1529,16 @@ export class OpenAiResponsesProvider extends AiProvider {
       } catch (error) {
         throw stableTransportError(error);
       }
-      if (stats) lease.reused ? stats.websocketConnectionsReused++ : stats.websocketConnectionsCreated++;
+      if (stats) {
+        if (lease.reused) stats.websocketConnectionsReused++;
+        else stats.websocketConnectionsCreated++;
+      }
       const entry = lease.entry as (ProviderWebSocketCacheEntry & { continuation?: ResponsesContinuation }) | undefined;
       const body = cache && entry ? cachedResponsesBody(fullBody, entry.continuation) : fullBody;
-      if (stats) body.previous_response_id ? stats.deltaRequests++ : stats.fullContextRequests++;
+      if (stats) {
+        if (body.previous_response_id) stats.deltaRequests++;
+        else stats.fullContextRequests++;
+      }
       const state: ResponsesAccumulator = {
         content: '', reasoning: '', tools: new Map(), outputBytes: 0, events: 0, completed: false, started: false,
       };
@@ -1600,8 +1620,8 @@ export class OpenAiResponsesProvider extends AiProvider {
           if (!trimmed.startsWith('data:')) continue;
           const payload = trimmed.slice(5).trim();
           if (!payload || payload === '[DONE]') continue;
-          let event: Record<string, any>;
-          try { event = JSON.parse(payload) as Record<string, any>; }
+          let event: ProviderResponseRecord;
+          try { event = JSON.parse(payload) as ProviderResponseRecord; }
           catch { throw new ResponsesProtocolError('invalid_sse_json'); }
           await applyResponsesEvent(event, state, onChunk);
         }
@@ -1610,8 +1630,8 @@ export class OpenAiResponsesProvider extends AiProvider {
       if (buffer.trim().startsWith('data:')) {
         const payload = buffer.trim().slice(5).trim();
         if (payload && payload !== '[DONE]') {
-          let event: Record<string, any>;
-          try { event = JSON.parse(payload) as Record<string, any>; }
+          let event: ProviderResponseRecord;
+          try { event = JSON.parse(payload) as ProviderResponseRecord; }
           catch { throw new ResponsesProtocolError('invalid_sse_json'); }
           await applyResponsesEvent(event, state, onChunk);
         }
@@ -1626,7 +1646,7 @@ export class OpenAiResponsesProvider extends AiProvider {
     return finalizeResponses(state);
   }
 
-  private async boundedJson(response: Response): Promise<Record<string, any>> {
+  private async boundedJson(response: Response): Promise<ProviderResponseRecord> {
     const contentLength = response.headers.get('content-length');
     if (contentLength !== null && (!/^(?:0|[1-9]\d*)$/u.test(contentLength)
       || Number(contentLength) > RESPONSES_MAX_EVENT_BYTES)) {
@@ -1650,9 +1670,10 @@ export class OpenAiResponsesProvider extends AiProvider {
       }
       const combined = Buffer.concat(chunks.map(chunk => Buffer.from(chunk)));
       try {
-        const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(combined));
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid');
-        return parsed as Record<string, any>;
+        const parsed: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(combined));
+        const record = providerResponseRecord(parsed);
+        if (!record) throw new Error('invalid');
+        return record;
       } catch { throw new Error('The provider response was invalid.'); }
     } finally {
       if (!completed) void reader.cancel('provider-response-abandoned').catch(() => undefined);
@@ -2208,7 +2229,7 @@ export class AnthropicProvider extends AiProvider {
     const anthropicMessages = this.buildAnthropicMessages(messages);
 
     // Handle the case where first user message should be preceded by system prompt in messages
-    let bodyMessages: Array<{ role: 'user' | 'assistant'; content: unknown }> = [...anthropicMessages];
+    const bodyMessages: Array<{ role: 'user' | 'assistant'; content: unknown }> = [...anthropicMessages];
     if (systemPrompt && bodyMessages.length > 0 && bodyMessages[0].role === 'user') {
       // Insert a system-like context at the beginning for Anthropic's message format
       // Anthropic uses top-level `system` field, not in messages array

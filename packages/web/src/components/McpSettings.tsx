@@ -175,6 +175,14 @@ function ServerCard({
       <span className={state === 'configured' ? 'status-success' : 'status-warning'}>
         {t(`settings.mcp.state.${state}`)}
       </span>
+      {server.runtimeStatus && <>
+        <small className={server.runtimeStatus.state === 'connected' ? 'status-success' : 'status-warning'}>
+          {t(`settings.mcp.runtime.${server.runtimeStatus.state}`, {
+            count: server.runtimeStatus.toolCount ?? 0,
+          })} · {testedAt(server.runtimeStatus.updatedAt)}
+        </small>
+        {server.runtimeStatus.error && <small className="status-warning">{server.runtimeStatus.error}</small>}
+      </>}
       {server.valid ? <label className="mcp-exposure-control">
         <span>{t('settings.mcp.exposureLabel')}</span>
         <select value={server.exposure} disabled={disabled}

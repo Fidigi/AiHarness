@@ -2,7 +2,7 @@
 // AI Provider API Proxy - Proxies requests to real AI APIs with SSE streaming
 // ============================================================
 
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -319,8 +319,10 @@ class CoreProviderProxy implements ProviderProxy {
         if (queue.length > 0) {
           const item = queue.shift()!;
           queuedBytes -= item.bytes;
-          const { bytes: _bytes, ...published } = item;
-          yield published;
+          yield {
+            content: item.content,
+            ...(item.usage ? { usage: item.usage } : {}),
+          };
         } else {
           await new Promise<void>(resolve => { wake = resolve; });
         }
@@ -866,20 +868,19 @@ export class AiProxyServer {
     }
 
     try {
-      const server = this;
       const operation = new AbortController();
       let chatStream: AsyncGenerator<{ content: string; usage?: Record<string, number> }, void, unknown> | undefined;
       let cancelled = false;
       let resumeDemand: (() => void) | undefined;
       const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
+        start: controller => {
           void (async () => {
           const contentParts: string[] = [];
           let fullContentBytes = 0;
           let fullContentJsonBytes = 0;
           let streamEvents = 0;
           let finalUsage: Record<string, number> | undefined;
-          const contentRedactor = server.redactor.createStream();
+          const contentRedactor = this.redactor.createStream();
           const waitForDemand = async (): Promise<void> => {
             while (!cancelled && (controller.desiredSize ?? 0) <= 0) {
               await new Promise<void>(resolve => { resumeDemand = resolve; });
@@ -890,11 +891,11 @@ export class AiProxyServer {
             await waitForDemand();
             if (!cancelled) controller.enqueue(textToSSE(event, data));
           };
-          await enqueue('message_start', { provider: server.redactText(providerType) });
+          await enqueue('message_start', { provider: this.redactText(providerType) });
 
           try {
-            const safeMessages = server.redactJson(messages);
-            const safeOptions = options ? server.redactJson(options) : undefined;
+            const safeMessages = this.redactJson(messages);
+            const safeOptions = options ? this.redactJson(options) : undefined;
             const signal = safeOptions?.signal
               ? AbortSignal.any([safeOptions.signal, operation.signal])
               : operation.signal;
@@ -928,7 +929,7 @@ export class AiProxyServer {
               await enqueue('text_delta', { content: finalContent });
             }
             if (!cancelled) {
-              if (finalUsage) server.recordProxyUsage(providerType, safeOptions?.model, finalUsage);
+              if (finalUsage) this.recordProxyUsage(providerType, safeOptions?.model, finalUsage);
               await enqueue('message_end', {
                 content: contentParts.join(''),
                 ...(finalUsage ? { usage: finalUsage } : {}),

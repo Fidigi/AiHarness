@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
+import type {
+  WorkspaceManager} from '@ai-harness/core';
 import {
   importMcpServer,
   inspectMcpConfig,
   McpConfigMutationError,
   McpServerTargetError,
   McpServerTester,
+  type McpSessionHost,
   previewMcpImport,
   readMcpServerTestTarget,
   replaceMcpServer,
@@ -23,8 +26,7 @@ import {
   removeMcpServer,
   restoreMcpServer,
   setMcpServerExposure,
-  setMcpServersEnabled,
-  WorkspaceManager,
+  setMcpServersEnabled
 } from '@ai-harness/core';
 
 export const MCP_UNDO_TTL_MS = 60_000;
@@ -113,6 +115,7 @@ export interface McpInventoryServiceOptions {
   now?: () => number;
   createToken?: () => string;
   tester?: McpServerTester;
+  host?: McpSessionHost;
 }
 
 export class McpInventoryService {
@@ -122,6 +125,7 @@ export class McpInventoryService {
   private readonly now: () => number;
   private readonly createToken: () => string;
   private readonly tester: McpServerTester;
+  private readonly host?: McpSessionHost;
 
   constructor(
     private readonly agentDir: string,
@@ -138,6 +142,7 @@ export class McpInventoryService {
     this.now = options.now ?? Date.now;
     this.createToken = options.createToken ?? randomUUID;
     this.tester = options.tester ?? new McpServerTester();
+    this.host = options.host;
   }
 
   async getOverview(cwd?: string): Promise<McpConfigInventory> {
@@ -153,7 +158,8 @@ export class McpInventoryService {
       } : {}),
       trustManager: this.trustManager,
     });
-    return this.tester.decorateInventory(inventory);
+    const tested = this.tester.decorateInventory(inventory);
+    return this.host ? this.host.decorateInventory(tested) : tested;
   }
 
   async testServer(request: {
@@ -204,8 +210,11 @@ export class McpInventoryService {
     };
   }
 
-  shutdown(): Promise<void> {
-    return this.tester.shutdown();
+  async shutdown(): Promise<void> {
+    await Promise.allSettled([
+      this.tester.shutdown(),
+      ...(this.host ? [this.host.shutdown()] : []),
+    ]);
   }
 
   /**

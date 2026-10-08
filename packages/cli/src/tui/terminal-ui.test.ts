@@ -8,14 +8,12 @@ import { TerminalUI } from './terminal-ui';
 
 describe('TerminalUI', () => {
   let terminal: TerminalUI;
-  let stdoutSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     terminal = new TerminalUI({ title: 'Test Harness' });
     
     // Capture console output
-    stdoutSpy = vi.spyOn(console, 'log').mockImplementation();
-    const originalClear = process.stdout.write;
+    vi.spyOn(console, 'log').mockImplementation();
     vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as any);
   });
 
@@ -76,7 +74,6 @@ describe('TerminalUI', () => {
     });
 
     it('should prefix with > symbol', () => {
-      const mockWrite = vi.spyOn(process.stdout, 'write');
       terminal.displayUserMessage('Test message');
       
       // Check that output contains the expected format
@@ -93,7 +90,6 @@ describe('TerminalUI', () => {
     });
 
     it('should wrap in assistant format', () => {
-      const mockWrite = vi.spyOn(process.stdout, 'write');
       terminal.displayAssistantMessage('Response content');
       
       // Should output formatted message
@@ -130,7 +126,7 @@ describe('TerminalUI', () => {
   describe('showError()', () => {
     it('should display error message', () => {
       const originalError = console.error;
-      let captured: string[] = [];
+      const captured: string[] = [];
       console.error = (...args) => captured.push(args.join(' '));
 
       terminal.showError('Something went wrong');
@@ -417,7 +413,7 @@ describe('TerminalUI', () => {
       let completed = false;
       
       await terminal.displayStreamingResponse(
-        (chunk) => {},
+        (_chunk) => {},
         () => { completed = true; },
       );
 
@@ -438,8 +434,8 @@ describe('TerminalUI', () => {
 
       // The streaming should be cleared
       const isStillStreaming = terminal.isCurrentlyStreaming();
-      // Note: displayUserMessage calls clearCurrentLine but doesn't set isStreaming to false
-      // This test verifies the output was written
+      // displayUserMessage clears the line but intentionally keeps the active stream.
+      expect(isStillStreaming).toBe(true);
       expect(mockWrite).toHaveBeenCalled();
     });
   });

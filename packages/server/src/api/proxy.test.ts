@@ -14,18 +14,7 @@ import { AiProxyServer, sanitizedProxyChatOptions, writeSSEStream } from './prox
 // Test helpers
 // ===================================================================
 
-function createMockFetchResponse(status: number, body: unknown): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    text: () => Promise.resolve(typeof body === 'string' ? body : JSON.stringify(body)),
-    json: () => Promise.resolve(body),
-    body: null as ReadableStream | null,
-  } as Response;
-}
-
 function createMockReadableStream(chunks: string[]): ReadableStream<Uint8Array> {
-  let index = 0;
   return new ReadableStream({
     start(controller) {
       for (const chunk of chunks) {

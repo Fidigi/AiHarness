@@ -1,6 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-async function trustActiveWorkspace(page: import('@playwright/test').Page): Promise<void> {
+async function trustActiveWorkspace(page: Page): Promise<void> {
   const trustWarning = page.getByRole('button', { name: /Project not trusted/i });
   if (await trustWarning.isVisible()) {
     await trustWarning.click();

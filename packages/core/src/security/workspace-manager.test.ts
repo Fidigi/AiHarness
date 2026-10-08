@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
-import { WORKSPACE_BROWSE_ENTRY_LIMIT, WorkspaceManager, WorkspacePathError } from './workspace-manager.js';
+import type { WorkspacePathError } from './workspace-manager.js';
+import { WORKSPACE_BROWSE_ENTRY_LIMIT, WorkspaceManager } from './workspace-manager.js';
 
 const execFileAsync = promisify(execFile);
 const directories: string[] = [];

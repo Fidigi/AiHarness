@@ -4,7 +4,6 @@
 
 import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
 import {
-  AiProvider,
   OpenAiProvider,
   OpenAiResponsesProvider,
   getOpenAiResponsesTransportStats,
@@ -303,11 +302,9 @@ describe('MockProvider', () => {
 
   describe('streamChat()', () => {
     let chunks: string[];
-    let events: any[];
 
     beforeEach(() => {
       chunks = [];
-      events = [];
       provider.reset();
     });
 

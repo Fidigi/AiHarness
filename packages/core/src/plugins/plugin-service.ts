@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { constants as fsConstants } from 'node:fs';
+import { constants as fsConstants, type Dirent } from 'node:fs';
 import {
   lstat,
   mkdir,
@@ -447,7 +447,7 @@ async function scanFiles(root: string): Promise<{ files: ScannedFile[]; truncate
       truncated = true;
       return;
     }
-    let entries: import('node:fs').Dirent[];
+    let entries: Dirent[];
     try {
       const listing = await readStableDirectoryEntries(directory, entriesRemaining);
       entries = listing.entries;
@@ -644,7 +644,7 @@ async function standaloneExtensions(
   trusted: boolean,
 ): Promise<PluginStandaloneExtensionInfo[]> {
   if (scope === 'project' && !trusted) return [];
-  let entries: import('node:fs').Dirent[];
+  let entries: Dirent[];
   try {
     entries = (await readStableDirectoryEntries(directory, 201)).entries;
   } catch {

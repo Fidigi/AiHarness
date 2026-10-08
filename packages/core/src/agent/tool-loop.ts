@@ -1,5 +1,9 @@
 import type { ChatResponse, ChatToolDefinition } from '../providers/index.js';
-import type { ExtensionRegistry, ExtensionRuntimeContext } from '../extensions/extension-registry.js';
+import type {
+  ExtensionRegistry,
+  ExtensionRuntimeContext,
+  ExtensionToolResult,
+} from '../extensions/extension-registry.js';
 import type { Message, TokenUsage, ToolCall } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 
@@ -19,6 +23,13 @@ export interface ToolLoopOptions {
   toolContext: ExtensionRuntimeContext;
   streamTurn(messages: Message[], tools: ChatToolDefinition[], round: number): Promise<ChatResponse>;
   tools?: ChatToolDefinition[];
+  /** Optional composite executor for tools hosted outside the static extension registry. */
+  executeTool?(
+    name: string,
+    input: unknown,
+    context: ExtensionRuntimeContext,
+    signal?: AbortSignal,
+  ): ExtensionToolResult | Promise<ExtensionToolResult>;
   onTurnStart?(round: number): void | Promise<void>;
   onAssistantResponse?(response: ChatResponse, round: number, durationMs: number): void | Promise<void>;
   onToolCall?(call: ToolCall): void | Promise<void>;
@@ -151,16 +162,17 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       let isError = false;
       try {
         const normalizedToolName = call.name.toLowerCase();
-        if (!enabledToolNames.has(normalizedToolName)
-          && options.extensionRegistry.getTools().some(tool => tool.name === normalizedToolName)) {
+        if (!enabledToolNames.has(normalizedToolName)) {
           throw new Error(`Tool is not enabled for this run: ${call.name}`);
         }
-        const result = await options.extensionRegistry.executeTool(
-          call.name,
-          call.input,
-          options.toolContext,
-          options.signal,
-        );
+        const result = await (options.executeTool
+          ? options.executeTool(call.name, call.input, options.toolContext, options.signal)
+          : options.extensionRegistry.executeTool(
+              call.name,
+              call.input,
+              options.toolContext,
+              options.signal,
+            ));
         content = options.redactText?.(result.content) ?? result.content;
         isError = Boolean(result.isError);
       } catch (error) {

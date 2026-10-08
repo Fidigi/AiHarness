@@ -6,6 +6,7 @@ import {
   ExtensionRegistry,
   JsonlSessionStore,
   loadAgentSettings,
+  McpSessionHost,
   normalizeProviderUsage,
   ProjectTrustManager,
   registerWorkspaceTools,
@@ -115,7 +116,15 @@ export async function createRuntimeServices(
     projectTrusted: await trustManager.isTrusted(defaultCwd),
   });
   proxy.setNetworkSettings(resolveAgentProviderNetworkSettings(providerSettings.settings));
-  const mcpInventory = new McpInventoryService(dataDir, workspaceManager, trustManager);
+  const mcpHost = new McpSessionHost({
+    agentDir: dataDir,
+    trustManager,
+    resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, {
+      base,
+      kind: 'directory',
+    }),
+  });
+  const mcpInventory = new McpInventoryService(dataDir, workspaceManager, trustManager, { host: mcpHost });
   const configurationStore = new ConfigurationStore(
     options.configurationFile ?? path.join(dataDir, 'config.json'),
   );
@@ -214,6 +223,7 @@ export async function createRuntimeServices(
     redactText: value => proxy.redactText(value),
     redactJson: value => proxy.redactJson(value),
     createTextRedactor: () => proxy.getCredentialRedactor().createStream(),
+    mcpHost,
     onNotification: (category, run) => {
       const session = sessionManager.get(run.sessionId);
       return pushService.notify(category, proxy.redactJson({

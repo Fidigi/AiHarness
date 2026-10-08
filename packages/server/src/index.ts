@@ -4,13 +4,14 @@
 // and manages sessions via JSONL persistence
 // ============================================================
 
-import express, { type NextFunction, Request, Response } from 'express';
+import type { Request, Response } from 'express';
+import express, { type NextFunction } from 'express';
 import cors from 'cors';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 import { createServer, type Server } from 'node:http';
-import { isIP } from 'node:net';
+import { isIP, type AddressInfo } from 'node:net';
 import { pathToFileURL } from 'node:url';
 import { AiProxyServer, createProxyRoutes } from './api/proxy.js';
 import {
@@ -1391,7 +1392,8 @@ export function start(config?: ServerConfig): Promise<{ port: number; host: stri
       handleWebSocketUpgrade(request, socket, serverProxy, head);
     });
     server.listen(port, host, () => {
-      resolve({ port: (server.address() as any).port || port, host, app: appInstance! });
+      const address = server.address() as AddressInfo | string | null;
+      resolve({ port: typeof address === 'object' && address ? address.port : port, host, app: appInstance! });
     });
     server.on('error', reject);
   });

@@ -8,6 +8,7 @@ import {
   type Session,
 } from '@ai-harness/core';
 import type { RuntimeServices } from '../runtime/services.js';
+import type { CommandEvent } from '../runtime/command-runtime.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { serializeSessionPage } from './session-pagination.js';
 import { requireCapability } from '../security/request-security.js';
@@ -300,6 +301,8 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         tools: services.agentRuntime.getTools(
           effective.values.toolPreset,
           effective.values.enabledTools,
+          undefined,
+          session.id,
         ).filter(tool => tool.name !== 'powershell' || effective.values.powershellEnabled === true).map(tool => ({
           name: tool.name,
           description: tool.description,
@@ -430,10 +433,10 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         systemPrompt: instructions.systemPrompt,
         maxRetries: integerValue(body.maxRetries, 2, 0, 5),
         maxToolRounds: integerValue(body.maxToolRounds, 8, 1, 32),
-        allowedTools: modelSupportsTools
-          ? (effective.values.enabledTools ?? services.extensionRegistry.getTools().map(tool => tool.name))
-            .filter(tool => tool !== 'powershell' || effective.values.powershellEnabled === true)
-          : [],
+        allowedTools: modelSupportsTools ? effective.values.enabledTools : [],
+        excludedTools: modelSupportsTools && effective.values.powershellEnabled !== true
+          ? ['powershell']
+          : undefined,
         steeringMode: agentSettings.settings.steeringMode,
         followUpMode: agentSettings.settings.followUpMode,
       });
@@ -685,8 +688,8 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
     const channel = new SseChannel(response, services.createTextRedactor());
     let sent = after;
     let replaying = true;
-    const pending: import('../runtime/command-runtime.js').CommandEvent[] = [];
-    const emit = (event: import('../runtime/command-runtime.js').CommandEvent): void => {
+    const pending: CommandEvent[] = [];
+    const emit = (event: CommandEvent): void => {
       if (event.sequence <= sent) return;
       if (replaying) {
         pending.push(event);

@@ -134,7 +134,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
       openFileAbortRef.current?.abort();
       refreshAbortRef.current?.abort();
     };
-  }, [workspace?.cwd, workspaceOperationTrusted]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workspace?.cwd, workspaceOperationTrusted]);
 
   useEffect(() => {
     if (!workspace || !workspaceOperationTrusted || query.trim().length < 1) {

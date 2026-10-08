@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
 import { AiProvider, MockProvider, type ChatOptions, type ChatResponse } from '../providers/index.js';
 import { CredentialRedactor } from '../providers/credentials.js';
+import type { McpSessionHost } from '../mcp/session-host.js';
 import { SessionManager } from '../sessions/session-manager.js';
 import type { Message } from '../types/index.js';
 import { AgentRuntime, type AgentRuntimeOptions } from './runtime.js';
@@ -30,6 +31,26 @@ class ToolProvider extends AiProvider {
       model: 'tool-model',
       usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
     });
+  }
+}
+
+class DynamicToolProvider extends AiProvider {
+  constructor() { super({ type: 'mock' as never }); }
+  validateConfig(): boolean { return true; }
+  async chat(): Promise<ChatResponse> { return { content: 'unused' }; }
+  async streamChat(
+    messages: Message[],
+    _onChunk: (chunk: string) => void,
+    onComplete?: (response?: ChatResponse) => void,
+    _onError?: (error: Error) => void,
+    options?: ChatOptions,
+  ): Promise<void> {
+    const toolName = options?.tools?.find(tool => tool.name.startsWith('mcp__'))?.name;
+    if (!messages.some(message => message.role === 'tool') && toolName) {
+      onComplete?.({ content: '', toolCalls: [{ id: 'mcp-call', name: toolName, input: { query: 'core' } }] });
+      return;
+    }
+    onComplete?.({ content: 'MCP complete' });
   }
 }
 
@@ -368,6 +389,101 @@ describe('AgentRuntime', () => {
 
     expect(provider.systemPrompt).toBe('resolved instructions including local context');
     expect(sessionManager.get(session.id)?.metadata?.systemPrompt).toBeUndefined();
+  });
+
+  it('prepares and executes persistent MCP tools through the shared tool loop', async () => {
+    const provider = new DynamicToolProvider();
+    const sessionManager = new SessionManager();
+    const session = await sessionManager.create({ cwd: process.cwd() });
+    const extensionRegistry = new ExtensionRegistry();
+    extensionRegistry.attachSessionManager(sessionManager);
+    const execute = vi.fn(async () => ({
+      content: 'found in core',
+      details: { server: 'docs', tool: 'lookup' },
+    }));
+    const prepared = {
+      tools: [{
+        name: 'mcp__docs__lookup',
+        description: '[MCP docs] Lookup',
+        parameters: { type: 'object', properties: { query: { type: 'string' } } },
+        extensionId: 'builtin:mcp' as const,
+        readOnly: true,
+        mcp: { scope: 'global' as const, server: 'docs', tool: 'lookup' },
+        execute,
+      }],
+      has: (name: string) => name.toLowerCase() === 'mcp__docs__lookup',
+      execute,
+    };
+    const mcpHost = {
+      prepareForPrompt: vi.fn(async () => prepared),
+      getPreparedTools: vi.fn(() => prepared),
+      finishPrompt: vi.fn(),
+      releaseSession: vi.fn(async () => undefined),
+    } as unknown as McpSessionHost;
+    const runtime = new AgentRuntime({
+      sessionManager,
+      extensionRegistry,
+      resolveProvider: () => provider,
+      isProjectTrusted: () => true,
+      mcpHost,
+    });
+
+    const started = await runtime.start({
+      sessionId: session.id, cwd: process.cwd(), provider: 'mock', input: 'lookup', toolPreset: 'read-only',
+    });
+    await runtime.wait(started.id);
+
+    expect(mcpHost.prepareForPrompt).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledWith(
+      'mcp__docs__lookup',
+      { query: 'core' },
+      expect.objectContaining({ currentSessionId: session.id }),
+      expect.any(AbortSignal),
+    );
+    expect(sessionManager.get(session.id)?.messages.map(message => message.role)).toEqual([
+      'user', 'assistant', 'tool', 'assistant',
+    ]);
+    expect(sessionManager.get(session.id)?.messages[2]).toMatchObject({
+      name: 'mcp__docs__lookup', content: 'found in core', isError: false,
+    });
+  });
+
+  it('does not persist an unsent prompt when Stop aborts the MCP startup wait', async () => {
+    const sessionManager = new SessionManager();
+    const session = await sessionManager.create({ cwd: process.cwd() });
+    const extensionRegistry = new ExtensionRegistry();
+    const prepareForPrompt = vi.fn(({ signal }: { signal?: AbortSignal }) => new Promise<never>((_resolve, reject) => {
+      signal?.addEventListener('abort', () => {
+        const error = new Error('aborted');
+        error.name = 'AbortError';
+        reject(error);
+      }, { once: true });
+    }));
+    const releaseSession = vi.fn(async () => undefined);
+    const mcpHost = {
+      prepareForPrompt,
+      getPreparedTools: () => ({ tools: [], has: () => false }),
+      finishPrompt: vi.fn(),
+      releaseSession,
+    } as unknown as McpSessionHost;
+    const runtime = new AgentRuntime({
+      sessionManager,
+      extensionRegistry,
+      resolveProvider: () => new MockProvider({ type: 'mock' as never }),
+      isProjectTrusted: () => true,
+      mcpHost,
+    });
+
+    const started = await runtime.start({
+      sessionId: session.id, cwd: process.cwd(), provider: 'mock', input: 'not sent',
+    });
+    runtime.stop(started.id);
+    await runtime.wait(started.id);
+
+    expect(prepareForPrompt).toHaveBeenCalledOnce();
+    expect(runtime.getRun(started.id)?.phase).toBe('stopped');
+    expect(sessionManager.get(session.id)?.messages).toEqual([]);
+    expect(releaseSession).toHaveBeenCalledWith(session.id);
   });
 
   it('stops a detached provider request and requires explicit project trust', async () => {

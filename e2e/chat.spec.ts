@@ -1,7 +1,7 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 
-function providerSection(page: import('@playwright/test').Page) {
+function providerSection(page: Page) {
   return page.getByRole('heading', { name: 'AI Provider' }).locator('..');
 }
 
@@ -574,6 +574,23 @@ test.describe('Conversation detached agent', () => {
     await expect(result.getByRole('button', { name: 'Download' })).toBeVisible();
     await result.getByRole('button', { name: 'Show complete output' }).click();
     await expect(result).toContainText('complete output');
+  });
+
+  test('identifie les appels MCP par serveur et outil dans le transcript', async ({ page }) => {
+    const session = mockSession('mcp-process-session', 'MCP process');
+    session.messages.push({
+      id: 'assistant-mcp', role: 'assistant', content: '', timestamp: '2025-01-01T12:00:01.000Z',
+      blocks: [
+        { type: 'tool_call', id: 'mcp-call', name: 'mcp__docs_server__lookup_item__0123456789', input: { query: 'runtime' } },
+        { type: 'tool_result', toolCallId: 'mcp-call', name: 'mcp__docs_server__lookup_item__0123456789', content: '{"found":true}', isError: false },
+      ],
+    });
+    await installMockApi(page, { sessions: [session] });
+    await page.goto('/chat/mcp-process-session');
+
+    const process = page.getByLabel('Agent process');
+    await expect(process).toContainText('Tool call: MCP docs_server / lookup_item');
+    await expect(process).toContainText('Tool result: MCP docs_server / lookup_item');
   });
 
   test('charge palette et widgets d’extension puis résout une interaction déclarative', async ({ page }) => {

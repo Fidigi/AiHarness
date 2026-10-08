@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events';
 import type { ChildProcess } from 'node:child_process';
 import { describe, expect, it, vi } from 'vitest';
-import { ExternalOpenError, externalOpenCommand, openExternalTarget } from './open-external.js';
+import type { ExternalOpenError} from './open-external.js';
+import { externalOpenCommand, openExternalTarget } from './open-external.js';
 
 function spawnedChild(event: 'spawn' | 'error' = 'spawn'): ChildProcess {
   const child = new EventEmitter() as ChildProcess;

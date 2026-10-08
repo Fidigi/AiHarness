@@ -554,7 +554,7 @@ export function startSystemThemeProbe(options: SystemThemeProbeOptions): SystemT
   let closed = false;
   let initialSettled = false;
   let lastSignature = '';
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = { timer: undefined as ReturnType<typeof setTimeout> | undefined };
   let resolveInitial!: (theme: TerminalTheme) => void;
   const initial = new Promise<TerminalTheme>(resolve => { resolveInitial = resolve; });
 
@@ -569,7 +569,7 @@ export function startSystemThemeProbe(options: SystemThemeProbeOptions): SystemT
     const signature = JSON.stringify([theme.mode, theme.colors, theme.export]);
     if (initial) {
       initialSettled = true;
-      if (timer) clearTimeout(timer);
+      if (timeout.timer) clearTimeout(timeout.timer);
       resolveInitial(theme);
     } else if (initialSettled && signature !== lastSignature) {
       options.onTheme?.(theme);
@@ -631,7 +631,7 @@ export function startSystemThemeProbe(options: SystemThemeProbeOptions): SystemT
   const close = (): void => {
     if (closed) return;
     closed = true;
-    if (timer) clearTimeout(timer);
+    if (timeout.timer) clearTimeout(timeout.timer);
     if (options.input.off) options.input.off('data', onData);
     else options.input.removeListener?.('data', onData);
     try { options.output.write('\u001b[?2031l'); } catch { /* Best-effort notification cleanup. */ }
@@ -645,8 +645,8 @@ export function startSystemThemeProbe(options: SystemThemeProbeOptions): SystemT
   options.input.on('data', onData);
   try { options.output.write('\u001b[?2031h'); } catch { /* The query below resolves to the fallback. */ }
   query();
-  timer = setTimeout(() => { if (!initialSettled) publish(true); }, timeoutMs);
-  timer.unref?.();
+  timeout.timer = setTimeout(() => { if (!initialSettled) publish(true); }, timeoutMs);
+  timeout.timer.unref?.();
   return { initial, refresh: query, close };
 }
 

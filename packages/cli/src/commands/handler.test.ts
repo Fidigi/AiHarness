@@ -117,6 +117,7 @@ describe('CommandHandler', () => {
 
     it('should output help text to terminal', async () => {
       const output = await captureOutput(async () => await handler.execute('/help'));
+      expect(output).toBe('');
       // The help command returns empty string (handled by TerminalUI.showHelp())
       // but the execute method should still work without errors
       expect(handler.isExiting()).toBe(false);
@@ -360,6 +361,7 @@ describe('CommandHandler', () => {
         // Should fail because no provider is configured (only mock which doesn't validate)
         const beforeMsgCount = session.messages.length;
         await handler.execute('/compact');
+        expect(beforeMsgCount).toBe(3);
         expect(handler.isExiting()).toBe(false);
       }
     });
@@ -374,6 +376,7 @@ describe('CommandHandler', () => {
         // With mock provider (doesn't validate API key)
         const beforeMsgCount = session.messages.length;
         await handler.execute('/compact Be very concise');
+        expect(beforeMsgCount).toBe(3);
         expect(handler.isExiting()).toBe(false);
       }
     });
@@ -388,6 +391,7 @@ describe('CommandHandler', () => {
 
         const beforeMsgCount = session.messages.length;
         await handler.execute('/compact');
+        expect(beforeMsgCount).toBe(20);
         expect(handler.isExiting()).toBe(false);
       }
     });
@@ -728,6 +732,7 @@ describe('/export command', () => {
 
       // Verify the new session was created and persisted
       const allIds = await store.listSessionIds();
+      expect(allIds).toContain(session1Id);
       expect(allIds.length).toBeGreaterThanOrEqual(2);
     });
   });
@@ -1212,6 +1217,7 @@ describe('/export command', () => {
         await handler.execute('/rename Renamed Session');
       });
 
+      expect(manager.list()).toHaveLength(sessionsBefore + 1);
       // The rename should have been recorded in the transcript mock
       expect(terminal.addTranscriptEntry).toHaveBeenCalledWith(
         expect.objectContaining({ content: 'Session renamed to: Renamed Session' })
