@@ -114,6 +114,7 @@ export {
   McpSessionHost,
 } from './session-host.js';
 export type {
+  HostedMcpTool,
   McpHostConnect,
   McpHostConnection,
   McpHostConnectOptions,

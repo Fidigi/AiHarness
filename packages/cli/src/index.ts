@@ -7,6 +7,8 @@ import {
   AgentMessageQueue,
   clampPublishedThinkingLevel,
   closeProviderNetworkDispatchers,
+  collectToolSearchLoadedNames,
+  createAgentToolLoadout,
   CredentialRedactor,
   DEFAULT_CODING_TOOL_NAMES,
   ExtensionRegistry,
@@ -30,6 +32,7 @@ import {
   SessionManager,
   toChatToolDefinitions,
   truncateToolTail,
+  TOOL_SEARCH_TOOL_NAME,
   unknownToolNames,
   WorkspaceManager,
 } from '@ai-harness/core';
@@ -39,7 +42,6 @@ import type {
   Message,
   MessageContentBlock,
   PluginResourceKind,
-  PreparedMcpTools,
   ResolvedAgentSettings,
   Session,
   SessionEntry,
@@ -770,13 +772,10 @@ async function main(): Promise<void> {
   const selectedTools = () => {
     const registered = extensionRegistry.getTools();
     const unknown = unknownToolNames(registered, cliArguments.tools, cliArguments.excludeTools)
-      .filter(name => !name.startsWith('mcp__'));
+      .filter(name => !name.startsWith('mcp__') && name !== TOOL_SEARCH_TOOL_NAME);
     if (unknown.length) throw new Error(`Unknown tool name(s): ${unknown.join(', ')}.`);
     return selectRegisteredTools(registered, toolSelectionOptions());
   };
-  const selectedMcpTools = (prepared: PreparedMcpTools) => (
-    selectRegisteredTools(prepared.tools, toolSelectionOptions())
-  );
   try { selectedTools(); }
   catch (error) {
     reportError(error instanceof Error ? error.message : String(error));
@@ -1304,24 +1303,50 @@ async function main(): Promise<void> {
       let continueConversation = true;
       while (continueConversation) {
         const currentSession = sessionManager.get(currentSessionId);
-        const mcpPrepared = await mcpHost.prepareForPrompt({
-          sessionId: currentSessionId,
-          cwd: workspaceCwd,
-          preset: currentSession?.toolPreset,
-          signal: operationController.signal,
+        const suppressAllTools = cliArguments.tools?.length === 0
+          || (cliArguments.noTools && cliArguments.tools === undefined);
+        const mcpPrepared = currentSession?.toolPreset === 'chat-only' || suppressAllTools
+          ? mcpHost.getPreparedTools(currentSessionId, 'chat-only')
+          : await mcpHost.prepareForPrompt({
+              sessionId: currentSessionId,
+              cwd: workspaceCwd,
+              preset: currentSession?.toolPreset,
+              signal: operationController.signal,
+            });
+        const toolLoadout = createAgentToolLoadout({
+          staticTools: extensionRegistry.getTools(),
+          dynamicSource: {
+            directTools: mcpPrepared.tools,
+            hasPotentialSearchableTools: mcpPrepared.hasPotentialDiscoverableTools ?? false,
+            currentSearchableTools: () => mcpPrepared.currentDiscoverableTools?.()
+              ?? mcpPrepared.discoverableTools ?? [],
+            waitForSearchableTools: signal => mcpPrepared.waitForDiscoverableTools?.(signal)
+              ?? Promise.resolve(mcpPrepared.discoverableTools ?? []),
+            has: name => mcpPrepared.has(name),
+          },
+          selection: {
+            ...toolSelectionOptions(),
+            preset: currentSession?.toolPreset,
+          },
+          initialLoadedTools: collectToolSearchLoadedNames(
+            await sessionManager.getRawEntries(currentSessionId),
+            currentSession?.activeLeafId,
+          ),
         });
-        const registeredTools = selectedTools();
-        const registeredNames = new Set(registeredTools.map(tool => tool.name));
-        const mcpTools = selectedMcpTools(mcpPrepared)
-          .filter(tool => !registeredNames.has(tool.name));
-        const enabledMcpNames = new Set(mcpTools.map(tool => tool.name));
-        finalContent = await runToolLoop({
-        sessionManager,
-        sessionId: currentSessionId,
-        extensionRegistry,
-        tools: toChatToolDefinitions([...registeredTools, ...mcpTools]),
-        executeTool: (name, input, context, signal) => enabledMcpNames.has(name.toLowerCase())
-          ? extensionRegistry.executeHostedTool(
+        const executeSelectedTool = (name: string, input: unknown, context: Parameters<typeof extensionRegistry.executeTool>[2], signal?: AbortSignal) => {
+          if (toolLoadout.isToolSearch(name)) {
+            return extensionRegistry.executeHostedTool(
+              name,
+              input,
+              context,
+              (hostInput, hostContext, hostSignal) => toolLoadout.executeToolSearch(
+                hostInput, hostContext, hostSignal,
+              ),
+              signal,
+            );
+          }
+          if (toolLoadout.isDynamicTool(name)) {
+            return extensionRegistry.executeHostedTool(
               name,
               input,
               context,
@@ -1329,8 +1354,18 @@ async function main(): Promise<void> {
                 name, hostInput, hostContext, hostSignal,
               ),
               signal,
-            )
-          : extensionRegistry.executeTool(name, input, context, signal),
+            );
+          }
+          return extensionRegistry.executeTool(name, input, context, signal);
+        };
+        finalContent = await runToolLoop({
+        sessionManager,
+        sessionId: currentSessionId,
+        extensionRegistry,
+        tools: toChatToolDefinitions(toolLoadout.getTools()),
+        resolveTools: () => toChatToolDefinitions(toolLoadout.getTools()),
+        executeTool: executeSelectedTool,
+        getActivatedTools: (name, result) => toolLoadout.activatedTools(name, result),
         toolContext: {
           sessionManager,
           currentSessionId,

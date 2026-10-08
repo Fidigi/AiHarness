@@ -7,6 +7,7 @@ import {
   ExtensionRegistry,
   MockProvider,
   SessionManager,
+  type ChatOptions,
   type ChatResponse,
   type Message,
 } from '@ai-harness/core';
@@ -30,6 +31,34 @@ class RpcToolProvider extends AiProvider {
       return;
     }
     onComplete?.({ content: 'done' });
+  }
+}
+
+class RpcSearchProvider extends AiProvider {
+  declarations: string[][] = [];
+
+  constructor() { super({ type: 'mock' as never }); }
+  validateConfig(): boolean { return true; }
+  async chat(): Promise<ChatResponse> { return { content: 'unused' }; }
+  async streamChat(
+    messages: Message[],
+    _onChunk: (chunk: string) => void,
+    onComplete?: (response?: ChatResponse) => void,
+    _onError?: (error: Error) => void,
+    options?: ChatOptions,
+  ): Promise<void> {
+    this.declarations.push(options?.tools?.map(tool => tool.name) ?? []);
+    const results = messages.filter(message => message.role === 'tool').length;
+    if (results === 0) {
+      onComplete?.({ content: '', toolCalls: [{ id: 'search', name: 'tool_search', input: { query: 'docs' } }] });
+    } else if (results === 1) {
+      onComplete?.({
+        content: '',
+        toolCalls: [{ id: 'deferred', name: 'mcp__docs__lookup', input: { query: 'rpc' } }],
+      });
+    } else {
+      onComplete?.({ content: 'done' });
+    }
   }
 }
 
@@ -170,6 +199,51 @@ describe('RPC command controller', () => {
     expect(context.sessionManager.get('rpc-test-session')?.messages.map(message => message.role)).toEqual([
       'user', 'assistant', 'tool', 'assistant',
     ]);
+  });
+
+  it('refreshes RPC declarations after tool_search and persists the activation', async () => {
+    const { controller, context, records } = createController();
+    const provider = new RpcSearchProvider();
+    context.provider = provider;
+    context.toolContext.provider = provider;
+    let loaded = false;
+    const details = { loaded: ['mcp__docs__lookup'] };
+    const execute = vi.fn(async (name: string) => {
+      if (name === 'tool_search') {
+        loaded = true;
+        return { content: 'loaded docs', details };
+      }
+      return { content: 'rpc deferred lookup' };
+    });
+    const search = { name: 'tool_search', description: 'Search tools', parameters: { type: 'object' } };
+    const lookup = { name: 'mcp__docs__lookup', description: 'Lookup docs', parameters: { type: 'object' } };
+    context.prepareDynamicTools = vi.fn(async () => ({
+      tools: [search],
+      resolveTools: () => loaded ? [search, lookup] : [search],
+      execute,
+      getActivatedTools: (name, result) => name === 'tool_search' && result.details === details
+        ? details.loaded
+        : undefined,
+    }));
+    await controller.initialize();
+
+    await controller.handle({ type: 'prompt', message: 'find docs' });
+    await vi.waitFor(() => expect(records.some(record => record.type === 'agent_settled')).toBe(true));
+
+    expect(provider.declarations).toEqual([
+      ['tool_search'],
+      ['tool_search', 'mcp__docs__lookup'],
+      ['tool_search', 'mcp__docs__lookup'],
+    ]);
+    expect(execute).toHaveBeenNthCalledWith(
+      2,
+      'mcp__docs__lookup',
+      { query: 'rpc' },
+      expect.objectContaining({ currentSessionId: 'rpc-test-session' }),
+      expect.any(AbortSignal),
+    );
+    expect(context.sessionManager.get('rpc-test-session')?.messages.find(message => message.name === 'tool_search')?.metadata)
+      .toEqual({ toolSearch: { loaded: ['mcp__docs__lookup'] } });
   });
 
   it('handles extension commands immediately without starting an agent run', async () => {

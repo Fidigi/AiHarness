@@ -6,6 +6,8 @@ import type {
 } from '../extensions/extension-registry.js';
 import type { Message, TokenUsage, ToolCall } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
+import { agentToolExposure, isDeclaredToolExposure } from '../tools/tool-selection.js';
+import { toolSearchActivationMetadata } from '../tools/tool-search.js';
 
 export interface ToolExecutionResult {
   call: ToolCall;
@@ -14,6 +16,8 @@ export interface ToolExecutionResult {
   isError: boolean;
   durationMs: number;
   truncated: boolean;
+  /** Branch-local declarations activated by a trusted host-owned discovery tool. */
+  activatedTools?: string[];
 }
 
 export interface ToolLoopOptions {
@@ -23,6 +27,8 @@ export interface ToolLoopOptions {
   toolContext: ExtensionRuntimeContext;
   streamTurn(messages: Message[], tools: ChatToolDefinition[], round: number): Promise<ChatResponse>;
   tools?: ChatToolDefinition[];
+  /** Recompute declarations before every model call after dynamic activation. */
+  resolveTools?(): ChatToolDefinition[];
   /** Optional composite executor for tools hosted outside the static extension registry. */
   executeTool?(
     name: string,
@@ -30,6 +36,8 @@ export interface ToolLoopOptions {
     context: ExtensionRuntimeContext,
     signal?: AbortSignal,
   ): ExtensionToolResult | Promise<ExtensionToolResult>;
+  /** Accept activation names only from a host-owned tool/result pair. */
+  getActivatedTools?(name: string, result: ExtensionToolResult): string[] | undefined;
   onTurnStart?(round: number): void | Promise<void>;
   onAssistantResponse?(response: ChatResponse, round: number, durationMs: number): void | Promise<void>;
   onToolCall?(call: ToolCall): void | Promise<void>;
@@ -75,12 +83,13 @@ export class AgentAbortError extends Error {
 export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
   const maxToolRounds = options.maxToolRounds ?? 8;
   const maxToolResultLength = options.maxToolResultLength ?? 50_000;
-  const tools = options.tools ?? options.extensionRegistry.getTools().map(tool => ({
-    name: tool.name,
-    description: tool.description,
-    parameters: tool.parameters ?? { type: 'object', properties: {} },
-  }));
-  const enabledToolNames = new Set(tools.map(tool => tool.name.toLowerCase()));
+  const defaultTools = options.tools ?? options.extensionRegistry.getTools()
+    .filter(tool => isDeclaredToolExposure(agentToolExposure(tool)))
+    .map(tool => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters ?? { type: 'object', properties: {} },
+    }));
   const effectiveMessages = (): Message[] => options.sessionManager.getEffectiveContext(options.sessionId)
     .filter(entry => entry.type === 'message')
     .map(entry => ({
@@ -110,6 +119,8 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
   for (let round = 0; round < maxToolRounds; round++) {
     throwIfAborted();
     await options.onTurnStart?.(round);
+    const tools = options.resolveTools?.() ?? defaultTools;
+    const enabledToolNames = new Set(tools.map(tool => tool.name.toLowerCase()));
     const startedAt = Date.now();
     const response = await options.streamTurn(messages, tools, round);
     throwIfAborted();
@@ -160,6 +171,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       const toolStartedAt = Date.now();
       let content: string;
       let isError = false;
+      let activatedTools: string[] | undefined;
       try {
         const normalizedToolName = call.name.toLowerCase();
         if (!enabledToolNames.has(normalizedToolName)) {
@@ -175,6 +187,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
             ));
         content = options.redactText?.(result.content) ?? result.content;
         isError = Boolean(result.isError);
+        if (!isError) activatedTools = options.getActivatedTools?.(call.name, result);
       } catch (error) {
         isError = true;
         const message = error instanceof Error ? error.message : String(error);
@@ -202,6 +215,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         name: call.name,
         isError,
         durationMs,
+        ...(activatedTools?.length ? { metadata: toolSearchActivationMetadata(activatedTools) } : {}),
       }, { signal: options.signal });
       const toolResult: ToolExecutionResult = {
         call,
@@ -210,6 +224,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         isError,
         durationMs,
         truncated,
+        ...(activatedTools?.length ? { activatedTools: [...activatedTools] } : {}),
       };
       toolResults.push(toolResult);
       await options.onToolResult?.(toolResult);

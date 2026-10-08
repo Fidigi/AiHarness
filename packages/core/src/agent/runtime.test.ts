@@ -54,6 +54,40 @@ class DynamicToolProvider extends AiProvider {
   }
 }
 
+class DeferredToolProvider extends AiProvider {
+  declarations: string[][] = [];
+
+  constructor() { super({ type: 'mock' as never }); }
+  validateConfig(): boolean { return true; }
+  async chat(): Promise<ChatResponse> { return { content: 'unused' }; }
+  async streamChat(
+    messages: Message[],
+    _onChunk: (chunk: string) => void,
+    onComplete?: (response?: ChatResponse) => void,
+    _onError?: (error: Error) => void,
+    options?: ChatOptions,
+  ): Promise<void> {
+    const declarations = options?.tools?.map(tool => tool.name) ?? [];
+    this.declarations.push(declarations);
+    const toolMessages = messages.filter(message => message.role === 'tool');
+    if (toolMessages.length === 0) {
+      onComplete?.({
+        content: '',
+        toolCalls: [{ id: 'search-call', name: 'tool_search', input: { query: 'product documentation' } }],
+      });
+      return;
+    }
+    if (toolMessages.length === 1) {
+      onComplete?.({
+        content: '',
+        toolCalls: [{ id: 'lookup-call', name: 'mcp__docs__lookup', input: { query: 'core' } }],
+      });
+      return;
+    }
+    onComplete?.({ content: 'Deferred MCP complete' });
+  }
+}
+
 class RetryProvider extends AiProvider {
   attempts = 0;
   constructor() { super({ type: 'mock' as never }); }
@@ -446,6 +480,80 @@ describe('AgentRuntime', () => {
     expect(sessionManager.get(session.id)?.messages[2]).toMatchObject({
       name: 'mcp__docs__lookup', content: 'found in core', isError: false,
     });
+  });
+
+  it('discovers deferred MCP tools for the next turn and restores activation after a fork', async () => {
+    const provider = new DeferredToolProvider();
+    const sessionManager = new SessionManager();
+    const session = await sessionManager.create({ cwd: process.cwd() });
+    const extensionRegistry = new ExtensionRegistry();
+    extensionRegistry.attachSessionManager(sessionManager);
+    const callTool = vi.fn(async () => ({ content: 'found deferred documentation' }));
+    const deferredTool = {
+      name: 'mcp__docs__lookup',
+      description: '[MCP docs] Search product documentation',
+      parameters: { type: 'object', properties: { query: { type: 'string' } } },
+      extensionId: 'builtin:mcp' as const,
+      exposure: 'deferred' as const,
+      namespace: { name: 'mcp__docs', description: 'Documentation server' },
+      readOnly: true,
+      mcp: { scope: 'global' as const, server: 'docs', tool: 'lookup' },
+      execute: callTool,
+    };
+    const prepared = {
+      tools: [],
+      discoverableTools: [deferredTool],
+      hasPotentialDiscoverableTools: true,
+      currentDiscoverableTools: () => [deferredTool],
+      waitForDiscoverableTools: vi.fn(async () => [deferredTool]),
+      has: (name: string) => name.toLowerCase() === deferredTool.name,
+      execute: vi.fn(async (_name: string, input: unknown) => callTool(input)),
+    };
+    const mcpHost = {
+      prepareForPrompt: vi.fn(async () => prepared),
+      getPreparedTools: vi.fn(() => prepared),
+      finishPrompt: vi.fn(),
+      releaseSession: vi.fn(async () => undefined),
+    } as unknown as McpSessionHost;
+    const runtime = new AgentRuntime({
+      sessionManager,
+      extensionRegistry,
+      resolveProvider: () => provider,
+      isProjectTrusted: () => true,
+      mcpHost,
+    });
+
+    const started = await runtime.start({
+      sessionId: session.id,
+      cwd: process.cwd(),
+      provider: 'mock',
+      input: 'look up the product documentation',
+    });
+    await runtime.wait(started.id);
+
+    expect(provider.declarations).toEqual([
+      ['tool_search'],
+      ['tool_search', deferredTool.name],
+      ['tool_search', deferredTool.name],
+    ]);
+    expect(prepared.waitForDiscoverableTools).toHaveBeenCalledOnce();
+    expect(prepared.execute).toHaveBeenCalledWith(
+      deferredTool.name,
+      { query: 'core' },
+      expect.objectContaining({ currentSessionId: session.id }),
+      expect.any(AbortSignal),
+    );
+    const searchResult = sessionManager.get(session.id)?.messages.find(message => message.name === 'tool_search');
+    expect(searchResult?.metadata).toEqual({ toolSearch: { loaded: [deferredTool.name] } });
+
+    const fork = await sessionManager.forkSession(session.id, undefined, 'Deferred branch');
+    expect(fork).toBeTruthy();
+    expect(runtime.getTools('default', undefined, undefined, fork!.id).map(tool => tool.name))
+      .toEqual(['tool_search', deferredTool.name]);
+    const beforeActivation = await sessionManager.forkSession(session.id, 0, 'Before activation');
+    expect(beforeActivation).toBeTruthy();
+    expect(runtime.getTools('default', undefined, undefined, beforeActivation!.id).map(tool => tool.name))
+      .toEqual(['tool_search']);
   });
 
   it('does not persist an unsent prompt when Stop aborts the MCP startup wait', async () => {

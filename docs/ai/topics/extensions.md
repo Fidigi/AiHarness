@@ -45,6 +45,8 @@ Core PluginService -> install/locked state/filtered inventory/bounded batch stat
 | `before` | `before:agent`, `before:provider`, or `before:tool` transform/cancellation hook |
 | `on` | Session/message/compaction lifecycle listener |
 
+A registered tool can set `exposure` to `direct`/`model-only` for immediate declaration, `deferred`/`codemode` for schema-free discovery through `tool_search`, or `hidden` to remain unavailable to model dispatch. Optional namespace metadata enriches ranking only. Exposure does not grant trust, authorization, or sandboxing: normal selection policy, declaration checks, hooks, cancellation, and runtime guards still apply, and static selected tools win dynamic name collisions.
+
 Prompts, package skills, and themes are discovered resources, not `ExtensionAPI` registrations. Web interaction requests use `ExtensionRuntimeContext.requestInteraction`; they are suspended runtime requests rather than executable browser components.
 
 ## Critical Flows
@@ -101,6 +103,7 @@ Never accept extension-provided React, DOM, script, style, or arbitrary HTML. Fo
 ## Associated Tests
 
 - `packages/core/src/extensions/extension-registry.test.ts` — API version, ownership, hooks, tools, providers, UI and atomic replacement
+- `packages/core/src/tools/tool-search.test.ts` — deferred exposure, BM25 ranking, activation provenance, policy revalidation and branch restoration
 - `packages/cli/src/extensions/extension-loader.test.ts` — explicit path parsing and loader behavior
 - `packages/core/src/plugins/plugin-service.test.ts` — source validation, filters, trust, bounded one-write group activation, partial outcomes, concurrency, inventory and transactional package state
 - `packages/cli/src/cli/{package-command,invocation}.test.ts` — strict command parsing and real package resource startup

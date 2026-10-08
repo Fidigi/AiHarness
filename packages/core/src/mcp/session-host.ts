@@ -44,14 +44,16 @@ export const MCP_RUNTIME_MAX_OUTPUT_CHARS = 64 * 1024;
 export const MCP_RUNTIME_MAX_SERVERS = 32;
 export const MCP_RUNTIME_MAX_TOOLS = 1_000;
 
+const MCP_RUNTIME_BINDING_HISTORY_MAX = MCP_RUNTIME_MAX_TOOLS * 8;
 const MCP_RUNTIME_STDERR_BYTES = 64 * 1024;
 const MCP_RUNTIME_DESCRIPTION_CHARS = 8 * 1024;
 const MCP_RUNTIME_SCHEMA_BYTES = 64 * 1024;
 const MCP_RUNTIME_STATUS_LIMIT = 500;
 const MCP_TOOL_NAME_MAX = 64;
 
-type HostedTool = ExtensionTool & {
+export type HostedMcpTool = ExtensionTool & {
   extensionId: typeof MCP_EXTENSION_ID;
+  exposure: McpExposure;
   readOnly: boolean;
   mcp: { scope: 'global' | 'project'; server: string; tool: string };
 };
@@ -115,7 +117,16 @@ export interface PrepareMcpSessionOptions {
 }
 
 export interface PreparedMcpTools {
-  tools: HostedTool[];
+  /** Connected direct tools available without discovery. */
+  tools: HostedMcpTool[];
+  /** Connected codemode/deferred tools whose schemas remain undeclared. */
+  discoverableTools?: HostedMcpTool[];
+  /** True while an eligible indirect server is connected or still resolving. */
+  hasPotentialDiscoverableTools?: boolean;
+  /** Fresh connected indirect metadata after tool-list notifications. */
+  currentDiscoverableTools?(): HostedMcpTool[];
+  /** Wait abortably for indirect connection attempts only after explicit discovery. */
+  waitForDiscoverableTools?(signal?: AbortSignal): Promise<HostedMcpTool[]>;
   has(name: string): boolean;
   execute(
     name: string,
@@ -151,6 +162,12 @@ interface BoundTool {
   record: ConnectionRecord;
   remote: RemoteTool;
   requireReadOnly: boolean;
+}
+
+interface PreparedToolSnapshot {
+  tools: HostedMcpTool[];
+  discoverableTools: HostedMcpTool[];
+  bindings: Map<string, BoundTool>;
 }
 
 function boundedInteger(value: number | undefined, fallback: number): number {
@@ -676,14 +693,24 @@ export class McpSessionHost {
     return record;
   }
 
-  private buildPreparedTools(session: HostedSession | undefined, preset?: Session['toolPreset']): PreparedMcpTools {
-    const candidates: Array<{ record: ConnectionRecord; remote: RemoteTool; base: string }> = [];
+  private buildToolSnapshot(session: HostedSession | undefined, preset?: Session['toolPreset']): PreparedToolSnapshot {
+    const candidates: Array<{
+      record: ConnectionRecord;
+      connection: McpHostConnection;
+      remote: RemoteTool;
+      base: string;
+    }> = [];
     if (preset !== 'chat-only') {
       outer: for (const record of session?.records.values() ?? []) {
-        if (record.exposure !== 'direct' || record.state !== 'connected' || !record.connection) continue;
+        if (record.state !== 'connected' || !record.connection) continue;
         for (const remote of record.tools) {
           if (preset === 'read-only' && !remote.readOnly) continue;
-          candidates.push({ record, remote, base: toolBaseName(record.target.name, remote.name) });
+          candidates.push({
+            record,
+            connection: record.connection,
+            remote,
+            base: toolBaseName(record.target.name, remote.name),
+          });
           if (candidates.length >= MCP_RUNTIME_MAX_TOOLS) break outer;
         }
       }
@@ -691,7 +718,8 @@ export class McpSessionHost {
     const counts = new Map<string, number>();
     for (const candidate of candidates) counts.set(candidate.base, (counts.get(candidate.base) ?? 0) + 1);
     const bindings = new Map<string, BoundTool>();
-    const tools: HostedTool[] = [];
+    const tools: HostedMcpTool[] = [];
+    const discoverableTools: HostedMcpTool[] = [];
     for (const candidate of candidates) {
       const needsHash = (counts.get(candidate.base) ?? 0) > 1 || candidate.base.length > MCP_TOOL_NAME_MAX;
       const suffix = `__${toolHash(candidate.record.target.scope, candidate.record.target.name, candidate.remote.remoteName)}`;
@@ -704,11 +732,22 @@ export class McpSessionHost {
         remote: candidate.remote,
         requireReadOnly: preset === 'read-only',
       });
-      tools.push({
+      const tool: HostedMcpTool = {
         name,
         description: `[MCP ${candidate.record.target.name}] ${candidate.remote.description}`,
         parameters: candidate.remote.parameters,
         extensionId: MCP_EXTENSION_ID,
+        exposure: candidate.record.exposure,
+        namespace: {
+          name: `mcp__${sanitizeToolPart(candidate.record.target.name)}`,
+          description: candidate.record.target.config.description
+            ? safeText(
+                candidate.record.target.config.description,
+                candidate.connection.redact,
+                MCP_RUNTIME_DESCRIPTION_CHARS,
+              )
+            : `MCP server ${candidate.record.target.name}`,
+        },
         readOnly: candidate.remote.readOnly,
         mcp: {
           scope: candidate.record.target.scope,
@@ -716,14 +755,57 @@ export class McpSessionHost {
           tool: candidate.remote.name,
         },
         execute: (input, context, signal) => this.executeBinding(name, bindings, input, context, signal),
-      });
+      };
+      if (candidate.record.exposure === 'direct') tools.push(tool);
+      else discoverableTools.push(tool);
     }
+    return { tools, discoverableTools, bindings };
+  }
+
+  private buildPreparedTools(session: HostedSession | undefined, preset?: Session['toolPreset']): PreparedMcpTools {
+    const initial = this.buildToolSnapshot(session, preset);
+    const hasPotentialDiscoverableTools = preset !== 'chat-only' && [...(session?.records.values() ?? [])]
+      .some(record => record.exposure !== 'direct'
+        && (record.state === 'connecting' || record.state === 'connected'));
+    const knownBindings = new Map(initial.bindings);
+    const current = (): PreparedToolSnapshot => {
+      const snapshot = this.buildToolSnapshot(session, preset);
+      for (const [name, binding] of snapshot.bindings) {
+        if (knownBindings.has(name)) continue;
+        if (knownBindings.size < MCP_RUNTIME_BINDING_HISTORY_MAX) knownBindings.set(name, binding);
+        else snapshot.bindings.delete(name);
+      }
+      return {
+        ...snapshot,
+        tools: snapshot.tools.filter(tool => snapshot.bindings.has(tool.name)),
+        discoverableTools: snapshot.discoverableTools.filter(tool => snapshot.bindings.has(tool.name)),
+      };
+    };
     return {
-      tools,
-      has: name => bindings.has(name.toLowerCase()),
-      execute: (name, input, context, signal) => this.executeBinding(
-        name.toLowerCase(), bindings, input, context, signal,
-      ),
+      tools: initial.tools,
+      discoverableTools: initial.discoverableTools,
+      hasPotentialDiscoverableTools,
+      currentDiscoverableTools: () => current().discoverableTools,
+      waitForDiscoverableTools: async signal => {
+        if (!session || session.released || preset === 'chat-only') return [];
+        const pending = [...session.records.values()]
+          .filter(record => record.exposure !== 'direct')
+          .map(record => record.ready);
+        if (pending.length > 0) {
+          const settled = Promise.allSettled(pending).then(() => undefined);
+          await (signal ? Promise.race([settled, waitForAbort(signal)]) : settled);
+        }
+        this.assertSessionActive(session, signal);
+        return current().discoverableTools;
+      },
+      has: name => {
+        current();
+        return knownBindings.has(name.toLowerCase());
+      },
+      execute: (name, input, context, signal) => {
+        current();
+        return this.executeBinding(name.toLowerCase(), knownBindings, input, context, signal);
+      },
     };
   }
 

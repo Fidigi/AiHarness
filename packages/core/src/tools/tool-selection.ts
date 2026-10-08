@@ -2,12 +2,35 @@ import type { ChatToolDefinition } from '../providers/index.js';
 import type { Session } from '../types/index.js';
 import { READ_ONLY_CODING_TOOL_NAMES } from './workspace-tools.js';
 
+/** How a registered tool reaches a model. Missing exposure retains the historical direct behavior. */
+export type AgentToolExposure = 'direct' | 'model-only' | 'codemode' | 'deferred' | 'hidden';
+
+export interface AgentToolNamespace {
+  name: string;
+  description?: string;
+  instructions?: string;
+}
+
 /** Minimum shape needed to apply one selection policy to built-in and extension tools. */
 export interface RegisteredAgentTool {
   name: string;
   description: string;
   parameters?: Record<string, unknown>;
   extensionId: string;
+  exposure?: AgentToolExposure;
+  namespace?: AgentToolNamespace;
+}
+
+export function agentToolExposure(tool: Pick<RegisteredAgentTool, 'exposure'>): AgentToolExposure {
+  return tool.exposure ?? 'direct';
+}
+
+export function isDeclaredToolExposure(exposure: AgentToolExposure): boolean {
+  return exposure === 'direct' || exposure === 'model-only';
+}
+
+export function isSearchableToolExposure(exposure: AgentToolExposure): boolean {
+  return exposure === 'codemode' || exposure === 'deferred';
 }
 
 export interface ToolSelectionOptions {
@@ -37,6 +60,7 @@ export const READ_ONLY_AGENT_TOOL_NAMES = [
   ...READ_ONLY_CODING_TOOL_NAMES,
   'load_skill',
   'spawn_subagent',
+  'tool_search',
 ] as const;
 
 function names(values: readonly string[] | undefined): Set<string> | undefined {

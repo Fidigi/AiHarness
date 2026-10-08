@@ -44,12 +44,17 @@ import { parseResourceCommandLine, type ResourceManager } from '../resources/res
 
 export interface RpcDynamicTools {
   tools: ChatToolDefinition[];
+  /** Refresh declarations after a discovery tool activates matches. */
+  resolveTools?(): ChatToolDefinition[];
   execute(
     name: string,
     input: unknown,
     context: ExtensionRuntimeContext,
     signal?: AbortSignal,
   ): ExtensionToolResult | Promise<ExtensionToolResult>;
+  /** Hosted tools need the registry hook adapter; registry-owned deferred tools do not. */
+  isHosted?(name: string): boolean;
+  getActivatedTools?(name: string, result: ExtensionToolResult): string[] | undefined;
   release?(): void | Promise<void>;
 }
 
@@ -1015,8 +1020,13 @@ export class RpcController {
           parameters: tool.parameters ?? { type: 'object', properties: {} },
         }));
         const staticNames = new Set(staticTools.map(tool => tool.name.toLowerCase()));
-        const uniqueDynamicTools = dynamicTools?.tools.filter(tool => !staticNames.has(tool.name.toLowerCase())) ?? [];
-        const dynamicNames = new Set(uniqueDynamicTools.map(tool => tool.name.toLowerCase()));
+        const resolveTools = (): ChatToolDefinition[] => {
+          const dynamicDefinitions = dynamicTools?.resolveTools?.() ?? dynamicTools?.tools ?? [];
+          return [
+            ...staticTools,
+            ...dynamicDefinitions.filter(tool => !staticNames.has(tool.name.toLowerCase())),
+          ];
+        };
         await this.events.startAgent(nextAgentPrompt.content, nextAgentPrompt.blocks);
         await this.context.extensionRegistry.emit('agent:start', {
           sessionId: this.currentSessionId,
@@ -1040,20 +1050,28 @@ export class RpcController {
             sessionManager: this.context.sessionManager,
             sessionId: this.currentSessionId,
             extensionRegistry: this.context.extensionRegistry,
-            tools: [...staticTools, ...uniqueDynamicTools],
-            executeTool: (name, input, context, executionSignal) => (
-              dynamicTools && dynamicNames.has(name.toLowerCase())
-                ? this.context.extensionRegistry.executeHostedTool(
-                    name,
-                    input,
-                    context,
-                    (hostInput, hostContext, hostSignal) => dynamicTools.execute(
-                      name, hostInput, hostContext, hostSignal,
-                    ),
-                    executionSignal,
-                  )
-                : this.context.extensionRegistry.executeTool(name, input, context, executionSignal)
-            ),
+            tools: resolveTools(),
+            resolveTools,
+            executeTool: (name, input, context, executionSignal) => {
+              const dynamicNames = new Set(resolveTools()
+                .filter(tool => !staticNames.has(tool.name.toLowerCase()))
+                .map(tool => tool.name.toLowerCase()));
+              if (dynamicTools && dynamicNames.has(name.toLowerCase())) {
+                return (dynamicTools.isHosted?.(name) ?? true)
+                  ? this.context.extensionRegistry.executeHostedTool(
+                      name,
+                      input,
+                      context,
+                      (hostInput, hostContext, hostSignal) => dynamicTools.execute(
+                        name, hostInput, hostContext, hostSignal,
+                      ),
+                      executionSignal,
+                    )
+                  : dynamicTools.execute(name, input, context, executionSignal);
+              }
+              return this.context.extensionRegistry.executeTool(name, input, context, executionSignal);
+            },
+            getActivatedTools: (name, result) => dynamicTools?.getActivatedTools?.(name, result),
             toolContext: {
               ...this.context.toolContext,
               currentSessionId: this.currentSessionId,

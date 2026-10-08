@@ -73,6 +73,45 @@ describe('McpSessionHost', () => {
     await host.shutdown();
   });
 
+  it('connects deferred servers in the background and reveals schemas only on explicit discovery', async () => {
+    const { agentDir, project, trust } = await workspace();
+    await writeConfig(agentDir, {
+      direct: { command: 'node', exposure: 'direct' },
+      docs: { command: 'node', exposure: 'deferred' },
+      code: { command: 'node', exposure: 'codemode' },
+    });
+    let releaseIndirect!: () => void;
+    const indirectGate = new Promise<void>(resolve => { releaseIndirect = resolve; });
+    const connect = vi.fn<McpHostConnect>(async target => {
+      if (target.name !== 'direct') await indirectGate;
+      return {
+        tools: [{
+          name: 'lookup', remoteName: 'lookup', description: 'Search product documentation',
+          parameters: { type: 'object' }, readOnly: true,
+        }],
+        redact: value => value,
+        callTool: async () => ({ content: [{ type: 'text', text: `${target.name}:ok` }] }),
+        close: async () => undefined,
+      };
+    });
+    const host = new McpSessionHost({ agentDir, trustManager: trust, startupWaitMs: 1_000, connect });
+
+    const prepared = await host.prepareForPrompt({ sessionId: 'deferred', cwd: project });
+    expect(prepared.tools.map(tool => tool.name)).toEqual(['mcp__direct__lookup']);
+    expect(prepared.currentDiscoverableTools?.()).toEqual([]);
+    expect(prepared.hasPotentialDiscoverableTools).toBe(true);
+
+    releaseIndirect();
+    const discoverable = await prepared.waitForDiscoverableTools?.();
+    expect(discoverable?.map(tool => ({ name: tool.name, exposure: tool.exposure }))).toEqual([
+      { name: 'mcp__docs__lookup', exposure: 'deferred' },
+      { name: 'mcp__code__lookup', exposure: 'codemode' },
+    ]);
+    const result = await prepared.execute('mcp__docs__lookup', {}, context);
+    expect(result.content).toBe('docs:ok');
+    await host.shutdown();
+  });
+
   it('reuses unchanged connections, closes disabled entries, and disambiguates normalized name collisions', async () => {
     const { agentDir, project, trust } = await workspace();
     await writeConfig(agentDir, {

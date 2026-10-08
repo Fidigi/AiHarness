@@ -5,12 +5,17 @@ import type {
   ExtensionInteractionResponse,
   ExtensionRegistry,
   ExtensionRuntimeContext,
+  ExtensionToolResult,
 } from '../extensions/extension-registry.js';
 import type { Message, MessageContentBlock, Session } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import type { AgentQueueMode } from '../config/agent-settings.js';
 import type { McpSessionHost, PreparedMcpTools } from '../mcp/session-host.js';
-import { selectRegisteredTools, toChatToolDefinitions } from '../tools/tool-selection.js';
+import { toChatToolDefinitions } from '../tools/tool-selection.js';
+import {
+  collectToolSearchLoadedNames,
+  createAgentToolLoadout,
+} from '../tools/tool-search.js';
 import { streamProviderTurn } from './provider-turn.js';
 import { AgentAbortError, runToolLoop } from './tool-loop.js';
 import {
@@ -85,9 +90,14 @@ interface PendingInteraction {
 }
 
 interface PreparedRunTools {
-  definitions: ChatToolDefinition[];
-  mcp?: PreparedMcpTools;
-  enabledMcpNames: Set<string>;
+  definitions(): ChatToolDefinition[];
+  execute(
+    name: string,
+    input: unknown,
+    context: ExtensionRuntimeContext,
+    signal?: AbortSignal,
+  ): Promise<ExtensionToolResult>;
+  activatedTools(name: string, result: ExtensionToolResult): string[] | undefined;
 }
 
 function invalidInteractionResponse(message: string): never {
@@ -505,20 +515,12 @@ export class AgentRuntime {
       extensionRegistry: this.extensionRegistry,
       toolContext: await this.toolContext(run, provider, request),
       provider: run.snapshot.provider,
-      tools: preparedTools.definitions,
-      executeTool: (name, input, context, signal) => (
-        preparedTools.mcp && preparedTools.enabledMcpNames.has(name.toLowerCase())
-          ? this.extensionRegistry.executeHostedTool(
-              name,
-              input,
-              context,
-              (hostInput, hostContext, hostSignal) => preparedTools.mcp!.execute(
-                name, hostInput, hostContext, hostSignal,
-              ),
-              signal,
-            )
-          : this.extensionRegistry.executeTool(name, input, context, signal)
+      tools: preparedTools.definitions(),
+      resolveTools: () => preparedTools.definitions(),
+      executeTool: (name, input, context, signal) => preparedTools.execute(
+        name, input, context, signal,
       ),
+      getActivatedTools: (name, result) => preparedTools.activatedTools(name, result),
       maxToolRounds: request.maxToolRounds,
       signal: run.controller.signal,
       redactText: this.redactText,
@@ -691,59 +693,102 @@ export class AgentRuntime {
       }));
   }
 
-  /** Return registered tools plus MCP tools already prepared for this session. */
+  /** Return declarations currently active for a session, including branch-restored search matches. */
   getTools(
     preset: Session['toolPreset'],
     allowedTools?: string[],
     allowedExtensions?: string[],
     sessionId?: string,
   ): ReturnType<ExtensionRegistry['getTools']> {
-    const registered = selectRegisteredTools(this.extensionRegistry.getTools(), {
-      preset,
-      allowedTools,
-      allowedExtensions,
-    });
     const prepared = sessionId ? this.mcpHost?.getPreparedTools(sessionId, preset) : undefined;
-    const dynamic = selectRegisteredTools(prepared?.tools ?? [], {
-      preset: preset === 'read-only' ? 'default' : preset,
-      allowedTools,
-      allowedExtensions,
+    return this.createToolLoadout(
+      sessionId,
+      { preset, allowedTools, allowedExtensions },
+      prepared,
+    ).getTools();
+  }
+
+  private createToolLoadout(
+    sessionId: string | undefined,
+    selection: {
+      preset?: Session['toolPreset'];
+      allowedTools?: string[];
+      excludedTools?: string[];
+      allowedExtensions?: string[];
+    },
+    mcp?: PreparedMcpTools,
+    initialLoadedTools?: Iterable<string>,
+  ) {
+    const loaded = initialLoadedTools ?? (sessionId
+      ? collectToolSearchLoadedNames(this.sessionManager.getEffectiveContext(sessionId))
+      : []);
+    return createAgentToolLoadout({
+      staticTools: this.extensionRegistry.getTools(),
+      selection,
+      initialLoadedTools: loaded,
+      dynamicSource: mcp ? {
+        directTools: mcp.tools,
+        hasPotentialSearchableTools: mcp.hasPotentialDiscoverableTools ?? false,
+        currentSearchableTools: () => mcp.currentDiscoverableTools?.() ?? mcp.discoverableTools ?? [],
+        waitForSearchableTools: signal => mcp.waitForDiscoverableTools?.(signal)
+          ?? Promise.resolve(mcp.discoverableTools ?? []),
+        has: name => mcp.has(name),
+      } : undefined,
     });
-    const registeredNames = new Set(registered.map(tool => tool.name));
-    return [...registered, ...dynamic.filter(tool => !registeredNames.has(tool.name))];
   }
 
   private async prepareRunTools(
     run: ActiveRun,
     request: StartAgentRunRequest,
   ): Promise<PreparedRunTools> {
-    const registered = selectRegisteredTools(this.extensionRegistry.getTools(), {
-      preset: request.toolPreset,
-      allowedTools: request.allowedTools,
-      excludedTools: request.excludedTools,
-      allowedExtensions: request.allowedExtensions,
-    });
-    if (!this.mcpHost || request.toolPreset === 'chat-only' || request.allowedTools?.length === 0) {
-      return { definitions: toChatToolDefinitions(registered), enabledMcpNames: new Set() };
+    let mcp: PreparedMcpTools | undefined;
+    if (this.mcpHost && request.toolPreset !== 'chat-only' && request.allowedTools?.length !== 0) {
+      mcp = await this.mcpHost.prepareForPrompt({
+        sessionId: run.snapshot.sessionId,
+        cwd: run.snapshot.cwd,
+        preset: request.toolPreset,
+        signal: run.controller.signal,
+      });
     }
-    const mcp = await this.mcpHost.prepareForPrompt({
-      sessionId: run.snapshot.sessionId,
-      cwd: run.snapshot.cwd,
+    const session = this.sessionManager.get(run.snapshot.sessionId);
+    const loadedTools = collectToolSearchLoadedNames(
+      await this.sessionManager.getRawEntries(run.snapshot.sessionId),
+      session?.activeLeafId,
+    );
+    const loadout = this.createToolLoadout(run.snapshot.sessionId, {
       preset: request.toolPreset,
-      signal: run.controller.signal,
-    });
-    const selected = selectRegisteredTools(mcp.tools, {
-      preset: request.toolPreset === 'read-only' ? 'default' : request.toolPreset,
       allowedTools: request.allowedTools,
       excludedTools: request.excludedTools,
       allowedExtensions: request.allowedExtensions,
-    });
-    const registeredNames = new Set(registered.map(tool => tool.name));
-    const unique = selected.filter(tool => !registeredNames.has(tool.name));
+    }, mcp, loadedTools);
     return {
-      definitions: toChatToolDefinitions([...registered, ...unique]),
-      mcp,
-      enabledMcpNames: new Set(unique.map(tool => tool.name)),
+      definitions: () => toChatToolDefinitions(loadout.getTools()),
+      execute: (name, input, context, signal) => {
+        if (loadout.isToolSearch(name)) {
+          return this.extensionRegistry.executeHostedTool(
+            name,
+            input,
+            context,
+            (hostInput, hostContext, hostSignal) => loadout.executeToolSearch(
+              hostInput, hostContext, hostSignal,
+            ),
+            signal,
+          );
+        }
+        if (mcp && loadout.isDynamicTool(name)) {
+          return this.extensionRegistry.executeHostedTool(
+            name,
+            input,
+            context,
+            (hostInput, hostContext, hostSignal) => mcp!.execute(
+              name, hostInput, hostContext, hostSignal,
+            ),
+            signal,
+          );
+        }
+        return this.extensionRegistry.executeTool(name, input, context, signal);
+      },
+      activatedTools: (name, result) => loadout.activatedTools(name, result),
     };
   }
 

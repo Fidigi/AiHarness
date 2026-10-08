@@ -3,6 +3,7 @@ import { ProviderFactory } from '../providers/index.js';
 import { AI_HARNESS_EXTENSION_API_VERSION } from '../public-api-version.js';
 import type { Message, ProviderConfig, Session } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
+import type { AgentToolExposure, AgentToolNamespace } from '../tools/tool-selection.js';
 import { EventEmitter, type EventHandler, type EventMap } from '../utils/event-emitter.js';
 
 export type ExtensionLogLevel = 'info' | 'success' | 'warning' | 'error';
@@ -81,6 +82,10 @@ export interface ExtensionTool<TInput = Record<string, unknown>, TDetails = unkn
   name: string;
   description: string;
   parameters?: Record<string, unknown>;
+  /** Direct by default; codemode/deferred tools are loaded through tool_search. */
+  exposure?: AgentToolExposure;
+  /** Optional metadata used by deferred ranking and future nested runtimes. */
+  namespace?: AgentToolNamespace;
   execute(
     input: TInput,
     context: ExtensionRuntimeContext,

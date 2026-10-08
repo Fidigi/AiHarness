@@ -2,6 +2,9 @@ import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import type { Readable } from 'node:stream';
 import {
+  agentToolExposure,
+  collectToolSearchLoadedNames,
+  createAgentToolLoadout,
   CredentialRedactor,
   DEFAULT_CODING_TOOL_NAMES,
   ExtensionRegistry,
@@ -23,7 +26,9 @@ import {
   resolveAgentThinkingLevel,
   selectAgentResourcePaths,
   selectRegisteredTools,
+  isDeclaredToolExposure,
   toChatToolDefinitions,
+  TOOL_SEARCH_TOOL_NAME,
   unknownToolNames,
   type AiProvider,
   type ChatResponse,
@@ -418,7 +423,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     }
     const registeredTools = extensionRegistry.getTools();
     const unknownTools = unknownToolNames(registeredTools, options.tools, options.excludeTools)
-      .filter(name => !name.startsWith('mcp__'));
+      .filter(name => !name.startsWith('mcp__') && name !== TOOL_SEARCH_TOOL_NAME);
     if (unknownTools.length) throw new Error(`Unknown tool name(s): ${unknownTools.join(', ')}.`);
     const configuredDefaults = resolveAgentDefaultTools(
       settingsResolution.settings.defaultTools,
@@ -433,7 +438,8 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       noBuiltInTools: options.noBuiltinTools,
       noTools: options.noTools,
     };
-    const selectedTools = selectRegisteredTools(registeredTools, toolSelectionOptions);
+    const selectedStaticTools = selectRegisteredTools(registeredTools, toolSelectionOptions);
+    const selectedTools = selectedStaticTools.filter(tool => isDeclaredToolExposure(agentToolExposure(tool)));
 
     const startupSession = await resolveStartupSession({
       sessionManager,
@@ -475,18 +481,47 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       prepareDynamicTools: async (sessionId, signal) => {
         try {
           const session = sessionManager.get(sessionId);
-          const prepared = await mcpHost!.prepareForPrompt({
-            sessionId,
-            cwd: session?.cwd ?? canonicalCwd,
-            preset: session?.toolPreset,
-            signal,
-          });
-          const selected = selectRegisteredTools(prepared.tools, toolSelectionOptions);
-          return {
-            tools: toChatToolDefinitions(selected),
-            execute: (name, input, context, executionSignal) => prepared.execute(
-              name, input, context, executionSignal,
+          const suppressAllTools = options.tools?.length === 0
+            || (options.noTools && options.tools === undefined);
+          const prepared = session?.toolPreset === 'chat-only' || suppressAllTools
+            ? mcpHost!.getPreparedTools(sessionId, 'chat-only')
+            : await mcpHost!.prepareForPrompt({
+                sessionId,
+                cwd: session?.cwd ?? canonicalCwd,
+                preset: session?.toolPreset,
+                signal,
+              });
+          const loadout = createAgentToolLoadout({
+            staticTools: registeredTools,
+            dynamicSource: {
+              directTools: prepared.tools,
+              hasPotentialSearchableTools: prepared.hasPotentialDiscoverableTools ?? false,
+              currentSearchableTools: () => prepared.currentDiscoverableTools?.()
+                ?? prepared.discoverableTools ?? [],
+              waitForSearchableTools: searchSignal => prepared.waitForDiscoverableTools?.(searchSignal)
+                ?? Promise.resolve(prepared.discoverableTools ?? []),
+              has: name => prepared.has(name),
+            },
+            selection: { ...toolSelectionOptions, preset: session?.toolPreset },
+            initialLoadedTools: collectToolSearchLoadedNames(
+              await sessionManager.getRawEntries(sessionId),
+              session?.activeLeafId,
             ),
+          });
+          return {
+            tools: toChatToolDefinitions(loadout.getTools()),
+            resolveTools: () => toChatToolDefinitions(loadout.getTools()),
+            execute: (name, input, context, executionSignal) => {
+              if (loadout.isToolSearch(name)) {
+                return loadout.executeToolSearch(input, context, executionSignal);
+              }
+              if (loadout.isDynamicTool(name)) {
+                return prepared.execute(name, input, context, executionSignal);
+              }
+              return extensionRegistry.executeTool(name, input, context, executionSignal);
+            },
+            isHosted: name => loadout.isToolSearch(name) || loadout.isDynamicTool(name),
+            getActivatedTools: (name, result) => loadout.activatedTools(name, result),
             release: () => signal.aborted
               ? mcpHost!.releaseSession(sessionId)
               : mcpHost!.finishPrompt(sessionId),
