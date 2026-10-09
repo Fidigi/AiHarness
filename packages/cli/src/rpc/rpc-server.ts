@@ -5,6 +5,7 @@ import {
   agentToolExposure,
   collectToolSearchLoadedNames,
   createAgentToolLoadout,
+  CODEMODE_TOOL_NAME,
   createMcpOAuthProviderFactory,
   CredentialRedactor,
   DEFAULT_CODING_TOOL_NAMES,
@@ -453,7 +454,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     }
     const registeredTools = extensionRegistry.getTools();
     const unknownTools = unknownToolNames(registeredTools, options.tools, options.excludeTools)
-      .filter(name => !name.startsWith('mcp__') && name !== TOOL_SEARCH_TOOL_NAME);
+      .filter(name => !name.startsWith('mcp__') && name !== TOOL_SEARCH_TOOL_NAME && name !== CODEMODE_TOOL_NAME);
     if (unknownTools.length) throw new Error(`Unknown tool name(s): ${unknownTools.join(', ')}.`);
     const configuredDefaults = resolveAgentDefaultTools(
       settingsResolution.settings.defaultTools,
@@ -523,6 +524,9 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
               });
           const loadout = createAgentToolLoadout({
             staticTools: registeredTools,
+            currentStaticTools: () => extensionRegistry.getTools(),
+            codemode: settingsResolution.settings.codemode,
+            redactText: value => redactor.redact(value),
             dynamicSource: {
               directTools: prepared.tools,
               hasPotentialSearchableTools: prepared.hasPotentialDiscoverableTools ?? false,
@@ -538,10 +542,12 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
               session?.activeLeafId,
             ),
           });
-          return {
-            tools: toChatToolDefinitions(loadout.getTools()),
-            resolveTools: () => toChatToolDefinitions(loadout.getTools()),
-            execute: (name, input, context, executionSignal) => {
+          const execute = (name: string, input: unknown, context: Parameters<typeof extensionRegistry.executeTool>[2], executionSignal?: AbortSignal): ReturnType<typeof extensionRegistry.executeTool> => {
+              if (loadout.isCodemode(name)) return loadout.executeCodemode(input, context,
+                (nestedName, nestedInput, nestedContext, nestedSignal) => loadout.isDynamicTool(nestedName)
+                  ? extensionRegistry.executeHostedTool(nestedName, nestedInput, nestedContext,
+                    () => execute(nestedName, nestedInput, nestedContext, nestedSignal), nestedSignal)
+                  : execute(nestedName, nestedInput, nestedContext, nestedSignal), executionSignal);
               if (loadout.isToolSearch(name)) {
                 return loadout.executeToolSearch(input, context, executionSignal);
               }
@@ -549,8 +555,13 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
                 return prepared.execute(name, input, context, executionSignal);
               }
               return extensionRegistry.executeTool(name, input, context, executionSignal);
-            },
-            isHosted: name => loadout.isToolSearch(name) || loadout.isDynamicTool(name),
+          };
+          return {
+            tools: toChatToolDefinitions(loadout.getTools()),
+            resolveTools: () => toChatToolDefinitions(loadout.getTools()),
+            execute,
+            isHosted: name => loadout.isCodemode(name) || loadout.isToolSearch(name) || loadout.isDynamicTool(name),
+            getToolResultMetadata: (name, result) => loadout.resultMetadata(name, result),
             getActivatedTools: (name, result) => loadout.activatedTools(name, result),
             release: () => signal.aborted
               ? mcpHost!.releaseSession(sessionId)

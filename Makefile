@@ -203,6 +203,10 @@ test-e2e: ## Lancer les tests e2e Playwright dans Docker (rebuild inclus)
 			docker cp "$${container}:/app/e2e/visual.spec.ts-snapshots/." e2e/visual.spec.ts-snapshots/ 2>/dev/null || true; \
 			mkdir -p e2e/settings.spec.ts-snapshots; \
 			docker cp "$${container}:/app/e2e/settings.spec.ts-snapshots/." e2e/settings.spec.ts-snapshots/ 2>/dev/null || true; \
+			mkdir -p e2e/codemode.spec.ts-snapshots; \
+			docker cp "$${container}:/app/e2e/codemode.spec.ts-snapshots/." e2e/codemode.spec.ts-snapshots/ 2>/dev/null || true; \
+			mkdir -p e2e/mcp-exposure.spec.ts-snapshots; \
+			docker cp "$${container}:/app/e2e/mcp-exposure.spec.ts-snapshots/." e2e/mcp-exposure.spec.ts-snapshots/ 2>/dev/null || true; \
 			docker rm -f "$$container" >/dev/null 2>&1 || true; \
 			docker image rm "$$image" >/dev/null 2>&1 || true; \
 			exit $$status; \

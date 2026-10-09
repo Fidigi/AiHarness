@@ -162,6 +162,34 @@ describe('MCP configuration mutations', () => {
     expect(await readFile(filePath, 'utf8')).toBe(directText);
   });
 
+  it('persists hidden and exact per-tool overrides without changing the server default or secrets', async () => {
+    const { agentDir } = await fixture();
+    const filePath = path.join(agentDir, 'mcp.json');
+    await writeFile(filePath, JSON.stringify({ mcpServers: { alpha: {
+      command: 'node', exposure: 'codemode', env: { TOKEN: 'KEEP-PRIVATE' },
+    } } }));
+    const before = await inspectMcpConfig({ agentDir });
+    const changed = await setMcpServerExposure({ agentDir, scope: 'global', name: 'alpha',
+      expectedRevision: before.files[0]!.revision!, tool: 'remote/read', exposure: 'hidden' });
+    expect(changed.changed).toBe(true);
+    const overridden = await inspectMcpConfig({ agentDir });
+    expect(overridden.servers[0]).toMatchObject({ exposure: 'codemode', toolExposure: { 'remote/read': 'hidden' } });
+    expect(JSON.parse(await readFile(filePath, 'utf8'))).toMatchObject({ mcpServers: { alpha: {
+      env: { TOKEN: 'KEEP-PRIVATE' }, exposure: 'codemode', toolExposure: { 'remote/read': 'hidden' },
+    } } });
+    const direct = await setMcpServerExposure({ agentDir, scope: 'global', name: 'alpha',
+      expectedRevision: changed.revision, tool: 'remote/read', exposure: 'direct' });
+    expect(JSON.parse(await readFile(filePath, 'utf8'))).toMatchObject({ mcpServers: { alpha: {
+      exposure: 'codemode', toolExposure: { 'remote/read': 'direct' },
+    } } });
+    await expect(setMcpServerExposure({ agentDir, scope: 'global', name: 'alpha', expectedRevision: direct.revision,
+      tool: 'bad\nname', exposure: 'hidden' })).rejects.toMatchObject({ code: 'invalid-request' });
+    await setMcpServerExposure({ agentDir, scope: 'global', name: 'alpha', expectedRevision: direct.revision, exposure: 'hidden' });
+    const hidden = await inspectMcpConfig({ agentDir });
+    expect(hidden.servers[0]).toMatchObject({ exposure: 'hidden', toolExposure: { 'remote/read': 'direct' } });
+    expect(JSON.stringify(hidden)).not.toContain('KEEP-PRIVATE');
+  });
+
   it('refuses invalid, missing, and stale exposure mutations without changing the file', async () => {
     const { agentDir } = await fixture();
     const filePath = path.join(agentDir, 'mcp.json');
@@ -182,7 +210,7 @@ describe('MCP configuration mutations', () => {
       agentDir, scope: 'global', expectedRevision: revision, name: 'invalid', exposure: 'deferred',
     })).rejects.toMatchObject({ code: 'target-invalid', uncertain: false });
     await expect(setMcpServerExposure({
-      agentDir, scope: 'global', expectedRevision: revision, name: 'alpha', exposure: 'hidden' as never,
+      agentDir, scope: 'global', expectedRevision: revision, name: 'alpha', exposure: 'invalid' as never,
     })).rejects.toMatchObject({ code: 'invalid-request', uncertain: false });
 
     const committed = await setMcpServerExposure({

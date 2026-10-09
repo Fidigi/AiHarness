@@ -22,7 +22,7 @@ const EMPTY_FILE: ConfigurationFile = {
 
 const SECRET_KEY = /(?:secret|token|password|api[-_]?key|authorization|credential)/i;
 const STRING_KEYS = new Set<keyof ScopedConfigurationValues>([
-  'provider', 'model', 'thinking', 'toolPreset', 'systemPrompt',
+  'provider', 'model', 'thinking', 'toolPreset', 'systemPrompt', 'codemodeMode',
 ]);
 const ARRAY_KEYS = new Set<keyof ScopedConfigurationValues>([
   'enabledModels', 'enabledSkills', 'enabledPlugins', 'enabledTools',
@@ -50,13 +50,17 @@ function validateValues(input: unknown): ScopedConfigurationValues {
       if (key === 'toolPreset' && !['configured', 'chat-only', 'read-only', 'default', 'full'].includes(value)) {
         invalidConfiguration("Preset d'outils invalide.");
       }
+      if (key === 'codemodeMode' && !['on', 'only'].includes(value)) invalidConfiguration('Invalid codemode mode.');
       Object.assign(result, { [key]: value });
+    } else if (key === 'codemodeInlineBudget') {
+      if (!Number.isSafeInteger(value) || Number(value) < 0 || Number(value) > 3_000) invalidConfiguration('Invalid codemode inline budget.');
+      result.codemodeInlineBudget = Number(value);
     } else if (ARRAY_KEYS.has(key)) {
       if (!Array.isArray(value) || value.length > 2_000 || !value.every(item => typeof item === 'string' && item.length <= 500)) {
         invalidConfiguration(`Valeur invalide pour ${rawKey}.`);
       }
       Object.assign(result, { [key]: [...new Set(value)] });
-    } else if (key === 'autoCompaction' || key === 'powershellEnabled') {
+    } else if (key === 'autoCompaction' || key === 'powershellEnabled' || key === 'codemodeEnabled') {
       if (typeof value !== 'boolean') invalidConfiguration(`Valeur invalide pour ${key}.`);
       Object.assign(result, { [key]: value });
     } else {
@@ -77,7 +81,7 @@ function validatePatchValues(input: unknown): Record<string, unknown> {
     if (SECRET_KEY.test(key)
       || (!STRING_KEYS.has(key as keyof ScopedConfigurationValues)
         && !ARRAY_KEYS.has(key as keyof ScopedConfigurationValues)
-        && key !== 'autoCompaction' && key !== 'powershellEnabled')) {
+        && key !== 'autoCompaction' && key !== 'powershellEnabled' && key !== 'codemodeEnabled' && key !== 'codemodeInlineBudget')) {
       invalidConfiguration(`Clé de configuration inconnue : ${key}.`);
     }
     result[key] = null;

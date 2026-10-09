@@ -49,6 +49,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
     { id: 'settings', group: t('palette.settings'), label: t('settings.title'), shortcut: preferences.keybindings.openSettings,
       run: () => navigate('/settings') },
     { id: 'appearance', group: t('palette.settings'), label: t('settings.appearance'), run: () => navigate('/settings#appearance') },
+    { id: 'mcp', group: t('palette.settings'), label: t('settings.mcp.title'), run: () => navigate('/settings#mcp') },
     { id: 'skills', group: t('palette.settings'), label: t('settings.skills.title'), run: () => navigate('/settings#skills') },
     { id: 'subagents', group: t('palette.settings'), label: t('subagents.title'), run: () => navigate('/settings#subagents') },
     { id: 'keyboard', group: t('palette.settings'), label: t('settings.shortcuts'), run: () => navigate('/settings#shortcuts') },

@@ -38,6 +38,8 @@ export interface ToolLoopOptions {
   ): ExtensionToolResult | Promise<ExtensionToolResult>;
   /** Accept activation names only from a host-owned tool/result pair. */
   getActivatedTools?(name: string, result: ExtensionToolResult): string[] | undefined;
+  /** Additional metadata authenticated by a host-owned executor (for example codemode store). */
+  getToolResultMetadata?(name: string, result: ExtensionToolResult): Record<string, unknown> | undefined;
   onTurnStart?(round: number): void | Promise<void>;
   onAssistantResponse?(response: ChatResponse, round: number, durationMs: number): void | Promise<void>;
   onToolCall?(call: ToolCall): void | Promise<void>;
@@ -172,6 +174,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       let content: string;
       let isError = false;
       let activatedTools: string[] | undefined;
+      let resultMetadata: Record<string, unknown> | undefined;
       try {
         const normalizedToolName = call.name.toLowerCase();
         if (!enabledToolNames.has(normalizedToolName)) {
@@ -188,6 +191,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         content = options.redactText?.(result.content) ?? result.content;
         isError = Boolean(result.isError);
         if (!isError) activatedTools = options.getActivatedTools?.(call.name, result);
+        resultMetadata = options.getToolResultMetadata?.(call.name, result);
       } catch (error) {
         isError = true;
         const message = error instanceof Error ? error.message : String(error);
@@ -215,7 +219,9 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         name: call.name,
         isError,
         durationMs,
-        ...(activatedTools?.length ? { metadata: toolSearchActivationMetadata(activatedTools) } : {}),
+        ...((activatedTools?.length || resultMetadata) ? { metadata: {
+          ...toolSearchActivationMetadata(activatedTools ?? []), ...resultMetadata,
+        } } : {}),
       }, { signal: options.signal });
       const toolResult: ToolExecutionResult = {
         call,

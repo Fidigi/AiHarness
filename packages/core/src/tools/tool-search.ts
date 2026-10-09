@@ -1,3 +1,7 @@
+import {
+  CODEMODE_REGISTRATION, CODEMODE_TOOL_NAME, collectCodemodeStore, isNestedCallable, runCodemode,
+  CODEMODE_EXTENSION_ID, CODEMODE_LIMITS, type CodemodeSettings, type HostedCodemodeTool,
+} from './codemode.js';
 import type {
   ExtensionRuntimeContext,
   ExtensionTool,
@@ -91,7 +95,7 @@ export type HostedToolSearchTool = ExtensionTool<Record<string, unknown>, ToolSe
 
 export interface ToolSearchLoadout<T extends RegisteredAgentTool> {
   /** Direct/model-only tools, the discovery tool, and branch-loaded matches. */
-  getTools(): Array<T | HostedToolSearchTool>;
+  getTools(): Array<T | HostedToolSearchTool | HostedCodemodeTool>;
   /** True only for the synthetic search tool owned by this loadout. */
   isToolSearch(name: string): boolean;
   executeToolSearch(
@@ -126,6 +130,11 @@ export interface AgentToolLoadout<TStatic extends RegisteredAgentTool, TDynamic 
   extends ToolSearchLoadout<TStatic | TDynamic> {
   /** True when a selected dynamic source, rather than the static registry, owns this name. */
   isDynamicTool(name: string): boolean;
+  isCodemode(name: string): boolean;
+  executeCodemode(input: unknown, context: ExtensionRuntimeContext,
+    execute: (name: string, input: unknown, context: ExtensionRuntimeContext, signal?: AbortSignal) => Promise<ExtensionToolResult>,
+    signal?: AbortSignal): Promise<ExtensionToolResult>;
+  resultMetadata(name: string, result: ExtensionToolResult): Record<string, unknown> | undefined;
 }
 
 export interface CreateAgentToolLoadoutOptions<
@@ -136,6 +145,9 @@ export interface CreateAgentToolLoadoutOptions<
   dynamicSource?: DynamicAgentToolSource<TDynamic>;
   selection?: ToolSelectionOptions;
   initialLoadedTools?: Iterable<string>;
+  codemode?: CodemodeSettings;
+  redactText?: (value: string) => string;
+  currentStaticTools?: () => readonly TStatic[];
 }
 
 const STOP_WORDS: ReadonlySet<string> = new Set([
@@ -385,8 +397,8 @@ export function createToolSearchLoadout<T extends RegisteredAgentTool>(
         ? remaining === 0
           ? `No tools loaded: the ${MAX_TOOL_SEARCH_LOADED}-tool activation limit was reached.`
           : 'No matching tools found.'
-        : `Loaded ${resultTools.length} tool${resultTools.length === 1 ? '' : 's'}. They are available from the next model call:\n${resultTools
-            .map(tool => `- ${tool.name}: ${firstLine(tool.description)}`)
+        : `Found ${resultTools.length} tool${resultTools.length === 1 ? '' : 's'}. Deferred tools are available from the next model call; codemode tools are script-only:\n${resultTools
+            .map(tool => `- ${tool.name} (${agentToolExposure(tool)}): ${firstLine(tool.description)}`)
             .join('\n')}`;
       const details: ToolSearchResultDetails = { loaded };
       issuedDetails.add(details);
@@ -399,7 +411,7 @@ export function createToolSearchLoadout<T extends RegisteredAgentTool>(
       refreshCurrent();
       const loaded = [...loadedNames]
         .map(name => searchable.get(name))
-        .filter((tool): tool is T => Boolean(tool));
+        .filter((tool): tool is T => Boolean(tool) && agentToolExposure(tool!) !== 'codemode');
       return [...direct, ...(searchTool ? [searchTool] : []), ...loaded];
     },
     isToolSearch(name) {
@@ -479,8 +491,80 @@ export function createAgentToolLoadout<
     },
   );
 
+  const explicitlySelected = [...selection.allowedTools ?? [], ...selection.defaultTools ?? []]
+    .some(name => normalizedName(name) === CODEMODE_TOOL_NAME);
+  const eligible = selectRegisteredTools([CODEMODE_REGISTRATION], selection).length === 1
+    && !(selection.noBuiltInTools && selection.allowedTools === undefined);
+  const codemodeEnabled = options.codemode?.enabled !== false && eligible
+    && !options.staticTools.some(tool => normalizedName(tool.name) === CODEMODE_TOOL_NAME)
+    && ((explicitlySelected && options.codemode?.activation !== 'automatic')
+      || options.codemode?.enabled === true || options.codemode?.activation === 'on'
+      || (options.codemode !== undefined && (Boolean(options.dynamicSource?.hasPotentialSearchableTools)
+        || selectedStatic.some(tool => isSearchableToolExposure(agentToolExposure(tool))))));
+  const issuedResults = new WeakSet<ExtensionToolResult>();
+  const nestedTools = (): Array<TStatic | TDynamic> => {
+    const currentStatic = selectRegisteredTools(options.currentStaticTools?.() ?? options.staticTools, selection);
+    const currentNames = new Set(currentStatic.map(tool => normalizedName(tool.name)));
+    const dynamic = options.dynamicSource ? selectedDynamicTools([
+      ...options.dynamicSource.directTools, ...options.dynamicSource.currentSearchableTools(),
+    ], selection).filter(tool => !currentNames.has(normalizedName(tool.name))) : [];
+    return [...currentStatic, ...dynamic].filter(isNestedCallable);
+  };
+  const codemodeTool: HostedCodemodeTool = {
+    ...CODEMODE_REGISTRATION,
+    extensionId: CODEMODE_EXTENSION_ID,
+    exposure: 'model-only',
+    execute: async () => { throw new Error('Codemode requires a hosted executor.'); },
+  };
   return {
     ...loadout,
+    getTools() {
+      const tools = loadout.getTools();
+      if (!codemodeEnabled) return tools;
+      const budget = Math.min(12_000, Math.max(0, (options.codemode?.inlineBudget ?? 3_000) * 4));
+      let inline = '';
+      for (const tool of nestedTools()) {
+        if (inline.length >= budget) break;
+        let schema = '';
+        try { schema = JSON.stringify(tool.parameters ?? {}); } catch { /* Cyclic trusted extension schema: use describeTool. */ }
+        inline += `${tool.name}: ${tool.description.slice(0, 200)} ${schema}\n`.slice(0, budget - inline.length);
+      }
+      codemodeTool.description = `${CODEMODE_REGISTRATION.description}\n${inline}`;
+      return [...(options.codemode?.mode === 'only' ? tools.filter(tool => !isNestedCallable(tool)) : tools), codemodeTool];
+    },
+    isCodemode: name => codemodeEnabled && normalizedName(name) === CODEMODE_TOOL_NAME,
+    async executeCodemode(input, context, execute, signal) {
+      if (!codemodeEnabled || !isRecord(input) || typeof input.code !== 'string'
+        || Object.keys(input).some(key => key !== 'code')) throw new Error('Invalid or disabled codemode input.');
+      const deadline = new AbortController();
+      const timer = setTimeout(() => deadline.abort(new Error('Codemode deadline exceeded.')), CODEMODE_LIMITS.timeoutMs);
+      const boundedSignal = signal ? AbortSignal.any([signal, deadline.signal]) : deadline.signal;
+      let rejectAbort!: (error: unknown) => void;
+      const cancelled = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
+      const abort = () => rejectAbort(boundedSignal.reason ?? new Error('Codemode cancelled.'));
+      boundedSignal.addEventListener('abort', abort, { once: true });
+      if (boundedSignal.aborted) abort();
+      try {
+        const preparation = async () => {
+          if (options.dynamicSource) await options.dynamicSource.waitForSearchableTools(boundedSignal);
+          const session = context.currentSessionId ? context.sessionManager.get(context.currentSessionId) : undefined;
+          const entries = session ? await context.sessionManager.getRawEntries(session.id) : [];
+          return collectCodemodeStore(entries, session?.activeLeafId);
+        };
+        const store = await Promise.race([preparation(), cancelled]);
+        const result = await runCodemode({ code: input.code, context, signal: boundedSignal, store,
+          tools: nestedTools, execute, redact: options.redactText });
+        issuedResults.add(result);
+        return result;
+      } finally {
+        clearTimeout(timer);
+        boundedSignal.removeEventListener('abort', abort);
+      }
+    },
+    resultMetadata(name, result) {
+      if (normalizedName(name) !== CODEMODE_TOOL_NAME || !issuedResults.has(result)) return undefined;
+      return { codemode: result.details };
+    },
     isDynamicTool(name) {
       const normalized = normalizedName(name);
       return !staticNames.has(normalized) && Boolean(options.dynamicSource?.has(normalized));

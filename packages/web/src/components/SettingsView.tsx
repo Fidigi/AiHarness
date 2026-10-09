@@ -102,7 +102,12 @@ function SettingsView() {
 
   useEffect(() => {
     const target = window.location.hash.slice(1) || preferences.lastSettingsSection;
-    window.setTimeout(() => document.getElementById(target)?.scrollIntoView({ block: 'start' }), 0);
+    const timer = window.setTimeout(() => {
+      const section = document.getElementById(target);
+      section?.scrollIntoView({ block: 'start' });
+      if (target === 'mcp' && window.location.hash === '#mcp') section?.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []); // Restore only on entry; interacting with controls must not move the page.
 
   useEffect(() => {

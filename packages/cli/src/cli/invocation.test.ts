@@ -607,6 +607,48 @@ describe('CLI invocation contract', () => {
     expect(await readdir(sessionDir)).toEqual(['rpc-stable.jsonl']);
   });
 
+  it('executes opt-in QuickJS from a workspace outside the installation and persists authenticated nested metadata', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-codemode-'));
+    temporaryDirectories.push(cwd);
+    const sessionDir = path.join(cwd, 'sessions');
+    const extensionPath = path.join(cwd, 'sandbox-provider.mjs');
+    await writeFile(extensionPath, `
+      export default api => {
+        api.registerTool({ name: 'nested_lookup', description: 'Nested lookup', exposure: 'codemode',
+          parameters: { type: 'object', properties: { value: { type: 'string' } } },
+          execute: async input => ({ content: 'nested:' + input.value }) });
+        api.registerProvider('sandbox', {
+          defaultConfig: { model: 'sandbox-model' }, create(config) {
+            return { config, validateConfig() { return true; }, getProviderType() { return 'sandbox'; },
+              getConfiguredModel() { return this.config.model; }, setConfiguredModel(model) { this.config.model = model; },
+              async chat() { return { content: 'unused' }; },
+              async streamChat(messages, onChunk, onComplete, onError, options) {
+                if (options.tools.some(tool => tool.name === 'nested_lookup')) throw new Error('Script-only tool declared directly');
+                const previous = messages.find(message => message.role === 'tool');
+                if (previous) { onComplete({ content: 'sandbox-complete' }); return; }
+                onComplete({ content: '', toolCalls: [{ id: 'code-call', name: 'codemode', input: {
+                  code: 'text(await tools.nested_lookup({value: "safe"})); text(typeof process); store("remember", {count: 1});'
+                } }] });
+              }
+            };
+          }
+        });
+      };
+    `);
+    const result = await invoke(['--mode', 'json', '--approve', '--extension', extensionPath,
+      '--provider', 'sandbox', '--model', 'sandbox-model', '--tools', 'codemode,nested_lookup',
+      '--session-id', 'sandbox-test', '--session-dir', sessionDir, 'exercise sandbox'], undefined, {}, cwd);
+    expect(result).toMatchObject({ code: 0, stderr: '' });
+    const records = result.stdout.trimEnd().split('\n').map(line => JSON.parse(line));
+    expect(records.at(-1)).toEqual({ type: 'agent_settled' });
+    const entries = (await readFile(path.join(sessionDir, 'sandbox-test.jsonl'), 'utf8')).trimEnd().split('\n').map(line => JSON.parse(line));
+    const tool = entries.find(entry => entry.role === 'tool');
+    expect(tool).toMatchObject({ metadata: { codemode: { engine: 'QuickJS', store: { remember: { count: 1 } },
+      nestedCalls: [expect.objectContaining({ name: 'nested_lookup', isError: false })] } } });
+    expect(tool.content).toContain('nested:safe');
+    expect(tool.content).toContain('undefined');
+  });
+
   it('emits a strict JSONL lifecycle with a session header and no plain-text stdout', async () => {
     const extensionDirectory = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-json-extension-'));
     temporaryDirectories.push(extensionDirectory);

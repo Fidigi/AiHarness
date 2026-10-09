@@ -537,6 +537,9 @@ export interface ScopedConfigurationValues {
   enabledPlugins?: string[];
   enabledTools?: string[];
   powershellEnabled?: boolean;
+  codemodeEnabled?: boolean;
+  codemodeMode?: 'on' | 'only';
+  codemodeInlineBudget?: number;
   systemPrompt?: string;
 }
 
@@ -558,6 +561,7 @@ export interface ToolSettingsEntry {
   enabled: boolean;
   available: boolean;
   unavailableReason?: string;
+  disabledReason?: 'chat-only' | 'read-only' | 'not-selected' | 'hidden' | 'automatic' | 'sandbox-unavailable';
 }
 
 export interface ToolSettings {
@@ -566,6 +570,12 @@ export interface ToolSettings {
   preset: Session['toolPreset'];
   powershellAvailable: boolean;
   powershellEnabled: boolean;
+  codemode?: {
+    enabled: boolean;
+    mode: 'on' | 'only';
+    inlineBudget: number;
+    selfTest: { state: 'passed' | 'failed' | 'not-run'; engine: 'QuickJS' };
+  };
   tools: ToolSettingsEntry[];
 }
 

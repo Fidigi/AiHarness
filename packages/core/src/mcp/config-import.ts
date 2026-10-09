@@ -1,6 +1,7 @@
 import {
   describeMcpConfigEntry,
   insertMcpServerEntry,
+  isMcpExposure,
   McpConfigMutationError,
   replaceMcpServerEntry,
   type McpConfigMutationTarget,
@@ -692,8 +693,14 @@ function mappedCandidate(
     addNote(notes, note('dropped-properties', { count: 1 }));
   }
   const exposure = take('exposure');
-  if (exposure === 'direct' || exposure === 'codemode' || exposure === 'deferred') config.exposure = exposure;
+  if (isMcpExposure(exposure)) config.exposure = exposure;
   else if (exposure !== undefined) addNote(notes, note('dropped-properties', { count: 1 }));
+  const toolExposure = take('toolExposure');
+  if (toolExposure !== undefined) {
+    if (!isRecord(toolExposure) || Object.keys(toolExposure).length > MAX_COLLECTION_ENTRIES
+      || !Object.values(toolExposure).every(isMcpExposure)) return note('invalid-entry');
+    config.toolExposure = { ...toolExposure };
+  }
   const description = take('description');
   if (boundedString(description)) config.description = description;
   else if (description !== undefined) addNote(notes, note('dropped-properties', { count: 1 }));
@@ -964,7 +971,7 @@ function parseAiHarnessAdd(words: string[]): ReadResult {
         break;
       }
       case '--exposure':
-        if (read.value !== 'direct' && read.value !== 'codemode' && read.value !== 'deferred') {
+        if (!isMcpExposure(read.value)) {
           return { error: note('invalid-entry') };
         }
         exposure = read.value;
@@ -1791,7 +1798,7 @@ function normalizedCandidate(
 function candidateFieldCount(candidate: ImportCandidate): number {
   const fields = new Set(candidate.fields.map(field => field.field));
   const add = (field: string, present: boolean) => { if (present) fields.add(field); };
-  for (const field of ['command', 'url', 'cwd', 'description', 'enabled', 'exposure']) {
+  for (const field of ['command', 'url', 'cwd', 'description', 'enabled', 'exposure', 'toolExposure']) {
     add(field, candidate.config[field] !== undefined);
   }
   if (Array.isArray(candidate.config.args)) {

@@ -77,6 +77,7 @@ export interface McpSetExposureRequest {
   cwd?: string;
   revision: string | null;
   name: string;
+  tool?: string;
   exposure: McpExposure;
 }
 
@@ -418,6 +419,7 @@ export class McpInventoryService {
       expectedRevision: request.revision,
       name: request.name,
       exposure: request.exposure,
+      ...(request.tool ? { tool: request.tool } : {}),
       ...(request.scope === 'project' && canonicalCwd ? { cwd: canonicalCwd } : {}),
       trustManager: this.trustManager,
     });

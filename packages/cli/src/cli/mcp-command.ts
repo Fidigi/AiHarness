@@ -1,8 +1,10 @@
 import path from 'node:path';
+import { runMcpOAuthCommand } from './mcp-oauth-command.js';
 import {
   CredentialRedactor,
   importMcpServer,
   inspectMcpConfig,
+  isMcpExposure,
   loadAgentSettings,
   McpServerTester,
   ProjectTrustManager,
@@ -14,13 +16,13 @@ import {
   WorkspaceManager,
   type McpConfigInventory,
   type McpConfigScope,
-  type McpExposure,
 } from '@ai-harness/core';
 
 interface McpCommandIo {
   cwd?: string;
   stdout?: (value: string) => void;
   stderr?: (value: string) => void;
+  signal?: AbortSignal;
 }
 
 interface ParsedOptions {
@@ -38,7 +40,11 @@ Commands:
   add <name> -- <command> [args...]   Add a stdio server
   enable <name> [...]                 Enable servers
   disable <name> [...]                Disable servers
-  exposure <name> <mode>              Set direct, codemode, or deferred exposure
+  exposure <name> <mode> [--tool <remote-name>]
+                                      Set direct, codemode, deferred, or hidden exposure
+  login <name> [--no-open] [--timeout <1..300>]
+                                      Authorize OAuth via loopback or terminal paste
+  logout <name>                       Remove local OAuth credentials (no remote revocation)
   remove <name>                       Remove a server
 
 Options:
@@ -156,6 +162,20 @@ export async function runMcpCommand(args: string[], io: McpCommandIo = {}): Prom
       return 0;
     }
 
+    if (command === 'login' || command === 'logout') {
+      const name = parsed.rest[0];
+      if (!name || name.startsWith('-')) throw new Error(`Usage: ai-harness mcp ${command} <name> [--scope <scope>]`);
+      return await runMcpOAuthCommand(command, parsed.rest.slice(1), {
+        agentDir: settings.agentDir, agentDirTrusted: settings.agentDirTrusted, redactor,
+        json: parsed.json, write, writeError, signal: io.signal,
+        readTarget: () => readMcpServerTestTarget({
+          agentDir: settings.agentDir, scope: parsed.scope, name,
+          ...(parsed.scope === 'project' ? { cwd } : {}), defaultCwd: cwd, trustManager,
+          resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, { base, kind: 'directory' }),
+        }),
+      });
+    }
+
     if (command === 'test') {
       const name = parsed.rest[0];
       if (!name || parsed.rest.length !== 1) throw new Error('Usage: ai-harness mcp test <name> [--scope <scope>] [--json]');
@@ -203,10 +223,11 @@ export async function runMcpCommand(args: string[], io: McpCommandIo = {}): Prom
 
     if (command === 'exposure') {
       const [name, mode, ...extra] = parsed.rest;
-      if (!name || extra.length || (mode !== 'direct' && mode !== 'codemode' && mode !== 'deferred')) {
-        throw new Error('Usage: ai-harness mcp exposure <name> <direct|codemode|deferred> [--scope <scope>]');
+      const tool = extra.length === 2 && extra[0] === '--tool' ? extra[1] : undefined;
+      if (!name || !isMcpExposure(mode) || (extra.length > 0 && !tool)) {
+        throw new Error('Usage: ai-harness mcp exposure <name> <direct|codemode|deferred|hidden> [--tool <remote-name>] [--scope <scope>]');
       }
-      const result = await setMcpServerExposure({ ...mutationTarget, name, exposure: mode as McpExposure });
+      const result = await setMcpServerExposure({ ...mutationTarget, name, exposure: mode, ...(tool ? { tool } : {}) });
       write(parsed.json ? `${JSON.stringify(result)}\n` : `Updated ${name}: exposure=${mode}.\n`);
       return 0;
     }

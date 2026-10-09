@@ -34,6 +34,8 @@ export type {
 
 export {
   inspectMcpConfig,
+  isMcpExposure,
+  mcpToolExposure,
   readMcpServerTestTarget,
   MCP_CONFIG_MAX_BYTES,
   MCP_CONFIG_MAX_MUTATIONS,

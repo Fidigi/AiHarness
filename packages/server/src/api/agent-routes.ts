@@ -116,6 +116,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         ['clone', 'Clone this conversation'],
         ['copy', 'Copy the latest assistant response'],
         ['name', 'Rename this conversation'],
+        ['mcp', 'Open MCP configuration, tools and OAuth status'],
         ['reload', 'Reload resources'],
         ['stats', 'Open session statistics'],
       ].map(([name, description]) => ({ name, description, source: 'builtin' }));
@@ -434,6 +435,12 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         maxRetries: integerValue(body.maxRetries, 2, 0, 5),
         maxToolRounds: integerValue(body.maxToolRounds, 8, 1, 32),
         allowedTools: modelSupportsTools ? effective.values.enabledTools : [],
+        codemode: {
+          enabled: services.codemodeSelfTest?.state === 'passed' ? undefined : false,
+          activation: effective.values.codemodeEnabled ? 'on' : 'automatic',
+          mode: effective.values.codemodeMode ?? agentSettings.settings.codemode?.mode,
+          inlineBudget: effective.values.codemodeInlineBudget ?? agentSettings.settings.codemode?.inlineBudget,
+        },
         excludedTools: modelSupportsTools && effective.values.powershellEnabled !== true
           ? ['powershell']
           : undefined,

@@ -13,6 +13,8 @@ import {
   resolveAgentProviderNetworkSettings,
   resolveInstructionPrompt,
   SessionManager,
+  testCodemodeSandbox,
+  type CodemodeSelfTest,
   WorkspaceManager,
 } from '@ai-harness/core';
 import type {
@@ -53,6 +55,7 @@ export interface RuntimeServices {
   trustManager: ProjectTrustManager;
   configurationStore: ConfigurationStore;
   agentSettings: ResolvedAgentSettings;
+  codemodeSelfTest?: CodemodeSelfTest;
   extensionRegistry: ExtensionRegistry;
   agentRuntime: AgentRuntime;
   commandRuntime: CommandRuntime;
@@ -86,6 +89,8 @@ function environmentRoots(): string[] | undefined {
   return value?.split(path.delimiter).map(item => item.trim()).filter(Boolean);
 }
 
+let codemodeSelfTestPromise: Promise<CodemodeSelfTest> | undefined;
+
 export async function createRuntimeServices(
   proxy: AiProxyServer,
   options: RuntimeServiceOptions = {},
@@ -107,6 +112,7 @@ export async function createRuntimeServices(
   });
   await workspaceManager.initialize();
   const defaultCwd = await workspaceManager.getDefaultCwd();
+  const codemodeSelfTest = await (codemodeSelfTestPromise ??= testCodemodeSandbox());
 
   const trustManager = new ProjectTrustManager(options.trustFile ?? path.join(dataDir, 'trust.json'));
   await trustManager.load();
@@ -439,6 +445,7 @@ export async function createRuntimeServices(
     trustManager,
     configurationStore,
     agentSettings: providerSettings,
+    codemodeSelfTest,
     extensionRegistry,
     agentRuntime,
     commandRuntime,

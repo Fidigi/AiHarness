@@ -892,6 +892,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     const [name, ...parts] = raw.slice(1).trim().split(/\s+/);
     const argument = parts.join(' ');
     switch (name.toLocaleLowerCase()) {
+      case 'mcp': {
+        navigate('/settings#mcp');
+        return true;
+      }
       case 'auto-compact': {
         const mode = argument.trim().toLocaleLowerCase();
         if (!mode) {

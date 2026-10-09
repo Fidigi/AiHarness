@@ -1,4 +1,9 @@
 export {
+  CODEMODE_EXTENSION_ID, CODEMODE_LIMITS, CODEMODE_REGISTRATION, CODEMODE_TOOL_NAME,
+  boundedCodemodeStore, collectCodemodeStore, isNestedCallable, runCodemode, testCodemodeSandbox,
+} from './codemode.js';
+export type { CodemodeDetails, CodemodeSelfTest, CodemodeSettings, HostedCodemodeTool, RunCodemodeOptions } from './codemode.js';
+export {
   registerWorkspaceTools,
   DEFAULT_CODING_TOOL_NAMES,
   READ_ONLY_CODING_TOOL_NAMES,

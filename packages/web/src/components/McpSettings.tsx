@@ -268,7 +268,7 @@ function ServerCard({
   onOAuthCancel: () => void;
   onOAuthLogout: () => void;
   onToggle: () => void;
-  onExposureChange: (exposure: McpExposure) => void;
+  onExposureChange: (exposure: McpExposure, tool?: string) => void;
   onEdit: (trigger: HTMLButtonElement) => void;
   onRemove: (trigger: HTMLButtonElement) => void;
 }) {
@@ -312,7 +312,7 @@ function ServerCard({
           data-mcp-exposure-key={editKey(server.scope, server.name)}
           aria-label={t('settings.mcp.exposureNamed', { name: server.name })}
           onChange={event => onExposureChange(event.currentTarget.value as McpExposure)}>
-          {(['direct', 'codemode', 'deferred'] as const).map(exposure => (
+          {(['direct', 'codemode', 'deferred', 'hidden'] as const).map(exposure => (
             <option value={exposure} key={exposure}>{t(`settings.mcp.exposure.${exposure}`)}</option>
           ))}
         </select>
@@ -340,6 +340,18 @@ function ServerCard({
         </button>
       </div>}
     </div>
+    {server.valid && (server.testStatus?.tools.length || Object.keys(server.toolExposure ?? {}).length) ? <details className="mcp-per-tool-exposure mcp-test-report">
+      <summary>{t('settings.mcp.perToolExposure')}</summary>
+      {[...new Set([...Object.keys(server.toolExposure ?? {}), ...server.testStatus?.tools.map(tool => tool.name) ?? []])].map(name => <label key={name} className="mcp-exposure-control">
+        <span><code>{name}</code></span>
+        <select disabled={disabled} value={server.toolExposure?.[name] ?? server.exposure}
+          data-mcp-exposure-key={editKey(server.scope, `${server.name}\0${name}`)}
+          aria-label={t('settings.mcp.exposureNamed', { name: `${server.name} / ${name}` })}
+          onChange={event => onExposureChange(event.currentTarget.value as McpExposure, name)}>
+          {(['direct', 'codemode', 'deferred', 'hidden'] as const).map(exposure => <option key={exposure} value={exposure}>{t(`settings.mcp.exposure.${exposure}`)}</option>)}
+        </select>
+      </label>)}
+    </details> : null}
     {server.usesOAuth && <McpOAuthPanel
       server={server}
       status={oauthStatus}
@@ -598,8 +610,9 @@ export function McpSettings() {
   const setExposure = async (
     server: McpServerInventoryEntry,
     exposure: McpExposure,
+    tool?: string,
   ): Promise<void> => {
-    if (!inventory || busy || exposure === server.exposure) return;
+    if (!inventory || busy || (!tool && exposure === server.exposure) || (tool && exposure === server.toolExposure?.[tool])) return;
     const request = ++actionRequest.current;
     const revision = fileForScope(inventory, server.scope)?.revision ?? null;
     setBusy(`exposure:${server.scope}:${server.name}`);
@@ -611,6 +624,7 @@ export function McpSettings() {
       exposure,
       revision,
       workspace?.cwd,
+      tool,
     );
     if (request !== actionRequest.current) return;
     if (result.success && result.data) {
@@ -621,7 +635,7 @@ export function McpSettings() {
     }
     if (request === actionRequest.current) {
       setBusy(undefined);
-      setPendingControlFocus({ kind: 'exposure', scope: server.scope, name: server.name });
+      setPendingControlFocus({ kind: 'exposure', scope: server.scope, name: tool ? `${server.name}\0${tool}` : server.name });
     }
   };
 
@@ -807,7 +821,7 @@ export function McpSettings() {
 
   const controlsDisabled = Boolean(busy) || Boolean(testing) || Boolean(oauthBusy) || importWriting || Boolean(replacement);
 
-  return <section ref={sectionRef} className="settings-section" id="mcp">
+  return <section ref={sectionRef} className="settings-section" id="mcp" tabIndex={-1}>
     <div className="mcp-settings-heading">
       <div>
         <h3>{t('settings.mcp.title')}</h3>
@@ -885,7 +899,7 @@ export function McpSettings() {
               onOAuthCancel={() => void cancelOAuth(server)}
               onOAuthLogout={() => void logoutOAuth(server)}
               onToggle={() => void setEnabled(server.scope, [server.name], !server.enabled, `row:${server.scope}:${server.name}`)}
-              onExposureChange={exposure => void setExposure(server, exposure)}
+              onExposureChange={(exposure, tool) => void setExposure(server, exposure, tool)}
               onEdit={trigger => {
                 const file = fileForScope(inventory, server.scope);
                 if (!file?.revision || controlsDisabled) return;

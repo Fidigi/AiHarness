@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "quickjs-emscripten": "^0.31.0",
     "undici": "^6.21.0"
   },
   "devDependencies": {

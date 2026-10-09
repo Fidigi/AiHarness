@@ -61,6 +61,7 @@ export const READ_ONLY_AGENT_TOOL_NAMES = [
   'load_skill',
   'spawn_subagent',
   'tool_search',
+  'codemode',
 ] as const;
 
 function names(values: readonly string[] | undefined): Set<string> | undefined {

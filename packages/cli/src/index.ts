@@ -9,6 +9,7 @@ import {
   closeProviderNetworkDispatchers,
   collectToolSearchLoadedNames,
   createAgentToolLoadout,
+  CODEMODE_TOOL_NAME,
   createMcpOAuthProviderFactory,
   CredentialRedactor,
   DEFAULT_CODING_TOOL_NAMES,
@@ -802,7 +803,7 @@ async function main(): Promise<void> {
   const selectedTools = () => {
     const registered = extensionRegistry.getTools();
     const unknown = unknownToolNames(registered, cliArguments.tools, cliArguments.excludeTools)
-      .filter(name => !name.startsWith('mcp__') && name !== TOOL_SEARCH_TOOL_NAME);
+      .filter(name => !name.startsWith('mcp__') && name !== TOOL_SEARCH_TOOL_NAME && name !== CODEMODE_TOOL_NAME);
     if (unknown.length) throw new Error(`Unknown tool name(s): ${unknown.join(', ')}.`);
     return selectRegisteredTools(registered, toolSelectionOptions());
   };
@@ -1345,6 +1346,9 @@ async function main(): Promise<void> {
             });
         const toolLoadout = createAgentToolLoadout({
           staticTools: extensionRegistry.getTools(),
+          currentStaticTools: () => extensionRegistry.getTools(),
+          codemode: settingsResolution.settings.codemode,
+          redactText: value => outputCredentialRedactor.redact(value),
           dynamicSource: {
             directTools: mcpPrepared.tools,
             hasPotentialSearchableTools: mcpPrepared.hasPotentialDiscoverableTools ?? false,
@@ -1363,7 +1367,11 @@ async function main(): Promise<void> {
             currentSession?.activeLeafId,
           ),
         });
-        const executeSelectedTool = (name: string, input: unknown, context: Parameters<typeof extensionRegistry.executeTool>[2], signal?: AbortSignal) => {
+        const executeSelectedTool = (name: string, input: unknown, context: Parameters<typeof extensionRegistry.executeTool>[2], signal?: AbortSignal): ReturnType<typeof extensionRegistry.executeTool> => {
+          if (toolLoadout.isCodemode(name)) {
+            return extensionRegistry.executeHostedTool(name, input, context,
+              (hostInput, hostContext, hostSignal) => toolLoadout.executeCodemode(hostInput, hostContext, executeSelectedTool, hostSignal), signal);
+          }
           if (toolLoadout.isToolSearch(name)) {
             return extensionRegistry.executeHostedTool(
               name,
@@ -1396,6 +1404,7 @@ async function main(): Promise<void> {
         resolveTools: () => toChatToolDefinitions(toolLoadout.getTools()),
         executeTool: executeSelectedTool,
         getActivatedTools: (name, result) => toolLoadout.activatedTools(name, result),
+        getToolResultMetadata: (name, result) => toolLoadout.resultMetadata(name, result),
         toolContext: {
           sessionManager,
           currentSessionId,

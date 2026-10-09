@@ -231,7 +231,7 @@ const settingsSchema = object({
   treeFilterMode: enumeration('default', 'no-tools', 'user-only', 'labeled-only', 'all'),
   defaultProjectTrust: enumeration('ask', 'always', 'never'),
   defaultTools: list(text(128, true)),
-  codemode: object({ mode: enumeration('on', 'only'), inlineBudget: integer() }),
+  codemode: object({ mode: enumeration('on', 'only'), inlineBudget: integer(0, 3_000) }),
   sessionDir: text(4_096, true),
   compaction: object({
     enabled: bool,

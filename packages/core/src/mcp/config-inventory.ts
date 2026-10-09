@@ -29,7 +29,15 @@ const SAFE_COMMAND_NAMES = new Set([
 
 export type McpConfigScope = 'global' | 'project';
 export type McpTransportKind = 'stdio' | 'http';
-export type McpExposure = 'direct' | 'codemode' | 'deferred';
+export type McpExposure = 'direct' | 'codemode' | 'deferred' | 'hidden';
+
+export function isMcpExposure(value: unknown): value is McpExposure {
+  return value === 'direct' || value === 'codemode' || value === 'deferred' || value === 'hidden';
+}
+export function mcpToolExposure(config: { exposure?: McpExposure; toolExposure?: Record<string, McpExposure> }, name?: string): McpExposure {
+  return (name && Object.hasOwn(config.toolExposure ?? {}, name) ? config.toolExposure?.[name] : undefined)
+    ?? config.exposure ?? 'direct';
+}
 export type McpServerTestState = 'connected' | 'needs-auth' | 'failed';
 
 export interface McpServerTestTool {
@@ -76,6 +84,7 @@ interface McpRuntimeConfigBase {
   description?: string;
   enabled?: boolean;
   exposure?: McpExposure;
+  toolExposure?: Record<string, McpExposure>;
 }
 
 export interface McpStdioRuntimeConfig extends McpRuntimeConfigBase {
@@ -142,6 +151,7 @@ export interface McpServerInventoryEntry {
   valid: boolean;
   enabled: boolean;
   exposure: McpExposure;
+  toolExposure?: Record<string, McpExposure>;
   transport?: McpTransportKind;
   command?: string;
   args?: string[];
@@ -682,7 +692,7 @@ function describeEntry(
   if (!validName(rawName)) problems.push('The server name is empty, too long, or contains hidden characters.');
 
   const knownFields = new Set([
-    'args', 'command', 'cwd', 'description', 'enabled', 'env', 'exposure', 'headers', 'oauth', 'type', 'url',
+    'args', 'command', 'cwd', 'description', 'enabled', 'env', 'exposure', 'headers', 'oauth', 'type', 'url', 'toolExposure',
   ]);
   if (Object.keys(config).some(key => !knownFields.has(key))) {
     problems.push('The server entry contains unsupported properties.');
@@ -732,10 +742,13 @@ function describeEntry(
     problems.push('HTTP servers cannot declare command arguments, a working directory, or process environment.');
   }
   if (config.enabled !== undefined && typeof config.enabled !== 'boolean') problems.push('Enabled must be a boolean.');
-  if (config.exposure !== undefined && config.exposure !== 'direct'
-    && config.exposure !== 'codemode' && config.exposure !== 'deferred') {
-    problems.push('Exposure must be direct, codemode, or deferred.');
+  if (config.exposure !== undefined && !isMcpExposure(config.exposure)) {
+    problems.push('Exposure must be direct, codemode, deferred, or hidden.');
   }
+  const toolExposureValid = config.toolExposure === undefined || (isRecord(config.toolExposure)
+    && Object.keys(config.toolExposure).length <= MCP_CONFIG_MAX_COLLECTION_ENTRIES
+    && Object.entries(config.toolExposure).every(([name, mode]) => validName(name) && isMcpExposure(mode)));
+  if (!toolExposureValid) problems.push('Per-tool exposure must be a bounded map of exact tool names and exposure modes.');
 
   let oauthValid = true;
   if (config.oauth !== undefined) {
@@ -781,9 +794,10 @@ function describeEntry(
       configKey: entryRevision(rawName, value),
       valid: problems.length === 0,
       enabled: config.enabled !== false,
-      exposure: config.exposure === 'codemode' || config.exposure === 'deferred'
-        ? config.exposure
-        : 'direct',
+      exposure: isMcpExposure(config.exposure) ? config.exposure : 'direct',
+      ...(toolExposureValid && isRecord(config.toolExposure) ? {
+        toolExposure: Object.fromEntries(Object.entries(config.toolExposure).map(([name, mode]) => [escapedDisplay(name), mode as McpExposure])),
+      } : {}),
       ...(inferredTransport ? { transport: inferredTransport } : {}),
       ...(command ? { command: command.value } : {}),
       ...(rawArgs.length ? { args: args.map(item => item.value) } : {}),
@@ -1082,6 +1096,8 @@ export interface McpServerActivationResult {
 
 export interface McpServerExposureMutation extends McpConfigMutationTarget {
   name: string;
+  /** Exact remote tool name; omitted changes the server default. */
+  tool?: string;
   exposure: McpExposure;
 }
 
@@ -1563,8 +1579,8 @@ export async function setMcpServerExposure(
   options: McpServerExposureMutation,
 ): Promise<McpServerExposureResult> {
   validateMutationName(options.name);
-  if (options.exposure !== 'direct' && options.exposure !== 'codemode'
-    && options.exposure !== 'deferred') {
+  if (options.tool !== undefined) validateMutationName(options.tool);
+  if (!isMcpExposure(options.exposure)) {
     throw mutationError('invalid-request', 'The MCP server exposure is invalid.');
   }
 
@@ -1576,9 +1592,16 @@ export async function setMcpServerExposure(
     if (!isRecord(entry) || !describeEntry(options.name, entry, options.scope, '').info.valid) {
       throw mutationError('target-invalid', 'The MCP server entry is invalid and was not changed.');
     }
-    const current = entry.exposure === 'codemode' || entry.exposure === 'deferred'
-      ? entry.exposure
-      : 'direct';
+    if (options.tool !== undefined) {
+      const overrides = isRecord(entry.toolExposure) ? entry.toolExposure : {};
+      if (overrides[options.tool] === options.exposure) return { changed: false, value: undefined };
+      entry.toolExposure = { ...overrides, [options.tool]: options.exposure };
+      if (!describeEntry(options.name, entry, options.scope, '').info.valid) {
+        throw mutationError('invalid-request', 'The per-tool exposure limit was exceeded.');
+      }
+      return { changed: true, value: undefined };
+    }
+    const current = isMcpExposure(entry.exposure) ? entry.exposure : 'direct';
     if (current === options.exposure) {
       return { changed: false, value: undefined };
     }

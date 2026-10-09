@@ -264,6 +264,9 @@ test.describe('Régression visuelle du catalogue de modèles', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);
+      // Pin the reviewed scroll position after lazy sections/fonts finish laying out.
+      await section.evaluate(element => element.scrollIntoView({ block: 'start', behavior: 'instant' }));
+      await expect.poll(() => section.evaluate(element => Math.abs(element.getBoundingClientRect().top))).toBeLessThan(1);
       await expect(page).toHaveScreenshot(`model-catalog-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });
@@ -419,6 +422,8 @@ test.describe('Régression visuelle du catalogue de plugins', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);
+      await section.evaluate(element => element.scrollIntoView({ block: 'start', behavior: 'instant' }));
+      await expect.poll(() => section.evaluate(element => Math.abs(element.getBoundingClientRect().top))).toBeLessThan(1);
       await expect(page).toHaveScreenshot(`plugin-catalog-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });

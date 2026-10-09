@@ -83,6 +83,22 @@ describe('agent settings resolution', () => {
     expect(result.provenance.defaultTools?.scopes).toEqual(['global', 'project']);
   });
 
+  it('bounds code-mode inline budgets while retaining valid sibling settings', async () => {
+    const { cwd, agentDir } = await fixture();
+    for (const budget of [0, 500, 3_000, -1, 3_001, 1.5]) {
+      await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({
+        codemode: { mode: 'only', inlineBudget: budget }, theme: 'dark',
+      }));
+      const result = await loadAgentSettings({ cwd, agentDir, projectTrusted: false });
+      expect(result.settings).toMatchObject({ codemode: { mode: 'only' }, theme: 'dark' });
+      if ([0, 500, 3_000].includes(budget)) expect(result.settings.codemode?.inlineBudget).toBe(budget);
+      else {
+        expect(result.settings.codemode?.inlineBudget).toBeUndefined();
+        expect(result.diagnostics.map(diagnostic => diagnostic.setting)).toContain('codemode.inlineBudget');
+      }
+    }
+  });
+
   it('does not open or expose project settings before trust', async () => {
     const { cwd, agentDir } = await fixture();
     await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({ theme: 'dark', sessionDir: 'global-sessions' }));

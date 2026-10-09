@@ -12,7 +12,8 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | AI Providers | [`topics/providers.md`](./topics/providers.md) | ~120 lines |
 | Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~125 lines |
 | Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~135 lines |
-| CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~285 lines |
+| CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~295 lines |
+| QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
 | Server API | [`topics/server-api.md`](./topics/server-api.md) | ~160 lines |
 | Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~140 lines |
 | Security & Trust | [`topics/security.md`](./topics/security.md) | ~180 lines |
@@ -78,6 +79,13 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → packages/core/src/tools/tool-search.ts
 → packages/server/src/api/mcp-routes.ts
 → packages/web/src/components/McpSettings.tsx
+```
+
+**Code-mode sandbox or nested calls** → Load `codemode.md` + the code-mode flow in `project-map.md` §4
+```
+→ packages/core/src/tools/{codemode,codemode-worker,tool-search}.ts
+→ packages/server/src/api/tool-routes.ts
+→ e2e/codemode.spec.ts
 ```
 
 **Child agents** → Load only `child-agents.md` + `project-map.md` §4

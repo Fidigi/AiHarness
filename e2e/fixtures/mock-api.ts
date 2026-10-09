@@ -499,7 +499,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
   } satisfies ProviderAuthStatus)));
   let customProviders = structuredClone(options.customProviders ?? []);
   let customModels = structuredClone(options.customModels ?? []);
-  let toolSettings = structuredClone(options.toolSettings ?? {
+  const toolSettings: ToolSettings = structuredClone(options.toolSettings ?? {
     scope: 'project', source: workspace.id, preset: 'default', powershellAvailable: false, powershellEnabled: false,
     tools: [
       { name: 'read', description: 'Read a workspace file', extensionId: 'builtin:workspace-tools', enabled: true, available: true },
@@ -507,6 +507,10 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       { name: 'powershell', description: 'Run PowerShell', extensionId: 'builtin:workspace-tools', enabled: false, available: false, unavailableReason: 'Windows only' },
     ],
   } satisfies ToolSettings);
+  const toolSettingsByScope: Record<'global' | 'project', ToolSettings> = {
+    global: { ...structuredClone(toolSettings), scope: 'global', source: 'global' },
+    project: structuredClone(toolSettings),
+  };
   const configurationScopes: Record<'global' | 'project', Record<string, unknown>> = {
     global: { provider: 'mock', model: 'mock-model', toolPreset: 'default' },
     project: { provider: 'mock', model: 'mock-model', toolPreset: 'default' },
@@ -925,12 +929,17 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
             error: 'The MCP server entry is invalid and was not changed.', code: 'target-invalid', uncertain: false,
           }, 409); return;
         }
-        if (input.exposure !== 'direct' && input.exposure !== 'codemode' && input.exposure !== 'deferred') {
+        if (input.exposure !== 'direct' && input.exposure !== 'codemode' && input.exposure !== 'deferred' && input.exposure !== 'hidden') {
           await fulfillJson(route, { error: 'Action MCP invalide.', code: 'invalid-request', uncertain: false }, 400); return;
         }
-        if (server.exposure !== input.exposure) {
+        if (typeof input.tool === 'string') {
+          server.toolExposure = { ...server.toolExposure, [input.tool]: input.exposure };
+          server.configKey = bumpMcpRevision(scope);
+          delete server.testStatus; delete server.runtimeStatus;
+        } else if (server.exposure !== input.exposure) {
           server.exposure = input.exposure;
-          bumpMcpRevision(scope);
+          server.configKey = bumpMcpRevision(scope);
+          delete server.testStatus; delete server.runtimeStatus;
         }
         await fulfillJson(route, { inventory: structuredClone(mcpConfig) }); return;
       }
@@ -954,16 +963,26 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       }
       await fulfillJson(route, { error: 'Action MCP invalide.', code: 'invalid-request', uncertain: false }, 400); return;
     }
-    if (url.pathname === '/api/tools' && method === 'GET') { await fulfillJson(route, toolSettings); return; }
+    if (url.pathname === '/api/tools' && method === 'GET') {
+      await fulfillJson(route, toolSettingsByScope[url.searchParams.has('projectId') ? 'project' : 'global']); return;
+    }
     if (url.pathname === '/api/tools' && method === 'PATCH') {
-      const input = body as { enabledTools?: string[]; toolPreset?: ToolSettings['preset']; powershellEnabled?: boolean; projectId?: string };
+      const input = body as { enabledTools?: string[]; toolPreset?: ToolSettings['preset']; powershellEnabled?: boolean; projectId?: string;
+        codemodeEnabled?: boolean; codemodeMode?: 'on' | 'only'; codemodeInlineBudget?: number };
       const enabled = new Set(input.enabledTools ?? []);
-      toolSettings = {
-        ...toolSettings, scope: input.projectId ? 'project' : 'global', source: input.projectId || 'global',
-        preset: input.toolPreset ?? toolSettings.preset, powershellEnabled: input.powershellEnabled === true,
-        tools: toolSettings.tools.map(tool => ({ ...tool, enabled: enabled.has(tool.name) && tool.available })),
+      const scope = input.projectId ? 'project' : 'global';
+      const previous = toolSettingsByScope[scope];
+      const preset = input.toolPreset ?? previous.preset;
+      toolSettingsByScope[scope] = {
+        ...previous, scope, source: input.projectId || 'global', preset, powershellEnabled: input.powershellEnabled === true,
+        ...(previous.codemode ? { codemode: { ...previous.codemode, enabled: input.codemodeEnabled ?? previous.codemode.enabled,
+          mode: input.codemodeMode ?? previous.codemode.mode, inlineBudget: input.codemodeInlineBudget ?? previous.codemode.inlineBudget } } : {}),
+        tools: previous.tools.map(tool => ({ ...tool, enabled: enabled.has(tool.name),
+          disabledReason: preset === 'chat-only' ? 'chat-only'
+            : preset === 'read-only' && ['write', 'edit', 'bash', 'powershell'].includes(tool.name) ? 'read-only'
+            : !enabled.has(tool.name) ? 'not-selected' : undefined })),
       };
-      await fulfillJson(route, toolSettings); return;
+      await fulfillJson(route, toolSettingsByScope[scope]); return;
     }
     if (url.pathname === '/api/skills/registry' && method === 'GET') {
       const query = (url.searchParams.get('query') || '').toLowerCase();

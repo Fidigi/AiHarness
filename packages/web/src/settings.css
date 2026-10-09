@@ -37,6 +37,14 @@
 .custom-resource-editor form input, .custom-resource-editor form select, .custom-resource-editor form textarea,
 #defaults input, #defaults select, #tools select { width: 100%; min-height: 2.2rem; }
 .custom-resource-editor form > div { grid-column: 1 / -1; display: flex; gap: .4rem; }
+.codemode-settings { min-width: 0; display: grid; gap: .65rem; margin-top: 1rem; padding: .75rem; border: 1px solid #40527b; border-radius: 6px; }
+.codemode-settings > label { min-width: 0; display: grid; gap: .3rem; }
+.codemode-settings p { margin: 0; overflow-wrap: anywhere; }
+.codemode-settings input { width: 100%; min-height: 2.2rem; }
+.mcp-per-tool-exposure { width: 100%; min-width: 0; text-align: left; overflow-wrap: anywhere; }
+.mcp-per-tool-exposure > summary { cursor: pointer; margin: .35rem 0; }
+.mcp-per-tool-exposure > label { margin-top: .4rem; }
+html[data-theme="light"] .codemode-settings { border-color: #b8c3d4; }
 .tool-settings-list { display: grid; gap: .35rem; margin: .7rem 0; }
 .tool-settings-list > label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: .5rem; padding: .45rem; border-bottom: 1px solid #30405f; }
 .tool-settings-list span { display: grid; gap: .15rem; }

@@ -55,6 +55,7 @@ export interface RpcDynamicTools {
   /** Hosted tools need the registry hook adapter; registry-owned deferred tools do not. */
   isHosted?(name: string): boolean;
   getActivatedTools?(name: string, result: ExtensionToolResult): string[] | undefined;
+  getToolResultMetadata?(name: string, result: ExtensionToolResult): Record<string, unknown> | undefined;
   release?(): void | Promise<void>;
 }
 
@@ -1072,6 +1073,7 @@ export class RpcController {
               return this.context.extensionRegistry.executeTool(name, input, context, executionSignal);
             },
             getActivatedTools: (name, result) => dynamicTools?.getActivatedTools?.(name, result),
+            getToolResultMetadata: (name, result) => dynamicTools?.getToolResultMetadata?.(name, result),
             toolContext: {
               ...this.context.toolContext,
               currentSessionId: this.currentSessionId,

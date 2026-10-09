@@ -53,7 +53,7 @@ function serverName(value: unknown): value is string {
 }
 
 function exposureOf(value: unknown): McpExposure | undefined {
-  return value === 'direct' || value === 'codemode' || value === 'deferred' ? value : undefined;
+  return value === 'direct' || value === 'codemode' || value === 'deferred' || value === 'hidden' ? value : undefined;
 }
 
 function configKey(value: unknown): value is string {
@@ -628,8 +628,9 @@ export function createMcpRouter(
         const scope = scopeOf(body.scope);
         const revision = revisionOf(body.revision);
         const exposure = exposureOf(body.exposure);
-        if (!hasOnlyKeys(body, ['action', 'cwd', 'exposure', 'name', 'revision', 'scope'])
+        if (!hasOnlyKeys(body, ['action', 'cwd', 'exposure', 'name', 'revision', 'scope', 'tool'])
           || !scope || revision === undefined || !exposure || !serverName(body.name)
+          || (body.tool !== undefined && !serverName(body.tool))
           || (body.cwd !== undefined && typeof body.cwd !== 'string')) {
           throw new McpConfigMutationError('invalid-request', INVALID_ACTION);
         }
@@ -640,6 +641,7 @@ export function createMcpRouter(
           revision,
           name: body.name,
           exposure,
+          ...(body.tool !== undefined ? { tool: body.tool as string } : {}),
           ...(cwd ? { cwd } : {}),
         }));
         return;

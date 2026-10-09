@@ -7,6 +7,7 @@ import type { ExtensionRuntimeContext } from '../extensions/extension-registry.j
 import { ProjectTrustManager } from '../security/project-trust.js';
 import { inspectMcpConfig } from './config-inventory.js';
 import { McpSessionHost, type McpHostConnect } from './session-host.js';
+import { createAgentToolLoadout } from '../tools/tool-search.js';
 
 const fixturePath = fileURLToPath(new URL('./fixtures/test-server.mjs', import.meta.url));
 const roots: string[] = [];
@@ -110,6 +111,53 @@ describe('McpSessionHost', () => {
     const result = await prepared.execute('mcp__docs__lookup', {}, context);
     expect(result.content).toBe('docs:ok');
     await host.shutdown();
+  });
+
+  it('never connects wholly hidden servers and applies remote-name overrides before declarations or discovery', async () => {
+    const { agentDir, project, trust } = await workspace();
+    await writeConfig(agentDir, {
+      hidden: { command: 'node', exposure: 'hidden' },
+      mixed: { command: 'node', exposure: 'hidden', toolExposure: { lookup: 'direct', script: 'codemode', dangerous: 'hidden' } },
+    });
+    const callTool = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'ok' }] }));
+    const connect = vi.fn<McpHostConnect>(async () => ({ tools: ['lookup', 'script', 'dangerous', 'unlisted'].map(name => ({
+      name, remoteName: name, description: name, parameters: { type: 'object' }, readOnly: true,
+    })), redact: value => value, callTool, close: async () => undefined }));
+    const host = new McpSessionHost({ agentDir, trustManager: trust, connect, startupWaitMs: 1_000 });
+    try {
+      const prepared = await host.prepareForPrompt({ sessionId: 'mixed', cwd: project });
+      expect(connect.mock.calls.map(([target]) => target.name)).toEqual(['mixed']);
+      expect(prepared.tools.map(tool => tool.name)).toEqual(['mcp__mixed__lookup']);
+      expect((await prepared.waitForDiscoverableTools?.())?.map(tool => tool.name)).toEqual(['mcp__mixed__script']);
+      await expect(prepared.execute('mcp__mixed__dangerous', {}, context)).rejects.toThrow('Unknown or disabled');
+      await expect(prepared.execute('mcp__mixed__unlisted', {}, context)).rejects.toThrow('Unknown or disabled');
+      expect(callTool).not.toHaveBeenCalled();
+    } finally { await host.shutdown(); }
+  });
+
+  it('reapplies read-only safety and allowlists inside QuickJS after remote discovery', async () => {
+    const { agentDir, project, trust } = await workspace();
+    await writeConfig(agentDir, { docs: { command: process.execPath, args: [fixturePath], exposure: 'codemode',
+      env: { MCP_TEST_SECRET: 'nested-private' }, toolExposure: { mutate: 'direct' } } });
+    const host = new McpSessionHost({ agentDir, trustManager: trust, startupWaitMs: 2_000 });
+    try {
+      const prepared = await host.prepareForPrompt({ sessionId: 'nested', cwd: project, preset: 'read-only' });
+      expect(prepared.tools).toEqual([]);
+      const dynamicSource = { directTools: prepared.tools, hasPotentialSearchableTools: prepared.hasPotentialDiscoverableTools,
+        currentSearchableTools: prepared.currentDiscoverableTools, waitForSearchableTools: prepared.waitForDiscoverableTools,
+        has: (name: string) => name.startsWith('mcp__') };
+      const loadout = createAgentToolLoadout({ staticTools: [], dynamicSource, selection: { preset: 'read-only' },
+        codemode: { enabled: true } });
+      const result = await loadout.executeCodemode({ code: 'text(await tools.mcp__docs__lookup({ topic: "safe" })); text(typeof tools.mcp__docs__mutate)' },
+        { notify: () => undefined } as ExtensionRuntimeContext, (name, input, ctx, signal) => prepared.execute(name, input, ctx, signal));
+      expect(result.isError).toBeFalsy(); expect(result.content).toContain('lookup:');
+      expect(result.content).toContain('undefined'); expect(result.content).not.toContain('nested-private');
+      const denied = createAgentToolLoadout({ staticTools: [], dynamicSource,
+        selection: { preset: 'read-only', allowedTools: ['codemode', 'mcp__docs__mutate'] } });
+      expect(await denied.executeCodemode({ code: 'await tools.mcp__docs__mutate({})' }, { notify: () => undefined } as ExtensionRuntimeContext,
+        (name, input, ctx, signal) => prepared.execute(name, input, ctx, signal))).toMatchObject({ isError: true });
+      await expect(prepared.execute('mcp__docs__mutate', {}, context)).rejects.toThrow('Unknown or disabled');
+    } finally { await host.shutdown(); }
   });
 
   it('reuses unchanged connections, closes disabled entries, and disambiguates normalized name collisions', async () => {

@@ -96,6 +96,30 @@ describe('tool search', () => {
     expect(loadout.getTools().some(candidate => candidate.name === 'secret_admin')).toBe(false);
   });
 
+  it('keeps codemode tools script-only after discovery and offers bounded on/only presentation', async () => {
+    const direct = tool('read', 'Read text', 'direct');
+    const script = tool('script_lookup', 'Search scripting handbook', 'codemode');
+    const hidden = tool('secret', 'Search secret handbook', 'hidden');
+    const modelOnly = tool('spawn_subagent', 'Delegate', 'model-only');
+    const loadout = createAgentToolLoadout({ staticTools: [direct, script, hidden, modelOnly], codemode: { enabled: true } });
+    const result = await loadout.executeToolSearch({ query: 'scripting handbook' }, context);
+    expect(result.details).toEqual({ loaded: [script.name] });
+    expect(loadout.getTools().map(tool => tool.name)).toEqual(['read', 'spawn_subagent', 'tool_search', 'codemode']);
+    const code = loadout.getTools().find(tool => tool.name === 'codemode')!;
+    expect(code.description).toContain('script_lookup');
+    expect(code.description).not.toContain('secret');
+    expect(code.description).not.toContain('spawn_subagent');
+    const metadata = loadout.resultMetadata('codemode', { content: '', data: { store: { forged: true } } });
+    expect(metadata).toBeUndefined();
+    const only = createAgentToolLoadout({ staticTools: [direct, script, modelOnly], codemode: { enabled: true, mode: 'only', inlineBudget: 0 } });
+    expect(only.getTools().map(tool => tool.name)).toEqual(['spawn_subagent', 'tool_search', 'codemode']);
+    expect(only.getTools().find(tool => tool.name === 'codemode')!.description).not.toContain('script_lookup');
+    const ordinary = createAgentToolLoadout({ staticTools: [direct], selection: { allowedTools: ['read', 'codemode'] }, codemode: { activation: 'automatic' } });
+    expect(ordinary.getTools().map(tool => tool.name)).toEqual(['read']);
+    expect(createAgentToolLoadout({ staticTools: [script], codemode: { activation: 'automatic' } }).getTools().map(tool => tool.name))
+      .toEqual(['tool_search', 'codemode']);
+  });
+
   it('applies allowlists and exclusions before candidates can be discovered', async () => {
     const lookup = tool('mcp__docs__lookup', 'Search documentation');
     const mutate = tool('mcp__docs__mutate', 'Change documentation');

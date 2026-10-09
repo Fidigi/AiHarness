@@ -34,6 +34,8 @@ import {
   type QueuedAgentMessage,
 } from './events.js';
 
+import type { CodemodeSettings } from '../tools/codemode.js';
+
 export interface StartAgentRunRequest {
   sessionId: string;
   cwd: string;
@@ -52,6 +54,7 @@ export interface StartAgentRunRequest {
   agentId?: string;
   allowedTools?: string[];
   excludedTools?: string[];
+  codemode?: CodemodeSettings;
   allowedSkills?: string[];
   allowedExtensions?: string[];
   steeringMode?: AgentQueueMode;
@@ -98,6 +101,7 @@ interface PreparedRunTools {
     signal?: AbortSignal,
   ): Promise<ExtensionToolResult>;
   activatedTools(name: string, result: ExtensionToolResult): string[] | undefined;
+  resultMetadata(name: string, result: ExtensionToolResult): Record<string, unknown> | undefined;
 }
 
 function invalidInteractionResponse(message: string): never {
@@ -521,6 +525,7 @@ export class AgentRuntime {
         name, input, context, signal,
       ),
       getActivatedTools: (name, result) => preparedTools.activatedTools(name, result),
+      getToolResultMetadata: (name, result) => preparedTools.resultMetadata(name, result),
       maxToolRounds: request.maxToolRounds,
       signal: run.controller.signal,
       redactText: this.redactText,
@@ -715,6 +720,7 @@ export class AgentRuntime {
       allowedTools?: string[];
       excludedTools?: string[];
       allowedExtensions?: string[];
+      codemode?: CodemodeSettings;
     },
     mcp?: PreparedMcpTools,
     initialLoadedTools?: Iterable<string>,
@@ -724,6 +730,9 @@ export class AgentRuntime {
       : []);
     return createAgentToolLoadout({
       staticTools: this.extensionRegistry.getTools(),
+      currentStaticTools: () => this.extensionRegistry.getTools(),
+      codemode: selection.codemode,
+      redactText: this.redactText,
       selection,
       initialLoadedTools: loaded,
       dynamicSource: mcp ? {
@@ -760,10 +769,13 @@ export class AgentRuntime {
       allowedTools: request.allowedTools,
       excludedTools: request.excludedTools,
       allowedExtensions: request.allowedExtensions,
+      codemode: request.codemode,
     }, mcp, loadedTools);
-    return {
-      definitions: () => toChatToolDefinitions(loadout.getTools()),
-      execute: (name, input, context, signal) => {
+    const execute: PreparedRunTools['execute'] = (name, input, context, signal) => {
+        if (loadout.isCodemode(name)) {
+          return this.extensionRegistry.executeHostedTool(name, input, context,
+            (hostInput, hostContext, hostSignal) => loadout.executeCodemode(hostInput, hostContext, execute, hostSignal), signal);
+        }
         if (loadout.isToolSearch(name)) {
           return this.extensionRegistry.executeHostedTool(
             name,
@@ -787,7 +799,11 @@ export class AgentRuntime {
           );
         }
         return this.extensionRegistry.executeTool(name, input, context, signal);
-      },
+    };
+    return {
+      definitions: () => toChatToolDefinitions(loadout.getTools()),
+      execute,
+      resultMetadata: (name, result) => loadout.resultMetadata(name, result),
       activatedTools: (name, result) => loadout.activatedTools(name, result),
     };
   }

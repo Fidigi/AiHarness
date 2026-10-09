@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +48,12 @@ describe('top-level MCP command', () => {
     output.length = 0;
 
     expect(await runMcpCommand(['exposure', 'fixture', 'deferred'], io)).toBe(0);
+    expect(await runMcpCommand(['exposure', 'fixture', 'hidden', '--tool', 'mutate'], io)).toBe(0);
+    expect(JSON.parse(await readFile(path.join(agentDir, 'mcp.json'), 'utf8'))).toMatchObject({ mcpServers: { fixture: {
+      exposure: 'deferred', toolExposure: { mutate: 'hidden' },
+    } } });
+    expect(await runMcpCommand(['exposure', 'fixture', 'hidden'], io)).toBe(0);
+    expect(JSON.parse(await readFile(path.join(agentDir, 'mcp.json'), 'utf8'))).toMatchObject({ mcpServers: { fixture: { exposure: 'hidden' } } });
     output.length = 0;
     expect(await runMcpCommand(['remove', 'fixture', '--json'], io)).toBe(0);
     expect(JSON.parse(output.join(''))).toMatchObject({ name: 'fixture', scope: 'global' });

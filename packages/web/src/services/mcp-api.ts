@@ -128,6 +128,7 @@ type McpActionRequest =
     revision: string | null;
     name: string;
     exposure: McpExposure;
+    tool?: string;
   }
   | {
     action: 'remove';
@@ -245,9 +246,10 @@ export function setMcpConfigExposure(
   exposure: McpExposure,
   revision: string | null,
   cwd?: string,
+  tool?: string,
 ): Promise<McpActionResponse> {
   return postMcpAction({
-    action: 'set-exposure', scope, name, exposure, revision, ...(cwd ? { cwd } : {}),
+    action: 'set-exposure', scope, name, exposure, revision, ...(cwd ? { cwd } : {}), ...(tool ? { tool } : {}),
   });
 }
 

@@ -4,9 +4,9 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { FetchLike, Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { executeShellCommand, filteredProcessEnvironment, ProcessAbortedError } from '../tools/process-execution.js';
+import { mcpToolExposure } from './config-inventory.js';
 import type {
   McpConfigInventory,
-  McpExposure,
   McpHttpRuntimeConfig,
   McpServerRuntimeConfig,
   McpServerTestResult,
@@ -99,12 +99,6 @@ export function appendBoundedTail(current: Buffer, chunk: Buffer, maximum: numbe
   let start = combined.length - maximum;
   while (start < combined.length && (combined[start]! & 0xc0) === 0x80) start++;
   return combined.subarray(start);
-}
-
-function exposure(config: McpServerRuntimeConfig): McpExposure {
-  return config.exposure === 'codemode' || config.exposure === 'deferred'
-    ? config.exposure
-    : 'direct';
 }
 
 function runtimeValues(config: McpServerRuntimeConfig): Array<{ field: string; value: string }> {
@@ -457,7 +451,7 @@ function describeTool(
     name: safeText(tool.name, redact, DESCRIPTION_MAX_CHARS),
     ...(description ? { description: safeText(description, redact, DESCRIPTION_MAX_CHARS) } : {}),
     readOnly: tool.annotations?.readOnlyHint === true,
-    exposure: exposure(config),
+    exposure: mcpToolExposure(config, tool.name),
   };
 }
 

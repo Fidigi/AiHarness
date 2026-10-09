@@ -10,6 +10,7 @@ import type { ProjectTrustManager } from '../security/project-trust.js';
 import type { Session } from '../types/index.js';
 import {
   inspectMcpConfig,
+  mcpToolExposure,
   readMcpServerTestTarget,
   type McpConfigInventory,
   type McpExposure,
@@ -204,9 +205,7 @@ function errorMessage(error: unknown): string {
 }
 
 function exposure(target: McpServerTestTarget): McpExposure {
-  return target.config.exposure === 'codemode' || target.config.exposure === 'deferred'
-    ? target.config.exposure
-    : 'direct';
+  return mcpToolExposure(target.config);
 }
 
 function targetIdentity(target: McpServerTestTarget): string {
@@ -601,6 +600,7 @@ export class McpSessionHost {
     const directReady: Promise<void>[] = [];
     const effectiveEntries = inventory.servers.filter(server => (
       server.valid && server.enabled && !(server.scope === 'global' && server.shadowedByProject)
+      && (server.exposure !== 'hidden' || Object.values(server.toolExposure ?? {}).some(mode => mode !== 'hidden'))
     ));
     const entries = effectiveEntries.slice(0, MCP_RUNTIME_MAX_SERVERS);
     for (const entry of effectiveEntries.slice(MCP_RUNTIME_MAX_SERVERS)) {
@@ -659,7 +659,7 @@ export class McpSessionHost {
         record = this.startConnection(sessionId, target);
         session.records.set(key, record);
       }
-      if (record.exposure === 'direct') directReady.push(record.ready);
+      if (record.exposure === 'direct' || Object.values(record.target.config.toolExposure ?? {}).includes('direct')) directReady.push(record.ready);
     }
 
     const stale: ConnectionRecord[] = [];
@@ -761,6 +761,7 @@ export class McpSessionHost {
       outer: for (const record of session?.records.values() ?? []) {
         if (record.state !== 'connected' || !record.connection) continue;
         for (const remote of record.tools) {
+          if (mcpToolExposure(record.target.config, remote.remoteName) === 'hidden') continue;
           if (preset === 'read-only' && !remote.readOnly) continue;
           candidates.push({
             record,
@@ -794,7 +795,7 @@ export class McpSessionHost {
         description: `[MCP ${candidate.record.target.name}] ${candidate.remote.description}`,
         parameters: candidate.remote.parameters,
         extensionId: MCP_EXTENSION_ID,
-        exposure: candidate.record.exposure,
+        exposure: mcpToolExposure(candidate.record.target.config, candidate.remote.remoteName),
         namespace: {
           name: `mcp__${sanitizeToolPart(candidate.record.target.name)}`,
           description: candidate.record.target.config.description
@@ -813,7 +814,7 @@ export class McpSessionHost {
         },
         execute: (input, context, signal) => this.executeBinding(name, bindings, input, context, signal),
       };
-      if (candidate.record.exposure === 'direct') tools.push(tool);
+      if (tool.exposure === 'direct') tools.push(tool);
       else discoverableTools.push(tool);
     }
     return { tools, discoverableTools, bindings };
@@ -822,7 +823,8 @@ export class McpSessionHost {
   private buildPreparedTools(session: HostedSession | undefined, preset?: Session['toolPreset']): PreparedMcpTools {
     const initial = this.buildToolSnapshot(session, preset);
     const hasPotentialDiscoverableTools = preset !== 'chat-only' && [...(session?.records.values() ?? [])]
-      .some(record => record.exposure !== 'direct'
+      .some(record => [record.exposure, ...Object.values(record.target.config.toolExposure ?? {})]
+        .some(mode => mode === 'codemode' || mode === 'deferred')
         && (record.state === 'connecting' || record.state === 'connected'));
     const knownBindings = new Map(initial.bindings);
     const current = (): PreparedToolSnapshot => {
