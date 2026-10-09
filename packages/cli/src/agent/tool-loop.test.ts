@@ -187,7 +187,7 @@ describe('runToolLoop', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it('passes cancellation to an active tool and does not persist a partial result', async () => {
+  it('passes cancellation to an active tool and persists one interrupted terminal result', async () => {
     const { sessionManager, session, extensionRegistry } = await setup();
     const controller = new AbortController();
     await extensionRegistry.load('slow', api => {
@@ -213,7 +213,10 @@ describe('runToolLoop', () => {
       signal: controller.signal,
     })).rejects.toThrow("Exécution de l'agent interrompue");
 
-    expect(sessionManager.get(session.id)?.messages.map(message => message.role)).toEqual(['user', 'assistant']);
+    expect(sessionManager.get(session.id)?.messages.map(message => message.role)).toEqual(['user', 'assistant', 'tool']);
+    expect(sessionManager.get(session.id)?.messages.at(-1)).toMatchObject({
+      toolCallId: 'slow-1', isError: true, content: 'Tool execution interrupted.', metadata: { interrupted: true },
+    });
   });
 
   it('stops an infinite tool loop at the configured safety limit', async () => {

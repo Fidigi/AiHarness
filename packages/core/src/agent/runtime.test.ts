@@ -260,6 +260,48 @@ describe('AgentRuntime', () => {
     expect(finished.filter(event => event.type === 'tool.progress')).toHaveLength(2);
   });
 
+  it('persists completed nested usage on Stop without committing store or accepting late work', async () => {
+    const provider = new MockProvider({ type: 'mock', model: 'virtual-chat' });
+    const usage = vi.fn();
+    const { runtime, sessionManager, session, extensionRegistry } = await setup(provider, usage);
+    let release!: () => void;
+    const hold = new Promise<void>(resolve => { release = resolve; });
+    await extensionRegistry.load('held-tool', api => api.registerTool({ name: 'hold', description: 'Wait',
+      execute: async () => { await hold; return { content: 'late output' }; } }));
+    vi.spyOn(provider, 'classify').mockResolvedValue({ label: 'yes',
+      usage: { inputTokens: 3, outputTokens: 1, totalTokens: 4, costUsd: 0.002 } });
+    const stream = vi.spyOn(provider, 'streamChat').mockImplementation(async (_messages, _chunk, complete) => {
+      complete?.({ content: '', toolCalls: [{ id: 'interrupted-script', name: 'codemode', input: {
+        code: `store('notCommitted',true); await models.classify({model:'virtual-chat:classifier',input:'test',labels:['yes']}); return await tools.hold({});`,
+      } }] });
+    });
+    const run = await runtime.start({ sessionId: session.id, cwd: process.cwd(), provider: 'mock', input: 'classify',
+      codemode: { enabled: true }, allowedTools: ['codemode', 'hold'] });
+    await vi.waitFor(() => expect(runtime.snapshot(session.id).run?.activeTool?.nestedCalls)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ state: 'completed', kind: 'classifier' }),
+        expect.objectContaining({ state: 'running', kind: 'tool' })])));
+    runtime.stop(run.id);
+    await expect(runtime.start({ sessionId: session.id, cwd: process.cwd(), provider: 'mock', input: 'too early' }))
+      .rejects.toThrow('déjà actif');
+    await runtime.wait(run.id);
+    const result = sessionManager.get(session.id)!.messages.at(-1)!;
+    expect(result).toMatchObject({ role: 'tool', toolCallId: 'interrupted-script', isError: true,
+      content: 'Tool execution interrupted.', usage: { totalTokens: 4, costUsd: 0.002 },
+      metadata: { interrupted: true, codemode: { nestedCalls: [{ state: 'completed' }, { state: 'cancelled' }] } } });
+    expect((result.metadata?.codemode as Record<string, unknown>).store).toBeUndefined();
+    expect(sessionManager.get(session.id)?.usage).toMatchObject({ totalTokens: 4, costUsd: 0.002 });
+    expect(usage).toHaveBeenCalledOnce();
+    expect(stream).toHaveBeenCalledOnce();
+    const events = runtime.journal.replay(session.id).events;
+    expect(events.filter(event => event.type === 'tool.failed')).toHaveLength(1);
+    expect(events.at(-1)?.type).toBe('run.stopped');
+    release();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(runtime.journal.replay(session.id).events).toEqual(events);
+    expect(sessionManager.get(session.id)!.messages.at(-1)).toEqual(result);
+    expect(usage).toHaveBeenCalledOnce();
+  });
+
   it('runs model/tool turns, persists rich entries, and publishes ordered replayable events', async () => {
     const turns: Array<{ provider: string; model?: string; tokens: number }> = [];
     const { runtime, sessionManager, session, extensionRegistry } = await setup(new ToolProvider(), (provider, model, usage) => {

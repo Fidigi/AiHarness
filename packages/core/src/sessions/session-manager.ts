@@ -1703,7 +1703,7 @@ export class SessionManager {
   async addMessage(
     sessionId: string,
     message: Omit<Message, 'id' | 'timestamp'>,
-    options: { signal?: AbortSignal } = {},
+    options: { signal?: AbortSignal; skipAutoCompaction?: boolean } = {},
   ): Promise<Session | null> {
     message = this.redactJson(message);
     if (!message || typeof message !== 'object'
@@ -1794,7 +1794,7 @@ export class SessionManager {
     });
     
     // Auto-compact if enabled and we have enough messages with significant context
-    if (this.compactionSettings.enabled && session.messages.length >= 4) {
+    if (!options.skipAutoCompaction && this.compactionSettings.enabled && session.messages.length >= 4) {
       await this.checkAndTriggerCompaction(session.id, options.signal);
     }
 

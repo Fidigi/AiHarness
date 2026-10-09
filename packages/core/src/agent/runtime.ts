@@ -82,6 +82,7 @@ interface ActiveRun {
   controller: AbortController;
   completion: Promise<void>;
   resolveCompletion(): void;
+  settled: boolean;
   queue: AgentMessageQueue<QueuedAgentMessage>;
 }
 
@@ -242,8 +243,9 @@ export class AgentRuntime {
         status: 409,
       });
     }
-    const existing = this.getSessionRun(request.sessionId);
-    if (existing && !['completed', 'failed', 'stopped'].includes(existing.phase)) {
+    const existingId = this.sessionRuns.get(request.sessionId);
+    const existing = existingId ? this.runs.get(existingId) : undefined;
+    if (existing && !existing.settled) {
       throw new Error('Un agent est déjà actif pour cette session.');
     }
 
@@ -292,6 +294,7 @@ export class AgentRuntime {
       controller,
       completion,
       resolveCompletion,
+      settled: false,
       queue: new AgentMessageQueue({
         steeringMode: request.steeringMode,
         followUpMode: request.followUpMode,
@@ -315,6 +318,7 @@ export class AgentRuntime {
     this.publish(active, 'run.queued', { input: hook.data.input });
 
     void this.execute(active, effectiveRequest, provider).finally(() => {
+      active.settled = true;
       active.resolveCompletion();
     });
     return this.redactJson(cloneSnapshot(snapshot));
@@ -432,9 +436,9 @@ export class AgentRuntime {
     run.snapshot.retry = undefined;
     run.snapshot.activeTool = undefined;
     run.snapshot.extensionRequest = undefined;
-    run.snapshot.completedAt = new Date().toISOString();
-    this.setPhase(run, 'stopped');
-    this.publish(run, 'run.stopped', { completedAt: run.snapshot.completedAt });
+    // The HTTP acknowledgement can report stopped immediately, but the journal's
+    // terminal event must follow durable interrupted-tool accounting and cleanup.
+    run.snapshot.phase = 'stopped';
     return this.redactJson(cloneSnapshot(run.snapshot));
   }
 
@@ -487,10 +491,8 @@ export class AgentRuntime {
       run.snapshot.extensionRequest = undefined;
       this.cancelInteractions(run);
       if (run.controller.signal.aborted || error instanceof AgentAbortError) {
-        if (run.snapshot.phase !== 'stopped') {
-          this.setPhase(run, 'stopped');
-          this.publish(run, 'run.stopped', { completedAt: run.snapshot.completedAt });
-        }
+        this.setPhase(run, 'stopped');
+        this.publish(run, 'run.stopped', { completedAt: run.snapshot.completedAt });
       } else {
         run.snapshot.error = this.redactText(error instanceof Error ? error.message : String(error));
         this.setPhase(run, 'failed');

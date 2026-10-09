@@ -218,13 +218,25 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         content = options.redactText?.(message) ?? message;
       }
 
-      throwIfAborted();
+      // Cancellation stops execution, not the durable record of work already done.
+      // In particular, authenticated code-mode metadata contains completed model usage.
+      const interrupted = options.signal?.aborted === true;
+      if (interrupted) {
+        isError = true;
+        activatedTools = undefined;
+        content = options.redactText?.('Tool execution interrupted.') ?? 'Tool execution interrupted.';
+        resultMetadata = { ...resultMetadata, interrupted: true };
+        const codemode = resultMetadata.codemode as CodemodeDetails | undefined;
+        if (codemode) {
+          const { store: _store, ...details } = codemode;
+          resultMetadata.codemode = details;
+        }
+      }
       const fullContent = content;
       const truncated = content.length > maxToolResultLength;
       if (truncated) content = `${content.slice(0, maxToolResultLength)}\n[Résultat tronqué — sortie complète disponible]`;
       const durationMs = Date.now() - toolStartedAt;
       const usage = (resultMetadata?.codemode as CodemodeDetails | undefined)?.usage;
-      if (usage) await options.onToolUsage?.(usage);
       await options.sessionManager.addMessage(options.sessionId, {
         role: 'tool',
         content,
@@ -245,7 +257,8 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         ...((activatedTools?.length || resultMetadata) ? { metadata: {
           ...toolSearchActivationMetadata(activatedTools ?? []), ...resultMetadata,
         } } : {}),
-      }, { signal: options.signal });
+      }, { skipAutoCompaction: true });
+      if (usage) await options.onToolUsage?.(usage);
       const toolResult: ToolExecutionResult = {
         call,
         content,
@@ -259,6 +272,8 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       };
       toolResults.push(toolResult);
       await options.onToolResult?.(toolResult);
+      throwIfAborted();
+      await options.sessionManager.checkAndTriggerCompaction(options.sessionId, options.signal);
     }
 
     await options.onTurnEnd?.(response, toolResults, round);
