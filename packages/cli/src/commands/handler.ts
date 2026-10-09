@@ -1534,7 +1534,8 @@ export class CommandHandler {
     }
 
     const exactCommand = commands.find(command => command.name === commandName);
-    const extensionCommand = exactCommand ? undefined : this.ctx.extensionRegistry?.getCommand(commandName);
+    const extensionCommand = !exactCommand || commandName === 'mcp'
+      ? this.ctx.extensionRegistry?.getCommand(commandName) : undefined;
 
     if (extensionCommand) {
       try {

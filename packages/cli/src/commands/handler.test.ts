@@ -641,6 +641,21 @@ describe('/export command', () => {
   // ===================================================================
 
   describe('extension integration', () => {
+    it('respects /mcp ownership, rejects a second owner and restores the builtin on unload', async () => {
+      const registry = new ExtensionRegistry();
+      await registry.load('mcp-owner', api => api.registerCommand('mcp', {
+        description: 'Owned MCP command', handler: args => `owned:${args}`,
+      }));
+      const ownedHandler = new CommandHandler(manager, store, terminal as unknown as TerminalUI, registry);
+      expect(await captureOutput(() => ownedHandler.execute('/mcp status'))).toContain('owned:status');
+      await expect(registry.load('mcp-conflict', api => api.registerCommand('mcp', {
+        description: 'Conflicting command', handler: () => 'wrong-owner',
+      }))).rejects.toThrow();
+      expect(await captureOutput(() => ownedHandler.execute('/mcp'))).toContain('owned:');
+      await registry.unload('mcp-owner');
+      expect(await captureOutput(() => ownedHandler.execute('/mcp'))).toContain('MCP runtime is not configured.');
+    });
+
     it('dispatches dynamically registered slash commands', async () => {
       const registry = new ExtensionRegistry();
       await registry.load('test-extension', api => api.registerCommand('greet', {

@@ -3,6 +3,7 @@ import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   McpOAuthCredentialManager,
+  ExtensionRegistry,
   McpOAuthFlowService,
   type McpOAuthCredentialBackend,
   type McpOAuthFlowDriver,
@@ -69,6 +70,7 @@ function application(
       }),
     },
     mcpHost: { disconnectServer: disconnect },
+    extensionRegistry: new ExtensionRegistry(),
   } as unknown as RuntimeServices;
   const getOAuthRuntime = vi.fn(async () => oauthRuntime);
   const app = express();
@@ -87,7 +89,7 @@ describe('MCP OAuth routes', () => {
     const getOverview = vi.fn(async () => ({ files: [], servers: [] }));
     const { app, getOAuthRuntime } = application(oauth, { getOverview });
 
-    await request(app).get('/api/mcp').expect(200, { files: [], servers: [] });
+    await request(app).get('/api/mcp').expect(200, { files: [], servers: [], command: { owner: 'builtin', conflict: false } });
     expect(getOverview).toHaveBeenCalledTimes(1);
     expect(getOAuthRuntime).not.toHaveBeenCalled();
   });

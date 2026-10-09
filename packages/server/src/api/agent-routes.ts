@@ -139,8 +139,8 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         .filter(resource => resource.kind === 'prompt')
         .map(resource => ({ name: resource.name, description: `Prompt from ${pkg.packageName ?? pkg.source}`, source: 'prompt' })));
       const seen = new Set<string>();
-      // An owned extension command wins over the local builtin, never over a sibling owner.
-      const ownedNames = new Set(extensions.map(command => command.name));
+      // /mcp has explicit ownership routing; other builtins retain their existing precedence.
+      const ownedNames = new Set(extensions.filter(command => command.name === 'mcp').map(command => command.name));
       response.json([...builtins.filter(command => !ownedNames.has(command.name)), ...extensions, ...prompts, ...skills].filter(item => {
         const key = `${item.source}:${item.name}`;
         if (seen.has(key)) return false;
