@@ -290,7 +290,7 @@ test.describe('Settings and authentication', () => {
     { name: 'mobile-dark', width: 390, theme: 'dark' },
     { name: 'mobile-light', width: 390, theme: 'light' },
   ] as const) {
-  test(`${scenario.name} connecte, colle le callback, déconnecte et annule un flux OAuth MCP sans exposer les jetons`, async ({ page }, testInfo) => {
+  test(`${scenario.name} connecte, colle le callback, déconnecte et annule un flux OAuth MCP sans exposer les jetons`, async ({ page }) => {
     await page.setViewportSize({ width: scenario.width, height: 900 });
     await page.addInitScript(({ theme }) => {
       localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({
@@ -374,8 +374,8 @@ test.describe('Settings and authentication', () => {
     const accessibility = await new AxeBuilder({ page }).include('.mcp-oauth-panel')
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     expect(accessibility.violations).toEqual([]);
-    await testInfo.attach(`mcp-oauth-authorize-${scenario.name}`, {
-      body: await card.screenshot({ animations: 'disabled' }), contentType: 'image/png',
+    await expect(card).toHaveScreenshot(`mcp-oauth-authorize-${scenario.name}.png`, {
+      animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
     });
     await card.getByLabel('Full redirected address').fill(
       'http://127.0.0.1:32123/oauth/callback?code=public-code&state=browser-state',
@@ -385,8 +385,8 @@ test.describe('Settings and authentication', () => {
     await expect(card).toContainText('Signed in');
     expect((await new AxeBuilder({ page }).include('.mcp-oauth-panel')
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()).violations).toEqual([]);
-    await testInfo.attach(`mcp-oauth-connected-${scenario.name}`, {
-      body: await card.screenshot({ animations: 'disabled' }), contentType: 'image/png',
+    await expect(card).toHaveScreenshot(`mcp-oauth-connected-${scenario.name}.png`, {
+      animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
     });
     await card.getByRole('button', { name: 'Sign out', exact: true }).click();
     await expect(card).toContainText('Not signed in');
