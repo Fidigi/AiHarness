@@ -12,6 +12,7 @@ RUN npm install --global npm@${NPM_VERSION}
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     fonts-liberation \
+    fonts-noto-cjk \
     fonts-noto-color-emoji \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -48,6 +49,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     wget \
     && rm -rf /var/lib/apt/lists/*
+
+COPY .docker/test-fonts.conf /etc/fonts/local.conf
 
 WORKDIR /app
 

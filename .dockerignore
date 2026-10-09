@@ -37,6 +37,8 @@ test-results/
 !.docker/baseline-artifacts.mjs
 !.docker/baseline-artifacts.test.mjs
 !.docker/run-e2e.mjs
+!.docker/test-fonts.conf
+!.docker/test-fonts.test.mjs
 Dockerfile*
 docker-compose*
 Makefile

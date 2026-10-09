@@ -14,6 +14,8 @@ import MarkdownContent from './MarkdownContent';
 import { SubagentPanel } from './SubagentPanel';
 import { applyCodemodeProgress, codemodeDetails } from './codemode-state';
 import { composerKeySubmits } from './composer-submit';
+import { clipboardTextToMarkdown } from './markdown-paste';
+import { getMarkdownListContinuation } from './markdown-list-continuation';
 import { publishNotice, type NoticeLevel } from '../services/notices';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import {
@@ -162,34 +164,6 @@ function rankFileSuggestions(items: FileSuggestion[], query: string): FileSugges
   });
   return scored.sort((left, right) => left.score - right.score || left.item.path.localeCompare(right.item.path))
     .map(entry => entry.item);
-}
-
-function clipboardHtmlToMarkdown(html: string): string {
-  const document = new DOMParser().parseFromString(html, 'text/html');
-  const convert = (node: Node): string => {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
-    if (!(node instanceof HTMLElement)) return '';
-    if (['script', 'style', 'template', 'iframe', 'object'].includes(node.tagName.toLowerCase())) return '';
-    const content = [...node.childNodes].map(convert).join('');
-    switch (node.tagName.toLowerCase()) {
-      case 'h1': case 'h2': case 'h3': case 'h4': case 'h5': case 'h6':
-        return `${'#'.repeat(Number(node.tagName.slice(1)))} ${content.trim()}\n\n`;
-      case 'strong': case 'b': return `**${content}**`;
-      case 'em': case 'i': return `*${content}*`;
-      case 'code': return node.parentElement?.tagName.toLowerCase() === 'pre' ? content : `\`${content}\``;
-      case 'pre': return `\n\`\`\`\n${content.replace(/\n+$/, '')}\n\`\`\`\n\n`;
-      case 'a': {
-        const href = node.getAttribute('href') ?? '';
-        return /^(?:https?:|file:)/i.test(href) ? `[${content}](${href})` : content;
-      }
-      case 'li': return `- ${content.trim()}\n`;
-      case 'blockquote': return `${content.trim().split('\n').map(line => `> ${line}`).join('\n')}\n\n`;
-      case 'br': return '\n';
-      case 'p': case 'div': return `${content.trim()}\n\n`;
-      default: return content;
-    }
-  };
-  return [...document.body.childNodes].map(convert).join('').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function locationMessageId(hash: string): string | undefined {
@@ -1300,6 +1274,22 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       void sendMessage();
       return;
     }
+    if (event.key === 'Enter' && !isComposing && !recentlyComposed
+      && !event.ctrlKey && !event.metaKey && !event.altKey && currentSession) {
+      const target = event.currentTarget;
+      const edit = getMarkdownListContinuation(input, target.selectionStart, target.selectionEnd);
+      if (edit) {
+        event.preventDefault();
+        const nextDraft = `${input.slice(0, edit.start)}${edit.text}${input.slice(edit.end)}`;
+        setDraft(currentSession.id, nextDraft);
+        const caret = edit.start + edit.text.length;
+        requestAnimationFrame(() => {
+          if (target.isConnected && textareaRef.current === target && target.value === nextDraft
+            && useSessionStore.getState().activeSessionId === currentSession.id) target.setSelectionRange(caret, caret);
+        });
+        return;
+      }
+    }
     if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && !input.includes('\n') && history.length) {
       const next = event.key === 'ArrowUp'
         ? Math.min(history.length - 1, historyIndex + 1)
@@ -1702,9 +1692,12 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
                 <Fragment key={`minimap:${message.id}`}>
                   {historyGaps.has(message.id) && <span className="minimap-gap" aria-label={t('chat.historyGap')}>⋯</span>}
                   <button className={`minimap-entry ${kind}`} onClick={() => scrollToMessage(message.id)}
-                    aria-label={`${kind}: ${preview}`} title={message.content.slice(0, 160)}>
+                    aria-label={tool ? `${kind}: ${preview}` : undefined} title={tool ? preview : undefined}>
                     <span aria-hidden="true" />
-                    <small>{preview}</small>
+                    {!tool && <span className="sr-only">{kind}: </span>}
+                    <small>{!tool && ['user', 'assistant'].includes(message.role)
+                      ? <MarkdownContent content={message.content} compact keepLineBreaks={message.role === 'user'} />
+                      : preview}</small>
                   </button>
                 </Fragment>
               );
@@ -1905,12 +1898,18 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             }
             const html = event.clipboardData.getData('text/html');
             if (html) {
-              const markdown = clipboardHtmlToMarkdown(html);
+              const markdown = clipboardTextToMarkdown(event.clipboardData.getData('text/plain'), html);
               if (!markdown) return;
               event.preventDefault();
               const start = event.currentTarget.selectionStart;
               const end = event.currentTarget.selectionEnd;
-              setDraft(currentSession.id, `${input.slice(0, start)}${markdown}${input.slice(end)}`);
+              const target = event.currentTarget;
+              const nextDraft = `${input.slice(0, start)}${markdown}${input.slice(end)}`;
+              setDraft(currentSession.id, nextDraft);
+              requestAnimationFrame(() => {
+                if (target.isConnected && textareaRef.current === target && target.value === nextDraft
+                  && useSessionStore.getState().activeSessionId === currentSession.id) target.setSelectionRange(start + markdown.length, start + markdown.length);
+              });
             }
           }}
           onCompositionStart={() => { composingRef.current = true; }}
@@ -2121,7 +2120,7 @@ function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationF
         })}
       </section>}
       {((!codeDetails && message.content) || images.length > 0) && <section className="message-output" aria-label={message.role === 'assistant' ? t('chat.response') : undefined}>
-        {message.content && renderMessageContent(message.content)}
+        {message.content && renderMessageContent(message.content, message.role === 'user')}
         {images.map((block, index) => block.type === 'image' && (
           <a className="message-image" href={block.url} target="_blank" rel="noopener noreferrer" key={`image-${index}`}>
             <img src={block.url} alt={block.name || 'Attachment'} loading="lazy" />
@@ -2242,8 +2241,8 @@ function ToolOutput({ content }: { content: string }) {
   })}</pre>;
 }
 
-function renderMessageContent(content: string): ReactNode {
-  return <MarkdownContent content={content} />;
+function renderMessageContent(content: string, keepLineBreaks = false): ReactNode {
+  return <MarkdownContent content={content} keepLineBreaks={keepLineBreaks} />;
 }
 
 async function fileDataUrl(file: Blob): Promise<string> {

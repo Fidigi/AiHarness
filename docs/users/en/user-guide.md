@@ -900,11 +900,13 @@ The composer's **Thinking level** can be changed while the agent runs. The saved
 
 Add up to eight images via camera button, paste or drag-and-drop. Browser attempts to reduce oversized images; total size is limited. A warning appears if chosen provider does not announce multimodal support. Image blocks persist with message and send natively to OpenAI/Azure, Anthropic and Gemini/Vertex.
 
-Responses support titles with anchors, lists, tables, quotes, links, colored and copyable code, KaTeX math, reasoning and tool details. Their footer shows timestamp, model, available tokens/cost and a copy button with visual confirmation; files produced by tools are buttons that open viewer directly. Mermaid blocks load on demand and have sanitized SVG preview, source, accessible zoom and download; unsupported syntax produces local error without injecting active content. Raw HTML stays as text, KaTeX outputs are sanitized with trust mode disabled and external links use isolated opening.
+Responses support titles with anchors, lists, tables, quotes, links, colored and copyable code, KaTeX math, reasoning and tool details. Their footer shows timestamp, model, available tokens/cost and a copy button with visual confirmation; files produced by tools are buttons that open viewer directly. Mermaid blocks load on demand and have sanitized SVG preview, source, accessible zoom and download; unsupported syntax produces local error without injecting active content. Raw HTML remains non-executable, KaTeX outputs are sanitized with trust mode disabled and external links use isolated opening.
 
 Each tool turn groups into **Process** then **Response**. Process exposes name, arguments, progress, result or error, duration, provider/model, tokens and cost. ANSI sequences render without active HTML. Long output remains bounded in preview and model context; **Show complete output** explicitly loads full version, which can then be copied or downloaded.
 
-HTML paste in composer converts to useful Markdown (titles, lists, emphasis, links and code) after removing active elements like script, style and iframe.
+Pasting preserves the original plain-text lines and spacing; safe named HTTP(S)/file links may be retained as Markdown. Optional HTML link metadata is parsed inertly and bounded: unsupported or oversized metadata falls back to unchanged plaintext without fetching resources. Newline keys continue bullets, numbered/CJK lists and unchecked tasks; an empty item ends the list. Sending and IME confirmation never continue lists.
+
+User messages preserve soft line breaks; assistant replies and file previews use ordinary Markdown wrapping. Prices stay text while real formulas render. CJK punctuation ends automatic links without breaking CJK paths, and raw HTML stays inert. Conversation-map previews and accessible names share these parsing rules and contain no interactive nested links.
 
 When **selection actions** option is active, selecting text in conversation opens an accessible bar allowing you to quote it in current composer or create a new pre-filled draft. Quotation preserves line breaks and focus returns to composer without sending message.
 

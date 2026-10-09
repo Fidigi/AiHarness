@@ -76,7 +76,8 @@ A cwd change aborts stale requests, clears old file/search results, and keys Rea
 
 ## Rendering and Extensions
 
-- `MarkdownContentRenderer` sanitizes supported rich output; raw HTML remains non-executable.
+- Memoized `MarkdownContentRenderer` shares currency/math, CJK autolink, raw-text and initial frontmatter parsing across messages, file previews and noninteractive minimap/accessibility projections. Only user messages preserve soft breaks. Raw HTML remains non-executable.
+- Composer paste treats plaintext as authoritative. An inert template provides bounded optional link metadata (65,536 code units, 1,024 nodes, 32 links); every failure/overflow preserves complete plaintext. List continuation obeys newline/send-mode/IME rules and restores the caret only on the same connected textarea.
 - Tool turns render Process/Response blocks with bounded preview and explicit full-output retrieval.
 - Extension widgets remain plain text; interactions are schema-driven dialogs, never extension React/DOM/HTML.
 - Dialogs/palettes trap focus, handle Escape, and restore the previous target.

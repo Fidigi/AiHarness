@@ -1,16 +1,20 @@
 import DOMPurify from 'dompurify';
-import { Fragment, isValidElement, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, isValidElement, memo, useEffect, useRef, useState, type ReactNode } from 'react';
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
+import { markdownPreviewText, markdownRemarkPlugins, normalizeMarkdownMath, remarkKeepLineBreaks } from './markdown-semantics';
 import 'katex/dist/katex.min.css';
+import './MarkdownContent.css';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useI18n } from '../hooks/useI18n';
 
 const sanitizeSchema = {
   ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    code: [['className', /^language-./, 'math-inline', 'math-display']],
+  },
   protocols: {
     ...defaultSchema.protocols,
     href: [...(defaultSchema.protocols?.href ?? []), 'file'],
@@ -160,13 +164,23 @@ const components: Components = {
   },
 };
 
-export default function MarkdownContentRenderer({ content }: { content: string }) {
+export interface MarkdownContentProps {
+  content: string;
+  /** Preserve typed/pasted line breaks in user messages, including tight lists. */
+  keepLineBreaks?: boolean;
+  /** Noninteractive text projection for navigation previews; never nests links/buttons. */
+  compact?: boolean;
+}
+
+export default memo(function MarkdownContentRenderer({ content, keepLineBreaks = false, compact = false }: MarkdownContentProps) {
+  if (compact) return <span className="markdown-compact">{markdownPreviewText(content)}</span>;
   return <div className="markdown-content">
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
+      remarkPlugins={keepLineBreaks ? [...markdownRemarkPlugins, remarkKeepLineBreaks] : markdownRemarkPlugins}
+      skipHtml
       rehypePlugins={[[rehypeSanitize, sanitizeSchema], [rehypeKatex, { strict: 'warn', trust: false }]]}
       components={components}
       urlTransform={url => /^file:/i.test(url) ? url : defaultUrlTransform(url)}
-    >{content}</ReactMarkdown>
+    >{normalizeMarkdownMath(content)}</ReactMarkdown>
   </div>;
-}
+});
