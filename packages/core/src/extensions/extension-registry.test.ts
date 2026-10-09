@@ -85,6 +85,21 @@ describe('ExtensionRegistry', () => {
     });
   });
 
+  it('does not run subsequent model hooks after the operation signal is aborted', async () => {
+    const registry = new ExtensionRegistry();
+    const controller = new AbortController();
+    const first = vi.fn(() => { controller.abort(); });
+    const skipped = vi.fn();
+    await registry.load('model-policy', api => {
+      api.before('before:model', first); api.before('before:model', skipped);
+    });
+    const data = { type: 'classifier' as const, request: { model: 'virtual', input: 'x', labels: ['a'] },
+      context: context(), signal: controller.signal };
+    expect((await registry.runBefore('before:model', data)).cancelled).toBe(true);
+    expect((await registry.runBefore('before:model', data)).cancelled).toBe(true);
+    expect(first).toHaveBeenCalledTimes(1); expect(skipped).not.toHaveBeenCalled();
+  });
+
   it('stops hooks on cancellation and preserves the reason', async () => {
     const registry = new ExtensionRegistry();
     const skipped = vi.fn();

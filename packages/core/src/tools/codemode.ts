@@ -1,4 +1,8 @@
 import { Worker } from 'node:worker_threads';
+import { randomUUID } from 'node:crypto';
+import { SpecializedModels, type ClassificationRequest, type ImageGenerationRequest, type SpecializedModelType } from '../providers/specialized-models.js';
+import type { CodemodeCall, CodemodeDetails, TokenUsage } from '../types/index.js';
+export type { CodemodeDetails } from '../types/index.js';
 import { createRequire } from 'node:module';
 import type { ExtensionRuntimeContext, ExtensionTool, ExtensionToolResult } from '../extensions/extension-registry.js';
 import { CODEMODE_WORKER_SOURCE } from './codemode-worker.js';
@@ -23,17 +27,11 @@ export type HostedCodemodeTool = ExtensionTool & {
   extensionId: typeof CODEMODE_EXTENSION_ID;
   exposure: 'model-only';
 };
-export interface CodemodeDetails {
-  engine: 'QuickJS';
-  durationMs: number;
-  nestedCalls: Array<{ name: string; isError: boolean }>;
-  store?: Record<string, unknown>;
-}
 export const CODEMODE_REGISTRATION: RegisteredAgentTool = {
   name: CODEMODE_TOOL_NAME,
   extensionId: CODEMODE_EXTENSION_ID,
   exposure: 'model-only',
-  description: 'Run an async JavaScript body in bounded QuickJS. Use await tools.<name>({...}), Promise.allSettled(), text(), console.log(), return, exit(), store()/load(), searchTools(), describeTool() and describeNamespace(). No Node, filesystem, network or timers. Calls are real, unattended and not rolled back. Model-only control tools and recursive codemode are unavailable. Classifier/image models are unsupported. Limits: 10 seconds, 32 MiB VM, 64 calls, 4 concurrent calls, 64 KiB output. Input is {code: "JavaScript"}.',
+  description: 'Run an async JavaScript body in bounded QuickJS. Use await tools.<name>({...}), Promise.allSettled(), text(), console.log(), return, exit(), store()/load(), searchTools(), describeTool() and describeNamespace(). No Node, filesystem, network or timers. Calls are real, unattended and not rolled back. Model-only control tools and recursive codemode are unavailable. models.getModelsOfType("classifier"|"image"), models.classify({model,input,labels}) and models.generateImages({model,prompt,count?,size?}) use the current credential-private provider; availability is rechecked on each call. Binary image results share the nested JSON budget. Limits: 10 seconds, 32 MiB VM, 64 calls, 4 concurrent calls, 64 KiB output. Input is {code: "JavaScript"}.',
   parameters: {
     type: 'object', additionalProperties: false,
     properties: { code: { type: 'string', maxLength: CODEMODE_LIMITS.sourceBytes } }, required: ['code'],
@@ -119,6 +117,23 @@ export async function runCodemode(options: RunCodemodeOptions): Promise<Extensio
   const controller = new AbortController();
   const started = Date.now();
   const nestedCalls: CodemodeDetails['nestedCalls'] = [];
+  const parentId = options.context.toolCallId ?? randomUUID();
+  const models = options.context.provider ? new SpecializedModels(options.context.provider, redact, options.context.beforeSpecializedModel) : undefined;
+  const progress = (call: CodemodeCall) => {
+    if (settled) return;
+    try { options.context.onCodemodeProgress?.({ parentId, call: structuredClone(call) }); } catch { /* Presentation cannot grant authority. */ }
+  };
+  const accounting = (): { usage?: TokenUsage; costComplete: boolean } => {
+    const modelCalls = nestedCalls.filter(call => call.kind !== 'tool');
+    const measured = nestedCalls.filter(call => call.usage);
+    const costComplete = modelCalls.every(call => call.usage?.costUsd !== undefined);
+    const usage: TokenUsage = {};
+    for (const call of measured) for (const key of ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'totalTokens', 'costUsd'] as const) {
+      const amount = call.usage?.[key];
+      if (amount !== undefined) usage[key] = Math.min(Number.MAX_SAFE_INTEGER, (usage[key] ?? 0) + amount);
+    }
+    return { ...(measured.length ? { usage } : {}), costComplete };
+  };
   let active = 0;
   let totalCalls = 0;
   let outputBytes = 0;
@@ -144,6 +159,9 @@ export async function runCodemode(options: RunCodemodeOptions): Promise<Extensio
   const done = new Promise<ExtensionToolResult<CodemodeDetails>>(resolve => {
     stop = (error, store) => {
       if (settled) return;
+      for (const call of nestedCalls) if (call.state === 'running') {
+        call.state = 'cancelled'; call.isError = true; progress(call);
+      }
       settled = true;
       clearTimeout(timer);
       options.signal?.removeEventListener('abort', abort);
@@ -167,7 +185,7 @@ export async function runCodemode(options: RunCodemodeOptions): Promise<Extensio
       resolve({
         content: `Script ${error ? 'failed' : 'completed'} (${durationMs} ms)\n${safeOutput}${error ? `\nScript error: ${redact(error).slice(0, 2_000)}` : ''}`,
         isError: Boolean(error),
-        details: { engine: 'QuickJS', durationMs, nestedCalls, ...(safeStore ? { store: safeStore } : {}) },
+        details: { engine: 'QuickJS', parentId, durationMs, nestedCalls, ...accounting(), ...(safeStore ? { store: safeStore } : {}) },
       });
     };
     timer = setTimeout(() => stop('Codemode deadline exceeded.'), limits.timeoutMs);
@@ -190,9 +208,17 @@ export async function runCodemode(options: RunCodemodeOptions): Promise<Extensio
           || Buffer.byteLength(message.input) > limits.inputBytes || !Number.isSafeInteger(message.id)) {
           stop('Nested call/input limit exceeded.'); return;
         }
+        const kind = message.operation === 'tool' ? 'tool' : message.operation === 'classify' ? 'classifier' : message.operation === 'images' ? 'image' : undefined;
+        const activity: CodemodeCall | undefined = kind ? {
+          id: `${parentId}:${message.id}`, parentId, kind,
+          name: kind === 'tool' ? redact(String(message.name)).slice(0, 256) : kind,
+          state: 'running', isError: false,
+        } : undefined;
+        if (activity) { nestedCalls.push(activity); progress(activity); }
         const task = async () => {
           if (settled) return;
           active++;
+          const callStarted = Date.now();
           let value: unknown;
           let error: string | undefined;
           try {
@@ -204,11 +230,10 @@ export async function runCodemode(options: RunCodemodeOptions): Promise<Extensio
               if (!record(input)) throw new Error('Nested tool input must be a JSON object.');
               const result = await options.execute(tool.name, input, { ...options.context,
                 onProcessOutput: undefined, processOutputPath: undefined,
-                requestInteraction: undefined,
+                requestInteraction: undefined, toolCallId: undefined, onCodemodeProgress: undefined, beforeSpecializedModel: undefined,
                 notify: (value, level) => { if (!controller.signal.aborted) options.context.notify(value, level); },
               }, controller.signal);
               if (settled) return;
-              nestedCalls.push({ name: tool.name, isError: Boolean(result.isError) });
               if (result.isError) throw new Error(result.content);
               value = result.content;
             } else if (message.operation === 'search') {
@@ -226,16 +251,32 @@ export async function runCodemode(options: RunCodemodeOptions): Promise<Extensio
             } else if (message.operation === 'namespace') {
               const members = tools.filter(tool => tool.namespace?.name === message.name);
               value = members.length ? { ...members[0]!.namespace, tools: members.map(toolMetadata) } : null;
-            } else if (message.operation === 'models') {
-              value = []; // No credential/model execution bridge is installed by this sandbox.
+            } else if (message.operation === 'models' || message.operation === 'availableModels') {
+              if (!['classifier', 'image'].includes(String(message.name))) throw new Error('Invalid specialized model type.');
+              value = models ? message.operation === 'models'
+                ? models.getModelsOfType(message.name as SpecializedModelType)
+                : models.getAvailableOfType(message.name as SpecializedModelType) : [];
+            } else if (message.operation === 'classify' || message.operation === 'images') {
+              if (!models) throw new Error('No model provider is available.');
+              value = message.operation === 'classify'
+                ? await models.classify(input as ClassificationRequest, { signal: controller.signal })
+                : await models.generateImages(input as ImageGenerationRequest, { signal: controller.signal });
+              if (settled) return;
+              if (activity) activity.usage = (value as { usage?: TokenUsage }).usage;
             } else throw new Error('Unknown sandbox operation.');
             const serialized = redact(JSON.stringify(value ?? null));
             resultBytes += Buffer.byteLength(serialized);
             if (resultBytes > limits.resultBytes) throw new Error('Nested result limit exceeded.');
-            if (!settled) worker.postMessage({ type: 'response', id: message.id, value: serialized });
+            if (!settled) {
+              if (activity) { activity.state = 'completed'; activity.durationMs = Date.now() - callStarted; progress(activity); }
+              worker.postMessage({ type: 'response', id: message.id, value: serialized });
+            }
           } catch (failure) {
             error = redact(failure instanceof Error ? failure.message : 'Nested call failed.').slice(0, 2_000);
-            if (!settled) worker.postMessage({ type: 'response', id: message.id, error });
+            if (!settled) {
+              if (activity) { activity.state = 'failed'; activity.isError = true; activity.durationMs = Date.now() - callStarted; progress(activity); }
+              worker.postMessage({ type: 'response', id: message.id, error });
+            }
           } finally {
             active--;
             if (!settled) queue.shift()?.();

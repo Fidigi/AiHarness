@@ -4,7 +4,7 @@ import type {
   ExtensionRuntimeContext,
   ExtensionToolResult,
 } from '../extensions/extension-registry.js';
-import type { Message, TokenUsage, ToolCall } from '../types/index.js';
+import type { CodemodeDetails, CodemodeProgress, Message, TokenUsage, ToolCall } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import { agentToolExposure, isDeclaredToolExposure } from '../tools/tool-selection.js';
 import { toolSearchActivationMetadata } from '../tools/tool-search.js';
@@ -18,6 +18,8 @@ export interface ToolExecutionResult {
   truncated: boolean;
   /** Branch-local declarations activated by a trusted host-owned discovery tool. */
   activatedTools?: string[];
+  metadata?: Record<string, unknown>;
+  usage?: TokenUsage;
 }
 
 export interface ToolLoopOptions {
@@ -44,6 +46,8 @@ export interface ToolLoopOptions {
   onAssistantResponse?(response: ChatResponse, round: number, durationMs: number): void | Promise<void>;
   onToolCall?(call: ToolCall): void | Promise<void>;
   onToolResult?(result: ToolExecutionResult): void | Promise<void>;
+  onCodemodeProgress?(progress: CodemodeProgress): void;
+  onToolUsage?(usage: TokenUsage): void | Promise<void>;
   onTurnEnd?(response: ChatResponse, toolResults: ToolExecutionResult[], round: number): void | Promise<void>;
   /** Persist or transform queued input after tools and before the next provider turn. */
   beforeNextTurn?(response: ChatResponse, toolResults: ToolExecutionResult[], round: number): void | Promise<void>;
@@ -176,16 +180,32 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       let activatedTools: string[] | undefined;
       let resultMetadata: Record<string, unknown> | undefined;
       try {
+        const context: ExtensionRuntimeContext = { ...options.toolContext, toolCallId: call.id,
+          onCodemodeProgress: options.onCodemodeProgress,
+          beforeSpecializedModel: async (type, request, signal) => {
+            if (signal.aborted) throw new AgentAbortError();
+            const hookContext: ExtensionRuntimeContext = { ...options.toolContext,
+              notify: (message, level) => { if (!signal.aborted) options.toolContext.notify(message, level); },
+              requestInteraction: options.toolContext.requestInteraction ? interaction => signal.aborted
+                ? Promise.resolve({ cancelled: true })
+                : options.toolContext.requestInteraction!({ ...interaction,
+                  signal: interaction.signal ? AbortSignal.any([signal, interaction.signal]) : signal }) : undefined,
+            };
+            const hook = await options.extensionRegistry.runBefore('before:model', { type, request, context: hookContext, signal });
+            if (hook.cancelled || hook.data.type !== type || signal.aborted) throw new Error('Model request cancelled.');
+            return hook.data.request;
+          },
+        };
         const normalizedToolName = call.name.toLowerCase();
         if (!enabledToolNames.has(normalizedToolName)) {
           throw new Error(`Tool is not enabled for this run: ${call.name}`);
         }
         const result = await (options.executeTool
-          ? options.executeTool(call.name, call.input, options.toolContext, options.signal)
+          ? options.executeTool(call.name, call.input, context, options.signal)
           : options.extensionRegistry.executeTool(
               call.name,
               call.input,
-              options.toolContext,
+              context,
               options.signal,
             ));
         content = options.redactText?.(result.content) ?? result.content;
@@ -203,6 +223,8 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       const truncated = content.length > maxToolResultLength;
       if (truncated) content = `${content.slice(0, maxToolResultLength)}\n[Résultat tronqué — sortie complète disponible]`;
       const durationMs = Date.now() - toolStartedAt;
+      const usage = (resultMetadata?.codemode as CodemodeDetails | undefined)?.usage;
+      if (usage) await options.onToolUsage?.(usage);
       await options.sessionManager.addMessage(options.sessionId, {
         role: 'tool',
         content,
@@ -219,6 +241,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         name: call.name,
         isError,
         durationMs,
+        ...(usage ? { usage } : {}),
         ...((activatedTools?.length || resultMetadata) ? { metadata: {
           ...toolSearchActivationMetadata(activatedTools ?? []), ...resultMetadata,
         } } : {}),
@@ -231,6 +254,8 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         durationMs,
         truncated,
         ...(activatedTools?.length ? { activatedTools: [...activatedTools] } : {}),
+        ...(resultMetadata ? { metadata: resultMetadata } : {}),
+        ...(usage ? { usage } : {}),
       };
       toolResults.push(toolResult);
       await options.onToolResult?.(toolResult);

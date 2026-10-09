@@ -85,10 +85,10 @@ const { parentPort, workerData } = require('node:worker_threads');
       globalThis.describeNamespace = name => call('namespace', name, null);
       globalThis.models = Object.freeze({
         getModelsOfType: type => call('models', type, null),
-        getAvailableOfType: type => call('models', type, null),
-        getModelOfType: () => Promise.resolve(undefined),
-        classify: () => Promise.reject(new Error('Classifier models are not supported.')),
-        generateImages: () => Promise.reject(new Error('Image models are not supported.')),
+        getAvailableOfType: type => call('availableModels', type, null),
+        getModelOfType: type => call('availableModels', type, null).then(models => models[0]),
+        classify: request => call('classify', '', request),
+        generateImages: request => call('images', '', request),
       });
       const values = Object.assign(Object.create(null), INITIAL_STORE);
       globalThis.store = (key, value) => {

@@ -3,6 +3,11 @@ import {
   AI_HARNESS_EXTENSION_API_VERSION,
   ExtensionRegistry,
   SessionManager,
+  SpecializedModels,
+  MockProvider,
+  type ClassificationRequest,
+  type ClassificationResult,
+  type ImageGenerationResult,
   type ExtensionFactory,
   type ExtensionRuntimeContext,
   type Session,
@@ -31,4 +36,8 @@ const session: Session = {
   updatedAt: new Date(0),
 };
 
-void [coreVersion, extensionVersion, context, factory, registry, session];
+const models = new SpecializedModels(new MockProvider({ type: 'mock', model: 'typed-model' }));
+const classification: ClassificationRequest = { model: 'typed-model:classifier', input: 'probe', labels: ['safe'] };
+const classified: Promise<ClassificationResult> = models.classify(classification);
+const images: Promise<ImageGenerationResult> = models.generateImages({ model: 'mock-image', prompt: 'pixel', count: 1 });
+void [coreVersion, extensionVersion, context, factory, registry, session, classified, images];

@@ -42,10 +42,12 @@ Core PluginService -> install/locked state/filtered inventory/bounded batch stat
 | `registerTool` | Model/manual tool with JSON schema, AbortSignal and structured result |
 | `registerProvider` | Runtime `AiProvider` factory and optional defaults |
 | `registerUI` | Plain-text `header`/`status` terminal component |
-| `before` | `before:agent`, `before:provider`, or `before:tool` transform/cancellation hook |
+| `before` | `before:agent`, `before:provider`, `before:tool`, or `before:model` transform/cancellation hook |
 | `on` | Session/message/compaction lifecycle listener |
 
 A registered tool can set `exposure` to `direct`/`model-only` for immediate declaration, `deferred` for schema-free discovery followed by next-turn declaration through `tool_search`, `codemode` for searchable but permanently script-only exposure, or `hidden` to remain unavailable to model dispatch. Optional namespace metadata enriches ranking and the bounded [QuickJS namespace helpers](./codemode.md). Exposure does not grant trust, authorization, or sandboxing: normal selection policy, declaration checks, hooks, cancellation, and runtime guards still apply, and static selected tools win dynamic name collisions.
+
+`before:model` receives `{type, request, context, signal}` for hosted classifier/image requests. It can transform `request` or cancel; the host revalidates kind, live model identity, exact request fields and cancellation after the hook, within the model deadline. This additive API is separate from conversational `before:provider`; the code-mode outer result owns usage/persistence. No hook can supply guest credentials or increase sandbox budgets.
 
 Prompts, package skills, and themes are discovered resources, not `ExtensionAPI` registrations. Web interaction requests use `ExtensionRuntimeContext.requestInteraction`; they are suspended runtime requests rather than executable browser components.
 

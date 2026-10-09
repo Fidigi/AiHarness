@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ExtensionRegistry, type ExtensionRuntimeContext } from '../extensions/extension-registry.js';
 import { SessionManager } from '../sessions/session-manager.js';
+import { MockProvider } from '../providers/index.js';
+import type { CodemodeProgress } from '../types/index.js';
 import { runToolLoop } from '../agent/tool-loop.js';
 import { collectCodemodeStore, runCodemode, testCodemodeSandbox } from './codemode.js';
 import { createAgentToolLoadout } from './tool-search.js';
@@ -174,6 +176,63 @@ describe('bounded QuickJS codemode', () => {
       await Promise.all(pending);
     }
     expect((await run('return 42;')).isError).toBe(false);
+  });
+
+  it('bridges classifier/image models with stable parent IDs, bounded progress and exact outer accounting', async () => {
+    const provider = new MockProvider({ type: 'mock', model: 'virtual-chat' }, ['{"label":"safe"}']);
+    const original = provider.classify.bind(provider);
+    const classify = vi.spyOn(provider, 'classify');
+    classify.mockImplementation(async (...args) => ({ ...await original(...args), usage: { inputTokens: 3, outputTokens: 1, totalTokens: 4, costUsd: 0.002 } }));
+    const progress: CodemodeProgress[] = [];
+    const result = await run(`
+      const model = await models.getModelOfType('classifier');
+      text(await models.classify({model: model.id, input: 'test', labels: ['safe', 'unsafe']}));
+      const image = (await models.getAvailableOfType('image'))[0];
+      text((await models.generateImages({model: image.id, prompt: 'pixel'})).images[0].mediaType);
+      await tools.read({});
+    `, { context: { ...context, provider, toolCallId: 'outer', onCodemodeProgress: event => progress.push(event) } });
+    expect(result.isError).toBe(false);
+    expect(result.content).toContain('"label":"safe"');
+    expect(result.content).toContain('image/png');
+    expect(result.details).toMatchObject({ parentId: 'outer', costComplete: false, usage: { totalTokens: 4 }, nestedCalls: [
+      { id: 'outer:2', parentId: 'outer', kind: 'classifier', state: 'completed' },
+      { id: 'outer:4', parentId: 'outer', kind: 'image', state: 'completed' },
+      { id: 'outer:5', parentId: 'outer', kind: 'tool', state: 'completed' },
+    ] });
+    expect(result.details?.usage?.costUsd).toBe(0.002); // Retain the known subtotal; the image is never silently free.
+    expect(progress.map(event => event.call.state)).toEqual(['running', 'completed', 'running', 'completed', 'running', 'completed']);
+    expect(new Set(progress.map(event => event.call.id)).size).toBe(3);
+  });
+
+  it('settles outstanding calls as cancelled without late progress or model output', async () => {
+    const provider = new MockProvider({ type: 'mock', model: 'virtual-chat' });
+    vi.spyOn(provider, 'classify').mockImplementation(() => new Promise(() => {}));
+    const progress = vi.fn();
+    const result = await run(`await models.classify({model:'virtual-chat:classifier',input:'x',labels:['a']});`, {
+      context: { ...context, provider, toolCallId: 'outer', onCodemodeProgress: progress }, limits: { timeoutMs: 500 },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.details?.nestedCalls).toMatchObject([{ state: 'cancelled', parentId: 'outer' }]);
+    expect(progress.mock.calls.map(call => call[0].call.state)).toEqual(['running', 'cancelled']);
+  });
+
+  it('retains model-only control declarations through dynamic metadata refresh and only/on transitions', async () => {
+    const control = { ...read, name: 'stop_subagent', exposure: 'model-only' as const };
+    let dynamic = [{ ...read, name: 'mcp_lookup', exposure: 'deferred' as const }];
+    const source = { directTools: [], hasPotentialSearchableTools: true, currentSearchableTools: () => dynamic,
+      waitForSearchableTools: async () => dynamic, has: (name: string) => dynamic.some(tool => tool.name === name) };
+    for (const mode of ['only', 'on'] as const) {
+      const loadout = createAgentToolLoadout({ staticTools: [read, control], dynamicSource: source,
+        codemode: { enabled: true, mode } });
+      expect(loadout.getTools().map(tool => tool.name)).toContain('stop_subagent');
+      await loadout.executeToolSearch({ query: 'documentation' }, context);
+      expect(loadout.getTools().map(tool => tool.name)).toContain('stop_subagent');
+      dynamic = [];
+      expect(loadout.getTools().map(tool => tool.name)).toContain('stop_subagent');
+      const execute = vi.fn();
+      const result = await loadout.executeCodemode({ code: 'await tools.stop_subagent({});' }, context, execute);
+      expect(result.isError).toBe(true); expect(execute).not.toHaveBeenCalled();
+    }
   });
 
   it('restores only store entries on the active branch, including empty-store deletion', () => {

@@ -1,7 +1,8 @@
 import type { AiProvider, ChatOptions } from '../providers/index.js';
+import type { BeforeSpecializedModel, SpecializedModelType, SpecializedModelRequest } from '../providers/specialized-models.js';
 import { ProviderFactory } from '../providers/index.js';
 import { AI_HARNESS_EXTENSION_API_VERSION } from '../public-api-version.js';
-import type { Message, ProviderConfig, Session } from '../types/index.js';
+import type { CodemodeProgress, Message, ProviderConfig, Session } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import type { AgentToolExposure, AgentToolNamespace } from '../tools/tool-selection.js';
 import { EventEmitter, type EventHandler, type EventMap } from '../utils/event-emitter.js';
@@ -59,6 +60,10 @@ export interface ExtensionRuntimeContext {
   workspaceId?: string;
   projectTrusted?: boolean;
   notify(message: string, level?: ExtensionLogLevel): void;
+  /** Host correlation/sink installed by the shared tool loop, never by guest source. */
+  toolCallId?: string;
+  onCodemodeProgress?(progress: CodemodeProgress): void;
+  beforeSpecializedModel?: BeforeSpecializedModel;
   /** Optional raw subprocess output sink; awaiting it applies downstream backpressure. */
   onProcessOutput?(chunk: string): void | Promise<void>;
   /** Host-owned path where the same complete subprocess stream is retained. */
@@ -133,6 +138,8 @@ export interface BeforeHookMap {
   'before:agent': BeforeAgentData;
   'before:provider': BeforeProviderData;
   'before:tool': BeforeToolData;
+  /** Native/virtual SDK requests are not conversational provider turns. */
+  'before:model': { type: SpecializedModelType; request: SpecializedModelRequest; context: ExtensionRuntimeContext; signal: AbortSignal };
 }
 
 export interface HookCancellation {
@@ -403,7 +410,9 @@ export class ExtensionRegistry {
     data: BeforeHookMap[K],
   ): Promise<BeforeHookExecution<BeforeHookMap[K]>> {
     let transformed = { ...data } as BeforeHookMap[K];
+    const signal = event === 'before:model' ? (data as BeforeHookMap['before:model']).signal : undefined;
     for (const entry of this.beforeHooks.get(event) ?? []) {
+      if (signal?.aborted) return { data: transformed, cancelled: true };
       let result: BeforeHookResult<BeforeHookMap[K]>;
       try {
         const handler = entry.value as unknown as BeforeHookHandler<BeforeHookMap[K]>;
@@ -413,7 +422,7 @@ export class ExtensionRegistry {
           `Extension hook "${String(event)}" failed in "${entry.owner}": ${error instanceof Error ? error.message : String(error)}`,
         );
       }
-      if (result === false) return { data: transformed, cancelled: true };
+      if (signal?.aborted || result === false) return { data: transformed, cancelled: true };
       if (result && 'cancel' in result && result.cancel === true) {
         return { data: transformed, cancelled: true, reason: result.reason };
       }

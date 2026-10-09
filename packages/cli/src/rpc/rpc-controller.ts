@@ -1131,6 +1131,7 @@ export class RpcController {
                 if (this.retryAbortController === retryController) this.retryAbortController = undefined;
               }
             },
+            onCodemodeProgress: progress => { void this.events.codemodeProgress(progress).catch(() => this.activeRun?.controller.abort()); },
             onAssistantResponse: response => this.events.finishAssistant(response),
             onToolCall: call => {
               activeToolCall = call;

@@ -10,6 +10,7 @@ export {
 export * from './types/index.js';
 
 // Providers
+export * from './providers/specialized-models.js';
 export {
   AiProvider,
   ProviderFactory,

@@ -1,4 +1,4 @@
-import type { MessageContentBlock } from '../types/index.js';
+import type { CodemodeCall, MessageContentBlock } from '../types/index.js';
 import type { ExtensionInteractionRequest } from '../extensions/extension-registry.js';
 
 export const AGENT_EVENT_PROTOCOL_VERSION = 1 as const;
@@ -85,6 +85,7 @@ export interface ActiveToolSnapshot {
   name: string;
   input: unknown;
   startedAt: string;
+  nestedCalls?: CodemodeCall[];
 }
 
 export interface AgentRunSnapshot {

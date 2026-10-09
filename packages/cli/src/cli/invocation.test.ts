@@ -311,18 +311,22 @@ describe('CLI invocation contract', () => {
     const environment = { AI_HARNESS_AGENT_DIR: agentDir, PROMPT_CAPTURE: capture };
     const args = ['--print', '--no-session', '--extension', captureExtension, 'hello'];
 
-    expect((await invoke(args, undefined, environment, cwd)).code).toBe(0);
+    const untrusted = await invoke(args, undefined, environment, cwd);
+    expect(untrusted.code, untrusted.stderr).toBe(0);
     expect(await readFile(capture, 'utf8')).not.toContain('trusted project instructions');
 
-    expect((await invoke(['--approve', ...args], undefined, environment, cwd)).code).toBe(0);
+    const approved = await invoke(['--approve', ...args], undefined, environment, cwd);
+    expect(approved.code, approved.stderr).toBe(0);
     expect(await readFile(capture, 'utf8')).toContain('trusted project instructions');
     await expect(readFile(path.join(agentDir, 'trust.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
 
     await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({ defaultProjectTrust: 'always' }));
-    expect((await invoke(args, undefined, environment, cwd)).code).toBe(0);
+    const always = await invoke(args, undefined, environment, cwd);
+    expect(always.code, always.stderr).toBe(0);
     expect(await readFile(capture, 'utf8')).toContain('trusted project instructions');
 
-    expect((await invoke(['--no-approve', ...args], undefined, environment, cwd)).code).toBe(0);
+    const refused = await invoke(['--no-approve', ...args], undefined, environment, cwd);
+    expect(refused.code, refused.stderr).toBe(0);
     expect(await readFile(capture, 'utf8')).not.toContain('trusted project instructions');
   });
 
@@ -584,7 +588,9 @@ describe('CLI invocation contract', () => {
     expect(invalidProvider.code).not.toBe(0);
     expect(invalidProvider.stdout).toBe('');
     expect(invalidProvider.stderr).toContain('Provider unavailable');
-    expect(invalidProvider.stderr).not.toContain('rpc extension stdout noise');
+    // Custom providers must now be discovered from trusted extensions before model resolution,
+    // just as in print/JSON. Even failed custom resolution keeps extension noise off stdout.
+    expect(invalidProvider.stderr).toContain('rpc extension stdout noise');
   });
 
   it('accepts RPC command envelopes, strict LF framing, and startup session selectors', async () => {
@@ -607,7 +613,7 @@ describe('CLI invocation contract', () => {
     expect(await readdir(sessionDir)).toEqual(['rpc-stable.jsonl']);
   });
 
-  it('executes opt-in QuickJS from a workspace outside the installation and persists authenticated nested metadata', async () => {
+  it.each(['json', 'print', 'rpc'])('executes model/nested QuickJS bridges in %s outside the installation with authenticated accounting', async mode => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-codemode-'));
     temporaryDirectories.push(cwd);
     const sessionDir = path.join(cwd, 'sessions');
@@ -621,13 +627,19 @@ describe('CLI invocation contract', () => {
           defaultConfig: { model: 'sandbox-model' }, create(config) {
             return { config, validateConfig() { return true; }, getProviderType() { return 'sandbox'; },
               getConfiguredModel() { return this.config.model; }, setConfiguredModel(model) { this.config.model = model; },
+              getSpecializedModels() { return [
+                { id: 'classifier', type: 'classifier', model: 'sandbox-model', provider: 'sandbox' },
+                { id: 'image', type: 'image', model: 'sandbox-image', provider: 'sandbox' },
+              ]; },
+              async classify(request) { return { label: request.labels[0], usage: { inputTokens: 3, outputTokens: 1, totalTokens: 4, costUsd: 0.002 } }; },
+              async generateImages() { return { images: [{ mediaType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j1ioAAAAASUVORK5CYII=' }], usage: { costUsd: 0.01 } }; },
               async chat() { return { content: 'unused' }; },
               async streamChat(messages, onChunk, onComplete, onError, options) {
                 if (options.tools.some(tool => tool.name === 'nested_lookup')) throw new Error('Script-only tool declared directly');
                 const previous = messages.find(message => message.role === 'tool');
                 if (previous) { onComplete({ content: 'sandbox-complete' }); return; }
                 onComplete({ content: '', toolCalls: [{ id: 'code-call', name: 'codemode', input: {
-                  code: 'text(await tools.nested_lookup({value: "safe"})); text(typeof process); store("remember", {count: 1});'
+                  code: 'text(await tools.nested_lookup({value: "safe"})); text((await models.classify({model:"classifier",input:"test",labels:["safe"]})).label); text((await models.generateImages({model:"image",prompt:"pixel"})).images[0].mediaType); text(typeof process); store("remember", {count: 1});'
                 } }] });
               }
             };
@@ -635,16 +647,27 @@ describe('CLI invocation contract', () => {
         });
       };
     `);
-    const result = await invoke(['--mode', 'json', '--approve', '--extension', extensionPath,
+    const result = await invoke([...(mode === 'print' ? ['--print'] : ['--mode', mode]), '--approve', '--extension', extensionPath,
       '--provider', 'sandbox', '--model', 'sandbox-model', '--tools', 'codemode,nested_lookup',
-      '--session-id', 'sandbox-test', '--session-dir', sessionDir, 'exercise sandbox'], undefined, {}, cwd);
+      '--session-id', 'sandbox-test', '--session-dir', sessionDir, ...(mode === 'rpc' ? [] : ['exercise sandbox'])],
+      mode === 'rpc' ? '{"type":"prompt","message":"exercise sandbox"}\n' : undefined, {}, cwd);
     expect(result).toMatchObject({ code: 0, stderr: '' });
-    const records = result.stdout.trimEnd().split('\n').map(line => JSON.parse(line));
-    expect(records.at(-1)).toEqual({ type: 'agent_settled' });
+    if (mode === 'print') expect(result.stdout).toBe('sandbox-complete\n');
+    else {
+      const records = result.stdout.trimEnd().split('\n').map(line => JSON.parse(line));
+      expect(records.some(record => record.type === 'agent_settled')).toBe(true);
+      const progress = records.filter(record => record.type === 'tool_execution_update' && record.partialResult?.details.kind === 'codemode');
+      expect(progress).toHaveLength(6);
+      expect(progress.every(record => record.toolCallId === 'code-call')).toBe(true);
+      expect(records.filter(record => record.type === 'tool_execution_start')).toHaveLength(1);
+    }
     const entries = (await readFile(path.join(sessionDir, 'sandbox-test.jsonl'), 'utf8')).trimEnd().split('\n').map(line => JSON.parse(line));
     const tool = entries.find(entry => entry.role === 'tool');
     expect(tool).toMatchObject({ metadata: { codemode: { engine: 'QuickJS', store: { remember: { count: 1 } },
-      nestedCalls: [expect.objectContaining({ name: 'nested_lookup', isError: false })] } } });
+      parentId: 'code-call', costComplete: true, usage: { totalTokens: 4, costUsd: 0.012 },
+      nestedCalls: [expect.objectContaining({ name: 'nested_lookup', isError: false }),
+        expect.objectContaining({ kind: 'classifier', state: 'completed' }), expect.objectContaining({ kind: 'image', state: 'completed' })] } },
+      usage: { totalTokens: 4, costUsd: 0.012 } });
     expect(tool.content).toContain('nested:safe');
     expect(tool.content).toContain('undefined');
   });

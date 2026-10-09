@@ -26,6 +26,7 @@ CLI/Web runtime -> streamChat -> normalized response and usage
 | `packages/core/src/providers/provider-network.ts` | Shared HTTP proxy, request/idle/connect deadlines, bounded retry and cached WebSocket leases |
 | `packages/core/src/providers/credentials.ts` | Process-local credentials, OAuth refresh, command/environment resolution and recursive/streaming redaction |
 | `packages/core/src/security/credential-store.ts` | Private atomic AES-256-GCM credential persistence and inter-process locking |
+| `packages/core/src/providers/specialized-models.ts` | Typed virtual classification/native images, credential-private descriptors, availability, bounded hooks/requests/results and SDK cancellation |
 | `packages/core/src/providers/model-metadata.ts` | Versioned shared published capabilities, context/output limits, prices and conservative inference |
 | `packages/core/src/config/agent-settings.ts` | Agent startup model/scope/thinking and compaction/retry setting resolution |
 | `packages/core/src/types/index.ts` | `ProviderConfig`, shared model/custom-provider contracts and capabilities |
@@ -40,6 +41,8 @@ CLI/Web runtime -> streamChat -> normalized response and usage
 - `AiProvider.chat()` returns one normalized `ChatResponse`.
 - `AiProvider.streamChat()` emits incremental text/reasoning/tool events, awaits each `StreamChunkCallback`, and completes once. Built-ins provide producer backpressure; the shared turn rejects extension providers that overrun its bounded pending-event/byte queue instead of awaiting callbacks.
 - `AiProvider.getAvailableModels()` returns bounded discovered identifiers when supported.
+- `AiProvider.getSpecializedModels()`, `classify()` and `generateImages()` supply virtual/native capabilities through the bounded `SpecializedModels` SDK. Current-provider-only guest integration, supported native image models and exact ceilings are documented in [Code mode](./codemode.md). `before:model` (not conversational `before:provider`) gates hosted calls; the outer tool owns persistence/accounting. Remote image URLs are not fetched and provider credentials never enter guest descriptors/options.
+- RPC now loads explicitly requested/trust-eligible extension generations before resolving custom provider/model selection, matching print/JSON. Even invalid custom selection may initialize those extensions; their stdout is still diverted to stderr, and no prompt is executed.
 - `ChatOptions.signal` carries cancellation; `sessionId` supplies a bounded transport-continuation identity without becoming a credential; tools, thinking, model and retry options remain optional.
 - `ProviderFactory` creates OpenAI/Azure, Anthropic, Gemini/Vertex, Bedrock, local OpenAI-compatible, mock, and registered extension providers.
 - `ModelCatalogEntry` distinguishes `published`, `discovered`, `configured`, and `custom` sources with availability, capabilities, compatibility, context/output limits, and optional cache-aware pricing.

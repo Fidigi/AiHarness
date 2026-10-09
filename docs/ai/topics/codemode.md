@@ -17,6 +17,8 @@ The Server runs a bounded fixed-script self-test at service construction and cac
 | `packages/core/src/tools/codemode.ts` | Host ceilings, worker lifecycle, redacted bridge and authenticated store metadata |
 | `packages/core/src/tools/codemode-worker.ts` | Trusted worker infrastructure and isolated QuickJS guest execution |
 | `packages/core/src/tools/tool-search.ts` | Selected prompt-local namespace, live nested authorization and active-branch restoration |
+| `packages/core/src/providers/specialized-models.ts` | Credential-private SDK/guest model descriptors, typed requests/results, live availability and deadlines |
+| `packages/web/src/components/CodemodeCard.tsx`, `packages/web/src/components/codemode-state.ts` | Specialized presentation and replay-safe nested state |
 | `packages/server/src/api/tool-routes.ts` | Cached health and canonical scoped settings/readback |
 
 ## Guest Contract
@@ -29,7 +31,9 @@ The tool input is exactly `{ "code": "async JavaScript body" }`. Scripts can use
 - `text(value)`, `console.log/info/warn/error/debug`, `return` and `exit()` for bounded output/completion.
 - `store(key, jsonValue)` and `load(key)` for branch-local JSON values; `store(key, undefined)` deletes a key.
 
-There is no guest Node/process/require, filesystem, network, timer or module-loader capability. The dependency is resolved from Core's installation, not the selected workspace. Classifier and image execution are **unsupported**: model-list helpers return empty lists and classifier/image helpers reject; no credentials or model bridge are installed. Do not claim complete upstream code-mode parity.
+There is no guest Node/process/require, filesystem, network, timer or module-loader capability. The dependency is resolved from Core's installation, not the selected workspace. `models.getModelsOfType`, `getAvailableOfType` and `getModelOfType` expose only bounded descriptors of the current provider. `models.classify({model,input,labels})` returns `{label,usage?}`; `models.generateImages({model,prompt,count?,size?})` returns `{images:[{mediaType,data}],usage?}` with base64 data. Requests accept no credential, endpoint, header or host-signal fields. Model IDs must match the live catalogue and kind again after any hook. The configured chat model supplies a virtual JSON-label classifier; OpenAI Chat providers expose native `dall-e-2`/`dall-e-3` (not Azure), mock supplies a fixture image, and typed extensions may implement native methods. No upstream API naming/schema compatibility or complete provider breadth is claimed.
+
+The exported Core `SpecializedModels` SDK uses the same contract with host-only `{signal}` options. Model calls have a 10-second deadline including cancellable `before:model` hooks. Code mode installs this dedicated hook through the shared tool loop: native/virtual model requests are not conversational `before:provider` turns. Hooks receive the operation AbortSignal and a context whose notifications/interactions cannot publish after it settles. Their output/usage persists once on the outer tool result, not as extra assistant turns. Direct SDK users can provide the optional bounded hook callback. Inputs are 32 KiB; labels are 1–100 unique strings (500 bytes each); image counts are 1–4, decoded output is capped at 8 MiB and accepts PNG/JPEG/WebP signatures only. Remote image URLs are never followed. Image data additionally consumes the guest's 256 KiB cumulative nested JSON limit; oversized images fail rather than escaping that budget. Built-in requests reuse provider network policy and credentials; no key crosses into QuickJS.
 
 ## Resource and Policy Bounds
 
@@ -53,9 +57,9 @@ Hidden and model-only tools never enter the nested namespace. `codemode`, `tool_
 
 ## Persistence and Failure
 
-The common extension before-hook/event pipeline wraps nested tools. Full nested tool results are not independently inserted as top-level provider messages. The outer result carries bounded duration, completed nested names/error flags and authenticated store metadata with `engine: QuickJS`. Only results issued by the loadout's private WeakSet can supply that metadata.
+The common extension before-hook/event pipeline wraps nested tools. Full nested tool results are not independently inserted as top-level provider messages. Host-issued IDs `${outerToolCallId}:${bridgeOperationId}` correlate running/completed/failed/cancelled calls exclusively to their outer invocation; metadata/search operations consume budget but do not create execution cards. Events use `tool.progress` with `kind: codemode`, and active snapshots retain at most 64 nested calls. JSON/RPC carry the same IDs through `tool_execution_update`; interactive renderers show correlated status while print stdout stays final-text-only. Late results/notifications cannot modify settled metadata. The outer result carries bounded duration, model usage, known cost subtotal, explicit `costComplete`, nested statuses and authenticated store metadata with `engine: QuickJS`. While the parent run remains active, usage persists and enters session/server totals once, including completed requests in a failed script. Parent-run abort still suppresses the durable outer tool result and its aggregate accounting; exact interruption accounting remains open under audit CLI-TOOL-10. Only results issued by the loadout's private WeakSet can supply that metadata.
 
-Store changes publish only on successful script completion, after JSON size checks and credential redaction. Failure/cancellation leaves the previous store intact; calls already performed are **not rolled back**. Restore follows only the active session parent chain (including resume, fork and compaction), not a sibling branch. Session metadata/output is sensitive user data, not a secret vault. Nested progress IDs, a specialized Web code-mode card, cost accounting and classifier/image models remain separate unfinished work.
+Store changes publish only on successful script completion, after JSON size checks and credential redaction. Failure/cancellation leaves the previous store intact; calls already performed are **not rolled back**. Restore follows only the active session parent chain (including resume, fork and compaction), not a sibling branch. Session metadata/output is sensitive user data, not a secret vault. Web lazily loads the specialized card and its scoped CSS, keeping the existing entry/CSS budgets. It renders plain-text script/output, duration, cost completeness and a scrollable twelve-call preview with an omitted count; legacy/foreign/malformed metadata falls back to generic tool blocks. Replay rejects crossed parents, duplicate IDs, terminal resurrection and nested top-level promotion. Tool changes/reload retain model-only declarations, pending parent interactions and independent child-agent controls; terminal runs cancel remaining interaction requests.
 
 ## Critical Flow
 
@@ -69,7 +73,7 @@ Use the repository's Docker-only workflow:
 - `make test-e2e E2E_ARGS='e2e/codemode.spec.ts --retries=0'`: scoped save/readback, failed health, visible restrictions, axe, overflow and reviewed desktop/mobile Light/Dark baselines.
 - `make lint-docs`; `git diff --check`.
 
-Relevant tests are `packages/core/src/tools/{codemode,tool-search}.test.ts`, `packages/cli/src/cli/invocation.test.ts`, `packages/server/src/api/tool-settings.test.ts`, and `e2e/codemode.spec.ts`. MCP-specific nested safety also lives in `packages/core/src/mcp/session-host.test.ts`.
+Relevant tests are `packages/core/src/providers/specialized-models.test.ts`, `packages/core/src/agent/runtime.test.ts`, `packages/web/src/components/codemode-state.test.ts`, `packages/core/src/tools/{codemode,tool-search}.test.ts`, `packages/cli/src/cli/invocation.test.ts`, `packages/server/src/api/tool-settings.test.ts`, and `e2e/codemode.spec.ts`. MCP-specific nested safety also lives in `packages/core/src/mcp/session-host.test.ts`.
 
 ## Common Changes
 

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent, ReactNode, RefObject } from 'react';
 import { parseShellCommandInput } from '@ai-harness/core/shell-input';
 import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, ExtensionInteractionSnapshot, Message, ModelCatalog, ProviderType, Session, TokenUsage } from '@ai-harness/core';
@@ -12,6 +12,7 @@ import { useSessionStore } from '../store/session-store';
 import { usePreferences } from '../store/preferences';
 import MarkdownContent from './MarkdownContent';
 import { SubagentPanel } from './SubagentPanel';
+import { applyCodemodeProgress, codemodeDetails } from './codemode-state';
 import { composerKeySubmits } from './composer-submit';
 import { publishNotice, type NoticeLevel } from '../services/notices';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -48,6 +49,8 @@ import {
 interface ChatViewProps {
   onStreamingUpdate?: (content: string) => void;
 }
+
+const CodemodeCard = lazy(() => import('./CodemodeCard').then(module => ({ default: module.CodemodeCard })));
 
 type QueueMode = 'steer' | 'follow-up';
 const EMPTY_ATTACHMENTS: DraftAttachment[] = [];
@@ -594,8 +597,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     let sequence = 0;
 
     const applyEvent = async (event: AgentEvent): Promise<void> => {
-      sequence = Math.max(sequence, event.sequence);
-      if (!mounted) return;
+      if (!mounted || event.sequence <= sequence) return;
+      sequence = event.sequence;
       const runId = event.runId;
       const patchRun = (changes: Partial<AgentRunSnapshot>): void => {
         const existing = useSessionStore.getState().runs[id];
@@ -636,13 +639,22 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         }
       }
       if (event.type === 'tool.started') {
-        const tool = event.data as { id?: unknown; name?: unknown; input?: unknown };
-        if (typeof tool.id === 'string' && typeof tool.name === 'string') patchRun({
+        const tool = event.data as { id?: unknown; name?: unknown; input?: unknown; parentId?: unknown };
+        if (tool.parentId === undefined && typeof tool.id === 'string' && typeof tool.name === 'string') patchRun({
           phase: 'tool',
           activeTool: { id: tool.id, name: tool.name, input: tool.input, startedAt: event.timestamp },
         });
       }
-      if (event.type === 'tool.completed' || event.type === 'tool.failed') patchRun({ activeTool: undefined });
+      if (event.type === 'tool.progress') {
+        const tool = useSessionStore.getState().runs[id]?.activeTool;
+        const next = applyCodemodeProgress(tool, event.data);
+        if (next !== tool) patchRun({ activeTool: next });
+      }
+      if (event.type === 'tool.completed' || event.type === 'tool.failed') {
+        const data = event.data as { call?: { id?: unknown }; id?: unknown; parentId?: unknown };
+        const tool = useSessionStore.getState().runs[id]?.activeTool;
+        if (data.parentId === undefined && tool?.id === (data.call?.id ?? data.id)) patchRun({ activeTool: undefined });
+      }
       if (event.type === 'extension.ui') {
         const data = event.data as { action?: unknown; request?: unknown };
         if (data.action === 'request' && data.request && typeof data.request === 'object') {
@@ -1443,6 +1455,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     }
   };
 
+  const toolInputs = useMemo(() => new Map((currentSession?.messages ?? []).flatMap(message =>
+    (message.toolCalls ?? message.blocks?.flatMap(block => block.type === 'tool_call' ? [block] : []) ?? [])
+      .map(call => [call.id, call.input] as const))), [currentSession?.messages]);
   const historyGaps = historyGapMessageIds(currentSession);
   const historyPage = currentSession?.messagePage;
   const sessionIndex = sessions.findIndex(session => session.id === currentSession?.id);
@@ -1480,7 +1495,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           : message.role === 'system' ? t('chat.role.system')
             : `🤖 ${t('chat.role.assistant')}`}
     </div>
-    <div className="message-content">{renderMessage(message, preferences.reasoningOpen, t)}</div>
+    <div className="message-content">{renderMessage(message, preferences.reasoningOpen, t,
+      message.toolCallId ? toolInputs.get(message.toolCallId) : undefined)}</div>
     <footer className="message-meta">
       <time dateTime={message.timestamp.toISOString()}>{message.timestamp.toLocaleTimeString()}</time>
       {message.model && <span>{message.model}</span>}
@@ -1782,6 +1798,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         </div>
       )}
 
+      {currentRun?.activeTool?.name === 'codemode' && <Suspense fallback={null}><CodemodeCard running
+        code={typeof (currentRun.activeTool.input as { code?: unknown })?.code === 'string'
+          ? (currentRun.activeTool.input as { code: string }).code : undefined}
+        calls={currentRun.activeTool.nestedCalls} /></Suspense>}
       <form onSubmit={handleSubmit} className="input-container"
         onDragOver={event => { if ([...event.dataTransfer.items].some(item => item.type.startsWith('image/'))) event.preventDefault(); }}
         onDrop={event => {
@@ -2008,7 +2028,10 @@ function ExtensionInteractionDialog({ request, onResolve, restoreFocusRef, t }: 
   </div>;
 }
 
-function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationFunction): ReactNode {
+function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationFunction, callInput?: unknown): ReactNode {
+  const codeDetails = message.name === 'codemode' && message.toolCallId
+    ? codemodeDetails(message.metadata?.codemode, message.toolCallId) : undefined;
+  const script = callInput && typeof callInput === 'object' && 'code' in callInput && typeof callInput.code === 'string' ? callInput.code : undefined;
   const reasoning = message.blocks?.filter(block => block.type === 'reasoning') ?? [];
   const images = message.blocks?.filter(block => block.type === 'image') ?? [];
   const toolBlocks = message.blocks?.filter(block => block.type === 'tool_call' || block.type === 'tool_result' || block.type === 'command') ?? [];
@@ -2031,6 +2054,10 @@ function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationF
             filename={`reasoning-${message.id}.txt`} t={t} />
         ))}
         {toolBlocks.map((block, index) => {
+          if (block.type === 'tool_result' && codeDetails) return <Suspense key={`tool-${index}`}
+            fallback={<pre className="tool-block-pre">{block.content?.slice(0, 8_000)}</pre>}>
+            <CodemodeCard code={script} output={block.fullContent ?? block.content} calls={codeDetails.nestedCalls} details={codeDetails} />
+          </Suspense>;
           const content = block.type === 'tool_call' ? JSON.stringify(block.input, null, 2)
             : (block.type === 'tool_result' ? block.content : block.output) ?? '';
           const fullContent = block.type === 'tool_result' ? block.fullContent : undefined;
@@ -2043,7 +2070,7 @@ function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationF
             error={block.type === 'tool_result' && block.isError} t={t} />;
         })}
       </section>}
-      {(message.content || images.length > 0) && <section className="message-output" aria-label={message.role === 'assistant' ? t('chat.response') : undefined}>
+      {((!codeDetails && message.content) || images.length > 0) && <section className="message-output" aria-label={message.role === 'assistant' ? t('chat.response') : undefined}>
         {message.content && renderMessageContent(message.content)}
         {images.map((block, index) => block.type === 'image' && (
           <a className="message-image" href={block.url} target="_blank" rel="noopener noreferrer" key={`image-${index}`}>

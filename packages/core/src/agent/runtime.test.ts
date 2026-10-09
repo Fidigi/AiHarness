@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ExtensionRegistry } from '../extensions/extension-registry.js';
+import { ExtensionRegistry, type BeforeHookMap } from '../extensions/extension-registry.js';
 import { AiProvider, MockProvider, type ChatOptions, type ChatResponse } from '../providers/index.js';
 import { CredentialRedactor } from '../providers/credentials.js';
 import type { McpSessionHost } from '../mcp/session-host.js';
@@ -205,6 +205,61 @@ async function setup(provider: AiProvider, onUsage?: AgentRuntimeOptions['onUsag
 }
 
 describe('AgentRuntime', () => {
+  it('replays nested model progress under the outer tool and accounts usage once in persisted results', async () => {
+    const provider = new MockProvider({ type: 'mock', model: 'virtual-chat' });
+    let release!: () => void;
+    const hold = new Promise<void>(resolve => { release = resolve; });
+    vi.spyOn(provider, 'classify').mockImplementation(async () => {
+      await hold;
+      return { label: 'yes', usage: { inputTokens: 3, outputTokens: 1, totalTokens: 4, costUsd: 0.002 } };
+    });
+    vi.spyOn(provider, 'streamChat').mockImplementation(async (messages, _chunk, complete) => {
+      complete?.(messages.some(message => message.role === 'tool') ? { content: 'done' } : {
+        content: '', toolCalls: [{ id: 'outer-script', name: 'codemode', input: {
+          code: `return await models.classify({model:'virtual-chat:classifier',input:'test',labels:['yes','no']});`,
+        } }],
+      });
+    });
+    const usage = vi.fn();
+    const { runtime, sessionManager, session, extensionRegistry } = await setup(provider, usage);
+    const hook = vi.fn((data: BeforeHookMap['before:model']) => ({ request: { ...data.request, input: 'transformed' } }));
+    await extensionRegistry.load('model-hook', api => { api.before('before:model', hook); });
+    const run = await runtime.start({ sessionId: session.id, cwd: process.cwd(), provider: 'mock', input: 'classify',
+      codemode: { enabled: true }, allowedTools: ['codemode'] });
+    await vi.waitFor(() => expect(runtime.snapshot(session.id).run?.activeTool?.nestedCalls).toHaveLength(1));
+    const snapshot = runtime.snapshot(session.id).run;
+    expect(snapshot?.activeTool).toMatchObject({ id: 'outer-script', name: 'codemode', nestedCalls: [{ state: 'running', parentId: 'outer-script' }] });
+    const interaction = runtime.requestExtensionInteraction(session.id, { kind: 'confirm', title: 'Retained control' });
+    expect(runtime.snapshot(session.id).run?.extensionRequest?.title).toBe('Retained control');
+    await extensionRegistry.load('transient-dynamic', api => api.registerTool({ name: 'transient',
+      description: 'Transient dynamic tool', execute: () => ({ content: 'unused' }) }));
+    await extensionRegistry.unload('transient-dynamic');
+    expect(runtime.snapshot(session.id).run?.extensionRequest?.title).toBe('Retained control');
+    expect(runtime.snapshot(session.id).run?.activeTool?.nestedCalls).toHaveLength(1);
+    const replay = runtime.journal.replay(session.id);
+    expect(replay.events.filter(event => event.type === 'tool.started')).toHaveLength(1);
+    expect(replay.events.filter(event => event.type === 'tool.progress')).toHaveLength(1);
+    release(); await runtime.wait(run.id); await interaction;
+    const results = sessionManager.get(session.id)!.messages.filter(message => message.role === 'tool');
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ toolCallId: 'outer-script', usage: { totalTokens: 4, costUsd: 0.002 },
+      metadata: { codemode: { costComplete: true, nestedCalls: [{ state: 'completed' }] } } });
+    expect(sessionManager.get(session.id)?.usage).toMatchObject({ totalTokens: 4, costUsd: 0.002 });
+    expect(usage).toHaveBeenCalledTimes(1);
+    expect(hook).toHaveBeenCalledTimes(1);
+    expect(provider.classify).toHaveBeenCalledWith(expect.objectContaining({ input: 'transformed' }), expect.anything());
+    const modelHook = hook.mock.calls[0]![0];
+    expect(modelHook.signal.aborted).toBe(true);
+    modelHook.context.notify('late-model-hook');
+    expect(await modelHook.context.requestInteraction!({ kind: 'confirm', title: 'Late model control' })).toEqual({ cancelled: true });
+    expect(runtime.snapshot(session.id).run?.extensionRequest).toBeUndefined();
+    expect(runtime.journal.replay(session.id).events.filter(event => event.type === 'notice').map(event => event.data))
+      .not.toContainEqual({ message: 'late-model-hook', level: 'info' });
+    const finished = runtime.journal.replay(session.id).events;
+    expect(finished.filter(event => event.type === 'tool.completed')).toHaveLength(1);
+    expect(finished.filter(event => event.type === 'tool.progress')).toHaveLength(2);
+  });
+
   it('runs model/tool turns, persists rich entries, and publishes ordered replayable events', async () => {
     const turns: Array<{ provider: string; model?: string; tokens: number }> = [];
     const { runtime, sessionManager, session, extensionRegistry } = await setup(new ToolProvider(), (provider, model, usage) => {

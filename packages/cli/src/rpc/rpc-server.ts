@@ -414,19 +414,28 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       shellPath: settingsResolution.settings.shellPath,
       shellCommandPrefix: settingsResolution.settings.shellCommandPrefix,
     });
+    const extensionLoader = new ExtensionLoader(extensionRegistry, {
+      paths: [...rpcExtensionPaths(options.extensions ?? [], settingsResolution), ...packageExtensions],
+      isProjectTrusted: () => projectResourcesTrusted,
+    });
+    const extensionLoadResult = await extensionLoader.loadAll();
+    for (const failure of extensionLoadResult.errors) {
+      process.stderr.write(`${redactor.redact(`Extension ${failure.path}: ${failure.error.message}`)}\n`);
+    }
     const providerRuntime = await createCliProviderRuntime(
       settingsResolution.agentDir,
       settingsResolution.settings,
       process.env,
       undefined,
       settingsResolution.agentDirTrusted,
-      [],
+      extensionRegistry.getProviderDefinitions().map(item => item.type),
       redactor,
     );
     if (!options.noSession) await sessionManager.loadAllSessions();
     const providers = createConfiguredProviders(process.env, {
       credentials: providerRuntime.values,
       network: providerRuntime.network,
+      extensionProviders: extensionRegistry.getProviderDefinitions(),
     });
     const effectiveModels = applyAgentModelSettings({
       provider: options.provider,
@@ -444,14 +453,6 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       startup.providerName,
       startupModel,
     ));
-    const extensionLoader = new ExtensionLoader(extensionRegistry, {
-      paths: [...rpcExtensionPaths(options.extensions ?? [], settingsResolution), ...packageExtensions],
-      isProjectTrusted: () => projectResourcesTrusted,
-    });
-    const extensionLoadResult = await extensionLoader.loadAll();
-    for (const failure of extensionLoadResult.errors) {
-      process.stderr.write(`${redactor.redact(`Extension ${failure.path}: ${failure.error.message}`)}\n`);
-    }
     const registeredTools = extensionRegistry.getTools();
     const unknownTools = unknownToolNames(registeredTools, options.tools, options.excludeTools)
       .filter(name => !name.startsWith('mcp__') && name !== TOOL_SEARCH_TOOL_NAME && name !== CODEMODE_TOOL_NAME);

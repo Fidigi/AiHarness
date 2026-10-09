@@ -20,6 +20,8 @@ const targetCriteria = [
   'CLI-SES-03',
   'CLI-SES-04',
   'CLI-EXT-02',
+  'CLI-MOD-09',
+  'CLI-TOOL-06',
   ...Array.from({ length: 8 }, (_, index) => `CLI-AUT-${String(index + 1).padStart(2, '0')}`),
 ];
 

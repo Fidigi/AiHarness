@@ -458,6 +458,8 @@ export interface SubagentRunSnapshot {
 }
 
 /** Supported AI provider types */
+export type { CodemodeCall, CodemodeProgress, CodemodeDetails } from './codemode.js';
+
 export enum ProviderType {
   OPENAI = 'openai',
   ANTHROPIC = 'anthropic',

@@ -260,6 +260,15 @@
   ],
   "sdkScenarios": [
     {
+      "id": "sdk-specialized-models",
+      "description": "executes typed classifier/image bridges and credential/kind negatives through the public Core entry",
+      "criteria": ["CLI-MOD-09", "CLI-TOOL-06"],
+      "kind": "runtime",
+      "input": "sdk/models-probe.mjs",
+      "expected": "sdk/models-probe.expected.json",
+      "expectSuccess": true
+    },
+    {
       "id": "sdk-runtime",
       "description": "executes the built Core entry point with session and extension primitives",
       "criteria": ["CLI-EXT-02", "CLI-AUT-08"],

@@ -472,6 +472,8 @@ export class AgentRuntime {
       }
 
       run.snapshot.completedAt = new Date().toISOString();
+      run.snapshot.extensionRequest = undefined;
+      this.cancelInteractions(run);
       this.setPhase(run, 'completed');
       this.publish(run, 'run.completed', { completedAt: run.snapshot.completedAt });
       void Promise.resolve(this.onNotification?.(
@@ -539,6 +541,21 @@ export class AgentRuntime {
         };
         this.setPhase(run, 'tool');
         this.publish(run, 'tool.started', call);
+      },
+      onCodemodeProgress: progress => {
+        const tool = run.snapshot.activeTool;
+        if (!tool || tool.name !== 'codemode' || tool.id !== progress.parentId) return;
+        const calls = tool.nestedCalls ?? [];
+        const index = calls.findIndex(call => call.id === progress.call.id);
+        if (index >= 0) calls[index] = structuredClone(progress.call);
+        else if (calls.length < 64) calls.push(structuredClone(progress.call));
+        tool.nestedCalls = calls;
+        this.publish(run, 'tool.progress', { kind: 'codemode', ...progress });
+      },
+      onToolUsage: usage => {
+        this.onUsage?.(run.snapshot.provider, undefined, { promptTokens: usage.inputTokens ?? 0,
+          completionTokens: usage.outputTokens ?? 0, totalTokens: usage.totalTokens ?? 0,
+          cacheReadTokens: usage.cacheReadTokens, cacheWriteTokens: usage.cacheWriteTokens, costUsd: usage.costUsd });
       },
       onToolResult: result => {
         run.snapshot.activeTool = undefined;

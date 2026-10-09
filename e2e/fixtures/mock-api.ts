@@ -1,6 +1,7 @@
 import type { Page, Route } from '@playwright/test';
 import type {
   CustomModelDefinition,
+  CodemodeCall,
   CustomProviderDefinition,
   ExtensionInteractionSnapshot,
   McpConfigInventory,
@@ -33,6 +34,10 @@ export interface MockMessage {
     cacheWriteTokens?: number; totalTokens?: number; costUsd?: number;
   };
   blocks?: unknown[];
+  metadata?: Record<string, unknown>;
+  name?: string;
+  toolCallId?: string;
+  toolCalls?: Array<{ id: string; name: string; input: unknown }>;
 }
 
 export interface MockSession {
@@ -158,7 +163,7 @@ export interface MockApiController {
     phase: 'queued' | 'prompting' | 'streaming' | 'tool' | 'command' | 'compacting' | 'completed' | 'failed' | 'stopped',
     details?: {
       retry?: { attempt: number; max: number; delayMs: number; message: string; scheduledAt: string };
-      activeTool?: { id: string; name: string; input: unknown; startedAt: string };
+      activeTool?: { id: string; name: string; input: unknown; startedAt: string; nestedCalls?: CodemodeCall[] };
     },
   ) => void;
 }
@@ -529,7 +534,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     steerQueue: Array<{ id: string; kind: 'steer'; content: string; createdAt: string }>;
     followUpQueue: Array<{ id: string; kind: 'follow-up'; content: string; createdAt: string }>;
     retry?: { attempt: number; max: number; delayMs: number; message: string; scheduledAt: string };
-    activeTool?: { id: string; name: string; input: unknown; startedAt: string };
+    activeTool?: { id: string; name: string; input: unknown; startedAt: string; nestedCalls?: CodemodeCall[] };
     extensionRequest?: ExtensionInteractionSnapshot;
     lastSequence: number;
   }>();

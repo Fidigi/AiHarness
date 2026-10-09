@@ -7,6 +7,7 @@ import type {
   ToolExecutionResult,
   TokenUsage,
   CredentialRedactionStream,
+  CodemodeProgress,
 } from '@ai-harness/core';
 
 interface JsonRecord {
@@ -224,6 +225,8 @@ function toolResultContent(result: ToolExecutionResult): {
   const details = {
     durationMs: result.durationMs,
     truncated: result.truncated,
+    ...(result.metadata ?? {}),
+    ...(result.usage ? { usage: result.usage } : {}),
   };
   return {
     executionResult: { content, details },
@@ -406,6 +409,11 @@ export class JsonEventStream {
         details: {},
       },
     }));
+  }
+
+  codemodeProgress(progress: CodemodeProgress): Promise<void> {
+    return Promise.resolve(this.emit({ type: 'tool_execution_update', toolCallId: progress.parentId,
+      toolName: 'codemode', partialResult: { content: [], details: { kind: 'codemode', ...progress } } }));
   }
 
   toolExecutionEnd(result: ToolExecutionResult): Promise<void> {

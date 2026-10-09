@@ -11,6 +11,7 @@ import {
   type AgentProviderNetworkSettings,
   type AgentSettings,
   type ProviderConfig,
+  type ExtensionProvider,
   type ThinkingLevel,
 } from '@ai-harness/core';
 
@@ -80,6 +81,7 @@ export interface CreateConfiguredProvidersOptions {
   /** Process-local resolved secrets. They are never copied into descriptors or sessions. */
   credentials?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
   network?: AgentProviderNetworkSettings;
+  extensionProviders?: ReadonlyArray<{ type: string; definition: ExtensionProvider }>;
 }
 
 function configuredCredential(
@@ -162,6 +164,12 @@ export function createConfiguredProviders(
     baseUrl: env.LOCAL_BASE_URL || env.LLAMA_BASE_URL || 'http://localhost:11434/v1',
     model: env.LOCAL_MODEL || env.LLAMA_MODEL || 'local-model',
   });
+  for (const { type, definition } of options.extensionProviders ?? []) {
+    if (providers.has(type)) continue;
+    const key = configuredCredential(type, undefined, options.credentials);
+    attempt(providers, type, { ...definition.defaultConfig, ...network, type,
+      ...(key ? { apiKey: key } : {}) });
+  }
   return providers;
 }
 
