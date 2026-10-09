@@ -886,6 +886,10 @@ Default shortcuts:
 
 Global shortcuts do not capture ordinary input in an editable field. Their configuration and panel visibility are validated then stored in browser preferences.
 
+### Live Reasoning
+
+The composer's **Thinking level** can be changed while the agent runs. The saved choice applies to the next model request, including tool continuations and queued follow-ups; the request already streaming is unchanged. Choose **Auto** to restore inherited settings. This neither stops the agent nor changes its model; environment-imposed settings remain authoritative.
+
 ### Images and Message Rendering
 
 Add up to eight images via camera button, paste or drag-and-drop. Browser attempts to reduce oversized images; total size is limited. A warning appears if chosen provider does not announce multimodal support. Image blocks persist with message and send natively to OpenAI/Azure, Anthropic and Gemini/Vertex.

@@ -65,7 +65,9 @@ POST /api/agent/runs
   -> GET /sessions/:sessionId/events?after=<sequence> (SSE)
 ```
 
-The run applies/removes only declared session overrides. Provider/tool turns, MCP preparation/invocation, automatic compaction, queues, retries, extension interactions, and persistence share one AbortSignal and sequenced journal. Stopping during MCP preparation releases that session's host records and does not persist the unsent user input.
+The run applies/removes only declared session overrides. Provider/tool turns, MCP preparation/invocation, automatic compaction, queues, retries, extension interactions, and persistence share one AbortSignal and sequenced journal. Stopping during MCP preparation releases that session's host records and does not persist the unsent user input. Interrupted tool results and completed nested usage are persisted before the journal's terminal stop event; cleanup never starts automatic compaction or another model request.
+
+`PATCH /api/sessions/:id` can change `thinking` while an agent is active. Immediately before each provider/tool-loop turn and queued prompt, Core calls the host's `resolveThinking` policy on the latest session; Server reapplies the same session/project/global/environment precedence as startup. `thinking: null` restores inheritance, invalid levels fail without mutation, and `max` maps to the supported provider level `xhigh`. A request already in flight keeps its captured options; changing reasoning neither restarts nor stops the run and does not change its provider/model.
 
 ### Current event contract
 

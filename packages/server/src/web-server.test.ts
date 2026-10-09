@@ -5,7 +5,7 @@ import { createServer, request as requestHttp } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { EncryptedCredentialStore } from '@ai-harness/core';
+import { EncryptedCredentialStore, MockProvider, type ChatOptions } from '@ai-harness/core';
 import { start, stop } from './index.js';
 
 const html = '<!doctype html><html><head><title>AiHarness Test</title></head><body>Web bundle</body></html>';
@@ -95,6 +95,61 @@ describe('combined Web server', () => {
         .rejects.toMatchObject({ code: 'ENOENT' });
     } finally {
       load.mockRestore();
+    }
+  });
+
+  it('applies persisted live reasoning to the next request and restores inherited policy without restarting the run', async () => {
+    const cwd = path.join(webRoot, 'live-reasoning');
+    await mkdir(cwd);
+    const trusted = await fetch(`${baseUrl}/api/workspaces/trust`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd, confirm: true }) });
+    expect(trusted.status).toBe(200);
+    const session = await fetch(`${baseUrl}/api/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd, title: 'Live reasoning' }) }).then(response => response.json()) as { id: string; workspaceId: string };
+    const configured = await fetch(`${baseUrl}/api/configuration/scope`, { method: 'PUT',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scope: 'project', scopeId: session.workspaceId,
+        cwd, values: { thinking: 'low' } }) });
+    expect(configured.status).toBe(200);
+    const requests: ChatOptions[] = [];
+    const releases: Array<() => void> = [];
+    const stream = vi.spyOn(MockProvider.prototype, 'streamChat').mockImplementation(async (_messages, _chunk, complete, _error, options) => {
+      requests.push(options!);
+      if (requests.length < 3) await new Promise<void>(resolve => { releases.push(resolve); });
+      complete?.({ content: 'Reasoning request completed' });
+    });
+    try {
+      const started = await fetch(`${baseUrl}/api/agent/runs`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.id, cwd, provider: 'mock', input: 'first', thinking: 'off' }) });
+      expect(started.status).toBe(202);
+      const { run } = await started.json() as { run: { id: string } };
+      await vi.waitFor(() => expect(requests).toHaveLength(1));
+      const patch = (thinking: unknown) => fetch(`${baseUrl}/api/sessions/${session.id}`, { method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ thinking }) });
+      expect((await patch('invalid')).status).toBe(400);
+      expect((await patch('high')).status).toBe(200);
+      const queue = () => fetch(`${baseUrl}/api/agent/runs/${run.id}/queue`, { method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'follow-up', content: 'next' }) });
+      expect((await queue()).status).toBe(202);
+      expect(requests[0]?.thinking).toBe('off');
+      releases[0]!();
+      await vi.waitFor(() => expect(requests).toHaveLength(2));
+      expect(requests[1]?.thinking).toBe('high');
+      expect((await patch(null)).status).toBe(200);
+      expect((await queue()).status).toBe(202);
+      expect(requests[1]?.thinking).toBe('high');
+      releases[1]!();
+      await vi.waitFor(() => expect(requests).toHaveLength(3));
+      expect(requests[2]?.thinking).toBe('low');
+      await vi.waitFor(async () => {
+        const state = await fetch(`${baseUrl}/api/agent/runs/${run.id}`).then(response => response.json()) as { phase: string };
+        expect(state.phase).toBe('completed');
+      });
+      const persisted = await fetch(`${baseUrl}/api/sessions/${session.id}`).then(response => response.json());
+      expect(persisted).not.toHaveProperty('thinking');
+    } finally {
+      releases.forEach(release => release());
+      stream.mockRestore();
+      await fetch(`${baseUrl}/api/sessions/${session.id}`, { method: 'DELETE' });
     }
   });
 
@@ -2286,8 +2341,9 @@ describe('combined Web server', () => {
     const waitForCompletion = async (): Promise<void> => {
       for (let attempt = 0; attempt < 100; attempt++) {
         const state = await fetch(`${baseUrl}/api/agent/sessions/${created.id}/state`)
-          .then(response => response.json()) as { run?: { phase?: string } };
+          .then(response => response.json()) as { run?: { phase?: string; error?: string } };
         if (state.run?.phase === 'completed') return;
+        if (state.run?.phase === 'failed') throw new Error(`Agent run failed: ${state.run.error}`);
         await new Promise(resolve => setTimeout(resolve, 10));
       }
       throw new Error('Agent run did not complete');

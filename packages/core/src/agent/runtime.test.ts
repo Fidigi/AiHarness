@@ -302,6 +302,32 @@ describe('AgentRuntime', () => {
     expect(usage).toHaveBeenCalledOnce();
   });
 
+  it('reads live reasoning between tool turns and queued prompts, leaving in-flight options unchanged', async () => {
+    const provider = new MockProvider({ type: 'mock' });
+    const options: ChatOptions[] = [];
+    const { runtime, sessionManager, session, extensionRegistry } = await setup(provider);
+    await sessionManager.update(session.id, { thinking: 'off' });
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    await extensionRegistry.load('thinking-gate', api => api.registerTool({ name: 'hold', description: 'Wait',
+      execute: async () => { await gate; return { content: 'ready' }; } }));
+    vi.spyOn(provider, 'streamChat').mockImplementation(async (_messages, _chunk, complete, _error, request) => {
+      options.push(request!);
+      complete?.(options.length === 1 ? { content: '', toolCalls: [{ id: 'hold', name: 'hold', input: {} }] }
+        : { content: 'done' });
+    });
+    const run = await runtime.start({ sessionId: session.id, cwd: process.cwd(), provider: 'mock', input: 'start',
+      persistSettings: false, thinking: 'minimal' });
+    await vi.waitFor(() => expect(runtime.getRun(run.id)?.phase).toBe('tool'));
+    await sessionManager.update(session.id, { thinking: 'max' });
+    runtime.enqueue(run.id, 'follow-up', 'continue');
+    expect(options[0]?.thinking).toBe('off');
+    release();
+    await runtime.wait(run.id);
+    expect(options.map(request => request.thinking)).toEqual(['off', 'xhigh', 'xhigh']);
+    expect(sessionManager.get(session.id)?.thinking).toBe('max');
+  });
+
   it('runs model/tool turns, persists rich entries, and publishes ordered replayable events', async () => {
     const turns: Array<{ provider: string; model?: string; tokens: number }> = [];
     const { runtime, sessionManager, session, extensionRegistry } = await setup(new ToolProvider(), (provider, model, usage) => {

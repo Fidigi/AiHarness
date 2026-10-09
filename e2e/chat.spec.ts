@@ -96,6 +96,23 @@ test.describe('Conversation detached agent', () => {
     expect(start?.body).not.toHaveProperty('messages');
   });
 
+  test('saves reasoning during streaming without stopping or queueing a new prompt', async ({ page }) => {
+    const api = await installMockApi(page, { sessions: [mockSession('live-thinking', 'Live thinking')], holdAgentRun: true });
+    await page.goto('/chat/live-thinking');
+    await page.getByPlaceholder(/Type your message/).fill('Keep streaming');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Stop model', exact: true })).toBeVisible();
+    const thinking = page.getByLabel('Thinking level');
+    await expect(thinking).toBeEnabled();
+    await thinking.selectOption('high');
+    await expect.poll(() => api.sessions[0]?.thinking).toBe('high');
+    await thinking.selectOption('auto');
+    await expect.poll(() => api.sessions[0]?.thinking).toBeUndefined();
+    expect(api.requests.filter(request => request.method === 'POST' && request.path === '/api/agent/runs')).toHaveLength(1);
+    expect(api.requests.some(request => /\/(stop|queue)$/.test(request.path))).toBe(false);
+    await expect(page.getByRole('button', { name: 'Stop model', exact: true })).toBeVisible();
+  });
+
   test('rend l’héritage explicite, persiste les surcharges puis restaure la portée projet', async ({ page }) => {
     const session = mockSession('scoped-session', 'Scoped settings');
     delete session.model;

@@ -891,6 +891,10 @@ Raccourcis par défaut :
 
 Les raccourcis globaux ne capturent pas la saisie ordinaire dans un champ éditable. Leur configuration et la visibilité des panneaux sont validées puis conservées dans les préférences du navigateur.
 
+### Raisonnement pendant un run
+
+Le **Thinking level** du composer peut être modifié pendant l’exécution. Le choix enregistré s’applique au prochain appel modèle, y compris après un outil ou pour un follow-up ; l’appel déjà en cours reste inchangé. **Auto** restaure les réglages hérités. Cela n’arrête pas l’agent et ne change pas son modèle ; les valeurs imposées par l’environnement restent prioritaires.
+
 ### Images et rendu des messages
 
 Ajoutez jusqu’à huit images par le bouton appareil photo, collage ou glisser-déposer. Le navigateur tente de réduire les images trop grandes ; la taille totale est limitée. Un avertissement apparaît si le provider choisi n’annonce pas de support multimodal. Les blocs image sont persistés avec le message et envoyés nativement à OpenAI/Azure, Anthropic et Gemini/Vertex.

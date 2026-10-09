@@ -65,6 +65,8 @@ export interface AgentRuntimeOptions {
   sessionManager: SessionManager;
   extensionRegistry: ExtensionRegistry;
   resolveProvider(name: string): AiProvider | undefined | Promise<AiProvider | undefined>;
+  /** Resolve live reasoning immediately before each model turn; never mutates an in-flight request. */
+  resolveThinking?(session: Session, initial: Session['thinking']): Session['thinking'];
   journal?: AgentEventJournal;
   isProjectTrusted?(cwd: string): boolean | Promise<boolean>;
   onUsage?(provider: string, model: string | undefined, usage: NonNullable<ChatResponse['usage']>): number | undefined;
@@ -211,6 +213,7 @@ export class AgentRuntime {
   private readonly sessionManager: SessionManager;
   private readonly extensionRegistry: ExtensionRegistry;
   private readonly resolveProvider: AgentRuntimeOptions['resolveProvider'];
+  private readonly resolveThinking: NonNullable<AgentRuntimeOptions['resolveThinking']>;
   private readonly isProjectTrusted: NonNullable<AgentRuntimeOptions['isProjectTrusted']>;
   private readonly onUsage?: AgentRuntimeOptions['onUsage'];
   private readonly onNotification?: AgentRuntimeOptions['onNotification'];
@@ -223,6 +226,7 @@ export class AgentRuntime {
     this.sessionManager = options.sessionManager;
     this.extensionRegistry = options.extensionRegistry;
     this.resolveProvider = options.resolveProvider;
+    this.resolveThinking = options.resolveThinking ?? ((session, initial) => session.thinking ?? initial);
     this.journal = options.journal ?? new AgentEventJournal();
     this.isProjectTrusted = options.isProjectTrusted ?? (() => false);
     this.onUsage = options.onUsage;
@@ -245,7 +249,8 @@ export class AgentRuntime {
     }
     const existingId = this.sessionRuns.get(request.sessionId);
     const existing = existingId ? this.runs.get(existingId) : undefined;
-    if (existing && !existing.settled) {
+    if (existing && (!['completed', 'failed', 'stopped'].includes(existing.snapshot.phase)
+      || (existing.controller.signal.aborted && !existing.settled))) {
       throw new Error('Un agent est déjà actif pour cette session.');
     }
 
@@ -578,7 +583,10 @@ export class AgentRuntime {
       streamTurn: async (messages, definitions) => {
         await this.flushSteering(run, request);
         const currentMessages = this.effectiveMessages(run.snapshot.sessionId);
-        const thinking = request.thinking === 'max' ? 'xhigh' : request.thinking;
+        const session = this.sessionManager.get(run.snapshot.sessionId);
+        if (!session) throw new Error('Session introuvable.');
+        const level = this.resolveThinking(session, request.thinking);
+        const thinking = level === 'max' ? 'xhigh' : level;
         let messageId = '';
         let content = '';
         let reasoning = '';

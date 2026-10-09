@@ -225,6 +225,9 @@ export async function createRuntimeServices(
     sessionManager,
     extensionRegistry,
     resolveProvider: provider => proxy.getAgentProvider(provider),
+    resolveThinking: session => resolveEffectiveConfiguration({ configurationStore }, {
+      projectId: session.workspaceId, sessionId: session.id, session,
+    }).values.thinking,
     isProjectTrusted: cwd => trustManager.isTrusted(cwd),
     onUsage: (provider, model, usage) => proxy.recordUsage(provider, model, usage),
     redactText: value => proxy.redactText(value),
