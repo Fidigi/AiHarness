@@ -8,14 +8,14 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 
 | Domain | File | Context Load |
 |---|---|---|
-| Project overview | [`project-map.md`](./project-map.md) | ~400 lines — load first for global navigation |
-| AI Providers | [`topics/providers.md`](./topics/providers.md) | ~100 lines |
-| Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~115 lines |
-| Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~120 lines |
-| CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~110 lines |
-| Server API | [`topics/server-api.md`](./topics/server-api.md) | ~110 lines |
-| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~115 lines |
-| Security & Trust | [`topics/security.md`](./topics/security.md) | ~115 lines |
+| Project overview | [`project-map.md`](./project-map.md) | ~530 lines — load first for global navigation |
+| AI Providers | [`topics/providers.md`](./topics/providers.md) | ~120 lines |
+| Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~125 lines |
+| Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~135 lines |
+| CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~285 lines |
+| Server API | [`topics/server-api.md`](./topics/server-api.md) | ~160 lines |
+| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~140 lines |
+| Security & Trust | [`topics/security.md`](./topics/security.md) | ~180 lines |
 | Child Agents | [`topics/child-agents.md`](./topics/child-agents.md) | ~115 lines |
 
 ### Reference Documentation
@@ -70,6 +70,14 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → packages/web/src/index.tsx, App.tsx
 → packages/web/src/store/*.ts
 → packages/web/src/components/{domain}.tsx
+```
+
+**MCP hosting, OAuth, or discovery** → Load `security.md` + the MCP flow in `project-map.md` §4; add `server-api.md` or `cli-reference.md` for the adapter
+```
+→ packages/core/src/mcp/{session-host,oauth,oauth-provider-factory,oauth-flow}.ts
+→ packages/core/src/tools/tool-search.ts
+→ packages/server/src/api/mcp-routes.ts
+→ packages/web/src/components/McpSettings.tsx
 ```
 
 **Child agents** → Load only `child-agents.md` + `project-map.md` §4

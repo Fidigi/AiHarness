@@ -56,6 +56,7 @@ export interface RuntimeServices {
   extensionRegistry: ExtensionRegistry;
   agentRuntime: AgentRuntime;
   commandRuntime: CommandRuntime;
+  mcpHost: McpSessionHost;
   mcpInventory: McpInventoryService;
   modelCatalog: ModelCatalogService;
   pluginService: PluginService;
@@ -441,6 +442,7 @@ export async function createRuntimeServices(
     extensionRegistry,
     agentRuntime,
     commandRuntime,
+    mcpHost,
     mcpInventory,
     modelCatalog,
     pluginService,

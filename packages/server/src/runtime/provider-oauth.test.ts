@@ -61,6 +61,7 @@ describe('ProviderOAuthService', () => {
   it('does not reflect OAuth denial descriptions or remote status details', async () => {
     configure();
     vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.418Z'));
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({
         device_code: 'private-device-code', user_code: 'CODE', verification_uri: 'https://oauth.example/activate',
@@ -74,9 +75,13 @@ describe('ProviderOAuthService', () => {
 
     await vi.advanceTimersByTimeAsync(1_000);
 
-    expect(service.get(flow.id)).toMatchObject({ state: 'failed', error: 'OAuth token exchange failed.' });
+    expect(service.get(flow.id)).toEqual({
+      id: flow.id, provider: 'openai', state: 'failed', expiresAt: flow.expiresAt,
+      error: 'OAuth token exchange failed.',
+    });
     expect(JSON.stringify(service.get(flow.id))).not.toContain('remote-secret-description');
-    expect(JSON.stringify(service.get(flow.id))).not.toContain('418');
+    // Numeric substrings in timestamps/UUIDs are not remote status disclosure.
+    expect(service.get(flow.id)?.error).not.toContain('418');
   });
 
   it('times out even when a custom fetcher ignores its abort signal', async () => {

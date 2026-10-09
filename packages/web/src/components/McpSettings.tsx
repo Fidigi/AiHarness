@@ -5,6 +5,7 @@ import type {
   McpConfigProblemReason,
   McpConfigScope,
   McpExposure,
+  McpOAuthFlowInfo,
   McpServerInventoryEntry,
 } from '@ai-harness/core';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -13,12 +14,19 @@ import { mcpTestMessage, type McpTestMessageKey } from './mcp-test-messages';
 import { useI18n } from '../hooks/useI18n';
 import { getMcpConfig } from '../services/api';
 import {
+  cancelMcpOAuthFlow,
+  getMcpOAuthStatuses,
+  logoutMcpOAuth,
+  pasteMcpOAuthRedirect,
+  readMcpOAuthFlow,
   removeMcpConfigServer,
   restoreMcpConfigServer,
   setMcpConfigEnabled,
   setMcpConfigExposure,
+  startMcpOAuth,
   testMcpConfigServer,
   type McpActionResponse,
+  type McpOAuthStatusEntry,
   type McpReplaceTarget,
 } from '../services/mcp-api';
 import { useSessionStore } from '../store/session-store';
@@ -78,6 +86,26 @@ function editKey(scope: McpConfigScope, name: string): string {
   return encodeURIComponent(`${scope}\0${name}`);
 }
 
+function oauthKey(server: Pick<McpServerInventoryEntry, 'scope' | 'name' | 'configKey'>): string {
+  return `${server.scope}\0${server.name}\0${server.configKey}`;
+}
+
+function activeOAuthFlow(flow: McpOAuthFlowInfo | undefined): boolean {
+  return Boolean(flow && !['connected', 'failed', 'cancelled', 'expired'].includes(flow.phase));
+}
+
+function safeAuthorizationLink(value: string | undefined): string | undefined {
+  if (!value || value.length > 16_384) return undefined;
+  try {
+    const url = new URL(value);
+    if (url.username || url.password) return undefined;
+    if (url.protocol === 'https:') return url.href;
+    if (url.protocol === 'http:'
+      && ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(url.hostname)) return url.href;
+    return undefined;
+  } catch { return undefined; }
+}
+
 function testedAt(value: string): string {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
@@ -130,11 +158,98 @@ function McpTestReport({ server }: { server: McpServerInventoryEntry }) {
   </section>;
 }
 
+function McpOAuthPanel({
+  server,
+  status,
+  flow,
+  busy,
+  error,
+  disabled,
+  onStart,
+  onPaste,
+  onCancel,
+  onLogout,
+}: {
+  server: McpServerInventoryEntry;
+  status?: McpOAuthStatusEntry;
+  flow?: McpOAuthFlowInfo;
+  busy: boolean;
+  error?: string;
+  disabled: boolean;
+  onStart(): void;
+  onPaste(value: string): void;
+  onCancel(): void;
+  onLogout(): void;
+}) {
+  const { t } = useI18n();
+  const [redirect, setRedirect] = useState('');
+  useEffect(() => setRedirect(''), [flow?.flowId]);
+  const active = activeOAuthFlow(flow);
+  const authorizationUrl = safeAuthorizationLink(flow?.authorizationUrl);
+  const statusKey = status?.signedIn
+    ? 'settings.mcp.oauth.signedIn'
+    : status?.stateStored
+      ? 'settings.mcp.oauth.registrationOnly'
+      : status ? 'settings.mcp.oauth.signedOut' : 'settings.mcp.oauth.unknown';
+  return <section className="mcp-test-report mcp-oauth-panel"
+    aria-label={t('settings.mcp.oauth.named', { name: server.name })}>
+    <div className="mcp-test-summary">
+      <strong>{t('settings.mcp.oauth.title')}</strong>
+      <small className={status?.signedIn ? 'status-success' : undefined}>{t(statusKey)}</small>
+    </div>
+    {flow && active && <small role="status">
+      {t(`settings.mcp.oauth.phase.${flow.phase}`)}
+    </small>}
+    {flow?.phase === 'authorize' && <div className="mcp-config-lines">
+      {authorizationUrl
+        ? <a href={authorizationUrl} target="_blank" rel="noopener noreferrer">
+          {t('settings.mcp.oauth.openAuthorization')}
+        </a>
+        : <small className="status-warning">{t('settings.mcp.oauth.invalidAuthorizationUrl')}</small>}
+      <label>
+        <span>{t('settings.mcp.oauth.redirectLabel')}</span>
+        <input value={redirect} disabled={busy}
+          placeholder={t('settings.mcp.oauth.redirectPlaceholder')}
+          onChange={event => setRedirect(event.currentTarget.value)} />
+      </label>
+      <button type="button" disabled={busy || redirect.trim().length === 0}
+        onClick={() => onPaste(redirect)}>{t('settings.mcp.oauth.submitRedirect')}</button>
+      {flow.redirectUrl && <small>{t('settings.mcp.oauth.callback', { url: flow.redirectUrl })}</small>}
+    </div>}
+    {flow && !active && <small role="status"
+      className={flow.phase === 'connected' ? 'status-success' : 'status-warning'}>
+      {t(`settings.mcp.oauth.outcome.${flow.phase}`)}
+      {flow.phase === 'failed' && flow.failure
+        ? ` ${t(`settings.mcp.oauth.failure.${flow.failure}`)}`
+        : ''}
+    </small>}
+    {error && <small role="alert" className="status-warning">{error}</small>}
+    <div className="mcp-row-actions">
+      {active
+        ? <button type="button" disabled={busy}
+          onClick={onCancel}>{busy ? t('settings.mcp.oauth.working') : t('settings.mcp.oauth.cancel')}</button>
+        : <button type="button" disabled={disabled || busy || !server.enabled || server.shadowedByProject}
+          onClick={onStart}>{busy ? t('settings.mcp.oauth.working') : t('settings.mcp.oauth.signIn')}</button>}
+      {!active && status?.stateStored && <button type="button" disabled={disabled || busy}
+        onClick={onLogout}>{t('settings.mcp.oauth.signOut')}</button>}
+    </div>
+    <small>{t('settings.mcp.oauth.explanation')}</small>
+  </section>;
+}
+
 function ServerCard({
   server,
   disabled,
   testing,
+  oauthStatus,
+  oauthFlow,
+  oauthBusy,
+  oauthError,
   onTest,
+  onOAuthStart,
+  onOAuthPaste,
+  onOAuthCancel,
+  onOAuthLogout,
   onToggle,
   onExposureChange,
   onEdit,
@@ -143,7 +258,15 @@ function ServerCard({
   server: McpServerInventoryEntry;
   disabled: boolean;
   testing: boolean;
+  oauthStatus?: McpOAuthStatusEntry;
+  oauthFlow?: McpOAuthFlowInfo;
+  oauthBusy: boolean;
+  oauthError?: string;
   onTest: () => void;
+  onOAuthStart: () => void;
+  onOAuthPaste: (value: string) => void;
+  onOAuthCancel: () => void;
+  onOAuthLogout: () => void;
   onToggle: () => void;
   onExposureChange: (exposure: McpExposure) => void;
   onEdit: (trigger: HTMLButtonElement) => void;
@@ -217,6 +340,18 @@ function ServerCard({
         </button>
       </div>}
     </div>
+    {server.usesOAuth && <McpOAuthPanel
+      server={server}
+      status={oauthStatus}
+      flow={oauthFlow}
+      busy={oauthBusy}
+      error={oauthError}
+      disabled={disabled}
+      onStart={onOAuthStart}
+      onPaste={onOAuthPaste}
+      onCancel={onOAuthCancel}
+      onLogout={onOAuthLogout}
+    />}
     <McpTestReport server={server} />
   </article>;
 }
@@ -232,6 +367,10 @@ export function McpSettings() {
   const [busy, setBusy] = useState<string>();
   const [testing, setTesting] = useState<string>();
   const [testError, setTestError] = useState<string>();
+  const [oauthStatuses, setOAuthStatuses] = useState<Record<string, McpOAuthStatusEntry>>({});
+  const [oauthFlows, setOAuthFlows] = useState<Record<string, McpOAuthFlowInfo>>({});
+  const [oauthBusy, setOAuthBusy] = useState<string>();
+  const [oauthErrors, setOAuthErrors] = useState<Record<string, string>>({});
   const [importWriting, setImportWriting] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackKind>();
   const [undo, setUndo] = useState<UndoState>();
@@ -241,12 +380,40 @@ export function McpSettings() {
   const inventoryRequest = useRef(0);
   const actionRequest = useRef(0);
   const testRequest = useRef(0);
+  const oauthRequest = useRef(0);
   const removalReturnFocus = useRef<HTMLButtonElement | null>(null);
   const removalDialogRef = useRef<HTMLElement | null>(null);
   const undoButtonRef = useRef<HTMLButtonElement | null>(null);
   const editReturnFocus = useRef<HTMLButtonElement | null>(null);
   const sectionRef = useRef<HTMLElement | null>(null);
   const refreshButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const refreshOAuthStatuses = useCallback(async (next: McpConfigInventory): Promise<void> => {
+    const servers = next.servers.filter(server => server.valid && server.usesOAuth)
+      .map(server => ({ scope: server.scope, name: server.name, configKey: server.configKey }));
+    const request = ++oauthRequest.current;
+    if (servers.length === 0) {
+      setOAuthStatuses({});
+      return;
+    }
+    const result = await getMcpOAuthStatuses(servers, workspace?.cwd);
+    if (request !== oauthRequest.current) return;
+    if (result.success && result.data) {
+      setOAuthStatuses(Object.fromEntries(result.data.statuses.map(status => [oauthKey(status), status])));
+      setOAuthErrors(current => {
+        const nextErrors = { ...current };
+        for (const server of servers) delete nextErrors[oauthKey(server)];
+        return nextErrors;
+      });
+      return;
+    }
+    setOAuthStatuses({});
+    const message = result.error ?? t('settings.mcp.oauth.unavailable');
+    setOAuthErrors(current => ({
+      ...current,
+      ...Object.fromEntries(servers.map(server => [oauthKey(server), message])),
+    }));
+  }, [t, workspace?.cwd]);
 
   const load = useCallback(async (clear = false): Promise<void> => {
     const sequence = ++inventoryRequest.current;
@@ -255,10 +422,12 @@ export function McpSettings() {
     if (clear) setInventory(undefined);
     const result = await getMcpConfig(workspace?.cwd);
     if (sequence !== inventoryRequest.current) return;
-    if (result.success && result.data) setInventory(result.data);
-    else setLoadError(result.error);
+    if (result.success && result.data) {
+      setInventory(result.data);
+      void refreshOAuthStatuses(result.data);
+    } else setLoadError(result.error);
     setLoading(false);
-  }, [workspace?.cwd]);
+  }, [refreshOAuthStatuses, workspace?.cwd]);
 
   const reloadCanonical = useCallback(async (): Promise<void> => {
     await Promise.all([load(true), refreshWorkspace()]);
@@ -270,6 +439,11 @@ export function McpSettings() {
     setBusy(undefined);
     setTesting(undefined);
     setTestError(undefined);
+    oauthRequest.current++;
+    setOAuthStatuses({});
+    setOAuthFlows({});
+    setOAuthBusy(undefined);
+    setOAuthErrors({});
     setImportWriting(false);
     setFeedback(undefined);
     setUndo(undefined);
@@ -281,6 +455,7 @@ export function McpSettings() {
       inventoryRequest.current++;
       actionRequest.current++;
       testRequest.current++;
+      oauthRequest.current++;
     };
   }, [load, workspace?.operationTrusted, workspace?.trusted]);
 
@@ -296,6 +471,36 @@ export function McpSettings() {
       window.cancelAnimationFrame(frame);
     };
   }, [undo]);
+
+  useEffect(() => {
+    const active = Object.entries(oauthFlows).filter(([, flow]) => activeOAuthFlow(flow));
+    if (active.length === 0) return;
+    let cancelled = false;
+    let timeout: number;
+    const poll = async () => {
+      await Promise.all(active.map(async ([key, flow]) => {
+        const result = await readMcpOAuthFlow(flow.flowId);
+        if (cancelled) return;
+        if (result.success && result.data) {
+          setOAuthFlows(current => current[key]?.flowId === flow.flowId && activeOAuthFlow(current[key])
+            ? { ...current, [key]: result.data! }
+            : current);
+          if (!activeOAuthFlow(result.data) && inventory) void refreshOAuthStatuses(inventory);
+        } else {
+          setOAuthErrors(current => ({
+            ...current,
+            [key]: result.error ?? t('settings.mcp.oauth.unavailable'),
+          }));
+        }
+      }));
+      if (!cancelled) timeout = window.setTimeout(() => void poll(), 1_000);
+    };
+    timeout = window.setTimeout(() => void poll(), 1_000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [inventory, oauthFlows, refreshOAuthStatuses, t]);
 
   useFocusTrap(
     Boolean(pendingRemoval),
@@ -481,6 +686,116 @@ export function McpSettings() {
     }
   };
 
+  const oauthControlsDisabled = Boolean(busy) || Boolean(testing) || importWriting || Boolean(replacement);
+
+  const startOAuth = async (server: McpServerInventoryEntry): Promise<void> => {
+    const key = oauthKey(server);
+    if (oauthBusy || oauthControlsDisabled) return;
+    setOAuthBusy(key);
+    setOAuthErrors(current => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    const sequence = inventoryRequest.current;
+    const result = await startMcpOAuth(server, workspace?.cwd);
+    if (sequence !== inventoryRequest.current) return;
+    if (result.success && result.data) {
+      setOAuthFlows(current => ({ ...current, [key]: result.data! }));
+      if (!activeOAuthFlow(result.data) && inventory) void refreshOAuthStatuses(inventory);
+    } else {
+      setOAuthErrors(current => ({
+        ...current,
+        [key]: result.error ?? t('settings.mcp.oauth.unavailable'),
+      }));
+    }
+    setOAuthBusy(current => current === key ? undefined : current);
+  };
+
+  const pasteOAuth = async (server: McpServerInventoryEntry, value: string): Promise<void> => {
+    const key = oauthKey(server);
+    const flow = oauthFlows[key];
+    if (!flow || oauthBusy) return;
+    setOAuthBusy(key);
+    const sequence = inventoryRequest.current;
+    const result = await pasteMcpOAuthRedirect(flow.flowId, value);
+    if (sequence !== inventoryRequest.current) return;
+    if (result.success && result.data) {
+      setOAuthFlows(current => ({ ...current, [key]: result.data! }));
+      if (!activeOAuthFlow(result.data) && inventory) void refreshOAuthStatuses(inventory);
+      setOAuthErrors(current => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    } else {
+      setOAuthErrors(current => ({
+        ...current,
+        [key]: result.error ?? t('settings.mcp.oauth.redirectRefused'),
+      }));
+    }
+    setOAuthBusy(current => current === key ? undefined : current);
+  };
+
+  const cancelOAuth = async (server: McpServerInventoryEntry): Promise<void> => {
+    const key = oauthKey(server);
+    const flow = oauthFlows[key];
+    if (!flow || oauthBusy) return;
+    setOAuthBusy(key);
+    const sequence = inventoryRequest.current;
+    const result = await cancelMcpOAuthFlow(flow.flowId);
+    if (sequence !== inventoryRequest.current) return;
+    if (result.success && result.data) {
+      setOAuthFlows(current => ({ ...current, [key]: result.data! }));
+    } else {
+      setOAuthErrors(current => ({
+        ...current,
+        [key]: result.error ?? t('settings.mcp.oauth.unavailable'),
+      }));
+    }
+    setOAuthBusy(current => current === key ? undefined : current);
+  };
+
+  const logoutOAuth = async (server: McpServerInventoryEntry): Promise<void> => {
+    const key = oauthKey(server);
+    if (oauthBusy || oauthControlsDisabled) return;
+    setOAuthBusy(key);
+    const sequence = inventoryRequest.current;
+    oauthRequest.current++;
+    const result = await logoutMcpOAuth(server, workspace?.cwd);
+    if (sequence !== inventoryRequest.current) return;
+    oauthRequest.current++;
+    if (result.success) {
+      setOAuthStatuses(current => ({
+        ...current,
+        [key]: {
+          scope: server.scope,
+          name: server.name,
+          configKey: server.configKey,
+          available: true,
+          signedIn: false,
+          stateStored: false,
+        },
+      }));
+      setOAuthFlows(current => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      setOAuthErrors(current => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    } else {
+      setOAuthErrors(current => ({
+        ...current,
+        [key]: result.error ?? t('settings.mcp.oauth.unavailable'),
+      }));
+    }
+    setOAuthBusy(current => current === key ? undefined : current);
+  };
+
   const projectFile = inventory?.files.find(file => file.scope === 'project');
   const groups = (['global', 'project'] as const).map(scope => ({
     scope,
@@ -490,7 +805,7 @@ export function McpSettings() {
 
   const feedbackKey = feedback ? `settings.mcp.mutation.${feedback}` : undefined;
 
-  const controlsDisabled = Boolean(busy) || Boolean(testing) || importWriting || Boolean(replacement);
+  const controlsDisabled = Boolean(busy) || Boolean(testing) || Boolean(oauthBusy) || importWriting || Boolean(replacement);
 
   return <section ref={sectionRef} className="settings-section" id="mcp">
     <div className="mcp-settings-heading">
@@ -559,8 +874,16 @@ export function McpSettings() {
               server={server}
               disabled={controlsDisabled}
               testing={testing === `${server.scope}:${server.name}`}
+              oauthStatus={oauthStatuses[oauthKey(server)]}
+              oauthFlow={oauthFlows[oauthKey(server)]}
+              oauthBusy={oauthBusy === oauthKey(server)}
+              oauthError={oauthErrors[oauthKey(server)]}
               key={`${server.scope}:${server.name}:${index}`}
               onTest={() => void testServer(server)}
+              onOAuthStart={() => void startOAuth(server)}
+              onOAuthPaste={value => void pasteOAuth(server, value)}
+              onOAuthCancel={() => void cancelOAuth(server)}
+              onOAuthLogout={() => void logoutOAuth(server)}
               onToggle={() => void setEnabled(server.scope, [server.name], !server.enabled, `row:${server.scope}:${server.name}`)}
               onExposureChange={exposure => void setExposure(server, exposure)}
               onEdit={trigger => {

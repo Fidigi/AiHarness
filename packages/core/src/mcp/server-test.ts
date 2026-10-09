@@ -118,6 +118,12 @@ export function mcpTestRunsCommand(config: McpServerRuntimeConfig): boolean {
   return runtimeValues(config).some(({ value }) => value.startsWith('!'));
 }
 
+/** Persistent OAuth may resolve its client secret after a challenge; serialize that command too. */
+export function mcpSessionRunsCommand(config: McpServerRuntimeConfig): boolean {
+  return mcpTestRunsCommand(config)
+    || ('url' in config && config.oauth?.clientSecret?.startsWith('!') === true);
+}
+
 function interpolateEnvironment(
   value: string,
   environment: NodeJS.ProcessEnv,
@@ -201,6 +207,37 @@ async function resolveValue(
   const resolved = result.output.trim();
   if (!resolved) throw new Error(`The command-backed MCP field ${field} returned no value.`);
   return resolved;
+}
+
+export interface ResolvedMcpOAuthSettings {
+  clientId?: string;
+  clientSecret?: string;
+  scopes?: string[];
+  resolvedSecrets: string[];
+}
+
+/** Resolve the optional OAuth client secret only after an OAuth challenge or explicit login. */
+export async function resolveMcpOAuthSettings(
+  target: McpServerTestTarget,
+  signal: AbortSignal,
+  commandTimeoutMs: number,
+): Promise<ResolvedMcpOAuthSettings> {
+  if (!('url' in target.config) || !target.config.oauth) return { resolvedSecrets: [] };
+  const { clientId, clientSecret, scopes } = target.config.oauth;
+  const resolvedSecrets: string[] = [];
+  let resolvedClientSecret: string | undefined;
+  if (clientSecret !== undefined) {
+    resolvedClientSecret = await resolveValue(
+      'oauth.clientSecret', clientSecret, target, signal, commandTimeoutMs, resolvedSecrets,
+    );
+    resolvedSecrets.push(resolvedClientSecret);
+  }
+  return {
+    ...(clientId ? { clientId } : {}),
+    ...(resolvedClientSecret ? { clientSecret: resolvedClientSecret } : {}),
+    ...(scopes ? { scopes: [...scopes] } : {}),
+    resolvedSecrets,
+  };
 }
 
 export async function resolveRuntimeConfig(

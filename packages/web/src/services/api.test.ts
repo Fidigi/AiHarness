@@ -43,13 +43,19 @@ import {
   uploadFiles,
 } from './api';
 import {
+  cancelMcpOAuthFlow,
+  getMcpOAuthStatuses,
   importMcpConfigServer,
+  logoutMcpOAuth,
   previewMcpImport,
   removeMcpConfigServer,
   replaceMcpConfigServer,
   restoreMcpConfigServer,
   setMcpConfigEnabled,
   setMcpConfigExposure,
+  startMcpOAuth,
+  pasteMcpOAuthRedirect,
+  readMcpOAuthFlow,
 } from './mcp-api';
 
 function sseResponse(chunks: string[], ok = true): Response {
@@ -449,6 +455,69 @@ describe('Web API service', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/mcp/actions', expect.objectContaining({
       body: JSON.stringify({ action: 'restore', undoToken: 'opaque-token-1234', cwd: '/workspace' }),
     }));
+  });
+
+  it('uses the explicit MCP OAuth endpoints without sending server URLs or receiving tokens', async () => {
+    const descriptor = { scope: 'global' as const, name: 'docs', configKey: 'a'.repeat(64) };
+    const flow = {
+      flowId: 'oauth-flow-1234567890123456',
+      scope: 'global' as const,
+      name: 'docs',
+      configKey: descriptor.configKey,
+      phase: 'authorize' as const,
+      authorizationUrl: 'https://login.example.test/authorize?state=public-state',
+      redirectUrl: 'http://127.0.0.1:32123/oauth/callback',
+      expiresAt: '2026-01-01T00:05:00.000Z',
+    };
+    const responses = [
+      { statuses: [{ ...descriptor, available: true, stateStored: false, signedIn: false }] },
+      { ...flow, joined: false },
+      flow,
+      flow,
+      { ...flow, phase: 'cancelled' },
+      { ...descriptor, removed: true },
+    ];
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(
+      JSON.stringify(responses.shift()),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const inventoryRow = { ...descriptor, url: 'https://mcp.example.test/private', usesOAuth: true, enabled: true };
+    await expect(getMcpOAuthStatuses([inventoryRow])).resolves.toMatchObject({
+      success: true,
+      data: { statuses: [expect.objectContaining({ signedIn: false })] },
+    });
+    await expect(startMcpOAuth(inventoryRow)).resolves.toMatchObject({
+      success: true, data: { joined: false, ...flow },
+    });
+    await expect(readMcpOAuthFlow(flow.flowId)).resolves.toEqual({ success: true, data: flow });
+    await expect(pasteMcpOAuthRedirect(flow.flowId, `${flow.redirectUrl}?code=public-code&state=public-state`))
+      .resolves.toEqual({ success: true, data: flow });
+    await expect(cancelMcpOAuthFlow(flow.flowId)).resolves.toMatchObject({
+      success: true, data: { phase: 'cancelled' },
+    });
+    await expect(logoutMcpOAuth(inventoryRow)).resolves.toMatchObject({ success: true, data: { removed: true } });
+
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      '/api/mcp/oauth/status',
+      '/api/mcp/oauth/start',
+      `/api/mcp/oauth/flows/${flow.flowId}`,
+      `/api/mcp/oauth/flows/${flow.flowId}/redirect`,
+      `/api/mcp/oauth/flows/${flow.flowId}`,
+      '/api/mcp/oauth/logout',
+    ]);
+    const bodies = fetchMock.mock.calls
+      .map(call => (call[1] as RequestInit | undefined)?.body)
+      .filter((value): value is string => typeof value === 'string');
+    expect(bodies.map(value => JSON.parse(value))).toEqual([
+      { servers: [descriptor] },
+      descriptor,
+      { redirectUrl: `${flow.redirectUrl}?code=public-code&state=public-state` },
+      descriptor,
+    ]);
+    expect(JSON.stringify(bodies)).not.toContain('mcp.example');
+    expect(JSON.stringify(flow)).not.toContain('access_token');
   });
 
   it('marks an MCP action timeout as uncertain so callers reload inventory', async () => {

@@ -5,6 +5,7 @@ import { createServer, request as requestHttp } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { EncryptedCredentialStore } from '@ai-harness/core';
 import { start, stop } from './index.js';
 
 const html = '<!doctype html><html><head><title>AiHarness Test</title></head><body>Web bundle</body></html>';
@@ -78,6 +79,23 @@ describe('combined Web server', () => {
     await rm(webRoot, { recursive: true, force: true });
     if (previousMasterKey === undefined) delete process.env.AI_HARNESS_MASTER_KEY;
     else process.env.AI_HARNESS_MASTER_KEY = previousMasterKey;
+  });
+
+  it('keeps the initial MCP inventory GET independent of credential-store initialization', async () => {
+    const load = vi.spyOn(EncryptedCredentialStore.prototype, 'load');
+    try {
+      const response = await fetch(`${baseUrl}/api/mcp`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      // Independently scheduled startup may finish loading custom-provider/Push
+      // stores; this GET must never initialize the built-in/MCP OAuth store.
+      expect(load.mock.contexts.some(store => Reflect.get(store, 'filePath')
+        === path.join(webRoot, '.data', 'credentials.enc'))).toBe(false);
+      await expect(readFile(path.join(webRoot, '.data', 'credentials.enc')))
+        .rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      load.mockRestore();
+    }
   });
 
   it('serves the Web bundle from the root', async () => {
@@ -2042,6 +2060,42 @@ describe('combined Web server', () => {
       body: JSON.stringify({ token: 'admin-token' }),
     });
     expect(secureLogin.headers.get('set-cookie')).toContain('Secure');
+  });
+
+  it('guards every MCP OAuth endpoint with administrator capability and Origin checks', async () => {
+    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'user-token');
+    vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'admin-token');
+    const descriptor = { scope: 'global', name: 'docs', configKey: 'a'.repeat(64) };
+    const routes = [
+      { path: '/oauth/status', method: 'POST', body: { servers: [descriptor] } },
+      { path: '/oauth/start', method: 'POST', body: descriptor },
+      { path: '/oauth/flows/00000000-0000-4000-8000-000000000123', method: 'GET' },
+      { path: '/oauth/flows/00000000-0000-4000-8000-000000000123/redirect', method: 'POST', body: { redirectUrl: 'http://127.0.0.1/callback' } },
+      { path: '/oauth/flows/00000000-0000-4000-8000-000000000123', method: 'DELETE' },
+      { path: '/oauth/logout', method: 'POST', body: descriptor },
+    ];
+    for (const route of routes) {
+      const init = { method: route.method, body: route.body ? JSON.stringify(route.body) : undefined };
+      expect((await fetch(`${baseUrl}/api/mcp${route.path}`, {
+        ...init, headers: { 'Content-Type': 'application/json' },
+      })).status).toBe(401);
+      expect((await fetch(`${baseUrl}/api/mcp${route.path}`, {
+        ...init, headers: { Authorization: 'Bearer user-token', 'Content-Type': 'application/json' },
+      })).status).toBe(403);
+      if (route.method !== 'GET') {
+        expect((await fetch(`${baseUrl}/api/mcp${route.path}`, {
+          ...init,
+          headers: { Authorization: 'Bearer admin-token', 'Content-Type': 'application/json', Origin: 'https://evil.invalid' },
+        })).status).toBe(403);
+      }
+    }
+    const status = await fetch(`${baseUrl}/api/mcp/oauth/status`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer admin-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ servers: [] }),
+    });
+    expect(status.status).toBe(200);
+    expect(await status.json()).toEqual({ statuses: [] });
   });
 
   it('enforces user and administrator API permissions', async () => {

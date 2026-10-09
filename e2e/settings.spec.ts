@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import {
@@ -282,6 +283,129 @@ test.describe('Settings and authentication', () => {
     const card = page.locator('#mcp').getByRole('article', { name: 'remote-docs: Configured', exact: true });
     await expect(card).toContainText('Connected · 2 tools');
   });
+
+  for (const scenario of [
+    { name: 'desktop-dark', width: 1440, theme: 'dark' },
+    { name: 'desktop-light', width: 1440, theme: 'light' },
+    { name: 'mobile-dark', width: 390, theme: 'dark' },
+    { name: 'mobile-light', width: 390, theme: 'light' },
+  ] as const) {
+  test(`${scenario.name} connecte, colle le callback, déconnecte et annule un flux OAuth MCP sans exposer les jetons`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: scenario.width, height: 900 });
+    await page.addInitScript(({ theme }) => {
+      localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({
+        version: 4, theme, sendMode: 'enter', contentWidth: 1000, fontSize: 16,
+        reasoningOpen: false, sound: false, notifications: false, selectionActions: true,
+        filesOpen: true, sidebarVisible: true, lastSettingsSection: 'mcp', keybindings: {},
+      }));
+    }, { theme: scenario.theme });
+    const inventory = mcpStateInventory();
+    inventory.servers[0] = {
+      ...inventory.servers[0]!, usesOAuth: true, headerNames: ['X-Workspace', 'X-Command', 'X-Token'],
+    };
+    const api = await installMockApi(page, { mcpConfig: inventory });
+    const oauthRequests: Array<{ method: string; path: string; body?: unknown }> = [];
+    let signedIn = false;
+    let phase: 'authorize' | 'connected' | 'cancelled' = 'authorize';
+    const flowId = '00000000-0000-4000-8000-000000000123';
+    const flow = () => ({
+      flowId,
+      scope: 'global',
+      name: 'remote-docs',
+      configKey: inventory.servers[0]!.configKey!,
+      phase,
+      authorizationUrl: phase === 'authorize'
+        ? 'https://login.example.test/authorize?state=browser-state'
+        : undefined,
+      redirectUrl: 'http://127.0.0.1:32123/oauth/callback',
+      expiresAt: '2026-01-01T00:05:00.000Z',
+    });
+    await page.route('**/api/mcp/oauth/**', async route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const body = request.postData() ? request.postDataJSON() : undefined;
+      oauthRequests.push({ method: request.method(), path: url.pathname, ...(body === undefined ? {} : { body }) });
+      if (url.pathname === '/api/mcp/oauth/status') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+          statuses: [{
+            scope: 'global', name: 'remote-docs', configKey: inventory.servers[0]!.configKey!,
+            available: true, stateStored: signedIn, signedIn,
+          }],
+        }) });
+        return;
+      }
+      if (url.pathname === '/api/mcp/oauth/start') {
+        phase = 'authorize';
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(flow()) });
+        return;
+      }
+      if (url.pathname.endsWith('/redirect')) {
+        phase = 'connected';
+        signedIn = true;
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(flow()) });
+        return;
+      }
+      if (url.pathname === `/api/mcp/oauth/flows/${flowId}` && request.method() === 'DELETE') {
+        phase = 'cancelled';
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(flow()) });
+        return;
+      }
+      if (url.pathname === `/api/mcp/oauth/flows/${flowId}`) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(flow()) });
+        return;
+      }
+      if (url.pathname === '/api/mcp/oauth/logout') {
+        signedIn = false;
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+          scope: 'global', name: 'remote-docs', configKey: inventory.servers[0]!.configKey!, removed: true,
+        }) });
+        return;
+      }
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not found"}' });
+    });
+
+    await page.goto('/settings#mcp');
+    const card = page.locator('#mcp').getByRole('article', { name: 'remote-docs: Configured', exact: true });
+    await expect(card).toContainText('Not signed in');
+    await card.getByRole('button', { name: 'Sign in', exact: true }).click();
+    const authorization = card.getByRole('link', { name: 'Open the authorization page', exact: true });
+    await expect(authorization).toHaveAttribute('href', 'https://login.example.test/authorize?state=browser-state');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
+    const accessibility = await new AxeBuilder({ page }).include('.mcp-oauth-panel')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    expect(accessibility.violations).toEqual([]);
+    await testInfo.attach(`mcp-oauth-authorize-${scenario.name}`, {
+      body: await card.screenshot({ animations: 'disabled' }), contentType: 'image/png',
+    });
+    await card.getByLabel('Full redirected address').fill(
+      'http://127.0.0.1:32123/oauth/callback?code=public-code&state=browser-state',
+    );
+    await card.getByRole('button', { name: 'Use redirected address', exact: true }).click();
+    await expect(card).toContainText('OAuth sign-in completed.');
+    await expect(card).toContainText('Signed in');
+    expect((await new AxeBuilder({ page }).include('.mcp-oauth-panel')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()).violations).toEqual([]);
+    await testInfo.attach(`mcp-oauth-connected-${scenario.name}`, {
+      body: await card.screenshot({ animations: 'disabled' }), contentType: 'image/png',
+    });
+    await card.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect(card).toContainText('Not signed in');
+
+    await card.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(card.getByRole('button', { name: 'Cancel sign-in', exact: true })).toBeVisible();
+    await card.getByRole('button', { name: 'Cancel sign-in', exact: true }).click();
+    await expect(card).toContainText('OAuth sign-in was cancelled.');
+
+    const posted = oauthRequests.filter(item => item.body !== undefined).map(item => item.body);
+    expect(oauthRequests.find(item => item.path === '/api/mcp/oauth/start')?.body).toEqual({
+      scope: 'global', name: 'remote-docs', configKey: inventory.servers[0]!.configKey!, cwd: '/workspace',
+    });
+    expect(posted.some(body => JSON.stringify(body).includes('docs.example.test'))).toBe(false);
+    expect(JSON.stringify(posted)).not.toContain('access_token');
+    expect(await page.locator('body').innerText()).not.toContain('route-access-secret');
+    expect(api.requests.filter(item => item.path === '/api/mcp')).not.toHaveLength(0);
+  });
+  }
 
   test('teste une entrée MCP sans envoyer sa configuration et détaille capacités, cwd et outils', async ({ page }) => {
     const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });

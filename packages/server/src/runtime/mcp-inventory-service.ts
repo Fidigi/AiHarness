@@ -22,6 +22,7 @@ import {
   type McpRemovedServerRecord,
   type McpServerMutationOutcome,
   type McpServerTestResult,
+  type McpServerTestTarget,
   type ProjectTrustManager,
   removeMcpServer,
   restoreMcpServer,
@@ -109,6 +110,11 @@ export interface McpReplaceRequest extends McpImportRequest {
   targetName: string;
 }
 
+export interface ResolvedMcpServerTarget {
+  target: McpServerTestTarget;
+  validate(): Promise<McpServerTestTarget>;
+}
+
 export interface McpInventoryServiceOptions {
   undoTtlMs?: number;
   undoMaxRecords?: number;
@@ -162,12 +168,12 @@ export class McpInventoryService {
     return this.host ? this.host.decorateInventory(tested) : tested;
   }
 
-  async testServer(request: {
+  async resolveServerTarget(request: {
     scope: McpConfigScope;
     name: string;
     cwd?: string;
-    signal?: AbortSignal;
-  }): Promise<{ scope: McpConfigScope; name: string; configKey: string; result: McpServerTestResult }> {
+    expectedConfigKey?: string;
+  }): Promise<ResolvedMcpServerTarget> {
     let canonicalCwd: string | undefined;
     try {
       canonicalCwd = await this.resolveOptionalWorkspace(request.cwd);
@@ -192,21 +198,38 @@ export class McpInventoryService {
       }),
     });
     const target = await readTarget();
-    const validate = async (): Promise<void> => {
+    if (request.expectedConfigKey && target.configKey !== request.expectedConfigKey) {
+      throw new McpServerTargetError(
+        'server-invalid',
+        'The MCP server configuration changed; reload it before retrying.',
+      );
+    }
+    const validate = async (): Promise<McpServerTestTarget> => {
       const current = await readTarget();
       if (current.sourcePath !== target.sourcePath || current.configKey !== target.configKey
         || current.cwd !== target.cwd) {
         throw new McpServerTargetError(
           'server-invalid',
-          'The MCP server configuration changed; retry the test.',
+          'The MCP server configuration changed; retry the operation.',
         );
       }
+      return current;
     };
+    return { target, validate };
+  }
+
+  async testServer(request: {
+    scope: McpConfigScope;
+    name: string;
+    cwd?: string;
+    signal?: AbortSignal;
+  }): Promise<{ scope: McpConfigScope; name: string; configKey: string; result: McpServerTestResult }> {
+    const { target, validate } = await this.resolveServerTarget(request);
     return {
       scope: target.scope,
       name: target.name,
       configKey: target.configKey,
-      result: await this.tester.test(target, request.signal, validate),
+      result: await this.tester.test(target, request.signal, async () => { await validate(); }),
     };
   }
 

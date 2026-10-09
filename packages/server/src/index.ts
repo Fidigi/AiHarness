@@ -15,9 +15,12 @@ import { isIP, type AddressInfo } from 'node:net';
 import { pathToFileURL } from 'node:url';
 import { AiProxyServer, createProxyRoutes } from './api/proxy.js';
 import {
+  createMcpOAuthProviderFactory,
   CredentialRedactor,
   EncryptedCredentialStore,
   isValidSessionId,
+  McpOAuthCredentialManager,
+  McpOAuthFlowService,
   ProviderCredentialService,
   serializeSession,
 } from '@ai-harness/core';
@@ -111,6 +114,8 @@ interface CredentialRuntime {
   readonly filePath: string;
   readonly services: Promise<RuntimeServices>;
   service?: ProviderCredentialService;
+  mcpOAuth?: McpOAuthCredentialManager;
+  mcpOAuthFlows?: McpOAuthFlowService;
   initialization?: Promise<void>;
   closed?: boolean;
 }
@@ -190,7 +195,8 @@ function initializeCredentials(
       redactor: proxy.getCredentialRedactor(),
     });
     await credentials.load();
-    await runtime.services.then(services => services.sessionManager.loadAllSessions());
+    const services = await runtime.services;
+    await services.sessionManager.loadAllSessions();
     const credentialEnvironment = { ...process.env };
     for (const [provider, command] of Object.entries(settings.providerApiKeyCommands ?? {})) {
       credentialEnvironment[credentialCommandVariable(provider)] = command;
@@ -214,7 +220,26 @@ function initializeCredentials(
       proxy.setApiKey(type, value);
     }
     if (runtime.closed) throw new Error('Application runtime is no longer active.');
+    let mcpOAuth: McpOAuthCredentialManager | undefined;
+    let mcpOAuthFlows: McpOAuthFlowService | undefined;
+    if (store) {
+      mcpOAuth = new McpOAuthCredentialManager(store, proxy.getCredentialRedactor());
+      mcpOAuthFlows = new McpOAuthFlowService(mcpOAuth);
+      services.mcpHost.setOAuthProviderFactory(createMcpOAuthProviderFactory({
+        manager: mcpOAuth,
+        resolveTarget: async target => (
+          await services.mcpInventory.resolveServerTarget({
+            scope: target.scope,
+            name: target.name,
+            expectedConfigKey: target.configKey,
+            cwd: target.cwd,
+          })
+        ).target,
+      }));
+    }
     runtime.service = credentials;
+    runtime.mcpOAuth = mcpOAuth;
+    runtime.mcpOAuthFlows = mcpOAuthFlows;
   })();
   return runtime.initialization;
 }
@@ -345,9 +370,11 @@ export function createApp(config?: ServerConfig): express.Application {
   closeServerWebSockets();
   const replacedServices = activeServices;
   const replacedProxy = proxyServer;
+  const replacedCredentials = activeCredentialRuntime;
   activeServices = undefined;
-  if (activeCredentialRuntime) activeCredentialRuntime.closed = true;
+  if (replacedCredentials) replacedCredentials.closed = true;
   activeCredentialRuntime = undefined;
+  if (replacedCredentials?.mcpOAuthFlows) void replacedCredentials.mcpOAuthFlows.shutdown();
   if (replacedServices) void shutdownRuntimeServices(replacedServices, replacedProxy);
   if (replacedProxy) void replacedProxy.closeNetworkDispatchers();
   clearWebSessions();
@@ -520,7 +547,12 @@ export function createApp(config?: ServerConfig): express.Application {
   });
 
   app.use('/api', originMiddleware(), authenticationMiddleware(), rateLimit(), jsonBody);
-  app.use('/api', async (_request, _response, next) => {
+  app.use('/api', async (request, _response, next) => {
+    // Inventory is a passive file/trust read. It must not create or open the credential store.
+    if (request.method === 'GET' && request.path === '/mcp') {
+      next();
+      return;
+    }
     try {
       const services = await servicesPromise;
       await initializeCredentials(credentialRuntime, applicationProxy, services.agentSettings.settings);
@@ -550,7 +582,17 @@ export function createApp(config?: ServerConfig): express.Application {
   app.use('/api/agent', requireCapability('chat'), createAgentRouter(servicesPromise));
   app.use('/api/workspaces', requireCapability('workspace:read'), createWorkspaceRouter(servicesPromise, config?.fileManager));
   app.use('/api/files', requireCapability('files:read'), createFileRouter(servicesPromise));
-  app.use('/api/mcp', requireCapability('workspace:read'), createMcpRouter(servicesPromise));
+  app.use('/api/mcp', requireCapability('workspace:read'), createMcpRouter(servicesPromise, {
+    getOAuthRuntime: async () => {
+      const services = await servicesPromise;
+      await initializeCredentials(credentialRuntime, applicationProxy, services.agentSettings.settings);
+      if (!credentialRuntime.mcpOAuth || !credentialRuntime.mcpOAuthFlows) return undefined;
+      return {
+        credentials: credentialRuntime.mcpOAuth,
+        flows: credentialRuntime.mcpOAuthFlows,
+      };
+    },
+  }));
   app.use('/api/terminals', requireCapability('terminal'), createTerminalRouter(servicesPromise));
   const configurationRouter = createConfigurationRouter(servicesPromise);
   app.use('/api/configuration', configurationRouter);
@@ -1412,10 +1454,12 @@ export async function stop(): Promise<void> {
   activeServices = undefined;
   httpServer = null;
   proxyServer = null;
-  if (activeCredentialRuntime) activeCredentialRuntime.closed = true;
+  const closingCredentials = activeCredentialRuntime;
+  if (closingCredentials) closingCredentials.closed = true;
   activeCredentialRuntime = undefined;
   const cleanup = Promise.allSettled([
     shutdownRuntimeServices(services, closingProxy),
+    closingCredentials?.mcpOAuthFlows?.shutdown(),
     closingProxy?.closeNetworkDispatchers(),
   ]);
   if (!server) {

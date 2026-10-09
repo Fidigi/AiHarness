@@ -534,6 +534,41 @@ export class EncryptedCredentialStore {
     });
   }
 
+  /**
+   * Atomically replace one exact value. A false result means another process
+   * changed or removed it; the process-local snapshot is refreshed either way.
+   */
+  async compareAndSet(
+    name: string,
+    expected: string | undefined,
+    value: string | undefined,
+  ): Promise<boolean> {
+    const normalized = validateName(name);
+    const validated = value === undefined ? undefined : validateValue(value);
+    return this.queued(async () => {
+      const release = await acquireLock(this.filePath);
+      try {
+        const current = await this.readCurrent();
+        if (current[normalized] !== expected) {
+          this.credentials = current;
+          this.loaded = true;
+          return false;
+        }
+        if (validated === undefined) delete current[normalized];
+        else current[normalized] = validated;
+        if (Object.keys(current).length > MAX_CREDENTIALS) {
+          throw new CredentialStoreError('invalid-value', 'The credential store has too many entries.');
+        }
+        await this.writeCurrent(current);
+        this.credentials = current;
+        this.loaded = true;
+        return true;
+      } finally {
+        await release();
+      }
+    });
+  }
+
   isLoaded(): boolean {
     return this.loaded;
   }

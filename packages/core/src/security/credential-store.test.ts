@@ -61,6 +61,26 @@ describe('EncryptedCredentialStore', () => {
     expect(reloaded.get('provider:second')).toBe('second-secret');
   });
 
+  it('compares and swaps against fresh encrypted state across store instances', async () => {
+    const { filePath } = await fixture();
+    const first = new EncryptedCredentialStore(filePath, 'correct horse battery staple');
+    await first.set('mcp-oauth:key', 'original');
+    const stale = new EncryptedCredentialStore(filePath, 'correct horse battery staple');
+    await stale.load();
+
+    await expect(first.compareAndSet('mcp-oauth:key', 'original', 'winner')).resolves.toBe(true);
+    await expect(stale.compareAndSet('mcp-oauth:key', 'original', 'loser')).resolves.toBe(false);
+    await expect(stale.compareAndSet('mcp-oauth:key', 'wrong', undefined)).resolves.toBe(false);
+
+    const reloaded = new EncryptedCredentialStore(filePath, 'correct horse battery staple');
+    await reloaded.load();
+    expect(reloaded.get('mcp-oauth:key')).toBe('winner');
+    await expect(reloaded.compareAndSet('mcp-oauth:key', 'winner', undefined)).resolves.toBe(true);
+    await expect(reloaded.compareAndSet('mcp-oauth:new', undefined, 'created')).resolves.toBe(true);
+    expect(reloaded.get('mcp-oauth:key')).toBeUndefined();
+    expect(reloaded.get('mcp-oauth:new')).toBe('created');
+  });
+
   it('fails closed for weak keys, links, corruption, hard links, and oversized sources', async () => {
     const { directory, filePath } = await fixture();
     expect(() => new EncryptedCredentialStore(filePath, 'short')).toThrow(CredentialStoreError);

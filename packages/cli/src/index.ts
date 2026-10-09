@@ -9,14 +9,17 @@ import {
   closeProviderNetworkDispatchers,
   collectToolSearchLoadedNames,
   createAgentToolLoadout,
+  createMcpOAuthProviderFactory,
   CredentialRedactor,
   DEFAULT_CODING_TOOL_NAMES,
+  EncryptedCredentialStore,
   ExtensionRegistry,
   getSupportedThinkingLevels,
   inspectMcpConfig,
   JsonlSessionStore,
   loadAgentSettings,
   loadPromptFiles,
+  McpOAuthCredentialManager,
   McpSessionHost,
   normalizeProviderUsage,
   PluginService,
@@ -27,6 +30,7 @@ import {
   resolveAgentResourcePaths,
   resolveAgentThinkingLevel,
   selectAgentResourcePaths,
+  readMcpServerTestTarget,
   registerWorkspaceTools,
   selectRegisteredTools,
   SessionManager,
@@ -574,6 +578,15 @@ async function main(): Promise<void> {
 
   const extensionRegistry = new ExtensionRegistry();
   extensionRegistry.attachSessionManager(sessionManager);
+  const mcpOAuth = process.env.AI_HARNESS_MASTER_KEY && settingsResolution.agentDirTrusted
+    ? new McpOAuthCredentialManager(
+      new EncryptedCredentialStore(
+        path.join(settingsResolution.agentDir, 'credentials.enc'),
+        process.env.AI_HARNESS_MASTER_KEY,
+      ),
+      outputCredentialRedactor,
+    )
+    : undefined;
   const mcpHost = new McpSessionHost({
     agentDir: settingsResolution.agentDir,
     trustManager,
@@ -581,6 +594,23 @@ async function main(): Promise<void> {
       base,
       kind: 'directory',
     }),
+    ...(mcpOAuth ? {
+      oauthProviderFactory: createMcpOAuthProviderFactory({
+        manager: mcpOAuth,
+        resolveTarget: target => readMcpServerTestTarget({
+          agentDir: settingsResolution.agentDir,
+          scope: target.scope,
+          name: target.name,
+          cwd: target.cwd,
+          defaultCwd: target.cwd,
+          trustManager,
+          resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, {
+            base,
+            kind: 'directory',
+          }),
+        }),
+      }),
+    } : {}),
   });
   let earlyCleanupPromise: Promise<void> | undefined;
   const cleanupEarlyExit = (

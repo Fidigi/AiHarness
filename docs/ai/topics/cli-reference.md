@@ -37,7 +37,7 @@ packages/cli/src/index.ts
 | `packages/cli/src/cli/model-list.ts` | Configured-provider `--list-models` metadata table and fuzzy filtering |
 | `packages/cli/src/cli/package-command.ts` | Strict top-level package parsing, scopes, filters and Core service adapter |
 | `packages/cli/src/cli/mcp-command.ts` | Thin top-level list/test/add/activation/exposure/removal adapter over Core MCP contracts |
-| `packages/core/src/mcp/session-host.ts` | Persistent per-session stdio/HTTP connections and direct tool declarations/invocation shared by CLI, RPC and Web |
+| `packages/core/src/mcp/{session-host,oauth-provider-factory,oauth,oauth-flow}.ts` | Persistent per-session stdio/HTTP connections, passive encrypted OAuth use/refresh, detached explicit OAuth flows, and direct tool declarations/invocation shared by CLI, RPC and Web |
 | `packages/cli/src/providers/configured-providers.ts` | Shared interactive/print/JSON/RPC provider environment and startup model resolution |
 | `packages/cli/src/sessions/startup-session.ts` | New/continue/resume/open/fork/exact-ID/name selection and session-directory precedence |
 | `packages/cli/src/commands/handler.ts` | Built-in command registry and execution context |
@@ -119,7 +119,7 @@ ai-harness mcp exposure docs deferred
 ai-harness mcp remove local
 ```
 
-`list` is file-only and value-free. `test` rereads one exact target and uses Core's bounded short-lived diagnostic. Add/mutation commands use the same schema, revision, trust, lock and atomic writer as Settings; the adapter never serializes removed entry data. `ai-harness mcp --help` is authoritative. MCP OAuth login/logout is not implemented.
+`list` is file-only and value-free. `test` rereads one exact target and uses Core's bounded short-lived diagnostic. Add/mutation commands use the same schema, revision, trust, lock and atomic writer as Settings; the adapter never serializes removed entry data. `ai-harness mcp --help` is authoritative. Interactive MCP login/logout commands are not yet exposed by CLI/RPC; explicit sign-in currently uses Web Settings. When `AI_HARNESS_MASTER_KEY` and the same independently trusted agent/data directory are configured, CLI and RPC persistent hosts reuse Core's encrypted MCP OAuth state and passive provider factory: ordinary prompts may use/refresh stored credentials but never publish an authorization URL. One-shot `mcp test` remains OAuth-free.
 
 Interactive `/mcp` reports the current process-local persistent states; `/mcp tools` prepares and lists direct tools, and `/mcp reconnect` closes the session's records before a fresh preparation. Interactive, print/JSON and modern RPC prompts all use Core's `McpSessionHost`. It rereads config/trust before every prompt, reuses unchanged exact connections, awaits only `direct` servers, and exposes provider-safe names such as `mcp__docs__lookup`; normalized collisions receive stable hash suffixes. Session `chat-only` exposes none, while `read-only` accepts only server-declared `readOnlyHint` tools. Disabled, codemode and deferred tools are not direct declarations.
 

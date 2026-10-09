@@ -18,6 +18,9 @@ import {
   type McpServerTestTarget,
   type McpStdioRuntimeConfig,
 } from './config-inventory.js';
+import type { McpOAuthProviderBinding } from './oauth.js';
+import { mcpOAuthUrl } from './oauth.js';
+import { boundedMcpOAuthFetch } from './oauth-fetch.js';
 import {
   MCP_TEST_CLOSE_WAIT_MS,
   MCP_TEST_COMMAND_TIMEOUT_MS,
@@ -30,7 +33,7 @@ import {
   collectPages,
   createRedactor,
   isNeedsAuth,
-  mcpTestRunsCommand,
+  mcpSessionRunsCommand,
   resolveRuntimeConfig,
   safeEnvironment,
   safeText,
@@ -86,6 +89,7 @@ export interface McpHostConnectOptions {
   closeWaitMs: number;
   commandTimeoutMs: number;
   callbacks: ConnectionCallbacks;
+  oauth?: McpOAuthProviderBinding;
 }
 
 export type McpHostConnect = (
@@ -93,6 +97,11 @@ export type McpHostConnect = (
   signal: AbortSignal,
   options: McpHostConnectOptions,
 ) => Promise<McpHostConnection>;
+
+export type McpOAuthProviderFactory = (
+  target: McpServerTestTarget,
+  signal: AbortSignal,
+) => Promise<McpOAuthProviderBinding | undefined>;
 
 export interface McpSessionHostOptions {
   agentDir: string;
@@ -107,6 +116,7 @@ export interface McpSessionHostOptions {
   statusLimit?: number;
   now?: () => number;
   connect?: McpHostConnect;
+  oauthProviderFactory?: McpOAuthProviderFactory;
 }
 
 export interface PrepareMcpSessionOptions {
@@ -334,8 +344,10 @@ async function connectMcpSession(
 ): Promise<McpHostConnection> {
   let stderr: Buffer = Buffer.alloc(0);
   const { config, resolvedSecrets } = await resolveRuntimeConfig(target, signal, options.commandTimeoutMs);
-  const redact = createRedactor(target.config, config, resolvedSecrets);
+  const configRedact = createRedactor(target.config, config, resolvedSecrets);
+  const redact = (value: string): string => configRedact(options.oauth?.redact(value) ?? value);
   const client = new Client({ name: 'ai-harness-session', version: '1.0.0' }, { capabilities: {} });
+  const fetchController = new AbortController();
   let transport: Transport;
   let stdio: StdioClientTransport | undefined;
 
@@ -355,8 +367,11 @@ async function connectMcpSession(
   } else {
     transport = new StreamableHTTPClientTransport(new URL(config.url), {
       requestInit: { headers: config.headers ?? {}, redirect: 'manual' },
+      ...(options.oauth ? { authProvider: options.oauth.provider } : {}),
       redirectPolicy: 'same-origin',
-      fetch: boundedMcpFetch,
+      fetch: options.oauth ? boundedMcpOAuthFetch(
+        AbortSignal.any([signal, fetchController.signal]), options.requestTimeoutMs, new URL(config.url).href,
+      ) : boundedMcpFetch,
       reconnectionOptions: {
         maxReconnectionDelay: 500,
         initialReconnectionDelay: 100,
@@ -367,7 +382,10 @@ async function connectMcpSession(
   }
 
   client.onerror = error => options.callbacks.onError(error);
-  client.onclose = () => options.callbacks.onClose();
+  client.onclose = () => {
+    fetchController.abort('mcp-http-closed');
+    options.callbacks.onClose();
+  };
   try {
     await client.connect(transport, {
       signal,
@@ -398,12 +416,22 @@ async function connectMcpSession(
           },
         ) as Promise<CallToolResult>;
       },
-      close: () => closeClient(client, transport, options.closeWaitMs, stdio),
+      close: () => {
+        fetchController.abort('mcp-http-closed');
+        return closeClient(client, transport, options.closeWaitMs, stdio);
+      },
     };
   } catch (error) {
+    fetchController.abort('mcp-http-closed');
     await closeClient(client, transport, options.closeWaitMs, stdio).catch(() => undefined);
     const stderrText = stderr.length ? safeText(stderr.toString('utf8'), redact, 2_000) : '';
-    if (stderrText && error instanceof Error) error.message = `${error.message}\n${stderrText}`;
+    if (error instanceof Error) {
+      error.message = safeText(
+        `${error.message}${stderrText ? `\n${stderrText}` : ''}`,
+        redact,
+        4_000,
+      );
+    }
     throw error;
   }
 }
@@ -426,6 +454,7 @@ export class McpSessionHost {
   private readonly statusLimit: number;
   private readonly now: () => number;
   private readonly connect: McpHostConnect;
+  private oauthProviderFactory?: McpOAuthProviderFactory;
   private readonly sessions = new Map<string, HostedSession>();
   private readonly statuses = new Map<string, McpServerRuntimeStatus>();
   private commandTail: Promise<void> = Promise.resolve();
@@ -444,6 +473,12 @@ export class McpSessionHost {
     this.statusLimit = boundedInteger(options.statusLimit, MCP_RUNTIME_STATUS_LIMIT);
     this.now = options.now ?? Date.now;
     this.connect = options.connect ?? connectMcpSession;
+    this.oauthProviderFactory = options.oauthProviderFactory;
+  }
+
+  /** Install the process-local credential provider before starting MCP work. */
+  setOAuthProviderFactory(factory: McpOAuthProviderFactory | undefined): void {
+    this.oauthProviderFactory = factory;
   }
 
   async prepareForPrompt(options: PrepareMcpSessionOptions): Promise<PreparedMcpTools> {
@@ -493,6 +528,28 @@ export class McpSessionHost {
     if (!session || session.released) return;
     await this.closeRecords(session.records.values());
     session.records.clear();
+  }
+
+  /** Close every process-local connection for one configured server. */
+  async disconnectServer(scope: 'global' | 'project', name: string): Promise<void> {
+    const statusPrefix = `${scope}\0${name}\0`;
+    for (const key of this.statuses.keys()) {
+      if (key.startsWith(statusPrefix)) this.statuses.delete(key);
+    }
+    const operations = [...this.sessions.values()].map(session => {
+      const operation = session.tail.then(async () => {
+        const selected = [...session.records.entries()]
+          .filter(([, record]) => record.target.scope === scope && record.target.name === name);
+        for (const [key] of selected) session.records.delete(key);
+        await this.closeRecords(selected.map(([, record]) => record));
+      });
+      session.tail = operation.then(() => undefined, () => undefined);
+      return operation;
+    });
+    await Promise.allSettled(operations);
+    for (const key of this.statuses.keys()) {
+      if (key.startsWith(statusPrefix)) this.statuses.delete(key);
+    }
   }
 
   async releaseSession(sessionId: string): Promise<void> {
@@ -907,7 +964,13 @@ export class McpSessionHost {
     signal: AbortSignal,
     options: McpHostConnectOptions,
   ): Promise<McpHostConnection> {
-    if (!mcpTestRunsCommand(target.config)) return this.connect(target, signal, options);
+    const connect = async (): Promise<McpHostConnection> => {
+      const oauth = mcpOAuthUrl(target.config) && this.oauthProviderFactory
+        ? await this.oauthProviderFactory(target, signal)
+        : undefined;
+      return this.connect(target, signal, { ...options, ...(oauth ? { oauth } : {}) });
+    };
+    if (!mcpSessionRunsCommand(target.config)) return connect();
     const ahead = this.commandTail;
     let release!: () => void;
     const held = new Promise<void>(resolve => { release = resolve; });
@@ -915,7 +978,7 @@ export class McpSessionHost {
     try {
       await Promise.race([ahead, waitForAbort(signal)]);
       throwIfAborted(signal);
-      return await this.connect(target, signal, options);
+      return await connect();
     } finally {
       release();
     }

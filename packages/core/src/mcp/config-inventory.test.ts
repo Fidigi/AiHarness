@@ -93,6 +93,40 @@ describe('inspectMcpConfig', () => {
     expect(serialized).not.toContain('/usr/local/bin');
   });
 
+  it('marks only valid OAuth-eligible HTTP entries without exposing configured client secrets', async () => {
+    const { agentDir } = await fixture();
+    await writeFile(path.join(agentDir, 'mcp.json'), JSON.stringify({
+      version: 1,
+      mcpServers: {
+        oauth: {
+          url: 'https://mcp.example.test/api',
+          oauth: { clientId: 'public-client', clientSecret: '!read-client-secret' },
+        },
+        header: {
+          url: 'https://header.example.test/api',
+          headers: { authorization: 'Bearer literal-secret' },
+        },
+        invalid: {
+          url: 'https://invalid.example.test/api',
+          oauth: { unsupported: 'must-not-leak' },
+        },
+      },
+    }));
+
+    const inventory = await inspectMcpConfig({ agentDir });
+    expect(inventory.servers[0]).toMatchObject({
+      name: 'oauth', valid: true, usesOAuth: true, masked: true,
+      commandFields: ['oauth.clientSecret'],
+    });
+    expect(inventory.servers[1]).not.toHaveProperty('usesOAuth');
+    expect(inventory.servers[2]).toMatchObject({ valid: false });
+    expect(inventory.servers[2]).not.toHaveProperty('usesOAuth');
+    const serialized = JSON.stringify(inventory);
+    expect(serialized).not.toContain('read-client-secret');
+    expect(serialized).not.toContain('literal-secret');
+    expect(serialized).not.toContain('must-not-leak');
+  });
+
   it('lists invalid entries with value-free strict-schema diagnostics and escaped hidden names', async () => {
     const { agentDir } = await fixture();
     const unknownLiteral = 'UNKNOWN-FIELD-LITERAL-MUST-NOT-LEAK';

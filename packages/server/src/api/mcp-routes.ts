@@ -3,12 +3,16 @@ import {
   MCP_IMPORT_MAX_FIELDS,
   MCP_IMPORT_MAX_SERVERS,
   McpConfigMutationError,
+  McpOAuthFlowServiceError,
+  mcpOAuthUrl,
   McpServerTargetError,
   type McpConfigScope,
   type McpExposure,
   type McpImportFieldValue,
   type McpImportSyntax,
   type McpImportWriteConfirmations,
+  type McpOAuthCredentialManager,
+  type McpOAuthFlowService,
 } from '@ai-harness/core';
 import { Router, type Response } from 'express';
 import type { RuntimeServices } from '../runtime/services.js';
@@ -50,6 +54,14 @@ function serverName(value: unknown): value is string {
 
 function exposureOf(value: unknown): McpExposure | undefined {
   return value === 'direct' || value === 'codemode' || value === 'deferred' ? value : undefined;
+}
+
+function configKey(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
+}
+
+function flowId(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9-]{16,128}$/u.test(value);
 }
 
 function importFieldValues(value: unknown): Record<string, McpImportFieldValue> | undefined {
@@ -156,7 +168,17 @@ function sendMutationError(response: Response, error: unknown): void {
   });
 }
 
-export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Router {
+export interface McpRouterOptions {
+  getOAuthRuntime?: () => Promise<{
+    credentials: McpOAuthCredentialManager;
+    flows: McpOAuthFlowService;
+  } | undefined>;
+}
+
+export function createMcpRouter(
+  servicesPromise: Promise<RuntimeServices>,
+  options: McpRouterOptions = {},
+): Router {
   const router = Router();
 
   router.get('/', async (request, response, next) => {
@@ -170,6 +192,239 @@ export function createMcpRouter(servicesPromise: Promise<RuntimeServices>): Rout
         response.status(400).json({ error: CWD_INVALID });
       } else {
         next(error);
+      }
+    }
+  });
+
+  router.post('/oauth/status', requireCapability('configuration'), async (request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
+    const body: unknown = request.body;
+    if (!isRecord(body) || !hasOnlyKeys(body, ['cwd', 'servers'])
+      || !Array.isArray(body.servers) || body.servers.length > MCP_IMPORT_MAX_SERVERS
+      || (body.cwd !== undefined && typeof body.cwd !== 'string')
+      || !body.servers.every(item => isRecord(item)
+        && hasOnlyKeys(item, ['configKey', 'name', 'scope'])
+        && scopeOf(item.scope) !== undefined && serverName(item.name) && configKey(item.configKey))) {
+      response.status(400).json({ error: 'Statut OAuth MCP invalide.', code: 'invalid-request' });
+      return;
+    }
+    try {
+      const cwd = optionalCwd(body.cwd);
+      const services = await servicesPromise;
+      const runtime = await options.getOAuthRuntime?.();
+      if (!runtime) {
+        response.status(503).json({ error: 'Le stockage OAuth MCP est indisponible.', code: 'oauth-unavailable' });
+        return;
+      }
+      const resolved = [] as Array<{
+        scope: McpConfigScope;
+        name: string;
+        configKey: string;
+        identity: { name: string; url: string };
+      }>;
+      for (const item of body.servers as Array<Record<string, unknown>>) {
+        try {
+          const scope = scopeOf(item.scope)!;
+          const server = await services.mcpInventory.resolveServerTarget({
+            scope,
+            name: item.name as string,
+            expectedConfigKey: item.configKey as string,
+            ...(cwd ? { cwd } : {}),
+          });
+          const url = mcpOAuthUrl(server.target.config);
+          if (!url) continue;
+          resolved.push({
+            scope,
+            name: server.target.name,
+            configKey: server.target.configKey,
+            identity: { name: server.target.name, url },
+          });
+        } catch {
+          // A stale/invalid row remains unknown; no target detail crosses this batch boundary.
+        }
+      }
+      const statuses = await runtime.credentials.statuses(resolved.map(item => item.identity));
+      response.json({
+        statuses: resolved.map((item, index) => ({
+          scope: item.scope,
+          name: item.name,
+          configKey: item.configKey,
+          ...statuses[index],
+        })),
+      });
+    } catch (error) {
+      if (error instanceof McpConfigMutationError && error.code === 'invalid-request') {
+        response.status(400).json({ error: CWD_INVALID, code: 'invalid-request' });
+      } else {
+        response.status(503).json({ error: 'Le statut OAuth MCP est indisponible.', code: 'oauth-unavailable' });
+      }
+    }
+  });
+
+  router.post('/oauth/start', requireCapability('configuration'), async (request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
+    const body: unknown = request.body;
+    const scope = isRecord(body) ? scopeOf(body.scope) : undefined;
+    if (!isRecord(body) || !hasOnlyKeys(body, ['configKey', 'cwd', 'name', 'scope'])
+      || !scope || !serverName(body.name) || !configKey(body.configKey)
+      || (body.cwd !== undefined && typeof body.cwd !== 'string')) {
+      response.status(400).json({ error: 'Connexion OAuth MCP invalide.', code: 'invalid-request' });
+      return;
+    }
+    try {
+      const cwd = optionalCwd(body.cwd);
+      const services = await servicesPromise;
+      const resolved = await services.mcpInventory.resolveServerTarget({
+        scope,
+        name: body.name,
+        expectedConfigKey: body.configKey,
+        ...(cwd ? { cwd } : {}),
+      });
+      if (!mcpOAuthUrl(resolved.target.config)) {
+        response.status(409).json({ error: 'Ce serveur MCP n’utilise pas OAuth.', code: 'not-oauth' });
+        return;
+      }
+      const runtime = await options.getOAuthRuntime?.();
+      if (!runtime) {
+        response.status(503).json({ error: 'Le stockage OAuth MCP est indisponible.', code: 'oauth-unavailable' });
+        return;
+      }
+      const started = runtime.flows.start(resolved);
+      response.json({ ...started.flow, ...(started.joined ? { joined: true as const } : {}) });
+    } catch (error) {
+      if (error instanceof McpServerTargetError) {
+        response.status(testTargetStatus(error)).json({ error: error.message, code: error.code });
+      } else if (error instanceof McpConfigMutationError && error.code === 'invalid-request') {
+        response.status(400).json({ error: CWD_INVALID, code: 'invalid-request' });
+      } else if (error instanceof McpOAuthFlowServiceError) {
+        response.status(error.code === 'flow-limit' ? 429 : 409).json({
+          error: 'La connexion OAuth MCP ne peut pas démarrer.',
+          code: error.code,
+        });
+      } else {
+        response.status(500).json({ error: 'La connexion OAuth MCP a échoué.', code: 'oauth-failed' });
+      }
+    }
+  });
+
+  router.get('/oauth/flows/:flowId', requireCapability('configuration'), async (request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
+    if (!flowId(request.params.flowId)) {
+      response.status(400).json({ error: 'Flux OAuth MCP invalide.', code: 'invalid-request' });
+      return;
+    }
+    try {
+      const runtime = await options.getOAuthRuntime?.();
+      if (!runtime) {
+        response.status(503).json({ error: 'Le stockage OAuth MCP est indisponible.', code: 'oauth-unavailable' });
+        return;
+      }
+      const flow = runtime.flows.read(request.params.flowId);
+      if (!flow) {
+        response.status(404).json({ error: 'Flux OAuth MCP introuvable.', code: 'flow-not-found' });
+        return;
+      }
+      response.json(flow);
+    } catch {
+      response.status(503).json({ error: 'Le flux OAuth MCP est indisponible.', code: 'oauth-unavailable' });
+    }
+  });
+
+  router.post('/oauth/flows/:flowId/redirect', requireCapability('configuration'), async (request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
+    const body: unknown = request.body;
+    if (!flowId(request.params.flowId) || !isRecord(body) || !hasOnlyKeys(body, ['redirectUrl'])) {
+      response.status(400).json({ error: 'Redirection OAuth MCP invalide.', code: 'invalid-request' });
+      return;
+    }
+    try {
+      const runtime = await options.getOAuthRuntime?.();
+      if (!runtime) {
+        response.status(503).json({ error: 'Le stockage OAuth MCP est indisponible.', code: 'oauth-unavailable' });
+        return;
+      }
+      const result = runtime.flows.pasteRedirect(request.params.flowId, body.redirectUrl);
+      if (!result) {
+        response.status(404).json({ error: 'Flux OAuth MCP introuvable.', code: 'flow-not-found' });
+      } else if (!result.ok) {
+        response.status(400).json({ error: 'La redirection OAuth MCP a été refusée.', code: result.code });
+      } else response.json(result.flow);
+    } catch {
+      response.status(503).json({ error: 'Le flux OAuth MCP est indisponible.', code: 'oauth-unavailable' });
+    }
+  });
+
+  router.delete('/oauth/flows/:flowId', requireCapability('configuration'), async (request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
+    if (!flowId(request.params.flowId)) {
+      response.status(400).json({ error: 'Flux OAuth MCP invalide.', code: 'invalid-request' });
+      return;
+    }
+    try {
+      const runtime = await options.getOAuthRuntime?.();
+      if (!runtime) {
+        response.status(503).json({ error: 'Le stockage OAuth MCP est indisponible.', code: 'oauth-unavailable' });
+        return;
+      }
+      const flow = runtime.flows.cancel(request.params.flowId);
+      if (!flow) {
+        response.status(404).json({ error: 'Flux OAuth MCP introuvable.', code: 'flow-not-found' });
+        return;
+      }
+      response.json(flow);
+    } catch {
+      response.status(503).json({ error: 'Le flux OAuth MCP est indisponible.', code: 'oauth-unavailable' });
+    }
+  });
+
+  router.post('/oauth/logout', requireCapability('configuration'), async (request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
+    const body: unknown = request.body;
+    const scope = isRecord(body) ? scopeOf(body.scope) : undefined;
+    if (!isRecord(body) || !hasOnlyKeys(body, ['configKey', 'cwd', 'name', 'scope'])
+      || !scope || !serverName(body.name) || !configKey(body.configKey)
+      || (body.cwd !== undefined && typeof body.cwd !== 'string')) {
+      response.status(400).json({ error: 'Déconnexion OAuth MCP invalide.', code: 'invalid-request' });
+      return;
+    }
+    try {
+      const cwd = optionalCwd(body.cwd);
+      const services = await servicesPromise;
+      const resolved = await services.mcpInventory.resolveServerTarget({
+        scope,
+        name: body.name,
+        expectedConfigKey: body.configKey,
+        ...(cwd ? { cwd } : {}),
+      });
+      const url = mcpOAuthUrl(resolved.target.config);
+      if (!url) {
+        response.status(409).json({ error: 'Ce serveur MCP n’utilise pas OAuth.', code: 'not-oauth' });
+        return;
+      }
+      const runtime = await options.getOAuthRuntime?.();
+      if (!runtime) {
+        response.status(503).json({ error: 'Le stockage OAuth MCP est indisponible.', code: 'oauth-unavailable' });
+        return;
+      }
+      let removed: boolean;
+      try {
+        removed = await runtime.flows.signOut({ name: resolved.target.name, url });
+      } finally {
+        await services.mcpHost.disconnectServer(scope, resolved.target.name);
+      }
+      response.json({
+        scope,
+        name: resolved.target.name,
+        configKey: resolved.target.configKey,
+        removed,
+      });
+    } catch (error) {
+      if (error instanceof McpServerTargetError) {
+        response.status(testTargetStatus(error)).json({ error: error.message, code: error.code });
+      } else if (error instanceof McpConfigMutationError && error.code === 'invalid-request') {
+        response.status(400).json({ error: CWD_INVALID, code: 'invalid-request' });
+      } else {
+        response.status(500).json({ error: 'La déconnexion OAuth MCP a échoué.', code: 'oauth-failed' });
       }
     }
   });

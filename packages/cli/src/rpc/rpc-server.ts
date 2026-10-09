@@ -5,17 +5,21 @@ import {
   agentToolExposure,
   collectToolSearchLoadedNames,
   createAgentToolLoadout,
+  createMcpOAuthProviderFactory,
   CredentialRedactor,
   DEFAULT_CODING_TOOL_NAMES,
+  EncryptedCredentialStore,
   ExtensionRegistry,
   JsonlSessionStore,
   loadAgentSettings,
+  McpOAuthCredentialManager,
   McpSessionHost,
   normalizeProviderUsage,
   PluginService,
   ProjectTrustManager,
   SessionManager,
   WorkspaceManager,
+  readMcpServerTestTarget,
   registerWorkspaceTools,
   resolveInstructionPrompt,
   resolvePreTrustAgentDirectory,
@@ -292,6 +296,15 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       cwd: canonicalCwd,
       projectTrusted: projectResourcesTrusted,
     });
+    const mcpOAuth = process.env.AI_HARNESS_MASTER_KEY && settingsResolution.agentDirTrusted
+      ? new McpOAuthCredentialManager(
+        new EncryptedCredentialStore(
+          path.join(settingsResolution.agentDir, 'credentials.enc'),
+          process.env.AI_HARNESS_MASTER_KEY,
+        ),
+        redactor,
+      )
+      : undefined;
     mcpHost = new McpSessionHost({
       agentDir: settingsResolution.agentDir,
       trustManager,
@@ -299,6 +312,23 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
         base,
         kind: 'directory',
       }),
+      ...(mcpOAuth ? {
+        oauthProviderFactory: createMcpOAuthProviderFactory({
+          manager: mcpOAuth,
+          resolveTarget: target => readMcpServerTestTarget({
+            agentDir: settingsResolution.agentDir,
+            scope: target.scope,
+            name: target.name,
+            cwd: target.cwd,
+            defaultCwd: target.cwd,
+            trustManager,
+            resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, {
+              base,
+              kind: 'directory',
+            }),
+          }),
+        }),
+      } : {}),
     });
     reportSettingsDiagnostics(settingsResolution, value => redactor.redact(value));
     const workspaceDescriptor = await workspaceManager.describe(canonicalCwd, projectTrusted);

@@ -14,6 +14,7 @@ import {
 import {
   connectMcpServerForTest,
   McpServerTester,
+  mcpSessionRunsCommand,
   mcpTestRunsCommand,
   type McpServerTestConnect,
 } from './server-test.js';
@@ -225,6 +226,7 @@ describe('MCP server connection tests', () => {
         cwd: project,
       };
       expect(mcpTestRunsCommand(target.config)).toBe(false);
+      expect(mcpSessionRunsCommand(target.config)).toBe(true);
       const result = await connectMcpServerForTest(target, new AbortController().signal, {
         requestTimeoutMs: 1_000,
         closeWaitMs: 100,

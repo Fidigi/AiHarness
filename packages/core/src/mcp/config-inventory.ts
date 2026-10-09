@@ -148,6 +148,8 @@ export interface McpServerInventoryEntry {
   url?: string;
   envNames: string[];
   headerNames: string[];
+  /** True only for an eligible HTTP entry without an explicit Authorization header. */
+  usesOAuth?: true;
   commandFields: string[];
   variableReferences: McpVariableReference[];
   masked: boolean;
@@ -788,9 +790,14 @@ function describeEntry(
       ...(url ? { url: url.value } : {}),
       envNames: Object.keys(env).map(name => escapedDisplay(name)),
       headerNames: Object.keys(headers).map(name => escapedDisplay(name)),
+      ...(problems.length === 0 && inferredTransport === 'http' && url?.valid
+        && !Object.keys(headers).some(name => name.toLowerCase() === 'authorization')
+        ? { usesOAuth: true as const }
+        : {}),
       commandFields,
       variableReferences,
-      masked: Boolean(command?.masked || url?.masked || args.some(item => item.masked)),
+      masked: Boolean(command?.masked || url?.masked || args.some(item => item.masked)
+        || (oauthValid && isRecord(config.oauth) && typeof config.oauth.clientSecret === 'string')),
       shadowedByProject: false,
       replacesGlobal: false,
       problems,

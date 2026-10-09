@@ -175,6 +175,38 @@ describe('McpSessionHost', () => {
     await host.shutdown();
   });
 
+  it('disconnects every process-local copy of one server and clears its runtime status', async () => {
+    const { agentDir, project, trust } = await workspace();
+    await writeConfig(agentDir, { docs: { command: 'node' } });
+    const close = vi.fn(async () => undefined);
+    const connect = vi.fn<McpHostConnect>(async () => ({
+      tools: [{
+        name: 'lookup', remoteName: 'lookup', description: 'Lookup',
+        parameters: { type: 'object' }, readOnly: true,
+      }],
+      redact: value => value,
+      callTool: async () => ({ content: [{ type: 'text', text: 'ok' }] }),
+      close,
+    }));
+    const host = new McpSessionHost({ agentDir, trustManager: trust, startupWaitMs: 1_000, connect });
+    await Promise.all([
+      host.prepareForPrompt({ sessionId: 'logout-one', cwd: project }),
+      host.prepareForPrompt({ sessionId: 'logout-two', cwd: project }),
+    ]);
+    expect(host.decorateInventory(await inspectMcpConfig({ agentDir })).servers[0]?.runtimeStatus?.state)
+      .toBe('connected');
+
+    await host.disconnectServer('global', 'docs');
+    expect(close).toHaveBeenCalledTimes(2);
+    expect(host.getPreparedTools('logout-one').tools).toEqual([]);
+    expect(host.getPreparedTools('logout-two').tools).toEqual([]);
+    expect(host.decorateInventory(await inspectMcpConfig({ agentDir })).servers[0]?.runtimeStatus)
+      .toBeUndefined();
+    expect((await host.prepareForPrompt({ sessionId: 'logout-one', cwd: project })).tools).toHaveLength(1);
+    expect(connect).toHaveBeenCalledTimes(3);
+    await host.shutdown();
+  });
+
   it('withdraws a prepared read-only binding when a tool-list update removes its safety hint', async () => {
     const { agentDir, project, trust } = await workspace();
     await writeConfig(agentDir, { docs: { command: 'node' } });

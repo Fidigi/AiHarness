@@ -94,14 +94,62 @@ export {
   MCP_TEST_REQUEST_TIMEOUT_MS,
   MCP_TEST_STATUS_LIMIT,
   McpServerTester,
+  mcpSessionRunsCommand,
   mcpTestRunsCommand,
+  resolveMcpOAuthSettings,
 } from './server-test.js';
 export type {
   McpServerTestConnect,
   McpServerTestConnectOptions,
   McpServerTesterOptions,
   McpServerTestValidate,
+  ResolvedMcpOAuthSettings,
 } from './server-test.js';
+
+export {
+  isSameMcpOAuthTarget,
+  McpOAuthAuthorizationRequiredError,
+  McpOAuthConfigurationError,
+  McpOAuthCredentialManager,
+  McpOAuthCredentialWriteError,
+  McpOAuthSignedOutError,
+  mcpOAuthStorageName,
+  mcpOAuthUrl,
+} from './oauth.js';
+export { createMcpOAuthProviderFactory } from './oauth-provider-factory.js';
+export type { McpOAuthProviderFactoryOptions } from './oauth-provider-factory.js';
+
+export type {
+  CreateMcpOAuthProviderOptions,
+  McpOAuthClientSettings,
+  McpOAuthCredentialBackend,
+  McpOAuthIdentity,
+  McpOAuthProviderBinding,
+  McpOAuthSecretRedactor,
+  McpOAuthStatus,
+} from './oauth.js';
+
+export {
+  MCP_OAUTH_FLOW_KEEP_MS,
+  MCP_OAUTH_FLOW_MAX,
+  MCP_OAUTH_FLOW_MAX_ACTIVE,
+  MCP_OAUTH_FLOW_TTL_MS,
+  MCP_OAUTH_REDIRECT_MAX_CHARS,
+  McpOAuthFlowService,
+  McpOAuthFlowServiceError,
+} from './oauth-flow.js';
+export type {
+  McpOAuthFlowDriver,
+  McpOAuthFlowDriverContext,
+  McpOAuthFlowDriverResult,
+  McpOAuthFlowFailure,
+  McpOAuthFlowInfo,
+  McpOAuthFlowPhase,
+  McpOAuthFlowServiceOptions,
+  McpOAuthFlowStartResult,
+  McpOAuthFlowTarget,
+  McpOAuthRedirectResult,
+} from './oauth-flow.js';
 
 export {
   MCP_EXTENSION_ID,
@@ -118,6 +166,7 @@ export type {
   McpHostConnect,
   McpHostConnection,
   McpHostConnectOptions,
+  McpOAuthProviderFactory,
   McpSessionHostOptions,
   PrepareMcpSessionOptions,
   PreparedMcpTools,
