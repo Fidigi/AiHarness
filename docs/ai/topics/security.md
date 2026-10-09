@@ -12,6 +12,7 @@ Review [`server-api.md`](./server-api.md) for route guards and [`extensions.md`]
 
 | File | Responsibility |
 |---|---|
+| `packages/core/src/security/stable-file.ts` | Bounded stable-file publisher, optional writer-owned one-use rollback receipts and explicit descriptor disposal |
 | `packages/core/src/security/workspace-manager.ts` | Allowed roots, realpath boundary, file kind, 500-entry browsing, one-direct-child creation and force-classified Git/worktree operations |
 | `packages/core/src/system/open-external.ts` | Shell-free bounded platform opener with an allowlisted, secret-free child environment |
 | `packages/core/src/security/project-trust.ts` | Shared bounded resource inventory, exact/inherited allow/refuse resolution, broad/nested fresh-folder analysis, serialized trust-plus-write rollback and atomic v2 trust store |
@@ -93,6 +94,14 @@ The trust store accepts only bounded absolute paths and boolean decisions. Reads
 
 Truncated interactive CLI and direct RPC shell output is retained under an owner-only temporary directory and returned as `fullOutputPath`; the Web command adapter uses the same runtime without exposing a server-local path. Retained output expires after 24 hours by default through an unreferenced per-file timer and safe scavenger; cleanup takes a bounded stable directory enumeration, rejects truncated scans, atomically quarantines each expired candidate, and deletes it only after device/inode revalidation. Symbolic links and pathname replacements are never recursively removed. Clients may still delete files immediately after consumption, and operators should treat the temp directory as sensitive.
 
+## Owned File Publication
+
+`atomicWriteStableFile` keeps its `Promise<void>` ABI; rejection can occur **after** publication. The opt-in `atomicWriteStableFileWithReceipt` instead returns frozen `publication: 'not-published' | 'published' | 'uncertain'`, optional opaque receipt and optional error. Check presence (`'error' in result`), not truthiness; an undefined thrown value is still failure. Value/authority options are captured before the first await; `beforeCommit` retains its original receiver but cannot mutate the admitted write.
+
+Receipt identity comes from the writer-owned staged descriptor retained across rename/link, never from blessing a replacement pathname. Frozen device/inode/size/nanosecond time/mode/link identity and the held parent are rechecked before guarded replacement. `expectedPublication` is destination-bound and one-use, including failed attempts; foreign/cloned/disposed/reused capabilities are refused. Host callers must await `disposeStableFilePublicationReceipt` in `finally` for **every** returned receipt, including error results. There are 64 retained/in-flight slots per module instance, at most two descriptors each; no TTL or implicit-cleanup guarantee. Ordinary writes retain none. See [EN](../../contributors/en/stable-file-publication.md) / [FR](../../contributors/fr/stable-file-publication.md) for the public lifecycle.
+
+This detects tested inode replacement and observable timestamp-changing in-place ABA; it is **not** OS-atomic compare-and-swap, hostile-writer exclusion or multi-file crash atomicity. The last-check/rename gap remains, timestamp precision depends on the filesystem, and directory fsync remains best effort. Callers still confine destinations and enforce trust/capabilities; this primitive grants neither workspace roots nor execution authority.
+
 ## Secret Storage
 
 | Data | Persistence |
@@ -145,6 +154,8 @@ Opening a workspace in the host file manager is narrower than ordinary authentic
 
 ## Associated Tests
 
+- `packages/core/src/security/{stable-file,stable-file-receipt}.test.ts` — real bounded publication, opaque lifecycle/disposal, admitted-option mutation, before/after-publication failures, parent/inode/in-place ABA, one-use guards and held/in-flight capacity
+
 - `packages/core/src/security/{project-trust,workspace-manager,credential-store}.test.ts`, `packages/core/src/system/open-external.test.ts`, `packages/server/src/api/workspace-file-manager.test.ts`, `packages/core/src/config/agent-settings.test.ts`, `packages/core/src/prompts/instruction-context.test.ts`, `packages/core/src/mcp/{config-import,config-import-mutation,config-inventory,config-mutation,server-test,session-host,oauth,oauth-provider-factory,oauth-flow,oauth-fetch,oauth-integration}.test.ts`, and `packages/core/src/tools/{workspace-tools,shell-command-runtime}.test.ts` — resource-sensitive trust, roots, settings/instruction/MCP bounds, import policy, atomic mutation, fresh Test targets, stdio/HTTP outcomes, OAuth discovery/PKCE/DCR/callback/paste/refresh/isolation/logout races, command serialization/deadlines, status freshness, redaction, shared shell cancellation/backpressure, retention and child-environment filtering
 - `packages/core/src/tools/codemode.test.ts`, `packages/server/src/api/tool-settings.test.ts` and `e2e/codemode.spec.ts` — QuickJS isolation/budgets/cancellation/parallelism, live nested policy, branch-local transactional store, cached health, scoped settings and accessible responsive restrictions
 - `packages/core/src/plugins/plugin-service.test.ts` — package source/filter validation, project trust, bounded batch refusal/partial success, linked-resource rejection, atomic persistence and concurrent service mutation
@@ -167,6 +178,10 @@ Update `ApiCapability`, role sets, route middleware, browser behavior, and anony
 ### Change paths, files, commands, or PTYs
 
 Resolve through `WorkspaceManager`, require the correct capability/trust state, bound all input/output, and test traversal, escaping symlinks, mismatched workspace IDs, and cancellation.
+
+### Add guarded rollback
+
+Use the Core publisher, inspect post-publication outcomes, retain owned receipts through dependent work and await disposal in finally. Test identical-byte external replacement and refusal without overwriting it; never replace receipt ownership with byte equality or fresh path identity.
 
 ### Change secret persistence
 

@@ -270,6 +270,16 @@ export type {
   WorkspacePathKind,
 } from './security/index.js';
 
+// Opt-in ownership receipts for guarded rollback; not an OS atomic compare-and-swap.
+export {
+  atomicWriteStableFileWithReceipt,
+  disposeStableFilePublicationReceipt,
+} from './security/stable-file.js';
+export type {
+  StableFilePublicationReceipt,
+  StableFilePublicationResult,
+} from './security/stable-file.js';
+
 // Host desktop integration
 export * from './system/index.js';
 
