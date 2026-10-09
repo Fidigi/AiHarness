@@ -197,18 +197,10 @@ test-e2e: ## Lancer les tests e2e Playwright dans Docker (rebuild inclus)
 		cleanup() { \
 			status=$$?; \
 			trap - EXIT; \
-			mkdir -p playwright-report test-results e2e/visual.spec.ts-snapshots; \
+			mkdir -p playwright-report test-results; \
 			docker cp "$${container}:/app/playwright-report/." playwright-report/ 2>/dev/null || true; \
 			docker cp "$${container}:/app/test-results/." test-results/ 2>/dev/null || true; \
-			docker cp "$${container}:/app/e2e/visual.spec.ts-snapshots/." e2e/visual.spec.ts-snapshots/ 2>/dev/null || true; \
-			mkdir -p e2e/settings.spec.ts-snapshots; \
-			docker cp "$${container}:/app/e2e/settings.spec.ts-snapshots/." e2e/settings.spec.ts-snapshots/ 2>/dev/null || true; \
-			mkdir -p e2e/sessions.spec.ts-snapshots; \
-			docker cp "$${container}:/app/e2e/sessions.spec.ts-snapshots/." e2e/sessions.spec.ts-snapshots/ 2>/dev/null || true; \
-			mkdir -p e2e/codemode.spec.ts-snapshots; \
-			docker cp "$${container}:/app/e2e/codemode.spec.ts-snapshots/." e2e/codemode.spec.ts-snapshots/ 2>/dev/null || true; \
-			mkdir -p e2e/mcp-exposure.spec.ts-snapshots; \
-			docker cp "$${container}:/app/e2e/mcp-exposure.spec.ts-snapshots/." e2e/mcp-exposure.spec.ts-snapshots/ 2>/dev/null || true; \
+			docker cp "$${container}:/app/.e2e-updated-baselines/." . 2>/dev/null || true; \
 			docker rm -f "$$container" >/dev/null 2>&1 || true; \
 			docker image rm "$$image" >/dev/null 2>&1 || true; \
 			exit $$status; \
@@ -225,7 +217,7 @@ test-e2e: ## Lancer les tests e2e Playwright dans Docker (rebuild inclus)
 			-e CI=true \
 			$(E2E_DOCKER_ARGS) \
 			"$$image" \
-			npm run test:e2e -- $(E2E_ARGS) >/dev/null; \
+			node .docker/run-e2e.mjs $(E2E_ARGS) >/dev/null; \
 		docker start --attach "$$container"
 
 # =============================================================================

@@ -33,7 +33,10 @@ playwright-report/
 test-results/
 
 # Fichiers de configuration Docker (non nécessaires dans le contexte)
-.docker/
+.docker/*
+!.docker/baseline-artifacts.mjs
+!.docker/baseline-artifacts.test.mjs
+!.docker/run-e2e.mjs
 Dockerfile*
 docker-compose*
 Makefile
