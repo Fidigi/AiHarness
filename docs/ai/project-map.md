@@ -112,8 +112,8 @@ Session files are versioned JSONL (current schema: v2). Entry types include `met
 | Command router | `src/commands/handler.ts` | Built-in slash commands, provider initialization, model/session operations, import/export/share/login |
 | Startup sessions | `src/sessions/startup-session.ts` | New/continue/resume/open/fork/exact-ID/name selection and storage-directory precedence |
 | Agent execution adapters | `src/agent/{tool-loop,provider-turn}.ts` | Thin re-exports of Core execution primitives; startup registers Core's workspace coding tools for the current cwd |
-| Regular TUI | `src/tui/terminal-ui.ts` | Readline-oriented output, help, transcript, streaming writer |
-| Fullscreen TUI | `src/tui/fullscreen-ui.ts`, `src/tui/fullscreen-input.ts`, `src/tui/terminal-escape.ts` | Alternate-screen rendering, concurrent run-time steering/follow-up input, shared lone-Escape/Alt+Enter disambiguation, history/completion, scrolling, extension panels |
+| Regular TUI | `src/tui/terminal-ui.ts`, `src/tui/{status,status-prompt-refresh,terminal-text}.ts` | Readline output/help/transcript/streaming plus actual journal/context/resource status at guarded prompt boundaries, late-refresh exclusion and stateful control-safe grapheme/cell projection |
+| Fullscreen TUI | `src/tui/fullscreen-ui.ts`, `src/tui/fullscreen-input.ts`, `src/tui/terminal-escape.ts` | Header/transcript/editor/footer with actual active/full-history usage and known/unknown cost, short-screen resize fallback, alternate-screen cleanup, concurrent steering/follow-up, lone-Escape/Alt+Enter, history/completion/scrolling and bounded extension panels |
 | Mode and themes | `src/tui/{mode,theme-manager,theme-input-filter}.ts` | Terminal mode selection, Core-backed rich/adaptive themes, live replacement and filtered probe input for readline/fullscreen |
 | Extensions | `src/extensions/extension-loader.ts` | JavaScript extension discovery, dynamic import, reload |
 | Skills/prompts | `src/resources/resource-manager.ts` | Markdown front matter, discovery, prompt expansion, model-invocable skills |

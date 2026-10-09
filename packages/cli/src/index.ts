@@ -71,6 +71,9 @@ import { ExtensionLoader } from './extensions/extension-loader.js';
 import { runToolLoop } from './agent/tool-loop.js';
 import { streamProviderTurn } from './agent/provider-turn.js';
 import { parseResourceCommandLine, ResourceManager } from './resources/resource-manager.js';
+import { createTerminalStatus } from './tui/status.js';
+import { PromptBoundaryRefresh } from './tui/status-prompt-refresh.js';
+import { terminalText } from './tui/terminal-text.js';
 import { editInExternalEditor } from './utils/system-integration.js';
 import { runRpcMode } from './rpc/rpc-server.js';
 import {
@@ -613,6 +616,7 @@ async function main(): Promise<void> {
   });
   let resourceManager = createResourceManager();
   const resourceLoadResult = await resourceManager.loadAll();
+  let resourceDiagnosticCount = resourceLoadResult.errors.length;
   for (const error of resourceLoadResult.errors) reportError(`Ressource : ${error.message}`);
 
   const extensionRegistry = extensionStartup?.registry ?? new ExtensionRegistry();
@@ -676,6 +680,9 @@ async function main(): Promise<void> {
     shellCommandPrefix: () => settingsResolution.settings.shellCommandPrefix,
   });
   let instructionSystemPrompt = '';
+  let instructionCount = 0;
+  let instructionDiagnosticCount = 0;
+  let extensionDiagnosticCount = 0;
   const reloadInstructionPrompt = async (): Promise<void> => {
     const resolved = await resolveInstructionPrompt({
       cwd: workspaceCwd,
@@ -687,6 +694,9 @@ async function main(): Promise<void> {
       appendSystemPromptInputs: cliArguments.appendSystemPrompts,
     });
     instructionSystemPrompt = resolved.systemPrompt;
+    instructionCount = resolved.contextFiles.length
+      + Number(resolved.systemPromptSource.kind !== 'default') + resolved.appendSystemPromptSources.length;
+    instructionDiagnosticCount = resolved.diagnostics.length;
     for (const diagnostic of resolved.diagnostics) {
       const message = redactOutput(`Instruction ignorée (${diagnostic.path}) : ${diagnostic.message}`);
       if (printMode) process.stderr.write(`Warning: ${message}\n`);
@@ -812,8 +822,10 @@ async function main(): Promise<void> {
     }
     resourceManager = createResourceManager();
     const resources = await resourceManager.loadAll();
+    resourceDiagnosticCount = resources.errors.length;
     for (const error of resources.errors) reportError(`Ressource : ${error.message}`);
     const result = await extensionLoader.reload();
+    extensionDiagnosticCount = result.errors.length;
     if (result.committed) {
       cliArguments = parseCliArguments(rawArguments, extensionRegistry.getOptions());
       extensionRegistry.setOptionValues(cliArguments.extensionOptions);
@@ -826,6 +838,7 @@ async function main(): Promise<void> {
   const extensionLoadResult = extensionStartup
     ? { errors: [] }
     : await extensionLoader.loadAll();
+  extensionDiagnosticCount = extensionLoadResult.errors.length;
   for (const failure of extensionLoadResult.errors) {
     reportError(`Extension ${failure.path}: ${failure.error.message}`);
   }
@@ -1045,6 +1058,37 @@ async function main(): Promise<void> {
     return;
   }
   let currentSessionId = startupSession.id;
+  let statusRevision = 0;
+  let effectiveStatusModel: { provider: string; model?: string } | undefined;
+  const refreshTerminalStatus = async (): Promise<void> => {
+    if (printMode || shuttingDown) return;
+    const revision = ++statusRevision;
+    const sessionId = currentSessionId;
+    const provider = ctx.provider;
+    const snapshot = await createTerminalStatus({
+      sessionManager, sessionId, cwd: workspaceCwd,
+      sessionFile: cliArguments.noSession ? undefined : path.join(path.resolve(sessionDirectory || path.join(process.env.HOME || '.', '.ai-harness', 'sessions')), `${sessionId}.jsonl`),
+      provider: effectiveStatusModel?.provider ?? provider?.getProviderType(),
+      model: effectiveStatusModel?.model ?? provider?.getConfiguredModel(),
+      thinking: ctx.thinkingLevel,
+      resources: {
+        skills: resourceManager.listSkills().length,
+        prompts: resourceManager.listPrompts().length,
+        extensions: extensionRegistry.list().length,
+        instructions: instructionCount,
+        diagnostics: resourceDiagnosticCount + extensionDiagnosticCount
+          + instructionDiagnosticCount + settingsResolution.diagnostics.length,
+      },
+    });
+    if (revision === statusRevision && sessionId === currentSessionId && !shuttingDown) terminal.setStatus(snapshot);
+  };
+  const onTerminalSessionUpdate = async ({ sessionId }: { sessionId: string }): Promise<void> => {
+    if (sessionId === currentSessionId) await refreshTerminalStatus();
+  };
+  if (!printMode) {
+    sessionManager.on('session:update', onTerminalSessionUpdate);
+    sessionManager.on('compaction:end', onTerminalSessionUpdate);
+  }
 
   sessionManager.setAutoCompactionCallback(async (_sessionId, toCompact, _keptEntries, signal) => {
     const provider = ctx.provider;
@@ -1143,12 +1187,20 @@ async function main(): Promise<void> {
 
   const sessionPrompt = (): string => {
     const title = sessionManager.get(currentSessionId)?.title;
-    return title ? `${redactOutput(title)}: ` : '> ';
+    return title ? `${terminalText(redactOutput(title)).replace(/\s+/g, ' ')}: ` : '> ';
   };
 
+  const promptBoundary = new PromptBoundaryRefresh();
   const refreshPrompt = (): void => {
-    inputDriver.setPrompt(sessionPrompt());
-    inputDriver.prompt();
+    const sessionId = currentSessionId;
+    void promptBoundary.refresh(sessionId, refreshTerminalStatus,
+      id => id === currentSessionId && !printMode && !shuttingDown && !conversationRunning && !isStreaming,
+      () => {
+        terminal.displayStatus();
+        inputDriver.setPrompt(sessionPrompt());
+        inputDriver.prompt();
+      },
+      error => reportError(error instanceof Error ? error.message : String(error)));
   };
 
   const restoreQueuedInput = (
@@ -1168,6 +1220,10 @@ async function main(): Promise<void> {
   const shutdown = (message: string, exitCode?: number): void => {
     if (shuttingDown) return;
     shuttingDown = true;
+    promptBoundary.close();
+    statusRevision++;
+    sessionManager.off('session:update', onTerminalSessionUpdate);
+    sessionManager.off('compaction:end', onTerminalSessionUpdate);
     activeAbortController?.abort();
     shellController.abort();
     streamWriter?.cancel();
@@ -1220,6 +1276,9 @@ async function main(): Promise<void> {
     input: string,
     options: { allowCommands?: boolean; imageBlocks?: MessageContentBlock[] } = {},
   ): Promise<string | undefined> {
+    // Invalidate before EVERY branch/await: empty input, commands, shell and provider.
+    promptBoundary.invalidate();
+    statusRevision++;
     let trimmed = input.trim();
     const unprocessedQueuedInputs: InteractiveQueuedInput[] = [];
     if (!trimmed) {
@@ -1491,7 +1550,11 @@ async function main(): Promise<void> {
           redactText: redactOutput,
           redactJson: value => outputCredentialRedactor.redactJson(value),
           createTextRedactor: () => outputCredentialRedactor.createStream(),
-          onStart: (effectiveProvider, effectiveModel) => {
+          onStart: async (effectiveProvider, effectiveModel) => {
+            promptBoundary.invalidate();
+            effectiveStatusModel = { provider: effectiveProvider, model: effectiveModel };
+            await refreshTerminalStatus();
+            if (shuttingDown || operationController.signal.aborted) return;
             streamWriter = printMode ? null : terminal.startStreaming();
             isStreaming = true;
             keyBindings.setStreaming(true);
@@ -1601,6 +1664,7 @@ async function main(): Promise<void> {
       activeAbortController = null;
       conversationRunning = false;
       keyBindings.setStreaming(false);
+      effectiveStatusModel = undefined;
       if (!printMode && !shuttingDown) refreshPrompt();
     }
   }
@@ -1720,6 +1784,7 @@ async function main(): Promise<void> {
     return;
   }
 
+  await refreshTerminalStatus();
   await activateSystemThemeProbe();
   filteredTerminalInput = new ThemeFilteredInput(process.stdin);
   if (fullscreenTerminal) {

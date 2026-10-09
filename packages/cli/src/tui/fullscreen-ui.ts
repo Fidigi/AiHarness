@@ -5,6 +5,8 @@ import {
   type TerminalOptions,
   type TranscriptEntry,
 } from './terminal-ui.js';
+import { statusLines } from './status.js';
+import { clipTerminalText, plainTerminalText, tailTerminalText, terminalWidth, wrapTerminalText } from './terminal-text.js';
 
 interface ScreenWriter {
   write(chunk: string): unknown;
@@ -24,7 +26,6 @@ interface ScreenEntry {
   content: string;
 }
 
-const ANSI_PATTERN = /\u001b\[[0-?]*[ -/]*[@-~]/g;
 const MAX_SCREEN_BYTES = 16 * 1024 * 1024;
 const MAX_SCREEN_ENTRY_BYTES = 1024 * 1024;
 
@@ -91,19 +92,24 @@ export class FullscreenUI extends TerminalUI {
     this.render();
   }
 
+  protected override onStatusChanged(): void { this.render(); }
+
+  override displayStatus(): void { this.render(); }
+
   setPanelProvider(provider: () => string[]): void {
     this.panelProvider = provider;
     this.render();
   }
 
   setPrompt(label: string): void {
-    this.promptLabel = label || '> ';
+    this.promptLabel = this.safeText(label).replace(/[\n\t]/g, ' ') || '> ';
     this.render();
   }
 
   setInput(value: string, cursor: number = value.length): void {
-    this.inputValue = value;
-    this.inputCursor = Math.max(0, Math.min(value.length, cursor));
+    this.inputValue = this.safeText(value);
+    this.inputCursor = Math.min(this.inputValue.length,
+      this.safeText(value.slice(0, Math.max(0, Math.min(value.length, cursor)))).length);
     this.render();
   }
 
@@ -291,15 +297,20 @@ export class FullscreenUI extends TerminalUI {
   render(): void {
     if (!this.active) return;
 
-    const width = Math.max(20, this.configuredColumns ?? this.output.columns ?? 80);
-    const height = Math.max(8, this.configuredRows ?? this.output.rows ?? 24);
+    const width = Math.max(1, this.configuredColumns ?? this.output.columns ?? 80);
+    const height = Math.max(2, this.configuredRows ?? this.output.rows ?? 24);
     const innerWidth = Math.max(1, width - 2);
     const panels = (this.panelProvider?.() ?? [])
       .slice(0, 32)
-      .flatMap(panel => this.wrap(this.stripAnsi(this.safeText(panel)), width));
-    const viewportHeight = Math.max(1, height - 5 - panels.length);
+      .flatMap(panel => this.wrap(this.stripAnsi(this.safeText(panel)), width))
+      .slice(0, Math.max(0, height - 7));
+    const footerBudget = Math.max(0, height - 6 - panels.length);
+    const footer = this.terminalStatus
+      ? statusLines(this.terminalStatus, this.editorStatus(), width, footerBudget)
+        .map(line => chalk.hex(this.theme.colors.muted)(this.safeText(line))) : [];
+    const viewportHeight = Math.max(0, height - 4 - panels.length - footer.length);
     const separator = chalk.hex(this.theme.colors.borderMuted)('─'.repeat(width));
-    const title = this.fit(` AiHarness CLI · ${this.safeText(this.status)} `, width);
+    const title = this.fit(` AiHarness CLI · ${this.safeText(this.status).replace(/\s+/g, ' ')} `, width);
     const transcript = this.getRenderedTranscriptLines();
     const streaming = this.streamingContent
       ? this.wrap(`Assistant: ${this.streamingContent}`, innerWidth)
@@ -312,9 +323,13 @@ export class FullscreenUI extends TerminalUI {
 
     while (visible.length < viewportHeight) visible.unshift('');
 
-    const safeInput = this.stripAnsi(this.safeText(`${this.promptLabel}${this.inputValue}`)).slice(0, width);
+    const before = `${this.promptLabel}${this.inputValue.slice(0, this.inputCursor)}`.replace(/[\n\t]/g, ' ');
+    const after = this.inputValue.slice(this.inputCursor).replace(/[\n\t]/g, ' ');
+    // Horizontal editor window keeps the real caret visible after shrink/resize.
+    const windowBefore = tailTerminalText(before, width - 1);
+    const safeInput = clipTerminalText(windowBefore + after, width);
     const input = chalk.hex(this.theme.colors.accent)(safeInput);
-    const cursorFromEnd = Math.min(width - 1, Math.max(0, this.inputValue.length - this.inputCursor));
+    const cursorFromEnd = Math.max(0, terminalWidth(safeInput) - terminalWidth(windowBefore));
     const cursorMove = cursorFromEnd > 0 ? `\u001b[${cursorFromEnd}D` : '';
     const frame = [
       chalk.bold.hex(this.theme.colors.accent)(title),
@@ -322,8 +337,9 @@ export class FullscreenUI extends TerminalUI {
       separator,
       ...visible.map(line => this.fit(line, width)),
       separator,
+      ...footer.map(line => this.fit(line, width)),
       input,
-    ].join('\n');
+    ].slice(-(height)).join('\n');
 
     this.output.write(`\u001b[2J\u001b[H${frame}${cursorMove}`);
   }
@@ -354,7 +370,7 @@ export class FullscreenUI extends TerminalUI {
   }
 
   private getRenderedTranscriptLines(): string[] {
-    const width = Math.max(18, (this.configuredColumns ?? this.output.columns ?? 80) - 2);
+    const width = Math.max(1, (this.configuredColumns ?? this.output.columns ?? 80) - 2);
     return this.screenEntries.flatMap(entry => {
       const prefix = entry.type === 'user'
         ? 'Vous: '
@@ -376,26 +392,15 @@ export class FullscreenUI extends TerminalUI {
   }
 
   private wrap(value: string, width: number): string[] {
-    const lines: string[] = [];
-    for (const sourceLine of value.split('\n')) {
-      if (!sourceLine) {
-        lines.push('');
-        continue;
-      }
-      for (let offset = 0; offset < sourceLine.length; offset += width) {
-        lines.push(sourceLine.slice(offset, offset + width));
-      }
-    }
-    return lines;
+    return wrapTerminalText(value, width);
   }
 
   private fit(value: string, width: number): string {
-    const plain = this.stripAnsi(value);
-    if (plain.length >= width) return plain.slice(0, width);
-    return value + ' '.repeat(width - plain.length);
+    const clipped = clipTerminalText(value, width);
+    return clipped + ' '.repeat(Math.max(0, width - terminalWidth(clipped)));
   }
 
   private stripAnsi(value: string): string {
-    return value.replace(ANSI_PATTERN, '');
+    return plainTerminalText(value);
   }
 }

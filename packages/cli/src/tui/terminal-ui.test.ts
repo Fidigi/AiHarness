@@ -2,7 +2,10 @@
 // Terminal UI Tests
 // ============================================================
 
-import { CredentialRedactor } from '@ai-harness/core';
+import { CredentialRedactor, SessionManager } from '@ai-harness/core';
+import chalk from 'chalk';
+import { createTerminalStatus } from './status.js';
+import { terminalWidth } from './terminal-text.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TerminalUI } from './terminal-ui';
 
@@ -46,6 +49,59 @@ describe('TerminalUI', () => {
     vi.mocked(process.stdout.write).mockClear();
     protectedTerminal.writeExplicitCredentialReveal(secret);
     expect(vi.mocked(process.stdout.write).mock.calls.map(call => String(call[0])).join('')).toContain(secret);
+  });
+
+  it('prints real snapshot status at prompt boundaries, stacking after resize and deferring during streaming', async () => {
+    const manager = new SessionManager();
+    const session = await manager.create({ title: 'session', cwd: '/work' });
+    await manager.addMessage(session.id, { role: 'assistant', content: 'reply', usage: { inputTokens: 9 } });
+    terminal.setStatus(await createTerminalStatus({ sessionManager: manager, sessionId: session.id,
+      cwd: '/work\x1b[2J', provider: 'mock', model: 'mock\x1b]0;FORGED\x07',
+      resources: { skills: 1, prompts: 2, extensions: 3, instructions: 4, diagnostics: 0 } }));
+    const oldColumns = process.stdout.columns;
+    try {
+      process.stdout.columns = 18;
+      terminal.displayStatus();
+      const output = vi.mocked(console.log).mock.calls.flat().map(String);
+      expect(output.every(line => terminalWidth(line) <= 18)).toBe(true);
+      expect(output.join('')).toContain('cost unknown');
+      expect(output.join('')).toContain('1 skills');
+      expect(output.join('')).not.toContain('FORGED');
+      process.stdout.columns = 120;
+      vi.mocked(console.log).mockClear();
+      terminal.displayStatus();
+      expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain('full history (all branches)');
+      const stream = terminal.startStreaming();
+      vi.mocked(console.log).mockClear();
+      terminal.displayStatus();
+      expect(console.log).not.toHaveBeenCalled();
+      stream.finish();
+    } finally { process.stdout.columns = oldColumns; }
+  });
+
+  it('sanitizes model/user/progress/output and split streaming controls without stripping trusted command styling', () => {
+    const previous = chalk.level;
+    chalk.level = 1;
+    try {
+      terminal.displayUserMessage('user\x1b]52;c;FORGED\x07\x1b[2J');
+      terminal.displayCommand('progress\x1b[?1049h', 'text\x1b]0;FORGED\x07');
+      terminal.writeOutput(chalk.red('trusted styled output') + '\x1b]52;c;FORGED\x07');
+      const stream = terminal.startStreaming();
+      stream.write('model\x1b]52;c;');
+      stream.write('FORGED\x1b');
+      stream.write('\\safe\x1b[');
+      stream.write('2Jtext');
+      stream.finish();
+      const output = vi.mocked(console.log).mock.calls.flat().join('')
+        + vi.mocked(process.stdout.write).mock.calls.map(call => String(call[0])).join('');
+      expect(output).not.toContain('FORGED');
+      expect(output).not.toContain('\x1b[2J');
+      expect(output).not.toContain('\x1b[?1049h');
+      expect(output).toContain('\x1b[31mtrusted styled output');
+      expect(output).toContain('model');
+      expect(output).toContain('safe');
+      expect(output).toContain('text');
+    } finally { chalk.level = previous; }
   });
 
   // Welcome tests

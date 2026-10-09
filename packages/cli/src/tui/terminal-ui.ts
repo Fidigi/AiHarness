@@ -7,6 +7,8 @@
 import chalk from 'chalk';
 import type { Interface, Key } from 'readline';
 import { ThemeManager, type TerminalTheme } from './theme-manager.js';
+import { statusLines, type TerminalStatus } from './status.js';
+import { TerminalTextFilter, terminalText, wrapTerminalText } from './terminal-text.js';
 
 interface TerminalTextRedactor {
   push(chunk: string): string;
@@ -48,6 +50,29 @@ export class TerminalUI {
   protected isStreaming = false;
   private readonly redact: (value: string) => string;
   private readonly createTextRedactor?: () => TerminalTextRedactor;
+  protected terminalStatus?: TerminalStatus;
+
+  /** Composition owns snapshots; rendering never reads journals or contacts providers. */
+  setStatus(status: TerminalStatus): void {
+    this.terminalStatus = structuredClone(status);
+    this.onStatusChanged();
+  }
+
+  protected onStatusChanged(): void { /* Regular output is printed at prompt boundaries. */ }
+
+  protected editorStatus(): string {
+    return this.isMultiLineMode ? `multiline (${this.multiLineBuffer.length} lines)`
+      : this.isStreaming ? 'ready · Enter steer · Alt+Enter follow-up' : 'ready · Enter send · /edit multiline';
+  }
+
+  /** Call before restoring readline's prompt, never in the middle of a stream. */
+  displayStatus(): void {
+    if (!this.terminalStatus || this.isStreaming) return;
+    const width = Math.max(1, process.stdout.columns ?? 80);
+    for (const line of statusLines(this.terminalStatus, this.editorStatus(), width)) {
+      console.log(chalk.hex(this.theme.colors.muted)(this.safeText(line)));
+    }
+  }
   
   // Transcript for session conversations (scrollable)
   private transcript: TranscriptEntry[] = [];
@@ -85,18 +110,22 @@ export class TerminalUI {
     // Regular terminals apply colors on their next write.
   }
 
-  protected safeText(value: string): string {
-    const safe = this.redact(value);
+  protected safeText(value: string, allowSgr = false): string {
+    const safe = terminalText(this.redact(value), allowSgr);
     return Buffer.byteLength(safe) <= MAX_TERMINAL_TEXT_BYTES
       ? safe
       : '[REDACTED: terminal output exceeded safe limit]';
   }
 
   protected createSafeTextRedactor(): TerminalTextRedactor {
-    return this.createTextRedactor?.() ?? {
-      push: chunk => this.safeText(chunk),
+    const redactor = this.createTextRedactor?.() ?? {
+      push: (chunk: string) => this.redact(chunk),
       flush: () => '',
     };
+    const filter = new TerminalTextFilter();
+    const bounded = (value: string): string => Buffer.byteLength(value) <= MAX_TERMINAL_TEXT_BYTES
+      ? filter.push(value) : '[REDACTED: terminal output exceeded safe limit]';
+    return { push: chunk => bounded(redactor.push(chunk)), flush: () => bounded(redactor.flush()) };
   }
 
   /** Display welcome screen */
@@ -105,15 +134,15 @@ export class TerminalUI {
     const accent = chalk.bold.hex(this.theme.colors.accent);
     const dim = chalk.hex(this.theme.colors.muted);
 
-    console.log(accent(`╔══════════════════════════════════════╗`));
-    console.log(accent(`║${' '.repeat(32)}║`));
-    console.log(accent(`║  ${accent('AiHarness CLI')} - Unified AI Agent Platform${' '.repeat(4)}║`));
-    console.log(accent(`║${' '.repeat(32)}║`));
-    console.log(accent(`╚══════════════════════════════════════╝`));
+    const width = Math.max(1, process.stdout.columns ?? 80);
+    for (const line of wrapTerminalText(this.safeText(this.options.title), width)) console.log(accent(line));
+    this.displayStatus();
     console.log();
-    console.log(dim('  Type /help for available commands'));
-    console.log(dim('  Providers: mock, openai, anthropic, google, local, azure, vertex, bedrock'));
-    console.log(dim('  Tip: Use Escape or Ctrl+C to interrupt active work'));
+    for (const hint of [
+      '  Type /help for available commands',
+      '  Providers: mock, openai, anthropic, google, local, azure, vertex, bedrock',
+      '  Tip: Use Escape or Ctrl+C to interrupt active work',
+    ]) for (const line of wrapTerminalText(hint, width)) console.log(dim(line));
     console.log();
   }
 
@@ -216,7 +245,7 @@ export class TerminalUI {
 
   /** Write unframed command output. Fullscreen backends override this sink. */
   writeOutput(output: string): void {
-    process.stdout.write(`${this.safeText(output)}\n\n`);
+    process.stdout.write(`${this.safeText(output, true)}\n\n`);
   }
 
   /** Deliberate local-only bypass used solely by `/credential reveal <provider>`. */
@@ -700,7 +729,7 @@ ${chalk.bold('Main environment variables:')}
       return `\u0001P${index}\u0002`;
     };
 
-    let result = text.replace(/```(?:([\w+#-]+))?\s*\n?([\s\S]*?)```/g, (_, lang: string | undefined, code: string) => {
+    let result = this.safeText(text).replace(/```(?:([\w+#-]+))?\s*\n?([\s\S]*?)```/g, (_, lang: string | undefined, code: string) => {
       const body = chalk.hex(this.theme.colors.mdCodeBlock)(code.replace(/\n$/, ''));
       const label = chalk.bgHex(this.theme.colors.customMessageBg)
         .hex(this.theme.colors.customMessageLabel)(` ${lang ?? 'code'} `);
