@@ -552,6 +552,12 @@ export class AgentRuntime {
         this.setPhase(run, 'tool');
         this.publish(run, 'tool.started', call);
       },
+      onToolProgress: progress => {
+        const tool = run.snapshot.activeTool;
+        if (!tool || tool.id !== progress.toolCallId || run.controller.signal.aborted) return;
+        tool.progress = structuredClone(progress);
+        this.publish(run, 'tool.progress', { kind: 'tool', ...progress });
+      },
       onCodemodeProgress: progress => {
         const tool = run.snapshot.activeTool;
         if (!tool || tool.name !== 'codemode' || tool.id !== progress.parentId) return;

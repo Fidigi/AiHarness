@@ -1,5 +1,6 @@
 import type { CodemodeCall, MessageContentBlock } from '../types/index.js';
 import type { ExtensionInteractionRequest } from '../extensions/extension-registry.js';
+import type { ToolProgressSnapshot } from './tool-progress.js';
 
 export const AGENT_EVENT_PROTOCOL_VERSION = 1 as const;
 
@@ -86,6 +87,7 @@ export interface ActiveToolSnapshot {
   input: unknown;
   startedAt: string;
   nestedCalls?: CodemodeCall[];
+  progress?: ToolProgressSnapshot;
 }
 
 export interface AgentRunSnapshot {

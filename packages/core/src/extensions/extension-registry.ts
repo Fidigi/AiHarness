@@ -5,6 +5,7 @@ import { AI_HARNESS_EXTENSION_API_VERSION } from '../public-api-version.js';
 import type { CodemodeProgress, Message, ProviderConfig, Session } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import type { AgentToolExposure, AgentToolNamespace } from '../tools/tool-selection.js';
+import type { ToolProgressInput } from '../agent/tool-progress.js';
 import { EventEmitter, type EventHandler, type EventMap } from '../utils/event-emitter.js';
 
 import { validateExtensionOption, type ExtensionOption, type ExtensionOptionDescriptor, type ExtensionOptionValue } from './startup-options.js';
@@ -66,6 +67,8 @@ export interface ExtensionRuntimeContext {
   /** Host correlation/sink installed by the shared tool loop, never by guest source. */
   toolCallId?: string;
   onCodemodeProgress?(progress: CodemodeProgress): void;
+  /** Bounded display-only snapshots. Await to apply downstream backpressure. */
+  onProgress?(progress: ToolProgressInput): Promise<void>;
   beforeSpecializedModel?: BeforeSpecializedModel;
   /** Optional raw subprocess output sink; awaiting it applies downstream backpressure. */
   onProcessOutput?(chunk: string): void | Promise<void>;
@@ -375,6 +378,8 @@ export class ExtensionRegistry {
     signal?: AbortSignal,
   ): Promise<ExtensionToolResult> {
     if (signal?.aborted) throw new Error(`Tool execution aborted: ${name}`);
+    const hostToolCallId = context.toolCallId;
+    const hostProgress = context.onProgress;
     const hook = await this.runBefore('before:tool', { tool: name, input, context });
     if (hook.cancelled) {
       throw new Error(hook.reason || `Tool execution cancelled by extension hook: ${name}`);
@@ -382,7 +387,11 @@ export class ExtensionRegistry {
 
     await this.emit('tool:call', { tool: name, input: hook.data.input });
     try {
-      const result = await execute(hook.data.input, hook.data.context, signal);
+      // Hooks may transform inputs/context, not replace host correlation or the
+      // bounded progress sink. Nested codemode contexts have no outer call ID.
+      const executionContext = { ...hook.data.context, toolCallId: hostToolCallId,
+        onProgress: hostToolCallId ? hostProgress : undefined };
+      const result = await execute(hook.data.input, executionContext, signal);
       await this.emit('tool:result', {
         tool: name,
         isError: Boolean(result.isError),

@@ -498,6 +498,8 @@ ai-harness --mode json --no-session "Liste les fichiers importants"
 
 Le premier enregistrement est un en-tête de session en version 3. Il est suivi, selon l’exécution, des événements d’agent, de tour, de message, de mise à jour texte/raisonnement, d’outil/résultat, de nouvelle tentative, de compaction, d’usage, d’erreur et de stabilisation. Les valeurs `message_end` terminées font autorité. Les diagnostics et logs d’extensions utilisent stderr afin que stdout soit directement consommable comme JSONL. Lisez le flux en continu et séparez les enregistrements uniquement sur LF.
 
+Les outils peuvent publier des instantanés de progression de remplacement, version 1, via `context.onProgress`. JSON/RPC exposent `tool_execution_update.partialResult.details.toolProgress`, avec IDs fournis par l’hôte, séquence croissante et texte/détails JSON bornés. Attendre le callback applique la backpressure ; les rafales non attendues sont regroupées et les omissions signalées. Les chaînes trop grandes sont masquées plutôt que d’exposer un préfixe potentiellement secret. Ces détails n’autorisent ni facturation, ni écriture du store, ni activation d’outils. Le dernier instantané accepté est persisté une seule fois, avec l’état completed/failed/cancelled, dans `metadata.toolProgress` du résultat parent ; l’annulation supprime les mises à jour tardives. Le mode print reste limité au texte final. Les mises à jour en cours sont reconstructibles, sans journal durable de chaque progression en cas de crash.
+
 ### Mode RPC
 
 Le mode RPC lit des requêtes JSON strictement délimitées par LF sur stdin et écrit sur stdout des réponses corrélées ainsi que des événements asynchrones :

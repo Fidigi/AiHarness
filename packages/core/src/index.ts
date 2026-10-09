@@ -180,6 +180,8 @@ export type { CompactionConfig, CompactionResult } from './sessions/compaction.j
 // Agent execution shared by CLI and server
 export { runToolLoop, AgentAbortError } from './agent/tool-loop.js';
 export type { ToolLoopOptions, ToolExecutionResult } from './agent/tool-loop.js';
+export { TOOL_PROGRESS_VERSION, TOOL_PROGRESS_LIMITS } from './agent/tool-progress.js';
+export type { ToolProgressInput, ToolProgressSnapshot, ToolProgressValue } from './agent/tool-progress.js';
 export { streamProviderTurn } from './agent/provider-turn.js';
 export type { StreamProviderTurnOptions } from './agent/provider-turn.js';
 export { AgentRuntime } from './agent/runtime.js';

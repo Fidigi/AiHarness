@@ -8,6 +8,7 @@ import type { CodemodeDetails, CodemodeProgress, Message, TokenUsage, ToolCall }
 import type { SessionManager } from '../sessions/session-manager.js';
 import { agentToolExposure, isDeclaredToolExposure } from '../tools/tool-selection.js';
 import { toolSearchActivationMetadata } from '../tools/tool-search.js';
+import { ToolProgressChannel, type ToolProgressSnapshot } from './tool-progress.js';
 
 export interface ToolExecutionResult {
   call: ToolCall;
@@ -20,6 +21,7 @@ export interface ToolExecutionResult {
   activatedTools?: string[];
   metadata?: Record<string, unknown>;
   usage?: TokenUsage;
+  progress?: ToolProgressSnapshot;
 }
 
 export interface ToolLoopOptions {
@@ -47,6 +49,7 @@ export interface ToolLoopOptions {
   onToolCall?(call: ToolCall): void | Promise<void>;
   onToolResult?(result: ToolExecutionResult): void | Promise<void>;
   onCodemodeProgress?(progress: CodemodeProgress): void;
+  onToolProgress?(progress: ToolProgressSnapshot): void | Promise<void>;
   onToolUsage?(usage: TokenUsage): void | Promise<void>;
   onTurnEnd?(response: ChatResponse, toolResults: ToolExecutionResult[], round: number): void | Promise<void>;
   /** Persist or transform queued input after tools and before the next provider turn. */
@@ -179,9 +182,11 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       let isError = false;
       let activatedTools: string[] | undefined;
       let resultMetadata: Record<string, unknown> | undefined;
+      const progressChannel = new ToolProgressChannel(call, options.onToolProgress, options.signal, options.redactText);
       try {
         const context: ExtensionRuntimeContext = { ...options.toolContext, toolCallId: call.id,
           onCodemodeProgress: options.onCodemodeProgress,
+          onProgress: progressChannel.report,
           beforeSpecializedModel: async (type, request, signal) => {
             if (signal.aborted) throw new AgentAbortError();
             const hookContext: ExtensionRuntimeContext = { ...options.toolContext,
@@ -217,6 +222,16 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         const message = error instanceof Error ? error.message : String(error);
         content = options.redactText?.(message) ?? message;
       }
+
+      const progress = await progressChannel.finish(options.signal?.aborted ? 'cancelled' : isError ? 'failed' : 'completed');
+      if (progressChannel.failure) {
+        isError = true;
+        content = options.redactText?.('Tool progress sink failed.') ?? 'Tool progress sink failed.';
+        if (progress) progress.status = options.signal?.aborted ? 'cancelled' : 'failed';
+      }
+      // This namespace is host-owned. Progress details remain inert display data,
+      // never merged into authenticated result metadata or accounted as usage.
+      if (progress) resultMetadata = { ...resultMetadata, toolProgress: progress };
 
       // Cancellation stops execution, not the durable record of work already done.
       // In particular, authenticated code-mode metadata contains completed model usage.
@@ -269,6 +284,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         ...(activatedTools?.length ? { activatedTools: [...activatedTools] } : {}),
         ...(resultMetadata ? { metadata: resultMetadata } : {}),
         ...(usage ? { usage } : {}),
+        ...(progress ? { progress } : {}),
       };
       toolResults.push(toolResult);
       await options.onToolResult?.(toolResult);

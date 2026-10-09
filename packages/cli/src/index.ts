@@ -1522,6 +1522,10 @@ async function main(): Promise<void> {
             jsonOutput?.events.retryEnd(success, attempt, finalError)
           ),
         }),
+        onToolProgress: async progress => {
+          if (jsonOutput) await jsonOutput.events.toolProgress(progress);
+          else if (!printMode && progress.content) reportOutput(`[${progress.toolName}] ${progress.content}`);
+        },
         onCodemodeProgress: progress => {
           if (jsonOutput) void jsonOutput.events.codemodeProgress(progress).catch(error => reportError(String(error)));
           else reportOutput(`[codemode ${progress.call.id}] ${progress.call.name}: ${progress.call.state}`);
