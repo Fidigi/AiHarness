@@ -86,6 +86,7 @@ Start at `packages/core/src/index.ts`, which defines the public package exports.
 | Specialized models | `src/providers/specialized-models.ts`, `src/types/codemode.ts` | Credential-private typed classifier/image SDK and guest bridges, live availability, bounded hooks/results and host-correlated nested progress/accounting |
 | Model catalogue | `src/providers/model-catalog.ts` | Shared published/configured/discovered/custom assembly, bounded discovery, exact/fuzzy/full-ID-first lookup, ordered scopes and non-secret protocol descriptors |
 | Session persistence | `src/sessions/session-manager.ts`, `src/sessions/serialization.ts` | `SessionManager`, bounded/private/locked v2 JSONL, atomic rewrites, commands, branches, cloning, summaries, per-session setting overrides, effective context and secret redaction |
+| Session SDK | `src/sdk/{index,agent-session,types,session-store,resource-loader}.ts` | Explicit API-1 factory/facade, true memory/borrowed structural stores, fresh canonical trust, copied/redacted inputs/observers, existing runtime/history/resource methods, durable stop/wait and last-handle-owned cleanup; no implicit discovery/executable/MCP/auth loading |
 | Compaction | `src/sessions/compaction.ts`, `src/sessions/session-manager.ts` | Token estimation, target selection, summary prompts, inherited automatic policy, metrics and cancellation-safe application |
 | Detached agent | `src/agent/runtime.ts`, `src/agent/tool-loop.ts`, `src/agent/provider-turn.ts`, `src/agent/events.ts`, `src/agent/message-queue.ts` | Shared model/tool loop, provider hooks/stream retry, bounded all/one-at-a-time steering and follow-up scheduling, runs, stop, full bounded tool outputs, extension interactions and sequenced journal |
 | Coding tools, discovery and commands | `src/tools/` | Shared CLI/Web `read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`; prompt-local `tool_search` with bounded BM25 ranking, deferred declarations and branch-persisted activation metadata; inactive-by-default QuickJS `codemode` in a disposable bounded worker with live authorized nested calls, script-only exposure and success-only branch store; browser-safe `!`/`!!` parsing; detached direct-shell runtime; bounded/backpressured process execution, filtered environments, tree cancellation, private output retention, exact edits, trust gates and common active-tool selection |
@@ -471,6 +472,7 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 | `docs/ai/index.md`, `project-map.md`, `AGENTS.md` | English | Agents | Versioned | Navigation, repository authority, and maintenance rules |
 | `docs/ai/topics/providers.md` | English | Agents | Versioned | Provider execution, catalogue, registry and OAuth |
 | `docs/ai/topics/sessions.md` | English | Agents | Versioned | JSONL v2, serialization, compaction, pagination and branches |
+| `docs/ai/topics/session-sdk.md` | English | Agents | Versioned | High-level Core SDK ownership, lifecycle, safe copies and genuine public package/declaration proof |
 | `docs/ai/topics/extensions.md` | English | Agents | Versioned | JavaScript extensions, packages, reload and declarative interactions |
 | `docs/ai/topics/codemode.md` | English | Agents | Versioned | QuickJS isolation, budgets, nested authorization, branch store, settings and explicit limitations |
 | `docs/ai/topics/cli-reference.md` | English | Agents | Versioned | Package commands, regular/fullscreen/print CLI, JSON events, and JSONL RPC |
@@ -481,7 +483,7 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 | `docs/ai/acceptance/`, `docs/ai/workflows/` | English | Agents | Versioned | Acceptance criteria and task-specific documentation workflows |
 | `docs/audit/documentation/AUDIT-1` | English | Agents + humans | Versioned | Current documentation audit; plain path intentionally omits `.md` |
 | `docs/users/{fr,en}/` | French/English | End users | Versioned | Complete user guides, container guidance and language indexes |
-| `docs/contributors/{fr,en}/` | French/English | Contributors | Versioned | Parallel architecture, extension, public-contract/parity and i18n guides |
+| `docs/contributors/{fr,en}/` | French/English | Contributors | Versioned | Parallel architecture, extension, session SDK, public-contract/parity and i18n guides |
 | `docs/screenshots/` | English/French | Humans | Versioned | Playwright-derived documented product states and capture inventory |
 | `README.md`, `CHANGELOG.md` | English/French | Everyone | Versioned | Product overview and history; changelog planning notes are not a roadmap |
 

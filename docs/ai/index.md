@@ -11,6 +11,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Project overview | [`project-map.md`](./project-map.md) | ~530 lines — load first for global navigation |
 | AI Providers | [`topics/providers.md`](./topics/providers.md) | ~120 lines |
 | Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~125 lines |
+| TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~45 lines |
 | Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~135 lines |
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~295 lines |
 | QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
@@ -130,6 +131,7 @@ These files do NOT belong to the agent documentation system:
 | CLI extensions | Contributors | [FR](../contributors/fr/extensions-cli.md) / [EN](../contributors/en/extensions-cli.md) |
 | Web extensions | Contributors | [FR](../contributors/fr/extensions-web.md) / [EN](../contributors/en/extensions-web.md) |
 | Public contracts and parity | Contributors | [FR](../contributors/fr/public-contract-policy.md) / [EN](../contributors/en/public-contract-policy.md) |
+| Session SDK | Contributors | [FR](../contributors/fr/session-sdk.md) / [EN](../contributors/en/session-sdk.md) |
 | Internationalization | Contributors | [FR](../contributors/fr/i18n.md) / [EN](../contributors/en/i18n.md) |
 | User/contributor navigation | Humans | [`users/README.md`](../users/README.md) / [`contributors/README.md`](../contributors/README.md) |
 | Screenshot inventory | Humans | [`screenshots/README.md`](../screenshots/README.md) |

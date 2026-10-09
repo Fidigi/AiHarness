@@ -520,6 +520,14 @@ Les réponses utilisent `type: "response"`, répètent la commande et l’ID, pu
 
 Les sélecteurs de démarrage usuels (`--continue`, `--session`, `--session-id`, `--fork`, `--session-dir`, `--name`, `--no-session`) s’appliquent, de même que les réglages agent de modèles, raisonnement, outils, ressources, files, retries et compaction. `--resume` est réservé au terminal interactif : utilisez `--session` en RPC. Les anciennes requêtes `{id,method,params}` restent acceptées pour migration. Les diagnostics utilisent toujours stderr, les processus shell de confiance n’héritent pas des variables d’environnement dont le nom ressemble à un credential, et les sorties complètes conservées sont privées et expirent par défaut après 24 heures.
 
+### SDK TypeScript de session
+
+`@ai-harness/core` exporte `createAgentSession` (Core API 1) pour une configuration intégrée explicite ou une instance de fournisseur prêtée. La confiance est refusée par défaut et vérifiée fraîchement dans les limites canoniques autorisées. Sans `store`, le fonctionnement reste réellement en mémoire ; `JsonlSessionStore`/un `SessionStore` structurel permet persistance et reprise. Fabrique/lectures ne découvrent ni ressources/modèles, ne chargent aucun exécutable/MCP et ne lancent aucune commande de credentials.
+
+`prompt` démarre le travail détaché ; `promptAndWait` l’attend. Stop accuse réception : attendez `wait()` pour les résultats/usages interrompus durables. Les mutations d’historique/settings sont refusées pendant un run. Lectures/événements retournent des copies expurgées ; forks/clones partagent les ressources possédées, donc disposez chaque handle. L’expansion explicite retourne du texte ; une compaction exige un résumé/callback fourni. OAuth/découverte/chargement/shell/changement de fournisseur ne sont pas implicites. Les callbacks/stockages hôte sont des intégrations de confiance, pas sandboxées.
+
+Consultez la [référence SDK bilingue complète et son exemple mock](../../../packages/core/src/sdk/README.md) et le [guide contributeur](../../contributors/fr/session-sdk.md) pour options, méthodes, secrets, propriété et validation du vrai paquet compilé.
+
 ## Utiliser l’interface Web
 
 En utilisation normale, `ai-harness-web` sert l’interface React, l’API, le streaming SSE et les WebSockets depuis un seul processus et un seul port.

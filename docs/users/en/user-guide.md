@@ -520,6 +520,14 @@ Responses use `type: "response"`, repeat the command and ID, and contain `succes
 
 Normal startup selectors such as `--continue`, `--session`, `--session-id`, `--fork`, `--session-dir`, `--name`, and `--no-session` apply, as do agent settings for models, thinking, tools, resources, queues, retry and compaction. `--resume` is interactive-only, so use `--session` in RPC. The former `{id,method,params}` requests remain accepted for migration. Diagnostics always use stderr, trusted shell children do not inherit credential-like environment variables, and retained full-output files are private and expire after 24 hours by default.
 
+### TypeScript Session SDK
+
+`@ai-harness/core` exports `createAgentSession` (Core API 1) for an explicit built-in provider config or borrowed provider instance. Trust defaults to denial and is checked freshly within canonical allowed roots. Omit `store` for true memory, or supply `JsonlSessionStore`/a structural `SessionStore` for persistence and resume. Factory/read operations do not discover resources/models, load executable extensions/MCP or run credential commands.
+
+`prompt` starts detached work; `promptAndWait` awaits it. Stop acknowledges cancellation: await `wait()` for durable interrupted results/usage. History/settings mutations are refused while busy. Reads/events return detached redacted snapshots; forks/clones share owned runtime resources, so dispose every handle. Explicit resource expansion returns text, and compaction requires a supplied summary/callback. Unsupported OAuth/discovery/loading/shell/provider-switching capabilities are not implied. Host callbacks/stores are trusted integrations, not sandboxed.
+
+See the [complete bilingual SDK reference and mock example](../../../packages/core/src/sdk/README.md) and [contributor guide](../../contributors/en/session-sdk.md) for options, methods, secrets, ownership and genuine built-package validation.
+
 ## Using the Web Interface
 
 In normal use, `ai-harness-web` serves the React interface, API, SSE streaming and WebSockets from a single process and port.
