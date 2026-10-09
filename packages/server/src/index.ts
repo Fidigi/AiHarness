@@ -1100,9 +1100,16 @@ export function createApp(config?: ServerConfig): express.Application {
 
   /** PATCH /api/sessions/:id - Rename a session */
   asyncPatch('/api/sessions/:id', async (req: Request, res: Response): Promise<void> => {
-    const sm = (await servicesPromise).sessionManager;
+    const services = await servicesPromise;
+    const sm = services.sessionManager;
     const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
       ? req.body as Record<string, unknown> : {};
+    const run = services.agentRuntime.getSessionRun(req.params.id);
+    if (body.activeLeafId !== undefined && run
+      && (!['completed', 'failed', 'stopped'].includes(run.phase) || !run.completedAt)) {
+      res.status(409).json({ error: 'Stop the agent before switching its active branch.', code: 'SESSION_BUSY' });
+      return;
+    }
     const changes: Parameters<SessionManager['update']>[1] = {};
     if ('title' in body) {
       const title = optionalSessionString(body.title, 500);
@@ -1276,9 +1283,13 @@ export function createApp(config?: ServerConfig): express.Application {
   asyncPost('/api/sessions/:id/fork', async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const { messageIndex, messageId, title: rawTitle } = (req.body ?? {}) as {
-        messageIndex?: number; messageId?: string; title?: string;
+      const { messageIndex, messageId, before, title: rawTitle } = (req.body ?? {}) as {
+        messageIndex?: number; messageId?: string; before?: boolean; title?: string;
       };
+      if (before !== undefined && (typeof before !== 'boolean' || typeof messageId !== 'string' || messageIndex !== undefined)) {
+        res.status(400).json({ error: 'Invalid fork position.' });
+        return;
+      }
       const title = optionalSessionString(rawTitle, 500);
       if ((rawTitle !== undefined && !title) || (messageId !== undefined
         && (typeof messageId !== 'string' || Buffer.byteLength(messageId) > 256 || UNSAFE_SESSION_TEXT.test(messageId)))) {
@@ -1309,10 +1320,28 @@ export function createApp(config?: ServerConfig): express.Application {
         res.status(400).json({ error: 'Invalid message target' });
         return;
       }
-      const forked = await sm.forkSession(id, resolvedMessageIndex, title);
+      const run = (await servicesPromise).agentRuntime.getSessionRun(id);
+      if (resolvedMessageIndex === undefined && run
+        && (!['completed', 'failed', 'stopped'].includes(run.phase) || !run.completedAt)) {
+        res.status(409).json({ error: 'An active source requires a persisted message target.', code: 'SESSION_BUSY' });
+        return;
+      }
+      const cutoff = resolvedMessageIndex === undefined ? undefined : session.messages[resolvedMessageIndex]?.timestamp;
+      if (session.commands?.some(command => command.status === 'running'
+        && (!cutoff || command.timestamp <= cutoff))) {
+        res.status(409).json({ error: 'A running command cannot be copied.', code: 'RUNNING_COMMAND_SOURCE' });
+        return;
+      }
+      if (before && session.messages[resolvedMessageIndex!]?.role !== 'user') {
+        res.status(400).json({ error: 'Only a persisted user message can be edited.' });
+        return;
+      }
+      const forked = before && messageId
+        ? await sm.forkSessionAtEntry(id, messageId, title, { before: true })
+        : await sm.forkSession(id, messageId ?? resolvedMessageIndex, title);
 
       if (!forked) {
-        res.status(500).json({ error: 'Fork failed' });
+        res.status(409).json({ error: 'The source message changed before copying.', code: 'MESSAGE_TARGET_CHANGED' });
         return;
       }
 
@@ -1363,10 +1392,22 @@ export function createApp(config?: ServerConfig): express.Application {
         res.status(400).json({ error: 'Invalid message target' });
         return;
       }
-      const cloned = await sm.cloneSession(id, title, resolvedMessageIndex);
+      const run = (await servicesPromise).agentRuntime.getSessionRun(id);
+      if (resolvedMessageIndex === undefined && run
+        && (!['completed', 'failed', 'stopped'].includes(run.phase) || !run.completedAt)) {
+        res.status(409).json({ error: 'An active source requires a persisted message target.', code: 'SESSION_BUSY' });
+        return;
+      }
+      const cutoff = resolvedMessageIndex === undefined ? undefined : session.messages[resolvedMessageIndex]?.timestamp;
+      if (session.commands?.some(command => command.status === 'running'
+        && (!cutoff || command.timestamp <= cutoff))) {
+        res.status(409).json({ error: 'A running command cannot be copied.', code: 'RUNNING_COMMAND_SOURCE' });
+        return;
+      }
+      const cloned = await sm.cloneSession(id, title, messageId ?? resolvedMessageIndex);
 
       if (!cloned) {
-        res.status(500).json({ error: 'Clone failed' });
+        res.status(409).json({ error: 'The source message changed before copying.', code: 'MESSAGE_TARGET_CHANGED' });
         return;
       }
 

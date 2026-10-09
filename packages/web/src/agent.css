@@ -294,6 +294,9 @@ html[data-theme="light"] .subagent-run.stopped > header span { color: #9b243a; }
 .composer-controls button { margin-left: auto; padding: .5rem 1rem; }
 .composer-setting-scopes { display: flex; flex-wrap: wrap; gap: .25rem .75rem; padding-top: .3rem; color: #8291ad; font-size: .65rem; }
 .composer-setting-scopes span { white-space: nowrap; }
+.staged-history-edit { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding-bottom: .5rem; font-size: .8rem; }
+.staged-history-edit span { flex: 1 1 200px; }
+.staged-history-edit button { padding: .4rem .6rem; background: #a12645; color: #fff; }
 
 html[data-theme="light"] body, html[data-theme="light"] .main-content { color: #172033; background: #f5f7fb; }
 html[data-theme="light"] .sidebar, html[data-theme="light"] .chat-toolbar, html[data-theme="light"] .input-container,

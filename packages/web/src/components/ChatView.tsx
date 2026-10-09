@@ -237,6 +237,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const { t } = useI18n();
   const [preferences] = usePreferences();
   const [starting, setStarting] = useState(false);
+  const [stagedEdit, setStagedEdit] = useState<{ sessionId: string; messageId: string; previousDraft: string }>();
+  useEffect(() => { setStagedEdit(undefined); }, [id, workspace?.cwd]);
   const [queueMode, setQueueMode] = useState<QueueMode>('steer');
   const setNotice = (message?: string, level: NoticeLevel = 'error', options: { id?: string; progress?: number; timeoutMs?: number } = {}) => {
     if (message) publishNotice(message, { level, ...options });
@@ -1129,17 +1131,17 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     setHistoryIndex(-1);
     setNotice(undefined);
 
-    if (content.startsWith('/')) {
+    if (!stagedEdit && content.startsWith('/')) {
       await executeSlashCommand(content);
       return;
     }
 
-    if (content.startsWith('!')) {
+    if (!stagedEdit && content.startsWith('!')) {
       await runShellCommand(content);
       return;
     }
 
-    if (active && currentRun) {
+    if (!stagedEdit && active && currentRun) {
       const queued = await enqueueAgentMessage(currentRun.id, queueMode, content, [
         { type: 'text', text: content },
         ...attachments.map(attachment => ({
@@ -1162,10 +1164,20 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     }
 
     setStarting(true);
-    const localId = currentSession.id;
+    let localId = currentSession.id;
     try {
+      if (stagedEdit?.sessionId === currentSession.id) {
+        const forked = await forkSession(currentSession.id, { messageId: stagedEdit.messageId, before: true,
+          title: `${currentSession.title || t('sidebar.untitled')} (branch)` });
+        if (!forked.success || !forked.data) throw new Error(forked.error || t('session.branchFailed'));
+        localId = forked.data.id;
+        setStagedEdit(undefined);
+        const loaded = await getSession(localId);
+        if (loaded.success && loaded.data) syncSession(loaded.data);
+        navigate(`/chat/${encodeURIComponent(localId)}?cwd=${encodeURIComponent(workspace.cwd)}`);
+      }
       const result = await startAgentRun({
-        ...(currentSession.draft ? {} : { sessionId: currentSession.id }),
+        ...(currentSession.draft ? {} : { sessionId: localId }),
         cwd: workspace.cwd,
         provider: activeProviderType,
         input: content,
@@ -1310,22 +1322,16 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     }
   }
 
-  const branchFrom = async (messageId: string, content: string, edit = false) => {
-    if (!currentSession || currentSession.draft || active) return;
-    const result = await forkSession(currentSession.id, { messageId, title: `${currentSession.title || t('sidebar.untitled')} (branch)` });
-    if (!result.success || !result.data) {
-      setNotice(result.error || t('session.branchFailed'));
-      return;
-    }
-    const loaded = await getSession(result.data.id);
-    if (loaded.success && loaded.data) syncSession(loaded.data);
-    await updateSession(currentSession.id, { activeLeafId: result.data.id });
-    if (edit) setDraft(result.data.id, content);
-    navigate(`/chat/${encodeURIComponent(result.data.id)}?cwd=${encodeURIComponent(workspace!.cwd)}`);
+  const stageHistoryEdit = (messageId: string, content: string) => {
+    if (!currentSession || currentSession.draft || active || starting) return;
+    setStagedEdit({ sessionId: currentSession.id, messageId,
+      previousDraft: stagedEdit?.previousDraft ?? input });
+    setDraft(currentSession.id, content);
+    window.setTimeout(() => textareaRef.current?.focus(), 0);
   };
 
   const cloneFrom = async (messageId: string) => {
-    if (!currentSession || currentSession.draft || active) return;
+    if (!currentSession || currentSession.draft || starting) return;
     const result = await cloneSession(currentSession.id, `${currentSession.title || t('sidebar.untitled')} (copy)`, messageId);
     if (!result.success || !result.data) {
       setNotice(result.error || t('session.cloneFailed'));
@@ -1504,9 +1510,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       <button onClick={() => void copyMessage(message)} aria-live="polite">
         {copiedMessageId === message.id ? t('chat.copied') : t('chat.copy')}
       </button>
-      {!currentSession.draft && !active && message.role === 'user' && (
+      {!currentSession.draft && message.role === 'user' && (
         <>
-          <button onClick={() => void branchFrom(message.id, message.content, true)}>{t('session.editFromHere')}</button>
+          {!active && <button onClick={() => stageHistoryEdit(message.id, message.content)}>{t('session.editFromHere')}</button>}
           <button onClick={() => void cloneFrom(message.id)}>{t('session.newFromHere')}</button>
         </>
       )}
@@ -1847,6 +1853,14 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             ))}
           </div>
         )}
+        {stagedEdit?.sessionId === currentSession.id && <div className="staged-history-edit" role="status">
+          <span>{t('session.editStaged')}</span>
+          <button type="button" disabled={starting} onClick={() => {
+            setDraft(currentSession.id, stagedEdit.previousDraft);
+            setStagedEdit(undefined);
+            textareaRef.current?.focus();
+          }}>{t('session.cancelEdit')}</button>
+        </div>}
         <textarea
           ref={textareaRef}
           value={input}

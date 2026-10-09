@@ -79,6 +79,8 @@ Cancellation must not apply a partial summary. Compaction entries remain in the 
 | Startup/copy fork | Creates a related session from a selected durable path for flows that require a separate file. |
 | Clone | Creates an independent root, remaps active message/command IDs and internal parents, clears branch lineage, and records `metadata.clonedFromSessionId`. |
 
+Web can fork or clone an explicitly targeted persisted message while its source agent continues; the copy uses a serialized snapshot and does not move or stop the source. Core `forkSession`/`cloneSession` accept stable message IDs alongside legacy numeric positions and resolve IDs against that same serialized snapshot, so a concurrent compaction cannot silently change the selected message. A removed target fails without creating a copy; HTTP returns `409 MESSAGE_TARGET_CHANGED`. Full-source copies during a run require an explicit target; unwritten stream IDs and prefixes containing running commands are refused. `PATCH activeLeafId` remains locked until the source run is idle. Web history edits are staged locally: only Send creates a related session via `POST /api/sessions/:id/fork` with `{messageId, before: true}`. Core's `forkSessionAtEntry(..., {before: true})` copies ancestors but omits that user message, including the empty-prefix case. Cancel, navigation and reload cannot create or move a branch. No persisted schema changes are needed.
+
 Raw RPC entries/tree include all retained branches; normal messages, fork candidates, and effective context follow only the active parent chain. Branch summaries and compactions also advance that chain. The format is still v2, so labels and clone handling for every custom entry remain incomplete.
 
 ### Web windows
@@ -101,6 +103,7 @@ Lists return metadata rather than full histories. Session state starts with a bo
 - `packages/core/src/sessions/compaction.test.ts` — estimates, policy and compaction targets
 - `packages/server/src/api/session-pagination.test.ts` — bounded stable windows
 - `packages/server/src/web-server.test.ts` — session HTTP, persistence, import/export and cascade behavior
+- `packages/server/src/api/session-live-mutations.test.ts` — active-run prefix copies, source independence, busy branch-switch protection and invalid/running-command refusals
 - `packages/web/src/store/session-store.test.ts` and `e2e/sessions.spec.ts` — hydration and browser lifecycle
 - `tests/functional-parity/functional-parity.test.ts` — current tree projection, unversioned read/rewrite migration and malformed/future-line rejection through the public Core entry point
 

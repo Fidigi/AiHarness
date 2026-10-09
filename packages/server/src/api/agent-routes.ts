@@ -472,7 +472,17 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
   router.post('/runs/:runId/stop', async (request, response, next) => {
     try {
       const { agentRuntime } = await servicesPromise;
-      response.status(202).json(agentRuntime.stop(request.params.runId));
+      const acknowledged = agentRuntime.stop(request.params.runId);
+      // Do not let clients resync/unsubscribe before interrupted results and usage
+      // have reached the authoritative session journal.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const settled = await Promise.race([
+        agentRuntime.wait(request.params.runId),
+        new Promise<undefined>(resolve => { timer = setTimeout(() => resolve(undefined), 5_000); timer.unref(); }),
+      ]).finally(() => { if (timer) clearTimeout(timer); });
+      // A privileged extension may ignore abort. Bound the HTTP wait, but keep
+      // the nonterminal snapshot so clients continue listening for real settlement.
+      response.status(202).json(settled ?? agentRuntime.getRun(request.params.runId) ?? acknowledged);
     } catch (error) {
       next(error);
     }

@@ -2255,11 +2255,12 @@ export class SessionManager {
   // Session Tree Operations (fork/clone/tree)
   // ===================================================================
 
-  /** Fork through a durable user entry on its parent-linked path. */
+  /** Fork through (or immediately before) a durable user entry on its parent-linked path. */
   async forkSessionAtEntry(
     sessionId: string,
     entryId: string,
     newTitle?: string,
+    options: { before?: boolean } = {},
   ): Promise<Session | null> {
     newTitle = newTitle === undefined ? undefined : this.redactText(newTitle);
     const snapshot = await this.withSessionMutation(sessionId, async () => {
@@ -2292,11 +2293,13 @@ export class SessionManager {
       ? rawEntries.filter(entry => entry.type !== 'metadata' && ancestorIds.has(entry.id))
       : rawEntries.slice(0, selectedIndex + 1);
     const copiedEntries = prefix.filter(
-      (entry): entry is MessageEntry | CommandEntry => entry.type === 'message' || entry.type === 'command',
+      (entry): entry is MessageEntry | CommandEntry => (entry.type === 'message' || entry.type === 'command')
+        && !(options.before && entry.id === entryId),
     );
+    if (copiedEntries.some(entry => entry.type === 'command' && entry.status === 'running')) return null;
     const normalizedParents = new Map<string, string | undefined>();
     copiedEntries.forEach((entry, index) => normalizedParents.set(entry.id, copiedEntries[index - 1]?.id));
-    const messages: Message[] = prefix.flatMap(entry => entry.type === 'message' ? [{
+    const messages: Message[] = copiedEntries.flatMap(entry => entry.type === 'message' ? [{
       id: entry.id,
       role: entry.role,
       content: entry.content,
@@ -2314,7 +2317,7 @@ export class SessionManager {
       agentId: entry.agentId,
       metadata: entry.metadata,
     }] : []);
-    const commands: ShellCommandRecord[] = prefix.flatMap(entry => entry.type === 'command' ? [{
+    const commands: ShellCommandRecord[] = copiedEntries.flatMap(entry => entry.type === 'command' ? [{
       id: entry.id,
       command: entry.command,
       cwd: entry.cwd,
@@ -2354,7 +2357,7 @@ export class SessionManager {
       commands: commands.length ? commands : undefined,
       parentId: sessionId,
       branchId: original.branchId || sessionId,
-      activeLeafId: entryId,
+      activeLeafId: copiedEntries.at(-1)?.id,
       cwd: original.cwd,
       workspaceId: original.workspaceId,
       gitBranch: original.gitBranch,
@@ -2371,7 +2374,7 @@ export class SessionManager {
   /** Fork a session from a specific message index */
   async forkSession(
     sessionId: string,
-    fromMessageIndex?: number,
+    fromMessageIndex?: number | string,
     newTitle?: string,
   ): Promise<Session | null> {
     newTitle = newTitle === undefined ? undefined : this.redactText(newTitle);
@@ -2380,6 +2383,9 @@ export class SessionManager {
       return current ? structuredClone(current) : null;
     });
     if (!original) return null;
+    // Resolve stable IDs against the same serialized snapshot, not a transport's
+    // earlier window which compaction or branch navigation may have replaced.
+    if (typeof fromMessageIndex === 'string') fromMessageIndex = original.messages.findIndex(message => message.id === fromMessageIndex);
     if (fromMessageIndex !== undefined && (!Number.isSafeInteger(fromMessageIndex)
       || fromMessageIndex < 0 || fromMessageIndex >= original.messages.length)) return null;
 
@@ -2394,6 +2400,7 @@ export class SessionManager {
     const sourceCommands = fromMessageIndex === undefined
       ? original.commands ?? []
       : (original.commands ?? []).filter(command => cutoff === undefined || command.timestamp.getTime() <= cutoff);
+    if (sourceCommands.some(command => command.status === 'running')) return null;
     const commandsToCopy = structuredClone(sourceCommands)
       .map(command => ({ ...command, timestamp: new Date(command.timestamp) }));
 
@@ -2534,18 +2541,23 @@ export class SessionManager {
   }
 
   /** Clone a session as an independent root, optionally through one message. */
-  async cloneSession(sessionId: string, newTitle?: string, throughMessageIndex?: number): Promise<Session | null> {
+  async cloneSession(sessionId: string, newTitle?: string, throughMessageIndex?: number | string): Promise<Session | null> {
     newTitle = newTitle === undefined ? undefined : this.redactText(newTitle);
     const original = await this.withSessionMutation(sessionId, async () => {
       const current = this.sessions.get(sessionId);
       return current ? structuredClone(current) : null;
     });
     if (!original) return null;
+    if (typeof throughMessageIndex === 'string') throughMessageIndex = original.messages.findIndex(message => message.id === throughMessageIndex);
     if (throughMessageIndex !== undefined && (!Number.isSafeInteger(throughMessageIndex)
       || throughMessageIndex < 0 || throughMessageIndex >= original.messages.length)) return null;
     const sourceMessages = throughMessageIndex === undefined
       ? original.messages
       : original.messages.slice(0, throughMessageIndex + 1);
+
+    const cutoff = sourceMessages.at(-1)?.timestamp.getTime();
+    if (original.commands?.some(command => command.status === 'running'
+      && (throughMessageIndex === undefined || cutoff === undefined || command.timestamp.getTime() <= cutoff))) return null;
 
     // Deep clone entries and identifiers so edits cannot mutate or branch the source.
     const messageIds = new Map(sourceMessages.map(message => [message.id, crypto.randomUUID()]));

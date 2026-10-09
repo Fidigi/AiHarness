@@ -49,6 +49,12 @@ local draft -> effective configuration -> POST /api/agent/runs
 
 `ChatView` may render one temporary streamed assistant message. Terminal events must replace it with canonical history without duplicates. Reconnection restores run queues, retries, partial text, pending extension interaction, and sequence position.
 
+## History Edits and Live Settings
+
+**Edit from here** stages a persisted user message in the current composer without a server mutation. A visible cancel control restores the previous draft and composer focus; navigation/reload discards the transient target. Only Send forks before that user entry and submits the replacement text on the new related session, preserving the source and excluding the old prompt. Staged input is literal conversation text, not a slash or shell command. **New chat from here** copies a persisted user entry even while its source run continues; neither source Stop nor active-leaf mutation is sent. Server refuses unwritten and running-command sources and locks in-session branch switching while busy.
+
+Reasoning changes persist during streaming and apply at the next model request through Core's live host resolver. **Auto** clears the session override; the in-flight request retains its options and environment precedence remains authoritative.
+
 ## History and Scroll
 
 - Start with the latest bounded window and fetch older pages with `before`.

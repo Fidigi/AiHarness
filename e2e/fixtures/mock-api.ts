@@ -1753,11 +1753,11 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     if (branchMatch && method === 'POST') {
       const source = controller.sessions.find(item => item.id === decodeURIComponent(branchMatch[1]!));
       if (!source) { await fulfillJson(route, { error: 'Session not found' }, 404); return; }
-      const input = body as { messageIndex?: number; messageId?: string; title?: string } | undefined;
+      const input = body as { messageIndex?: number; messageId?: string; before?: boolean; title?: string } | undefined;
       const messageIndex = input?.messageId
         ? source.messages.findIndex(message => message.id === input.messageId)
         : input?.messageIndex;
-      const end = messageIndex === undefined || messageIndex < 0 ? source.messages.length : messageIndex + 1;
+      const end = messageIndex === undefined || messageIndex < 0 ? source.messages.length : messageIndex + (input?.before ? 0 : 1);
       const branched: MockSession = {
         ...structuredClone(source),
         id: `e2e-session-${nextSessionId++}`,

@@ -864,6 +864,58 @@ describe('SessionManager with JSONL Persistence', () => {
       expect(forked?.metadata?.compactionSummary).toBeUndefined();
     });
 
+    it('forks before a durable user entry without copying the old prompt or mutating the source', async () => {
+      const session = await manager.create({ title: 'Edit source' });
+      await manager.addMessage(session.id, { role: 'user', content: 'First' });
+      const firstId = session.activeLeafId!;
+      await manager.addMessage(session.id, { role: 'assistant', content: 'Answer', usage: { totalTokens: 5, costUsd: 0.01 } });
+      const command = await manager.addCommand(session.id, { command: 'pwd', cwd: '/workspace', status: 'completed', output: '/workspace' });
+      await manager.addMessage(session.id, { role: 'user', content: 'Old prompt' });
+      const targetId = session.activeLeafId!;
+      await manager.addMessage(session.id, { role: 'assistant', content: 'Later answer' });
+      const source = structuredClone(session);
+      const forked = await manager.forkSessionAtEntry(session.id, targetId, 'Staged edit', { before: true });
+      expect(forked?.messages.map(message => message.content)).toEqual(['First', 'Answer']);
+      expect(forked?.activeLeafId).toBe(command?.id);
+      expect(forked?.usage).toMatchObject({ totalTokens: 5, costUsd: 0.01 });
+      expect(session).toEqual(source);
+      await manager.addMessage(forked!.id, { role: 'user', content: 'Edited prompt' });
+      expect(forked?.messages.at(-1)?.parentMessageId).toBe(command?.id);
+      const empty = await manager.forkSessionAtEntry(session.id, firstId, 'Empty edit', { before: true });
+      expect(empty?.messages).toEqual([]);
+      expect(empty?.activeLeafId).toBeUndefined();
+      const reloaded = new SessionManager({ store: new JsonlSessionStore(tempDir) });
+      await reloaded.loadAllSessions();
+      expect(reloaded.get(forked!.id)?.messages.map(message => message.content)).toEqual(['First', 'Answer', 'Edited prompt']);
+      expect(reloaded.get(empty!.id)?.messages).toEqual([]);
+      expect(reloaded.get(session.id)?.messages).toEqual(source.messages);
+    });
+
+    it('resolves stable copy targets against the serialized source snapshot after context changes', async () => {
+      const session = await manager.create();
+      await manager.addMessage(session.id, { role: 'user', content: 'Old root' });
+      const removedId = session.activeLeafId!;
+      await manager.addMessage(session.id, { role: 'assistant', content: 'Old answer' });
+      await manager.addMessage(session.id, { role: 'user', content: 'Retained target' });
+      const targetId = session.activeLeafId!;
+      await manager.applyCompaction(session.id, 'Summary', targetId);
+      expect((await manager.forkSession(session.id, targetId))?.messages.map(message => message.content))
+        .toEqual(['Retained target']);
+      expect((await manager.cloneSession(session.id, undefined, targetId))?.messages.map(message => message.content))
+        .toEqual(['Retained target']);
+      expect(await manager.forkSession(session.id, removedId)).toBeNull();
+      expect(await manager.cloneSession(session.id, undefined, removedId)).toBeNull();
+    });
+
+    it('refuses to copy a running command into a historical edit', async () => {
+      const session = await manager.create();
+      await manager.addCommand(session.id, { command: 'pending', cwd: '/workspace', status: 'running', output: '' });
+      await manager.addMessage(session.id, { role: 'user', content: 'Target' });
+      const count = manager.list().length;
+      expect(await manager.forkSessionAtEntry(session.id, session.activeLeafId!, undefined, { before: true })).toBeNull();
+      expect(manager.list()).toHaveLength(count);
+    });
+
     it('branches in place while preserving the abandoned descendants in the durable tree', async () => {
       const session = await manager.create({ title: 'Original' });
       await manager.addMessage(session.id, { role: 'user', content: 'First' });

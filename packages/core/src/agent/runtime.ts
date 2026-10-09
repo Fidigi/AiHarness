@@ -435,16 +435,19 @@ export class AgentRuntime {
   }
 
   stop(runId: string): AgentRunSnapshot {
+    const pending = this.runs.get(runId);
+    if (pending?.controller.signal.aborted && !pending.settled) {
+      return this.redactJson({ ...cloneSnapshot(pending.snapshot), phase: 'stopped' });
+    }
     const run = this.requireActive(runId);
     run.controller.abort();
     this.cancelInteractions(run);
     run.snapshot.retry = undefined;
     run.snapshot.activeTool = undefined;
     run.snapshot.extensionRequest = undefined;
-    // The HTTP acknowledgement can report stopped immediately, but the journal's
-    // terminal event must follow durable interrupted-tool accounting and cleanup.
-    run.snapshot.phase = 'stopped';
-    return this.redactJson(cloneSnapshot(run.snapshot));
+    // Report the cancellation acknowledgement without marking replay/state as
+    // terminal before durable interrupted-tool accounting has settled.
+    return this.redactJson({ ...cloneSnapshot(run.snapshot), phase: 'stopped' });
   }
 
   private async execute(
@@ -859,6 +862,7 @@ export class AgentRuntime {
     run: ActiveRun,
     request: ExtensionInteractionRequest,
   ): Promise<ExtensionInteractionResponse> {
+    if (run.controller.signal.aborted) return Promise.resolve({ cancelled: true });
     if (run.snapshot.extensionRequest) throw new Error('An extension interaction is already pending for this run.');
     const normalized = interactionRequest(request, this.redactText);
     const snapshot: ExtensionInteractionSnapshot = {
@@ -921,7 +925,7 @@ export class AgentRuntime {
   private requireActive(runId: string): ActiveRun {
     const run = this.runs.get(runId);
     if (!run) throw new Error('Exécution introuvable.');
-    if (['completed', 'failed', 'stopped'].includes(run.snapshot.phase)) {
+    if (run.controller.signal.aborted || ['completed', 'failed', 'stopped'].includes(run.snapshot.phase)) {
       throw new Error('Cette exécution est terminée.');
     }
     return run;

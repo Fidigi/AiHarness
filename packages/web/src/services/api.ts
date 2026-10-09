@@ -1198,7 +1198,7 @@ export async function deleteSession(sessionId: string, cascade = false): Promise
 /** Fork a session from a specific message index */
 export async function forkSession(
   sessionId: string,
-  options?: { messageIndex?: number; messageId?: string; title?: string },
+  options?: { messageIndex?: number; messageId?: string; before?: boolean; title?: string },
 ): Promise<ApiResponse<{ id: string; title?: string }>> {
   try {
     const response = await apiFetch(`${API_BASE}/sessions/${sessionId}/fork`, {

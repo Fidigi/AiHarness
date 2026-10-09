@@ -100,6 +100,8 @@ export const frLocale: LocalePlugin = {
     'session.cost': 'Coût',
     'session.export': 'Télécharger l’historique complet',
     'session.editFromHere': 'Modifier depuis ici',
+    'session.editStaged': 'Modification de l’historique : la branche sera créée uniquement à l’envoi.',
+    'session.cancelEdit': 'Annuler la modification',
     'session.newFromHere': 'Nouveau chat depuis ici',
     'session.branchFailed': 'Impossible de créer la branche.',
     'session.cloneFailed': 'Impossible de cloner la conversation.',

@@ -886,6 +886,10 @@ Default shortcuts:
 
 Global shortcuts do not capture ordinary input in an editable field. Their configuration and panel visibility are validated then stored in browser preferences.
 
+### Editing and Copying History
+
+**Edit from here** loads a saved user message into the composer without changing history. **Cancel history edit** restores your previous draft; reloading or leaving the conversation creates no branch. Only **Send** creates a branch before the selected message and submits your edited text there, keeping the original conversation unchanged. **New chat from here** can copy a saved user message while its source agent continues. Unwritten streamed messages and running shell-command sources cannot be copied; switching the active branch of a running session remains blocked.
+
 ### Live Reasoning
 
 The composer's **Thinking level** can be changed while the agent runs. The saved choice applies to the next model request, including tool continuations and queued follow-ups; the request already streaming is unchanged. Choose **Auto** to restore inherited settings. This neither stops the agent nor changes its model; environment-imposed settings remain authoritative.

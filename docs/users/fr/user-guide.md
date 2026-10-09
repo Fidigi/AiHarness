@@ -891,6 +891,10 @@ Raccourcis par défaut :
 
 Les raccourcis globaux ne capturent pas la saisie ordinaire dans un champ éditable. Leur configuration et la visibilité des panneaux sont validées puis conservées dans les préférences du navigateur.
 
+### Modifier et copier l’historique
+
+**Modifier depuis ici** charge un message utilisateur enregistré dans le composer sans changer l’historique. **Annuler la modification** restaure votre précédent brouillon ; recharger ou quitter la conversation ne crée aucune branche. Seul **Envoyer** crée une branche avant le message sélectionné et y soumet votre texte modifié, sans altérer la conversation originale. **Nouveau chat depuis ici** peut copier un message enregistré pendant que l’agent source continue. Les messages diffusés non enregistrés et les commandes shell en cours ne peuvent pas être copiés ; changer la branche active d’une session en cours reste bloqué.
+
 ### Raisonnement pendant un run
 
 Le **Thinking level** du composer peut être modifié pendant l’exécution. Le choix enregistré s’applique au prochain appel modèle, y compris après un outil ou pour un follow-up ; l’appel déjà en cours reste inchangé. **Auto** restaure les réglages hérités. Cela n’arrête pas l’agent et ne change pas son modèle ; les valeurs imposées par l’environnement restent prioritaires.
