@@ -127,11 +127,11 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
     await options.onTurnStart?.(round);
     const tools = options.resolveTools?.() ?? defaultTools;
     const enabledToolNames = new Set(tools.map(tool => tool.name.toLowerCase()));
-    const startedAt = Date.now();
+    const startedAt = performance.now();
     const response = await options.streamTurn(messages, tools, round);
     throwIfAborted();
     if (response.usage) await options.onUsage?.(response, round);
-    const durationMs = Date.now() - startedAt;
+    const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
     await options.onAssistantResponse?.(response, round, durationMs);
     const toolCalls = response.toolCalls ?? [];
 
@@ -174,7 +174,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
     for (const call of toolCalls) {
       throwIfAborted();
       await options.onToolCall?.(call);
-      const toolStartedAt = Date.now();
+      const toolStartedAt = performance.now();
       let content: string;
       let isError = false;
       let activatedTools: string[] | undefined;
@@ -235,7 +235,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       const fullContent = content;
       const truncated = content.length > maxToolResultLength;
       if (truncated) content = `${content.slice(0, maxToolResultLength)}\n[Résultat tronqué — sortie complète disponible]`;
-      const durationMs = Date.now() - toolStartedAt;
+      const durationMs = Math.max(0, Math.round(performance.now() - toolStartedAt));
       const usage = (resultMetadata?.codemode as CodemodeDetails | undefined)?.usage;
       await options.sessionManager.addMessage(options.sessionId, {
         role: 'tool',

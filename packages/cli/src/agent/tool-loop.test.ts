@@ -11,6 +11,27 @@ async function setup() {
 }
 
 describe('runToolLoop', () => {
+  it('keeps provider/tool durations valid when the wall clock regresses', async () => {
+    const { sessionManager, session, extensionRegistry } = await setup();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    try {
+      await extensionRegistry.load('clock', api => api.registerTool({ name: 'clock', description: 'Clock regression',
+        execute: () => { clock.mockReturnValue(800); return { content: 'done' }; } }));
+      const streamTurn = vi.fn().mockImplementationOnce(async () => {
+        clock.mockReturnValue(900);
+        return { content: '', toolCalls: [{ id: 'clock-call', name: 'clock', input: {} }] };
+      }).mockImplementationOnce(async () => { clock.mockReturnValue(700); return { content: 'Final' }; });
+      const result = await runToolLoop({ provider: 'mock', sessionId: session.id, sessionManager, extensionRegistry,
+        streamTurn, toolContext: { sessionManager, currentSessionId: session.id, notify: vi.fn() } });
+      expect(result).toBe('Final');
+      const timed = session.messages.filter(message => message.durationMs !== undefined);
+      expect(timed).toHaveLength(3);
+      for (const message of timed) {
+        expect(message.durationMs).toBeGreaterThanOrEqual(0);
+        expect(Number.isSafeInteger(message.durationMs)).toBe(true);
+      }
+    } finally { clock.mockRestore(); }
+  });
   it('injects schemas, executes a tool, persists its result, and resumes the model', async () => {
     const { sessionManager, session, extensionRegistry } = await setup();
     await extensionRegistry.load('math', api => {

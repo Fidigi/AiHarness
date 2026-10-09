@@ -15,6 +15,20 @@ function run(code: string, extra: Partial<Parameters<typeof runCodemode>[0]> = {
 }
 
 describe('bounded QuickJS codemode', () => {
+  it('measures outer and nested elapsed time independently of wall-clock regression', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    try {
+      const result = await run('await tools.read({}); return "done";', {
+        execute: async () => { clock.mockReturnValue(500); return { content: 'document' }; },
+      });
+      expect(result.isError).toBe(false);
+      expect(result.details?.nestedCalls).toHaveLength(1);
+      for (const duration of [result.details?.durationMs, result.details?.nestedCalls[0]?.durationMs]) {
+        expect(duration).toBeGreaterThanOrEqual(0);
+        expect(Number.isSafeInteger(duration)).toBe(true);
+      }
+    } finally { clock.mockRestore(); }
+  });
   it('self-tests isolation without granting ambient Node/network/timer capabilities', async () => {
     expect(await testCodemodeSandbox()).toMatchObject({ state: 'passed', engine: 'QuickJS' });
     const result = await run('return [typeof process, typeof require, typeof fetch, typeof setTimeout, typeof __hostCall];');

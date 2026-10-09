@@ -51,7 +51,7 @@ describe.each(manifest.processScenarios)('$id', scenario => {
     const result = await runProcessScenario(scenario);
     try {
       const fixtures = await assertProcessScenario(scenario, result);
-      expect(result.code).toBe(scenario.expected.exitCode);
+      expect(result.code, `${scenario.id}: stderr=${result.stderr.slice(-4_000)}`).toBe(scenario.expected.exitCode);
       expect(fixtures.actual).toEqual(fixtures.expected);
       if (scenario.expected.stdout.endsWith('.jsonl')) {
         expect(result.stdout.endsWith('\n')).toBe(result.stdout.length > 0);

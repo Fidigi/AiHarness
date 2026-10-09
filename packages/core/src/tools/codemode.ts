@@ -115,7 +115,7 @@ export async function runCodemode(options: RunCodemodeOptions): Promise<Extensio
   const initialStore = boundedCodemodeStore(options.store ?? {});
   if (activeSandboxes >= MAX_ACTIVE_SANDBOXES) throw new Error('Codemode sandbox capacity exceeded.');
   const controller = new AbortController();
-  const started = Date.now();
+  const started = performance.now();
   const nestedCalls: CodemodeDetails['nestedCalls'] = [];
   const parentId = options.context.toolCallId ?? randomUUID();
   const models = options.context.provider ? new SpecializedModels(options.context.provider, redact, options.context.beforeSpecializedModel) : undefined;
@@ -181,7 +181,7 @@ export async function runCodemode(options: RunCodemodeOptions): Promise<Extensio
         try { safeStore = boundedCodemodeStore(JSON.parse(redact(JSON.stringify(store)))); }
         catch { error = 'Invalid codemode store.'; }
       }
-      const durationMs = Date.now() - started;
+      const durationMs = Math.max(0, Math.round(performance.now() - started));
       resolve({
         content: `Script ${error ? 'failed' : 'completed'} (${durationMs} ms)\n${safeOutput}${error ? `\nScript error: ${redact(error).slice(0, 2_000)}` : ''}`,
         isError: Boolean(error),
@@ -218,7 +218,7 @@ export async function runCodemode(options: RunCodemodeOptions): Promise<Extensio
         const task = async () => {
           if (settled) return;
           active++;
-          const callStarted = Date.now();
+          const callStarted = performance.now();
           let value: unknown;
           let error: string | undefined;
           try {
@@ -268,13 +268,13 @@ export async function runCodemode(options: RunCodemodeOptions): Promise<Extensio
             resultBytes += Buffer.byteLength(serialized);
             if (resultBytes > limits.resultBytes) throw new Error('Nested result limit exceeded.');
             if (!settled) {
-              if (activity) { activity.state = 'completed'; activity.durationMs = Date.now() - callStarted; progress(activity); }
+              if (activity) { activity.state = 'completed'; activity.durationMs = Math.max(0, Math.round(performance.now() - callStarted)); progress(activity); }
               worker.postMessage({ type: 'response', id: message.id, value: serialized });
             }
           } catch (failure) {
             error = redact(failure instanceof Error ? failure.message : 'Nested call failed.').slice(0, 2_000);
             if (!settled) {
-              if (activity) { activity.state = 'failed'; activity.isError = true; activity.durationMs = Date.now() - callStarted; progress(activity); }
+              if (activity) { activity.state = 'failed'; activity.isError = true; activity.durationMs = Math.max(0, Math.round(performance.now() - callStarted)); progress(activity); }
               worker.postMessage({ type: 'response', id: message.id, error });
             }
           } finally {
