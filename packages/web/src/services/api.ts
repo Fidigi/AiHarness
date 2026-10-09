@@ -2100,6 +2100,12 @@ export function updateToolSettings(input: {
   return jsonApi('/tools', { method: 'PATCH', body: JSON.stringify(input) });
 }
 
+export function saveNewSessionDefault(
+  input: ({ kind: 'model'; provider: string; model: string } | { kind: 'thinking'; thinking: NonNullable<import('@ai-harness/core').Session['thinking']> }) & { projectId?: string },
+): Promise<ApiResponse<{ values: Record<string, unknown>; overridden: string[]; effective: EffectiveConfiguration }>> {
+  return jsonApi('/configuration/defaults', { method: 'PATCH', body: JSON.stringify(input) });
+}
+
 export function getConfigurationScope(scope: 'global' | 'project', scopeId?: string): Promise<ApiResponse<{ values: Record<string, unknown> }>> {
   const parameters = new URLSearchParams({ scope });
   if (scopeId) parameters.set('scopeId', scopeId);

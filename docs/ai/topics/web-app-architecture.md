@@ -55,6 +55,8 @@ local draft -> effective configuration -> POST /api/agent/runs
 
 Reasoning changes persist during streaming and apply at the next model request through Core's live host resolver. **Auto** clears the session override; the in-flight request retains its options and environment precedence remains authoritative.
 
+Open the composer Model/Thinking scope disclosures to save the current model/provider or reasoning independently as a global new-session default. The save does not patch history, change a running request or enqueue a message. Project/environment overrides produce an explicit warning, including when a current session override hides them. Fresh drafts wait for their own effective configuration before sending and inherit its provider/model/thinking. Settings offers all seven reasoning levels plus inheritance, sends only dirty keys and disables saves when the settings read fails.
+
 ## History and Scroll
 
 - Start with the latest bounded window and fetch older pages with `before`.
@@ -121,6 +123,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 - `packages/web/src/services/{push,pwa,keyboard,notices}.test.ts` — global browser services
 - `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including MCP OAuth sign-in/paste/cancel/logout UI state, minimal-config-free MCP Test requests and identity/cwd/capability/tool reports, locked/redacted inventory, atomic import/replacement, fresh-project trust-plus-first-write, grouped activation, exposure, focus, undo and failure reconciliation
 - `e2e/accessibility.spec.ts`, `e2e/performance.spec.ts`, and `e2e/visual.spec.ts` — a11y, bounds and baselines, including desktop/mobile Light/Dark workspace creation dialogs
+- `e2e/defaults.spec.ts` — independent composer/Settings saves, fresh draft inheritance, unreadable settings, precedence warnings and reviewed responsive axe/overflow baselines
 - `e2e/live-server.spec.ts` — real browser-to-server smoke path
 
 ## Common Changes

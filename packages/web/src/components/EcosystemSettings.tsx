@@ -414,22 +414,40 @@ export function SkillRegistryPanel() {
 export function DefaultModelSettings() {
   const { t } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
-  const [scope, setScope] = useState<'global' | 'project'>('project');
-  const [values, setValues] = useState({ provider: '', model: '', toolPreset: '' });
+  const [scope, setScope] = useState<'global' | 'project'>(workspace?.id ? 'project' : 'global');
+  const [values, setValues] = useState({ provider: '', model: '', thinking: '', toolPreset: '' });
+  const [dirty, setDirty] = useState<Array<keyof typeof values>>([]);
+  const [busy, setBusy] = useState(true);
+  const [ready, setReady] = useState(false);
+  const [overrideWarning, setOverrideWarning] = useState(false);
+  const change = (key: keyof typeof values, value: string) => {
+    setValues(current => ({ ...current, [key]: value }));
+    setDirty(current => [...new Set([...current, key])]);
+  };
   const [effective, setEffective] = useState<Awaited<ReturnType<typeof getEffectiveConfiguration>>['data']>();
   const scopeId = scope === 'project' ? workspace?.id : undefined;
   useEffect(() => {
-    void Promise.all([getConfigurationScope(scope, scopeId), getEffectiveConfiguration(scopeId)]).then(([configured, resolved]) => {
-      if (!configured.success || !configured.data) { error(configured.error); return; }
+    let cancelled = false;
+    setBusy(true); setReady(false); setDirty([]); setOverrideWarning(false);
+    if (scope === 'project' && !scopeId) { setScope('global'); return; }
+    void Promise.all([getConfigurationScope(scope, scopeId), getEffectiveConfiguration(workspace?.id)]).then(([configured, resolved]) => {
+      if (cancelled) return;
+      setBusy(false);
+      if (!configured.success || !configured.data || !resolved.success || !resolved.data) {
+        error(configured.error || resolved.error); return;
+      }
+      setReady(true);
       setValues({
         provider: typeof configured.data.values.provider === 'string' ? configured.data.values.provider : '',
         model: typeof configured.data.values.model === 'string' ? configured.data.values.model : '',
+        thinking: typeof configured.data.values.thinking === 'string' ? configured.data.values.thinking : '',
         toolPreset: typeof configured.data.values.toolPreset === 'string' ? configured.data.values.toolPreset : '',
       });
-      if (resolved.success) setEffective(resolved.data);
+      setEffective(resolved.data);
     });
-  }, [scope, scopeId]);
-  const environmentLocked = (key: 'provider' | 'model' | 'toolPreset') => effective?.provenance[key]?.scope === 'environment';
+    return () => { cancelled = true; };
+  }, [scope, scopeId, workspace?.id]);
+  const environmentLocked = (key: keyof typeof values) => effective?.provenance[key]?.scope === 'environment';
   return <section className="settings-section" id="defaults">
     <h3>{t('settings.defaults.title')}</h3>
     <p className="settings-help">{t('settings.defaults.help')}</p>
@@ -439,34 +457,46 @@ export function DefaultModelSettings() {
         model: String(effective.values.model ?? '—'),
         preset: String(effective.values.toolPreset ?? 'default'),
       })}
-      {' · '}{['provider', 'model', 'toolPreset'].map(key => `${key}: ${effective.provenance[key as keyof typeof effective.provenance]?.source ?? 'built-in'}`).join(' · ')}
+      {' · '}{['provider', 'model', 'thinking', 'toolPreset'].map(key => `${key}: ${effective.provenance[key as keyof typeof effective.provenance]?.source ?? 'built-in'}`).join(' · ')}
     </p>}
     {scope === 'project' && Object.values(values).some(value => !value) && <p className="status-warning">{t('settings.defaults.inheritanceWarning')}</p>}
-    <label>{t('settings.scope')}<select value={scope} onChange={event => setScope(event.target.value as typeof scope)}>
+    {overrideWarning && <p role="status" className="status-warning">{t('settings.defaults.overrideWarning')}</p>}
+    {!ready && !busy && <p role="alert">{t('settings.defaults.failed')}</p>}
+    <label>{t('settings.scope')}<select value={scope} disabled={busy} onChange={event => setScope(event.target.value as typeof scope)}>
       <option value="global">{t('chat.scope.global')}</option><option value="project" disabled={!workspace?.id}>{t('chat.scope.project')}</option>
     </select></label>
-    <label>{t('settings.provider')}<input value={values.provider} disabled={environmentLocked('provider')}
+    <label>{t('settings.provider')}<input value={values.provider} disabled={busy || !ready || environmentLocked('provider')}
       placeholder={`${t('chat.setting.auto')} · ${String(effective?.values.provider ?? '—')}`}
-      onChange={event => setValues(current => ({ ...current, provider: event.target.value }))} /></label>
-    <label>{t('settings.model')}<input value={values.model} disabled={environmentLocked('model')}
+      onChange={event => change('provider', event.target.value)} /></label>
+    <label>{t('settings.model')}<input value={values.model} disabled={busy || !ready || environmentLocked('model')}
       placeholder={`${t('chat.setting.auto')} · ${String(effective?.values.model ?? '—')}`}
-      onChange={event => setValues(current => ({ ...current, model: event.target.value }))} /></label>
-    <label>{t('settings.tools.defaultPreset')}<select value={values.toolPreset} disabled={environmentLocked('toolPreset')}
-      onChange={event => setValues(current => ({ ...current, toolPreset: event.target.value }))}>
+      onChange={event => change('model', event.target.value)} /></label>
+    <label>{t('chat.thinking')}<select value={values.thinking} disabled={busy || !ready || environmentLocked('thinking')}
+      onChange={event => change('thinking', event.target.value)}>
+      <option value="">{t('chat.setting.auto')} · {String(effective?.values.thinking ?? 'off')}</option>
+      {['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map(level => <option key={level}>{level}</option>)}
+    </select></label>
+    <label>{t('settings.tools.defaultPreset')}<select value={values.toolPreset} disabled={busy || !ready || environmentLocked('toolPreset')}
+      onChange={event => change('toolPreset', event.target.value)}>
       <option value="">{t('chat.setting.auto')} · {String(effective?.values.toolPreset ?? 'default')}</option>
       {['configured', 'chat-only', 'read-only', 'default', 'full'].map(preset => <option key={preset}>{preset}</option>)}
     </select></label>
-    <button type="button" disabled={scope === 'project' && !scopeId} onClick={async () => {
-      const result = await updateConfigurationScope(scope, {
-        provider: values.provider || null,
-        model: values.model || null,
-        toolPreset: values.toolPreset || null,
-      }, scopeId);
-      if (result.success) {
-        publishNotice(t('settings.defaults.saved'), { level: 'success' });
-        const resolved = await getEffectiveConfiguration(scopeId);
-        if (resolved.success) setEffective(resolved.data);
-      } else error(result.error);
+    <button type="button" disabled={busy || !ready || !dirty.length || scope === 'project' && !scopeId} onClick={async () => {
+      setBusy(true);
+      try {
+        const changed = dirty.filter(key => !environmentLocked(key));
+        const result = await updateConfigurationScope(scope,
+          Object.fromEntries(changed.map(key => [key, values[key] || null])), scopeId);
+        if (!result.success) { error(result.error); return; }
+        setDirty([]);
+        const resolved = await getEffectiveConfiguration(workspace?.id);
+        if (resolved.success && resolved.data) {
+          setEffective(resolved.data);
+          const overridden = scope === 'global' && changed.some(key => ['project', 'environment'].includes(resolved.data!.provenance[key]?.scope ?? ''));
+          setOverrideWarning(overridden);
+          publishNotice(t(overridden ? 'settings.defaults.overrideWarning' : 'settings.defaults.saved'), { level: overridden ? 'warning' : 'success' });
+        } else error(resolved.error);
+      } finally { setBusy(false); }
     }}>{t('common.save')}</button>
   </section>;
 }

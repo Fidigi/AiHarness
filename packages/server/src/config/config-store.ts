@@ -1,4 +1,5 @@
-import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
+import { atomicWriteStableFile, readBoundedResourceText } from '@ai-harness/core';
 import path from 'node:path';
 import type {
   ConfigurationScope,
@@ -20,6 +21,9 @@ const EMPTY_FILE: ConfigurationFile = {
   sessions: {},
 };
 
+const MAX_CONFIGURATION_BYTES = 4 * 1024 * 1024;
+const mutations = new Map<string, Promise<void>>();
+
 const SECRET_KEY = /(?:secret|token|password|api[-_]?key|authorization|credential)/i;
 const STRING_KEYS = new Set<keyof ScopedConfigurationValues>([
   'provider', 'model', 'thinking', 'toolPreset', 'systemPrompt', 'codemodeMode',
@@ -27,6 +31,11 @@ const STRING_KEYS = new Set<keyof ScopedConfigurationValues>([
 const ARRAY_KEYS = new Set<keyof ScopedConfigurationValues>([
   'enabledModels', 'enabledSkills', 'enabledPlugins', 'enabledTools',
 ]);
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+    && [Object.prototype, null].includes(Object.getPrototypeOf(value));
+}
 
 function cloneFile(value: ConfigurationFile): ConfigurationFile {
   return structuredClone(value);
@@ -37,7 +46,7 @@ function invalidConfiguration(message: string): never {
 }
 
 function validateValues(input: unknown): ScopedConfigurationValues {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) invalidConfiguration('Configuration invalide.');
+  if (!isPlainRecord(input)) invalidConfiguration('Configuration invalide.');
   const result: ScopedConfigurationValues = {};
   for (const [rawKey, value] of Object.entries(input as Record<string, unknown>)) {
     if (SECRET_KEY.test(rawKey)) invalidConfiguration('Les secrets ne sont pas acceptés dans la configuration.');
@@ -71,7 +80,7 @@ function validateValues(input: unknown): ScopedConfigurationValues {
 }
 
 function validatePatchValues(input: unknown): Record<string, unknown> {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) invalidConfiguration('Configuration invalide.');
+  if (!isPlainRecord(input)) invalidConfiguration('Configuration invalide.');
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
     if (value !== null) {
@@ -93,66 +102,80 @@ function validatePatchValues(input: unknown): Record<string, unknown> {
 export class ConfigurationStore {
   private data: ConfigurationFile = cloneFile(EMPTY_FILE);
   private loaded = false;
-  private writeQueue: Promise<void> = Promise.resolve();
-
   constructor(private readonly filePath: string) {}
 
-  async load(): Promise<void> {
+  private async read(): Promise<{ data: ConfigurationFile; source?: string }> {
     try {
-      const parsed = JSON.parse(await readFile(this.filePath, 'utf8')) as Partial<ConfigurationFile>;
-      if (parsed.version !== 1) throw new Error('Version de configuration non prise en charge.');
-      this.data = {
-        version: 1,
-        global: validateValues(parsed.global ?? {}),
-        projects: Object.fromEntries(Object.entries(parsed.projects ?? {}).map(([id, values]) => [id, validateValues(values)])),
-        sessions: Object.fromEntries(Object.entries(parsed.sessions ?? {}).map(([id, values]) => [id, validateValues(values)])),
+      const source = await readBoundedResourceText(this.filePath, MAX_CONFIGURATION_BYTES);
+      const parsed = JSON.parse(source) as Partial<ConfigurationFile>;
+      if (!parsed || Array.isArray(parsed) || parsed.version !== 1
+        || Object.keys(parsed).some(key => !['version', 'global', 'projects', 'sessions'].includes(key))) {
+        throw new Error('Unsupported configuration version.');
+      }
+      const layer = (input: unknown): Record<string, ScopedConfigurationValues> => {
+        if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length > 10_000) {
+          throw new Error('Invalid configuration layers.');
+        }
+        return Object.fromEntries(Object.entries(input).map(([id, values]) => {
+          this.validateScope('project', id);
+          return [id, validateValues(values)];
+        }));
       };
+      return { source, data: { version: 1, global: validateValues(parsed.global ?? {}),
+        projects: layer(parsed.projects ?? {}), sessions: layer(parsed.sessions ?? {}) } };
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      this.data = cloneFile(EMPTY_FILE);
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { data: cloneFile(EMPTY_FILE) };
+      throw Object.assign(new Error('Configuration cannot be read safely.'), { status: 409, code: 'CONFIGURATION_UNREADABLE' });
     }
-    this.loaded = true;
+  }
+
+  async load(): Promise<void> {
+    return this.serialise(async () => {
+      const snapshot = await this.read();
+      this.data = snapshot.data;
+      this.loaded = true;
+    });
   }
 
   get(scope: ConfigurationScope, scopeId?: string): ScopedConfigurationValues {
     this.assertLoaded();
+    this.validateScope(scope, scopeId);
     if (scope === 'global') return structuredClone(this.data.global);
-    if (!scopeId) invalidConfiguration(`scopeId requis pour la portée ${scope}.`);
     return structuredClone(scope === 'project'
-      ? this.data.projects[scopeId] ?? {}
-      : this.data.sessions[scopeId] ?? {});
+      ? this.data.projects[scopeId!] ?? {}
+      : this.data.sessions[scopeId!] ?? {});
   }
 
   async patch(scope: ConfigurationScope, values: unknown, scopeId?: string): Promise<ScopedConfigurationValues> {
     this.assertLoaded();
     const patch = validatePatchValues(values);
-    if (scope !== 'global' && (!scopeId || scopeId.length > 2_000)) {
-      invalidConfiguration(`scopeId requis pour la portée ${scope}.`);
-    }
-    const target: ScopedConfigurationValues = scope === 'global'
-      ? { ...this.data.global }
-      : scope === 'project' ? { ...(this.data.projects[scopeId!] ?? {}) }
-        : { ...(this.data.sessions[scopeId!] ?? {}) };
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === null) delete (target as Record<string, unknown>)[key];
-      else Object.assign(target, { [key]: value });
-    }
-    if (scope === 'global') this.data.global = target;
-    else if (scope === 'project') this.data.projects[scopeId!] = target;
-    else this.data.sessions[scopeId!] = target;
-    await this.persist();
-    return this.get(scope, scopeId);
+    this.validateScope(scope, scopeId);
+    return this.mutate(scope, scopeId, target => {
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null) delete (target as Record<string, unknown>)[key];
+        else Object.assign(target, { [key]: value });
+      }
+      return target;
+    });
   }
 
   async replace(scope: ConfigurationScope, values: unknown, scopeId?: string): Promise<ScopedConfigurationValues> {
     this.assertLoaded();
     const replacement = validateValues(values);
-    if (scope !== 'global' && !scopeId) invalidConfiguration(`scopeId requis pour la portée ${scope}.`);
-    if (scope === 'global') this.data.global = replacement;
-    else if (scope === 'project') this.data.projects[scopeId!] = replacement;
-    else this.data.sessions[scopeId!] = replacement;
-    await this.persist();
-    return this.get(scope, scopeId);
+    this.validateScope(scope, scopeId);
+    return this.mutate(scope, scopeId, () => replacement);
+  }
+
+  /** Serialized relative mutation against the fresh scope and global base.
+   * The callback is synchronous and receives private copies; invalid results
+   * and unchanged values are never published to disk.
+   */
+  async update(scope: ConfigurationScope,
+    transform: (target: ScopedConfigurationValues, globalBase: ScopedConfigurationValues) => ScopedConfigurationValues,
+    scopeId?: string): Promise<ScopedConfigurationValues> {
+    this.assertLoaded();
+    this.validateScope(scope, scopeId);
+    return this.mutate(scope, scopeId, transform);
   }
 
   effective(input: {
@@ -187,17 +210,52 @@ export class ConfigurationStore {
     return { values, provenance };
   }
 
-  private persist(): Promise<void> {
-    const snapshot = cloneFile(this.data);
-    const operation = this.writeQueue.then(async () => {
-      await mkdir(path.dirname(this.filePath), { recursive: true, mode: 0o700 });
-      const temporary = `${this.filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
-      await writeFile(temporary, `${JSON.stringify(snapshot, null, 2)}\n`, { mode: 0o600 });
-      await rename(temporary, this.filePath);
-      await chmod(this.filePath, 0o600);
+  private validateScope(scope: ConfigurationScope, id?: string): void {
+    if (!['global', 'project', 'session'].includes(scope)
+      || (scope !== 'global' && (!id || id.length > 2_000 || /[\u0000-\u001f\u007f]/.test(id)
+        || ['__proto__', 'prototype', 'constructor'].includes(id)))) invalidConfiguration('Invalid configuration scope.');
+  }
+
+  private serialise<T>(operation: () => Promise<T>): Promise<T> {
+    const key = path.resolve(this.filePath);
+    const result = (mutations.get(key) ?? Promise.resolve()).then(operation);
+    const queued = result.then(() => undefined, () => undefined);
+    mutations.set(key, queued);
+    void queued.then(() => { if (mutations.get(key) === queued) mutations.delete(key); });
+    return result;
+  }
+
+  private mutate(scope: ConfigurationScope, id: string | undefined,
+    update: (target: ScopedConfigurationValues, globalBase: ScopedConfigurationValues) => ScopedConfigurationValues): Promise<ScopedConfigurationValues> {
+    return this.serialise(async () => {
+      const key = path.resolve(this.filePath);
+      // Fresh read, serialized by pathname across service generations. Never
+      // replace unreadable settings or publish an uncommitted value in memory.
+      const before = await this.read();
+      const snapshot = before.data;
+      const previous = scope === 'global' ? snapshot.global
+        : (scope === 'project' ? snapshot.projects[id!] : snapshot.sessions[id!]) ?? {};
+      const target = validateValues(update(structuredClone(previous),
+        structuredClone(scope === 'global' ? {} : snapshot.global)));
+      if (JSON.stringify(target) === JSON.stringify(previous)) {
+        this.data = snapshot;
+        return structuredClone(target);
+      }
+      if (scope === 'global') snapshot.global = target;
+      else if (scope === 'project') snapshot.projects[id!] = target;
+      else snapshot.sessions[id!] = target;
+      await mkdir(path.dirname(key), { recursive: true, mode: 0o700 });
+      await atomicWriteStableFile(key, `${JSON.stringify(snapshot, null, 2)}\n`, {
+        overwrite: true, mode: 0o600, maxBytes: MAX_CONFIGURATION_BYTES,
+        beforeCommit: async () => {
+          if ((await this.read()).source !== before.source) {
+            throw Object.assign(new Error('Configuration changed before commit.'), { status: 409, code: 'CONFIGURATION_CHANGED' });
+          }
+        },
+      });
+      this.data = snapshot;
+      return structuredClone(target);
     });
-    this.writeQueue = operation.catch(() => undefined);
-    return operation;
   }
 
   private assertLoaded(): void {

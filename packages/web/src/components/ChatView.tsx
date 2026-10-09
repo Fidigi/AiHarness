@@ -38,6 +38,7 @@ import {
   respondToExtensionInteraction,
   runExtensionCommand,
   searchFiles,
+  saveNewSessionDefault,
   startAgentRun,
   startCommand,
   stopAgentRun,
@@ -214,7 +215,11 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const sessions = useSessionStore(state => state.sessions);
   const currentSession = sessions.find(session => session.id === id);
   const workspace = useSessionStore(state => state.workspace);
-  const activeProviderType = useSessionStore(state => state.providers.active);
+  const selectedProviderType = useSessionStore(state => state.providers.active);
+  const [effectiveConfiguration, setEffectiveConfiguration] = useState<EffectiveConfiguration>();
+  const configurationKey = `${workspace?.id ?? ''}:${currentSession?.id ?? ''}`;
+  const [configurationReadyFor, setConfigurationReadyFor] = useState<string>();
+  const activeProviderType = (currentSession?.draft ? effectiveConfiguration?.values.provider : undefined) as ProviderType | undefined ?? selectedProviderType;
   const providerConfig = useSessionStore(state => state.providers.available[activeProviderType]);
   const modelCatalog = useSessionStore(state => state.providers.catalog);
   const currentRun = useSessionStore(state => id ? state.runs[id] : undefined);
@@ -261,7 +266,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
   const [compacting, setCompacting] = useState(false);
   const [automaticCompacting, setAutomaticCompacting] = useState(false);
-  const [effectiveConfiguration, setEffectiveConfiguration] = useState<EffectiveConfiguration>();
+  const [savingDefault, setSavingDefault] = useState(false);
+  const [defaultWarning, setDefaultWarning] = useState(false);
   const [selection, setSelection] = useState<{ text: string; x: number; y: number }>();
   const [copiedMessageId, setCopiedMessageId] = useState<string>();
   const [sessionUnavailable, setSessionUnavailable] = useState<string>();
@@ -334,6 +340,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   useEffect(() => {
     let current = true;
     setAutomaticCompacting(false);
+    setEffectiveConfiguration(undefined);
+    setConfigurationReadyFor(undefined);
+    setDefaultWarning(false);
     if (!workspace?.id) {
       setEffectiveConfiguration(undefined);
       return () => { current = false; };
@@ -342,10 +351,16 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       workspace.id,
       currentSession?.draft ? undefined : currentSession?.id,
     ).then(result => {
-      if (current && result.success && result.data) setEffectiveConfiguration(result.data);
+      if (!current) return;
+      if (!result.success || !result.data) {
+        setNotice(result.error || t('settings.defaults.failed'));
+        return;
+      }
+      setEffectiveConfiguration(result.data);
+      setConfigurationReadyFor(configurationKey);
     });
     return () => { current = false; };
-  }, [currentSession?.draft, currentSession?.id, workspace?.id]);
+  }, [currentSession?.draft, currentSession?.id, workspace?.id, configurationKey]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -839,6 +854,18 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     : effectiveConfiguration?.provenance[key]?.scope ?? 'default';
   const modelScope = settingScope('model', currentSession?.model !== undefined);
   const thinkingScope = settingScope('thinking', currentSession?.thinking !== undefined);
+  const saveDefault = async (kind: 'model' | 'thinking') => {
+    if (savingDefault) return;
+    setSavingDefault(true);
+    try {
+      const result = await saveNewSessionDefault({ projectId: workspace?.id,
+        ...(kind === 'model' ? { kind, provider: activeProviderType, model } : { kind, thinking }) });
+      if (!result.success || !result.data) { setNotice(result.error || t('settings.defaults.failed')); return; }
+      setDefaultWarning(result.data.overridden.length > 0);
+      setNotice(t(result.data.overridden.length ? 'settings.defaults.overrideWarning' : 'settings.defaults.saved'),
+        result.data.overridden.length ? 'warning' : 'success');
+    } finally { setSavingDefault(false); }
+  };
   const toolPresetScope = settingScope('toolPreset', currentSession?.toolPreset !== undefined);
   const autoCompactionScope = settingScope('autoCompaction', currentSession?.autoCompaction !== undefined);
   const slashQuery = input.startsWith('/') && !input.includes(' ') ? input.slice(1).toLocaleLowerCase() : undefined;
@@ -854,7 +881,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const workspaceOperationTrusted = Boolean(workspace
     && (workspace.operationTrusted ?? workspace.trusted));
   const canSend = Boolean((input.trim() || attachments.length) && currentSession && workspaceOperationTrusted
-    && !starting && !busyCompacting);
+    && !starting && !busyCompacting && (!currentSession.draft || configurationReadyFor === configurationKey));
   const status = busyCompacting
     ? t('chat.status.compacting')
     : starting
@@ -1929,7 +1956,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
               ? undefined
               : event.target.value as Session['thinking'])}>
             <option value="auto">{t('chat.setting.auto')} · {thinking}</option>
-            {['off', 'low', 'medium', 'high', 'xhigh', 'max'].map(level => <option key={level} value={level}>{level}</option>)}
+            {['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map(level => <option key={level} value={level}>{level}</option>)}
           </select>
           <select
             className="composer-setting"
@@ -1969,10 +1996,19 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           <button type="submit" disabled={!canSend}>{starting ? '…' : active ? t('chat.queue') : t('chat.send')}</button>
         </div>
         <div className="composer-setting-scopes" aria-label={t('chat.settingScopes')}>
-          <span>{t('settings.model')}: {t(`chat.scope.${modelScope}`)}</span>
-          <span>{t('chat.thinking')}: {t(`chat.scope.${thinkingScope}`)}</span>
+          <details>
+            <summary aria-label={t('chat.defaults.modelActions')}>{t('settings.model')}: {t(`chat.scope.${modelScope}`)}</summary>
+            <button type="button" disabled={savingDefault || !model || modelLocked}
+              onClick={() => void saveDefault('model')}>{t('chat.defaults.saveModel')}</button>
+          </details>
+          <details>
+            <summary aria-label={t('chat.defaults.thinkingActions')}>{t('chat.thinking')}: {t(`chat.scope.${thinkingScope}`)}</summary>
+            <button type="button" disabled={savingDefault || thinkingLocked}
+              onClick={() => void saveDefault('thinking')}>{t('chat.defaults.saveThinking')}</button>
+          </details>
           <span>{t('chat.tools')}: {t(`chat.scope.${toolPresetScope}`)}</span>
           <span>{t('chat.autoCompaction')}: {t(`chat.scope.${autoCompactionScope}`)}</span>
+          {defaultWarning && <p role="status">{t('settings.defaults.overrideWarning')}</p>}
         </div>
       </form>
     </div>

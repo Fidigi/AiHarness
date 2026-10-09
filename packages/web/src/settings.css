@@ -35,6 +35,7 @@
 .custom-resource-editor form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin: .75rem 0; }
 .custom-resource-editor form > label { min-width: 0; display: grid; gap: .25rem; font-size: .78rem; }
 .custom-resource-editor form input, .custom-resource-editor form select, .custom-resource-editor form textarea,
+#defaults button:not(:disabled) { background: #a12645; color: #fff; }
 #defaults input, #defaults select, #tools select { width: 100%; min-height: 2.2rem; }
 .custom-resource-editor form > div { grid-column: 1 / -1; display: flex; gap: .4rem; }
 .codemode-settings { min-width: 0; display: grid; gap: .65rem; margin-top: 1rem; padding: .75rem; border: 1px solid #40527b; border-radius: 6px; }

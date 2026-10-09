@@ -32,7 +32,7 @@ The browser contract is summarized in [`web-app-architecture.md`](./web-app-arch
 | Agent | `POST /api/agent/runs`; `GET /runs/:runId`; stop/queue; `/sessions/:sessionId/state|events|compact|capabilities|extensions|commands|interactions` |
 | Workspaces/files | `/api/workspaces/default|validate|browse|file-manager|trust|worktrees`; `/api/files`, content/download/index/upload/watch and Git status/diff |
 | Terminals | `/api/terminals` plus per-terminal events/input/resize/delete |
-| Configuration | `/api/configuration` and legacy `/api/settings` alias; effective values include provenance |
+| Configuration | `/api/configuration` and legacy `/api/settings` alias; effective values include provenance; admin `PATCH /defaults` independently saves model/provider or thinking |
 | Models | `GET /api/models`; `PATCH /api/models/enabled` |
 | Provider registry | `/api/provider-registry/auth`, OAuth flows, tests, custom providers and custom models |
 | MCP configuration | `GET /api/mcp` for global configuration; optional canonical `?cwd=` adds trust-gated project data and fresh volatile Test/runtime status; admin-only `POST /api/mcp/test` connects one fresh file entry once; `/preview` reparses paste without writing; `/actions` performs atomic import/replacement or local mutations. Agent runs use a separate Core-owned persistent host, not these administration routes |
@@ -68,6 +68,12 @@ POST /api/agent/runs
 The run applies/removes only declared session overrides. Provider/tool turns, MCP preparation/invocation, automatic compaction, queues, retries, extension interactions, and persistence share one AbortSignal and sequenced journal. Stopping during MCP preparation releases that session's host records and does not persist the unsent user input. Interrupted tool results and completed nested usage are persisted before the journal's terminal stop event; cleanup never starts automatic compaction or another model request. Stop waits at most five seconds for durable settlement. If a privileged extension ignores abort, the acknowledgement returns the still-nonterminal run snapshot so clients keep replaying rather than resynchronizing too early; queues and new dialogs are already refused/cancelled, and another run cannot reuse that session until cleanup settles. Core's immediate `stop()` cancellation acknowledgement is distinct from `wait()` and the authoritative state/replay snapshot.
 
 `PATCH /api/sessions/:id` can change `thinking` while an agent is active. Immediately before each provider/tool-loop turn and queued prompt, Core calls the host's `resolveThinking` policy on the latest session; Server reapplies the same session/project/global/environment precedence as startup. `thinking: null` restores inheritance, invalid levels fail without mutation, and `max` maps to the supported provider level `xhigh`. A request already in flight keeps its captured options; changing reasoning neither restarts nor stops the run and does not change its provider/model.
+
+### New-session defaults
+
+`PATCH /api/configuration/defaults` requires `configuration` capability and accepts exactly `{kind: "model", provider, model, projectId?}` or `{kind: "thinking", thinking, projectId?}`. It updates only those global keys and returns committed values, overridden key names and effective project/environment provenance; current session overrides and active runs are not changed. Thinking is one of off/minimal/low/medium/high/xhigh/max, never null or an unknown value. New runs may omit provider to inherit the effective default; environment provider policy remains authoritative. Scoped Settings saves only dirty fields, preserving independently edited defaults.
+
+`ConfigurationStore` rereads bounded stable UTF-8 version-1 settings on every serialized mutation, refuses invalid/unreadable/linked files, stages a private fsynced atomic write, rechecks the source before publication and updates memory only after commit. Mutations serialize by pathname across service instances; a conflicting external writer causes refusal rather than stale overwrite. Missing files initialize normally; invalid files are never replaced with empty settings.
 
 ### Current event contract
 
@@ -143,6 +149,7 @@ Flows expire after five minutes, retain terminal state for one minute, and are c
 - `packages/server/src/web-server.test.ts` — broad HTTP, auth, sessions, providers, files, PTY, MCP Test fresh-target/config-smuggling/trust/redaction/status behavior, import-and-replacement preview/persistence/exposure/admin mutation/opaque undo, packages and runtime integration
 - `packages/server/src/api/mcp-oauth-routes.test.ts` and `packages/core/src/mcp/{oauth,oauth-provider-factory,oauth-flow,oauth-integration}.test.ts` — passive inventory, explicit routes, unavailable storage, bounded public state, paste/cancel/logout guards, SDK discovery/PKCE/DCR/callback/refresh and token non-disclosure
 - `packages/server/src/api/tool-settings.test.ts` and `packages/core/src/tools/codemode.test.ts` — cached sandbox health, exact scoped settings/readback, visible reasons, budgets and nested execution
+- `packages/server/src/api/configuration-defaults.test.ts`, `packages/server/src/config/config-store.test.ts`, and `packages/core/src/security/stable-file.test.ts` — independent saves, live default inheritance, unreadable/stale/link refusal and durable commit guards
 - `packages/server/src/api/session-pagination.test.ts` — bounded message windows and cursors
 - `packages/server/src/security/request-security.test.ts` — roles, capabilities, origins, limits and WebSocket auth
 - `e2e/settings.spec.ts` — browser Test request minimality plus identity/cwd/capability/tool reporting; import/replacement/local mutation and focus flows

@@ -354,6 +354,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
           code: 'PROJECT_TRUST_REQUIRED',
         });
       }
+      const requestedProvider = stringValue(body.provider, 'provider', { optional: true, max: 100 });
       const requestedModel = stringValue(body.model, 'model', { optional: true, max: 500 });
       const requestedThinking = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(String(body.thinking))
         ? body.thinking as Session['thinking']
@@ -409,7 +410,8 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         sessionId: session.id,
         session,
       });
-      const selectedProvider = stringValue(body.provider, 'provider', { max: 100 })!;
+      const selectedProvider = (effective.provenance.provider?.scope === 'environment' ? effective.values.provider : requestedProvider)
+        ?? effective.values.provider ?? session.providerConfig?.type ?? 'mock';
       const selectedModel = effective.values.model ?? requestedModel;
       const configuredSystemPrompt = stringValue(body.systemPrompt, 'systemPrompt', { optional: true, max: 200_000 })
         ?? effective.values.systemPrompt;

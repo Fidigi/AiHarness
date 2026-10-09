@@ -25,6 +25,8 @@ export interface AtomicStableFileOptions {
   overwrite?: boolean;
   maxBytes?: number;
   mode?: number;
+  /** Revalidate caller-owned state after staging, before target inspection/publication. */
+  beforeCommit?(): Promise<void>;
 }
 
 /**
@@ -88,6 +90,7 @@ export async function atomicWriteStableFile(
     }
     await stagingHandle.close();
     stagingHandle = undefined;
+    await options.beforeCommit?.();
 
     const [current, stagingCurrent] = await Promise.all([
       lstat(target).catch(error => {

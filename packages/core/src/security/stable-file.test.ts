@@ -1,4 +1,4 @@
-import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -44,6 +44,18 @@ describe('atomicWriteStableFile', () => {
     await link(target, sibling);
     await expect(atomicWriteStableFile(target, 'new', { overwrite: true }))
       .rejects.toMatchObject<Partial<StableFileError>>({ code: 'unsafe-target' });
+  });
+
+  it('runs the caller commit guard after staging and removes staging on refusal', async () => {
+    const root = await fixture();
+    const target = path.join(root, 'settings.json');
+    await writeFile(target, 'previous');
+    await expect(atomicWriteStableFile(target, 'uncommitted', { overwrite: true, beforeCommit: async () => {
+      expect((await readdir(root)).some(name => name.endsWith('.staging'))).toBe(true);
+      throw new Error('Revision changed');
+    } })).rejects.toThrow('Revision changed');
+    expect(await readFile(target, 'utf8')).toBe('previous');
+    expect(await readdir(root)).toEqual(['settings.json']);
   });
 
   it('rejects content beyond the caller limit before touching the target', async () => {

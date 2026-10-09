@@ -109,6 +109,7 @@ export interface MockApiOptions {
   toolSettings?: ToolSettings;
   subagentConfiguration?: SubagentConfiguration;
   subagentRuns?: SubagentRunSnapshot[];
+  configurationScopes?: Partial<Record<'global' | 'project', Record<string, unknown>>>;
   effectiveConfiguration?: {
     values?: { model?: string; thinking?: string; toolPreset?: string; autoCompaction?: boolean };
     provenance?: Record<string, { value: unknown; scope: 'default' | 'global' | 'project' | 'session' | 'environment'; source: string }>;
@@ -517,8 +518,27 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     project: structuredClone(toolSettings),
   };
   const configurationScopes: Record<'global' | 'project', Record<string, unknown>> = {
-    global: { provider: 'mock', model: 'mock-model', toolPreset: 'default' },
-    project: { provider: 'mock', model: 'mock-model', toolPreset: 'default' },
+    global: structuredClone(options.configurationScopes?.global ?? { provider: 'mock', model: 'mock-model', toolPreset: 'default' }),
+    project: structuredClone(options.configurationScopes?.project ?? { provider: 'mock', model: 'mock-model', toolPreset: 'default' }),
+  };
+  let configurationChanged = Boolean(options.configurationScopes);
+  const effectiveConfiguration = (projectId?: string | null, sessionId?: string | null) => {
+    const values: Record<string, unknown> = { thinking: 'off', toolPreset: 'default', autoCompaction: true };
+    const provenance: Record<string, { value: unknown; scope: 'default' | 'global' | 'project' | 'session' | 'environment'; source: string }> =
+      Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { value, scope: 'default', source: 'built-in' }]));
+    if (configurationChanged) for (const scope of ['global', ...(projectId ? ['project' as const] : [])] as const) {
+      for (const [key, value] of Object.entries(configurationScopes[scope])) {
+        values[key] = value; provenance[key] = { value, scope, source: scope === 'project' ? projectId! : 'global' };
+      }
+    }
+    Object.assign(values, options.effectiveConfiguration?.values);
+    Object.assign(provenance, options.effectiveConfiguration?.provenance);
+    const session = sessionId ? controller.sessions.find(item => item.id === sessionId) : undefined;
+    for (const key of ['model', 'thinking', 'toolPreset', 'autoCompaction'] as const) {
+      if (session?.[key] === undefined || options.effectiveConfiguration?.provenance?.[key]?.scope === 'environment') continue;
+      values[key] = session[key]; provenance[key] = { value: session[key], scope: 'session', source: session.id };
+    }
+    return { values, provenance };
   };
   let subagentConfiguration = structuredClone(options.subagentConfiguration ?? mockSubagentConfiguration(workspace));
   const subagentRuns = structuredClone(options.subagentRuns ?? []);
@@ -1011,8 +1031,22 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     if (url.pathname === '/api/configuration/scope' && method === 'PATCH') {
       const input = body as { scope?: 'global' | 'project'; values?: Record<string, unknown>; scopeId?: string };
       const scope = input.scope === 'global' ? 'global' : 'project';
-      configurationScopes[scope] = { ...configurationScopes[scope], ...(input.values ?? {}) };
+      configurationChanged = true;
+      for (const [key, value] of Object.entries(input.values ?? {})) {
+        if (value === null) delete configurationScopes[scope][key];
+        else configurationScopes[scope][key] = value;
+      }
       await fulfillJson(route, { scope, scopeId: input.scopeId, values: configurationScopes[scope] }); return;
+    }
+    if (url.pathname === '/api/configuration/defaults' && method === 'PATCH') {
+      const input = body as { kind: string; provider?: string; model?: string; thinking?: string; projectId?: string };
+      configurationChanged = true;
+      const patch = input.kind === 'model' ? { provider: input.provider, model: input.model } : { thinking: input.thinking };
+      Object.assign(configurationScopes.global, patch);
+      const effective = effectiveConfiguration(input.projectId);
+      const overridden = Object.keys(patch).filter(key => input.projectId && Object.hasOwn(configurationScopes.project, key)
+        || effective.provenance[key]?.scope === 'environment');
+      await fulfillJson(route, { values: configurationScopes.global, overridden, effective }); return;
     }
     if (url.pathname === '/api/models' && method === 'GET') {
       if (url.searchParams.get('refresh') === 'true') modelCatalog.updatedAt = '2025-01-01T12:01:00.000Z';
@@ -1280,24 +1314,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       await fulfillJson(route, run ?? { error: 'Run not found' }, run ? 200 : 404); return;
     }
     if (url.pathname === '/api/configuration/effective' && method === 'GET') {
-      const sessionId = url.searchParams.get('sessionId');
-      const session = sessionId ? controller.sessions.find(item => item.id === sessionId) : undefined;
-      const values: Record<string, unknown> = {
-        thinking: 'off', toolPreset: 'default', autoCompaction: true,
-        ...(options.effectiveConfiguration?.values ?? {}),
-      };
-      const provenance: Record<string, { value: unknown; scope: 'default' | 'global' | 'project' | 'session' | 'environment'; source: string }> = {
-        thinking: { value: values.thinking, scope: 'default', source: 'built-in' },
-        toolPreset: { value: values.toolPreset, scope: 'default', source: 'built-in' },
-        autoCompaction: { value: values.autoCompaction, scope: 'default', source: 'built-in' },
-        ...(options.effectiveConfiguration?.provenance ?? {}),
-      };
-      for (const key of ['model', 'thinking', 'toolPreset', 'autoCompaction'] as const) {
-        if (session?.[key] === undefined || options.effectiveConfiguration?.provenance?.[key]?.scope === 'environment') continue;
-        values[key] = session[key];
-        provenance[key] = { value: session[key], scope: 'session', source: session.id };
-      }
-      await fulfillJson(route, { values, provenance }); return;
+      await fulfillJson(route, effectiveConfiguration(url.searchParams.get('projectId'), url.searchParams.get('sessionId'))); return;
     }
     if (url.pathname === '/api/app-update' && method === 'GET') {
       await fulfillJson(route, {
