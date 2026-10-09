@@ -72,6 +72,7 @@ Development ports differ from the combined launcher:
 | `e2e/*.spec.ts`, `e2e/fixtures/`, `e2e/*-snapshots/` | Playwright journeys with reusable intercepted API fixtures, a real-server smoke path and Docker-generated visual baselines |
 | `tests/functional-parity/` | Manifest-driven public CLI/JSON/RPC/session/extension/SDK probes with reviewed positive and negative goldens |
 | `docs/` | User, architecture, extension, container, and agent documentation |
+| `demo/`, `.github/workflows/demo-pages.yml` | Separate synthetic React/Vite static demo, bounded offline assets, Docker validation/export and build-only PR/separately admitted Pages pipeline; no backend/host tools |
 
 Use npm from the repository root so workspace packages are linked consistently. Treat `package-lock.json` as authoritative for dependency changes.
 
@@ -478,6 +479,7 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 | `docs/ai/topics/cli-reference.md` | English | Agents | Versioned | Package commands, regular/fullscreen/print CLI, JSON events, and JSONL RPC |
 | `docs/ai/topics/server-api.md` | English | Agents | Versioned | REST, SSE, WebSocket and detached runtime contracts |
 | `docs/ai/topics/web-app-architecture.md` | English | Agents | Versioned | React stores/components, browser persistence, PWA and validation |
+| `docs/ai/topics/static-demo.md` | English | Agents | Versioned | Independent synthetic static demo, base-safe offline artifact, publication limits and Pages policy |
 | `docs/ai/topics/security.md` | English | Agents | Versioned | Workspace trust, auth, secrets and executable-code boundaries |
 | `docs/ai/topics/child-agents.md` | English | Agents | Versioned | Profiles, delegation limits, linked sessions and parent events |
 | `docs/ai/acceptance/`, `docs/ai/workflows/` | English | Agents | Versioned | Acceptance criteria and task-specific documentation workflows |
@@ -516,6 +518,8 @@ make build-prod      # Build the complete production image
 ```
 
 Use `make lockfile` after an intentional dependency or package metadata change; it regenerates `package-lock.json` in Docker.
+
+The independent static demo has its own Docker target: `bash demo/run-docker.sh`, optionally with `DEMO_BASE=/` or `DEMO_BASE=/preview/AiHarness/`. It validates types, fixture/build/export policy, bounded static artifacts, eight Chromium journeys and 28 captures without starting the agent/backend. It publishes only validated generated `demo/dist/`; explicit updates export bounded screenshot deltas. See [static-demo.md](./topics/static-demo.md) for offline/deployment boundaries; local validation never enables Pages or deploys remotely.
 
 For a focused Playwright test during iteration, pass arguments through the Makefile, for example `make test-e2e E2E_ARGS='e2e/performance.spec.ts -g "virtualise" --retries=0'`. The E2E container receives a 1 GiB shared-memory ceiling by default to prevent Chromium worker crashes; override `E2E_DOCKER_ARGS` only for a runner-specific need. Use `make test-parity` for the focused public-contract harness. For other focused Vitest work, use `make shell` and run the relevant npm command inside that container. Final validation should still use the standard targets below.
 
