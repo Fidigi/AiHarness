@@ -4,6 +4,8 @@
 
 ## Overview
 
+Effective provider context orders known message/command ancestry before wall-clock time. This prevents queued turns from moving ahead of their parents after a clock regression; unlinked legacy roots retain chronological fallback. Command projections retain their parent and original-ID alias, including after durable reload.
+
 Sessions are the shared conversation record for CLI and Server. Core owns the runtime `Session` contract, the custom JSONL v2 journal, active/abandoned branches, forks/clones, effective model context, compaction, and JSON wire serialization. The persisted v2 marker is independent from `AI_HARNESS_CORE_API_VERSION`; advancing one does not silently advance the other.
 
 Provider and tool turns described in [`providers.md`](./providers.md) are persisted incrementally. Web hydration and pagination must preserve the same IDs, dates, revisions, and branch relationships.

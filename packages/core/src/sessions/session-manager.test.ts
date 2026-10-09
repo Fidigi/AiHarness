@@ -828,6 +828,19 @@ describe('SessionManager with JSONL Persistence', () => {
       expect(forked!.parentId).toBe(session.id);
     });
 
+    it('orders parent-linked context across wall-clock regressions, commands and durable reload', async () => {
+      const session = await manager.create({ activeLeafId: 'clock-child', messages: [
+        { id: 'clock-root', role: 'user', content: 'First', timestamp: new Date(3000) },
+        { id: 'clock-child', parentMessageId: 'clock-command', role: 'user', content: 'Second', timestamp: new Date(1000) },
+      ], commands: [{ id: 'clock-command', parentEntryId: 'clock-root', command: 'pwd', cwd: '/workspace',
+        status: 'completed', output: '/workspace', timestamp: new Date(2000) }] });
+      const ids = ['clock-root', 'context-clock-command', 'clock-child'];
+      expect(manager.getEffectiveContext(session.id).map(entry => entry.id)).toEqual(ids);
+      const reloaded = new SessionManager(); reloaded.setStore(store);
+      await reloaded.loadFromStore(session.id);
+      expect(reloaded.getEffectiveContext(session.id).map(entry => entry.id)).toEqual(ids);
+    });
+
     it('forks a durable user entry hidden by compaction with its preceding command', async () => {
       const session = await manager.create({ title: 'Original' });
       await manager.addMessage(session.id, { role: 'user', content: 'First' });

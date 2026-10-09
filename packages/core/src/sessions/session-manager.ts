@@ -240,6 +240,33 @@ function messageFromEntry(entry: MessageEntry): Message | undefined {
   };
 }
 
+/** Parent links outrank wall-clock timestamps (which can regress); legacy roots retain time order. */
+function orderContextEntries(entries: SessionEntry[]): SessionEntry[] {
+  const ordered: SessionEntry[] = [];
+  const byId = new Map(entries.map(entry => [entry.id, entry]));
+  for (const entry of entries) {
+    const commandId = entry.type === 'message' ? entry.metadata?.sourceCommandId : undefined;
+    if (typeof commandId === 'string') byId.set(commandId, entry);
+  }
+  const emitted = new Set<string>();
+  for (const entry of entries.sort((left, right) => left.timestamp - right.timestamp)) {
+    const chain: SessionEntry[] = [];
+    const visiting = new Set<string>();
+    let cursor: SessionEntry | undefined = entry;
+    while (cursor && !emitted.has(cursor.id) && !visiting.has(cursor.id)) {
+      visiting.add(cursor.id); chain.push(cursor);
+      const parent: string | undefined = cursor.type === 'message' ? cursor.parentMessageId
+        : 'parentEntryId' in cursor ? cursor.parentEntryId : undefined;
+      cursor = parent ? byId.get(parent) : undefined;
+    }
+    for (const ancestor of chain.reverse()) {
+      if (emitted.has(ancestor.id)) continue;
+      emitted.add(ancestor.id); ordered.push(ancestor);
+    }
+  }
+  return ordered;
+}
+
 function messageToEntry(message: Message): MessageEntry {
   return {
     id: message.id,
@@ -1966,12 +1993,13 @@ export class SessionManager {
     const session = this.sessions.get(sessionId);
     if (!session) return [];
 
-    const entries: SessionEntry[] = [
+    const entries = orderContextEntries([
       ...session.messages.map(messageToEntry),
       ...(session.commands ?? [])
         .filter(command => !command.excludedFromContext && command.status !== 'queued' && command.status !== 'running')
         .map(command => ({
           id: `context-${command.id}`,
+          parentMessageId: command.parentEntryId,
           type: 'message' as const,
           version: SESSION_SCHEMA_VERSION,
           role: 'user' as const,
@@ -1990,7 +2018,7 @@ export class SessionManager {
           }],
           metadata: { sourceCommandId: command.id },
         })),
-    ].sort((left, right) => left.timestamp - right.timestamp);
+    ]);
     const summary = session.metadata?.compactionSummary;
     if (typeof summary !== 'string' || !summary) return entries;
 
