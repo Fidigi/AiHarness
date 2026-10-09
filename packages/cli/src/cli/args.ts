@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import type { ExtensionOptionDescriptor, ExtensionOptionValue } from '@ai-harness/core';
 
 export type CliOutputMode = 'text' | 'json' | 'rpc';
 export type CliThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -7,6 +8,10 @@ export type CliApplicationMode = 'interactive' | 'print' | 'json' | 'rpc';
 
 export interface CliArguments {
   help: boolean;
+  extensionHelp: boolean;
+  completion?: string;
+  extensionOptions: Record<string, ExtensionOptionValue>;
+  deferredOptions: string[];
   version: boolean;
   print: boolean;
   mode?: CliOutputMode;
@@ -45,7 +50,7 @@ export interface CliArguments {
 
 export class CliArgumentError extends Error {
   constructor(message: string) {
-    super(message);
+    super(message.replace(/[\x00-\x1f\x7f-\x9f]/g, '?').slice(0, 512));
     this.name = 'CliArgumentError';
   }
 }
@@ -67,9 +72,21 @@ function modelPatternList(value: string): string[] {
 }
 
 /** Strict parser for the implemented AiHarness startup surface. */
-export function parseCliArguments(args: readonly string[]): CliArguments {
+export function parseCliArguments(
+  args: readonly string[],
+  extensionOptions: readonly ExtensionOptionDescriptor[] = [],
+  bootstrap = false,
+): CliArguments {
+  if (args.length > 4096 || args.some(value => value.length > 2 * 1024 * 1024)
+    || args.reduce((total, value) => total + Buffer.byteLength(value), 0) > 4 * 1024 * 1024) {
+    throw new CliArgumentError('CLI argument size/count limit exceeded.');
+  }
+  const options = new Map(extensionOptions.map(option => [`--${option.name}`, option]));
   const result: CliArguments = {
     help: false,
+    extensionHelp: false,
+    extensionOptions: Object.create(null) as Record<string, ExtensionOptionValue>,
+    deferredOptions: [],
     version: false,
     print: false,
     continueSession: false,
@@ -110,6 +127,9 @@ export function parseCliArguments(args: readonly string[]): CliArguments {
     const equals = raw.startsWith('--') ? raw.indexOf('=') : -1;
     const option = equals > 0 ? raw.slice(0, equals) : raw;
     const inlineValue = equals > 0 ? raw.slice(equals + 1) : undefined;
+    if (bootstrap && result.deferredOptions.length && ['--extension', '-e', '--approve', '-a', '--no-approve', '-na'].includes(option)) {
+      throw new CliArgumentError('Extension loading and trust options must precede extension-contributed options.');
+    }
     const value = (): string => {
       const candidate = inlineValue ?? args[++index];
       if (candidate === undefined || (!inlineValue && candidate.startsWith('-'))) {
@@ -125,6 +145,15 @@ export function parseCliArguments(args: readonly string[]): CliArguments {
     switch (option) {
       case '--help': case '-h': booleanOption(); result.help = true; break;
       case '--version': case '-v': booleanOption(); result.version = true; break;
+      case '--help-extensions': booleanOption(); result.extensionHelp = true; break;
+      case '--completion': {
+        const prefix = inlineValue ?? args[++index];
+        if (!prefix || prefix.length > 4096 || /[\x00-\x1f\x7f-\x9f]/.test(prefix)) {
+          throw new CliArgumentError('--completion requires a bounded non-empty prefix.');
+        }
+        result.completion = prefix;
+        break;
+      }
       case '--print': case '-p': booleanOption(); result.print = true; break;
       case '--rpc': booleanOption(); result.mode = 'rpc'; break;
       case '--mode': {
@@ -208,8 +237,34 @@ export function parseCliArguments(args: readonly string[]): CliArguments {
         result.thinking = level;
         break;
       }
-      default:
-        throw new CliArgumentError(`Unknown option: ${option}. Use --help for available options.`);
+      default: {
+        const metadata = options.get(option);
+        if (metadata) {
+          if (Object.hasOwn(result.extensionOptions, metadata.name)) {
+            throw new CliArgumentError(`Duplicate extension option: ${option}.`);
+          }
+          if (metadata.type === 'boolean') {
+            if (inlineValue !== undefined && inlineValue !== 'true' && inlineValue !== 'false') {
+              throw new CliArgumentError(`${option} accepts only true or false.`);
+            }
+            result.extensionOptions[metadata.name] = inlineValue === undefined || inlineValue === 'true';
+          } else {
+            const candidate = value();
+            if (candidate.length > 4096 || /[\x00-\x1f\x7f-\x9f]/.test(candidate)) {
+              throw new CliArgumentError(`${option} value exceeds permitted bounds.`);
+            }
+            result.extensionOptions[metadata.name] = candidate;
+          }
+        } else if (bootstrap && option.startsWith('--') && /^--[a-z][a-z0-9-]{0,63}$/.test(option)) {
+          result.deferredOptions.push(option);
+          // Unknown arity is resolved only after trusted registration. This pass is
+          // solely for locating built-in loading/trust flags, never executing prompts.
+          if (inlineValue === undefined && args[index + 1] !== undefined && !args[index + 1].startsWith('-')) index++;
+        } else {
+          throw new CliArgumentError(`Unknown option: ${option.slice(0, 80).replace(/[\x00-\x1f\x7f-\x9f]/g, '?')}. Use --help for available options.`);
+        }
+        break;
+      }
     }
   }
 
@@ -275,9 +330,25 @@ export function cliVersion(): string {
   return typeof packageJson.version === 'string' ? packageJson.version : '0.0.0';
 }
 
-export function formatCliHelp(): string {
-  return `AiHarness - unified AI coding agent\n\nUsage:\n  ai-harness [options] [--] [@files...] [messages...]\n  ai-harness package <list|install|configure|enable|disable|remove|check|update|reload>\n  ai-harness mcp <list|status|test|add|enable|disable|exposure|remove>\n\nOptions:\n  -p, --print                    Run supplied prompts, print only the final response, then exit\n  --mode <text|json|rpc>         Select text, JSONL event, or RPC output\n  --rpc                          Backward-compatible alias for --mode rpc\n  --provider <name>              Select a provider (requires --model or --models)\n  --model <[provider/]model>     Select an exact/fuzzy model, optionally suffixed with :thinking\n  --models <patterns>            Scope startup and cycling with IDs, fuzzy matches, globs, and :thinking\n  --list-models [search]         List configured-provider models, optionally fuzzy-filtered, then exit\n  --api-key <key>                Non-persistent credential override (requires --model or --models)\n  --thinking <level>             off|minimal|low|medium|high|xhigh|max\n  --system-prompt <text|path>    Replace the default system prompt for this run\n  --append-system-prompt <value> Append text or an existing file (repeatable)\n  -nc, --no-context-files        Disable AGENTS.md and CLAUDE.md discovery\n  -a, --approve                  Trust this project for this process only\n  -na, --no-approve              Refuse this project for this process only\n  -t, --tools <names>            Replace active tools with a comma-separated allowlist\n  -xt, --exclude-tools <names>   Disable comma-separated tool names after selection\n  -nbt, --no-builtin-tools       Disable default built-ins but retain extension tools\n  -nt, --no-tools                Disable all tools by default\n  -c, --continue                 Continue the newest session for this workspace\n  -r, --resume                   Select a stored session interactively\n  --session <path|id>            Open a session file or ID prefix\n  --session-id <id>              Open or create an exact session ID\n  --fork <path|id>               Fork a stored session before startup\n  --session-dir <dir>            Override the session storage directory\n  -n, --name <name>              Name or rename the startup session\n  --no-session                   Keep the session in memory only\n  --tui-mode <mode>              fullscreen or regular\n  --fullscreen                   Legacy fullscreen alias\n  --regular, --no-fullscreen     Legacy regular-mode aliases\n  --theme <name|file>            Select dark, light, or a custom theme file\n  -e, --extension <path>         Load an extension file or directory (repeatable)\n  --skill <path>                 Add a trusted skill file/directory selector (repeatable)\n  --prompt-template <path>       Add a trusted prompt file/directory selector (repeatable)\n  -ns, --no-skills               Disable skill discovery for this run\n  -np, --no-prompt-templates     Disable prompt-template discovery for this run\n  -h, --help                     Show this help and exit\n  -v, --version                  Show the version and exit\n  --                             Stop option parsing\n\nPackage administration:\n  package --help                 Show package sources, scopes, filters, and action options\n  install/remove/uninstall/update/list
-                                 Short aliases for the corresponding package actions\n  config                         Short alias for package configure\n\nMCP administration:\n  mcp --help                     Show global/project MCP configuration actions\n  /mcp [status|tools|reconnect]  Inspect persistent connections in interactive mode\n\nInput:\n  Positional messages are sent in order. @path prepends a bounded UTF-8 text file\n  or supported image to the first message. Piped stdin is prepended in print mode.\n\nConfiguration:\n  User settings load from <AI_HARNESS_AGENT_DIR>/settings.json or ~/.ai-harness/settings.json.\n  Trusted project settings load from .ai-harness/settings.json; CLI options take precedence.\n  AI_HARNESS_SESSIONS_DIR overrides settings sessionDir. Interactive startup asks only\n  when protected project resources need a decision; headless ask mode refuses safely.\n  Use /settings for effective sources and /reload after changing settings or trust.\n\nInstructions:\n  User files load from the same agent directory. Project context and .ai-harness\n  system files require trust; use /reload after changing trust interactively.\n`;
+export function formatCliHelp(extensionOptions: readonly ExtensionOptionDescriptor[] = []): string {
+  const contributed = extensionOptions.length ? `\nExtension options:\n${extensionOptions.map(option =>
+    `  --${option.name}${option.type === 'string' ? ' <value>' : '[=true|false]'}  ${option.description}`,
+  ).join('\n')}\n` : '';
+  return `AiHarness - unified AI coding agent\n\nUsage:\n  ai-harness [options] [--] [@files...] [messages...]\n  ai-harness package <list|install|configure|enable|disable|remove|check|update|reload>\n  ai-harness mcp <list|status|test|add|enable|disable|exposure|remove>\n\nOptions:\n  -p, --print                    Run supplied prompts, print only the final response, then exit\n  --mode <text|json|rpc>         Select text, JSONL event, or RPC output\n  --rpc                          Backward-compatible alias for --mode rpc\n  --provider <name>              Select a provider (requires --model or --models)\n  --model <[provider/]model>     Select an exact/fuzzy model, optionally suffixed with :thinking\n  --models <patterns>            Scope startup and cycling with IDs, fuzzy matches, globs, and :thinking\n  --list-models [search]         List configured-provider models, optionally fuzzy-filtered, then exit\n  --api-key <key>                Non-persistent credential override (requires --model or --models)\n  --thinking <level>             off|minimal|low|medium|high|xhigh|max\n  --system-prompt <text|path>    Replace the default system prompt for this run\n  --append-system-prompt <value> Append text or an existing file (repeatable)\n  -nc, --no-context-files        Disable AGENTS.md and CLAUDE.md discovery\n  -a, --approve                  Trust this project for this process only\n  -na, --no-approve              Refuse this project for this process only\n  -t, --tools <names>            Replace active tools with a comma-separated allowlist\n  -xt, --exclude-tools <names>   Disable comma-separated tool names after selection\n  -nbt, --no-builtin-tools       Disable default built-ins but retain extension tools\n  -nt, --no-tools                Disable all tools by default\n  -c, --continue                 Continue the newest session for this workspace\n  -r, --resume                   Select a stored session interactively\n  --session <path|id>            Open a session file or ID prefix\n  --session-id <id>              Open or create an exact session ID\n  --fork <path|id>               Fork a stored session before startup\n  --session-dir <dir>            Override the session storage directory\n  -n, --name <name>              Name or rename the startup session\n  --no-session                   Keep the session in memory only\n  --tui-mode <mode>              fullscreen or regular\n  --fullscreen                   Legacy fullscreen alias\n  --regular, --no-fullscreen     Legacy regular-mode aliases\n  --theme <name|file>            Select dark, light, or a custom theme file\n  -e, --extension <path>         Load an extension file or directory (repeatable)\n  --skill <path>                 Add a trusted skill file/directory selector (repeatable)\n  --prompt-template <path>       Add a trusted prompt file/directory selector (repeatable)\n  -ns, --no-skills               Disable skill discovery for this run\n  -np, --no-prompt-templates     Disable prompt-template discovery for this run\n  --help-extensions             Load eligible trusted extensions and show contributed help\n  --completion <prefix>         Load eligible trusted extensions and print option/value candidates\n  -h, --help                     Show metadata-only built-in help (no extension execution)\n  -v, --version                  Show the version and exit\n  --                             Stop option parsing\n\nPackage administration:\n  package --help                 Show package sources, scopes, filters, and action options\n  install/remove/uninstall/update/list
+                                 Short aliases for the corresponding package actions\n  config                         Short alias for package configure\n\nMCP administration:\n  mcp --help                     Show global/project MCP configuration actions\n  /mcp [status|tools|reconnect]  Inspect persistent connections in interactive mode\n\nInput:\n  Positional messages are sent in order. @path prepends a bounded UTF-8 text file\n  or supported image to the first message. Piped stdin is prepended in print mode.\n\nConfiguration:\n  User settings load from <AI_HARNESS_AGENT_DIR>/settings.json or ~/.ai-harness/settings.json.\n  Trusted project settings load from .ai-harness/settings.json; CLI options take precedence.\n  AI_HARNESS_SESSIONS_DIR overrides settings sessionDir. Interactive startup asks only\n  when protected project resources need a decision; headless ask mode refuses safely.\n  Use /settings for effective sources and /reload after changing settings or trust.\n\nInstructions:\n  User files load from the same agent directory. Project context and .ai-harness\n  system files require trust; use /reload after changing trust interactively.\n${contributed}`;
+}
+
+/** Metadata-driven startup completion; no callbacks, filesystem reads, or shell execution. */
+export function completeCliOptions(prefix: string, options: readonly ExtensionOptionDescriptor[]): string[] {
+  if (prefix.length > 4096 || /[\x00-\x1f\x7f-\x9f]/.test(prefix)) throw new CliArgumentError('Invalid completion prefix.');
+  const equals = prefix.indexOf('=');
+  if (equals > 0) {
+    const option = options.find(item => `--${item.name}` === prefix.slice(0, equals));
+    const values = option?.type === 'boolean' ? ['true', 'false'] : option?.completions ?? [];
+    return values.filter(value => value.startsWith(prefix.slice(equals + 1))).map(value => `${prefix.slice(0, equals)}=${value}`);
+  }
+  const builtin = [...formatCliHelp().matchAll(/(?:^|\s)(--[a-z][a-z0-9-]*)/g)].map(match => match[1]);
+  return [...new Set([...builtin, ...options.map(option => `--${option.name}`)])].filter(name => name.startsWith(prefix)).sort();
 }
 
 /** Read redirected stdin without allowing an unbounded automation payload. */

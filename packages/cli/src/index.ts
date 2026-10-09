@@ -86,6 +86,7 @@ import {
 import {
   CliArgumentError,
   cliVersion,
+  completeCliOptions,
   formatCliHelp,
   parseCliArguments,
   readPipedStdin,
@@ -103,6 +104,7 @@ import { cleanupCliEarlyExit } from './cli/lifecycle.js';
 import { InteractiveShellController } from './cli/shell-controller.js';
 import { formatConfiguredModelList } from './cli/model-list.js';
 import { runPackageCommand } from './cli/package-command.js';
+import { prepareExtensionStartup } from './cli/extension-startup.js';
 import { runMcpCommand } from './cli/mcp-command.js';
 import {
   resolveStartupSession,
@@ -235,7 +237,7 @@ async function main(): Promise<void> {
   }
   let cliArguments: ReturnType<typeof parseCliArguments>;
   try {
-    cliArguments = parseCliArguments(rawArguments);
+    cliArguments = parseCliArguments(rawArguments, [], true);
   } catch (error) {
     const message = error instanceof CliArgumentError ? error.message : String(error);
     process.stderr.write(`Error: ${outputCredentialRedactor.redact(message)}\n`);
@@ -243,6 +245,11 @@ async function main(): Promise<void> {
     return;
   }
   outputCredentialRedactor.add(cliArguments.apiKey);
+  if ((cliArguments.help || cliArguments.version || cliArguments.listModels) && cliArguments.deferredOptions.length) {
+    process.stderr.write(`Error: Unknown option: ${cliArguments.deferredOptions[0]}. Use --help for available options.\n`);
+    process.exitCode = 2;
+    return;
+  }
   if (cliArguments.help) {
     process.stdout.write(formatCliHelp());
     return;
@@ -250,6 +257,34 @@ async function main(): Promise<void> {
   if (cliArguments.version) {
     process.stdout.write(`${cliVersion()}\n`);
     return;
+  }
+  let extensionStartup: Awaited<ReturnType<typeof prepareExtensionStartup>> | undefined;
+  if (cliArguments.deferredOptions.length || cliArguments.extensionHelp || cliArguments.completion !== undefined) {
+    try {
+      extensionStartup = await prepareExtensionStartup(rawArguments, cliArguments);
+      cliArguments = extensionStartup.arguments;
+    } catch (error) {
+      const message = error instanceof CliArgumentError ? error.message : 'Extension startup failed.';
+      process.stderr.write(`Error: ${outputCredentialRedactor.redact(message)}\n`);
+      process.exitCode = 2;
+      return;
+    }
+    if (cliArguments.extensionHelp || cliArguments.completion !== undefined) {
+      try {
+        process.stdout.write(cliArguments.extensionHelp
+          ? formatCliHelp(extensionStartup.registry.getOptions())
+          : `${completeCliOptions(cliArguments.completion!, extensionStartup.registry.getOptions()).join('\n')}\n`);
+      } finally {
+        const originalWrite = process.stdout.write;
+        process.stdout.write = process.stderr.write.bind(process.stderr) as typeof process.stdout.write;
+        try { await extensionStartup.registry.unloadAll(); }
+        finally { process.stdout.write = originalWrite; }
+      }
+      return;
+    }
+  } else {
+    // A bootstrap pass is never an authoritative parse, even without custom options.
+    cliArguments = parseCliArguments(rawArguments);
   }
   if (cliArguments.listModels) {
     try {
@@ -299,7 +334,7 @@ async function main(): Promise<void> {
   });
   if (applicationMode === 'rpc') {
     try {
-      await runRpcMode({
+      const rpcStartupOptions = {
       noSession: cliArguments.noSession,
       sessionDir: cliArguments.sessionDir,
       provider: cliArguments.provider,
@@ -316,6 +351,8 @@ async function main(): Promise<void> {
       fork: cliArguments.fork,
       name: cliArguments.name,
       extensions: cliArguments.extensions,
+      extensionRegistry: extensionStartup?.registry,
+      extensionLoader: extensionStartup?.loader,
       skills: cliArguments.skills,
       promptTemplates: cliArguments.promptTemplates,
       noSkills: cliArguments.noSkills,
@@ -326,7 +363,8 @@ async function main(): Promise<void> {
       noTools: cliArguments.noTools,
       projectTrust: cliArguments.projectTrust,
         credentialRedactor: outputCredentialRedactor,
-      });
+      };
+      await runRpcMode(rpcStartupOptions);
     } finally {
       await cleanupCliEarlyExit({ closeNetwork: closeProviderNetworkDispatchers });
     }
@@ -577,7 +615,7 @@ async function main(): Promise<void> {
   const resourceLoadResult = await resourceManager.loadAll();
   for (const error of resourceLoadResult.errors) reportError(`Ressource : ${error.message}`);
 
-  const extensionRegistry = new ExtensionRegistry();
+  const extensionRegistry = extensionStartup?.registry ?? new ExtensionRegistry();
   extensionRegistry.attachSessionManager(sessionManager);
   const mcpOAuth = process.env.AI_HARNESS_MASTER_KEY && settingsResolution.agentDirTrusted
     ? new McpOAuthCredentialManager(
@@ -663,8 +701,7 @@ async function main(): Promise<void> {
     await cleanupEarlyExit();
     return;
   }
-  const extensionLoader = new ExtensionLoader(extensionRegistry, {
-    paths: async () => [
+  const runtimeExtensionPaths = async (): Promise<string[]> => [
       ...configuredExtensionPaths(cliArguments.extensions, settingsResolution),
       ...(settingsResolution.agentDirTrusted ? await pluginService.getEnabledExtensionFiles({
         cwd: workspaceCwd,
@@ -676,7 +713,10 @@ async function main(): Promise<void> {
         )}\n`);
         return [];
       }) : []),
-    ],
+    ];
+  extensionStartup?.setDiscovery(runtimeExtensionPaths, mayLoadProjectResources);
+  const extensionLoader = extensionStartup?.loader ?? new ExtensionLoader(extensionRegistry, {
+    paths: runtimeExtensionPaths,
     isProjectTrusted: mayLoadProjectResources,
   });
   const registerSkillTool = async (): Promise<void> => {
@@ -774,12 +814,18 @@ async function main(): Promise<void> {
     const resources = await resourceManager.loadAll();
     for (const error of resources.errors) reportError(`Ressource : ${error.message}`);
     const result = await extensionLoader.reload();
+    if (result.committed) {
+      cliArguments = parseCliArguments(rawArguments, extensionRegistry.getOptions());
+      extensionRegistry.setOptionValues(cliArguments.extensionOptions);
+    }
     for (const failure of result.errors) {
       reportError(`Extension ${failure.path}: ${failure.error.message}`);
     }
     await registerSkillTool();
   });
-  const extensionLoadResult = await extensionLoader.loadAll();
+  const extensionLoadResult = extensionStartup
+    ? { errors: [] }
+    : await extensionLoader.loadAll();
   for (const failure of extensionLoadResult.errors) {
     reportError(`Extension ${failure.path}: ${failure.error.message}`);
   }
@@ -1636,6 +1682,7 @@ async function main(): Promise<void> {
   }
 
   const completeCommands = (input: string): string[] => {
+    if (input.startsWith('--')) return completeCliOptions(input, extensionRegistry.getOptions());
     if (!input.startsWith('/') || input.includes(' ')) return [];
     const names = [
       ...commandHandler.getCommandNames(),

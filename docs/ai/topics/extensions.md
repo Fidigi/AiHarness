@@ -38,6 +38,7 @@ Core PluginService -> install/locked state/filtered inventory/bounded batch stat
 | Registration | Contract |
 |---|---|
 | `version` | Read-only extension API major used for compatibility checks |
+| `registerOption` / `getOption` | Owned bounded boolean/string startup flags, defaults, generated help and literal completion |
 | `registerCommand` | Slash command handler with runtime context |
 | `registerTool` | Model/manual tool with JSON schema, AbortSignal and structured result |
 | `registerProvider` | Runtime `AiProvider` factory and optional defaults |
@@ -61,6 +62,8 @@ Prompts, package skills, and themes are discovered resources, not `ExtensionAPI`
 4. Atomically replace loader-owned registrations.
 5. On any discovery/import/registration error, keep or restore the previous generation.
 6. On workspace change, clear old handlers if the new candidate cannot commit.
+
+CLI startup loads one trusted generation before strict contributed-option parsing and reuses it in interactive, print, JSON and RPC modes. Built-in help/version never import extensions; `--extension-help` and `--completion` are explicit trust-gated operations. Reload gives ESM and CommonJS entries a fresh identity after successful or failed attempts, without replacing preexisting CommonJS cache entries. Dependencies retain ordinary caches; executable side effects are not transactional. See the [EN startup-option contract](../../contributors/en/extension-startup-options.md) and [FR contract](../../contributors/fr/extension-startup-options.md).
 
 ### Administer a plugin package
 

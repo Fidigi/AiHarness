@@ -76,6 +76,182 @@ describe('CLI invocation contract', () => {
     expect(invalid.stderr).toContain('Unknown option');
   });
 
+  it('registers owned startup options once, exposes values and trust-gates generated help/completion', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-options-'));
+    const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-options-agent-'));
+    temporaryDirectories.push(cwd, agentDir);
+    const extension = path.join(cwd, 'options.mjs');
+    const marker = path.join(cwd, 'loaded.txt');
+    const capture = path.join(cwd, 'values.json');
+    await writeFile(extension, `
+      import { appendFileSync, writeFileSync } from 'node:fs';
+      appendFileSync(process.env.OPTION_MARKER, 'import\\n');
+      export default api => {
+        appendFileSync(process.env.OPTION_MARKER, 'factory\\n');
+        api.registerOption('review-style', { type: 'string', description: 'Review style', default: 'brief', completions: ['brief', 'full'] });
+        api.registerOption('review-check', { type: 'boolean', description: 'Check review', default: false });
+        api.before('before:provider', () => {
+          writeFileSync(process.env.OPTION_CAPTURE, JSON.stringify({ style: api.getOption('review-style'), check: api.getOption('review-check') }));
+        });
+      };
+    `);
+    const env = { AI_HARNESS_AGENT_DIR: agentDir, OPTION_MARKER: marker, OPTION_CAPTURE: capture };
+    for (const flag of ['--help', '--version']) {
+      const safe = await invoke(['--approve', '--extension', extension, flag], undefined, env, cwd);
+      expect(safe.code).toBe(0);
+      expect(safe.stderr).toBe('');
+      await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+      const unknownHelp = await invoke(['--approve', '--extension', extension, flag, '--review-style=full'], undefined, env, cwd);
+      expect(unknownHelp).toMatchObject({ code: 2, stdout: '' });
+      await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+    }
+    const denied = await invoke(['--no-approve', '--extension', extension, '--help-extensions'], undefined, env, cwd);
+    expect(denied.code).toBe(0);
+    expect(denied.stdout).not.toContain('--review-style');
+    await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+    const unknownDenied = await invoke(['--no-approve', '--extension', extension, '--review-style=full'], undefined, env, cwd);
+    expect(unknownDenied).toMatchObject({ code: 2, stdout: '' });
+    await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+
+    const help = await invoke(['--approve', '--extension', extension, '--help-extensions'], undefined, env, cwd);
+    expect(help).toMatchObject({ code: 0, stderr: '' });
+    expect(help.stdout).toContain('--review-style <value>  Review style');
+    await rm(marker);
+    const completion = await invoke(['--approve', '--extension', extension, '--completion=--review-style=f'], undefined, env, cwd);
+    expect(completion).toEqual({ code: 0, stdout: '--review-style=full\n', stderr: '' });
+    await rm(marker);
+    const print = await invoke(['--approve', '--extension', extension, '--review-style=full', '--review-check=false', '--print', '--no-session', 'hello'], undefined, env, cwd);
+    expect(print).toEqual({ code: 0, stdout: '[Mock AI Response]\n', stderr: '' });
+    expect(JSON.parse(await readFile(capture, 'utf8'))).toEqual({ style: 'full', check: false });
+    expect(await readFile(marker, 'utf8')).toBe('import\nfactory\n');
+    await rm(marker);
+    const json = await invoke(['--approve', '--extension', extension, '--review-check', '--mode=json', '--no-session', 'hello'], undefined, env, cwd);
+    expect(json.code, json.stderr).toBe(0);
+    expect(json.stdout.trim().split('\n').every(line => !!JSON.parse(line))).toBe(true);
+    expect(JSON.parse(await readFile(capture, 'utf8'))).toEqual({ style: 'brief', check: true });
+    expect(await readFile(marker, 'utf8')).toBe('import\nfactory\n');
+    for (const args of [['--review-style='], ['--review-check=maybe'], ['--review-check', '--review-check'], ['--missing']]) {
+      const invalid = await invoke(['--approve', '--extension', extension, ...args], undefined, env, cwd);
+      expect(invalid).toMatchObject({ code: 2, stdout: '' });
+    }
+    const conflicting = path.join(cwd, 'conflict.mjs');
+    await writeFile(conflicting, `export default api => api.registerOption('review-style', { type: 'string', description: 'Conflict' });`);
+    const conflict = await invoke(['--approve', '--extension', extension, '--extension', conflicting, '--help-extensions'], undefined, env, cwd);
+    expect(conflict).toEqual({ code: 2, stdout: '', stderr: 'Error: Extension startup registration failed. Check trusted extension metadata.\n' });
+    await writeFile(extension, `export default api => api.registerOption('help', { type: 'boolean', description: 'Hijack' });`);
+    expect(await invoke(['--approve', '--extension', extension, '--help-extensions'], undefined, env, cwd))
+      .toEqual({ code: 2, stdout: '', stderr: 'Error: Extension startup registration failed. Check trusted extension metadata.\n' });
+  }, 60_000);
+
+  it('reuses owned contributed values in real RPC processes with pure framing and consistent shutdown', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-rpc-options-'));
+    const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-rpc-options-agent-'));
+    temporaryDirectories.push(cwd, agentDir);
+    const extension = path.join(cwd, 'a-owner.mjs');
+    const observer = path.join(cwd, 'z-observer.mjs');
+    const marker = path.join(cwd, 'lifecycle.jsonl');
+    await writeFile(extension, `
+      import { appendFileSync } from 'node:fs';
+      const mark = value => appendFileSync(process.env.OPTION_MARKER, JSON.stringify(value) + '\\n');
+      console.log('option import noise'); mark({ phase: 'import' });
+      export default api => {
+        console.log('option factory noise');
+        api.registerOption('review-style', { type: 'string', description: 'Review style', default: 'brief', completions: ['brief', 'full'] });
+        api.registerOption('review-check', { type: 'boolean', description: 'Review check', default: false });
+        const values = () => ({ style: api.getOption('review-style'), check: api.getOption('review-check') });
+        mark({ phase: 'factory', ...values() });
+        api.before('before:provider', () => { console.log('option hook noise'); mark({ phase: 'hook', ...values() }); });
+        api.registerCommand('review-values', { description: 'Read review values', handler: () => {
+          mark({ phase: 'command', ...values() }); return JSON.stringify(values());
+        } });
+        api.registerTool({ name: 'review_values', description: 'Read review values', parameters: { type: 'object', properties: {} },
+          execute: async () => ({ content: JSON.stringify(values()) }) });
+        api.registerProvider('option-probe', { defaultConfig: { model: 'option-model' }, create(config) {
+          return { config, validateConfig() { return true; }, getProviderType() { return 'option-probe'; },
+            getConfiguredModel() { return this.config.model; }, setConfiguredModel(model) { this.config.model = model; },
+            async chat() { return { content: 'unused' }; },
+            async streamChat(messages, onChunk, onComplete, onError, options) {
+              if (!options.tools.some(tool => tool.name === 'review_values')) throw new Error('Owned tool not declared');
+              if (messages.some(message => message.role === 'tool')) onComplete({ content: 'review complete' });
+              else onComplete({ content: '', toolCalls: [{ id: 'review-call', name: 'review_values', input: {} }] });
+            },
+          };
+        } });
+        api.on('system:shutdown', () => { console.log('option shutdown noise'); mark({ phase: 'shutdown', ...values() }); });
+        return () => { console.log('option cleanup noise'); mark({ phase: 'cleanup' }); };
+      };
+    `);
+    await writeFile(observer, `
+      import { appendFileSync } from 'node:fs';
+      export default api => api.before('before:provider', () => {
+        appendFileSync(process.env.OPTION_MARKER, JSON.stringify({ phase: 'observer', value: api.getOption('review-style') ?? null }) + '\\n');
+      });
+    `);
+    const env = { AI_HARNESS_AGENT_DIR: agentDir, OPTION_MARKER: marker };
+    const base = ['--approve', '--extension', extension, '--extension', observer, '--mode=rpc', '--no-session'];
+    const help = await invoke([...base, '--help-extensions'], '', env, cwd);
+    expect(help.code, help.stderr).toBe(0);
+    expect(help.stdout).toContain('--review-style <value>  Review style');
+    expect((await readFile(marker, 'utf8')).trimEnd().split('\n').map(line => JSON.parse(line))).toEqual([
+      { phase: 'import' }, { phase: 'factory', style: 'brief', check: false }, { phase: 'cleanup' },
+    ]);
+    await rm(marker);
+    const completion = await invoke([...base, '--completion=--review-style=f'], '', env, cwd);
+    expect(completion).toMatchObject({ code: 0, stdout: '--review-style=full\n' });
+    expect((await readFile(marker, 'utf8')).trimEnd().split('\n').map(line => JSON.parse(line))).toEqual([
+      { phase: 'import' }, { phase: 'factory', style: 'brief', check: false }, { phase: 'cleanup' },
+    ]);
+    await rm(marker);
+    for (const [flags, values] of [
+      [['--review-style', 'full', '--review-check=false'], { style: 'full', check: false }],
+      [['--review-check'], { style: 'brief', check: true }],
+      [[], { style: 'brief', check: false }],
+    ] as Array<[string[], { style: string; check: boolean }]>) {
+      const result = await invoke([...base, ...flags, '--provider=option-probe', '--model=option-model', '--tools=review_values'],
+        '{"type":"get_commands","id":"commands"}\n{"type":"prompt","id":"values","message":"/review-values"}\n{"type":"prompt","message":"review"}\n', env, cwd);
+      expect(result.code, result.stderr).toBe(0);
+      expect(result.stdout.endsWith('\n')).toBe(true);
+      const records = result.stdout.trimEnd().split('\n').map(line => JSON.parse(line));
+      expect(records.find(record => record.id === 'commands')).toMatchObject({ success: true,
+        data: { commands: expect.arrayContaining([expect.objectContaining({ name: 'review-values', source: 'extension' })]) } });
+      expect(records.find(record => record.type === 'tool_execution_end')).toMatchObject({
+        toolName: 'review_values', isError: false, result: { content: [{ type: 'text', text: JSON.stringify(values) }] },
+      });
+      expect(records.at(-1)).toEqual({ type: 'agent_settled' });
+      for (const phase of ['import', 'factory', 'hook', 'shutdown', 'cleanup']) expect(result.stderr).toContain(`option ${phase} noise`);
+      const lifecycle = (await readFile(marker, 'utf8')).trimEnd().split('\n').map(line => JSON.parse(line));
+      expect(lifecycle.filter(record => record.phase === 'import')).toHaveLength(1);
+      expect(lifecycle.filter(record => record.phase === 'factory')).toEqual([{ phase: 'factory', style: 'brief', check: false }]);
+      expect(lifecycle.filter(record => record.phase === 'command')).toEqual([{ phase: 'command', ...values }]);
+      expect(lifecycle.filter(record => record.phase === 'hook')).toEqual([
+        { phase: 'hook', ...values }, { phase: 'hook', ...values },
+      ]);
+      expect(lifecycle.filter(record => record.phase === 'observer')).toEqual([
+        { phase: 'observer', value: null }, { phase: 'observer', value: null },
+      ]);
+      expect(lifecycle.slice(-2)).toEqual([{ phase: 'shutdown', ...values }, { phase: 'cleanup' }]);
+      await rm(marker);
+    }
+    const failed = await invoke([...base, '--review-style=full', '--provider=missing', '--model=missing'], '', env, cwd);
+    expect(failed.code).not.toBe(0);
+    expect(failed.stdout).toBe('');
+    expect(failed.stderr).toContain('Provider unavailable');
+    const lifecycle = (await readFile(marker, 'utf8')).trimEnd().split('\n').map(line => JSON.parse(line));
+    expect(lifecycle.slice(-2)).toEqual([{ phase: 'shutdown', style: 'full', check: false }, { phase: 'cleanup' }]);
+    await rm(marker);
+    for (const flags of [['--review-style='], ['--review-check=maybe'], ['--review-check', '--review-check'], ['--missing']]) {
+      const invalid = await invoke([...base, ...flags], '', env, cwd);
+      expect(invalid).toMatchObject({ code: 2, stdout: '' });
+      expect((await readFile(marker, 'utf8')).trimEnd().split('\n').map(line => JSON.parse(line))).toEqual([
+        { phase: 'import' }, { phase: 'factory', style: 'brief', check: false }, { phase: 'cleanup' },
+      ]);
+      await rm(marker);
+    }
+    const denied = await invoke(['--no-approve', '--extension', extension, '--mode=rpc', '--review-style=full'], '', env, cwd);
+    expect(denied).toMatchObject({ code: 2, stdout: '' });
+    await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+  }, 60_000);
+
   it('administers shared packages without starting the agent and loads enabled package resources', async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-packages-'));
     temporaryDirectories.push(cwd);

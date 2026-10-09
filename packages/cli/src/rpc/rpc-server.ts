@@ -96,6 +96,9 @@ export interface RpcStartupOptions {
   fork?: string;
   name?: string;
   extensions?: string[];
+  /** Internal, already-loaded startup generation. Supply registry and loader together. */
+  extensionRegistry?: ExtensionRegistry;
+  extensionLoader?: ExtensionLoader;
   skills?: string[];
   promptTemplates?: string[];
   noSkills?: boolean;
@@ -259,7 +262,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     redactText: value => redactor.redact(value),
     redactJson: value => redactor.redactJson(value),
   });
-  const extensionRegistry = new ExtensionRegistry();
+  const extensionRegistry = options.extensionRegistry ?? new ExtensionRegistry();
   let controller: RpcController | undefined;
   let mcpHost: McpSessionHost | undefined;
   const stopForSignal = (): void => {
@@ -273,6 +276,9 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
 
   let runError: unknown;
   try {
+    if (!!options.extensionRegistry !== !!options.extensionLoader) {
+      throw new Error('Prepared RPC extensions require both registry and loader.');
+    }
     extensionRegistry.attachSessionManager(sessionManager);
 
     const cwd = process.cwd();
@@ -414,13 +420,17 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       shellPath: settingsResolution.settings.shellPath,
       shellCommandPrefix: settingsResolution.settings.shellCommandPrefix,
     });
-    const extensionLoader = new ExtensionLoader(extensionRegistry, {
+    // Startup parsing already imported and ran these factories, with final owned values.
+    // Reusing that generation is essential: a second load would reset values to defaults.
+    const extensionLoader = options.extensionLoader ?? new ExtensionLoader(extensionRegistry, {
       paths: [...rpcExtensionPaths(options.extensions ?? [], settingsResolution), ...packageExtensions],
       isProjectTrusted: () => projectResourcesTrusted,
     });
-    const extensionLoadResult = await extensionLoader.loadAll();
-    for (const failure of extensionLoadResult.errors) {
-      process.stderr.write(`${redactor.redact(`Extension ${failure.path}: ${failure.error.message}`)}\n`);
+    if (!options.extensionLoader) {
+      const extensionLoadResult = await extensionLoader.loadAll();
+      for (const failure of extensionLoadResult.errors) {
+        process.stderr.write(`${redactor.redact(`Extension ${failure.path}: ${failure.error.message}`)}\n`);
+      }
     }
     const providerRuntime = await createCliProviderRuntime(
       settingsResolution.agentDir,

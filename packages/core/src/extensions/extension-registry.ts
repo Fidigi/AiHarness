@@ -7,6 +7,9 @@ import type { SessionManager } from '../sessions/session-manager.js';
 import type { AgentToolExposure, AgentToolNamespace } from '../tools/tool-selection.js';
 import { EventEmitter, type EventHandler, type EventMap } from '../utils/event-emitter.js';
 
+import { validateExtensionOption, type ExtensionOption, type ExtensionOptionDescriptor, type ExtensionOptionValue } from './startup-options.js';
+export type { ExtensionOption, ExtensionOptionDescriptor, ExtensionOptionValue } from './startup-options.js';
+
 export type ExtensionLogLevel = 'info' | 'success' | 'warning' | 'error';
 
 export type ExtensionInteractionKind = 'confirm' | 'input' | 'select' | 'editor' | 'custom';
@@ -168,6 +171,10 @@ export interface ExtensionInfo {
 export interface ExtensionAPI {
   /** Major version of this AiHarness-owned extension contract. */
   readonly version: typeof AI_HARNESS_EXTENSION_API_VERSION;
+  /** Register an owned long startup option; disposing or unloading removes it. */
+  registerOption(name: string, option: ExtensionOption): () => void;
+  /** Reads only this extension's options. Explicit values are ready after startup parsing. */
+  getOption(name: string): ExtensionOptionValue | undefined;
   registerCommand(name: string, command: ExtensionCommand): void;
   registerTool(tool: ExtensionTool): void;
   registerProvider(type: string, provider: ExtensionProvider): void;
@@ -208,6 +215,8 @@ const SESSION_EVENTS: SessionEvent[] = [
 
 /** Runtime registry for extension commands, tools, providers and lifecycle hooks. */
 export class ExtensionRegistry {
+  private readonly startupOptions = new Map<string, Owned<ExtensionOption>>();
+  private startupOptionValues: Readonly<Record<string, ExtensionOptionValue>> = Object.freeze({});
   private readonly commands = new Map<string, Owned<ExtensionCommand>>();
   private readonly tools = new Map<string, Owned<ExtensionTool>>();
   private readonly providers = new Map<string, Owned<ExtensionProvider>>();
@@ -265,6 +274,7 @@ export class ExtensionRegistry {
     previousIds: Iterable<string>,
     candidates: Array<{ id: string; factory: ExtensionFactory }>,
   ): Promise<void> {
+    const previousOptionValues = this.startupOptionValues;
     const previous = [...new Set(previousIds)]
       .map(id => this.loaded.get(id))
       .filter((item): item is LoadedExtension => Boolean(item))
@@ -288,11 +298,32 @@ export class ExtensionRegistry {
           restoreErrors.push(`${item.id}: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`);
         }
       }
+      const restoredValues = Object.fromEntries(Object.entries(previousOptionValues).filter(([name, value]) =>
+        this.startupOptions.get(name)?.value.type === typeof value,
+      ));
+      this.setOptionValues(restoredValues);
       if (restoreErrors.length) {
         throw new AggregateError([error], `Extension reload failed and rollback was incomplete: ${restoreErrors.join('; ')}`);
       }
       throw error;
     }
+  }
+
+  getOptions(): ExtensionOptionDescriptor[] {
+    return [...this.startupOptions].map(([name, entry]) => ({ ...entry.value, name, extensionId: entry.owner }));
+  }
+
+  /** Host-only, atomic assignment after strict parsing; defaults are resolved by getOption. */
+  setOptionValues(values: Readonly<Record<string, ExtensionOptionValue>>): void {
+    if (Object.keys(values).length > 256) throw new Error('Too many extension option values.');
+    for (const [name, value] of Object.entries(values)) {
+      const option = this.startupOptions.get(name)?.value;
+      if (!option || typeof value !== option.type || (typeof value === 'string'
+        && (!value || value.length > 4096 || /[\x00-\x1f\x7f-\x9f]/.test(value)))) {
+        throw new Error('Invalid extension startup option value.');
+      }
+    }
+    this.startupOptionValues = Object.freeze({ ...values });
   }
 
   getCommand(name: string): ExtensionCommand | undefined {
@@ -464,6 +495,33 @@ export class ExtensionRegistry {
   private createApi(extension: LoadedExtension): ExtensionAPI {
     return {
       version: AI_HARNESS_EXTENSION_API_VERSION,
+      registerOption: (name, metadata) => {
+        if (!this.loaded.has(extension.id) || this.loaded.get(extension.id) !== extension) {
+          throw new Error('Cannot register startup options for an unloaded extension.');
+        }
+        const option = validateExtensionOption(name, metadata);
+        if (this.startupOptions.size >= 256
+          || [...this.startupOptions.values()].filter(entry => entry.owner === extension.id).length >= 32) {
+          throw new Error('Extension startup option limit exceeded.');
+        }
+        this.assertAvailable(this.startupOptions, name, 'startup option');
+        const entry = { owner: extension.id, value: option };
+        this.startupOptions.set(name, entry);
+        const dispose = (): void => {
+          if (this.startupOptions.get(name) !== entry) return;
+          this.startupOptions.delete(name);
+          const values = { ...this.startupOptionValues };
+          delete values[name];
+          this.startupOptionValues = Object.freeze(values);
+        };
+        extension.cleanups.push(dispose);
+        return dispose;
+      },
+      getOption: name => {
+        const entry = this.startupOptions.get(name);
+        if (!entry || entry.owner !== extension.id || this.loaded.get(extension.id) !== extension) return undefined;
+        return Object.hasOwn(this.startupOptionValues, name) ? this.startupOptionValues[name] : entry.value.default;
+      },
       registerCommand: (name, command) => {
         const normalized = this.normalizeName(name);
         this.assertAvailable(this.commands, normalized, 'command');

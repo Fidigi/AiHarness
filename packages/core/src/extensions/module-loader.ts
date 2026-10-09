@@ -1,8 +1,11 @@
-import { constants as fsConstants } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { constants as fsConstants, readFileSync } from 'node:fs';
+import { findPackageJSON, registerHooks } from 'node:module';
 import { lstat, open } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { compileFunction } from 'node:vm';
 import { openStableDirectoryHandle, readStableDirectoryEntries } from '../security/stable-directory.js';
 import type { ExtensionFactory } from './extension-registry.js';
 import type { ExtensionRegistry } from './extension-registry.js';
@@ -63,7 +66,7 @@ function sameExtensionIdentity(
 
 async function importExtensionFactory(
   filePath: string,
-  generation: number,
+  importAttempt: string,
 ): Promise<ExtensionFactory> {
   const parentPath = path.dirname(filePath);
   const parentHandle = await openStableDirectoryHandle(parentPath).catch(() => {
@@ -95,13 +98,66 @@ async function importExtensionFactory(
       throw new Error('Extension module changed while it was being opened');
     }
 
-    // Linux imports through the held descriptor so a pathname replacement cannot substitute the entry module.
-    // Vitest's VM loader cannot import /proc descriptors; process-level contract tests exercise that path.
-    // Other platforms retain the same before/open/after identity checks and fail closed when instability is seen.
-    const descriptorImport = process.platform === 'linux' && !RUNNING_UNDER_VITEST;
-    const importPath = descriptorImport ? `/proc/self/fd/${fileHandle.fd}` : filePath;
-    const moduleUrl = `${pathToFileURL(importPath).href}?aiharness=${generation}`;
-    const loaded = await import(moduleUrl) as { default?: ExtensionFactory };
+    // Keep the real entry URL for relative imports and import.meta.url, but read
+    // entry source from the held descriptor. Importing /proc/self/fd/N directly is unsafe:
+    // Node caches its realpath even after N is closed and reused for another module.
+    // Vitest's VM loader uses the pathname with the same before/open/after checks.
+    const moduleUrl = `${pathToFileURL(filePath).href}?aiharness=${importAttempt}`;
+    const hooks = !RUNNING_UNDER_VITEST ? registerHooks({
+      resolve(specifier, context, nextResolve) {
+        const resolved = nextResolve(specifier, context);
+        return specifier === moduleUrl ? { ...resolved, url: moduleUrl, shortCircuit: true } : resolved;
+      },
+      load(url, context, nextLoad) {
+        if (url !== moduleUrl) return nextLoad(url, context);
+        const source = readFileSync(fileHandle!.fd, 'utf8');
+        let format = context.format;
+        // Preserve Node's .js package-type/syntax detection, including CommonJS factories.
+        // Compiling an ambiguous CommonJS wrapper detects ESM-only syntax without executing it.
+        // Some source loaders (e.g. tsx) label ambiguous .js as CommonJS before
+        // Node's syntax detection. Only an explicit package type fixes .js format.
+        const packageJson = format === 'commonjs' && filePath.endsWith('.js')
+          ? findPackageJSON(pathToFileURL(filePath)) : undefined;
+        // Node can return the entry path itself when there is no package scope.
+        const packageType: unknown = packageJson && path.basename(packageJson) === 'package.json'
+          ? JSON.parse(readFileSync(packageJson, 'utf8')).type : undefined;
+        if (!format || (format === 'commonjs' && filePath.endsWith('.js')
+          && packageType !== 'commonjs' && packageType !== 'module')) {
+          try {
+            compileFunction(source, ['exports', 'require', 'module', '__filename', '__dirname']);
+            format = 'commonjs';
+          } catch {
+            format = 'module';
+          }
+        }
+        if (format === 'commonjs') {
+          // Node's CJS translator caches by filename, ignoring the attempt query.
+          // Evaluate just this entry in an ESM envelope instead: do not delete or
+          // replace any require.cache entry (even during a failed candidate).
+          // Dependencies still use Node's ordinary cache and real entry location.
+          return { format: 'module', source: `
+            import Module, { createRequire } from 'node:module';
+            const filename = ${JSON.stringify(filePath)};
+            const require = createRequire(filename);
+            const module = new Module(filename);
+            module.filename = filename;
+            module.paths = require.resolve.paths('aiharness-entry') ?? [];
+            // Node's own CJS compiler retains sloppy mode, wrapper variables,
+            // shebang handling and dynamic import resolution at the real filename.
+            module._compile(${JSON.stringify(source)}, filename);
+            module.loaded = true;
+            export default module.exports;
+          `, shortCircuit: true };
+        }
+        return { format, source, shortCircuit: true };
+      },
+    }) : undefined;
+    let loaded: { default?: ExtensionFactory };
+    try {
+      loaded = await import(moduleUrl) as { default?: ExtensionFactory };
+    } finally {
+      hooks?.deregister();
+    }
 
     const [openedAfter, pathAfter, parentAfter] = await Promise.all([
       fileHandle.stat(),
@@ -134,6 +190,9 @@ export class ExtensionModuleLoader {
   private readonly includeProjectLocation: boolean;
   private managedIds = new Set<string>();
   private generation = 0;
+  // Failed candidates are still cached by ESM. Never reuse an attempted import URL.
+  private importAttempt = 0;
+  private readonly importIdentity = randomUUID();
   private activeReload?: Promise<ExtensionModuleLoadResult>;
 
   constructor(
@@ -224,11 +283,12 @@ export class ExtensionModuleLoader {
 
   private async performReload(): Promise<ExtensionModuleLoadResult> {
     const nextGeneration = this.generation + 1;
+    const importAttempt = ++this.importAttempt;
     const errors: ExtensionModuleLoadError[] = [];
     const candidates: Array<{ id: string; factory: ExtensionFactory }> = [];
     for (const filePath of await this.discover()) {
       try {
-        candidates.push({ id: filePath, factory: await importExtensionFactory(filePath, nextGeneration) });
+        candidates.push({ id: filePath, factory: await importExtensionFactory(filePath, `${this.importIdentity}-${importAttempt}`) });
       } catch (error) {
         errors.push({ path: filePath, error: error instanceof Error ? error : new Error(String(error)) });
       }
@@ -249,7 +309,7 @@ export class ExtensionModuleLoader {
   }
 
   private async findIndex(directory: string): Promise<string | undefined> {
-    for (const name of ['index.mjs', 'index.js']) {
+    for (const name of ['index.mjs', 'index.js', 'index.cjs']) {
       const candidate = path.join(directory, name);
       try {
         const info = await lstat(candidate);
@@ -263,6 +323,6 @@ export class ExtensionModuleLoader {
   }
 
   private isExtensionFile(filePath: string): boolean {
-    return filePath.endsWith('.js') || filePath.endsWith('.mjs');
+    return filePath.endsWith('.js') || filePath.endsWith('.mjs') || filePath.endsWith('.cjs');
   }
 }

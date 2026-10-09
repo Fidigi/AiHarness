@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import { MockProvider, SessionManager } from '@ai-harness/core';
+import { ExtensionRegistry, MockProvider, SessionManager, type ExtensionAPI } from '@ai-harness/core';
+import { ExtensionLoader } from '../extensions/extension-loader.js';
 import { handleRpcRequest, runRpcMode, type RpcContext } from './rpc-server';
 
 async function context(): Promise<RpcContext> {
@@ -101,6 +102,48 @@ describe('RPC server', () => {
       input: Readable.from(['{"type":"get_state","id":"state"}\n']),
       output: async () => { throw new Error('closed protocol output'); },
     })).rejects.toThrow('closed protocol output');
+  });
+
+  it.each(['eof', 'startup-failure', 'output-failure'] as const)('reuses and shuts down a prepared generation on %s', async ending => {
+    const registry = new ExtensionRegistry();
+    let owner!: ExtensionAPI;
+    const cleanup = vi.fn();
+    const shutdownValues: unknown[] = [];
+    const factory = vi.fn((api: ExtensionAPI) => {
+      owner = api;
+      api.registerOption('review-style', { type: 'string', description: 'Style', default: 'brief' });
+      api.on('system:shutdown', () => { shutdownValues.push(api.getOption('review-style')); });
+      return cleanup;
+    });
+    await registry.load('prepared-review', factory);
+    registry.setOptionValues({ 'review-style': 'full' });
+    const loader = new ExtensionLoader(registry);
+    const load = vi.spyOn(loader, 'loadAll');
+    const records: Record<string, unknown>[] = [];
+    const running = runRpcMode({
+      noSession: true,
+      extensionRegistry: registry,
+      extensionLoader: loader,
+      ...(ending === 'startup-failure' ? { provider: 'missing', model: 'missing-model' } : {}),
+      input: Readable.from(['{"id":"prepared","method":"system.ping"}\n']),
+      output: async record => {
+        if (ending === 'output-failure') throw new Error('closed prepared sink');
+        records.push(record);
+      },
+    });
+    if (ending === 'eof') {
+      await running;
+      expect(records).toEqual([{ id: 'prepared', result: { ok: true } }]);
+    } else {
+      await expect(running).rejects.toThrow(ending === 'startup-failure' ? 'Provider unavailable' : 'closed prepared sink');
+    }
+    expect(load).not.toHaveBeenCalled();
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(shutdownValues).toEqual(['full']);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(registry.getOptions()).toEqual([]);
+    expect(owner.getOption('review-style')).toBeUndefined();
+    expect(registry.list()).toEqual([]);
   });
 
   it('returns a structured error for unknown methods', async () => {
