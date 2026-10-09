@@ -22,6 +22,7 @@ const EMPTY_FILE: ConfigurationFile = {
 };
 
 const MAX_CONFIGURATION_BYTES = 4 * 1024 * 1024;
+const MAX_CONFIGURATION_SCOPES = 10_000;
 const mutations = new Map<string, Promise<void>>();
 
 const SECRET_KEY = /(?:secret|token|password|api[-_]?key|authorization|credential)/i;
@@ -113,7 +114,7 @@ export class ConfigurationStore {
         throw new Error('Unsupported configuration version.');
       }
       const layer = (input: unknown): Record<string, ScopedConfigurationValues> => {
-        if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length > 10_000) {
+        if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length > MAX_CONFIGURATION_SCOPES) {
           throw new Error('Invalid configuration layers.');
         }
         return Object.fromEntries(Object.entries(input).map(([id, values]) => {
@@ -244,6 +245,9 @@ export class ConfigurationStore {
       if (scope === 'global') snapshot.global = target;
       else if (scope === 'project') snapshot.projects[id!] = target;
       else snapshot.sessions[id!] = target;
+      if (Object.keys(snapshot.projects).length > MAX_CONFIGURATION_SCOPES || Object.keys(snapshot.sessions).length > MAX_CONFIGURATION_SCOPES) {
+        invalidConfiguration('Configuration scope limit exceeded.');
+      }
       await mkdir(path.dirname(key), { recursive: true, mode: 0o700 });
       await atomicWriteStableFile(key, `${JSON.stringify(snapshot, null, 2)}\n`, {
         overwrite: true, mode: 0o600, maxBytes: MAX_CONFIGURATION_BYTES,

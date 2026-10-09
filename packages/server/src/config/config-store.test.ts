@@ -134,6 +134,23 @@ describe('ConfigurationStore', () => {
     }
   });
 
+  it('never publishes a scoped record that its bounded reader would refuse', async () => {
+    const file = await storePath();
+    await mkdir(path.dirname(file), { recursive: true });
+    const source = JSON.stringify({ version: 1, global: { thinking: 'low' },
+      projects: Object.fromEntries(Array.from({ length: 10_000 }, (_, index) => [`project-${index}`, {}])), sessions: {} });
+    await writeFile(file, source);
+    const store = new ConfigurationStore(file);
+    await store.load();
+    await expect(store.patch('project', { model: 'must-not-publish' }, 'overflow'))
+      .rejects.toMatchObject({ status: 400, code: 'INVALID_CONFIGURATION' });
+    expect(await readFile(file, 'utf8')).toBe(source);
+    expect(store.get('project', 'overflow')).toEqual({});
+    await store.patch('global', { thinking: 'high' });
+    await store.load();
+    expect(store.get('global').thinking).toBe('high');
+  });
+
   it('rejects linked and over-budget settings without following or overwriting them', async () => {
     const file = await storePath();
     await mkdir(path.dirname(file), { recursive: true });
