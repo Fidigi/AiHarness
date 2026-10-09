@@ -891,11 +891,29 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     if (!currentSession || !workspace || !raw.startsWith('/')) return false;
     const [name, ...parts] = raw.slice(1).trim().split(/\s+/);
     const argument = parts.join(' ');
-    switch (name.toLocaleLowerCase()) {
-      case 'mcp': {
-        navigate('/settings#mcp');
+    // Resolve ownership afresh: a reload can change who owns /mcp while a run streams.
+    if (name.toLocaleLowerCase() === 'mcp') {
+      const latest = await getAgentPalette(workspace.cwd, workspace.id);
+      if (!latest.success || !latest.data) {
+        setNotice(latest.error || t('chat.extensionCommandFailed'));
         return true;
       }
+      setPalette(latest.data);
+      const owner = latest.data.find(item => item.name === 'mcp' && item.source === 'extension');
+      if (owner) {
+        if (currentSession.draft) setNotice(t('chat.extensionCommandFailed'), 'warning');
+        else {
+          const result = await runExtensionCommand(currentSession.id, 'mcp', argument);
+          if (!result.success) setNotice(result.error || t('chat.extensionCommandFailed'));
+          else if (result.data?.output) setNotice(result.data.output, 'info');
+        }
+        return true;
+      }
+      if (!argument) navigate('/settings#mcp');
+      else setNotice(t('chat.unknownCommand', { command: raw }), 'warning');
+      return true;
+    }
+    switch (name.toLocaleLowerCase()) {
       case 'auto-compact': {
         const mode = argument.trim().toLocaleLowerCase();
         if (!mode) {

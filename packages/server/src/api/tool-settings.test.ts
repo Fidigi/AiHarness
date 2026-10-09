@@ -40,6 +40,25 @@ describe('scoped sandbox and disabled-tool settings', () => {
     expect(palette).toContainEqual(expect.objectContaining({ name: 'mcp', source: 'builtin' }));
   });
 
+  it('reports command conflicts without confusing ownership with MCP connection state, and unload restores navigation', async () => {
+    const directory = path.join(root, 'data', 'extensions');
+    await mkdir(directory, { recursive: true });
+    const file = path.join(directory, 'mcp-owner.mjs');
+    await writeFile(file, `export default api => { api.registerCommand('mcp', { description: 'Owned command', handler: () => 'owned' }); };`);
+    const reload = () => fetch(`${base}/api/agent/reload`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    expect((await reload()).status).toBe(200);
+    const palette = await fetch(`${base}/api/agent/palette`).then(response => response.json());
+    expect(palette.filter((item: { name: string }) => item.name === 'mcp')).toEqual([
+      expect.objectContaining({ name: 'mcp', source: 'extension', extensionId: expect.any(String) }),
+    ]);
+    const inventory = await fetch(`${base}/api/mcp`).then(response => response.json());
+    expect(inventory.command).toMatchObject({ owner: 'extension', conflict: true, extensionId: expect.any(String) });
+    expect(inventory.servers).toEqual([]);
+    await rm(file);
+    expect((await reload()).status).toBe(200);
+    expect((await fetch(`${base}/api/mcp`).then(response => response.json())).command).toEqual({ owner: 'builtin', conflict: false });
+  });
+
   it('persists project settings independently and rejects invalid budgets/unknown fields atomically', async () => {
     const scoped = { cwd: path.join(root, 'project'), projectId, enabledTools: ['codemode'], toolPreset: 'chat-only',
       powershellEnabled: false, codemodeEnabled: true, codemodeMode: 'on', codemodeInlineBudget: 500 };

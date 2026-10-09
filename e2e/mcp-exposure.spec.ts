@@ -48,3 +48,30 @@ test('bare /mcp navigates locally rather than sending a provider prompt', async 
   await expect(page.locator('#mcp')).toBeFocused();
   expect(api.requests.some(request => request.path === '/api/agent/runs' && request.method === 'POST')).toBe(false);
 });
+
+for (const owned of [false, true]) {
+  test(`streaming /mcp respects ${owned ? 'extension ownership' : 'builtin navigation'}`, async ({ page }) => {
+    const inventory = mcpStateInventory();
+    inventory.command = owned ? { owner: 'extension', extensionId: 'fixture:owner', conflict: true }
+      : { owner: 'builtin', conflict: false };
+    const api = await installMockApi(page, { sessions: [mockSession('mcp-stream', 'Streaming')], holdAgentRun: true,
+      mcpConfig: inventory, paletteItems: [{ name: 'mcp', description: 'Owned MCP', source: owned ? 'extension' : 'builtin' }] });
+    await page.goto('/chat/mcp-stream');
+    const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
+    await composer.fill('Start'); await composer.press('Enter');
+    await expect(page.getByRole('button', { name: 'Stop model' })).toBeVisible();
+    api.setRunPhase('mcp-stream', 'streaming');
+    await composer.fill('/mcp'); await page.getByRole('button', { name: 'Queue', exact: true }).click();
+    if (owned) {
+      await expect.poll(() => api.requests.some(request => request.path.endsWith('/commands/mcp') && request.method === 'POST')).toBe(true);
+      await expect(page).toHaveURL(/\/chat\/mcp-stream/);
+      await page.goto('/settings#mcp');
+      await expect(page.locator('#mcp')).toContainText('fixture:owner owns /mcp');
+    } else {
+      await expect(page).toHaveURL(/\/settings#mcp$/);
+      await expect(page.locator('#mcp')).toBeFocused();
+    }
+    expect(api.requests.filter(request => request.path === '/api/agent/runs' && request.method === 'POST')).toHaveLength(1);
+    expect(api.requests.some(request => request.path.endsWith('/stop') || request.path.endsWith('/queue'))).toBe(false);
+  });
+}

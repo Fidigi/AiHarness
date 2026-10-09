@@ -424,6 +424,7 @@ export const frLocale: LocalePlugin = {
     'settings.skills.toggle': 'Autoriser {skill} pour l’invocation autonome par le modèle',
     'settings.skills.metadata': 'Source et confiance du skill',
     'settings.skills.untrusted': 'non approuvé',
+    'settings.mcp.commandConflict': 'L’extension {owner} possède /mcp. La commande exécute cette extension, sans ouvrir les réglages. Les connexions MCP restent indépendantes.',
     'settings.mcp.title': 'Serveurs MCP',
     'settings.mcp.help': 'Inspectez et modifiez la configuration expurgée. Tester relit explicitement une entrée, peut résoudre ses valeurs, exécuter ses commandes, démarrer son processus ou contacter son URL une fois, puis le ferme ; cette action ne démarre jamais la connexion OAuth.',
     'settings.mcp.loadFailed': 'Impossible de charger l’inventaire de configuration MCP.',

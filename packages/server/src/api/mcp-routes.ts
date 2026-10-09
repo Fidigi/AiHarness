@@ -186,7 +186,10 @@ export function createMcpRouter(
     try {
       const services = await servicesPromise;
       const overview = await services.mcpInventory.getOverview(optionalCwd(request.query.cwd));
-      response.json(overview);
+      const owner = services.extensionRegistry.getCommands().find(command => command.name === 'mcp');
+      response.json({ ...overview, command: owner
+        ? { owner: 'extension', extensionId: services.redactText(owner.extensionId), conflict: true }
+        : { owner: 'builtin', conflict: false } });
     } catch (error) {
       if (error instanceof McpConfigMutationError && error.code === 'invalid-request') {
         response.status(400).json({ error: CWD_INVALID });

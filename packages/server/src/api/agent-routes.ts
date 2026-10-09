@@ -139,7 +139,9 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         .filter(resource => resource.kind === 'prompt')
         .map(resource => ({ name: resource.name, description: `Prompt from ${pkg.packageName ?? pkg.source}`, source: 'prompt' })));
       const seen = new Set<string>();
-      response.json([...builtins, ...extensions, ...prompts, ...skills].filter(item => {
+      // An owned extension command wins over the local builtin, never over a sibling owner.
+      const ownedNames = new Set(extensions.map(command => command.name));
+      response.json([...builtins.filter(command => !ownedNames.has(command.name)), ...extensions, ...prompts, ...skills].filter(item => {
         const key = `${item.source}:${item.name}`;
         if (seen.has(key)) return false;
         seen.add(key);

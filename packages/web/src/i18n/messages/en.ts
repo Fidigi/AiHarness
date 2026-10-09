@@ -424,6 +424,7 @@ export const enLocale: LocalePlugin = {
     'settings.skills.toggle': 'Allow {skill} for autonomous model invocation',
     'settings.skills.metadata': 'Skill source and trust metadata',
     'settings.skills.untrusted': 'untrusted',
+    'settings.mcp.commandConflict': 'The extension {owner} owns /mcp. The command runs that extension, not Settings navigation. MCP connections remain independent.',
     'settings.mcp.title': 'MCP servers',
     'settings.mcp.help': 'Inspect and edit redacted configuration. Test explicitly rereads one entry, may resolve its values, run configured commands, start its process or contact its URL once, then closes it; it never starts OAuth sign-in.',
     'settings.mcp.loadFailed': 'Failed to load the MCP configuration inventory.',

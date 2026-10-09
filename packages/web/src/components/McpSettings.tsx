@@ -830,6 +830,9 @@ export function McpSettings() {
       <button ref={refreshButtonRef} type="button" disabled={loading || controlsDisabled}
         onClick={() => void load(true)}>{t('common.refresh')}</button>
     </div>
+    {inventory?.command?.conflict && <p role="status" className="status-warning">
+      {t('settings.mcp.commandConflict', { owner: inventory.command.extensionId ?? 'extension' })}
+    </p>}
     {loading && !inventory && <p role="status">{t('common.loading')}…</p>}
     {loadError && <p role="alert" className="status-warning">{t('settings.mcp.loadFailed')} {loadError}</p>}
     {testError && <p role="alert" className="status-warning mcp-action-feedback">

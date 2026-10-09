@@ -230,6 +230,8 @@ export interface McpProjectInventory {
 }
 
 export interface McpConfigInventory {
+  /** Runtime command ownership; omitted by the passive file inspector. */
+  command?: { owner: 'builtin' | 'extension'; extensionId?: string; conflict: boolean };
   files: McpConfigFileInventory[];
   servers: McpServerInventoryEntry[];
   project?: McpProjectInventory;
