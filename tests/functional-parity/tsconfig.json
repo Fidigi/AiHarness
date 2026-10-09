@@ -4,5 +4,5 @@
     "noEmit": true,
     "types": ["node", "vitest/globals"]
   },
-  "include": ["./harness.ts", "./functional-parity.test.ts"]
+  "include": ["./harness.ts", "./functional-parity.test.ts", "./installed-executable.test.ts"]
 }

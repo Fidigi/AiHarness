@@ -68,7 +68,7 @@ packages/cli/src/index.ts
 
 Regular rendering prints status only at startup/prompt boundaries; fullscreen lays out header/transcript/editor/footer with compact/resize fallback for physically short screens. `tui/status.ts` projects actual raw journal accounting (active ancestors including pre-compaction vs full abandoned history), effective estimated context, known/partial/unknown costs, model/thinking, cwd/session persistence and loaded resources/instructions. Never traverse arbitrary progress details for billing or retroactively price old usage with the current model. `terminal-text.ts` statefully strips untrusted OSC/CSI/DCS/APC/C1/bidi controls while preserving trusted harmless SGR; conventional grapheme/cell widths are not a universal emulator guarantee. `PromptBoundaryRefresh` and composition invalidate old snapshots/prompts at every input/provider start/shutdown and guard current session/stream before synchronous display. Focused tests cover huge combining clusters, emoji widths, delayed refreshes and unchanged accounting; real regular/fullscreen PTYs exercise sessions, resize, shell-control suppression and cleanup.
 
-CLI flags override `AI_HARNESS_TUI_MODE`; terminal capability determines whether fullscreen can actually run. Unknown options and missing values fail before loading sessions or executable resources. `--help` and `--version` are metadata-only exits. `--approve` (`-a`) and `--no-approve` (`-na`) provide opposing one-process project-trust overrides and never mutate `trust.json`; combining them is rejected.
+CLI flags override `AI_HARNESS_TUI_MODE`; terminal capability determines whether fullscreen can actually run. Unknown options and missing values fail before session/provider startup, but contributed-option discovery may execute eligible trusted extensions. `--help` and `--version` remain metadata-only exits. `--approve` (`-a`) and `--no-approve` (`-na`) provide opposing one-process project-trust overrides and never mutate `trust.json`; combining them is rejected.
 
 ## Model Catalogue and Selection
 
@@ -183,6 +183,8 @@ AiHarness owns its executable syntax, JSON/RPC envelopes, session schema, extens
 
 Canonicalization is intentionally narrow: temporary paths, UUIDs, timestamps, measured durations, generated workspace IDs and JSON object-key order are unstable. Event order, record count, payload meaning, usage, failures, exit status and stdout/stderr assignment remain exact. Goldens have no implicit update mode and must be edited and reviewed deliberately. Run the focused Docker target with `make test-parity`; the root `make test` includes the same suite.
 
+The separate `tests/functional-parity/installed-executable.test.ts` rebuilds Core/CLI, creates real offline npm archives and installs literal tarball paths outside the checkout. It invokes the installed bin through PATH and checks help/version/unknown exits, trusted contributed options, unchanged print/JSON/RPC goldens, genuine public declarations, fresh CommonJS entry reload and QuickJS worker/WASM resolution. Packages remain private: local archive installation is proved, not registry publication or clean online dependency resolution. The [EN](../../contributors/en/installed-cli.md) / [FR](../../contributors/fr/installed-cli.md) guides specify the real copied-dependency/existing-cache fixture and read-only, network-none Docker command.
+
 ## JSON Event Contract
 
 `--mode json` reserves stdout for LF-delimited JSON objects through a serialized writer that waits for stream acceptance. Its first object is a version-3 session header; each supplied prompt then emits agent, turn, user/assistant message, text/reasoning delta, tool execution start/update/end, result, usage, terminal agent, and settled events. Assistant updates omit cumulative message/partial snapshots, tool-call starts retain normalized `id` and `toolName`, and streamed tool snapshots stay bounded. Diagnostics and accidental extension writes are redirected to stderr.
@@ -274,6 +276,7 @@ Reads, searches, and CLI `@path` inputs are canonicalized inside the active work
 - `packages/core/src/agent/{message-queue,runtime}.test.ts` — common queue modes/bounds plus detached Web scheduling
 - `packages/cli/src/tui/{terminal-ui,fullscreen-ui,fullscreen-input,theme-manager,theme-input-filter}.test.ts` — rendering, concurrent input, queue shortcuts/editor restoration, adaptive themes and OSC/CSI-to-keypress filtering
 - `tests/functional-parity/functional-parity.test.ts` — positive/negative CLI and automation goldens, stdout purity, session migration, extension API versioning and built-package SDK probes
+- `tests/functional-parity/installed-executable.test.ts` — genuine local pack/install outside checkout, PATH bin, read-only/no-network proof, installed public declarations/extensions/QuickJS assets and unchanged protocol goldens
 
 ## Common Changes
 

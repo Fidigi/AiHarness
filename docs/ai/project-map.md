@@ -70,7 +70,7 @@ Development ports differ from the combined launcher:
 | `Makefile` | Authoritative Docker build and validation workflow; E2E artifacts and Docker-generated baselines are copied out of the completed container |
 | `.docker/` | Test, production, and lockfile Dockerfiles; bounded E2E artifact helpers archive only screenshots added or byte-changed by that run so concurrent cleanup cannot restore stale baselines |
 | `e2e/*.spec.ts`, `e2e/fixtures/`, `e2e/*-snapshots/` | Playwright journeys with reusable intercepted API fixtures, a real-server smoke path and Docker-generated visual baselines |
-| `tests/functional-parity/` | Manifest-driven public CLI/JSON/RPC/session/extension/SDK probes with reviewed positive and negative goldens |
+| `tests/functional-parity/` | Manifest-driven public CLI/JSON/RPC/session/extension/SDK goldens plus genuine outside-checkout Core/CLI pack/install/PATH-bin/worker probes; local archives, not public registry distribution |
 | `docs/` | User, architecture, extension, container, and agent documentation |
 | `demo/`, `.github/workflows/demo-pages.yml` | Separate synthetic React/Vite static demo, bounded offline assets, Docker validation/export and build-only PR/separately admitted Pages pipeline; no backend/host tools |
 
