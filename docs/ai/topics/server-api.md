@@ -4,7 +4,7 @@
 
 ## Overview
 
-The Express server exposes authenticated REST, SSE, and legacy WebSocket chat; owns runtime services and persistence; and optionally serves the built Web bundle. Fixed session routes are declared before `/:id` routes, and domain routers are mounted under explicit `/api/*` prefixes.
+The Express server exposes authenticated REST, SSE, and legacy WebSocket chat; owns runtime services and persistence; and optionally serves the built Web bundle. Fixed session routes are declared before `/:id` routes, and domain routers are mounted under explicit `/api/*` prefixes. `createApp()` stays synchronous; `await start()` awaits the existing composition factory before binding a listener and rejects initialization failure or a generation retired during bootstrap. This is not a new initialization deadline: a non-cooperative factory can keep startup pending.
 
 The browser contract is summarized in [`web-app-architecture.md`](./web-app-architecture.md); session and event invariants live in [`sessions.md`](./sessions.md).
 
@@ -162,6 +162,7 @@ Administrator `PATCH /api/skills/enabled/batch` accepts exactly `{changes: [{key
 
 ## Associated Tests
 
+- `packages/server/src/start-readiness.test.ts` and `packages/server/src/application-lifecycle.test.ts` — gated startup publication, initialization rejection, stop-during-bootstrap/late cleanup and existing application-generation retirement
 - `packages/server/src/web-server.test.ts` — broad HTTP, auth, sessions, providers, files, PTY, MCP Test fresh-target/config-smuggling/trust/redaction/status behavior, import-and-replacement preview/persistence/exposure/admin mutation/opaque undo, packages and runtime integration
 - `packages/server/src/api/mcp-oauth-routes.test.ts` and `packages/core/src/mcp/{oauth,oauth-provider-factory,oauth-flow,oauth-integration}.test.ts` — passive inventory, explicit routes, unavailable storage, bounded public state, paste/cancel/logout guards, SDK discovery/PKCE/DCR/callback/refresh and token non-disclosure
 - `packages/server/src/api/tool-settings.test.ts` and `packages/core/src/tools/codemode.test.ts` — cached sandbox health, exact scoped settings/readback, visible reasons, budgets and nested execution
@@ -187,7 +188,7 @@ Update Core event types/journal, AgentRuntime writer, state serializer, browser 
 
 ### Change startup or static serving
 
-Check `web-cli.ts`, option precedence, package scripts, Docker stages, asset copying, browser opening, loopback defaults, production image, and graceful shutdown.
+Preserve composition-before-listen and bootstrap-generation checks; never substitute fixture HTTP waits for startup readiness. Check `web-cli.ts`, option precedence, package scripts, Docker stages, asset copying, browser opening, loopback defaults, production image, and graceful shutdown.
 
 ## Related Domains
 

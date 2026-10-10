@@ -136,7 +136,7 @@ Project extensions are executable code. User extensions are loaded from `~/.ai-h
 
 | Area | Files | Responsibility |
 |---|---|---|
-| Server composition | `src/index.ts`, `src/runtime/services.ts` | Express app, shared runtime services, middleware, route mounting, sharing, static Web assets, lifecycle |
+| Server composition | `src/index.ts`, `src/runtime/services.ts` | Synchronous Express app construction, awaited runtime bootstrap before listen with retired-generation refusal, middleware, routes, sharing, static assets and lifecycle |
 | Detached execution | `src/api/agent-routes.ts`, `src/runtime/command-runtime.ts` | Agent state/SSE/queues/stop, effective setting overrides, Core-resolved trusted instruction prompts, exact preset capabilities, Core-backed shell command output/replay/cancel, manual and automatic compaction; `command-runtime.ts` is a thin re-export |
 | Interactive terminals | `src/api/terminal-routes.ts`, `src/runtime/terminal-runtime.ts` | Owned `node-pty` processes, bounded ANSI replay by UTF-8 offset, input/resize/exit, instance limits and shutdown |
 | Session windows | `src/api/session-pagination.ts`, `src/index.ts` | Metadata-only lists, bounded tail/before/around pages, stable message cursors, full server-side export, provider title generation and recursive cascade guard |

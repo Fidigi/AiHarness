@@ -15,7 +15,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~135 lines |
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~320 lines |
 | QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
-| Server API | [`topics/server-api.md`](./topics/server-api.md) | ~200 lines |
+| Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~200 lines |
 | Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~155 lines |
 | Static Demonstration | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
 | Security & Trust | [`topics/security.md`](./topics/security.md) | ~180 lines |
@@ -62,7 +62,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → tests/functional-parity/ (public contract probes and reviewed goldens)
 ```
 
-**A server API endpoint** → Load only `server-api.md` + `project-map.md` §§3–4
+**A server API endpoint or startup lifecycle** → Load only `server-api.md` + `project-map.md` §§3–4
 ```
 → packages/server/src/index.ts (Express app, middleware)
 → packages/server/src/api/{domain}-routes.ts

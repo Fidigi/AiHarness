@@ -1441,7 +1441,7 @@ export function createApp(config?: ServerConfig): express.Application {
 }
 
 /** Start the Express server */
-export function start(config?: ServerConfig): Promise<{ port: number; host: string; app: express.Application }> {
+export async function start(config?: ServerConfig): Promise<{ port: number; host: string; app: express.Application }> {
   let port: number;
   let host: string;
   try { ({ port, host } = serverAddress(config)); }
@@ -1459,6 +1459,13 @@ export function start(config?: ServerConfig): Promise<{ port: number; host: stri
 
   if (!appInstance) {
     createApp(config);
+  }
+
+  // start() publishes a usable composition, not merely a bound socket.
+  const startingGeneration = applicationGeneration;
+  await activeServices;
+  if (startingGeneration !== applicationGeneration) {
+    throw new Error('Application runtime is no longer active.');
   }
 
   return new Promise((resolve, reject) => {
