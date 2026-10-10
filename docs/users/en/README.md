@@ -4,6 +4,6 @@
 |---|---|
 | [User guide](./user-guide.md) | Installation, CLI/Web configuration, commands, sessions and security |
 | [Containerization](./containerization.md) | Running the CLI and Web launcher with Docker |
-| [Resource group controls](./resource-batches.md) | Filter-preserving model catalogue batches and failure reconciliation |
+| [Resource group controls](./resource-batches.md) | Filtered model/skill batches, valid Markdown edits and failure reconciliation |
 
 The same documents are available in [French](../fr/). See the [user documentation index](../README.md) for screenshot themes and project links.

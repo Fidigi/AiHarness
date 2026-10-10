@@ -189,16 +189,16 @@ test.describe('Settings and authentication', () => {
     await section.getByLabel('Filter skills or sources').fill('');
 
     const release = section.getByRole('checkbox', { name: 'Allow release-notes for autonomous model invocation' });
-    await release.uncheck();
-    await expect.poll(() => api.requests.filter(request => request.path === '/api/skills/enabled').at(-1)?.body)
-      .toMatchObject({ cwd: '/workspace', projectId: 'workspace-e2e' });
-    expect((api.requests.filter(request => request.path === '/api/skills/enabled').at(-1)?.body as { enabledSkills: string[] }).enabledSkills)
-      .not.toContain('global:release-notes:e2e');
+    await release.click();
+    await expect(release).not.toBeChecked();
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/skills/enabled/batch').at(-1)?.body)
+      .toEqual({ cwd: '/workspace', projectId: 'workspace-e2e', changes: [{ key: 'global:release-notes:e2e', enabled: false }] });
 
     const documentation = section.getByRole('checkbox', { name: 'Allow documentation for autonomous model invocation' });
-    await documentation.check();
-    await expect.poll(() => (api.requests.filter(request => request.path === '/api/skills/enabled').at(-1)?.body as { enabledSkills: string[] })?.enabledSkills)
-      .toContain('path:documentation:e2e');
+    await documentation.click();
+    await expect(documentation).toBeChecked();
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/skills/enabled/batch').at(-1)?.body)
+      .toEqual({ cwd: '/workspace', projectId: 'workspace-e2e', changes: [{ key: 'path:documentation:e2e', enabled: true }] });
     await page.reload();
     await expect(section.getByRole('checkbox', { name: 'Allow release-notes for autonomous model invocation' })).not.toBeChecked();
     await expect(section.getByRole('checkbox', { name: 'Allow documentation for autonomous model invocation' })).toBeChecked();

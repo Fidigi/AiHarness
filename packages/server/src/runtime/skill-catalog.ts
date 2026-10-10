@@ -8,15 +8,24 @@ import type {
   SkillDiagnostic,
   SkillDefinition,
   ResourceProvenance,
+  ResourceEnableChange,
+  ResourceEnableOutcome,
+  SkillEnableBatchResult,
 } from '@ai-harness/core';
 import type { ConfigurationStore } from '../config/config-store.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import type { RuntimeServices } from './services.js';
 import {
   ResourceManager,
+  disposeStableFilePublicationReceipt,
+  type StableFilePublicationResult,
+  parseResourceMarkdown,
   type ProjectTrustManager,
   type WorkspaceManager,
 } from '@ai-harness/core';
+
+import { mergeResourceChanges } from './resource-batches.js';
+import { readSkillMarkdown, skillInvocationMarkdown, withSkillMutation, writeSkillMarkdown } from './skill-markdown.js';
 
 const MAX_SKILLS = 500;
 const MAX_PATH_ROOTS = 32;
@@ -34,6 +43,7 @@ export interface PackageSkillRoot {
 
 interface SkillRecord extends Omit<SkillCatalogEntry, 'modelInvocable'> {
   instructions: string;
+  absolutePath: string;
   provenance: ResourceProvenance;
 }
 
@@ -125,6 +135,7 @@ function skillRecord(
     trusted: skill.provenance.trusted,
     defaultModelInvocable: !skill.disableModelInvocation,
     instructions: skill.instructions,
+    absolutePath: skill.filePath,
     provenance: structuredClone(skill.provenance),
   };
 }
@@ -185,6 +196,100 @@ export class SkillCatalogService {
         instructions: record.instructions,
         filePath: record.filePath,
       }));
+  }
+
+  async setEnabledBatch(input: {
+    cwd?: string; projectId?: string; changes: ResourceEnableChange[];
+  }): Promise<SkillEnableBatchResult> {
+    const context = await this.context(input.cwd, input.projectId);
+    const cached = this.cached(context.cwd) ?? await this.refresh(context);
+    const records = new Map(cached.records.map(record => [record.key, record]));
+    const outcomes: ResourceEnableOutcome[] = [];
+    const scope = input.projectId ? 'project' : 'global';
+    // Each entry is independently authorized and committed; a bad file never
+    // discards earlier successes. Selectors resolve only through owned discovery.
+    for (const change of input.changes) {
+      const record = records.get(change.key);
+      if (!record) {
+        outcomes.push({ ...change, status: 'failed', code: 'UNKNOWN_RESOURCE' });
+        continue;
+      }
+      try {
+        const outcome = await withSkillMutation(record.absolutePath, async () => {
+          const authorize = async (): Promise<void> => {
+            if (!record.trusted || ((record.provenance.scope === 'project' || inside(context.cwd, record.absolutePath))
+              && !await this.trustManager.isTrusted(context.cwd))) {
+              throw Object.assign(new Error('Project trust required.'), { code: 'PROJECT_TRUST_REQUIRED' });
+            }
+          };
+          await authorize();
+          const before = await readSkillMarkdown(record.absolutePath);
+          const after = skillInvocationMarkdown(before, record.name, change.enabled);
+          let currentEnabled = parseResourceMarkdown(before).attributes['disable-model-invocation'] !== 'true';
+          await this.configurationStore.update(scope, (target, inherited) => {
+            const configured = target.enabledSkills ?? inherited.enabledSkills;
+            if (configured !== undefined) currentEnabled = configured.includes(record.key) || configured.includes(record.name);
+            return target;
+          }, input.projectId ? context.projectId : undefined);
+          if (currentEnabled === change.enabled) return { ...change, status: 'unchanged' as const };
+          let publication: StableFilePublicationResult | undefined;
+          const settingsOutcomes: ResourceEnableOutcome[] = [];
+          try {
+            publication = await writeSkillMarkdown(record.absolutePath, before, after, authorize);
+            if (publication && 'error' in publication) throw publication.error;
+            await this.configurationStore.update(scope, (target, inherited) => {
+              if (target.enabledSkills === undefined && inherited.enabledSkills === undefined) return target;
+              return mergeResourceChanges(target, inherited, 'enabledSkills', cached.records.map(skill => ({
+                key: skill.key, alias: skill.name, defaultEnabled: skill.defaultModelInvocable,
+              })), [change], settingsOutcomes);
+            }, input.projectId ? context.projectId : undefined);
+          } catch (error) {
+            // The settings writer also has a void ABI: rejection may follow
+            // publication. Reload canonical settings even if Markdown rollback succeeds.
+            // A post-publication failure is not evidence of an unchanged file.
+            // Restore only the exact owned publication, never an ABA replacement.
+            if (publication && publication.publication !== 'not-published') {
+              let rollback: StableFilePublicationResult | undefined;
+              try {
+                if (!publication.receipt) throw new Error('Owned publication unavailable.');
+                rollback = await writeSkillMarkdown(record.absolutePath, after, before, authorize, publication.receipt);
+                if (rollback && 'error' in rollback) throw rollback.error;
+              } catch {
+                throw Object.assign(new Error('Skill rollback failed; reconcile canonical state.'), {
+                  code: 'SKILL_ROLLBACK_FAILED',
+                });
+              } finally {
+                if (rollback?.receipt) await disposeStableFilePublicationReceipt(rollback.receipt);
+              }
+            }
+            throw error;
+          } finally {
+            if (publication?.receipt) await disposeStableFilePublicationReceipt(publication.receipt);
+          }
+          return { ...change, status: before !== after || settingsOutcomes.some(item => item.status === 'changed')
+            ? 'changed' as const : 'unchanged' as const };
+        });
+        outcomes.push(outcome);
+      } catch (error) {
+        const code = error !== null && typeof error === 'object'
+          ? Object.getOwnPropertyDescriptor(error, 'code')?.value : undefined;
+        outcomes.push({ ...change, status: 'failed', code: typeof code === 'string' && /^[A-Z0-9_]{1,64}$/.test(code)
+          ? code : 'SKILL_WRITE_FAILED' });
+      }
+    }
+    // Global/package files may also be cached in other workspaces.
+    this.invalidate();
+    // A writer rejection can follow publication, or the initial read can fail.
+    // Always reconcile before returning a catalogue; never bless stale memory.
+    try { await this.configurationStore.load(); }
+    catch {
+      throw Object.assign(new Error('Skill batch state is uncertain; canonical reconciliation required.'), {
+        status: 409, code: 'SKILL_BATCH_UNCERTAIN', uncertain: true, outcomes,
+      });
+    }
+    const catalog = await this.getCatalog({ cwd: context.cwd, projectId: input.projectId,
+      configurationScope: scope, refresh: true });
+    return { outcomes, catalog };
   }
 
   /** Invalidate discovery after an atomic plugin-resource generation change. */
@@ -342,7 +447,7 @@ export class SkillCatalogService {
       projectTrusted: cached.projectTrusted,
       enabledScope: provenance?.scope ?? 'default',
       enabledSource: provenance?.source ?? 'skill metadata',
-      skills: cached.records.map(({ instructions: _instructions, ...skill }) => ({
+      skills: cached.records.map(({ instructions: _instructions, absolutePath: _absolutePath, ...skill }) => ({
         ...skill,
         modelInvocable: skill.trusted && (enabled === undefined
           ? skill.defaultModelInvocable

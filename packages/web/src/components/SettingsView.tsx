@@ -49,7 +49,6 @@ function SettingsView() {
   const batches = useResourceBatches();
   const skills = useSessionStore(state => state.skills);
   const hydrateSkillCatalog = useSessionStore(state => state.hydrateSkillCatalog);
-  const setSkillModelInvocable = useSessionStore(state => state.setSkillModelInvocable);
   const sessionCount = useSessionStore(state => state.sessions.length);
   const workspaceId = useSessionStore(state => state.workspace?.id);
   const { t } = useI18n();
@@ -80,15 +79,16 @@ function SettingsView() {
       || model.name.toLocaleLowerCase().includes(normalizedModelFilter)),
   })).filter(group => group.models.length > 0) ?? [];
   const normalizedSkillFilter = skillFilter.trim().toLocaleLowerCase();
-  const visibleSkillGroups = (['project', 'global', 'path', 'package'] as const).map(scope => ({
-    scope,
-    skills: (skills.catalog?.skills ?? []).filter(skill => skill.scope === scope && (
+  const visibleSkillGroups = (['project', 'global', 'path', 'package'] as const).flatMap(scope => {
+    const candidates = (skills.catalog?.skills ?? []).filter(skill => skill.scope === scope && (
       !normalizedSkillFilter
       || skill.name.toLocaleLowerCase().includes(normalizedSkillFilter)
       || skill.description.toLocaleLowerCase().includes(normalizedSkillFilter)
       || skill.source.toLocaleLowerCase().includes(normalizedSkillFilter)
-    )),
-  })).filter(group => group.skills.length > 0);
+    ));
+    const sources = scope === 'package' || scope === 'path' ? [...new Set(candidates.map(skill => skill.source))] : [''];
+    return sources.map(source => ({ scope, source, skills: candidates.filter(skill => !source || skill.source === source) }));
+  }).filter(group => group.skills.length > 0);
 
   const checkForUpdate = async (refresh = false) => {
     setCheckingUpdate(true);
@@ -381,7 +381,7 @@ function SettingsView() {
               onChange={event => setSkillFilter(event.target.value)} />
           </label>
           <div>
-            <button type="button" disabled={skills.loading} onClick={() => void hydrateSkillCatalog(true)}>
+            <button type="button" disabled={skills.loading || batches.busy} onClick={() => void hydrateSkillCatalog(true)}>
               {t('settings.skills.refresh')}
             </button>
           </div>
@@ -403,17 +403,22 @@ function SettingsView() {
         {skills.error && <p role="alert" className="status-warning">{skills.error}</p>}
         {!skills.loading && skills.catalog && visibleSkillGroups.length === 0 && <p>{t('settings.skills.empty')}</p>}
         <SkillRegistryPanel />
+        <ResourceBatchReport busy={batches.busy} outcomes={batches.reports.skills} error={batches.errors.skills}
+          names={new Map(skills.catalog?.skills.map(skill => [skill.key, skill.name] as const))} />
         <div className="skill-catalog-groups">
           {visibleSkillGroups.map(group => (
-            <fieldset key={group.scope} data-scope={group.scope}>
-              <legend>{t(`settings.skills.scope.${group.scope}`)}</legend>
+            <fieldset key={`${group.scope}:${group.source}`} data-scope={group.scope} data-source={group.source}>
+              <legend>{t(`settings.skills.scope.${group.scope}`)}{group.source && ` · ${group.source}`}</legend>
+              <ResourceGroupButtons group={group.source || t(`settings.skills.scope.${group.scope}`)}
+                rows={group.skills.map(skill => ({ key: skill.key, enabled: skill.modelInvocable }))}
+                disabled={!!skills.loading || batches.busy} save={changes => batches.save('skills', changes)} />
               {group.skills.map(skill => (
                 <label key={skill.key} className="skill-catalog-row">
                   <input type="checkbox" checked={skill.modelInvocable}
-                    disabled={skills.loading || !skill.trusted}
+                    disabled={skills.loading || batches.busy || !skill.trusted}
                     title={!skill.trusted ? t('settings.skills.requiresTrust') : undefined}
                     aria-label={t('settings.skills.toggle', { skill: skill.name })}
-                    onChange={event => void setSkillModelInvocable(skill.key, event.target.checked)} />
+                    onChange={event => void batches.save('skills', [{ key: skill.key, enabled: event.target.checked }])} />
                   <span className="skill-catalog-identity">
                     <strong>{skill.name}</strong>
                     <span>{skill.description}</span>

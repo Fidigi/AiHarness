@@ -139,7 +139,13 @@ Flows expire after five minutes, retain terminal state for one minute, and are c
 
 Administrator `PATCH /api/models/enabled/batch` accepts exactly `{ changes: [{ key, enabled }], projectId? }`, with at most 500 unique bounded selectors. Return ordered changed/unchanged/failed outcomes plus the canonical catalogue. Fresh serialized transforms preserve inherited no-ops, hidden/unknown keys and other providers' same-ID models; known qualified keys win over overlapping legacy IDs; Web sends only changed displayed rows, including single-checkbox requests.
 
-[WARNING] A write error may follow publication: reload canonical configuration before returning state. Unreadable reconciliation returns `409 MODEL_BATCH_UNCERTAIN` with outcomes but no catalogue. `GET /api/models` also rereads/refuses unreadable configuration. Captured workspace ID/cwd and Settings-lifetime guards prevent a retired response from overwriting a reopened view. See the [EN contributor contract](../../contributors/en/resource-batches.md) and [FR contract](../../contributors/fr/resource-batches.md); this does not deliver skill-group editing or alter sessions/defaults/providers.
+[WARNING] A write error may follow publication: reload canonical configuration before returning state. Unreadable reconciliation returns `409 MODEL_BATCH_UNCERTAIN` with outcomes but no catalogue. `GET /api/models` also rereads/refuses unreadable configuration. Captured workspace ID/cwd and Settings-lifetime guards prevent a retired response from overwriting a reopened view. See the [EN contributor contract](../../contributors/en/resource-batches.md) and [FR contract](../../contributors/fr/resource-batches.md); model changes do not alter sessions/defaults/providers.
+
+## Skill Group Mutation
+
+Administrator `PATCH /api/skills/enabled/batch` accepts exactly `{changes: [{key, enabled}], cwd?, projectId?}` with the same 500 unique-selector bound. Canonical cwd/project identity and fresh project trust guard owned discovery and each file read/publication. Each entry independently validates strict Markdown and edits only invocation frontmatter; retain BOM, LF/CRLF, comments/body/mode, effective no-ops, hidden entries and fresh scoped allowlists. Project/Global and configured/package-source groups send changed filtered rows; single-item toggles use one selector. Global/package/path file edits may affect other workspaces, so invalidate all discovery caches.
+
+[WARNING] Settings failure restores Markdown only through a destination-bound writer-owned receipt, never a byte comparison alone. Observable ABA or revoked trust yields `SKILL_ROLLBACK_FAILED`; siblings continue and receipts are disposed. Always reload canonical settings. Unreadable reconciliation returns `409 SKILL_BATCH_UNCERTAIN` with ordered outcomes and no catalogue; `GET /api/skills` refuses `CONFIGURATION_UNREADABLE`. No cross-file crash atomicity or hostile-writer exclusion is claimed.
 
 ## Session HTTP Invariants
 
@@ -157,6 +163,7 @@ Administrator `PATCH /api/models/enabled/batch` accepts exactly `{ changes: [{ k
 - `packages/server/src/api/tool-settings.test.ts` and `packages/core/src/tools/codemode.test.ts` — cached sandbox health, exact scoped settings/readback, visible reasons, budgets and nested execution
 - `packages/server/src/api/configuration-defaults.test.ts`, `packages/server/src/config/config-store.test.ts`, and `packages/core/src/security/stable-file.test.ts` — independent saves, live default inheritance, unreadable/stale/link refusal and durable commit guards
 - `packages/server/src/api/model-batches.test.ts`, `packages/server/src/runtime/resource-batches.test.ts`, and `e2e/model-batches.spec.ts` — exact scoped batches, canonical post-error readback, filtered/group/individual requests and retired-view exclusion
+- `packages/server/src/api/resource-batches.test.ts`, `packages/server/src/runtime/skill-markdown.test.ts`, `e2e/resource-batches.spec.ts` and `e2e/skill-batches-live.spec.ts` — independent skill outcomes, real publication/ABA/trust/disposal guards, reviewed group visuals and genuine Vite/Express/Core/disk/reload behavior
 - `packages/server/src/api/session-pagination.test.ts` — bounded message windows and cursors
 - `packages/server/src/security/request-security.test.ts` — roles, capabilities, origins, limits and WebSocket auth
 - `e2e/settings.spec.ts` — browser Test request minimality plus identity/cwd/capability/tool reporting; import/replacement/local mutation and focus flows
