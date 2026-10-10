@@ -14,6 +14,8 @@ import type {
   PluginResourceFilters,
   PluginScope,
   PluginUpdateResult,
+  PluginNpmCommandOptions,
+  ResolvedAgentSettings,
 } from '@ai-harness/core';
 
 export type PackageCommandAction =
@@ -233,6 +235,20 @@ function formatUpdates(updates: PluginUpdateResult[]): string {
   ].filter(Boolean).join('\t')).join('\n');
 }
 
+/** Capture only explicit host process choices, with CLI flags before session-only prompts.
+ * Resolved/default/saved project trust is selection policy, never an explicit override.
+ */
+export function resolvePackageNpmOptions(
+  resolved: ResolvedAgentSettings,
+  canonicalCwd: string,
+  flag?: boolean,
+  sessionChoice?: boolean,
+): PluginNpmCommandOptions {
+  const override = flag ?? sessionChoice;
+  return PluginService.resolveNpmCommand(resolved, override === undefined ? undefined
+    : Object.freeze({ cwd: canonicalCwd, trusted: override }));
+}
+
 /** Execute package administration without starting a session, provider, extension, or TUI. */
 export async function runPackageCommand(args: readonly string[]): Promise<number> {
   const redactor = new CredentialRedactor();
@@ -294,6 +310,10 @@ export async function runPackageCommand(args: readonly string[]): Promise<number
       trustManager,
       path.join(agentDir, 'plugins.json'),
       agentDir,
+      undefined,
+      // Keep rejected/uncertain trusted-source policy, not just the loader's
+      // surviving merged array. Refusal is lazy so list/reload remain passive.
+      resolvePackageNpmOptions(resolvedSettings, canonicalCwd, parsed.projectTrust),
     );
     await service.load();
 

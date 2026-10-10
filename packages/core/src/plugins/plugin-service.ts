@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { execFile } from 'node:child_process';
 import { constants as fsConstants, type Dirent } from 'node:fs';
 import {
   lstat,
@@ -12,7 +11,7 @@ import {
 import path from 'node:path';
 import { readStableDirectoryEntries } from '../security/stable-directory.js';
 import { releaseStableLockPath } from '../security/stable-lock.js';
-import { promisify } from 'node:util';
+import type { ResolvedAgentSettings } from '../config/agent-settings.js';
 import type {
   PluginCatalog,
   PluginDiagnostic,
@@ -32,9 +31,17 @@ import type {
 } from '../types/index.js';
 import type { ProjectTrustManager } from '../security/project-trust.js';
 import type { WorkspaceManager } from '../security/workspace-manager.js';
-import { filteredProcessEnvironment } from '../tools/process-execution.js';
+import {
+  capturePluginNpmCommandOptions,
+  createPluginCommandRunner,
+  pluginNpmInvocation,
+  pluginNpmSourceTrustFailure,
+  resolvePluginNpmCommand,
+  type PluginNpmCommandOptions,
+  type PluginNpmSourceTrustOverride,
+} from './package-command.js';
+export { resolvePluginNpmCommand, type PluginNpmCommandOptions, type PluginNpmSourceTrustOverride } from './package-command.js';
 
-const execFileAsync = promisify(execFile);
 const FILE_VERSION = 1 as const;
 const MAX_PACKAGES = 100;
 const MAX_MANIFEST_BYTES = 256 * 1024;
@@ -319,31 +326,6 @@ export function parsePluginSource(input: string, baseDirectory = process.cwd()):
     type: 'path',
     identity: `path:${normalized}`,
     localPath: normalized,
-  };
-}
-
-function defaultRunner(): PluginCommandRunner {
-  return {
-    async run(command, args, options) {
-      try {
-        const result = await execFileAsync(command, args, {
-          ...(options.cwd ? { cwd: options.cwd } : {}),
-          timeout: options.timeoutMs,
-          signal: options.signal,
-          maxBuffer: 1024 * 1024,
-          windowsHide: true,
-          env: filteredProcessEnvironment(),
-        });
-        return { stdout: result.stdout, stderr: result.stderr };
-      } catch (error) {
-        const code = typeof (error as NodeJS.ErrnoException).code === 'string'
-          ? (error as NodeJS.ErrnoException).code
-          : typeof (error as { code?: unknown }).code === 'number'
-            ? String((error as { code: number }).code)
-            : 'FAILED';
-        throw httpError(`${command} a échoué (${code}).`, 502, 'PLUGIN_COMMAND_FAILED');
-      }
-    },
   };
 }
 
@@ -819,19 +801,34 @@ async function acquirePluginLock(filePath: string): Promise<() => Promise<void>>
 
 /** Secure, explicit package installer and metadata-only resource catalogue shared by CLI and Server. */
 export class PluginService {
+  static resolveNpmCommand(
+    resolved: ResolvedAgentSettings,
+    sourceTrustOverride?: PluginNpmSourceTrustOverride,
+  ): PluginNpmCommandOptions {
+    return resolvePluginNpmCommand(resolved, sourceTrustOverride);
+  }
+
   private state: PluginStateFile = { version: FILE_VERSION, generation: 0, packages: [] };
   private mutation = Promise.resolve();
   private readonly catalogCache = new Map<string, PluginCatalog>();
   private readonly pluginRoot: string;
+  private readonly npmOptions: PluginNpmCommandOptions;
+  private readonly npmSourceTrustInvalid: boolean;
 
   constructor(
     private readonly workspaceManager: WorkspaceManager,
     private readonly trustManager: ProjectTrustManager,
     private readonly stateFile: string,
     private readonly dataDir: string,
-    private readonly runner: PluginCommandRunner = defaultRunner(),
+    private readonly runner: PluginCommandRunner = createPluginCommandRunner(),
+    npmOptions: PluginNpmCommandOptions = {},
   ) {
     this.pluginRoot = path.join(dataDir, 'plugins');
+    // Copy only the declared contract; caller-owned values cannot change either
+    // captured command policy or its source binding while an operation awaits a lock.
+    const captured = capturePluginNpmCommandOptions(npmOptions);
+    this.npmOptions = captured.options;
+    this.npmSourceTrustInvalid = captured.sourceTrustInvalid;
   }
 
   async load(): Promise<void> {
@@ -1165,9 +1162,8 @@ export class PluginService {
   ): Promise<PluginUpdateResult[]> {
     await this.refreshState();
     const context = await this.context(input);
-    const records = this.visibleRecords(context).filter(record => !input.key || (
-      record.key === input.key && (!input.scope || record.scope === input.scope)
-    ));
+    const records = this.visibleRecords(context).filter(record =>
+      (!input.scope || record.scope === input.scope) && (!input.key || record.key === input.key));
     if (input.key && records.length === 0) throw httpError('Package introuvable.', 404, 'PLUGIN_NOT_FOUND');
     const results: PluginUpdateResult[] = [];
     for (const record of records) {
@@ -1356,15 +1352,18 @@ export class PluginService {
       pluginHash(key),
     );
     const finalPath = path.join(this.pluginRoot, managedRelativePath);
+    // Git installs can require npm after cloning: reject unsafe npm policy before
+    // starting either executable or creating a candidate package.
+    await this.npmInvocation([]);
     await mkdir(stagingPath, { recursive: true, mode: 0o700 });
     let packageRelativePath: string;
     let installedRevision: string | undefined;
     try {
       if (parsed.type === 'npm') {
-        await this.runner.run('npm', [
+        await this.runNpm([
           'install', '--prefix', stagingPath, '--ignore-scripts', '--no-audit', '--no-fund',
           '--package-lock=false', '--omit=dev', parsed.normalized.slice(4),
-        ], { timeoutMs: INSTALL_TIMEOUT_MS, signal });
+        ], { cwd: stagingPath, timeoutMs: INSTALL_TIMEOUT_MS, signal });
         packageRelativePath = path.join('node_modules', ...parsed.packageName!.split('/'));
       } else {
         packageRelativePath = 'repository';
@@ -1372,20 +1371,20 @@ export class PluginService {
         const cloneArguments = ['clone', '--depth', '1', '--single-branch'];
         if (parsed.gitRef) cloneArguments.push('--branch', parsed.gitRef);
         cloneArguments.push('--', parsed.gitUrl!, repository);
-        await this.runner.run('git', cloneArguments, { timeoutMs: INSTALL_TIMEOUT_MS, signal });
+        await this.runGit(cloneArguments, { timeoutMs: INSTALL_TIMEOUT_MS, signal });
         const packageJson = path.join(repository, 'package.json');
         try {
           const info = await lstat(packageJson);
           if (info.isFile() && !info.isSymbolicLink()) {
-            await this.runner.run('npm', [
+            await this.runNpm([
               'install', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', '--omit=dev',
             ], { cwd: repository, timeoutMs: INSTALL_TIMEOUT_MS, signal });
           }
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
         }
-        installedRevision = (await this.runner.run(
-          'git', ['-C', repository, 'rev-parse', 'HEAD'], { timeoutMs: CHECK_TIMEOUT_MS, signal },
+        installedRevision = (await this.runGit(
+          ['-C', repository, 'rev-parse', 'HEAD'], { timeoutMs: CHECK_TIMEOUT_MS, signal },
         )).stdout.trim();
         if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(installedRevision)) {
           throw new Error('Git returned an invalid installed revision');
@@ -1412,6 +1411,46 @@ export class PluginService {
     }
   }
 
+  // A fresh saved decision is not an OS-atomic trust-read/spawn transaction and
+  // cannot withdraw a process already running. Do not cache it across awaited work.
+  private async npmInvocation(args: readonly string[]): Promise<ReturnType<typeof pluginNpmInvocation>> {
+    const invocation = pluginNpmInvocation(this.npmOptions, args);
+    if (this.npmSourceTrustInvalid) throw pluginNpmSourceTrustFailure();
+    const source = this.npmOptions.npmCommandSourceWorkspace;
+    const override = this.npmOptions.npmCommandSourceTrustOverride;
+    if (source !== undefined) {
+      let trusted = false;
+      try {
+        // Reject missing/moved/aliased/out-of-root source bindings, independent of
+        // the operation's cwd/scope and any embedding one-process trust assertion.
+        trusted = typeof source === 'string' && path.isAbsolute(source)
+          && await this.workspaceManager.resolve(source, { kind: 'directory' }) === source
+          && (override === undefined ? await this.trustManager.isTrusted(source)
+            : override.cwd === source && override.trusted);
+      } catch { /* Unavailable source or saved trust fails closed, without source disclosure. */ }
+      if (!trusted) throw pluginNpmSourceTrustFailure();
+    }
+    return invocation;
+  }
+
+  private async runNpm(
+    args: string[],
+    options: { cwd?: string; timeoutMs: number; signal?: AbortSignal },
+  ): Promise<PluginCommandResult> {
+    // Settings remain the admission snapshot, but executable source trust does not.
+    // Recheck here even after candidate preflight or an earlier awaited Git process.
+    const invocation = await this.npmInvocation(args);
+    return this.runner.run(invocation.executable, invocation.args, options);
+  }
+
+  private async runGit(
+    args: string[],
+    options: { cwd?: string; timeoutMs: number; signal?: AbortSignal },
+  ): Promise<PluginCommandResult> {
+    await this.npmInvocation([]);
+    return this.runner.run('git', args, options);
+  }
+
   private async checkRecord(record: StoredPlugin, signal?: AbortSignal): Promise<PluginUpdateResult> {
     const base: Omit<PluginUpdateResult, 'state'> = {
       key: record.key,
@@ -1430,8 +1469,8 @@ export class PluginService {
       const parsed = parsePluginSource(record.source);
       if (record.sourceType === 'npm') {
         const specification = `${parsed.packageName}${parsed.configuredVersion ? `@${parsed.configuredVersion}` : ''}`;
-        const output = await this.runner.run(
-          'npm', ['view', specification, 'version', '--json'], { timeoutMs: CHECK_TIMEOUT_MS, signal },
+        const output = await this.runNpm(
+          ['view', specification, 'version', '--json'], { cwd: this.dataDir, timeoutMs: CHECK_TIMEOUT_MS, signal },
         );
         const value = JSON.parse(output.stdout) as unknown;
         const availableVersion = Array.isArray(value)
@@ -1445,8 +1484,8 @@ export class PluginService {
         };
       }
       const references = parsed.gitRef ? [parsed.gitRef, `${parsed.gitRef}^{}`] : ['HEAD'];
-      const output = await this.runner.run(
-        'git', ['ls-remote', parsed.gitUrl!, ...references], { timeoutMs: CHECK_TIMEOUT_MS, signal },
+      const output = await this.runGit(
+        ['ls-remote', parsed.gitUrl!, ...references], { timeoutMs: CHECK_TIMEOUT_MS, signal },
       );
       const lines = output.stdout.trim().split(/\r?\n/).filter(Boolean);
       const selected = lines.find(line => line.endsWith('^{}')) ?? lines[0];
@@ -1463,7 +1502,8 @@ export class PluginService {
       return {
         ...base,
         state: 'error',
-        message: error instanceof Error ? cleanText(error.message, 300) ?? 'Vérification impossible.' : 'Vérification impossible.',
+        message: errorCode(error) === 'INVALID_PLUGIN_NPM_COMMAND'
+          ? 'Configuration npmCommand invalide.' : 'Vérification impossible.',
       };
     }
   }

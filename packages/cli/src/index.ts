@@ -106,7 +106,7 @@ import { reserveProcessStdoutForJson, toJsonProtocolUsage } from './cli/json-out
 import { cleanupCliEarlyExit } from './cli/lifecycle.js';
 import { InteractiveShellController } from './cli/shell-controller.js';
 import { formatConfiguredModelList } from './cli/model-list.js';
-import { runPackageCommand } from './cli/package-command.js';
+import { resolvePackageNpmOptions, runPackageCommand } from './cli/package-command.js';
 import { prepareExtensionStartup } from './cli/extension-startup.js';
 import { runMcpCommand } from './cli/mcp-command.js';
 import {
@@ -457,21 +457,34 @@ async function main(): Promise<void> {
     workspaceCwd,
     isProjectTrusted(),
   );
+  // Only explicit flags/session-only prompt choices are process authority. Never
+  // promote resolved/default/saved trust into an override that survives revocation.
+  const resolvePluginOptions = () => resolvePackageNpmOptions(
+    settingsResolution, workspaceCwd, cliArguments.projectTrust, sessionProjectTrust,
+  );
   let pluginServiceAgentDir = settingsResolution.agentDir;
+  let pluginCommandKey = JSON.stringify(resolvePluginOptions());
   let pluginService = new PluginService(
     workspaceManager,
     trustManager,
     path.join(pluginServiceAgentDir, 'plugins.json'),
     pluginServiceAgentDir,
+    undefined,
+    resolvePluginOptions(),
   );
   const refreshPluginService = async (): Promise<void> => {
-    if (pluginServiceAgentDir !== settingsResolution.agentDir) {
+    const npmOptions = resolvePluginOptions();
+    const commandKey = JSON.stringify(npmOptions);
+    if (pluginServiceAgentDir !== settingsResolution.agentDir || pluginCommandKey !== commandKey) {
       pluginServiceAgentDir = settingsResolution.agentDir;
+      pluginCommandKey = commandKey;
       pluginService = new PluginService(
         workspaceManager,
         trustManager,
         path.join(pluginServiceAgentDir, 'plugins.json'),
         pluginServiceAgentDir,
+        undefined,
+        npmOptions,
       );
     }
     if (settingsResolution.agentDirTrusted) await pluginService.load();

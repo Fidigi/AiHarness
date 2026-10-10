@@ -142,10 +142,11 @@ export function createPluginRouter(servicesPromise: Promise<RuntimeServices>): R
       const action = requiredString(request.body?.action, 'action', 30);
       let catalog;
       if (action === 'install') {
-        catalog = await services.pluginService.install({
-          ...input,
-          scope: requiredScope(request.body?.scope),
-          source: webPluginSource(request.body?.source),
+        const scope = requiredScope(request.body?.scope);
+        const source = webPluginSource(request.body?.source);
+        const configured = await services.resolvePluginOperation(input);
+        catalog = await configured.service.install({
+          ...configured.context, scope, source,
         }, operation.signal);
       } else if (action === 'enable' || action === 'disable') {
         catalog = await services.pluginService.setEnabled({
@@ -162,15 +163,17 @@ export function createPluginRouter(servicesPromise: Promise<RuntimeServices>): R
         });
       } else if (action === 'update') {
         const key = optionalString(request.body?.key, 'key', 300);
+        const scope = key ? requiredScope(request.body?.scope) : optionalScope(request.body?.scope);
+        const configured = await services.resolvePluginOperation(input);
         catalog = key
-          ? await services.pluginService.update({
-            ...input,
-            scope: requiredScope(request.body?.scope),
+          ? await configured.service.update({
+            ...configured.context,
+            scope: scope!,
             key,
           }, operation.signal)
-          : await services.pluginService.updateAll({
-            ...input,
-            scope: optionalScope(request.body?.scope),
+          : await configured.service.updateAll({
+            ...configured.context,
+            scope,
           }, operation.signal);
       } else {
         throw Object.assign(new Error('Action de plugin invalide.'), { status: 400, code: 'INVALID_PLUGIN_ACTION' });
@@ -188,10 +191,13 @@ export function createPluginRouter(servicesPromise: Promise<RuntimeServices>): R
     const operation = operationSignal(request);
     try {
       const services = await servicesPromise;
-      const updates = await services.pluginService.checkUpdates({
-        ...context(request.body),
-        ...(optionalString(request.body?.key, 'key', 300) ? { key: optionalString(request.body?.key, 'key', 300) } : {}),
-        ...(optionalScope(request.body?.scope) ? { scope: optionalScope(request.body?.scope) } : {}),
+      const key = optionalString(request.body?.key, 'key', 300);
+      const scope = optionalScope(request.body?.scope);
+      const configured = await services.resolvePluginOperation(context(request.body));
+      const updates = await configured.service.checkUpdates({
+        ...configured.context,
+        ...(key ? { key } : {}),
+        ...(scope ? { scope } : {}),
       }, operation.signal);
       response.json({ updates });
     } catch (error) {

@@ -27,6 +27,7 @@ import type { AiProxyServer } from '../api/proxy.js';
 import { ConfigurationStore } from '../config/config-store.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { CommandRuntime } from './command-runtime.js';
+import { createConfiguredPluginService, type ConfiguredPluginOperation } from './configured-plugin-service.js';
 import { McpInventoryService } from './mcp-inventory-service.js';
 import { ModelCatalogService } from './model-catalog.js';
 import { PluginService } from './plugin-service.js';
@@ -63,6 +64,7 @@ export interface RuntimeServices {
   mcpInventory: McpInventoryService;
   modelCatalog: ModelCatalogService;
   pluginService: PluginService;
+  resolvePluginOperation(input?: { cwd?: string; projectId?: string }): Promise<ConfiguredPluginOperation>;
   providerRegistry: ProviderRegistryService;
   pushService: PushService;
   skillCatalog: SkillCatalogService;
@@ -456,6 +458,9 @@ export async function createRuntimeServices(
     mcpInventory,
     modelCatalog,
     pluginService,
+    resolvePluginOperation: input => createConfiguredPluginService({
+      workspaceManager, trustManager, dataDir, restricted: false,
+    }, input),
     providerRegistry,
     pushService,
     skillCatalog,

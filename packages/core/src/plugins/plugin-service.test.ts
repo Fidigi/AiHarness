@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { ProjectTrustManager } from '../security/project-trust.js';
@@ -8,7 +8,11 @@ import {
   parsePluginSource,
   PluginService,
   type PluginCommandRunner,
+  type PluginNpmCommandOptions,
 } from './plugin-service.js';
+import { createPluginCommandRunner, resolvePluginNpmCommand } from './package-command.js';
+import { loadAgentSettings } from '../config/agent-settings.js';
+import { PluginService as PublicPluginService, resolvePluginNpmCommand as publicNpmOptions } from '@ai-harness/core';
 
 const temporaryDirectories: string[] = [];
 
@@ -40,10 +44,11 @@ async function fixturePackage(root: string, version = '1.0.0'): Promise<void> {
   await writeFile(path.join(root, 'themes', 'night.json'), '{"name":"night"}');
 }
 
-async function setup(root: string, runner?: PluginCommandRunner): Promise<{
+async function setup(root: string, runner?: PluginCommandRunner, npmOptions?: PluginNpmCommandOptions): Promise<{
   project: string;
   data: string;
   trust: ProjectTrustManager;
+  workspaces: WorkspaceManager;
   service: PluginService;
 }> {
   const project = path.join(root, 'project');
@@ -54,12 +59,13 @@ async function setup(root: string, runner?: PluginCommandRunner): Promise<{
   await workspaces.initialize();
   const trust = new ProjectTrustManager(path.join(data, 'trust.json'));
   await trust.load();
-  const service = new PluginService(workspaces, trust, path.join(data, 'plugins.json'), data, runner);
+  const service = new PluginService(workspaces, trust, path.join(data, 'plugins.json'), data, runner, npmOptions);
   await service.load();
-  return { project, data, trust, service };
+  return { project, data, trust, workspaces, service };
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(temporaryDirectories.splice(0).map(directory => rm(directory, { recursive: true, force: true })));
 });
 
@@ -83,6 +89,34 @@ describe('parsePluginSource', () => {
 });
 
 describe('PluginService', () => {
+  it('checks only requested package scopes even without an individual key', async () => {
+    const root = await temporaryDirectory();
+    const source = path.join(root, 'source-plugin');
+    await fixturePackage(source);
+    const runner = { run: vi.fn(async () => { throw new Error('No process expected.'); }) };
+    const { project, data, trust, service } = await setup(root, runner);
+    await service.install({ cwd: project, scope: 'global', source });
+    await trust.trust(project);
+    const catalog = await service.install({ cwd: project, scope: 'project', source });
+    const originalState = await readFile(path.join(data, 'plugins.json'), 'utf8');
+    for (const scope of ['global', 'project'] as const) {
+      const result = await service.checkUpdates({ cwd: project, scope });
+      expect(result.map(item => item.scope)).toEqual([scope]);
+      const other = catalog.packages.find(item => item.scope !== scope)!;
+      await expect(service.checkUpdates({ cwd: project, scope, key: other.key })).rejects.toMatchObject({
+        code: 'PLUGIN_NOT_FOUND',
+      });
+    }
+    expect(await service.checkUpdates({ cwd: project })).toHaveLength(2);
+    await trust.refuse(project);
+    // Administration still exposes the safe metadata-only local-source outcome.
+    expect(await service.checkUpdates({ cwd: project, scope: 'project' })).toMatchObject([
+      { scope: 'project', state: 'unsupported' },
+    ]);
+    expect(await readFile(path.join(data, 'plugins.json'), 'utf8')).toBe(originalState);
+    expect(runner.run).not.toHaveBeenCalled();
+  });
+
   it('inventories package resources without contents or symlink traversal and gates project changes on trust', async () => {
     const root = await temporaryDirectory();
     const source = path.join(root, 'source-plugin');
@@ -425,6 +459,260 @@ describe('PluginService', () => {
     expect(calls.find(call => call.command === 'npm')?.args).toContain('--ignore-scripts');
     await expect(service.checkUpdates({ cwd: project, projectId: catalog.projectId, key: pkg.key, scope: 'project' }))
       .resolves.toEqual([expect.objectContaining({ state: 'update-available', availableVersion: 'b'.repeat(40) })]);
+  });
+
+  it('executes a real disposable configured npm wrapper for install/check/update/all, preserving literal argv, trust and rollback', async () => {
+    const root = await temporaryDirectory();
+    const executable = path.join(root, 'npm wrapper');
+    const log = path.join(root, 'process-log.jsonl');
+    const control = path.join(root, 'control.json');
+    const marker = path.join(root, 'shell-must-not-run');
+    const literal = `$(touch ${marker}); echo private|cat > ${marker}`;
+    await writeFile(control, JSON.stringify({ version: '1.0.0' }));
+    await writeFile(executable, `#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const [log, control, literal, ...args] = process.argv.slice(2);
+fs.appendFileSync(log, JSON.stringify({ args, literal, cwd: process.cwd(), env: process.env }) + '\\n');
+const state = JSON.parse(fs.readFileSync(control, 'utf8'));
+if (state.fail) { console.error('private-child-stderr'); console.log('private-child-stdout'); process.exit(9); }
+if (args[0] === 'view') { console.log(JSON.stringify(state.version)); process.exit(0); }
+if (args[0] !== 'install' || !args.includes('--ignore-scripts')) process.exit(10);
+const prefix = args.indexOf('--prefix');
+const dest = prefix < 0 ? process.cwd() : path.join(args[prefix + 1], 'node_modules', ...args.at(-1).split('/'));
+fs.mkdirSync(path.join(dest, 'prompts'), { recursive: true });
+fs.writeFileSync(path.join(dest, 'package.json'), JSON.stringify({ name: prefix < 0 ? '@demo/git' : args.at(-1), version: state.version }));
+fs.writeFileSync(path.join(dest, 'prompts', 'review.md'), 'inert prompt');
+`);
+    await chmod(executable, 0o700);
+    vi.stubEnv('OPENAI_API_KEY', 'disposable-parent-secret');
+    vi.stubEnv('NODE_OPTIONS', '--require=/must-not-execute');
+    vi.stubEnv('NPM_CONFIG_IGNORE_SCRIPTS', 'false');
+    const command = ['./npm wrapper', log, control, literal];
+    const { project, data, service } = await setup(root, undefined, { npmCommand: command, npmCommandBaseDirectory: root });
+    // The service snapshots caller-owned argv, and list/reload cannot execute it.
+    command[0] = './not-the-wrapper';
+    await service.getCatalog({ cwd: project });
+    await expect(readFile(log)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(service.install({ cwd: project, scope: 'project', source: 'npm:@demo/blocked' }))
+      .rejects.toMatchObject({ code: 'PROJECT_TRUST_REQUIRED' });
+    await expect(readFile(log)).rejects.toMatchObject({ code: 'ENOENT' });
+    const installed = await service.install({ cwd: project, scope: 'global', source: 'npm:@demo/plugin' });
+    const pkg = installed.packages[0]!;
+    await service.reload({ cwd: project });
+    await writeFile(control, JSON.stringify({ version: '2.0.0' }));
+    expect(await service.checkUpdates({ cwd: project, key: pkg.key })).toEqual([
+      expect.objectContaining({ state: 'update-available', availableVersion: '2.0.0' }),
+    ]);
+    await service.update({ cwd: project, key: pkg.key, scope: 'global' });
+    await writeFile(control, JSON.stringify({ version: '3.0.0' }));
+    expect((await service.updateAll({ cwd: project })).packages[0]?.version).toBe('3.0.0');
+    const before = await readFile(path.join(data, 'plugins.json'), 'utf8');
+    const persist = vi.spyOn(service as unknown as { persist(): Promise<void> }, 'persist');
+    persist.mockRejectedValueOnce(new Error('simulated persistence failure'));
+    await writeFile(control, JSON.stringify({ version: '4.0.0' }));
+    await expect(service.update({ cwd: project, key: pkg.key, scope: 'global' })).rejects.toThrow('simulated persistence failure');
+    expect(await readFile(path.join(data, 'plugins.json'), 'utf8')).toBe(before);
+    expect((await service.getCatalog({ cwd: project, refresh: true })).packages[0]?.version).toBe('3.0.0');
+    await writeFile(control, JSON.stringify({ fail: true }));
+    await expect(service.update({ cwd: project, key: pkg.key, scope: 'global' }))
+      .rejects.toMatchObject({ message: 'npm a échoué (9).' });
+    await expect(service.install({ cwd: project, scope: 'global', source: 'npm:@demo/failed' }))
+      .rejects.toMatchObject({ message: 'npm a échoué (9).' });
+    expect(await service.checkUpdates({ cwd: project, key: pkg.key })).toEqual([
+      expect.objectContaining({ state: 'error', message: 'Vérification impossible.' }),
+    ]);
+    expect(await readFile(path.join(data, 'plugins.json'), 'utf8')).toBe(before);
+    expect(await readdir(path.join(data, 'plugins'))).toEqual(['installed']);
+    await expect(readFile(path.join(data, 'plugins.json.lock'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+    const entries = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as {
+      args: string[]; literal: string; env: Record<string, string>;
+    });
+    expect(entries.map(entry => entry.args[0])).toEqual(['install', 'view', 'install', 'install', 'install', 'install', 'install', 'view']);
+    for (const entry of entries) {
+      expect(entry.literal).toBe(literal);
+      expect(entry.env.OPENAI_API_KEY).toBeUndefined();
+      expect(entry.env.NODE_OPTIONS).toBeUndefined();
+      expect(entry.env.NPM_CONFIG_IGNORE_SCRIPTS).toBeUndefined();
+      expect(entry.env.npm_config_ignore_scripts).toBe('true');
+      if (entry.args[0] === 'install') {
+        expect(entry.args).toEqual([
+          'install', '--prefix', expect.stringContaining('.staging-'), '--ignore-scripts', '--no-audit', '--no-fund',
+          '--package-lock=false', '--omit=dev', expect.stringMatching(/^@demo\//),
+        ]);
+      }
+    }
+    expect(JSON.stringify(await service.getCatalog({ cwd: project }))).not.toContain('private-child');
+  });
+
+  it('routes Git dependency installation and reinstallation through the configured npm executable', async () => {
+    const root = await temporaryDirectory();
+    const executable = path.join(root, 'dependency npm');
+    const log = path.join(root, 'dependencies.jsonl');
+    await writeFile(executable, `#!/usr/bin/env node
+require('node:fs').appendFileSync(process.argv[2], JSON.stringify({ args: process.argv.slice(3), cwd: process.cwd() }) + '\\n');
+`);
+    await chmod(executable, 0o700);
+    const actual = createPluginCommandRunner();
+    const runner: PluginCommandRunner = {
+      async run(command, args, options) {
+        if (command !== 'git') return actual.run(command, args, options);
+        if (args[0] === 'clone') await fixturePackage(args.at(-1)!);
+        return { stdout: args.includes('rev-parse') ? 'a'.repeat(40) : '', stderr: '' };
+      },
+    };
+    const { project, service } = await setup(root, runner, { npmCommand: [executable, log] });
+    const installed = await service.install({ cwd: project, scope: 'global', source: 'git:https://github.com/example/plugin.git' });
+    await service.update({ cwd: project, key: installed.packages[0]!.key, scope: 'global' });
+    const entries = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+    expect(entries).toHaveLength(2);
+    for (const entry of entries) expect(entry).toEqual({
+      args: ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', '--omit=dev'],
+      cwd: expect.stringMatching(/\.staging-.*[/\\]repository$/),
+    });
+  });
+
+  it('public Core admitted project command refuses global install/check/update with saved revocation, including after a lock wait', async () => {
+    const root = await temporaryDirectory();
+    const { project, data, trust, workspaces } = await setup(root);
+    const local = path.join(project, '.ai-harness'); await mkdir(local);
+    const log = path.join(root, 'executed'); const executable = path.join(local, 'npm.cjs');
+    await writeFile(executable, `#!/usr/bin/env node
+const fs = require('node:fs'), path = require('node:path');
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(process.argv.slice(2)) + '\\n');
+const args = process.argv.slice(2);
+if (args.includes('view')) console.log('"2.0.0"');
+else { const dest = path.join(args[args.indexOf('--prefix') + 1], 'node_modules', args.at(-1));
+fs.mkdirSync(dest, { recursive: true }); fs.writeFileSync(path.join(dest, 'package.json'), JSON.stringify({ name: args.at(-1), version: '1.0.0' })); }
+`);
+    await chmod(executable, 0o700);
+    const settingsPath = path.join(local, 'settings.json');
+    await writeFile(settingsPath, JSON.stringify({ npmCommand: ['./npm.cjs', 'project prefix'] }));
+    await trust.trust(project);
+    const resolved = await loadAgentSettings({ cwd: project, agentDir: data, projectTrusted: true });
+    const options = { ...publicNpmOptions(resolved) };
+    const admitted = new PublicPluginService(workspaces, trust, path.join(data, 'plugins.json'), data, undefined, options);
+    await admitted.load();
+    // Mutating caller data cannot remove the captured source binding.
+    options.npmCommandSourceWorkspace = undefined;
+    resolved.projectSettings.npmCommand![0] = '/not-the-captured-command';
+    const installed = await admitted.install({ cwd: project, scope: 'global', source: 'npm:core-seed' });
+    const key = installed.packages[0]!.key;
+    const files = [path.join(data, 'plugins.json'), settingsPath, executable, log];
+    const bytes = await Promise.all(files.map(file => readFile(file)));
+    const alias = path.join(root, 'source-alias'); await symlink(project, alias, 'dir');
+    const aliased = new PublicPluginService(workspaces, trust, path.join(data, 'plugins.json'), data, undefined,
+      { ...options, npmCommandSourceWorkspace: alias });
+    await aliased.load();
+    // Even a saved allow for the target cannot authorize a noncanonical source binding.
+    await expect(aliased.install({ cwd: project, scope: 'global', source: 'npm:aliased-source' }))
+      .rejects.toMatchObject({ code: 'PROJECT_TRUST_REQUIRED' });
+    const writer = new ProjectTrustManager(path.join(data, 'trust.json')); await writer.load();
+    const lock = path.join(data, 'plugins.json.lock'); await writeFile(lock, '', { mode: 0o600 });
+    const pending = admitted.install({ cwd: project, projectTrusted: true, scope: 'global', source: 'npm:core-refused' });
+    const refusal = expect(pending).rejects.toMatchObject({ code: 'PROJECT_TRUST_REQUIRED' });
+    await new Promise(resolve => setTimeout(resolve, 50)); // Actual Core lock is held by the test.
+    await writer.setDecision(project, false); await rm(lock);
+    await refusal;
+    await expect(admitted.update({ cwd: project, projectTrusted: true, key, scope: 'global' }))
+      .rejects.toMatchObject({ code: 'PROJECT_TRUST_REQUIRED' });
+    await expect(admitted.updateAll({ cwd: project, projectTrusted: true, scope: 'global' }))
+      .rejects.toMatchObject({ code: 'PROJECT_TRUST_REQUIRED' });
+    expect(await admitted.checkUpdates({ cwd: project, projectTrusted: true, key, scope: 'global' }))
+      .toMatchObject([{ state: 'error', message: 'Vérification impossible.' }]);
+    // Different operation cwd/trust never substitutes for trust of the captured source.
+    await expect(admitted.install({ cwd: data, projectTrusted: true, scope: 'global', source: 'npm:other-target' }))
+      .rejects.toMatchObject({ code: 'PROJECT_TRUST_REQUIRED' });
+    expect(await Promise.all(files.map(file => readFile(file)))).toEqual(bytes);
+    expect(await readdir(path.join(data, 'plugins'))).toEqual(['installed']);
+    expect((await readdir(data)).filter(name => /lock|tmp/.test(name))).toEqual([]);
+  });
+
+  it('rechecks captured project source trust after a genuine delayed Git clone before npm dependency execution', async () => {
+    const root = await temporaryDirectory();
+    const { project, data, trust, workspaces } = await setup(root);
+    const local = path.join(project, '.ai-harness'); const bin = path.join(root, 'bin');
+    await mkdir(local); await mkdir(bin);
+    const marker = path.join(root, 'clone-started'); const release = path.join(root, 'clone-release');
+    const npmLog = path.join(root, 'npm-executed'); const gitLog = path.join(root, 'git-executed');
+    const npm = path.join(local, 'npm.cjs'); const git = path.join(bin, 'git');
+    await writeFile(npm, `#!/usr/bin/env node\nrequire('node:fs').writeFileSync(${JSON.stringify(npmLog)}, 'executed');`);
+    await writeFile(git, `#!/usr/bin/env node
+const fs = require('node:fs'), path = require('node:path');
+// Workspace descriptions also probe Git. Only the admitted clone is delayed.
+if (process.argv[2] !== 'clone') {
+  if (process.argv.includes('rev-parse') && process.argv.at(-1) === 'HEAD') console.log('a'.repeat(40));
+  process.exit(0);
+}
+fs.appendFileSync(${JSON.stringify(gitLog)}, JSON.stringify(process.argv.slice(2)) + '\\n');
+fs.writeFileSync(${JSON.stringify(marker)}, 'started');
+const wait = setInterval(() => { if (!fs.existsSync(${JSON.stringify(release)})) return;
+clearInterval(wait); const dest = process.argv.at(-1); fs.mkdirSync(dest, { recursive: true });
+fs.writeFileSync(path.join(dest, 'package.json'), JSON.stringify({ name: 'git-fixture', version: '1.0.0' })); }, 10);
+`);
+    await chmod(npm, 0o700); await chmod(git, 0o700);
+    vi.stubEnv('PATH', `${bin}${path.delimiter}${process.env.PATH}`);
+    const settingsPath = path.join(local, 'settings.json');
+    await writeFile(settingsPath, JSON.stringify({ npmCommand: ['./npm.cjs', 'project prefix'] }));
+    await trust.trust(project);
+    const options = publicNpmOptions(await loadAgentSettings({ cwd: project, agentDir: data, projectTrusted: true }));
+    const admitted = new PublicPluginService(workspaces, trust, path.join(data, 'plugins.json'), data, undefined, options);
+    await admitted.load();
+    const before = await Promise.all([settingsPath, npm, git].map(file => readFile(file)));
+    const pending = admitted.install({ cwd: project, scope: 'global', source: 'git:https://github.com/example/plugin.git' });
+    const refusal = expect(pending).rejects.toMatchObject({ code: 'PROJECT_TRUST_REQUIRED' });
+    const deadline = Date.now() + 3000;
+    while (!await readFile(marker).then(() => true, () => false)) {
+      if (Date.now() > deadline) throw new Error('Disposable Git process did not start.');
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    const writer = new ProjectTrustManager(path.join(data, 'trust.json')); await writer.load();
+    await writer.setDecision(project, false); await writeFile(release, 'release');
+    await refusal;
+    await expect(readFile(npmLog)).rejects.toMatchObject({ code: 'ENOENT' });
+    const calls = (await readFile(gitLog, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+    expect(calls).toHaveLength(1); expect(calls[0][0]).toBe('clone');
+    // Revoked policy also refuses Git at preflight, even when npm might not be needed.
+    await expect(admitted.install({ cwd: project, scope: 'global', source: 'git:https://github.com/example/second.git' }))
+      .rejects.toMatchObject({ code: 'PROJECT_TRUST_REQUIRED' });
+    expect((await readFile(gitLog, 'utf8')).trim().split('\n')).toHaveLength(1);
+    expect(await Promise.all([settingsPath, npm, git].map(file => readFile(file)))).toEqual(before);
+    await expect(readFile(path.join(data, 'plugins.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readdir(path.join(data, 'plugins'))).toEqual([]);
+    expect((await readdir(data)).filter(name => /lock|tmp/.test(name))).toEqual([]);
+  });
+
+  it('invalid configured npm argv cleans staging and never reaches the runner', async () => {
+    const root = await temporaryDirectory();
+    const run = vi.fn();
+    const { project, data, service } = await setup(root, { run }, { npmCommand: ['npm', 'private\nargument'] });
+    await expect(service.install({ cwd: project, scope: 'global', source: 'npm:@demo/plugin' }))
+      .rejects.toMatchObject({ code: 'INVALID_PLUGIN_NPM_COMMAND' });
+    expect(run).not.toHaveBeenCalled();
+    expect(await readdir(path.join(data, 'plugins'))).toEqual([]);
+    expect((await service.getCatalog({ cwd: project })).packages).toEqual([]);
+  });
+
+  it('does not start Git or publish a package when settings diagnostics block npm policy', async () => {
+    const root = await temporaryDirectory();
+    const agentDir = path.join(root, 'agent');
+    await mkdir(agentDir);
+    await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({ npmCommand: null }));
+    const resolved = await loadAgentSettings({ cwd: path.join(root, 'project'), agentDir });
+    const run = vi.fn();
+    const { project, data, service } = await setup(root, { run }, resolvePluginNpmCommand(resolved));
+    expect((await service.getCatalog({ cwd: project })).packages).toEqual([]);
+    await service.reload({ cwd: project });
+    const state = await readFile(path.join(data, 'plugins.json'), 'utf8');
+    for (const source of ['npm:@demo/plugin', 'git:https://github.com/example/plugin']) {
+      await expect(service.install({ cwd: project, scope: 'global', source }))
+        .rejects.toMatchObject({ code: 'INVALID_PLUGIN_NPM_COMMAND' });
+    }
+    expect(run).not.toHaveBeenCalled();
+    expect(await readFile(path.join(data, 'plugins.json'), 'utf8')).toBe(state);
+    expect(await readdir(path.join(data, 'plugins'))).toEqual([]);
+    expect((await service.getCatalog({ cwd: project })).packages).toEqual([]);
   });
 
   it('commits reload generations only after every active package validates and inventories standalone extensions by trust', async () => {
