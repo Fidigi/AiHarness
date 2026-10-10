@@ -16,7 +16,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~320 lines |
 | QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
 | Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~210 lines |
-| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~160 lines |
+| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~170 lines |
 | Static Demonstration | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
 | Security & Trust | [`topics/security.md`](./topics/security.md) | ~180 lines |
 | Child Agents | [`topics/child-agents.md`](./topics/child-agents.md) | ~115 lines |
@@ -140,5 +140,6 @@ These files do NOT belong to the agent documentation system:
 | Internationalization and lazy Settings copy | Contributors / users | [FR contributor](../contributors/fr/i18n.md) / [EN contributor](../contributors/en/i18n.md); [FR loading](../users/fr/settings-loading.md) / [EN loading](../users/en/settings-loading.md) |
 | Optional file-pane loading | Users | [FR](../users/fr/workspace-loading.md) / [EN](../users/en/workspace-loading.md) |
 | Standalone authentication/export | Users / operators | [FR](../users/fr/standalone-operations.md) / [EN](../users/en/standalone-operations.md) |
+| Mobile keyboard layout | Users | [FR](../users/fr/mobile-keyboard.md) / [EN](../users/en/mobile-keyboard.md); conservative detection and device limits |
 | User/contributor navigation | Humans | [`users/README.md`](../users/README.md) / [`contributors/README.md`](../contributors/README.md) |
 | Screenshot inventory | Humans | [`screenshots/README.md`](../screenshots/README.md) |

@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { FormEvent, KeyboardEvent, ReactNode, RefObject } from 'react';
+import type { CSSProperties, FormEvent, KeyboardEvent, ReactNode, RefObject } from 'react';
 import { parseShellCommandInput } from '@ai-harness/core/shell-input';
 import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, ExtensionInteractionSnapshot, Message, ModelCatalog, ProviderType, Session, TokenUsage } from '@ai-harness/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -18,6 +18,7 @@ import { clipboardTextToMarkdown } from './markdown-paste';
 import { getMarkdownListContinuation } from './markdown-list-continuation';
 import { publishNotice, type NoticeLevel } from '../services/notices';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { mobileKeyboardViewKey, useMobileKeyboard } from '../hooks/useMobileKeyboard';
 import {
   cancelCommand,
   clearAgentQueue,
@@ -189,6 +190,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const sessions = useSessionStore(state => state.sessions);
   const currentSession = sessions.find(session => session.id === id);
   const workspace = useSessionStore(state => state.workspace);
+  const mobileKeyboard = useMobileKeyboard(mobileKeyboardViewKey(workspace?.id, workspace?.cwd, id, location.key));
   const selectedProviderType = useSessionStore(state => state.providers.active);
   const [effectiveConfiguration, setEffectiveConfiguration] = useState<EffectiveConfiguration>();
   const configurationKey = `${workspace?.id ?? ''}:${currentSession?.id ?? ''}`;
@@ -1546,7 +1548,11 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   );
 
   return (
-    <div className="chat-view">
+    <div className="chat-view" data-mobile-keyboard={mobileKeyboard.keyboardOpen}
+      style={mobileKeyboard.keyboardOpen ? {
+        '--mobile-keyboard-height': `${mobileKeyboard.viewportHeight}px`,
+        '--mobile-keyboard-top': `${mobileKeyboard.viewportOffsetTop}px`,
+      } as CSSProperties : undefined}>
       <header className="chat-toolbar">
         <div>
           <strong>{currentSession.title || t('sidebar.untitled')}</strong>

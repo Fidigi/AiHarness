@@ -78,6 +78,14 @@ A cwd change aborts stale requests, clears old file/search results, and keys Rea
 
 `WorkspacePanel` retains tree/index, Git state/diffs, bounded uploads, file watching, and source/media/Markdown ownership. `TerminalPanel` dynamically loads xterm, resumes bounded ANSI output by UTF-8 offset, and stores tab IDs per workspace.
 
+## Mobile Keyboard Layout
+
+`hooks/useMobileKeyboard.ts` observes eleven fixed browser events with one coalesced animation frame. Compact chat needs editable focus, a coarse pointer, width ≤959 CSS pixels and height loss above max(160px, 20%) against a trusted unzoomed baseline; closing uses max(120px, 15%) hysteresis. Pinch-only loss, toolbar motion and panning do not open it. Focused rotation waits for blur before reseeding.
+
+The view identity is a tuple of workspace ID/cwd, session ID and route key. Replacement scopes discard old publication and require fresh focus/input/composition intent. `hooks/mobileKeyboardStyles.ts` loads `hooks/mobile-keyboard.css` through a URL-only import; publication waits for readiness and a fresh measurement. Failed links are removed, stalled requests have an eight-second deadline, and a closed sample rearms retry. Disposal cancels the request, frame and listeners; success retains the link until its owner retires.
+
+Secondary chat chrome collapses without replacing the composer, images, Queue or Stop. Settings and MCP keep their own styles. Floating/overlay keyboards without viewport loss and initially zoomed/resized mounts may remain undetected; Chromium touch emulation is not physical Android/iOS/Safari certification. See the [mobile keyboard guide](../../users/en/mobile-keyboard.md).
+
 ## Rendering and Extensions
 
 - Memoized `MarkdownContentRenderer` shares currency/math, CJK autolink, raw-text and initial frontmatter parsing across messages, file previews and noninteractive minimap/accessibility projections. Only user messages preserve soft breaks. Raw HTML remains non-executable.
@@ -118,10 +126,13 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 
 - Settings, optional file-pane JS/CSS, terminal/xterm, Mermaid, syntax highlighting, and other heavy surfaces stay lazy where configured.
 - `packages/web/scripts/check-bundle-budget.mjs` fails eager, async, or CSS budget regressions.
-- Accepted E2E snapshots comprise 178 PNGs, including the full MCP state/import-preview matrix in Light/Dark desktop/mobile layouts; the independent static demo has separate captures.
+- E2E snapshots comprise 190 PNGs (178 conserved accepted baselines and twelve mobile keyboard additions), including the full MCP state/import-preview matrix in Light/Dark desktop/mobile layouts; the independent static demo has separate captures.
 - Performance tests protect cache bounds, virtualization, and lazy loading.
 
 ## Associated Tests
+
+- `packages/web/src/hooks/useMobileKeyboard.test.ts` and `packages/web/src/hooks/mobileKeyboardStyles.test.ts` — geometry, tuple identity, listener/frame ownership and bounded stylesheet lifecycle
+- `e2e/mobile-keyboard.spec.ts` — actual ChatView/MCP, touch/viewport emulation, eager interaction fields, retired sessions, asset failure/retry and compact IME/attachment/Stop; no physical-keyboard proof
 
 - `packages/web/src/store/session-store.test.ts` plus `.remote.test.ts` and `.integration.test.ts` — hydration, windows, drafts, cache and run state
 - `packages/web/src/store/preferences.test.ts` and `packages/web/src/components/composer-submit.test.ts` — schema migration, preference validation, newline shortcuts and IME-safe send decisions
