@@ -16,7 +16,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~305 lines |
 | QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
 | Server API | [`topics/server-api.md`](./topics/server-api.md) | ~200 lines |
-| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~140 lines |
+| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~150 lines |
 | Static Demonstration | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
 | Security & Trust | [`topics/security.md`](./topics/security.md) | ~180 lines |
 | Child Agents | [`topics/child-agents.md`](./topics/child-agents.md) | ~115 lines |
@@ -136,6 +136,6 @@ These files do NOT belong to the agent documentation system:
 | Public contracts and parity | Contributors | [FR](../contributors/fr/public-contract-policy.md) / [EN](../contributors/en/public-contract-policy.md) |
 | Resource group batches | Users / contributors | [FR user](../users/fr/resource-batches.md) / [EN user](../users/en/resource-batches.md); [FR contributor](../contributors/fr/resource-batches.md) / [EN contributor](../contributors/en/resource-batches.md) |
 | Session SDK | Contributors | [FR](../contributors/fr/session-sdk.md) / [EN](../contributors/en/session-sdk.md) |
-| Internationalization | Contributors | [FR](../contributors/fr/i18n.md) / [EN](../contributors/en/i18n.md) |
+| Internationalization and lazy Settings copy | Contributors / users | [FR contributor](../contributors/fr/i18n.md) / [EN contributor](../contributors/en/i18n.md); [FR loading](../users/fr/settings-loading.md) / [EN loading](../users/en/settings-loading.md) |
 | User/contributor navigation | Humans | [`users/README.md`](../users/README.md) / [`contributors/README.md`](../contributors/README.md) |
 | Screenshot inventory | Humans | [`screenshots/README.md`](../screenshots/README.md) |

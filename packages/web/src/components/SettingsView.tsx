@@ -6,6 +6,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import '../settings.css';
 import { useSessionStore } from '../store/session-store';
 import { useI18n } from '../hooks/useI18n';
+import { SettingsLocaleBoundary } from './SettingsLocaleBoundary';
 import type { ProviderType } from '@ai-harness/core';
 import type { TranslationFunction } from '../i18n/types';
 import {
@@ -699,4 +700,8 @@ function getModelOptions(
   }
 }
 
-export default SettingsView;
+function LocalizedSettingsView() {
+  return <SettingsLocaleBoundary><SettingsView /></SettingsLocaleBoundary>;
+}
+
+export default LocalizedSettingsView;

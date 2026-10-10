@@ -18,7 +18,7 @@ Documentation technique complète en français :
 | [installed-cli.md](fr/installed-cli.md) | Exécutable installé par archives locales, preuve hors ligne et limites de distribution |
 | [resource-batches.md](fr/resource-batches.md) | Sélecteurs exacts, lots modèles/skills, reçus de retour arrière et réconciliation |
 | [public-contract-policy.md](fr/public-contract-policy.md) | Politique de compatibilité et harnais golden CLI/JSON/RPC/session/extension/SDK |
-| [i18n.md](fr/i18n.md) | Guide d'internationalisation de l'interface Web React |
+| [i18n.md](fr/i18n.md) | Internationalisation React, textes différés des Réglages et conservation EN/FR |
 
 ### [English](en/)
 
@@ -32,7 +32,7 @@ Documentation technique complète en français :
 | [installed-cli.md](en/installed-cli.md) | Locally archived installed executable, offline proof and distribution limits |
 | [resource-batches.md](en/resource-batches.md) | Exact model/skill batches, owned rollback receipts and canonical reconciliation |
 | [public-contract-policy.md](en/public-contract-policy.md) | Compatibility policy and golden CLI/JSON/RPC/session/extension/SDK harness |
-| [i18n.md](en/i18n.md) | React Web internationalization guide |
+| [i18n.md](en/i18n.md) | React i18n, deferred Settings text and EN/FR conservation |
 
 ## 🔗 Liens utiles
 

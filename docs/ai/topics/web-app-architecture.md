@@ -107,7 +107,7 @@ This panel still has no non-import add or long-lived runtime reconnect control. 
 
 ## PWA, Push, and i18n
 
-The service worker caches the offline shell/static assets, never `/api` data. Updates require user activation. Web Push is explicit and category-specific; visible clients suppress duplicate service-worker notifications. Locale resolution uses registered language packages with English fallback and a persisted selection. Feature-only bilingual copy such as `mcp-import-messages.ts` stays co-located with the lazy Settings surface instead of inflating the eager locale registry.
+The service worker caches the offline shell/static assets, never `/api` data. Updates require user activation. Web Push is explicit and category-specific; visible clients suppress duplicate service-worker notifications. Locale resolution uses registered language packages with English fallback and a persisted selection. Feature-only bilingual copy such as `mcp-import-messages.ts` stays co-located with the lazy Settings surface. `SettingsLocaleBoundary.tsx` additionally loads `settings-locale.ts` on entry and registers both built-in feature dictionaries before mounting business controls. Shared/dynamic/default copy stays eager; fill-only registration preserves live package references and custom overrides. Translated loading/error/Close remain local, and explicit Reload and retry reloads the page because failed ESM imports remain rejected on reopen. Unmount/navigation invalidates late completion without focus, scroll or navigation effects. This is copy allocation, not complete localization of every residual feature; see the bilingual [i18n contributor guide](../../contributors/en/i18n.md).
 
 ## Build and Performance Contracts
 
@@ -125,6 +125,8 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 - `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including MCP OAuth sign-in/paste/cancel/logout UI state, minimal-config-free MCP Test requests and identity/cwd/capability/tool reports, locked/redacted inventory, atomic import/replacement, fresh-project trust-plus-first-write, grouped activation, exposure, focus, undo and failure reconciliation
 - `e2e/accessibility.spec.ts`, `e2e/performance.spec.ts`, and `e2e/visual.spec.ts` — a11y, bounds and baselines, including desktop/mobile Light/Dark workspace creation dialogs
 - `e2e/defaults.spec.ts` — independent composer/Settings saves, fresh draft inheritance, unreadable settings, precedence warnings and reviewed responsive axe/overflow baselines
+- `packages/web/src/components/settings-locale.test.ts` — exact eager/feature literal and placeholder conservation, eligible consumers, bounded fill-only registration and cached loader outcomes
+- `e2e/settings-locale-asset-load.spec.ts` with its production-preview config — real dictionary assets, controlled API fixtures, delayed/failed loading, EN/FR switch, keyboard/axe, reload/retry and retired close/session/workspace lifetimes; not live-provider proof
 - `e2e/live-server.spec.ts` — real browser-to-server smoke path
 
 ## Common Changes
