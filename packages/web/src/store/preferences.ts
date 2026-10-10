@@ -138,5 +138,10 @@ export function usePreferences(): [BrowserPreferences, (changes: Partial<Browser
       media?.removeEventListener('change', system);
     };
   }, []); // Preferences update through the custom event below.
-  return [preferences, changes => writePreferences({ ...preferences, ...changes, version: 4 })];
+  return [preferences, changes => {
+    const next = validated({ ...preferences, ...changes, version: 4 });
+    // Own writes must update this hook even before its passive subscription exists.
+    setPreferences(next);
+    writePreferences(next);
+  }];
 }

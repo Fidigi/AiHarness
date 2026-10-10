@@ -2,7 +2,7 @@
 // Web App - Main Component
 // ============================================================
 
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import ChatView from './components/ChatView';
 import WorkspacePanelBoundary from './components/WorkspacePanelBoundary';
@@ -141,7 +141,8 @@ function App() {
     };
   }, [location.pathname, workspace?.id]);
 
-  useEffect(() => {
+  // Register before the bootstrap DOM is observable, not in a later passive task.
+  useLayoutEffect(() => {
     const toggleFiles = () => {
       setFilesOpen(!filesOpen);
       setPreferences({ filesOpen: !filesOpen });

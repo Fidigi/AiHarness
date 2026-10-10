@@ -82,7 +82,8 @@ A cwd change aborts stale requests, clears old file/search results, and keys Rea
 - Composer paste treats plaintext as authoritative. An inert template provides bounded optional link metadata (65,536 code units, 1,024 nodes, 32 links); every failure/overflow preserves complete plaintext. List continuation obeys newline/send-mode/IME rules and restores the caret only on the same connected textarea.
 - Tool turns render Process/Response blocks with bounded preview and explicit full-output retrieval.
 - Extension widgets remain plain text; interactions are schema-driven dialogs, never extension React/DOM/HTML.
-- Dialogs/palettes trap focus, handle Escape, and restore the previous target.
+- App registers global shortcuts in a layout effect before bootstrap DOM observers or input can see an unregistered committed shell; matching and view eligibility remain with the existing App handler. Preference setters update their own hook state before broadcasting, so an early write cannot be lost before passive subscription.
+- Dialogs/palettes trap focus and handle Escape. Deferred initial/return focus belongs to one modal lifetime: remount retires old return, and a newer explicit focus destination supersedes it. Return uses only a connected, visible, enabled, non-inert invoker or fallback, and cannot leave another active modal scope.
 - Child runs appear in `SubagentPanel`, the global monitor, and bounded notices.
 
 See [`extensions.md`](./extensions.md) for server-side ownership and interaction validation.
@@ -115,7 +116,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 
 - Settings, optional file-pane JS/CSS, terminal/xterm, Mermaid, syntax highlighting, and other heavy surfaces stay lazy where configured.
 - `packages/web/scripts/check-bundle-budget.mjs` fails eager, async, or CSS budget regressions.
-- Visual coverage currently comprises 118 reviewed baselines, including the full MCP state/import-preview matrix in Light/Dark desktop/mobile layouts.
+- Accepted E2E snapshots comprise 178 PNGs, including the full MCP state/import-preview matrix in Light/Dark desktop/mobile layouts; the independent static demo has separate captures.
 - Performance tests protect cache bounds, virtualization, and lazy loading.
 
 ## Associated Tests
@@ -123,6 +124,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 - `packages/web/src/store/session-store.test.ts` plus `.remote.test.ts` and `.integration.test.ts` — hydration, windows, drafts, cache and run state
 - `packages/web/src/store/preferences.test.ts` and `packages/web/src/components/composer-submit.test.ts` — schema migration, preference validation, newline shortcuts and IME-safe send decisions
 - `packages/web/src/services/api.test.ts` — shared REST/SSE credential and response contracts, including minimal OAuth selectors even when callers pass full inventory rows
+- `packages/web/src/hooks/useFocusTrap.test.ts`, `packages/web/src/store/preferences-bootstrap.test.ts` and `e2e/pane-lifetime.spec.ts` with its production-preview config — commit-time shortcut registration, newer-focus ownership, ordinary return, remount/StrictMode retirement and unavailable fallback negatives
 - `packages/web/src/services/{push,pwa,keyboard,notices}.test.ts` — global browser services
 - `e2e/chat.spec.ts`, `e2e/sessions.spec.ts`, `e2e/settings.spec.ts`, and `e2e/workspaces.spec.ts` — primary browser flows, including MCP OAuth sign-in/paste/cancel/logout UI state, minimal-config-free MCP Test requests and identity/cwd/capability/tool reports, locked/redacted inventory, atomic import/replacement, fresh-project trust-plus-first-write, grouped activation, exposure, focus, undo and failure reconciliation
 - `e2e/accessibility.spec.ts`, `e2e/performance.spec.ts`, and `e2e/visual.spec.ts` — a11y, bounds and baselines, including desktop/mobile Light/Dark workspace creation dialogs
