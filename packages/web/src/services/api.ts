@@ -26,6 +26,7 @@ import type {
   SkillRegistry,
   SkillRegistryEntry,
   SerializedSession,
+  Session,
   ShellCommandEvent,
   ShellCommandSnapshot,
   SubagentConfiguration,
@@ -2101,7 +2102,7 @@ export function updateToolSettings(input: {
 }
 
 export function saveNewSessionDefault(
-  input: ({ kind: 'model'; provider: string; model: string } | { kind: 'thinking'; thinking: NonNullable<import('@ai-harness/core').Session['thinking']> }) & { projectId?: string },
+  input: ({ kind: 'model'; provider: string; model: string } | { kind: 'thinking'; thinking: NonNullable<Session['thinking']> }) & { projectId?: string },
 ): Promise<ApiResponse<{ values: Record<string, unknown>; overridden: string[]; effective: EffectiveConfiguration }>> {
   return jsonApi('/configuration/defaults', { method: 'PATCH', body: JSON.stringify(input) });
 }
