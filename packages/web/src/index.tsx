@@ -14,7 +14,9 @@ import './terminal.css';
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <I18nProvider>
-      <BrowserRouter>
+      {/* Zustand publishes view identity synchronously; the router must not leave
+          an old route epoch mounted behind an already updated browser URL. */}
+      <BrowserRouter useTransitions={false}>
         <App />
       </BrowserRouter>
     </I18nProvider>

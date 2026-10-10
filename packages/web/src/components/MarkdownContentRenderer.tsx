@@ -8,6 +8,7 @@ import 'katex/dist/katex.min.css';
 import './MarkdownContent.css';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useI18n } from '../hooks/useI18n';
+import { openWorkspaceFile } from './workspace-file-intent';
 
 const sanitizeSchema = {
   ...defaultSchema,
@@ -30,11 +31,6 @@ function plainText(value: ReactNode): string {
 
 function slug(value: ReactNode): string {
   return plainText(value).toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'section';
-}
-
-function openWorkspaceFile(reference: string): void {
-  window.dispatchEvent(new CustomEvent('aih-show-files'));
-  window.setTimeout(() => window.dispatchEvent(new CustomEvent('aih-open-file', { detail: reference })), 0);
 }
 
 function HighlightedCode({ code, language }: { code: string; language: string }) {
@@ -150,7 +146,7 @@ const components: Components = {
   a: ({ href, children }) => {
     if (href?.toLocaleLowerCase().startsWith('file:')) return <a href={href} onClick={event => {
       event.preventDefault();
-      openWorkspaceFile(href.slice(5));
+      openWorkspaceFile(href.slice(5), event.currentTarget);
     }}>{children}</a>;
     if (href && /^https?:\/\//i.test(href)) return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
     return href ? <a href={href}>{children}</a> : <span>{children}</span>;

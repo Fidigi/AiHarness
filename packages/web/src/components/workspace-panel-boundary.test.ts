@@ -40,6 +40,14 @@ describe('workspace pane load boundary', () => {
     expect(app).toContain('workspace?.id, workspace?.cwd, activeSessionId, location.key');
     expect(entry).not.toContain('workspace-panel.css');
   });
+  it('commits router identity urgently alongside the external workspace/session store', () => {
+    const entry = source('../index.tsx');
+    expect(entry).toContain('<BrowserRouter useTransitions={false}>');
+  });
+  it('retires real navigation even when browser history entries reuse a fallback key', () => {
+    const app = source('../App.tsx');
+    expect(app).toContain('location.key, location.pathname, location.search, location.hash');
+  });
   it('keeps fallback styles local and avoids mutating global focus or DOM state', () => {
     const css = source('./workspace-panel-boundary.css');
     expect(css).toContain('.workspace-panel-loading');

@@ -225,7 +225,7 @@ function App() {
           }><SettingsView /></Suspense>} />
         </Routes>
       </main>
-      {!location.pathname.startsWith('/settings') && workspace && filesOpen && <WorkspacePanelBoundary key={JSON.stringify([workspace?.id, workspace?.cwd, activeSessionId, location.key])} onRequestClose={() => {
+      {!location.pathname.startsWith('/settings') && workspace && filesOpen && <WorkspacePanelBoundary key={JSON.stringify([workspace?.id, workspace?.cwd, activeSessionId, location.key, location.pathname, location.search, location.hash])} onRequestClose={() => {
         setFilesOpen(false);
         setPreferences({ filesOpen: false });
       }} />}

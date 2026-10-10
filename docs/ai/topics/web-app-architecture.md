@@ -12,7 +12,7 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 
 | File | Responsibility |
 |---|---|
-| `packages/web/src/index.tsx` | React root, `I18nProvider`, global styles and service worker bootstrap |
+| `packages/web/src/index.tsx` | React root, urgent declarative router identity, `I18nProvider`, global styles and service worker bootstrap |
 | `packages/web/src/App.tsx` | Auth bootstrap, route/deep-link restoration and top-level data hydration |
 | `packages/web/src/store/session-store.ts` | Sessions, windows, drafts, runs, catalogues and bounded workspace cache |
 | `packages/web/src/store/preferences.ts` | Versioned appearance, send-key, layout, notification, panel and keybinding state |
@@ -36,6 +36,8 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 | Credentials | Provider secrets stay server-side; auth uses HttpOnly cookie or legacy per-tab bearer, never workspace cache/preferences |
 
 The cache favors draft text over binary previews, strips provider keys, and discards/reconciles remote windows when the server revision changes.
+
+`BrowserRouter useTransitions={false}` keeps location updates urgent alongside the synchronous Zustand workspace/session store. A canonical browser URL must not leave the previous React route epoch available for a file intent that a delayed navigation commit then retires. Keep the pane's complete workspace/cwd/session/navigation key and true-navigation cancellation; do not repair the writer by replaying across scopes.
 
 ## Detached Conversation Flow
 
@@ -72,7 +74,7 @@ Sidebar directory reads are sequence guarded and visibly report the server's 500
 
 A cwd change aborts stale requests, clears old file/search results, and keys React state so old PTY/file surfaces unmount before target state restores. Browser paths are never trusted directly: Server resolves them with `WorkspaceManager` and applies project trust before mutations or execution. Workspace descriptors keep resource-sensitive `trusted` separate from persisted-decision `operationTrusted`; Sidebar prompts, file/search surfaces and project configuration gates use the latter (with a compatibility fallback only when older descriptors omit it), so an implicitly safe empty folder cannot silently authorize an operation.
 
-`WorkspacePanelBoundary` imports the real panel and original stylesheet together only at the workspace-eligible open-pane call site. Its key includes workspace ID/cwd, active session and navigation key. Local nonmodal loading/error exposes Close/Cancel without focus mutation or global suspension; failed imports stay rejected on reopen. Explicit page-reload retry warns about unsent text. A latest bounded file intent survives loading and the DOM/passive-listener gap; replay waits one task for the child's development StrictMode setup, is cancelled on teardown, and is superseded by newer live intent. Loading grants no new path/trust authority; see the bilingual [file-pane loading guide](../../users/en/workspace-loading.md).
+`WorkspacePanelBoundary` imports the real panel and original stylesheet together only at the workspace-eligible open-pane call site. Its key includes workspace ID/cwd, active session, navigation key and pathname/search/hash. Address fields also retire navigation when external history entries reuse the router's fallback key. Markdown file links capture their actual origin element and address before showing the pane; their next-task dispatch is suppressed after address change or origin disconnection, rather than publishing into an already replaced boundary. This is presentation lifetime, not file/trust authority. Local nonmodal loading/error exposes Close/Cancel without focus mutation or global suspension; failed imports stay rejected on reopen. Explicit page-reload retry warns about unsent text. A latest bounded file intent survives loading and the DOM/passive-listener gap; replay waits one task for the child's development StrictMode setup, is cancelled on teardown, and is superseded by newer live intent. Loading grants no new path/trust authority; see the bilingual [file-pane loading guide](../../users/en/workspace-loading.md).
 
 `WorkspacePanel` retains tree/index, Git state/diffs, bounded uploads, file watching, and source/media/Markdown ownership. `TerminalPanel` dynamically loads xterm, resumes bounded ANSI output by UTF-8 offset, and stores tab IDs per workspace.
 
@@ -131,7 +133,8 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 - `e2e/defaults.spec.ts` — independent composer/Settings saves, fresh draft inheritance, unreadable settings, precedence warnings and reviewed responsive axe/overflow baselines
 - `packages/web/src/components/settings-locale.test.ts` — exact eager/feature literal and placeholder conservation, eligible consumers, bounded fill-only registration and cached loader outcomes
 - `e2e/settings-locale-asset-load.spec.ts` with its production-preview config — real dictionary assets, controlled API fixtures, delayed/failed loading, EN/FR switch, keyboard/axe, reload/retry and retired close/session/workspace lifetimes; not live-provider proof
-- `packages/web/src/components/workspace-panel-boundary.test.ts` — local loading, retained failure/reload warning, bounded bilingual copy, keyed call site and scoped styles
+- `packages/web/src/components/workspace-panel-boundary.test.ts` — local loading, retained failure/reload warning, bounded bilingual copy, keyed call site, urgent root router declaration, fallback-key address retirement and scoped styles
+- `packages/web/src/components/workspace-file-intent.test.ts` — show-before-dispatch order and unchanged reference, address-change and disconnected-origin suppression for the delayed Markdown link producer
 - `e2e/workspace-asset-load.spec.ts` with its production-preview config — actual pane JS/CSS delay/refusal, Close/Cancel/reload, retained/latest/commit-phase file intent and retired navigation; controlled API fixtures, not live file-authority proof
 - `e2e/live-server.spec.ts` — unchanged real browser-to-server file/viewer, traversal refusal, PTY and persisted mock-provider smoke paths
 
@@ -139,7 +142,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 
 ### Change chat or session state
 
-Update API parsing, store hydration/windows, `ChatView`, detached protocol fixtures, reconnection/duplicate tests, and long-history behavior together.
+Update API parsing, store hydration/windows, `ChatView`, detached protocol fixtures, reconnection/duplicate tests, and long-history behavior together. Preserve urgent router updates alongside external-store identity and the unchanged real-file/PTY guard; metadata or timing changes must not retire a valid intent behind an already canonical URL.
 
 ### Change a visible surface
 

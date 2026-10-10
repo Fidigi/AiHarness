@@ -69,7 +69,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → packages/web/src/services/api.ts (client counterpart)
 ```
 
-**The React/Web client** → Load only `web-app-architecture.md` + `project-map.md` §§3–4
+**The React/Web client, including router/store identity and optional-pane lifetimes** → Load only `web-app-architecture.md` + `project-map.md` §§3–4
 ```
 → packages/web/src/index.tsx, App.tsx
 → packages/web/src/store/*.ts
