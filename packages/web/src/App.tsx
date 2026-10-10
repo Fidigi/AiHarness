@@ -5,7 +5,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import ChatView from './components/ChatView';
-import WorkspacePanel from './components/WorkspacePanel';
+import WorkspacePanelBoundary from './components/WorkspacePanelBoundary';
 import LoginView from './components/LoginView';
 import PwaStatus from './components/PwaStatus';
 import CommandPalette from './components/CommandPalette';
@@ -224,7 +224,7 @@ function App() {
           }><SettingsView /></Suspense>} />
         </Routes>
       </main>
-      {!location.pathname.startsWith('/settings') && filesOpen && <WorkspacePanel isOpen={filesOpen} onRequestClose={() => {
+      {!location.pathname.startsWith('/settings') && workspace && filesOpen && <WorkspacePanelBoundary key={JSON.stringify([workspace?.id, workspace?.cwd, activeSessionId, location.key])} onRequestClose={() => {
         setFilesOpen(false);
         setPreferences({ filesOpen: false });
       }} />}

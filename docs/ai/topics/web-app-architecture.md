@@ -18,7 +18,7 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 | `packages/web/src/store/preferences.ts` | Versioned appearance, send-key, layout, notification, panel and keybinding state |
 | `packages/web/src/services/api.ts`, `packages/web/src/services/mcp-api.ts` | Credential-aware fetch, REST/SSE contracts, workspace creation/file-manager/force-retry operations, and Settings-lazy MCP one-shot Test, explicit OAuth status/start/poll/paste/cancel/logout, import/replacement preview, persistence and local mutation requests |
 | `packages/web/src/components/ChatView.tsx` | Detached runs, history, composer, queues, settings and reconciliation |
-| `packages/web/src/components/{Sidebar,WorkspacePanel,TerminalPanel}.tsx` | Lazy navigation with bounded folder creation/host opening/worktree force retry, files/Git and PTY surfaces |
+| `packages/web/src/components/{Sidebar,WorkspacePanel,WorkspacePanelBoundary,TerminalPanel}.tsx` | Lazy navigation, locally admitted optional file-pane JS/CSS, unchanged files/Git and PTY surfaces |
 | `packages/web/src/components/SettingsView.tsx` | Lazy Settings route and administration sections |
 | `packages/web/src/components/{McpSettings,McpImportPreview}.tsx` | Redacted global/project MCP groups and explicit Test reports, paste preview, field/reference completion, scope/confirmation-gated atomic import or replacement, trust lock, row/group activation, per-server exposure, confirmed removal, temporary undo and file diagnostics |
 | `packages/web/src/components/PluginSettings.tsx` | Project/global package inventory, individual and one-request group activation, partial-result and reload-pending feedback |
@@ -72,7 +72,9 @@ Sidebar directory reads are sequence guarded and visibly report the server's 500
 
 A cwd change aborts stale requests, clears old file/search results, and keys React state so old PTY/file surfaces unmount before target state restores. Browser paths are never trusted directly: Server resolves them with `WorkspaceManager` and applies project trust before mutations or execution. Workspace descriptors keep resource-sensitive `trusted` separate from persisted-decision `operationTrusted`; Sidebar prompts, file/search surfaces and project configuration gates use the latter (with a compatibility fallback only when older descriptors omit it), so an implicitly safe empty folder cannot silently authorize an operation.
 
-`WorkspacePanel` owns lazy tree/index, Git state/diffs, bounded uploads, file watching, and source/media/Markdown views. `TerminalPanel` dynamically loads xterm, resumes bounded ANSI output by UTF-8 offset, and stores tab IDs per workspace.
+`WorkspacePanelBoundary` imports the real panel and original stylesheet together only at the workspace-eligible open-pane call site. Its key includes workspace ID/cwd, active session and navigation key. Local nonmodal loading/error exposes Close/Cancel without focus mutation or global suspension; failed imports stay rejected on reopen. Explicit page-reload retry warns about unsent text. A latest bounded file intent survives loading and the DOM/passive-listener gap; replay waits one task for the child's development StrictMode setup, is cancelled on teardown, and is superseded by newer live intent. Loading grants no new path/trust authority; see the bilingual [file-pane loading guide](../../users/en/workspace-loading.md).
+
+`WorkspacePanel` retains tree/index, Git state/diffs, bounded uploads, file watching, and source/media/Markdown ownership. `TerminalPanel` dynamically loads xterm, resumes bounded ANSI output by UTF-8 offset, and stores tab IDs per workspace.
 
 ## Rendering and Extensions
 
@@ -111,7 +113,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 
 ## Build and Performance Contracts
 
-- Settings, terminal/xterm, Mermaid, syntax highlighting, and other heavy surfaces stay lazy where configured.
+- Settings, optional file-pane JS/CSS, terminal/xterm, Mermaid, syntax highlighting, and other heavy surfaces stay lazy where configured.
 - `packages/web/scripts/check-bundle-budget.mjs` fails eager, async, or CSS budget regressions.
 - Visual coverage currently comprises 118 reviewed baselines, including the full MCP state/import-preview matrix in Light/Dark desktop/mobile layouts.
 - Performance tests protect cache bounds, virtualization, and lazy loading.
@@ -127,7 +129,9 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 - `e2e/defaults.spec.ts` — independent composer/Settings saves, fresh draft inheritance, unreadable settings, precedence warnings and reviewed responsive axe/overflow baselines
 - `packages/web/src/components/settings-locale.test.ts` — exact eager/feature literal and placeholder conservation, eligible consumers, bounded fill-only registration and cached loader outcomes
 - `e2e/settings-locale-asset-load.spec.ts` with its production-preview config — real dictionary assets, controlled API fixtures, delayed/failed loading, EN/FR switch, keyboard/axe, reload/retry and retired close/session/workspace lifetimes; not live-provider proof
-- `e2e/live-server.spec.ts` — real browser-to-server smoke path
+- `packages/web/src/components/workspace-panel-boundary.test.ts` — local loading, retained failure/reload warning, bounded bilingual copy, keyed call site and scoped styles
+- `e2e/workspace-asset-load.spec.ts` with its production-preview config — actual pane JS/CSS delay/refusal, Close/Cancel/reload, retained/latest/commit-phase file intent and retired navigation; controlled API fixtures, not live file-authority proof
+- `e2e/live-server.spec.ts` — unchanged real browser-to-server file/viewer, traversal refusal, PTY and persisted mock-provider smoke paths
 
 ## Common Changes
 
