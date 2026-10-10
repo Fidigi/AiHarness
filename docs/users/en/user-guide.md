@@ -609,7 +609,7 @@ The **Settings** page allows:
 - applying a Bearer token to the current tab or logging out of the Web session;
 - viewing Web/agent versions, explicitly checking the latest release and opening its notes without auto-installation.
 
-Expand **Manage model catalogue** in the **Model** section to search for a model or provider, view its reasoning/image/tool capabilities, then activate an entry, all entries or none. **Refresh catalog** re-triggers server-side discovery: local OpenAI/Ollama-compatible servers are queried via their models endpoint, then merged with a minimal published catalog and configured model. Discovery failure keeps the last valid result and the published catalog remains available.
+Expand **Manage model catalogue** in the **Model** section to search for a model or provider, view its reasoning/image/tool capabilities, then activate an entry or use **Enable displayed**/**Disable displayed** for one provider or all displayed groups. Only changed visible rows are submitted in one batch; hidden rows and inherited/unrelated settings remain intact. Filter a group exceeding 500 changes. Ordered outcomes report changed, unchanged and failed entries. After a failure or navigating away during a save, refresh canonical state rather than assuming rollback; see [resource group controls](./resource-batches.md). **Refresh catalogue** re-triggers server-side discovery: local OpenAI/Ollama-compatible servers are queried via their models endpoint, then merged with a minimal published catalog and configured model. Discovery failure keeps the last valid result and the published catalog remains available.
 
 ![Published and discovered model catalogue, light theme](../../screenshots/05-settings/model-catalog-light.png)
 

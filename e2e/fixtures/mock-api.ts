@@ -13,6 +13,8 @@ import type {
   PluginPackageInfo,
   ProviderAuthStatus,
   ProviderModelCatalog,
+  ResourceEnableChange,
+  ResourceEnableOutcome,
   SkillCatalog,
   SkillRegistry,
   SubagentConfiguration,
@@ -190,6 +192,24 @@ const MOCK_CATALOG_MODELS: Record<string, Array<{ id: string; name: string; reas
   bedrock: [{ id: 'anthropic.claude-3-haiku-20240307-v1:0', name: 'Claude 3 Haiku', images: true, tools: true }],
   local: [{ id: 'local-model', name: 'Local server model' }],
 };
+
+function fixtureBatchChanges(body: unknown, resource: 'models' | 'skills'): ResourceEnableChange[] | undefined {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return undefined;
+  const input = body as Record<string, unknown>;
+  const allowed = resource === 'models' ? ['changes', 'projectId'] : ['changes', 'cwd', 'projectId'];
+  if (Object.keys(input).some(key => !allowed.includes(key)) || !Array.isArray(input.changes)
+    || input.changes.length > 500) return undefined;
+  const seen = new Set<string>();
+  const result: ResourceEnableChange[] = [];
+  for (const change of input.changes) {
+    if (!change || typeof change !== 'object' || Array.isArray(change)
+      || Object.keys(change).some(key => !['key', 'enabled'].includes(key))
+      || typeof change.key !== 'string' || !change.key.length || change.key.length > 500
+      || /[\u0000-\u001f\u007f]/.test(change.key) || typeof change.enabled !== 'boolean' || seen.has(change.key)) return undefined;
+    seen.add(change.key); result.push({ key: change.key, enabled: change.enabled });
+  }
+  return result;
+}
 
 function mockModelCatalog(providers: MockProvider[]): ModelCatalog {
   const groups: ProviderModelCatalog[] = providers.map(provider => ({
@@ -1052,6 +1072,30 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       if (url.searchParams.get('refresh') === 'true') modelCatalog.updatedAt = '2025-01-01T12:01:00.000Z';
       await fulfillJson(route, modelCatalog); return;
     }
+    if (url.pathname === '/api/models/enabled/batch' && method === 'PATCH') {
+      const changes = fixtureBatchChanges(body, 'models');
+      if (!changes) { await fulfillJson(route, { error: 'Invalid model batch', code: 'INVALID_RESOURCE_BATCH' }, 400); return; }
+      const known = new Map(modelCatalog.providers.flatMap(provider => provider.models.map(model => [model.key, model] as const)));
+      const outcomes: ResourceEnableOutcome[] = changes.map(change => {
+        const model = known.get(change.key);
+        return model ? { ...change, status: model.enabled === change.enabled ? 'unchanged' : 'changed' }
+          : { ...change, status: 'failed', code: 'UNKNOWN_RESOURCE' };
+      });
+      const targets = new Map(outcomes.filter(outcome => outcome.status !== 'failed').map(outcome => [outcome.key, outcome.enabled]));
+      const projectId = (body as { projectId?: string }).projectId;
+      const changed = outcomes.some(outcome => outcome.status === 'changed');
+      modelCatalog = { ...modelCatalog, ...(changed ? { enabledScope: projectId ? 'project' as const : 'global' as const,
+        enabledSource: projectId || 'global' } : {}),
+        providers: modelCatalog.providers.map(provider => ({ ...provider,
+          models: provider.models.map(model => ({ ...model, enabled: targets.get(model.key) ?? model.enabled })) })) };
+      const scope = projectId ? 'project' : 'global';
+      const enabled = new Set((configurationScopes[scope].enabledModels
+        ?? configurationScopes.global.enabledModels
+        ?? [...known.values()].filter(model => model.enabled).map(model => model.key)) as string[]);
+      for (const [key, value] of targets) { if (value) enabled.add(key); else enabled.delete(key); }
+      if (changed) configurationScopes[scope].enabledModels = [...enabled];
+      await fulfillJson(route, { outcomes, catalog: modelCatalog }); return;
+    }
     if (url.pathname === '/api/models/enabled' && method === 'PATCH') {
       const enabledModels = Array.isArray((body as { enabledModels?: unknown[] })?.enabledModels)
         ? new Set((body as { enabledModels: unknown[] }).enabledModels.filter((value): value is string => typeof value === 'string'))
@@ -1071,6 +1115,23 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     if (url.pathname === '/api/skills' && method === 'GET') {
       if (url.searchParams.get('refresh') === 'true') skillCatalog.updatedAt = '2025-01-01T12:01:00.000Z';
       await fulfillJson(route, skillCatalog); return;
+    }
+    if (url.pathname === '/api/skills/enabled/batch' && method === 'PATCH') {
+      const changes = fixtureBatchChanges(body, 'skills');
+      if (!changes) { await fulfillJson(route, { error: 'Invalid skill batch', code: 'INVALID_RESOURCE_BATCH' }, 400); return; }
+      const known = new Map(skillCatalog.skills.map(skill => [skill.key, skill]));
+      const outcomes: ResourceEnableOutcome[] = changes.map(change => {
+        const skill = known.get(change.key);
+        if (!skill) return { ...change, status: 'failed', code: 'UNKNOWN_RESOURCE' };
+        if (!skill.trusted) return { ...change, status: 'failed', code: 'PROJECT_TRUST_REQUIRED' };
+        return { ...change, status: skill.modelInvocable === change.enabled && skill.defaultModelInvocable === change.enabled
+          ? 'unchanged' : 'changed' };
+      });
+      const targets = new Map(outcomes.filter(outcome => outcome.status !== 'failed').map(outcome => [outcome.key, outcome.enabled]));
+      skillCatalog = { ...skillCatalog, skills: skillCatalog.skills.map(skill => ({ ...skill,
+        modelInvocable: targets.get(skill.key) ?? skill.modelInvocable,
+        defaultModelInvocable: targets.get(skill.key) ?? skill.defaultModelInvocable })) };
+      await fulfillJson(route, { outcomes, catalog: skillCatalog }); return;
     }
     if (url.pathname === '/api/skills/enabled' && method === 'PATCH') {
       const enabledSkills = Array.isArray((body as { enabledSkills?: unknown[] })?.enabledSkills)

@@ -257,6 +257,8 @@ test.describe('Régression visuelle du catalogue de modèles', () => {
       await page.goto('/settings#model');
       await page.addStyleTag({ content: '#skills, #plugins { display: none !important; }' });
       const section = page.getByRole('heading', { name: 'Model', exact: true }).locator('..');
+      const defaults = page.getByRole('heading', { name: 'Provider and model defaults', exact: true }).locator('..');
+      await expect(defaults.getByLabel('Model', { exact: true })).toBeEnabled();
       await section.getByText('Manage model catalogue').click();
       await section.getByLabel('Filter models or providers').fill('openai');
       await expect(section.locator('fieldset[data-provider="openai"]')).toContainText('GPT-4o (Recommended)');

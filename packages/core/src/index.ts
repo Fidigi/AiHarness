@@ -8,6 +8,7 @@ export {
   AI_HARNESS_EXTENSION_API_VERSION,
 } from './public-api-version.js';
 export * from './types/index.js';
+export * from './types/resource-batches.js';
 export * from './sdk/index.js';
 
 // Providers

@@ -41,6 +41,7 @@ test.describe('Settings and authentication', () => {
         { type: 'openai', configured: true },
         { type: 'anthropic', configured: false },
       ],
+      configurationScopes: { global: { provider: 'openai', model: 'gpt-4o', toolPreset: 'default' }, project: {} },
     });
     await page.goto('/settings#model');
     await settingsSection(page, 'AI Provider').locator('select').selectOption('openai');
@@ -57,24 +58,29 @@ test.describe('Settings and authentication', () => {
     await section.getByLabel('Filter models or providers').fill('');
 
     const o3 = section.getByRole('checkbox', { name: 'Enable o3 for OpenAI' });
-    await o3.uncheck();
-    await expect.poll(() => api.requests.filter(request => request.path === '/api/models/enabled').at(-1)?.body)
-      .toMatchObject({ projectId: 'workspace-e2e' });
-    expect((api.requests.filter(request => request.path === '/api/models/enabled').at(-1)?.body as { enabledModels: string[] }).enabledModels)
-      .not.toContain('openai:o3');
+    await o3.click();
+    await expect(o3).not.toBeChecked();
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/models/enabled/batch').at(-1)?.body)
+      .toEqual({ projectId: 'workspace-e2e', changes: [{ key: 'openai:o3', enabled: false }] });
 
-    await section.getByRole('button', { name: 'Disable all' }).click();
-    await expect.poll(() => (api.requests.filter(request => request.path === '/api/models/enabled').at(-1)?.body as { enabledModels: string[] })?.enabledModels)
-      .toEqual([]);
-    await section.getByRole('button', { name: 'Enable all' }).click();
-    await expect.poll(() => (api.requests.filter(request => request.path === '/api/models/enabled').at(-1)?.body as { enabledModels: string[] })?.enabledModels.length)
-      .toBeGreaterThan(1);
+    const keys = ['mock:mock-model', 'openai:gpt-4o', 'openai:gpt-4-turbo', 'openai:gpt-3.5-turbo',
+      'anthropic:claude-3-haiku-20240307'];
+    const catalogueActions = section.getByRole('group', { name: 'Manage model catalogue', exact: true });
+    await catalogueActions.getByRole('button', { name: 'Disable displayed', exact: true }).click();
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/models/enabled/batch').at(-1)?.body)
+      .toEqual({ projectId: 'workspace-e2e', changes: keys.map(key => ({ key, enabled: false })) });
+    await expect(section.locator('.model-catalog-row input:checked')).toHaveCount(0);
+    await catalogueActions.getByRole('button', { name: 'Enable displayed', exact: true }).click();
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/models/enabled/batch').at(-1)?.body)
+      .toEqual({ projectId: 'workspace-e2e', changes: [...keys.slice(0, 4), 'openai:o3', keys[4]].map(key => ({ key, enabled: true })) });
+    await expect(section.locator('.model-catalog-row input:checked')).toHaveCount(6);
 
     const catalogueRequests = api.requests.filter(request => request.path === '/api/models').length;
     await section.getByRole('button', { name: 'Refresh catalogue' }).click();
     await expect.poll(() => api.requests.filter(request => request.path === '/api/models').length).toBe(catalogueRequests + 1);
 
-    await o3.uncheck();
+    await o3.click();
+    await expect(o3).not.toBeChecked();
     await page.getByRole('button', { name: 'New chat' }).click();
     const suggestions = page.locator('#model-suggestions option');
     await expect.poll(() => suggestions.evaluateAll(options => options.map(option => (option as HTMLOptionElement).value)))

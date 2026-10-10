@@ -30,6 +30,8 @@ import {
   ToolSettingsPanel,
 } from './EcosystemSettings';
 
+import { ResourceBatchReport, ResourceGroupButtons, useResourceBatches } from './ResourceBatchControls';
+
 const PluginSettings = lazy(async () => ({
   default: (await import('./PluginSettings')).PluginSettings,
 }));
@@ -44,8 +46,7 @@ function SettingsView() {
   const updateApiKey = useSessionStore(state => state.updateApiKey);
   const setModel = useSessionStore(state => state.setModel);
   const hydrateModelCatalog = useSessionStore(state => state.hydrateModelCatalog);
-  const setModelEnabled = useSessionStore(state => state.setModelEnabled);
-  const setAllModelsEnabled = useSessionStore(state => state.setAllModelsEnabled);
+  const batches = useResourceBatches();
   const skills = useSessionStore(state => state.skills);
   const hydrateSkillCatalog = useSessionStore(state => state.hydrateSkillCatalog);
   const setSkillModelInvocable = useSessionStore(state => state.setSkillModelInvocable);
@@ -308,15 +309,13 @@ function SettingsView() {
                 onChange={event => setModelFilter(event.target.value)} />
             </label>
             <div>
-              <button type="button" disabled={providers.catalogLoading} onClick={() => void hydrateModelCatalog(true)}>
+              <button type="button" disabled={providers.catalogLoading || batches.busy} onClick={() => void hydrateModelCatalog(true)}>
                 {t('settings.modelCatalog.refresh')}
               </button>
-              <button type="button" disabled={providers.catalogLoading || !providers.catalog} onClick={() => void setAllModelsEnabled(true)}>
-                {t('settings.modelCatalog.enableAll')}
-              </button>
-              <button type="button" disabled={providers.catalogLoading || !providers.catalog} onClick={() => void setAllModelsEnabled(false)}>
-                {t('settings.modelCatalog.disableAll')}
-              </button>
+              <ResourceGroupButtons group={t('settings.modelCatalog.manage')}
+                rows={visibleModelGroups.flatMap(group => group.models.map(model => ({ key: model.key, enabled: model.enabled })))}
+                disabled={!!providers.catalogLoading || batches.busy}
+                save={changes => batches.save('models', changes)} />
             </div>
           </div>
           {providers.catalog && <p className="model-catalog-meta">
@@ -328,6 +327,8 @@ function SettingsView() {
           {!providers.catalogLoading && providers.catalog && visibleModelGroups.length === 0 && (
             <p>{t('settings.modelCatalog.empty')}</p>
           )}
+          <ResourceBatchReport busy={batches.busy} outcomes={batches.reports.models} error={batches.errors.models}
+            names={new Map(providers.catalog?.providers.flatMap(group => group.models.map(model => [model.key, model.name] as const)))} />
           <div className="model-catalog-groups">
             {visibleModelGroups.map(group => (
               <fieldset key={group.provider} data-provider={group.provider}>
@@ -337,11 +338,15 @@ function SettingsView() {
                     {group.configured ? t('settings.modelCatalog.configured') : t('settings.modelCatalog.unavailable')}
                   </span>
                 </legend>
+                <ResourceGroupButtons group={getTypeLabel(group.provider as ProviderType, t)}
+                  rows={group.models.map(model => ({ key: model.key, enabled: model.enabled }))}
+                  disabled={!!providers.catalogLoading || batches.busy}
+                  save={changes => batches.save('models', changes)} />
                 {group.models.map(model => (
                   <label key={model.key} className="model-catalog-row">
-                    <input type="checkbox" checked={model.enabled} disabled={providers.catalogLoading}
+                    <input type="checkbox" checked={model.enabled} disabled={providers.catalogLoading || batches.busy}
                       aria-label={t('settings.modelCatalog.toggle', { model: model.name, provider: getTypeLabel(group.provider as ProviderType, t) })}
-                      onChange={event => void setModelEnabled(model.key, event.target.checked)} />
+                      onChange={event => void batches.save('models', [{ key: model.key, enabled: event.target.checked }])} />
                     <span className="model-catalog-identity">
                       <strong>{model.name}</strong>
                       <code>{model.id}</code>

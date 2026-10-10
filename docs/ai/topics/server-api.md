@@ -33,7 +33,7 @@ The browser contract is summarized in [`web-app-architecture.md`](./web-app-arch
 | Workspaces/files | `/api/workspaces/default|validate|browse|file-manager|trust|worktrees`; `/api/files`, content/download/index/upload/watch and Git status/diff |
 | Terminals | `/api/terminals` plus per-terminal events/input/resize/delete |
 | Configuration | `/api/configuration` and legacy `/api/settings` alias; effective values include provenance; admin `PATCH /defaults` independently saves model/provider or thinking |
-| Models | `GET /api/models`; `PATCH /api/models/enabled` |
+| Models | `GET /api/models`; `PATCH /api/models/enabled` and `/enabled/batch` |
 | Provider registry | `/api/provider-registry/auth`, OAuth flows, tests, custom providers and custom models |
 | MCP configuration | `GET /api/mcp` for global configuration; optional canonical `?cwd=` adds trust-gated project data and fresh volatile Test/runtime status; admin-only `POST /api/mcp/test` connects one fresh file entry once; `/preview` reparses paste without writing; `/actions` performs atomic import/replacement or local mutations. Agent runs use a separate Core-owned persistent host, not these administration routes |
 | Tools/packages/resources | `/api/tools`; `/api/plugins` plus `PATCH /api/plugins/enabled`; `/api/skills`; `/api/push` |
@@ -135,6 +135,12 @@ Flows expire after five minutes, retain terminal state for one minute, and are c
 
 `PATCH /api/plugins/enabled` accepts one to 100 unique `{ key, scope, enabled }` selectors plus canonical workspace context. It requires the `packages` capability and the normal mutation Origin check. The Server adapter validates shape only; Core owns lookup, trust, locking, rollback and persistence. Allowed entries are committed in one atomic state write, while ordered outcomes report changed, unchanged, missing and trust-refused entries independently. Project enables require resolved trust; project disables remain available for cleanup. The returned catalogue reflects the committed state, resource selectors are untouched, and `reloadRequired` tells Web when executable extension changes need the separate atomic reload endpoint. An untrusted project cleanup is conservatively flagged without reopening package files, because a prior trusted runtime generation may still contain its code.
 
+## Model Group Mutation
+
+Administrator `PATCH /api/models/enabled/batch` accepts exactly `{ changes: [{ key, enabled }], projectId? }`, with at most 500 unique bounded selectors. Return ordered changed/unchanged/failed outcomes plus the canonical catalogue. Fresh serialized transforms preserve inherited no-ops, hidden/unknown keys and other providers' same-ID models; known qualified keys win over overlapping legacy IDs; Web sends only changed displayed rows, including single-checkbox requests.
+
+[WARNING] A write error may follow publication: reload canonical configuration before returning state. Unreadable reconciliation returns `409 MODEL_BATCH_UNCERTAIN` with outcomes but no catalogue. `GET /api/models` also rereads/refuses unreadable configuration. Captured workspace ID/cwd and Settings-lifetime guards prevent a retired response from overwriting a reopened view. See the [EN contributor contract](../../contributors/en/resource-batches.md) and [FR contract](../../contributors/fr/resource-batches.md); this does not deliver skill-group editing or alter sessions/defaults/providers.
+
 ## Session HTTP Invariants
 
 1. Register `/tree` and `/search` before `/sessions/:id`.
@@ -150,6 +156,7 @@ Flows expire after five minutes, retain terminal state for one minute, and are c
 - `packages/server/src/api/mcp-oauth-routes.test.ts` and `packages/core/src/mcp/{oauth,oauth-provider-factory,oauth-flow,oauth-integration}.test.ts` — passive inventory, explicit routes, unavailable storage, bounded public state, paste/cancel/logout guards, SDK discovery/PKCE/DCR/callback/refresh and token non-disclosure
 - `packages/server/src/api/tool-settings.test.ts` and `packages/core/src/tools/codemode.test.ts` — cached sandbox health, exact scoped settings/readback, visible reasons, budgets and nested execution
 - `packages/server/src/api/configuration-defaults.test.ts`, `packages/server/src/config/config-store.test.ts`, and `packages/core/src/security/stable-file.test.ts` — independent saves, live default inheritance, unreadable/stale/link refusal and durable commit guards
+- `packages/server/src/api/model-batches.test.ts`, `packages/server/src/runtime/resource-batches.test.ts`, and `e2e/model-batches.spec.ts` — exact scoped batches, canonical post-error readback, filtered/group/individual requests and retired-view exclusion
 - `packages/server/src/api/session-pagination.test.ts` — bounded message windows and cursors
 - `packages/server/src/security/request-security.test.ts` — roles, capabilities, origins, limits and WebSocket auth
 - `e2e/settings.spec.ts` — browser Test request minimality plus identity/cwd/capability/tool reporting; import/replacement/local mutation and focus flows
