@@ -345,12 +345,15 @@ export async function createRuntimeServices(
     extensionContext = { cwd, projectId: descriptor.id, trusted };
     let result = await extensionLoader.reload();
     // Never keep executable handlers from another workspace when its replacement is invalid.
-    if (contextChanged && !result.committed) result = {
-      ...await extensionLoader.clear(),
-      errors: result.errors,
-      committed: false,
-    };
-    if (result.committed) skillCatalog.invalidate(cwd);
+    if (contextChanged && !result.committed) {
+      const cleared = await extensionLoader.clear();
+      agentRuntime.clearExtensionInteractions();
+      result = { ...cleared, errors: result.errors, committed: false };
+    }
+    if (result.committed) {
+      agentRuntime.clearExtensionInteractions();
+      skillCatalog.invalidate(cwd);
+    }
     return {
       generation: result.generation,
       loadedExtensions: result.loaded,

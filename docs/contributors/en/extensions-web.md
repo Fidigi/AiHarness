@@ -7,6 +7,7 @@
 - [Widgets, notices and interactive requests](#widgets-notices-and-interactive-requests)
   - [Interaction types](#interaction-types)
   - [Lifecycle](#lifecycle)
+  - [Detached host queue contract](#detached-host-queue-contract)
 - [Security and loader limits](#security-and-loader-limits)
 - [Administration via Settings](#administration-via-settings)
 
@@ -68,6 +69,20 @@ An extension can publish:
 - Custom forms remain declarative: no arbitrary HTML or direct DOM access.
 - The structured response is revalidated by `AgentRuntime` before resolution.
 - Focus remains trapped in the dialog while open, then returns to previous control.
+
+### Detached Host Queue Contract
+
+The detached Core/Server host now supports concurrent pending requests. The current Web client still has singular interaction state, including the first-entry compatibility snapshot; complete browser queue, waiting-count, attention and focus behavior is not yet delivered.
+
+- `requestInteraction(request)` returns an awaitable Promise. Detached hosts additionally issue readonly `id`, `update(replacement)` and `close()` controls; other adapters may omit them. Retain the returned handle: knowing an ID alone gives no update/close authority.
+- `update` fully replaces display/schema without changing ID, admission order, creation time, original AbortSignal or deadline. Omitted display fields are removed. The next response is checked against the latest schema.
+- Responses, close, abort and timeout settle once. Retired/settled controls return `false`. No active run yields `{cancelled: true}`.
+- Per run: 16 pending requests, 128,000 UTF-8 JSON bytes per normalized request and 512,000 aggregate bytes. Admission/updates exceeding these bounds throw `409 EXTENSION_INTERACTION_QUEUE_FULL` without replacing prior state. Normalization retains existing field/string limits and secret redaction.
+- An optional timeout must be finite, nonnegative and at most 2,147,483,647 ms; invalid values throw `400 INVALID_EXTENSION_INTERACTION_TIMEOUT`. Signals and timeouts never enter reconnect snapshots.
+- `extensionRequests` carries complete admission-order reconnect state; `extensionRequest` remains the first entry. Events carry only the changed request or closed ID. HTTP response/cancel stays bound to session/request IDs; stale, foreign or repeated responses return 404.
+- Stop, settlement, successful executable/tool-generation commits and failed-workspace safety clearing cancel requests and revoke old requesters. Passive reads and failed same-workspace candidates preserve the current generation. Server binds command requesters before session/trust awaits.
+
+These are in-memory requests, not crash-durable dialogs or concurrent CLI/RPC UI parity. The inherited completed-run registry is not newly bounded. Stop acknowledgement is not durable settlement: interrupted-tool accounting still persists before terminal replay.
 
 ## Security and Loader Limits
 

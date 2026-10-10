@@ -51,6 +51,19 @@ export interface ExtensionInteractionResponse {
   value?: unknown;
 }
 
+/** Full replacement of display/schema only; cancellation and deadline remain attached to the original request. */
+export type ExtensionInteractionUpdate = Omit<ExtensionInteractionRequest, 'signal' | 'timeoutMs'>;
+
+/** Optional on adapters; detached hosts issue these capabilities, never accept caller-owned IDs. */
+export interface ExtensionInteractionControls {
+  readonly id: string;
+  update(request: ExtensionInteractionUpdate): boolean;
+  close(): boolean;
+}
+
+export type ExtensionInteractionPromise = Promise<ExtensionInteractionResponse> & Partial<ExtensionInteractionControls>;
+export type ExtensionInteractionHandle = Promise<ExtensionInteractionResponse> & ExtensionInteractionControls;
+
 export interface ExtensionRuntimeContext {
   sessionManager: SessionManager;
   currentSessionId?: string;
@@ -74,7 +87,7 @@ export interface ExtensionRuntimeContext {
   onProcessOutput?(chunk: string): void | Promise<void>;
   /** Host-owned path where the same complete subprocess stream is retained. */
   processOutputPath?: string;
-  requestInteraction?(request: ExtensionInteractionRequest): Promise<ExtensionInteractionResponse>;
+  requestInteraction?(request: ExtensionInteractionRequest): ExtensionInteractionPromise;
 }
 
 export interface ExtensionCommand {

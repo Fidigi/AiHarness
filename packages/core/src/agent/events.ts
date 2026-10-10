@@ -75,7 +75,7 @@ export interface AgentRetrySnapshot {
   scheduledAt: string;
 }
 
-export interface ExtensionInteractionSnapshot extends ExtensionInteractionRequest {
+export interface ExtensionInteractionSnapshot extends Omit<ExtensionInteractionRequest, 'signal' | 'timeoutMs'> {
   id: string;
   extensionId?: string;
   createdAt: string;
@@ -103,7 +103,10 @@ export interface AgentRunSnapshot {
   error?: string;
   retry?: AgentRetrySnapshot;
   activeTool?: ActiveToolSnapshot;
+  /** Compatibility projection: first entry of extensionRequests. */
   extensionRequest?: ExtensionInteractionSnapshot;
+  /** Complete bounded admission-ordered queue for reconnect; events carry only one changed request/ID. */
+  extensionRequests?: ExtensionInteractionSnapshot[];
   partialMessage?: { id: string; content: string; reasoning?: string };
   steerQueue: QueuedAgentMessage[];
   followUpQueue: QueuedAgentMessage[];

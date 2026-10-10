@@ -52,7 +52,9 @@ Registered and hosted tools may await `context.onProgress({version: 1, content, 
 
 `before:model` receives `{type, request, context, signal}` for hosted classifier/image requests. It can transform `request` or cancel; the host revalidates kind, live model identity, exact request fields and cancellation after the hook, within the model deadline. This additive API is separate from conversational `before:provider`; the code-mode outer result owns usage/persistence. No hook can supply guest credentials or increase sandbox budgets.
 
-Prompts, package skills, and themes are discovered resources, not `ExtensionAPI` registrations. Web interaction requests use `ExtensionRuntimeContext.requestInteraction`; they are suspended runtime requests rather than executable browser components.
+Prompts, package skills, and themes are discovered resources, not `ExtensionAPI` registrations. Declarative interactions use `ExtensionRuntimeContext.requestInteraction`, returning an awaitable `ExtensionInteractionPromise`; adapters may omit controls. Detached Core hosts return an `ExtensionInteractionHandle` with readonly host ID and closure-owned `update(replacement)` / `close()`. The ID alone grants neither capability. Updates replace display/schema in place, retaining admission order, created time and the original signal/deadline; snapshots omit both signal and timeout.
+
+Core owns at most 16 pending requests per run, 128,000 UTF-8 JSON bytes per normalized request and 512,000 aggregate bytes. Oversized admission/update throws `409 EXTENSION_INTERACTION_QUEUE_FULL` without changing prior state. A supplied timeout must be finite, nonnegative and at most 2,147,483,647 ms; otherwise `400 INVALID_EXTENSION_INTERACTION_TIMEOUT`. No active run returns a cancelled Promise. Responses validate the latest schema and settle once; late controls return false. `extensionRequests` is the complete ordered reconnect snapshot; `extensionRequest` remains its first-entry compatibility projection. The current Web adapter still has singular interaction state and reads that compatibility snapshot; its complete browser queue/attention/focus behavior is a separate unaccepted delivery.
 
 ## Critical Flows
 
@@ -89,13 +91,13 @@ explicit CLI or Web install/update
 
 ```text
 extension tool/hook -> context.requestInteraction(schema)
-  -> active AgentRuntime stores one pending request
+  -> active AgentRuntime admits a bounded ordered request and issues an awaitable handle
   -> extension.ui event -> ChatView text/form controls
   -> response/cancel endpoint validates IDs, kind, fields, options and size
   -> extension resumes or receives cancellation
 ```
 
-Never accept extension-provided React, DOM, script, style, or arbitrary HTML. Focus trap, Escape, restoration, reconnect recovery, and cancellation are transport behavior.
+Never accept extension-provided React, DOM, script, style, or arbitrary HTML. Stop, settlement, executable/tool-generation commit and failed-workspace safety clear cancel pending requests and revoke captured requesters. Passive inventory and failed same-cwd candidates preserve the current generation. Bind Server command requesters before session/trust awaits; an old command must not inherit a new epoch. Focus trap, Escape, restoration, reconnect recovery, and cancellation remain adapter responsibilities. This queue is in-memory, not crash-durable; inherited completed-run retention is not newly bounded.
 
 ## Security Invariants
 
@@ -110,6 +112,8 @@ Never accept extension-provided React, DOM, script, style, or arbitrary HTML. Fo
 ## Associated Tests
 
 - `packages/core/src/extensions/extension-registry.test.ts` — API version, ownership, hooks, tools, providers, UI and atomic replacement
+- `packages/core/src/agent/runtime-interaction-queue.test.ts` and `runtime-interaction-process.test.ts` — order, updates, exactly-once settlement, bounds, signal/deadline and original subprocess controls
+- `packages/server/src/api/{interaction-queue-http,queue-reconciliation-http,queue-generation-http,queue-generation-process}.test.ts` — latest-schema HTTP validation, stop accounting before terminal replay, same-cwd preservation and revocation while the run remains active
 - `packages/core/src/tools/{tool-search,codemode}.test.ts` — deferred/script-only exposure, BM25 ranking, activation/store provenance, bounded QuickJS, policy revalidation and branch restoration
 - `packages/cli/src/extensions/extension-loader.test.ts` — explicit path parsing and loader behavior
 - `packages/core/src/plugins/plugin-service.test.ts` — source validation, filters, trust, bounded one-write group activation, partial outcomes, concurrency, inventory and transactional package state
@@ -124,6 +128,10 @@ Never accept extension-provided React, DOM, script, style, or arbitrary HTML. Fo
 ### Add an extension registration
 
 Change Core contracts/registry/public exports, both runtime compositions, cleanup/rollback tests, and declarative Web handling only if browser-visible.
+
+### Change interaction lifecycle
+
+Keep contracts in Core's `extensions/extension-registry.ts` and `agent/{events,interaction-handle,runtime}.ts`; preserve compatibility snapshots, capability ownership, original deadlines and active-run epoch tests. Revalidate genuine installed declarations/runtime and unchanged CLI/RPC goldens. Do not infer browser queue acceptance from Core/Server tests.
 
 ### Change module discovery
 

@@ -8,14 +8,14 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 
 | Domain | File | Context Load |
 |---|---|---|
-| Project overview | [`project-map.md`](./project-map.md) | ~545 lines — load first for global navigation |
+| Project overview | [`project-map.md`](./project-map.md) | ~550 lines — load first for global navigation |
 | AI Providers | [`topics/providers.md`](./topics/providers.md) | ~120 lines |
 | Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~125 lines |
 | TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~35 lines |
-| Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~135 lines |
+| Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~150 lines |
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~320 lines |
 | QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
-| Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~200 lines |
+| Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~210 lines |
 | Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~155 lines |
 | Static Demonstration | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
 | Security & Trust | [`topics/security.md`](./topics/security.md) | ~180 lines |

@@ -75,6 +75,12 @@ The run applies/removes only declared session overrides. Provider/tool turns, MC
 
 `ConfigurationStore` rereads bounded stable UTF-8 version-1 settings on every serialized mutation, refuses invalid/unreadable/linked files, stages a private fsynced atomic write, rechecks the source before publication and updates memory only after commit. Mutations serialize by pathname across service instances; a conflicting external writer causes refusal rather than stale overwrite. Missing files initialize normally; invalid files are never replaced with empty settings.
 
+### Declarative interaction queue prerequisite
+
+Core snapshots expose complete bounded admission-order `extensionRequests` plus the existing first-entry `extensionRequest`. `extension.ui` carries only the changed request or closed ID; reconnect state carries the full queue. HTTP response/cancel remains session/request-ID bound, validates the latest schema before settlement, and returns 404 for stale, foreign or already-settled IDs. This does not make an ID update/close authority; only Core-issued handle closures hold those capabilities.
+
+Server captures command requesters before loading sessions or checking trust. Successful executable/tool-generation commits revoke them and cancel pending interactions, even while an old run remains active. Failed same-cwd candidates and passive reads do not revoke; a failed workspace switch performs safety clearing. Stop cancels requests immediately but durable tool accounting still precedes terminal replay. See [Core limits and handle semantics](./extensions.md#extension-contracts). The singular browser adapter is conserved; complete Web queue/attention/reconnect composition remains separately unaccepted.
+
 ### Current event contract
 
 Events include `run.started`, `run.phase`, `message.start|delta|completed`, `tool.started|completed`, `queue.updated`, `retry.scheduled`, `compaction.completed`, `subagent.*`, and `extension.ui`; SSE begins with `connection.ready`. Sequence IDs, snapshot reset, partial-message restoration, and no-duplicate replay are one cross-package contract.
@@ -162,6 +168,7 @@ Administrator `PATCH /api/skills/enabled/batch` accepts exactly `{changes: [{key
 
 ## Associated Tests
 
+- `packages/server/src/api/{interaction-queue-http,queue-reconciliation-http,queue-generation-http,queue-generation-process}.test.ts` — concurrent IDs, current-schema validation, durable stop replay and active-run generation revocation/preservation
 - `packages/server/src/start-readiness.test.ts` and `packages/server/src/application-lifecycle.test.ts` — gated startup publication, initialization rejection, stop-during-bootstrap/late cleanup and existing application-generation retirement
 - `packages/server/src/web-server.test.ts` — broad HTTP, auth, sessions, providers, files, PTY, MCP Test fresh-target/config-smuggling/trust/redaction/status behavior, import-and-replacement preview/persistence/exposure/admin mutation/opaque undo, packages and runtime integration
 - `packages/server/src/api/mcp-oauth-routes.test.ts` and `packages/core/src/mcp/{oauth,oauth-provider-factory,oauth-flow,oauth-integration}.test.ts` — passive inventory, explicit routes, unavailable storage, bounded public state, paste/cancel/logout guards, SDK discovery/PKCE/DCR/callback/refresh and token non-disclosure

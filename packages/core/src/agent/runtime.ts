@@ -2,6 +2,7 @@ import type { AiProvider, ChatResponse, ChatToolDefinition } from '../providers/
 import type { CredentialRedactionStream } from '../providers/credentials.js';
 import type {
   ExtensionInteractionRequest,
+  ExtensionInteractionHandle,
   ExtensionInteractionResponse,
   ExtensionRegistry,
   ExtensionRuntimeContext,
@@ -35,6 +36,7 @@ import {
 } from './events.js';
 
 import type { CodemodeSettings } from '../tools/codemode.js';
+import { assertInteractionCapacity, interactionHandle, interactionTimeout } from './interaction-handle.js';
 
 export interface StartAgentRunRequest {
   sessionId: string;
@@ -92,7 +94,7 @@ interface PendingInteraction {
   runId: string;
   sessionId: string;
   request: ExtensionInteractionSnapshot;
-  settle(response: ExtensionInteractionResponse): void;
+  settle(response: ExtensionInteractionResponse): boolean;
 }
 
 interface PreparedRunTools {
@@ -115,6 +117,9 @@ function validateInteractionResponse(
   request: ExtensionInteractionSnapshot,
   response: ExtensionInteractionResponse,
 ): ExtensionInteractionResponse {
+  if (!response || typeof response !== 'object' || typeof response.cancelled !== 'boolean') {
+    invalidInteractionResponse('Interaction response must contain a boolean cancelled flag.');
+  }
   if (response.cancelled === true) return { cancelled: true };
   const value = response.value;
   if (request.kind === 'confirm') {
@@ -210,6 +215,7 @@ export class AgentRuntime {
   private readonly runs = new Map<string, ActiveRun>();
   private readonly sessionRuns = new Map<string, string>();
   private readonly interactions = new Map<string, PendingInteraction>();
+  private interactionEpoch = 0;
   private readonly sessionManager: SessionManager;
   private readonly extensionRegistry: ExtensionRegistry;
   private readonly resolveProvider: AgentRuntimeOptions['resolveProvider'];
@@ -290,6 +296,7 @@ export class AgentRuntime {
       provider: providerName,
       model: effectiveRequest.model ?? session.model,
       phase: 'queued',
+      extensionRequests: [],
       steerQueue: [],
       followUpQueue: [],
       lastSequence: this.journal.lastSequence(session.id),
@@ -353,13 +360,29 @@ export class AgentRuntime {
   requestExtensionInteraction(
     sessionId: string,
     request: ExtensionInteractionRequest,
-  ): Promise<ExtensionInteractionResponse> {
+  ): ExtensionInteractionHandle {
     const runId = this.sessionRuns.get(sessionId);
     const run = runId ? this.runs.get(runId) : undefined;
     if (!run || ['completed', 'failed', 'stopped'].includes(run.snapshot.phase)) {
       throw new Error('An active agent run is required for an extension interaction.');
     }
     return this.requestInteraction(run, request);
+  }
+
+  /** Bind command/hook adapters to the current run and executable epoch, so late callbacks cannot open in a replacement run. */
+  createExtensionInteractionRequester(sessionId: string): (request: ExtensionInteractionRequest) => ExtensionInteractionHandle {
+    const runId = this.sessionRuns.get(sessionId);
+    const run = runId ? this.runs.get(runId) : undefined;
+    const epoch = this.interactionEpoch;
+    return request => run
+      ? this.requestInteraction(run, request, epoch)
+      : interactionHandle(crypto.randomUUID(), Promise.resolve({ cancelled: true }), () => false, () => false);
+  }
+
+  /** Call only after a successful executable/tool generation commit, never on failed rebuilds. */
+  clearExtensionInteractions(): void {
+    this.interactionEpoch++;
+    for (const run of this.runs.values()) this.cancelInteractions(run);
   }
 
   snapshot(sessionId: string): AgentStateSnapshot {
@@ -417,20 +440,19 @@ export class AgentRuntime {
     response: ExtensionInteractionResponse,
   ): AgentRunSnapshot {
     const pending = this.interactions.get(requestId);
-    if (!pending || pending.sessionId !== sessionId) throw new Error('Extension interaction not found.');
+    if (!pending || pending.sessionId !== sessionId) throw Object.assign(
+      new Error('Extension interaction not found.'), { status: 404, code: 'EXTENSION_INTERACTION_NOT_FOUND' },
+    );
     const run = this.runs.get(pending.runId);
     if (!run) throw new Error('Extension run not found.');
     let serialized: string | undefined;
     try { serialized = response.value === undefined ? undefined : JSON.stringify(response.value); }
-    catch { throw new Error('Extension interaction response must be JSON serializable.'); }
+    catch { invalidInteractionResponse('Extension interaction response must be JSON serializable.'); }
     if (serialized && Buffer.byteLength(serialized, 'utf8') > 100_000) {
-      throw new Error('Extension interaction response is too large.');
+      invalidInteractionResponse('Extension interaction response is too large.');
     }
     const normalized = this.redactJson(validateInteractionResponse(pending.request, response));
-    this.interactions.delete(requestId);
-    run.snapshot.extensionRequest = undefined;
     pending.settle(normalized);
-    this.publish(run, 'extension.ui', { action: 'resolved', requestId, cancelled: response.cancelled === true });
     return this.redactJson(cloneSnapshot(run.snapshot));
   }
 
@@ -849,6 +871,7 @@ export class AgentRuntime {
     provider: AiProvider,
     request: StartAgentRunRequest,
   ): Promise<ExtensionRuntimeContext> {
+    const interactionEpoch = this.interactionEpoch;
     return {
       sessionManager: this.sessionManager,
       currentSessionId: run.snapshot.sessionId,
@@ -860,56 +883,82 @@ export class AgentRuntime {
       workspaceId: run.snapshot.workspaceId,
       projectTrusted: await this.isProjectTrusted(run.snapshot.cwd),
       notify: (message, level = 'info') => this.publish(run, 'notice', { message, level }),
-      requestInteraction: request => this.requestInteraction(run, request),
+      requestInteraction: request => this.requestInteraction(run, request, interactionEpoch),
     };
   }
 
   private requestInteraction(
     run: ActiveRun,
     request: ExtensionInteractionRequest,
-  ): Promise<ExtensionInteractionResponse> {
-    if (run.controller.signal.aborted) return Promise.resolve({ cancelled: true });
-    if (run.snapshot.extensionRequest) throw new Error('An extension interaction is already pending for this run.');
-    const normalized = interactionRequest(request, this.redactText);
+    epoch = this.interactionEpoch,
+  ): ExtensionInteractionHandle {
+    const id = crypto.randomUUID();
+    if (epoch !== this.interactionEpoch || run.controller.signal.aborted || request.signal?.aborted
+      || run.settled || ['completed', 'failed', 'stopped'].includes(run.snapshot.phase)) {
+      return interactionHandle(id, Promise.resolve({ cancelled: true }), () => false, () => false);
+    }
+    const timeoutMs = interactionTimeout(request.timeoutMs);
     const snapshot: ExtensionInteractionSnapshot = {
-      ...normalized,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
+      ...interactionRequest(request, this.redactText), id, createdAt: new Date().toISOString(),
     };
-    run.snapshot.extensionRequest = snapshot;
-    this.publish(run, 'extension.ui', { action: 'request', request: snapshot });
-    void Promise.resolve(this.onNotification?.(
-      'attention',
-      this.redactJson(cloneSnapshot(run.snapshot)),
+    assertInteractionCapacity(run.snapshot.extensionRequests ?? [], snapshot);
+    let resolve!: (response: ExtensionInteractionResponse) => void;
+    const response = new Promise<ExtensionInteractionResponse>(done => { resolve = done; });
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const signal = AbortSignal.any(request.signal ? [run.controller.signal, request.signal] : [run.controller.signal]);
+    const settle = (value: ExtensionInteractionResponse): boolean => {
+      if (settled) return false;
+      settled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      signal.removeEventListener('abort', abort);
+      this.interactions.delete(id);
+      run.snapshot.extensionRequests = (run.snapshot.extensionRequests ?? []).filter(item => item.id !== id);
+      run.snapshot.extensionRequest = run.snapshot.extensionRequests[0];
+      try { this.publishInteraction(run, { action: 'resolved', requestId: id, cancelled: value.cancelled }); }
+      finally { resolve(value); }
+      return true;
+    };
+    const abort = (): void => { settle({ cancelled: true }); };
+    const pending: PendingInteraction = {
+      runId: run.snapshot.id, sessionId: run.snapshot.sessionId, request: snapshot, settle,
+    };
+    this.interactions.set(id, pending);
+    run.snapshot.extensionRequests = [...(run.snapshot.extensionRequests ?? []), snapshot];
+    run.snapshot.extensionRequest = run.snapshot.extensionRequests[0];
+    signal.addEventListener('abort', abort, { once: true });
+    if (timeoutMs !== undefined) timer = setTimeout(abort, timeoutMs);
+    const handle = interactionHandle(id, response, replacement => {
+      if (settled || epoch !== this.interactionEpoch) return false;
+      const next: ExtensionInteractionSnapshot = {
+        ...interactionRequest(replacement, this.redactText), id, createdAt: snapshot.createdAt,
+      };
+      assertInteractionCapacity(run.snapshot.extensionRequests ?? [], next, id);
+      pending.request = next;
+      run.snapshot.extensionRequests = (run.snapshot.extensionRequests ?? []).map(item => item.id === id ? next : item);
+      run.snapshot.extensionRequest = run.snapshot.extensionRequests[0];
+      this.publishInteraction(run, { action: 'request', request: next });
+      return true;
+    }, () => settle({ cancelled: true }));
+    // Install settlement authority before publishing: even synchronous transport responses are safe.
+    this.publishInteraction(run, { action: 'request', request: snapshot });
+    if (!settled) void Promise.resolve(this.onNotification?.(
+      'attention', this.redactJson(cloneSnapshot(run.snapshot)),
     )).catch(() => undefined);
-    return new Promise(resolve => {
-      let settled = false;
-      const settle = (response: ExtensionInteractionResponse): void => {
-        if (settled) return;
-        settled = true;
-        run.controller.signal.removeEventListener('abort', abort);
-        resolve(response);
-      };
-      const abort = (): void => {
-        this.interactions.delete(snapshot.id);
-        run.snapshot.extensionRequest = undefined;
-        settle({ cancelled: true });
-      };
-      this.interactions.set(snapshot.id, {
-        runId: run.snapshot.id,
-        sessionId: run.snapshot.sessionId,
-        request: snapshot,
-        settle,
-      });
-      run.controller.signal.addEventListener('abort', abort, { once: true });
-    });
+    return handle;
+  }
+
+  private publishInteraction(run: ActiveRun, data: unknown): void {
+    try { this.publish(run, 'extension.ui', structuredClone(data)); }
+    finally {
+      // A synchronous subscriber may resolve another request while this event is being delivered.
+      run.snapshot.lastSequence = this.journal.lastSequence(run.snapshot.sessionId);
+    }
   }
 
   private cancelInteractions(run: ActiveRun): void {
-    for (const [id, pending] of this.interactions) {
-      if (pending.runId !== run.snapshot.id) continue;
-      this.interactions.delete(id);
-      pending.settle({ cancelled: true });
+    for (const pending of [...this.interactions.values()]) {
+      if (pending.runId === run.snapshot.id) pending.settle({ cancelled: true });
     }
   }
 

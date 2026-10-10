@@ -7,6 +7,7 @@
 - [Widgets, notices et requêtes interactives](#widgets-notices-et-requêtes-interactives)
   - [Types d'interactions](#types-dinteractions)
   - [Cycle de vie](#cycle-de-vie)
+  - [Contrat de la file du runtime détaché](#contrat-de-la-file-du-runtime-détaché)
 - [Sécurité et limites du chargeur](#sécurité-et-limites-du-chargeur)
 - [Administration via Settings](#administration-via-settings)
 
@@ -68,6 +69,20 @@ Une extension peut publier :
 - Les formulaires `custom` restent déclaratifs : jamais de HTML arbitraire ni d'accès DOM direct.
 - La réponse structurée est revalidée par `AgentRuntime` avant résolution.
 - Le focus reste piégé dans le dialogue tant qu'il est ouvert, puis revient au contrôle précédent.
+
+### Contrat de la file du runtime détaché
+
+Le runtime détaché Core/Server prend désormais en charge plusieurs demandes en attente. Le client Web actuel conserve encore un état d’interaction unique, notamment le snapshot de compatibilité du premier élément ; la file complète côté navigateur, le compteur, les notifications et le focus ne sont pas encore livrés.
+
+- `requestInteraction(request)` renvoie une Promise que l’on peut attendre. Le runtime détaché fournit aussi un `id` en lecture seule et les contrôles `update(replacement)` et `close()` ; les autres adaptateurs peuvent les omettre. Conservez le handle retourné : connaître un ID ne confère aucun droit de modification ou de fermeture.
+- `update` remplace entièrement l’affichage et le schéma sans changer l’ID, l’ordre d’admission, la date de création, l’AbortSignal ou l’échéance initiale. Les champs d’affichage omis disparaissent. La réponse suivante est validée contre le dernier schéma.
+- Réponse, fermeture, abandon et expiration résolvent la Promise une seule fois. Les contrôles périmés ou déjà résolus renvoient `false`. Sans run actif, le résultat est `{cancelled: true}`.
+- Par run : 16 demandes en attente, 128 000 octets JSON UTF-8 par demande normalisée et 512 000 octets cumulés. Une admission ou modification dépassant ces bornes lève `409 EXTENSION_INTERACTION_QUEUE_FULL` sans remplacer l’état précédent. La normalisation conserve les limites existantes des champs/chaînes et le masquage des secrets.
+- Le délai facultatif doit être fini, positif ou nul, et ne pas dépasser 2 147 483 647 ms ; sinon `400 INVALID_EXTENSION_INTERACTION_TIMEOUT`. Signaux et délais ne sont jamais sérialisés dans les snapshots de reconnexion.
+- `extensionRequests` contient la file complète dans l’ordre d’admission ; `extensionRequest` reste le premier élément. Les événements ne transportent que la demande modifiée ou l’ID fermé. Réponse/annulation HTTP reste liée aux IDs session/demande ; une réponse périmée, étrangère ou répétée retourne 404.
+- Stop, fin du run, engagement réussi d’une génération exécutable/d’outils et nettoyage de sécurité après échec d’un changement de workspace annulent les demandes et révoquent les anciens callbacks. Lectures passives et candidates échouées dans le même workspace conservent la génération. Server capture les callbacks des commandes avant les attentes session/trust.
+
+Ces demandes sont en mémoire, sans durabilité après crash ni parité UI concurrente CLI/RPC. Le registre existant des runs terminés n’est pas nouvellement borné. L’accusé de réception de Stop ne vaut pas règlement durable : la comptabilité des outils interrompus est encore persistée avant le rejeu terminal.
 
 ## Sécurité et limites du chargeur
 

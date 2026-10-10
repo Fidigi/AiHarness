@@ -89,7 +89,7 @@ Start at `packages/core/src/index.ts`, which defines the public package exports.
 | Session persistence | `src/sessions/session-manager.ts`, `src/sessions/serialization.ts` | `SessionManager`, bounded/private/locked v2 JSONL, atomic rewrites, commands, branches, cloning, summaries, per-session setting overrides, effective context and secret redaction |
 | Session SDK | `src/sdk/{index,agent-session,types,session-store,resource-loader}.ts` | Explicit API-1 factory/facade, true memory/borrowed structural stores, fresh canonical trust, copied/redacted inputs/observers, existing runtime/history/resource methods, durable stop/wait and last-handle-owned cleanup; no implicit discovery/executable/MCP/auth loading |
 | Compaction | `src/sessions/compaction.ts`, `src/sessions/session-manager.ts` | Token estimation, target selection, summary prompts, inherited automatic policy, metrics and cancellation-safe application |
-| Detached agent | `src/agent/runtime.ts`, `src/agent/tool-loop.ts`, `src/agent/provider-turn.ts`, `src/agent/events.ts`, `src/agent/message-queue.ts` | Shared model/tool loop, provider hooks/stream retry, bounded all/one-at-a-time steering and follow-up scheduling, runs, stop, full bounded tool outputs, extension interactions and sequenced journal |
+| Detached agent | `src/agent/runtime.ts`, `src/agent/tool-loop.ts`, `src/agent/provider-turn.ts`, `src/agent/events.ts`, `src/agent/message-queue.ts`, `src/agent/interaction-handle.ts` | Shared model/tool loop, provider hooks/stream retry, bounded all/one-at-a-time steering and follow-up scheduling, runs, stop, full bounded tool outputs, extension interactions and sequenced journal |
 | Coding tools, discovery and commands | `src/tools/` | Shared CLI/Web `read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`; prompt-local `tool_search` with bounded BM25 ranking, deferred declarations and branch-persisted activation metadata; inactive-by-default QuickJS `codemode` in a disposable bounded worker with live authorized nested calls, script-only exposure and success-only branch store; browser-safe `!`/`!!` parsing; detached direct-shell runtime; bounded/backpressured process execution, filtered environments, tree cancellation, private output retention, exact edits, trust gates and common active-tool selection |
 | Prompt inputs and instructions | `src/prompts/{prompt-input,instruction-context}.ts` | Canonical bounded `@path` UTF-8/image loading plus shared CLI/Web independently trusted agent-directory, trusted project-context and system-prompt discovery/composition; stable nonlinked files, aggregate limits and source precedence are enforced once in Core |
 | Resources and themes | `src/resources/resource-manager.ts`, `src/themes/theme-manager.ts` | Trust-gated stable Markdown discovery, selectors/collisions/provenance and strict skills; rich custom themes plus bounded adaptive terminal palette probing and OSC/CSI response filtering |
@@ -399,7 +399,8 @@ Keep package administration explicit: a read must never install, update, contact
 
 ```text
 extension tool/hook -> context.requestInteraction(declarative request)
-  -> AgentRuntime stores one pending request in the run snapshot
+  -> AgentRuntime admits a bounded ordered request with a host-owned awaitable handle
+  -> extensionRequests stores the complete queue; extensionRequest projects its first entry
   -> extension.ui event + optional attention Push
   -> ChatView renders text/form controls without arbitrary HTML
   -> POST response/cancel with active session + request IDs
@@ -407,7 +408,7 @@ extension tool/hook -> context.requestInteraction(declarative request)
   -> suspended extension resumes, or receives cancellation
 ```
 
-Only an active run may request interaction. Keep widget content plain text and custom dialogs schema-driven; never introduce extension-provided React, DOM, script, style or unsanitized HTML. Focus trapping, Escape, restoration and reconnection are part of the transport contract, not cosmetic behavior.
+Only an active run may request interaction. Core owns admission, schema replacement, exactly-once settlement and cancellation; Server binds command requesters before awaits and clears them on executable/tool-generation commit or failed-workspace safety retirement. Failed same-cwd candidates and passive reads preserve the current epoch. The existing Web adapter still has singular interaction state; full browser queue/attention delivery is not implied. See [extensions](./topics/extensions.md) for limits, handles and tests. Keep widget content plain text and custom dialogs schema-driven; never introduce extension-provided React, DOM, script, style or unsanitized HTML. Focus trapping, Escape, restoration and reconnection remain adapter responsibilities.
 
 ### Session persistence
 

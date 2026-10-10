@@ -3,7 +3,6 @@ import {
   loadAgentSettings,
   resolveInstructionPrompt,
   type AgentEvent,
-  type ExtensionInteractionRequest,
   type MessageContentBlock,
   type Session,
 } from '@ai-harness/core';
@@ -211,6 +210,8 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
   router.post('/sessions/:sessionId/commands/:name', async (request, response, next) => {
     try {
       const services = await servicesPromise;
+      // Bind before session/trust awaits: an old command cannot inherit a later generation.
+      const requestInteraction = services.agentRuntime.createExtensionInteractionRequester(request.params.sessionId);
       const session = services.sessionManager.get(request.params.sessionId)
         ?? await services.sessionManager.loadFromStore(request.params.sessionId);
       if (!session) {
@@ -242,8 +243,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         notify: (message, level = 'info') => services.agentRuntime.publishSessionEvent(
           session.id, 'notice', { message, level },
         ),
-        requestInteraction: (interaction: ExtensionInteractionRequest) => services.agentRuntime
-          .requestExtensionInteraction(session.id, interaction),
+        requestInteraction,
       });
       response.json({
         output: typeof output === 'string' ? services.redactText(output.slice(0, 200_000)) : '',
