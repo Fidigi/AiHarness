@@ -103,6 +103,10 @@ AiHarness ajoute automatiquement `/v1` à l’URL locale côté serveur si néce
 
 ## Utiliser le CLI
 
+### Authentification et export autonomes
+
+`ai-harness auth list --json`, `auth login <provider>` et `auth logout <provider>` quittent sans démarrer d’agent. Login/logout exigent le magasin chiffré indépendant ; login utilise un flux device HTTPS configuré par l’opérateur, pas une intégration navigateur/PKCE prédéfinie. `ai-harness export --session <chemin-ou-id> --format html --output ./conversation.html --approve` exporte une session existante sélectionnée dans le workspace courant approuvé, sans créer de conversation. JSONL ne contient que les messages, pas une sauvegarde complète du journal. Voir le [guide des commandes autonomes](./standalone-operations.md) pour syntaxe, délais/annulation, canaux privés, formats, racines d’entrée/sortie et règles d’échec.
+
 ### Démarrage
 
 Après l’installation globale décrite plus haut, la commande normale est :

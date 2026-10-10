@@ -86,6 +86,10 @@ Configuration:
 Instructions:
   User files load from the same agent directory. Project context and .ai-harness
   system files require trust; use /reload after changing trust interactively.
+
+Standalone operations (exit before agent startup):
+  auth --help                   Provider credential list/login/logout
+  export --help                 Trusted session file export
 `;
 let artifactRoot: string;
 let build: string;

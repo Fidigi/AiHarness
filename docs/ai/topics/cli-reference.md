@@ -14,6 +14,8 @@ Conversation persistence follows [`sessions.md`](./sessions.md), while extension
 packages/cli/src/index.ts
   |-> package command -> Core PluginService -> shared plugins.json
   |-> mcp command -> Core inventory/mutations/Test -> shared mcp.json
+  |-> auth command -> passive Core credentials / explicit bounded device flow
+  |-> export command -> selected Core JSONL projection / existing renderer + atomic writer
   |-> Core model catalogue -> startup selection / --list-models / scoped cycling
   |-> Core instruction resolver -> composed provider system prompt
   |-> --mode rpc / --rpc -> rpc/rpc-server.ts
@@ -36,6 +38,7 @@ packages/cli/src/index.ts
 | `packages/cli/src/cli/shell-controller.ts` | Interactive `!`/`!!` trust, streaming, cancellation and TUI adapter |
 | `packages/cli/src/cli/model-list.ts` | Configured-provider `--list-models` metadata table and fuzzy filtering |
 | `packages/cli/src/cli/package-command.ts` | Strict top-level package parsing, scopes, filters and Core service adapter |
+| `packages/cli/src/cli/{provider-auth-command,export-command}.ts` | Strict standalone credential metadata/device login/local logout and trusted explicit session export before agent startup |
 | `packages/cli/src/cli/{mcp-command,mcp-oauth-command}.ts` | Thin top-level configuration/hidden/per-tool exposure and explicit OAuth login/logout adapters over Core MCP contracts |
 | `packages/core/src/mcp/{session-host,oauth-provider-factory,oauth,oauth-flow}.ts` | Persistent per-session stdio/HTTP connections, passive encrypted OAuth use/refresh, detached explicit OAuth flows, and direct tool declarations/invocation shared by CLI, RPC and Web |
 | `packages/cli/src/providers/configured-providers.ts` | Shared interactive/print/JSON/RPC provider environment and startup model resolution |
@@ -93,6 +96,13 @@ CLI and Server compose the same Core `ProviderCredentialService`, encrypted-stor
 `transport`, `httpProxy`, `httpIdleTimeoutMs`, `websocketConnectTimeoutMs`, and `retry.provider.{timeoutMs,maxRetries,maxRetryDelayMs}` flow into every built-in and extension/custom provider. Defaults are `auto`, 300-second request/idle deadlines, a 15-second WebSocket handshake and zero provider-level retries. Core uses bounded proxy dispatchers and stable errors without URL/body/header/proxy detail. OpenAI Responses supports SSE, WebSocket and session-cached WebSocket continuation; its cache has exclusive leases and bounded age/cardinality, and it falls back to SSE only before any WebSocket event.
 
 Credential command configuration is executable trusted configuration. Its bounded stdout remains in memory and is immediately registered for raw/URI/base64/base64url/hex/JSON-escaped redaction. Independent streaming redactors protect provider/tool/shell/extension output, sessions, JSON/RPC channels and diagnostics even when a credential crosses chunk boundaries.
+
+## Standalone Authentication and Export
+
+`index.ts` dispatches `auth` and `export` before global argument/startup composition. Root help advertises both without executing extensions. See [EN](../../users/en/standalone-operations.md) / [FR](../../users/fr/standalone-operations.md) for exact grammar, scopes, channels and limitations.
+
+- `auth list [--json]` is stored/configuration-presence metadata only: no commands, refresh, providers or agents. Login/logout require the independent encrypted Core store. Operator HTTPS device configuration is explicit; there is no bundled registration, browser opener/callback or PKCE here. Caller abort reaches the existing 15-second bounded client transport/body without changing global fetch. Overall login timeout is monotonic (1–300 seconds, default 300), additionally limited by device lifetime. Reject user codes changed by UTF-8, terminal formatting or known-secret redaction before instructions/poll/publication. Instructions use stderr, fixed acknowledgements stdout; exits are 0/2/1/124/130. Local logout is not remote revocation; a started encrypted commit is not cancellation rollback.
+- `export` requires exact/unambiguous/path selection and explicit matching-format output. Only the selected existing store/workspace grants input authority; output stays in a freshly approved current workspace. Core no-follow loading, copied/redacted memory-only normalization, shared slash exporter and atomic 0600 writer retain existing ownership. Shared HTML renderer escapes tool labels once, including slash users. No agent/session creation, credential commands/refresh, transcript stdout or source replacement. JSONL is message-only, not a v2 journal/abandoned-branch backup; provider fields/known secrets are scrubbed, arbitrary unknown conversation secrets are not. Failure does not prove unchanged publication; exits 0/2/1.
 
 ## Agent Settings
 
@@ -264,6 +274,8 @@ Reads, searches, and CLI `@path` inputs are canonicalized inside the active work
 
 - `packages/cli/src/cli/{args,json-output,invocation,shell-controller,package-command}.test.ts` — strict options and package parsing, JSON events, package/resource process integration, modes, process exits/stdout purity, real pseudo-terminal steering/follow-up ordering and direct shell trust/stream/abort/persistence
 - `packages/cli/src/cli/{mcp-command,mcp-oauth-command}.test.ts` — strict management/exposure parsing and a real loopback PKCE login, encrypted persistence/logout, invalid storage/timeout, cancellation/expiry and listener closure
+- `packages/cli/src/cli/{provider-auth-command,export-command}.test.ts` — actual built/installed PATH-bin HTTPS device/body/poll/cancellation/encrypted publication, unchanged user codes/monotonic timeout, selected no-follow trusted exports, real bytes/modes/redaction and failed publication
+- `packages/cli/src/security/oauth-device.test.ts`, `packages/cli/src/utils/session-export.test.ts` — shared caller pre-abort/body cancellation and escaped tool labels without double escaping
 - `packages/core/src/tools/codemode.test.ts` — sandbox budgets, isolation, live nested authorization and transactional branch store
 - `packages/core/src/plugins/plugin-service.test.ts` — npm/Git/local source policy, filters, fresh source trust through locks/Git, scopes, symlink rejection, atomic state and concurrent mutation
 - `packages/core/src/plugins/{package-command,npm-source-override,npm-argv-admission}.test.ts` — real shell-free literal processes, bounded own-slot admission, immutable exact-source explicit choices, revocation and denied-operation cleanup

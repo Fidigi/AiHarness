@@ -40,7 +40,7 @@ export function renderSessionHtml(session: Session): string {
           : 'Système';
     const timestamp = new Date(message.timestamp).toISOString();
     return `      <article class="message ${role}">
-        <header><strong>${label}</strong><time datetime="${timestamp}">${escapeHtml(new Date(message.timestamp).toLocaleString('fr-FR'))}</time></header>
+        <header><strong>${escapeHtml(label)}</strong><time datetime="${timestamp}">${escapeHtml(new Date(message.timestamp).toLocaleString('fr-FR'))}</time></header>
         <pre>${escapeHtml(message.content)}</pre>
       </article>`;
   }).join('\n');

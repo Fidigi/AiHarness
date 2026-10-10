@@ -121,6 +121,7 @@ Session files are versioned JSONL (current schema: v2). Entry types include `met
 | Provider runtime and security | `src/providers/provider-runtime.ts`, `src/security/` | Shared Core credentials/network composition, independent pre-trust store selection and bounded provider OAuth Device Flow |
 | Direct shell | `src/cli/shell-controller.ts` | Trust-aware interactive `!`/`!!` adapter over Core's CLI/Web shell runtime, with regular/fullscreen streaming and abort |
 | Package commands | `src/cli/package-command.ts` | Strict top-level lifecycle aliases/actions, global/project scopes, per-kind filters and JSON/text adapter over Core `PluginService` |
+| Standalone credentials/export | `src/cli/{provider-auth-command,export-command}.ts`, matching tests, `src/security/oauth-device.ts`, `src/utils/session-export.ts` | Before-startup passive credential metadata, explicit encrypted device login/local logout with caller body abort/verbatim codes/monotonic deadline, selected no-follow trusted workspace export over existing Core/slash ownership |
 | Models | `src/cli/model-list.ts`, `src/providers/configured-providers.ts` | Configured-provider listing, shared startup exact/fuzzy/scope resolution, settings defaults/scopes, ephemeral API-key override and mode-independent provider construction |
 | Agent settings and resources | `src/index.ts`, `src/resources/resource-manager.ts` | Global/trusted-project settings integration, safe ordered skill/prompt discovery, startup precedence, `/settings`, and interactive reload |
 | Headless JSON | `src/cli/json-output.ts` | Versioned session/lifecycle/retry/compaction JSONL encoding plus serialized backpressure-aware stdout isolation over the shared Core loop |
@@ -230,6 +231,8 @@ CLI positional/@file/piped input or interactive input
 ```
 
 Cancellation must propagate through `AbortSignal` to provider, active tool work and direct shell process trees. Interactive, final-text-only print, one-shot JSON event, RPC prompting, and the detached Web runtime use the same Core tool loop and provider-turn hooks; interactive CLI and Web direct commands separately share Core's `ShellCommandRuntime` and `parseShellCommandInput`. Provider implementations must await each stream callback; Core serializes delivery and bounds pending bytes/events so a non-cooperative extension cannot create an unbounded queue. JSON mode writes its version-3 session header and lifecycle records through `cli/json-output.ts`; RPC reuses that event encoder without the header. Do not add a provider or shell process path that bypasses hooks/persistence where applicable, retry, backpressure, environment filtering or cancellation without an explicit reason.
+
+Standalone `ai-harness auth` and `export` dispatch before conversation startup; root help advertises their strict help surfaces. Authentication reuses Core's independent encrypted credential service and the bounded device client with caller signal, never a process-global fetch replacement. Export opens only the selected existing session, normalizes a detached memory-only projection and reuses slash rendering/Core atomic output; JSONL is message-only, not a journal backup. See the [EN](../users/en/standalone-operations.md) / [FR](../users/fr/standalone-operations.md) operator contract; these operations neither create sessions nor initialize providers/extensions/TUI.
 
 ### Web detached conversation
 
@@ -437,7 +440,7 @@ Update the shared type, JSONL reader/writer/append methods, `SessionManager`, CL
 
 ### Add or change a CLI command
 
-Update the command registry and tests in `commands/handler.*`, then check dispatch/completion in `cli/src/index.ts` and help in both `terminal-ui.ts` and `fullscreen-ui.ts`. Document user-visible commands in `docs/users/fr/user-guide.md`.
+For conversational commands, update registry/tests in `commands/handler.*`, dispatch/completion in `cli/src/index.ts` and both TUI help surfaces. Standalone before-startup operations instead own strict parsers/help/process tests in `cli/src/cli/` and early dispatch in `index.ts`; preserve exact installed root-help equality and package/MCP behavior. Document user-visible commands in both `docs/users/{en,fr}/user-guide.md` and owning guides/navigation.
 
 ### Add or change an HTTP or streaming contract
 
@@ -479,7 +482,7 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 | `docs/ai/topics/session-sdk.md` | English | Agents | Versioned | High-level Core SDK ownership, lifecycle, safe copies and genuine public package/declaration proof |
 | `docs/ai/topics/extensions.md` | English | Agents | Versioned | JavaScript extensions, packages, reload and declarative interactions |
 | `docs/ai/topics/codemode.md` | English | Agents | Versioned | QuickJS isolation, budgets, nested authorization, branch store, settings and explicit limitations |
-| `docs/ai/topics/cli-reference.md` | English | Agents | Versioned | Package commands, regular/fullscreen/print CLI, JSON events, and JSONL RPC |
+| `docs/ai/topics/cli-reference.md` | English | Agents | Versioned | Package/auth/export standalone commands, regular/fullscreen/print CLI, JSON events and JSONL RPC |
 | `docs/ai/topics/server-api.md` | English | Agents | Versioned | REST, SSE, WebSocket and detached runtime contracts |
 | `docs/ai/topics/web-app-architecture.md` | English | Agents | Versioned | React stores/components, browser persistence, PWA and validation |
 | `docs/ai/topics/static-demo.md` | English | Agents | Versioned | Independent synthetic static demo, base-safe offline artifact, publication limits and Pages policy |

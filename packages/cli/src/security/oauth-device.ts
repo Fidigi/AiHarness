@@ -115,9 +115,11 @@ export class OAuthDeviceClient {
     }
   }
 
-  async requestCode(): Promise<OAuthDevicePrompt> {
+  async requestCode(signal?: AbortSignal): Promise<OAuthDevicePrompt> {
+    if (signal?.aborted) throw new Error('Authentification OAuth annulée.');
     let response: Response;
-    const requestSignal = AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS);
+    const deadline = AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS);
+    const requestSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
     try {
       response = await fetch(safeEndpoint(this.config.deviceAuthorizationUrl), {
         method: 'POST',

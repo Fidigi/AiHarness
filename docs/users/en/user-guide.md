@@ -103,6 +103,10 @@ AiHarness automatically appends `/v1` to the local URL on the server side when n
 
 ## Using the CLI
 
+### Standalone Authentication and Export
+
+`ai-harness auth list --json`, `auth login <provider>` and `auth logout <provider>` exit without starting an agent. Login/logout require the independent encrypted store; login uses operator-configured HTTPS device flow, not a bundled browser/PKCE integration. `ai-harness export --session <path-or-id> --format html --output ./conversation.html --approve` exports one existing selected session into the trusted current workspace, without creating a conversation. JSONL output is message-only, not a complete journal backup. See the [standalone command guide](./standalone-operations.md) for grammar, deadlines/cancellation, private channels, formats, source/output boundaries and failure rules.
+
 ### Starting Up
 
 After global installation as described above, the normal command is:

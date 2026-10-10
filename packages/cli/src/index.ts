@@ -238,6 +238,16 @@ async function main(): Promise<void> {
     process.exitCode = await runPackageCommand(packageArguments);
     return;
   }
+  if (rawArguments[0] === 'auth') {
+    const { runProviderAuthCommand } = await import('./cli/provider-auth-command.js');
+    process.exitCode = await runProviderAuthCommand(rawArguments.slice(1));
+    return;
+  }
+  if (rawArguments[0] === 'export') {
+    const { runExportCommand } = await import('./cli/export-command.js');
+    process.exitCode = await runExportCommand(rawArguments.slice(1));
+    return;
+  }
   let cliArguments: ReturnType<typeof parseCliArguments>;
   try {
     cliArguments = parseCliArguments(rawArguments, [], true);
@@ -255,6 +265,7 @@ async function main(): Promise<void> {
   }
   if (cliArguments.help) {
     process.stdout.write(formatCliHelp());
+    process.stdout.write('\nStandalone operations (exit before agent startup):\n  auth --help                   Provider credential list/login/logout\n  export --help                 Trusted session file export\n');
     return;
   }
   if (cliArguments.version) {
