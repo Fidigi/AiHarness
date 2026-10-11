@@ -73,6 +73,8 @@ Une extension peut publier :
 
 Les nouvelles notices de commandes d’extension publiées via l’API de session omettent `runId` lorsque le run courant de la session est `completed`, `failed` ou `stopped` ; tant que ce run est actif, la corrélation est conservée. Un callback `notify` lié au run et capturé dans le contexte d’un outil conserve son `runId` initial, même s’il est appelé après la fin de ce run. Ce contrat de corrélation des événements ne garantit ni leur présentation dans le navigateur ni une nouvelle admission d’interaction.
 
+Les métadonnées du titre de session ne définissent pas la durée de vie de l’abonnement SSE de ChatView : une actualisation du titre canonique ne doit ni retirer le flux ni perdre une notice valide. Les notifications existantes d’attention/de fin/d’échec lisent, lors de leur émission, le dernier titre canonique déjà présent dans le store navigateur pour la session abonnée, avec `AiHarness` comme repli si le titre est absent ou vide. Le remplacement de session/cwd et le démontage de la vue annulent toujours le transport possédé ; cela n’ajoute ni epochs SSE pour l’adresse complète ni livraison complète de la file/des notifications d’attention côté navigateur.
+
 ### Chargement du formulaire optionnel et focus
 
 `ExtensionInteractionBoundary.tsx` reste eager ; seule une demande unique en attente importe `ExtensionInteractionDialog.tsx` et sa feuille de style. Le chargement/l’erreur reste non modal et traduit, avec Fermer/Annuler disponibles, tandis que le composeur et Stop restent utilisables. Les imports échoués restent en cache même après réouverture. **Recharger et réessayer** recharge la page : copiez d’abord le texte non envoyé.

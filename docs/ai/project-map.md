@@ -262,6 +262,8 @@ The current protocol uses dotted event names such as `run.started`, `message.del
 
 Session-scoped command notices retain active-run correlation but omit `runId` when the current run is completed/failed/stopped; captured run-bound tool notices retain their original ID. See [the session event contract](./topics/server-api.md#current-event-contract); this does not certify browser notice presentation or full Web queue delivery.
 
+ChatView’s canonical title metadata does not define SSE lifetime: title refresh preserves the subscription, existing notifications read the stored canonical title at dispatch, and session/cwd replacement or unmount retains cancellation. See [Web architecture](./topics/web-app-architecture.md#detached-conversation-flow); this is not full-address SSE or plural queue/attention/progress admission.
+
 ### Child-agent delegation
 
 ```text

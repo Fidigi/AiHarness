@@ -52,6 +52,8 @@ local draft -> effective configuration -> POST /api/agent/runs
 
 `ChatView` may render one temporary streamed assistant message. Terminal events must replace it with canonical history without duplicates. Reconnection restores run queues, retries, partial text, pending extension interaction, and sequence position.
 
+Session title metadata is presentation data, not SSE lifetime identity: a canonical title refresh must not restart ChatView’s subscription or discard a valid notice. The three existing attention/completion/failure Notification sites read the latest canonical title already in the store for the subscribed session at dispatch, with `AiHarness` for an absent/empty title. Existing session/cwd replacement and unmount still withdraw owned transport; this is not a new full-address SSE epoch.
+
 ## History Edits and Live Settings
 
 **Edit from here** stages a persisted user message in the current composer without a server mutation. A visible cancel control restores the previous draft and composer focus; navigation/reload discards the transient target. Only Send forks before that user entry and submits the replacement text on the new related session, preserving the source and excluding the old prompt. Staged input is literal conversation text, not a slash or shell command. **New chat from here** copies a persisted user entry even while its source run continues; neither source Stop nor active-leaf mutation is sent. Server refuses unwritten and running-command sources and locks in-session branch switching while busy.
@@ -139,6 +141,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 - `packages/web/src/components/extension-interaction-dialog.test.ts` — declarative fields/output, CSS allocation, abort/cached-reload contract and compatible draft projection
 - `e2e/interaction-single-asset-load.spec.ts` with its production-preview config — genuine optional form JS/CSS, local loading/error/cancel/reload, retired replies/view tuples, same-ID drafts/composition, delayed initial focus and coarse manual-editing return
 - `e2e/interaction-live-boundary.spec.ts` — real extension/HTTP schema rejection, response/cancel and mock-provider resumption
+- `e2e/session-event-lifetime.spec.ts` — controlled first-frame notice preservation across empty/existing title hydration; `e2e/session-title-production.browser.ts` and its production config/server — real command/metadata writer/publisher, unchanged subscription and session-navigation retirement. The completion event is directly published, not real compaction execution; Notification titles and plural queue/attention/progress are not directly proved.
 
 - `packages/web/src/store/session-store.test.ts` plus `.remote.test.ts` and `.integration.test.ts` — hydration, windows, drafts, cache and run state
 - `packages/web/src/store/preferences.test.ts` and `packages/web/src/components/composer-submit.test.ts` — schema migration, preference validation, newline shortcuts and IME-safe send decisions

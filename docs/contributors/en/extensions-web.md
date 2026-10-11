@@ -73,6 +73,8 @@ An extension can publish:
 
 New extension-command notices published through the session API omit `runId` when the session's current run is `completed`, `failed` or `stopped`; while that run is active, correlation is retained. A run-bound `notify` callback captured from a tool context retains its original `runId`, even when called after that run terminates. This is an event-correlation contract, not a guarantee of browser notice presentation or new interaction admission.
 
+Session title metadata does not define ChatView’s SSE subscription lifetime: canonical title refresh must not retire the stream or discard a valid notice. Existing attention/completion/failure notifications read the latest canonical title already in the browser store for the subscribed session at dispatch, falling back to `AiHarness` if absent or empty. Existing session/cwd replacement and view unmount still cancel owned transport; this does not add full-address SSE epochs or complete browser queue/attention delivery.
+
 ### Optional Form Loading and Focus
 
 `ExtensionInteractionBoundary.tsx` remains eager; only a pending singular request imports `ExtensionInteractionDialog.tsx` and its stylesheet. Loading/error is nonmodal and translated, with Close/Cancel still available, while composer and Stop remain usable. Failed imports stay cached even after reopening. **Reload and retry** reloads the page, so copy unsent text first.

@@ -668,7 +668,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           if (preferences.sound && preferences.soundEvents.attention) playCompletionSound(preferences.soundVolume, true);
           if (preferences.notifications && preferences.notificationEvents.attention
             && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-            new Notification(currentSession?.title || 'AiHarness', { body: request.message, tag: `agent:${id}:attention` });
+            new Notification(useSessionStore.getState().sessions.find(session => session.id === id)?.title || 'AiHarness', { body: request.message, tag: `agent:${id}:attention` });
           }
         } else if (data.action === 'resolved') patchRun({ extensionRequest: undefined });
       }
@@ -716,7 +716,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         if (preferences.sound && preferences.soundEvents.completion) playCompletionSound(preferences.soundVolume);
         if (preferences.notifications && preferences.notificationEvents.completion
           && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-          const notification = new Notification(currentSession?.title || 'AiHarness', {
+          const notification = new Notification(useSessionStore.getState().sessions.find(session => session.id === id)?.title || 'AiHarness', {
             body: t('chat.agentCompleted'),
             tag: `agent:${id}:${event.runId ?? ''}`,
           });
@@ -735,7 +735,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         if (preferences.sound && preferences.soundEvents.attention) playCompletionSound(preferences.soundVolume, true);
         if (preferences.notifications && preferences.notificationEvents.attention
           && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-          new Notification(currentSession?.title || 'AiHarness', { body: detail, tag: `agent:${id}:attention` });
+          new Notification(useSessionStore.getState().sessions.find(session => session.id === id)?.title || 'AiHarness', { body: detail, tag: `agent:${id}:attention` });
         }
       }
       if (event.type === 'run.completed') patchRun({ phase: 'completed', retry: undefined, activeTool: undefined });
@@ -805,7 +805,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       mounted = false;
       controller.abort();
     };
-  }, [currentSession?.title, id, navigate, onStreamingUpdate, preferences.notificationEvents, preferences.notifications, preferences.sound, preferences.soundEvents, preferences.soundVolume, removeSession, setRun, syncSession, t, upsertAssistantMessage, workspace?.cwd]);
+  }, [id, navigate, onStreamingUpdate, preferences.notificationEvents, preferences.notifications, preferences.sound, preferences.soundEvents, preferences.soundVolume, removeSession, setRun, syncSession, t, upsertAssistantMessage, workspace?.cwd]);
 
   const active = isActivePhase(currentRun?.phase);
   const modelLocked = effectiveConfiguration?.provenance.model?.scope === 'environment';
