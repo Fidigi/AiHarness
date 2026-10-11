@@ -354,7 +354,8 @@ export class AgentRuntime {
 
   publishSessionEvent(sessionId: string, type: AgentEventType, data: unknown): AgentEvent {
     const run = this.getSessionRun(sessionId);
-    return this.journal.publish(sessionId, type, this.redactJson(data), run?.id);
+    const runId = run && !['completed', 'failed', 'stopped'].includes(run.phase) ? run.id : undefined;
+    return this.journal.publish(sessionId, type, this.redactJson(data), runId);
   }
 
   requestExtensionInteraction(

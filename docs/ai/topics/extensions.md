@@ -56,6 +56,8 @@ Prompts, package skills, and themes are discovered resources, not `ExtensionAPI`
 
 Core owns at most 16 pending requests per run, 128,000 UTF-8 JSON bytes per normalized request and 512,000 aggregate bytes. Oversized admission/update throws `409 EXTENSION_INTERACTION_QUEUE_FULL` without changing prior state. A supplied timeout must be finite, nonnegative and at most 2,147,483,647 ms; otherwise `400 INVALID_EXTENSION_INTERACTION_TIMEOUT`. No active run returns a cancelled Promise. Responses validate the latest schema and settle once; late controls return false. `extensionRequests` is the complete ordered reconnect snapshot; `extensionRequest` remains its first-entry compatibility projection. The Web adapter still reads the singular first-entry compatibility snapshot. Its optional form lifecycle is validated separately below; complete browser queue/waiting-count/attention delivery remains unaccepted.
 
+Session-scoped extension-command `notify` uses `AgentRuntime.publishSessionEvent`: notices omit `runId` when the current session run is `completed`, `failed` or `stopped`, while nonterminal correlation is retained. Run-bound tool-context `notify` callbacks retain their original run ID after termination. This changes event correlation only, not interaction admission or browser queue/notice acceptance; see [the session event contract](./server-api.md#current-event-contract).
+
 ## Critical Flows
 
 ### Load or reload JavaScript
@@ -119,6 +121,7 @@ Initial focus is admitted before the renderer exists and checked again at its fi
 
 ## Associated Tests
 
+- `packages/server/src/api/session-notice-process.test.ts` — public Core/real built Server process coverage for completed/failed/stopped session-command notice correlation, active correlation and captured tool callbacks over HTTP/SSE; not browser queue delivery
 - `packages/core/src/extensions/extension-registry.test.ts` — API version, ownership, hooks, tools, providers, UI and atomic replacement
 - `packages/core/src/agent/runtime-interaction-queue.test.ts` and `runtime-interaction-process.test.ts` — order, updates, exactly-once settlement, bounds, signal/deadline and original subprocess controls
 - `packages/server/src/api/{interaction-queue-http,queue-reconciliation-http,queue-generation-http,queue-generation-process}.test.ts` — latest-schema HTTP validation, stop accounting before terminal replay, same-cwd preservation and revocation while the run remains active

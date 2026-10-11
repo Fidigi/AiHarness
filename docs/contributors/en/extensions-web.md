@@ -71,6 +71,8 @@ An extension can publish:
 - The structured response is revalidated by `AgentRuntime` before resolution.
 - The mounted form owns its focus trap and ordinary Escape; return respects current view, newer focus and other modals rather than always restoring the previous control.
 
+New extension-command notices published through the session API omit `runId` when the session's current run is `completed`, `failed` or `stopped`; while that run is active, correlation is retained. A run-bound `notify` callback captured from a tool context retains its original `runId`, even when called after that run terminates. This is an event-correlation contract, not a guarantee of browser notice presentation or new interaction admission.
+
 ### Optional Form Loading and Focus
 
 `ExtensionInteractionBoundary.tsx` remains eager; only a pending singular request imports `ExtensionInteractionDialog.tsx` and its stylesheet. Loading/error is nonmodal and translated, with Close/Cancel still available, while composer and Stop remain usable. Failed imports stay cached even after reopening. **Reload and retry** reloads the page, so copy unsent text first.

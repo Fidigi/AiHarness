@@ -71,6 +71,8 @@ Une extension peut publier :
 - La réponse structurée est revalidée par `AgentRuntime` avant résolution.
 - Le formulaire monté possède son focus trap et la gestion ordinaire d’Escape ; le retour respecte la vue courante, le focus plus récent et les autres dialogues au lieu de toujours restaurer le contrôle précédent.
 
+Les nouvelles notices de commandes d’extension publiées via l’API de session omettent `runId` lorsque le run courant de la session est `completed`, `failed` ou `stopped` ; tant que ce run est actif, la corrélation est conservée. Un callback `notify` lié au run et capturé dans le contexte d’un outil conserve son `runId` initial, même s’il est appelé après la fin de ce run. Ce contrat de corrélation des événements ne garantit ni leur présentation dans le navigateur ni une nouvelle admission d’interaction.
+
 ### Chargement du formulaire optionnel et focus
 
 `ExtensionInteractionBoundary.tsx` reste eager ; seule une demande unique en attente importe `ExtensionInteractionDialog.tsx` et sa feuille de style. Le chargement/l’erreur reste non modal et traduit, avec Fermer/Annuler disponibles, tandis que le composeur et Stop restent utilisables. Les imports échoués restent en cache même après réouverture. **Recharger et réessayer** recharge la page : copiez d’abord le texte non envoyé.

@@ -260,6 +260,8 @@ React ChatView + local draft
 
 The current protocol uses dotted event names such as `run.started`, `message.delta`, `tool.completed`, `extension.ui`, `queue.updated`, `retry.scheduled`, and `compaction.completed`, plus `connection.ready` for SSE setup. Sequence IDs, snapshot reset semantics, partial-message/interaction restoration and no-duplicate replay are one contract. The underscore event names (`message_start`, `text_delta`, `message_end`) belong only to legacy `/api/chat*` and WebSocket chat compatibility. Update Core events, server writer, browser parser/store, fixtures, integration tests and documentation together.
 
+Session-scoped command notices retain active-run correlation but omit `runId` when the current run is completed/failed/stopped; captured run-bound tool notices retain their original ID. See [the session event contract](./topics/server-api.md#current-event-contract); this does not certify browser notice presentation or full Web queue delivery.
+
 ### Child-agent delegation
 
 ```text

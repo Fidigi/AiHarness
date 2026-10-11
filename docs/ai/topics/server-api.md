@@ -87,6 +87,8 @@ Events include `run.started`, `run.phase`, `message.start|delta|completed`, `too
 
 Underscore events such as `message_start`, `text_delta`, and `message_end` belong only to legacy chat compatibility.
 
+`AgentEvent.runId` is optional. `AgentRuntime.publishSessionEvent` retains it for nonterminal current runs but omits it from JSON/SSE after `completed`, `failed` or `stopped`; extension-command `notify` uses this session-scoped path. A tool-context `notify` callback remains bound to its original run and retains that ID even after termination. Session IDs, sequence/replay semantics and redaction are unchanged; this is not new interaction admission or a browser presentation guarantee.
+
 ## Authentication and Authorization
 
 - Without configured auth tokens, requests receive admin capabilities; non-loopback binding is still guarded by launcher policy.
@@ -168,6 +170,7 @@ Administrator `PATCH /api/skills/enabled/batch` accepts exactly `{changes: [{key
 
 ## Associated Tests
 
+- `packages/server/src/api/session-notice-process.test.ts` — real public Core/built Server process checks across completed/failed/stopped: active correlation, terminal session-command notices without `runId`, and captured tool notices retaining the original ID over session SSE
 - `packages/server/src/api/{interaction-queue-http,queue-reconciliation-http,queue-generation-http,queue-generation-process}.test.ts` — concurrent IDs, current-schema validation, durable stop replay and active-run generation revocation/preservation
 - `packages/server/src/start-readiness.test.ts` and `packages/server/src/application-lifecycle.test.ts` — gated startup publication, initialization rejection, stop-during-bootstrap/late cleanup and existing application-generation retirement
 - `packages/server/src/web-server.test.ts` — broad HTTP, auth, sessions, providers, files, PTY, MCP Test fresh-target/config-smuggling/trust/redaction/status behavior, import-and-replacement preview/persistence/exposure/admin mutation/opaque undo, packages and runtime integration
