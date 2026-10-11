@@ -281,6 +281,15 @@ export type {
   StableFilePublicationResult,
 } from './security/stable-file.js';
 
+// Explicit source/link-bound read consent; never expands workspace roots or trust.
+export { LinkedDirectoryConsent } from './security/linked-directory-consent.js';
+export { LinkedDirectoryError } from './security/linked-directory-types.js';
+export type {
+  LinkedDirectoryReason, LinkedDirectoryEntry, LinkedDirectoryInventory,
+  LinkedDirectorySelector, LinkedDirectoryAccess, LinkedDirectoryListing,
+  LinkedDirectoryContent, LinkedDirectoryErrorCode,
+} from './security/linked-directory-types.js';
+
 // Host desktop integration
 export * from './system/index.js';
 

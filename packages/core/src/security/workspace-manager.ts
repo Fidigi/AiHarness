@@ -55,7 +55,13 @@ export class WorkspacePathError extends Error {
 }
 
 function inside(root: string, candidate: string): boolean {
-  return candidate === root || candidate.startsWith(`${root}${path.sep}`);
+  const relative = path.relative(root, candidate);
+  return relative === '' || (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`));
+}
+
+function validBoundedPath(input: string): boolean {
+  return typeof input === 'string' && input.length > 0 && !input.includes('\0')
+    && Buffer.byteLength(input, 'utf8') <= 4_096 && input.split(/[\\/]/u).length <= 64;
 }
 
 function expandHome(input: string, homeDir: string): string {
@@ -95,6 +101,7 @@ export class WorkspaceManager {
     this.initialized = true;
   }
 
+  /** Configured roots only. Scoped linked-directory consent never expands this authority. */
   getAllowedRoots(): readonly string[] {
     this.assertInitialized();
     return this.roots;
@@ -109,7 +116,7 @@ export class WorkspaceManager {
     options: { base?: string; mustExist?: boolean; kind?: WorkspacePathKind } = {},
   ): Promise<string> {
     this.assertInitialized();
-    if (!input || input.includes('\0')) {
+    if (!validBoundedPath(input)) {
       throw new WorkspacePathError('INVALID_PATH', 'Chemin invalide.');
     }
     const expanded = expandHome(input, this.homeDir);
@@ -117,6 +124,7 @@ export class WorkspaceManager {
       ? await this.resolve(options.base, { kind: 'directory' })
       : await this.canonicalConfiguredDefault();
     const absolute = path.resolve(base, expanded);
+    if (!validBoundedPath(absolute)) throw new WorkspacePathError('INVALID_PATH', 'Chemin invalide.');
     // Reject lexical escapes before realpath/lstat so an untrusted path cannot probe
     // filesystem metadata outside the configured roots.
     if (!this.roots.some(root => inside(root, absolute))) {
@@ -132,6 +140,7 @@ export class WorkspaceManager {
       canonical = await this.resolveFuturePath(absolute);
     }
 
+    if (!validBoundedPath(canonical)) throw new WorkspacePathError('INVALID_PATH', 'Chemin invalide.');
     if (!this.roots.some(root => inside(root, canonical))) {
       throw new WorkspacePathError('OUTSIDE_ALLOWED_ROOTS', 'Chemin hors des racines autorisées.');
     }
@@ -154,7 +163,7 @@ export class WorkspaceManager {
     options: { base?: string; kind?: WorkspacePathKind } = {},
   ): Promise<string> {
     this.assertInitialized();
-    if (!input || input.includes('\0')) {
+    if (!validBoundedPath(input)) {
       throw new WorkspacePathError('INVALID_PATH', 'Chemin invalide.');
     }
     const expanded = expandHome(input, this.homeDir);
@@ -162,6 +171,7 @@ export class WorkspaceManager {
       ? await this.resolve(options.base, { kind: 'directory' })
       : await this.canonicalConfiguredDefault();
     const absolute = path.resolve(base, expanded);
+    if (!validBoundedPath(absolute)) throw new WorkspacePathError('INVALID_PATH', 'Chemin invalide.');
     if (!this.roots.some(root => inside(root, absolute))) {
       throw new WorkspacePathError('OUTSIDE_ALLOWED_ROOTS', 'Chemin hors des racines autorisées.');
     }
@@ -319,11 +329,12 @@ export class WorkspaceManager {
   /** Create missing directory components without traversing symbolic links. */
   async ensureDirectory(input: string, options: { base?: string } = {}): Promise<string> {
     this.assertInitialized();
-    if (!input || input.includes('\0')) throw new WorkspacePathError('INVALID_PATH', 'Chemin invalide.');
+    if (!validBoundedPath(input)) throw new WorkspacePathError('INVALID_PATH', 'Chemin invalide.');
     const base = options.base
       ? await this.resolve(options.base, { kind: 'directory' })
       : await this.canonicalConfiguredDefault();
     const absolute = path.resolve(base, expandHome(input, this.homeDir));
+    if (!validBoundedPath(absolute)) throw new WorkspacePathError('INVALID_PATH', 'Chemin invalide.');
     if (!inside(base, absolute) || !this.roots.some(root => inside(root, absolute))) {
       throw new WorkspacePathError('OUTSIDE_ALLOWED_ROOTS', 'Chemin hors des racines autorisées.');
     }

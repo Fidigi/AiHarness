@@ -18,6 +18,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~210 lines |
 | Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~170 lines |
 | Static Demonstration | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
+| Linked-Directory Consent | [topics/linked-directories.md](./topics/linked-directories.md) | ~66 lines |
 | Security & Trust | [`topics/security.md`](./topics/security.md) | ~180 lines |
 | Child Agents | [`topics/child-agents.md`](./topics/child-agents.md) | ~115 lines |
 
@@ -99,6 +100,8 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → packages/server/src/api/subagent-routes.ts
 → packages/web/src/components/SubagentPanel.tsx, SubagentSettings.tsx
 ```
+
+**Linked-directory browsing/consent** → Load [linked-directories.md](./topics/linked-directories.md) plus the workspace/security rows in `project-map.md`; keep source trust independent and re-admit every target/descendant handle.
 
 **A security change** → Load only `security.md` + the security rows/flows in `project-map.md` §§3–6
 ```

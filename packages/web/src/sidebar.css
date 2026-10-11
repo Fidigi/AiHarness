@@ -1,3 +1,5 @@
+.workspace-linked-directories { width: 100%; margin-top: .45rem; padding: .4rem; border: 1px solid #52668f; border-radius: 5px; color: #d9e3f4; background: #223154; text-align: left; cursor: pointer; }
+html[data-theme="light"] .workspace-linked-directories { color: #26344e; background: #f8f9fc; border-color: #9eabc1; }
 .workspace-control { display: flex; align-items: stretch; gap: .35rem; }
 .workspace-file-manager { flex: 0 0 42px; border: 1px solid #30466e; border-radius: 7px; color: #d9e3f4; background: #223154; cursor: pointer; }
 .workspace-file-manager:disabled { opacity: .55; cursor: wait; }

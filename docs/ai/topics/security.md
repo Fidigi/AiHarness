@@ -189,6 +189,8 @@ Keep non-secret metadata separate, require master-key encryption for disk persis
 
 ## Related Domains
 
+- [Linked-directory consent](./linked-directories.md) — metadata-only inventory, scoped reads and independent source trust
+
 - [`codemode.md`](./codemode.md) — guest budgets and live nested-call authorization
 - [`server-api.md`](./server-api.md) — middleware and protected route families
 - [`extensions.md`](./extensions.md) — executable modules, packages and declarative UI

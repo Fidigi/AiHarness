@@ -13,6 +13,9 @@ import {
 import { useI18n } from '../hooks/useI18n';
 import { useSessionStore } from '../store/session-store';
 import MarkdownContent from './MarkdownContent';
+import { linkedDirectoryMessages } from './linked-directory-messages';
+import LinkedDirectoryBoundary from './LinkedDirectoryBoundary';
+import { useLocation } from 'react-router-dom';
 
 type Tab = 'files' | 'changes';
 type ViewerTab = 'source' | 'preview' | 'diff';
@@ -21,22 +24,24 @@ function quoteMention(path: string): string {
   return path.includes(' ') ? `@"${path}"` : `@${path}`;
 }
 
-function FileNode({ entry, cwd, depth, onOpen, onMention, showHidden }: {
+function FileNode({ entry, cwd, depth, onOpen, onMention, onLinkedDirectory, showHidden }: {
   entry: WorkspaceFileEntry;
   cwd: string;
   depth: number;
-  onOpen: (path: string) => void;
+  onOpen: (path: string, linkOrigin?: HTMLButtonElement) => void;
   onMention: (path: string) => void;
+  onLinkedDirectory: (path: string) => void;
   showHidden: boolean;
 }) {
+  const { locale } = useI18n();
   const [open, setOpen] = useState(false);
   const [children, setChildren] = useState<WorkspaceFileEntry[]>();
   const [error, setError] = useState('');
 
   if (entry.hidden && !showHidden) return null;
-  const activate = async () => {
+  const activate = async (event: { currentTarget: HTMLButtonElement }) => {
     if (!entry.isDirectory) {
-      onOpen(entry.path);
+      onOpen(entry.path, entry.isSymbolicLink ? event.currentTarget : undefined);
       return;
     }
     const next = !open;
@@ -50,16 +55,18 @@ function FileNode({ entry, cwd, depth, onOpen, onMention, showHidden }: {
   return (
     <li className="file-node">
       <div style={{ paddingLeft: `${depth * .8}rem` }}>
-        <button className="file-name" onClick={() => void activate()} title={entry.path}>
+        <button className="file-name" onClick={event => void activate(event)} title={entry.path}>
           {entry.isDirectory ? open ? '📂' : '📁' : '📄'} {entry.name}
           {entry.gitStatus && <span className={`git-badge ${entry.gitStatus}`} title={entry.gitStatus}>{gitBadge(entry.gitStatus)}</span>}
         </button>
         {!entry.isDirectory && <button className="file-mention" onClick={() => onMention(entry.path)} aria-label={`Mention ${entry.path}`}>@</button>}
       </div>
+      {entry.isSymbolicLink && <small className="file-link-reason"><button type="button"
+        onClick={() => onLinkedDirectory(entry.path)}>{linkedDirectoryMessages(locale).review}</button></small>}
       {error && <small role="alert">{error}</small>}
       {open && children && <ul>{children.map(child => (
         <FileNode key={child.path} entry={child} cwd={cwd} depth={depth + 1}
-          onOpen={onOpen} onMention={onMention} showHidden={showHidden} />
+          onOpen={onOpen} onMention={onMention} onLinkedDirectory={onLinkedDirectory} showHidden={showHidden} />
       ))}</ul>}
     </li>
   );
@@ -70,7 +77,16 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   const activeSessionId = useSessionStore(state => state.activeSessionId);
   const draft = useSessionStore(state => activeSessionId ? state.drafts[activeSessionId] ?? '' : '');
   const setDraft = useSessionStore(state => state.setDraft);
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const location = useLocation();
+  const linkedDirectoryNavigation = JSON.stringify([location.key, location.pathname, location.search, location.hash]);
+  const [linkedDirectoryRequest, setLinkedDirectoryRequest] = useState<{ cwd: string; navigation: string; folder: string }>();
+  const linkedDirectoryFolder = linkedDirectoryRequest && workspace?.cwd === linkedDirectoryRequest.cwd
+    && linkedDirectoryNavigation === linkedDirectoryRequest.navigation && isOpen ? linkedDirectoryRequest.folder : undefined;
+  const openLinkedDirectory = (folder: string) => {
+    if (workspace) setLinkedDirectoryRequest({ cwd: workspace.cwd, navigation: linkedDirectoryNavigation, folder });
+  };
+  useEffect(() => { setLinkedDirectoryRequest(undefined); }, [workspace?.cwd, linkedDirectoryNavigation, isOpen]);
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState<Tab>('files');
   const [entries, setEntries] = useState<WorkspaceFileEntry[]>([]);
@@ -120,6 +136,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     openFileAbortRef.current?.abort();
     refreshAbortRef.current?.abort();
     setUploadProgress(undefined);
+    setLinkedDirectoryRequest(undefined);
     setSelected(undefined);
     setEntries([]);
     setChanges([]);
@@ -170,8 +187,10 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     }, 1_200);
   };
 
-  const openFile = async (rawPath: string, targetTab: ViewerTab = 'source', requestedLine?: number) => {
+  const openFile = async (rawPath: string, targetTab: ViewerTab = 'source', requestedLine?: number, linkOrigin?: HTMLButtonElement) => {
     if (!workspace || !workspaceOperationTrusted) return;
+    // New explicit read admission retires old metadata before any response/import await.
+    if (linkOrigin) setLinkedDirectoryRequest(undefined);
     setError('');
     const match = rawPath.match(/^(.*?)(?:#L(\d+))?$/i);
     const filePath = match?.[1] || rawPath;
@@ -204,6 +223,12 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
         binary: Boolean(diffResult.data?.binary),
       });
     } else {
+      // First preserve ordinary in-root reads. A refused symbolic-link read only
+      // opens source metadata while this explicit invoker still owns focus/lifetime.
+      if (linkOrigin?.isConnected && document.activeElement === linkOrigin) {
+        openLinkedDirectory(filePath.includes('/') ? filePath.slice(0, filePath.lastIndexOf('/')) : '.');
+        return;
+      }
       setError(content.error || t('files.openFailed'));
     }
   };
@@ -310,10 +335,15 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
         <div className="panel-header-actions">
           {onRequestClose && <button className="workspace-panel-close" onClick={onRequestClose} aria-label={t('common.close')}>×</button>}
           <button onClick={() => window.dispatchEvent(new Event('aih-open-terminal'))} aria-label={t('terminal.openFromFiles')}>⌘</button>
-          <button onClick={() => setCollapsed(true)} aria-label={t('files.collapse')}>›</button>
+          <button onClick={() => { setLinkedDirectoryRequest(undefined); setCollapsed(true); }} aria-label={t('files.collapse')}>›</button>
         </div>
       </header>
 
+      <button className="panel-linked-directories" onClick={() => openLinkedDirectory('.')}>
+        {linkedDirectoryMessages(locale).title}
+      </button>
+      {linkedDirectoryFolder !== undefined && <LinkedDirectoryBoundary key={JSON.stringify([workspace.cwd, linkedDirectoryNavigation, linkedDirectoryFolder])}
+        cwd={workspace.cwd} initialDirectory={linkedDirectoryFolder} onClose={() => setLinkedDirectoryRequest(undefined)} />}
       {!workspaceOperationTrusted ? <p className="panel-empty">{t('files.trustRequired')}</p> : (
         <>
           <div className="file-toolbar">
@@ -353,7 +383,8 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
               <ul>{searchResult.map(file => <li key={file}><button onClick={() => void openFile(file)}>📄 {file}</button><button onClick={() => mention(file)}>@</button></li>)}</ul>
             ) : tab === 'files' ? (
               entries.length ? <ul>{entries.map(entry => <FileNode key={entry.path} entry={entry} cwd={workspace.cwd}
-                depth={0} onOpen={openFile} onMention={mention} showHidden={showHidden} />)}</ul>
+                depth={0} onOpen={(path, origin) => void openFile(path, 'source', undefined, origin)} onMention={mention} showHidden={showHidden}
+                onLinkedDirectory={path => openLinkedDirectory(path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.')} />)}</ul>
                 : <p className="panel-empty">{t('files.empty')}</p>
             ) : gitSummary.repository ? (
               <>

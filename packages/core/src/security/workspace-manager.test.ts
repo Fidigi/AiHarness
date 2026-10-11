@@ -62,6 +62,18 @@ describe('WorkspaceManager', () => {
     expect(listing.truncated).toBe(false);
   });
 
+  it('rejects overlong and overly deep paths before any filesystem probe', async () => {
+    const root = await temporaryDirectory();
+    const manager = new WorkspaceManager({ allowedRoots: [root], defaultCwd: root });
+    await manager.initialize();
+    for (const value of ['x'.repeat(4_097), Array(65).fill('x').join('/')]) {
+      await expect(manager.resolve(value)).rejects.toMatchObject({ code: 'INVALID_PATH' });
+      await expect(manager.resolveDestination(value)).rejects.toMatchObject({ code: 'INVALID_PATH' });
+      await expect(manager.ensureDirectory(value)).rejects.toMatchObject({ code: 'INVALID_PATH' });
+    }
+    expect(manager.getAllowedRoots()).toEqual([root]);
+  });
+
   it('bounds directory browsing and reports truncation', async () => {
     const root = await temporaryDirectory();
     await Promise.all(Array.from({ length: WORKSPACE_BROWSE_ENTRY_LIMIT + 1 }, (_, index) =>

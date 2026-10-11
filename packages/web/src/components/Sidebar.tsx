@@ -22,6 +22,8 @@ import { useI18n } from '../hooks/useI18n';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSessionStore } from '../store/session-store';
 import LanguageSelector from './LanguageSelector';
+import { linkedDirectoryMessages } from './linked-directory-messages';
+import LinkedDirectoryBoundary from './LinkedDirectoryBoundary';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -66,6 +68,7 @@ function operationTrusted(workspace: WorkspaceDescriptor): boolean {
 function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const linkedDirectoryNavigation = JSON.stringify([location.key, location.pathname, location.search, location.hash]);
   const sessions = useSessionStore(state => state.sessions);
   const workspace = useSessionStore(state => state.workspace);
   const recentWorkspaces = useSessionStore(state => state.recentWorkspaces);
@@ -79,6 +82,10 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
   const activeSessionId = useSessionStore(state => state.activeSessionId);
   const { t, locale } = useI18n();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [linkedDirectoryRequest, setLinkedDirectoryRequest] = useState<{ cwd: string; navigation: string }>();
+  const linkedDirectoryOpen = Boolean(linkedDirectoryRequest && workspace?.cwd === linkedDirectoryRequest.cwd
+    && linkedDirectoryNavigation === linkedDirectoryRequest.navigation && (isOpen || !modal) && !inactive);
+  useEffect(() => { setLinkedDirectoryRequest(undefined); }, [workspace?.cwd, linkedDirectoryNavigation, isOpen, inactive]);
   const [pathInput, setPathInput] = useState('');
   const [directories, setDirectories] = useState<Array<{ name: string; path: string }>>([]);
   const [parent, setParent] = useState<string>();
@@ -109,9 +116,9 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
 
   const query = useMemo(() => workspace ? `?cwd=${encodeURIComponent(workspace.cwd)}` : '', [workspace]);
   const selectedSessionId = sessionIdFromPathname(location.pathname) ?? activeSessionId;
-  useFocusTrap(modal && !pendingWorkspace && !pickerOpen, sidebarRef, () => onRequestClose?.());
+  useFocusTrap(modal && !pendingWorkspace && !pickerOpen && !linkedDirectoryOpen, sidebarRef, () => onRequestClose?.());
   useFocusTrap(Boolean(pendingWorkspace), trustDialogRef, () => setPendingWorkspace(undefined));
-  useFocusTrap(pickerOpen && !createFolderOpen, pickerDialogRef, () => setPickerOpen(false));
+  useFocusTrap(pickerOpen && !createFolderOpen && !linkedDirectoryOpen, pickerDialogRef, () => setPickerOpen(false));
   useFocusTrap(createFolderOpen, createFolderDialogRef, () => setCreateFolderOpen(false));
 
   useEffect(() => {
@@ -377,6 +384,9 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
             </button>
           )}
         </div>
+        {workspace && <button className="workspace-linked-directories" onClick={() => setLinkedDirectoryRequest({ cwd: workspace.cwd, navigation: linkedDirectoryNavigation })}>
+          {linkedDirectoryMessages(locale).title}
+        </button>}
         {workspace && !operationTrusted(workspace) && (
           <button className="trust-warning" onClick={() => {
             setError('');
@@ -493,6 +503,9 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
       <div className="sidebar-footer">
         <button onClick={() => navigate(`/settings${query}`)}>⚙ {t('common.settings')}</button>
       </div>
+
+      {linkedDirectoryOpen && workspace && <LinkedDirectoryBoundary key={JSON.stringify([workspace.cwd, linkedDirectoryNavigation])} cwd={workspace.cwd}
+        onClose={() => setLinkedDirectoryRequest(undefined)} />}
 
       {pendingWorkspace && (
         <div className="modal-backdrop" role="presentation">

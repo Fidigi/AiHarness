@@ -8,6 +8,7 @@
 | [Standalone authentication/export](./standalone-operations.md) | Passive credential metadata, encrypted device flow and selected trusted session files |
 | [Settings text loading](./settings-loading.md) | Translated loading, Close, explicit reload/retry and unsent-text warning |
 | [File-pane loading](./workspace-loading.md) | Optional explorer assets, retained file intent, local Close and honest reload/retry |
+| [Linked directories](./linked-directories.md) | Exact consent, independent source trust, bounded read-only browsing and revocation |
 | [Resource group controls](./resource-batches.md) | Filtered model/skill batches, valid Markdown edits and failure reconciliation |
 | [Mobile keyboard layout](./mobile-keyboard.md) | Conservative viewport detection, chat-only styles, retry and device limits |
 

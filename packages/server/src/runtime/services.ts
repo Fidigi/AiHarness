@@ -28,6 +28,7 @@ import { ConfigurationStore } from '../config/config-store.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { CommandRuntime } from './command-runtime.js';
 import { createConfiguredPluginService, type ConfiguredPluginOperation } from './configured-plugin-service.js';
+import { LinkedDirectoriesService } from './linked-directories-service.js';
 import { McpInventoryService } from './mcp-inventory-service.js';
 import { ModelCatalogService } from './model-catalog.js';
 import { PluginService } from './plugin-service.js';
@@ -53,6 +54,8 @@ export interface RuntimeServices {
   sessionManager: SessionManager;
   sessionStore: JsonlSessionStore;
   workspaceManager: WorkspaceManager;
+  /** Descriptor-scoped explicit reads; never an allowed-root or execution grant. */
+  linkedDirectories: LinkedDirectoriesService;
   trustManager: ProjectTrustManager;
   configurationStore: ConfigurationStore;
   agentSettings: ResolvedAgentSettings;
@@ -100,7 +103,8 @@ export async function createRuntimeServices(
   const dataDir = options.dataDir ?? process.env.AI_HARNESS_DATA_DIR
     ?? path.join(os.homedir(), '.ai-harness');
   const requestedDefaultCwd = options.defaultCwd ?? process.env.AI_HARNESS_DEFAULT_CWD ?? process.cwd();
-  const sessionStore = new JsonlSessionStore(options.sessionsDir ?? path.join(dataDir, 'sessions'));
+  const sessionsDir = options.sessionsDir ?? path.join(dataDir, 'sessions');
+  const sessionStore = new JsonlSessionStore(sessionsDir);
   const sessionManager = new SessionManager({
     redactText: value => proxy.redactText(value),
     redactJson: value => proxy.redactJson(value),
@@ -133,6 +137,10 @@ export async function createRuntimeServices(
       kind: 'directory',
     }),
   });
+  const linkedDirectories = new LinkedDirectoriesService(workspaceManager, trustManager, {
+    storeDirectory: dataDir,
+    protectedPaths: [sessionsDir, path.dirname(options.trustFile ?? path.join(dataDir, 'trust.json'))],
+  }, value => proxy.redactText(value));
   const mcpInventory = new McpInventoryService(dataDir, workspaceManager, trustManager, { host: mcpHost });
   const configurationStore = new ConfigurationStore(
     options.configurationFile ?? path.join(dataDir, 'config.json'),
@@ -450,6 +458,7 @@ export async function createRuntimeServices(
     sessionManager,
     sessionStore,
     workspaceManager,
+    linkedDirectories,
     trustManager,
     configurationStore,
     agentSettings: providerSettings,

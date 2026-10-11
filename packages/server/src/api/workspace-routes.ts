@@ -2,6 +2,7 @@ import { Router, type Response } from 'express';
 import { ExternalOpenError, WorkspacePathError, type ProjectTrustStatus } from '@ai-harness/core';
 import type { RuntimeServices } from '../runtime/services.js';
 import { requireCapability } from '../security/request-security.js';
+import type { LinkedDirectoriesService } from '../runtime/linked-directories-service.js';
 import {
   fileManagerAvailable,
   openWorkspaceDirectory,
@@ -50,6 +51,25 @@ export function createWorkspaceRouter(
   fileManagerOptions: WorkspaceFileManagerOptions = {},
 ): Router {
   const router = Router();
+  // Delay new runtime exports until explicit service composition. Existing workspaces
+  // keep working before the coordinator supplies the public Core export patch.
+  let linkedRouter: Promise<Router> | undefined;
+  const linkedWrite = requireCapability('workspace:write');
+  router.use('/linked-directories', requireCapability('workspace:read'), (request, response, next) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) next();
+    else linkedWrite(request, response, next);
+  }, async (request, response, next) => {
+    response.setHeader('Cache-Control', 'no-store');
+    try {
+      const getService = async () => (await servicesPromise as RuntimeServices & { linkedDirectories?: LinkedDirectoriesService }).linkedDirectories;
+      if (!await getService()) {
+        response.status(503).json({ error: 'Private linked-directory consent storage is unavailable.', code: 'store-unavailable' });
+        return;
+      }
+      linkedRouter ??= import('./linked-directories-routes.js').then(module => module.createLinkedDirectoriesRouter(getService));
+      (await linkedRouter)(request, response, next);
+    } catch (error) { next(error); }
+  });
 
   router.get('/roots', async (_request, response, next) => {
     try {

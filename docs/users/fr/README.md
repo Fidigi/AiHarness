@@ -8,6 +8,7 @@
 | [Authentification/export autonomes](./standalone-operations.md) | Métadonnées passives, flux device chiffré et fichiers de session sélectionnés/approuvés |
 | [Chargement des textes des réglages](./settings-loading.md) | Chargement traduit, fermeture, réessai explicite et texte non envoyé |
 | [Chargement du panneau de fichiers](./workspace-loading.md) | Ressources optionnelles, intention d’ouverture, fermeture locale et réessai explicite |
+| [Répertoires liés](./linked-directories.md) | Consentement exact, confiance source indépendante, navigation limitée et révocation |
 | [Contrôles par groupe](./resource-batches.md) | Lots filtrés de modèles/skills, Markdown valide et réconciliation des échecs |
 | [Disposition avec le clavier mobile](./mobile-keyboard.md) | Détection prudente, styles propres au chat, réessai et limites matérielles |
 
