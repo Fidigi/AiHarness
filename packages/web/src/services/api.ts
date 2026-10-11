@@ -426,10 +426,11 @@ export async function respondToExtensionInteraction(
   sessionId: string,
   requestId: string,
   responseValue: { cancelled: boolean; value?: unknown },
+  signal?: AbortSignal,
 ): Promise<ApiResponse<AgentRunSnapshot>> {
   try {
     const response = await apiFetch(`${API_BASE}/agent/sessions/${encodeURIComponent(sessionId)}/interactions/${encodeURIComponent(requestId)}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(responseValue),
+      signal, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(responseValue),
     });
     const data = await response.json().catch(() => ({})) as AgentRunSnapshot & { error?: string };
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);

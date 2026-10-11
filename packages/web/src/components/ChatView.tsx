@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, FormEvent, KeyboardEvent, ReactNode, RefObject } from 'react';
+import type { CSSProperties, FormEvent, KeyboardEvent, ReactNode } from 'react';
 import { parseShellCommandInput } from '@ai-harness/core/shell-input';
 import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, ExtensionInteractionSnapshot, Message, ModelCatalog, ProviderType, Session, TokenUsage } from '@ai-harness/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -17,7 +17,7 @@ import { composerKeySubmits } from './composer-submit';
 import { clipboardTextToMarkdown } from './markdown-paste';
 import { getMarkdownListContinuation } from './markdown-list-continuation';
 import { publishNotice, type NoticeLevel } from '../services/notices';
-import { useFocusTrap } from '../hooks/useFocusTrap';
+import ExtensionInteractionBoundary from './ExtensionInteractionBoundary';
 import { mobileKeyboardViewKey, useMobileKeyboard } from '../hooks/useMobileKeyboard';
 import {
   cancelCommand,
@@ -215,7 +215,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const upsertAssistantMessage = useSessionStore(state => state.upsertAssistantMessage);
   const updateSessionSettings = useSessionStore(state => state.updateSessionSettings);
   const renameLocalSession = useSessionStore(state => state.renameSession);
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [preferences] = usePreferences();
   const [starting, setStarting] = useState(false);
   const [stagedEdit, setStagedEdit] = useState<{ sessionId: string; messageId: string; previousDraft: string }>();
@@ -250,6 +250,18 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [minimapOpen, setMinimapOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const interactionViewKey = JSON.stringify([workspace?.id, workspace?.cwd, id, currentRun?.id, location.key, location.pathname, location.search, location.hash]);
+  const interactionViewRef = useRef(interactionViewKey);
+  interactionViewRef.current = interactionViewKey;
+  const interactionFocusKey = JSON.stringify([workspace?.id, workspace?.cwd, id, currentRun?.id,
+    currentRun?.extensionRequest?.id, currentRun?.extensionRequest?.kind]);
+  const interactionFocusAdmission = useRef({ view: interactionViewKey, request: interactionFocusKey, allowed: true });
+  if (interactionFocusAdmission.current.request !== interactionFocusKey) {
+    interactionFocusAdmission.current = { view: interactionViewKey, request: interactionFocusKey, allowed: true };
+  } else if (interactionFocusAdmission.current.view !== interactionViewKey) {
+    // Re-presenting the same pending request in a replacement route is not new focus intent.
+    interactionFocusAdmission.current = { view: interactionViewKey, request: interactionFocusKey, allowed: false };
+  }
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
@@ -1595,15 +1607,20 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         </details>)}
       </aside>}
 
-      {currentRun?.extensionRequest && <ExtensionInteractionDialog
-        key={currentRun.extensionRequest.id}
+      {currentRun?.extensionRequest && <ExtensionInteractionBoundary
+        key={interactionViewKey}
         request={currentRun.extensionRequest}
+        waitingCount={0}
+        locale={locale}
         restoreFocusRef={textareaRef}
-        onResolve={async result => {
-          const response = await respondToExtensionInteraction(currentSession.id, currentRun.extensionRequest!.id, result);
+        canRestoreFocus={() => interactionViewRef.current === interactionViewKey}
+        canFocusInitially={() => interactionViewRef.current === interactionViewKey && interactionFocusAdmission.current.allowed}
+        renderOutput={content => <AnsiOutput content={content} />}
+        onResolve={async (result, signal) => {
+          const response = await respondToExtensionInteraction(currentSession.id, currentRun.extensionRequest!.id, result, signal);
+          if (signal.aborted) return;
           if (response.success && response.data) setRun(currentSession.id, response.data);
           else setNotice(response.error || t('chat.extensionInteractionFailed'));
-          window.requestAnimationFrame(() => textareaRef.current?.focus());
         }} t={t} />}
 
       {!currentSession.draft && (
@@ -2018,69 +2035,6 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       </form>
     </div>
   );
-}
-
-function ExtensionInteractionDialog({ request, onResolve, restoreFocusRef, t }: {
-  request: ExtensionInteractionSnapshot;
-  onResolve(response: { cancelled: boolean; value?: unknown }): Promise<void>;
-  restoreFocusRef: RefObject<HTMLElement | null>;
-  t: TranslationFunction;
-}) {
-  const initial = request.kind === 'custom'
-    ? Object.fromEntries((request.fields ?? []).map(field => [field.name,
-        field.type === 'checkbox' ? false : field.type === 'select' && field.required ? field.options?.[0]?.value ?? '' : '']))
-    : request.kind === 'select' ? request.options?.[0]?.value ?? '' : '';
-  const [value, setValue] = useState<unknown>(initial);
-  const [submitting, setSubmitting] = useState(false);
-  const custom = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  const resolve = async (response: { cancelled: boolean; value?: unknown }) => {
-    if (submitting) return;
-    setSubmitting(true);
-    try { await onResolve(response); } finally { setSubmitting(false); }
-  };
-  const dialogRef = useRef<HTMLFormElement>(null);
-  useFocusTrap(true, dialogRef, () => { void resolve({ cancelled: true }); }, restoreFocusRef);
-  return <div className="modal-overlay extension-interaction-overlay" onMouseDown={event => {
-    if (!submitting && event.target === event.currentTarget) void resolve({ cancelled: true });
-  }}>
-    <form ref={dialogRef} tabIndex={-1} className="extension-interaction" role="dialog" aria-modal="true" aria-labelledby={`extension-title-${request.id}`}
-      onSubmit={event => { event.preventDefault(); void resolve({ cancelled: false, value: request.kind === 'confirm' ? true : value }); }}>
-      <header><h3 id={`extension-title-${request.id}`}>{request.title}</h3></header>
-      {request.message && <p>{request.message}</p>}
-      {request.output && (/\u001b\[[0-9;]*m/.test(request.output)
-        ? <AnsiOutput content={request.output} /> : <pre className="extension-output">{request.output}</pre>)}
-      {request.kind === 'input' && <input data-autofocus required value={String(value)} placeholder={request.placeholder}
-        onChange={event => setValue(event.target.value)} aria-label={request.title} />}
-      {request.kind === 'editor' && <textarea data-autofocus required rows={10} value={String(value)} placeholder={request.placeholder}
-        onChange={event => setValue(event.target.value)} aria-label={request.title} />}
-      {request.kind === 'select' && <select data-autofocus value={String(value)} onChange={event => setValue(event.target.value)} aria-label={request.title}>
-        {request.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>}
-      {request.kind === 'custom' && <details className="extension-custom-panel" open>
-        <summary>{t('chat.extensionInteraction.fields')}</summary>
-        <div className="extension-fields">
-          {request.fields?.map(field => <label key={field.name}>
-            <span>{field.label}</span>
-            {field.type === 'textarea' ? <textarea required={field.required} placeholder={field.placeholder}
-              value={String(custom[field.name] ?? '')} onChange={event => setValue({ ...custom, [field.name]: event.target.value })} />
-              : field.type === 'select' ? <select required={field.required} value={String(custom[field.name] ?? '')}
-                onChange={event => setValue({ ...custom, [field.name]: event.target.value })}>
-                {!field.required && <option value="" />}
-                {field.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-                : field.type === 'checkbox' ? <input type="checkbox" checked={custom[field.name] === true}
-                  onChange={event => setValue({ ...custom, [field.name]: event.target.checked })} />
-                  : <input required={field.required} placeholder={field.placeholder} value={String(custom[field.name] ?? '')}
-                    onChange={event => setValue({ ...custom, [field.name]: event.target.value })} />}
-          </label>)}
-        </div>
-      </details>}
-      <footer>
-        <button type="button" disabled={submitting} onClick={() => void resolve({ cancelled: true })}>{t('common.cancel')}</button>
-        <button type="submit" disabled={submitting}>{request.kind === 'confirm' ? t('common.confirm') : t('common.submit')}</button>
-      </footer>
-    </form>
-  </div>;
 }
 
 function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationFunction, callInput?: unknown): ReactNode {

@@ -18,6 +18,7 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 | `packages/web/src/store/preferences.ts` | Versioned appearance, send-key, layout, notification, panel and keybinding state |
 | `packages/web/src/services/api.ts`, `packages/web/src/services/mcp-api.ts` | Credential-aware fetch, REST/SSE contracts, workspace creation/file-manager/force-retry operations, and Settings-lazy MCP one-shot Test, explicit OAuth status/start/poll/paste/cancel/logout, import/replacement preview, persistence and local mutation requests |
 | `packages/web/src/components/ChatView.tsx` | Detached runs, history, composer, queues, settings and reconciliation |
+| `packages/web/src/components/{ExtensionInteractionBoundary,ExtensionInteractionDialog}.tsx` | Singular optional form loading/error, own lazy CSS, abortable response and local modal/focus/IME lifetimes |
 | `packages/web/src/components/{Sidebar,WorkspacePanel,WorkspacePanelBoundary,TerminalPanel}.tsx` | Lazy navigation, locally admitted optional file-pane JS/CSS, unchanged files/Git and PTY surfaces |
 | `packages/web/src/components/SettingsView.tsx` | Lazy Settings route and administration sections |
 | `packages/web/src/components/{McpSettings,McpImportPreview}.tsx` | Redacted global/project MCP groups and explicit Test reports, paste preview, field/reference completion, scope/confirmation-gated atomic import or replacement, trust lock, row/group activation, per-server exposure, confirmed removal, temporary undo and file diagnostics |
@@ -96,6 +97,8 @@ Secondary chat chrome collapses without replacing the composer, images, Queue or
 - Dialogs/palettes trap focus and handle Escape. Deferred initial/return focus belongs to one modal lifetime: remount retires old return, and a newer explicit focus destination supersedes it. Return uses only a connected, visible, enabled, non-inert invoker or fallback, and cannot leave another active modal scope.
 - Child runs appear in `SubagentPanel`, the global monitor, and bounded notices.
 
+Singular extension presentation uses `ExtensionInteractionBoundary`: the real renderer and own stylesheet load only for a pending request. Local nonmodal loading/error keeps Close/Cancel, chat and Stop usable; rejection remains cached until explicit page reload with an unsent-text warning. Complete workspace/cwd/session/run/route identity retires stale transport and late presentation. Aborting transport suppresses browser publication, not an already accepted server response. Compatible same-ID/kind drafts and connected IME survive schema refresh; composition/legacy-229 Enter and Escape cannot acknowledge/cancel the form. Initial-focus admission observes intent even before import completes and again before first-frame focus. A replacement route presenting the same request is not fresh focus intent. Return is view/fallback/newer-focus/modal guarded; coarse pointers avoid unsolicited editable focus but permit guarded return after owned manual editing. This does not deliver the full concurrent browser queue or physical-device certification.
+
 See [`extensions.md`](./extensions.md) for server-side ownership and interaction validation.
 
 ## Settings Packages and MCP Configuration
@@ -124,15 +127,18 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 
 ## Build and Performance Contracts
 
-- Settings, optional file-pane JS/CSS, terminal/xterm, Mermaid, syntax highlighting, and other heavy surfaces stay lazy where configured.
+- Settings, optional file-pane and extension-form JS/CSS, terminal/xterm, Mermaid, syntax highlighting, and other heavy surfaces stay lazy where configured.
 - `packages/web/scripts/check-bundle-budget.mjs` fails eager, async, or CSS budget regressions.
-- E2E snapshots comprise 190 PNGs (178 conserved accepted baselines and twelve mobile keyboard additions), including the full MCP state/import-preview matrix in Light/Dark desktop/mobile layouts; the independent static demo has separate captures.
+- E2E snapshots comprise 202 PNGs: 178 earlier accepted baselines, twelve mobile keyboard, eight linked-directory and four provider-rename additions. This includes the MCP state/import-preview matrix in Light/Dark desktop/mobile layouts; optional form extraction adds no PNGs and the independent static demo has separate captures.
 - Performance tests protect cache bounds, virtualization, and lazy loading.
 
 ## Associated Tests
 
 - `packages/web/src/hooks/useMobileKeyboard.test.ts` and `packages/web/src/hooks/mobileKeyboardStyles.test.ts` — geometry, tuple identity, listener/frame ownership and bounded stylesheet lifecycle
-- `e2e/mobile-keyboard.spec.ts` — actual ChatView/MCP, touch/viewport emulation, eager interaction fields, retired sessions, asset failure/retry and compact IME/attachment/Stop; no physical-keyboard proof
+- `e2e/mobile-keyboard.spec.ts` — actual ChatView/MCP, touch/viewport emulation, native interaction fields through the optional renderer, retired sessions, asset failure/retry and compact IME/attachment/Stop; no physical-keyboard proof
+- `packages/web/src/components/extension-interaction-dialog.test.ts` — declarative fields/output, CSS allocation, abort/cached-reload contract and compatible draft projection
+- `e2e/interaction-single-asset-load.spec.ts` with its production-preview config — genuine optional form JS/CSS, local loading/error/cancel/reload, retired replies/view tuples, same-ID drafts/composition, delayed initial focus and coarse manual-editing return
+- `e2e/interaction-live-boundary.spec.ts` — real extension/HTTP schema rejection, response/cancel and mock-provider resumption
 
 - `packages/web/src/store/session-store.test.ts` plus `.remote.test.ts` and `.integration.test.ts` — hydration, windows, drafts, cache and run state
 - `packages/web/src/store/preferences.test.ts` and `packages/web/src/components/composer-submit.test.ts` — schema migration, preference validation, newline shortcuts and IME-safe send decisions

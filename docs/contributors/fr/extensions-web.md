@@ -7,6 +7,7 @@
 - [Widgets, notices et requêtes interactives](#widgets-notices-et-requêtes-interactives)
   - [Types d'interactions](#types-dinteractions)
   - [Cycle de vie](#cycle-de-vie)
+  - [Chargement du formulaire optionnel et focus](#chargement-du-formulaire-optionnel-et-focus)
   - [Contrat de la file du runtime détaché](#contrat-de-la-file-du-runtime-détaché)
 - [Sécurité et limites du chargeur](#sécurité-et-limites-du-chargeur)
 - [Administration via Settings](#administration-via-settings)
@@ -58,7 +59,7 @@ Une extension peut publier :
 1. Extension active → AgentRuntime publie un événement `extension.ui`
 2. Le serveur stocke la demande dans le snapshot du run actif
 3. L'événement est diffusé au navigateur par SSE
-4. ChatView rend le dialogue avec focus trap et gestion Escape
+4. ChatView affiche un chargement/une erreur locale, puis charge le formulaire déclaratif et son CSS
 5. L'utilisateur répond ou annule (`POST /api/agent/sessions/:sessionId/interactions/:requestId`)
 6. Le serveur revalide la réponse structurée avant de résoudre l'extension
 7. Si l'onglet n'est pas visible, une notification Web Push catégorie "attention" est envoyée
@@ -68,11 +69,21 @@ Une extension peut publier :
 - Une interaction nécessite **toujours un run actif**. Sans run, elle est ignorée.
 - Les formulaires `custom` restent déclaratifs : jamais de HTML arbitraire ni d'accès DOM direct.
 - La réponse structurée est revalidée par `AgentRuntime` avant résolution.
-- Le focus reste piégé dans le dialogue tant qu'il est ouvert, puis revient au contrôle précédent.
+- Le formulaire monté possède son focus trap et la gestion ordinaire d’Escape ; le retour respecte la vue courante, le focus plus récent et les autres dialogues au lieu de toujours restaurer le contrôle précédent.
+
+### Chargement du formulaire optionnel et focus
+
+`ExtensionInteractionBoundary.tsx` reste eager ; seule une demande unique en attente importe `ExtensionInteractionDialog.tsx` et sa feuille de style. Le chargement/l’erreur reste non modal et traduit, avec Fermer/Annuler disponibles, tandis que le composeur et Stop restent utilisables. Les imports échoués restent en cache même après réouverture. **Recharger et réessayer** recharge la page : copiez d’abord le texte non envoyé.
+
+Le remplacement de la demande/du schéma ou de la vue abandonne le transport de réponse et empêche une publication navigateur périmée ; il n’annule pas une réponse déjà acceptée par Server. Le tuple de vue comprend l’ID/cwd du workspace, la session, le run et tous les champs d’identité de route. Les contrôles compatibles de même ID/type conservent leur brouillon et leur composition connectée. Les contrôles modifiés/supprimés sont réinitialisés. Enter/Escape pendant l’IME ou avec le code clavier historique 229 restent de l’édition native, sans validation/annulation du formulaire ; un Enter ordinaire après la composition peut envoyer une seule réponse.
+
+Le focus initial est admis avant la fin de l’import puis revérifié à la première frame du renderer. Un focus plus récent (même suivi d’un blur), un autre dialogue ou la même demande réaffichée dans une route de remplacement refusent cette admission. Le retour exige une vue courante, une cible de repli inchangée et disponible, sans focus/dialogue plus récent. Un pointeur coarse évite le focus éditable non sollicité, mais un retour gardé au composeur reste possible après une édition manuelle dans le formulaire ; un focus externe efface cette intention d’édition.
+
+`extension-interaction-dialog.test.ts` protège les champs, le texte inerte, CSS/transport/copie et la projection du brouillon. `e2e/interaction-single-asset-load.spec.ts`, en preview de production, teste les vrais JS/CSS retardés/refusés, le rechargement et les gardes focus/IME/durée de vie. `e2e/interaction-live-boundary.spec.ts` prouve séparément la validation réelle extension/HTTP et réponse/annulation via le provider mock. L’émulation tactile Chromium ne certifie pas Android/iOS/Safari physiques.
 
 ### Contrat de la file du runtime détaché
 
-Le runtime détaché Core/Server prend désormais en charge plusieurs demandes en attente. Le client Web actuel conserve encore un état d’interaction unique, notamment le snapshot de compatibilité du premier élément ; la file complète côté navigateur, le compteur, les notifications et le focus ne sont pas encore livrés.
+Le runtime détaché Core/Server prend désormais en charge plusieurs demandes en attente. Le client Web actuel conserve encore un état d’interaction unique, notamment le snapshot de compatibilité du premier élément ; les contrôles focus/durée de vie validés du formulaire unique ne prouvent pas la livraison de la file complète côté navigateur, du compteur ou des notifications.
 
 - `requestInteraction(request)` renvoie une Promise que l’on peut attendre. Le runtime détaché fournit aussi un `id` en lecture seule et les contrôles `update(replacement)` et `close()` ; les autres adaptateurs peuvent les omettre. Conservez le handle retourné : connaître un ID ne confère aucun droit de modification ou de fermeture.
 - `update` remplace entièrement l’affichage et le schéma sans changer l’ID, l’ordre d’admission, la date de création, l’AbortSignal ou l’échéance initiale. Les champs d’affichage omis disparaissent. La réponse suivante est validée contre le dernier schéma.

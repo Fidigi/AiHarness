@@ -775,7 +775,17 @@ The browser catalogue and CLI `--json` output contain sanitized metadata only: n
 
 Global extensions from the data directory, extensions in `.ai-harness/extensions/` for an approved project, and active packages feed the `/` palette and conversation panels after **Reload resources** or `/reload`. Reload prepares the complete generation before publishing it; an error in the same workspace keeps the previous valid generation active and displays a diagnostic.
 
-An extension can publish a text widget or notice, or request a `confirm`, `input`, `select`, `editor` or `custom` interaction. Custom forms remain declarative: text fields, selects, checkboxes and buttons, never arbitrary HTML or DOM access. The dialog traps focus, accepts `Escape`, restores the composer and returns a structured response that the server validates again. If the tab is not visible, an interaction request can use the **attention** Push category. An interaction always requires an active run.
+An extension can publish a text widget or notice, or request a `confirm`, `input`, `select`, `editor` or `custom` interaction. Custom forms remain declarative: text fields, selects, checkboxes and buttons, never arbitrary HTML or DOM access. Responses are structured and validated again by the server. An interaction requires an active run and can use the **attention** Push category when the tab is not visible.
+
+#### Optional Form Loading and Keyboard Behavior
+
+- The form's JavaScript and styles load on demand for the current request. While loading, a local nonmodal status leaves chat, the composer and **Stop** usable. **Close** and **Cancel** both send cancellation for that request; they do not merely hide it.
+- A load failure shows a local error. Reopening does not retry the cached failed import. **Reload and retry** reloads the whole page, not just resources or session information. [WARNING] Copy unsent text first: it may be lost despite the bounded draft cache.
+- Stop, completion or navigation retires the old presentation; late loading or response results cannot revive it. A still-pending server request may be presented in a new view. Form drafts are not durable dialogs, and aborting a browser request does not undo a response already accepted by the server.
+- Once ready, the dialog contains keyboard navigation and normally accepts `Escape` to cancel. Deferred autofocus and focus return respect newer focus, including another active modal; returning to the composer is not unconditional. Compatible fields keep their draft during a same-ID, same-kind refresh; removed fields are dropped, while changed field types or unavailable selections reset.
+- During IME composition, `Enter` does not submit and `Escape` does not cancel the form. On coarse-pointer screens, the dialog avoids unsolicited editable autofocus: select a field to edit manually. After manual editing, focus may return to the prior control or composer when that destination is still eligible.
+
+This describes the current single-request presentation, not a complete browser interaction queue or waiting count. Browser emulation is not physical-device or general accessibility certification.
 
 ![Declarative extension approval interaction, light theme](../../screenshots/06-extensions/interaction-confirm-light.png)
 
@@ -952,7 +962,7 @@ Server limits PTY count, input size and dimensions. Creation, input, resize and 
 
 ### Mobile and Tablet Screens
 
-Below 960px, sidebar and explorer become stacked drawers accessible via top-of-screen buttons. Chat takes full width, secondary actions move to mobile bar, viewer can take full screen and terminal stays anchored above PWA safe zone. Drawer background closes active panel; Escape closes dialogs and palettes.
+Below 960px, sidebar and explorer become stacked drawers accessible via top-of-screen buttons. Chat takes full width, secondary actions move to mobile bar, viewer can take full screen and terminal stays anchored above PWA safe zone. Drawer background closes active panel; Escape normally closes dialogs and palettes; extension forms preserve IME composition as described above.
 
 Sessions load from server at startup. Multiple tabs see same server storage after reload; appearance preferences synchronized via browser events.
 
@@ -960,7 +970,7 @@ Sessions load from server at startup. Multiple tabs see same server storage afte
 
 ### Accessibility
 
-Palettes, dialogs, zooms and mobile drawers trap focus without losing it at close and accept Escape. Conversation and error zones use non-blocking ARIA announcements, controls have accessible labels and active states do not rely solely on color. AiHarness respects `prefers-reduced-motion` and system forced colors.
+Palettes, dialogs, zooms and mobile drawers provide focus containment and Escape handling. Extension-form focus return and IME exceptions follow the rules above; this is not general accessibility certification. Conversation and error zones use non-blocking ARIA announcements, controls have accessible labels and active states do not rely solely on color. AiHarness respects `prefers-reduced-motion` and system forced colors.
 
 ![Keyboard focus in the command palette, light theme](../../screenshots/08-accessibility/command-palette-focus-light.png)
 

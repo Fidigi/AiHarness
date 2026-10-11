@@ -775,7 +775,17 @@ Le catalogue transmis au navigateur et la sortie CLI `--json` ne contiennent que
 
 Les extensions globales du répertoire de données, celles de `.ai-harness/extensions/` dans un projet approuvé et celles des packages actifs alimentent la palette `/` et les panneaux de conversation après **Reload resources** ou `/reload`. Le reload prépare toute la génération avant de la publier ; une erreur dans le même workspace conserve la génération valide précédente et affiche le diagnostic.
 
-Une extension peut publier un widget texte, une notice ou demander une interaction `confirm`, `input`, `select`, `editor` ou `custom`. Les formulaires custom restent déclaratifs : champs texte, sélection, case à cocher et boutons, jamais HTML ou accès DOM arbitraire. Le dialogue piège le focus, accepte `Escape`, restaure le composer et renvoie une réponse structurée que le serveur revalide. Si l’onglet n’est pas visible, une demande d’interaction peut utiliser la catégorie Push **attention**. Une interaction nécessite toujours un run actif.
+Une extension peut publier un widget texte, une notice ou demander une interaction `confirm`, `input`, `select`, `editor` ou `custom`. Les formulaires custom restent déclaratifs : champs texte, sélection, cases à cocher et boutons, jamais HTML ou accès DOM arbitraire. Les réponses sont structurées et revalidées par le serveur. Une interaction exige un run actif et peut utiliser la catégorie Push **attention** lorsque l’onglet n’est pas visible.
+
+#### Chargement du formulaire facultatif et comportement clavier
+
+- Le JavaScript et les styles du formulaire se chargent à la demande pour la requête courante. Pendant le chargement, un état local non modal laisse le chat, le composer et **Arrêter** utilisables. **Fermer** et **Annuler** envoient tous deux l’annulation de cette requête ; ils ne la masquent pas simplement.
+- Un échec de chargement affiche une erreur locale. Rouvrir ne réessaie pas l’import en échec conservé en cache. **Recharger et réessayer** recharge toute la page, pas seulement les ressources ou les informations de session. [WARNING] Copiez d’abord le texte non envoyé : il risque d’être perdu malgré le cache borné des brouillons.
+- Arrêt, fin du run ou navigation retire l’ancienne présentation ; les résultats tardifs de chargement ou de réponse ne peuvent pas la réactiver. Une requête serveur encore en attente peut être présentée dans une nouvelle vue. Les brouillons du formulaire ne constituent pas des dialogues durables, et interrompre une requête navigateur n’annule pas une réponse déjà acceptée par le serveur.
+- Une fois prêt, le dialogue contient la navigation clavier et accepte normalement `Escape` pour annuler. Le focus initial différé et son retour respectent un focus plus récent, y compris une autre modale active ; le retour au composer n’est pas systématique. Les champs compatibles conservent leur brouillon lors d’une actualisation de même ID et de même type d’interaction ; les champs supprimés sont retirés, tandis que les types de champ modifiés ou les sélections devenues indisponibles sont réinitialisés.
+- Pendant une composition IME, `Entrée` n’envoie pas et `Escape` n’annule pas le formulaire. Sur un écran à pointeur grossier, le dialogue évite le focus éditable automatique non sollicité : sélectionnez un champ pour le modifier manuellement. Après cette saisie manuelle, le focus peut revenir au contrôle précédent ou au composer si cette destination reste éligible.
+
+Cela décrit la présentation courante d’une seule requête, pas une file complète d’interactions navigateur ni un compteur d’attente. L’émulation navigateur ne certifie ni les appareils physiques ni l’accessibilité générale.
 
 ![Interaction déclarative d’approbation d’une extension, thème clair](../../screenshots/06-extensions/interaction-confirm-light.png)
 
@@ -957,7 +967,7 @@ Le serveur limite le nombre de PTY, la taille des entrées et les dimensions. Cr
 
 ### Écrans mobiles et tablettes
 
-Sous 960 px, la barre latérale et l’explorateur deviennent des tiroirs superposés accessibles par les boutons en haut de l’écran. Le chat occupe toute la largeur, les actions secondaires passent dans une barre mobile, le viewer peut prendre tout l’écran et le terminal reste ancré au-dessus de la zone sûre PWA. Le fond du tiroir ferme le panneau actif ; `Escape` ferme les dialogues et palettes.
+Sous 960 px, la barre latérale et l’explorateur deviennent des tiroirs superposés accessibles par les boutons en haut de l’écran. Le chat occupe toute la largeur, les actions secondaires passent dans une barre mobile, le viewer peut prendre tout l’écran et le terminal reste ancré au-dessus de la zone sûre PWA. Le fond du tiroir ferme le panneau actif ; `Escape` ferme normalement les dialogues et palettes ; les formulaires d’extension préservent la composition IME comme décrit plus haut.
 
 Les sessions sont chargées depuis le serveur au démarrage. Plusieurs onglets voient le même stockage serveur après rechargement ; les préférences d’apparence sont synchronisées par les événements du navigateur.
 
@@ -965,7 +975,7 @@ Les sessions sont chargées depuis le serveur au démarrage. Plusieurs onglets v
 
 ### Accessibilité
 
-Les palettes, dialogues, zooms et tiroirs mobiles piègent le focus sans le perdre à la fermeture et acceptent `Escape`. Les zones de conversation et d’erreur utilisent des annonces ARIA non bloquantes, les contrôles ont des libellés accessibles et les états actifs ne reposent pas uniquement sur la couleur. AiHarness respecte `prefers-reduced-motion` et les couleurs forcées du système.
+Les palettes, dialogues, zooms et tiroirs mobiles proposent un confinement du focus et la gestion d’`Escape`. Le retour du focus des formulaires d’extension et les exceptions IME suivent les règles ci-dessus ; cela ne constitue pas une certification d’accessibilité générale. Les zones de conversation et d’erreur utilisent des annonces ARIA non bloquantes, les contrôles ont des libellés accessibles et les états actifs ne reposent pas uniquement sur la couleur. AiHarness respecte `prefers-reduced-motion` et les couleurs forcées du système.
 
 ![Palette de commandes avec focus clavier, thème clair](../../screenshots/08-accessibility/command-palette-focus-light.png)
 

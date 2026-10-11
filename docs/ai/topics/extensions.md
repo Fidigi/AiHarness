@@ -54,7 +54,7 @@ Registered and hosted tools may await `context.onProgress({version: 1, content, 
 
 Prompts, package skills, and themes are discovered resources, not `ExtensionAPI` registrations. Declarative interactions use `ExtensionRuntimeContext.requestInteraction`, returning an awaitable `ExtensionInteractionPromise`; adapters may omit controls. Detached Core hosts return an `ExtensionInteractionHandle` with readonly host ID and closure-owned `update(replacement)` / `close()`. The ID alone grants neither capability. Updates replace display/schema in place, retaining admission order, created time and the original signal/deadline; snapshots omit both signal and timeout.
 
-Core owns at most 16 pending requests per run, 128,000 UTF-8 JSON bytes per normalized request and 512,000 aggregate bytes. Oversized admission/update throws `409 EXTENSION_INTERACTION_QUEUE_FULL` without changing prior state. A supplied timeout must be finite, nonnegative and at most 2,147,483,647 ms; otherwise `400 INVALID_EXTENSION_INTERACTION_TIMEOUT`. No active run returns a cancelled Promise. Responses validate the latest schema and settle once; late controls return false. `extensionRequests` is the complete ordered reconnect snapshot; `extensionRequest` remains its first-entry compatibility projection. The current Web adapter still has singular interaction state and reads that compatibility snapshot; its complete browser queue/attention/focus behavior is a separate unaccepted delivery.
+Core owns at most 16 pending requests per run, 128,000 UTF-8 JSON bytes per normalized request and 512,000 aggregate bytes. Oversized admission/update throws `409 EXTENSION_INTERACTION_QUEUE_FULL` without changing prior state. A supplied timeout must be finite, nonnegative and at most 2,147,483,647 ms; otherwise `400 INVALID_EXTENSION_INTERACTION_TIMEOUT`. No active run returns a cancelled Promise. Responses validate the latest schema and settle once; late controls return false. `extensionRequests` is the complete ordered reconnect snapshot; `extensionRequest` remains its first-entry compatibility projection. The Web adapter still reads the singular first-entry compatibility snapshot. Its optional form lifecycle is validated separately below; complete browser queue/waiting-count/attention delivery remains unaccepted.
 
 ## Critical Flows
 
@@ -99,6 +99,14 @@ extension tool/hook -> context.requestInteraction(schema)
 
 Never accept extension-provided React, DOM, script, style, or arbitrary HTML. Stop, settlement, executable/tool-generation commit and failed-workspace safety clear cancel pending requests and revoke captured requesters. Passive inventory and failed same-cwd candidates preserve the current generation. Bind Server command requesters before session/trust awaits; an old command must not inherit a new epoch. Focus trap, Escape, restoration, reconnect recovery, and cancellation remain adapter responsibilities. This queue is in-memory, not crash-durable; inherited completed-run retention is not newly bounded.
 
+### Optional Web form lifecycle
+
+`ChatView` delegates singular presentation to `components/ExtensionInteractionBoundary.tsx`; only an actual pending request loads `ExtensionInteractionDialog.tsx` and its own CSS. Loading/error is a local nonmodal region with translated Close/Cancel, not a global Suspense or focus trap. Failed imports remain cached on reopen; explicit page reload warns about unsent text.
+
+The boundary aborts its response transport on schema/request replacement or view retirement. Chat suppresses an aborted reply before updating state; abort does not undo a response already accepted by Server. Workspace ID/cwd, session, run and the full route tuple own presentation. Same-ID/kind compatible fields retain drafts and connected composition; changed controls reset. The mounted form suppresses IME/legacy-229 Enter acknowledgement and Escape propagation without preventing native editing. Ordinary post-composition Enter can submit once.
+
+Initial focus is admitted before the renderer exists and checked again at its first frame: newer focus (including focus then blur), another modal, or re-presentation of the same request in a replacement route defeats it. Return needs the current view, unchanged available fallback and no newer focus/modal. Coarse pointers avoid unsolicited editable autofocus; guarded composer return remains possible after owned manual editing, whose intent is cleared by external focus. These are adapter controls, not new runtime authority or complete concurrent-browser queue behavior.
+
 ## Security Invariants
 
 - Treat every extension and package as executable code.
@@ -121,6 +129,9 @@ Never accept extension-provided React, DOM, script, style, or arbitrary HTML. St
 - `packages/server/src/web-server.test.ts` — plugin/reload HTTP, trust and runtime integration
 - `e2e/settings.spec.ts` — package administration flows
 - `e2e/chat.spec.ts` and `e2e/accessibility.spec.ts` — widgets, interactions, focus and response handling
+- `packages/web/src/components/extension-interaction-dialog.test.ts` — native declarative fields, inert output, CSS ownership, transport-only abort, bilingual cached-failure copy and compatible drafts
+- `e2e/interaction-single-asset-load.spec.ts` with `interaction-asset-load.config.ts` — actual production JS/CSS delay/refusal, cached reload, singular head/draft lifetime, held-response retirement, IME and newer-focus/coarse-pointer controls; controlled API fixtures
+- `e2e/interaction-live-boundary.spec.ts` — real extension/runtime/HTTP latest-schema rejection and form response/cancellation through the mock provider
 - `tests/functional-parity/functional-parity.test.ts` — native extension positive/negative fixtures, RPC interaction and public type/runtime probes
 
 ## Common Changes
@@ -131,7 +142,7 @@ Change Core contracts/registry/public exports, both runtime compositions, cleanu
 
 ### Change interaction lifecycle
 
-Keep contracts in Core's `extensions/extension-registry.ts` and `agent/{events,interaction-handle,runtime}.ts`; preserve compatibility snapshots, capability ownership, original deadlines and active-run epoch tests. Revalidate genuine installed declarations/runtime and unchanged CLI/RPC goldens. Do not infer browser queue acceptance from Core/Server tests.
+Keep contracts in Core's `extensions/extension-registry.ts` and `agent/{events,interaction-handle,runtime}.ts`; preserve compatibility snapshots, capability ownership, original deadlines and active-run epoch tests. Revalidate genuine installed declarations/runtime and unchanged CLI/RPC goldens. Do not infer browser queue acceptance from Core/Server tests. Preserve the optional renderer's local loading/error, cached-reload warning, transport retirement, IME and initial/return-focus controls; validate the genuine production assets and unchanged mobile interaction journeys.
 
 ### Change module discovery
 

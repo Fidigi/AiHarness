@@ -8,18 +8,18 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 
 | Domain | File | Context Load |
 |---|---|---|
-| Project overview | [`project-map.md`](./project-map.md) | ~550 lines — load first for global navigation |
+| Project overview | [`project-map.md`](./project-map.md) | ~560 lines — load first for global navigation |
 | AI Providers | [`topics/providers.md`](./topics/providers.md) | ~150 lines |
 | Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~125 lines |
 | TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~35 lines |
-| Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~150 lines |
+| Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~160 lines |
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~320 lines |
 | QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
 | Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~210 lines |
-| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~170 lines |
+| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~180 lines |
 | Static Demonstration | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
 | Linked-Directory Consent | [topics/linked-directories.md](./topics/linked-directories.md) | ~66 lines |
-| Security & Trust | [`topics/security.md`](./topics/security.md) | ~180 lines |
+| Security & Trust | [`topics/security.md`](./topics/security.md) | ~200 lines |
 | Child Agents | [`topics/child-agents.md`](./topics/child-agents.md) | ~115 lines |
 
 ### Reference Documentation
@@ -70,7 +70,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → packages/web/src/services/api.ts (client counterpart)
 ```
 
-**The React/Web client, including router/store identity and optional-pane lifetimes** → Load only `web-app-architecture.md` + `project-map.md` §§3–4
+**The React/Web client, including router/store identity and optional-pane/form lifetimes** → Load only `web-app-architecture.md` + `project-map.md` §§3–4
 ```
 → packages/web/src/index.tsx, App.tsx
 → packages/web/src/store/*.ts
