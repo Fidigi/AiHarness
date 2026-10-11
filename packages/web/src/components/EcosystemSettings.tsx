@@ -7,6 +7,9 @@ import type {
   ToolSettings,
 } from '@ai-harness/core';
 import { useI18n } from '../hooks/useI18n';
+import { ProviderRenamePanel } from './ProviderRenamePanel';
+import { isRenameableProvider, type ProviderRenameResult } from '../services/provider-lifecycle';
+import { providerSettingsMessage, type ProviderSettingsMessage } from './provider-settings-messages';
 import { useSessionStore } from '../store/session-store';
 import { publishNotice } from '../services/notices';
 import {
@@ -18,6 +21,8 @@ import {
   getCustomModels,
   getEffectiveConfiguration,
   getCustomProviders,
+  getProviders,
+  getModelCatalog,
   getProviderAuthStatuses,
   getProviderOAuth,
   getSkillRegistry,
@@ -33,14 +38,24 @@ import {
   updateRegistrySkills,
   updateToolSettings,
   type ProviderOAuthFlow,
+  type ProviderRenameCapability,
 } from '../services/api';
 
 function error(message?: string): void {
   publishNotice(message || 'Operation failed.', { level: 'error' });
 }
 
-export function ProviderLifecycleSettings() {
-  const { t } = useI18n();
+export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded, onSelectionInvalidated }: {
+  onCanonicalReload?: () => void;
+  onSelectionInvalidated?: () => void;
+  onProvidersLoaded?: (providers: CustomProviderDefinition[]) => void;
+}) {
+  const { t, locale } = useI18n();
+  const epoch = useRef(0);
+  const mounted = useRef(false);
+  const origin = useSessionStore.getState();
+  const loadSequence = useRef(0);
+  const [renameCapability, setRenameCapability] = useState<ProviderRenameCapability>({ supported: false, mode: 'disabled', reason: 'unavailable' });
   const hydrateProviders = useSessionStore(state => state.hydrateProviders);
   const hydrateModelCatalog = useSessionStore(state => state.hydrateModelCatalog);
   const [statuses, setStatuses] = useState<ProviderAuthStatus[]>([]);
@@ -50,11 +65,84 @@ export function ProviderLifecycleSettings() {
   const [form, setForm] = useState({ id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' });
   const [busy, setBusy] = useState(false);
   const load = async () => {
+    const generation = epoch.current;
+    const sequence = ++loadSequence.current;
     const [auth, custom] = await Promise.all([getProviderAuthStatuses(), getCustomProviders()]);
+    if (!mounted.current || generation !== epoch.current || sequence !== loadSequence.current) return;
     if (auth.success && auth.data) setStatuses(auth.data);
-    if (custom.success && custom.data) setProviders(custom.data);
+    setRenameCapability(custom.renameCapability);
+    if (custom.success && custom.data) { setProviders(custom.data); onProvidersLoaded?.(custom.data); }
   };
-  useEffect(() => { void load(); }, []);
+  const reconcile = async (outcome?: ProviderRenameResult, notify = true, renameTarget?: string) => {
+    const generation = epoch.current;
+    const sequence = ++loadSequence.current;
+    // Bound to the operation's rendered selection, not the selection after a
+    // delayed mutation response. Navigation must never retarget this result.
+    const initial = origin;
+    const [auth, custom, actual, catalog, global, project, effective] = await Promise.all([
+      getProviderAuthStatuses(), getCustomProviders(), getProviders(), getModelCatalog(initial.workspace?.id, true),
+      getConfigurationScope('global'),
+      initial.workspace?.id ? getConfigurationScope('project', initial.workspace.id) : Promise.resolve({ success: true }),
+      getEffectiveConfiguration(initial.workspace?.id, initial.activeSessionId ?? undefined),
+    ]);
+    if (![auth, custom, actual, catalog, global, project, effective].every(result => result.success)
+      || !actual.data || !custom.data || !catalog.data) throw new Error('Canonical reload failed');
+    const current = useSessionStore.getState();
+    if (!mounted.current || generation !== epoch.current || sequence !== loadSequence.current || current.workspace?.id !== initial.workspace?.id
+      || current.activeSessionId !== initial.activeSessionId || current.providers.active !== initial.providers.active
+      || outcome && current.providers.available[current.providers.active] !== initial.providers.available[initial.providers.active]) {
+      // Ask the still-mounted Settings owner for a fresh, selection-bound read;
+      // never apply this old operation's mutation result to the new selection.
+      if (outcome) onSelectionInvalidated?.();
+      return;
+    }
+    // Navigation/new selection owns its own reload.
+    setStatuses(auth.data ?? []); setProviders(custom.data); setRenameCapability(custom.renameCapability);
+    onProvidersLoaded?.(custom.data);
+    useSessionStore.setState(state => {
+      if (state.workspace?.id !== initial.workspace?.id || state.activeSessionId !== initial.activeSessionId
+        || state.providers.active !== initial.providers.active
+        || outcome && state.providers.available[state.providers.active] !== initial.providers.available[initial.providers.active]) return state;
+      // Built-in credential inputs/selection are independent of discovery and
+      // must remain present even if the server lists only configured providers.
+      const builtins = Object.fromEntries((['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local', 'mock'] as const)
+        .map(type => [type, state.providers.available[type]]));
+      const available = { ...builtins, ...Object.fromEntries(actual.data!.map(provider => {
+        const group = catalog.data!.providers.find(item => item.provider === provider.type);
+        const existing = state.providers.available[provider.type as keyof typeof state.providers.available];
+        // Keep model selection only when still present at the same canonical source.
+        const model = group?.models.some(item => item.id === existing?.model) ? existing!.model ?? ''
+          : group?.models.find(item => item.enabled && item.available)?.id ?? '';
+        return [provider.type, { type: provider.type, model, ...(provider.configured ? { apiKey: 'configured' } : {}) }];
+      })) } as typeof state.providers.available;
+      const renamed = outcome?.success && outcome.data && custom.data!.some(item => item.id === outcome.data!.id)
+        ? outcome.data.id : undefined;
+      const active = renamed && available[renamed as keyof typeof available]
+        && (state.providers.active === renameTarget || !available[state.providers.active]) ? renamed
+        : available[state.providers.active] ? state.providers.active : actual.data![0]?.type ?? 'mock';
+      return { providers: { ...state.providers, available, active: active as typeof state.providers.active,
+        catalog: catalog.data, catalogLoading: false, catalogError: undefined } };
+    });
+    if (notify) onCanonicalReload?.();
+    if (outcome) {
+      const refusal = ({ PROVIDER_IN_USE: 'inUse', PROVIDER_EXISTS: 'collision', PROVIDER_REGISTRY_STALE: 'stale',
+        PROVIDER_ADMISSION_UNAVAILABLE: 'disabled', PROVIDER_ADMINISTRATION_BUSY: 'busy',
+        PROVIDER_REBIND_UNAVAILABLE: 'unavailable', PROVIDER_ENVIRONMENT_LOCKED: 'environment',
+        PROVIDER_UNSUPPORTED_REFERENCES: 'unsupported', PROVIDER_REFERENCE_STORE_UNAVAILABLE: 'unsupported' } as Record<string, ProviderSettingsMessage>)[
+        outcome.code ?? ''];
+      publishNotice(providerSettingsMessage(locale, outcome.success ? 'renamed' : outcome.uncertain ? 'uncertain' : refusal ?? 'failed'),
+        { level: outcome.success ? 'success' : 'warning' });
+    }
+  };
+  useEffect(() => {
+    mounted.current = true;
+    ++epoch.current;
+    void load();
+    void reconcile(undefined, false).catch(() => {
+      if (mounted.current) setRenameCapability({ supported: false, mode: 'disabled', reason: 'unavailable' });
+    });
+    return () => { mounted.current = false; ++epoch.current; };
+  }, []);
   useEffect(() => {
     if (!oauthFlow || oauthFlow.state !== 'pending') return;
     const timer = window.setTimeout(async () => {
@@ -151,8 +239,12 @@ export function ProviderLifecycleSettings() {
         }}>{t('common.cancel')}</button>}</div>
       </form>
       <div className="settings-resource-list">
-        {providers.map(provider => <article key={provider.id} className="settings-resource-card">
+        {providers.map(provider => <article key={provider.id} className={`settings-resource-card${isRenameableProvider(provider) ? ' provider-custom-card' : ''}`}>
           <div><strong>{provider.name}</strong><code>{provider.id}</code><small>{provider.dialect} · {provider.baseUrl}</small></div>
+          {isRenameableProvider(provider) ? <ProviderRenamePanel provider={provider} reconcile={outcome => reconcile(outcome, true, provider.id)} capability={renameCapability}
+            disabled={busy || Boolean(editing) || oauthFlow?.state === 'pending' || !renameCapability.supported}
+            disabledReason={!renameCapability.supported ? renameCapability.reason === 'exclusive-host-required' ? 'disabled' : 'capabilityUnknown' : undefined} />
+            : null}
           <span>{provider.configured ? t('settings.connected') : t('settings.disconnected')} · {provider.modelCount} models</span>
           <div>
             <button type="button" onClick={() => {

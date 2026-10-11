@@ -23,6 +23,7 @@ CLI/Web runtime -> streamChat -> normalized response and usage
 | File | Responsibility |
 |---|---|
 | `packages/core/src/providers/index.ts` | `AiProvider`, factory, built-ins, bounded payloads/streams, OpenAI Responses SSE/WebSocket transport, discovery, retry and usage normalization |
+| `packages/core/src/providers/provider-endpoints.ts` | Strict based-path discovery endpoint normalization |
 | `packages/core/src/providers/provider-network.ts` | Shared HTTP proxy, request/idle/connect deadlines, bounded retry and cached WebSocket leases |
 | `packages/core/src/providers/credentials.ts` | Process-local credentials, OAuth refresh, command/environment resolution and recursive/streaming redaction |
 | `packages/core/src/security/credential-store.ts` | Private atomic AES-256-GCM credential persistence and inter-process locking |
@@ -33,6 +34,8 @@ CLI/Web runtime -> streamChat -> normalized response and usage
 | `packages/server/src/api/proxy.ts` | Built-in configuration, legacy chat paths, usage/cost persistence |
 | `packages/server/src/runtime/model-catalog.ts` | Merge of Core published metadata, discovery and custom model definitions |
 | `packages/server/src/runtime/provider-registry.ts` | Custom provider/model state and secret separation |
+| `packages/server/src/runtime/provider-administration.ts`, `packages/server/src/config/config-store.ts` | Awaited host leases, unsupported reference guards, bounded optimistic rebind and private offline-recovery intent |
+| `packages/web/src/services/provider-lifecycle.ts`, `packages/web/src/components/{ProviderRenamePanel,OAuthPastePanel}.tsx` | Identity-only submission, canonical outcome reconciliation and passive inline controls |
 | `packages/server/src/runtime/provider-oauth.ts` | OAuth Device Flow lifecycle |
 | `packages/server/src/api/{model,provider-registry}-routes.ts` | Catalogue, activation, OAuth and custom resource HTTP routes |
 
@@ -41,13 +44,14 @@ CLI/Web runtime -> streamChat -> normalized response and usage
 - `AiProvider.chat()` returns one normalized `ChatResponse`.
 - `AiProvider.streamChat()` emits incremental text/reasoning/tool events, awaits each `StreamChunkCallback`, and completes once. Built-ins provide producer backpressure; the shared turn rejects extension providers that overrun its bounded pending-event/byte queue instead of awaiting callbacks.
 - `AiProvider.getAvailableModels()` returns bounded discovered identifiers when supported.
+- `AiProvider.canDiscoverModels()` reports discovery eligibility, including explicit keyless HTTP(S) bases; it is not a connection/authentication probe.
 - `AiProvider.getSpecializedModels()`, `classify()` and `generateImages()` supply virtual/native capabilities through the bounded `SpecializedModels` SDK. Current-provider-only guest integration, supported native image models and exact ceilings are documented in [Code mode](./codemode.md). `before:model` (not conversational `before:provider`) gates hosted calls; the outer tool owns persistence/accounting. Remote image URLs are not fetched and provider credentials never enter guest descriptors/options.
 - RPC now loads explicitly requested/trust-eligible extension generations before resolving custom provider/model selection, matching print/JSON. Even invalid custom selection may initialize those extensions; their stdout is still diverted to stderr, and no prompt is executed.
 - `ChatOptions.signal` carries cancellation; `sessionId` supplies a bounded transport-continuation identity without becoming a credential; tools, thinking, model and retry options remain optional.
 - `ProviderFactory` creates OpenAI/Azure, Anthropic, Gemini/Vertex, Bedrock, local OpenAI-compatible, mock, and registered extension providers.
 - `ModelCatalogEntry` distinguishes `published`, `discovered`, `configured`, and `custom` sources with availability, capabilities, compatibility, context/output limits, and optional cache-aware pricing.
 
-Published non-secret metadata lives in Core so CLI and Web use the same descriptors. Explicit thinking maps define supported levels (`null` means unsupported), while unknown models use conservative capabilities and remain unpriced. RPC caches and deduplicates live model discovery briefly, and can resolve CLI model-scope globs for cycling. Server alone merges live/custom catalogue state, but both composition roots use `ProviderCredentialService`. Raw keys/tokens stay in process memory or `EncryptedCredentialStore`; custom API keys use `provider:<id>` and custom headers use the separate `provider-headers:<id>` namespace. Catalogue, descriptor, RPC and HTTP objects are non-secret.
+Published non-secret metadata lives in Core so CLI and Web use the same descriptors. Explicit thinking maps define supported levels (`null` means unsupported), while unknown models use conservative capabilities and remain unpriced. RPC caches and deduplicates live model discovery briefly, and can resolve CLI model-scope globs for cycling. Server alone merges live/custom catalogue state, but both composition roots use `ProviderCredentialService`. Raw keys/tokens stay in process memory or `EncryptedCredentialStore`; custom API keys use `provider:<private identity>` and headers use `provider-headers:<private identity>`. First-use identities retain the existing ID namespace; rename preserves that private identity, and old-ID reuse receives a fresh identity when it is reserved by a renamed record. Descriptors omit it. Catalogue, descriptor, RPC and HTTP objects are non-secret.
 
 CLI and RPC layer explicit flags over agent settings `defaultProvider`, `defaultModel`, `enabledModels`, `defaultThinkingLevel`, and exact `modelThinkingLevels["provider/model"]`. A saved default inside the enabled scope is preferred; scope suffixes and explicit flags remain stronger, and the final level is capability-clamped. Agent-level retry settings configure shared turn retries. Core applies `transport`, `httpProxy`, `httpIdleTimeoutMs`, `websocketConnectTimeoutMs`, and bounded `retry.provider` timeouts/retries to built-in and extension/custom provider adapters. Network errors are stable and never include the request URL, remote body/headers, or proxy credentials.
 
@@ -80,6 +84,24 @@ A completed response without tool calls may retain `previous_response_id` and a 
 4. Enabled qualified IDs (`provider:model`) are resolved by global/project scope.
 5. Web receives metadata only; discovery failure retains safe catalogue entries.
 
+### Custom lifecycle and restricted rename
+
+Discovery accepts explicit keyless HTTP(S) API bases or supported full request endpoints, preserving proxy paths without synthetic authentication. Server discovery caches bind to the actual provider instance; replacement, reload, rename and old-ID reuse discard stale sources and late results. Explicit disconnection persists across reconciliation/restart. Metadata-only edits omit unchanged secrets; PUT cannot change identity.
+
+`POST /api/provider-registry/custom/:id/rename` requires credentials/configuration administrator capabilities and the ordinary Origin boundary. Its only body fields are `{ id, revision }`; built-in IDs are immutable. `GET /custom` retains its array and exposes passive `X-AiHarness-Provider-Rename` capability metadata. Missing/invalid metadata disables Web rename. Settings names exact custom IDs and reloads canonical providers/auth/catalogue/scoped defaults/effective configuration after every outcome, guarded against retired workspace/session/selection results.
+
+[WARNING] Rename is OFF by default. Only `AI_HARNESS_PROVIDER_RENAME_EXCLUSIVE_HOST=1` (exact value) or `providerRenameExclusiveHost: true` opts into a temporary restricted SINGLE-WRITER host. Stop all CLI/other servers/external writers first; independently administer data/session/config/trust/installed-code paths outside editable allowed roots. Activating over a still-owned prior host is refused. This is not OS process isolation or shared-runtime admission.
+
+Actual awaited operation leases cover session/config/profile/start/reload owners, including disconnects and queued child admission. Detached work continuing after HTTP 202 is separately checked through fresh active-run inventories. Rename owns exclusion through registry rollback/reconciliation and the final intent-settlement handshake. Busy agents/PTYs, current or historical session references, qualified disabled child profiles, environment selectors, global/project agent settings and unsafe/legacy/oversized inventories refuse rather than rewrite history or grant trust.
+
+Restricted mode refuses legacy chat/upgrades, shell/PTY, executable package/extension commands, active MCP, file/workspace HTTP (including Git helpers), and unleased model/tool/resource mutations. It imports no third-party Node generation, injects no persistent MCP host into agents, refuses credential commands and cancels bash/PowerShell/Git-search/codemode tools. Default-OFF ordinary host/npm behavior is unchanged. Privileged embedders remain responsible for their own code and manual listeners.
+
+The bounded fresh ConfigurationStore transaction rewrites only exact provider and `oldId:` model/enabled-model references across global/projects/sessions, refuses non-canonical case/whitespace or slash-qualified aliases before publishing an intent, preserves inheritance/siblings and compares publication bytes plus observed file identity for rollback. Registry CAS likewise detects observable replacement/ABA. These are optimistic checks, not hostile-writer atomic compare-exchange.
+
+[WARNING] Two metadata files are NOT crash-atomic. A private bounded `config.json.provider-intent.json` pending/malformed/linked/uncertain intent blocks initialization, listener publication and mutations. Never auto-replay, clear by PID, or force-clear online. With EVERY writer stopped, preserve metadata/credentials/intent/reference inventories, inspect intervening edits and choose/verify one coherent outcome without guessing or moving secrets or rewriting history. Remove the intent only after explicit offline reconciliation, then restart. A settled marker is safe to retain.
+
+Provider OAuth remains Device Flow; it has no pasted callback endpoint. The shared inline `OAuthPasteInput` is used by genuine MCP callback flows. It is inert before explicit flow admission, bounded to 8,192 characters, transient, non-autofocusing and acknowledgement-gated; Enter preserves native composition and legacy keyCode 229 rather than submitting. Original MCP labels/layout/polling/trust/status/cancel ownership remain in the host.
+
 ### Add a provider
 
 1. Add the Core implementation and factory mapping.
@@ -98,6 +120,10 @@ A completed response without tool calls may retain `previous_response_id` and a 
 - `packages/web/src/services/api.test.ts` and `e2e/settings.spec.ts` — browser contracts and settings flow
 
 Never use real credentials or external network calls in tests.
+
+- `packages/core/src/providers/provider-endpoints.test.ts` — based-path/keyless real loopback discovery, bounds and non-reflection
+- `packages/server/src/config/provider-reference-transaction.test.ts`, `packages/server/src/runtime/provider-administration.test.ts`, `packages/server/src/runtime/provider-lifecycle.test.ts`, `packages/server/src/api/provider-lifecycle-routes.test.ts`, `packages/server/src/api/provider-host-integration.test.ts` — exact reference transaction, leases, four real SIGKILL windows, observed identity/ABA, fail-closed restart and actual restricted composition
+- `e2e/provider-settings.spec.ts`, `packages/web/src/services/provider-lifecycle.test.ts`, `packages/web/src/components/{oauth-paste-panel,provider-rename-panel}.test.ts` — passive capability/paste, identity-only intent and selection-safe reconciliation
 
 ## Common Changes
 

@@ -1,4 +1,5 @@
-import { mkdir } from 'node:fs/promises';
+import { lstat, mkdir } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { atomicWriteStableFile, readBoundedResourceText } from '@ai-harness/core';
 import path from 'node:path';
 import type {
@@ -103,7 +104,180 @@ function validatePatchValues(input: unknown): Record<string, unknown> {
 export class ConfigurationStore {
   private data: ConfigurationFile = cloneFile(EMPTY_FILE);
   private loaded = false;
+  private quarantined = false;
+  private finishRebind?: () => Promise<void>;
   constructor(private readonly filePath: string) {}
+
+  private quarantine(): never {
+    this.quarantined = true;
+    throw Object.assign(new Error('Provider transaction requires offline reconciliation.'), {
+      status: 409, code: 'PROVIDER_TRANSACTION_QUARANTINED', uncertain: true,
+    });
+  }
+
+  private get intentPath(): string { return `${path.resolve(this.filePath)}.provider-intent.json`; }
+
+  private async intentSource(): Promise<string | undefined> {
+    try { return await readBoundedResourceText(this.intentPath, 2_048); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      return this.quarantine();
+    }
+  }
+
+  /** Fresh fail-closed admission check, not an exclusion lock. Use the host lease too.
+   * Pending, malformed, unsafe or unreadable intents are NEVER auto-recovered.
+   */
+  async assertProviderTransactionSafe(): Promise<void> {
+    if (this.quarantined) this.quarantine();
+    await this.safeIntentSource();
+  }
+
+  private async safeIntentSource(): Promise<string | undefined> {
+    const source = await this.intentSource();
+    if (source === undefined) return undefined;
+    try {
+      const value: unknown = JSON.parse(source);
+      if (!isPlainRecord(value) || value.version !== 1 || value.state !== 'settled'
+        || Object.keys(value).some(key => !['version', 'state'].includes(key))) this.quarantine();
+    } catch { this.quarantine(); }
+    return source;
+  }
+
+  /** One fresh whole-file reference publication and exactly one awaited host commit.
+   * Two files are NOT crash-atomic: a private bounded intent quarantines EVERY
+   * interruption/failure, including a successful local rollback (the registry
+   * may still be rolling back). Offline reconciliation is required to clear it.
+   * Host must exclude admission and all reference mutations, and call
+   * finishProviderRebind ONLY after the entire registry rename returns success.
+   */
+  async rebindProvider(oldId: string, newId: string, commit: () => Promise<void>): Promise<void> {
+    this.assertLoaded();
+    if (![oldId, newId].every(id => /^[a-z][a-z0-9_-]{1,63}$/.test(id))) invalidConfiguration('Invalid provider identity.');
+    return this.serialise(async () => {
+      await this.assertProviderTransactionSafe();
+      const before = await this.read();
+      if (oldId === newId) { await commit(); this.data = before.data; return; }
+      // Runtime provider lookup folds case, while this transaction owns only
+      // exact canonical references. Refuse aliases before writing an intent;
+      // silently leaving them behind would orphan a previously resolvable ID.
+      const alias = (value: string): boolean => [':', '/'].some(separator =>
+        value.trim().toLowerCase().startsWith(oldId + separator)) && !value.startsWith(oldId + ':');
+      for (const values of [before.data.global, ...Object.values(before.data.projects), ...Object.values(before.data.sessions)]) {
+        if (values.provider !== undefined && values.provider.trim().toLowerCase() === oldId && values.provider !== oldId
+          || values.model !== undefined && alias(values.model) || values.enabledModels?.some(alias)) {
+          throw Object.assign(new Error('Provider reference form is unsupported.'), {
+            status: 409, code: 'PROVIDER_UNSUPPORTED_REFERENCES', uncertain: false,
+          });
+        }
+      }
+      const snapshot = cloneFile(before.data);
+      const qualified = (value: string): string => value.startsWith(`${oldId}:`)
+        ? `${newId}:${value.slice(oldId.length + 1)}` : value;
+      for (const values of [snapshot.global, ...Object.values(snapshot.projects), ...Object.values(snapshot.sessions)]) {
+        if (values.provider === oldId) values.provider = newId;
+        if (values.model !== undefined) values.model = qualified(values.model);
+        if (values.enabledModels !== undefined) values.enabledModels = values.enabledModels.map(qualified);
+        // Destination prefixes can expand bounded strings; validate the output,
+        // not only the original reader snapshot.
+        Object.assign(values, validateValues(values));
+      }
+      const changed = JSON.stringify(snapshot) !== JSON.stringify(before.data);
+      const publication = changed ? `${JSON.stringify(snapshot, null, 2)}\n` : before.source;
+      // Enforce the existing reader bounds BEFORE any intent/config publication.
+      if (publication !== undefined && Buffer.byteLength(publication) > MAX_CONFIGURATION_BYTES) invalidConfiguration('Configuration size limit exceeded.');
+      await mkdir(path.dirname(path.resolve(this.filePath)), { recursive: true, mode: 0o700 });
+      const previousIntent = await this.safeIntentSource();
+      const intent = `${JSON.stringify({ version: 1, state: 'pending', transaction: randomUUID(), oldId, newId })}\n`;
+      await atomicWriteStableFile(this.intentPath, intent, {
+        overwrite: previousIntent !== undefined, mode: 0o600, maxBytes: 2_048,
+        beforeCommit: async () => {
+          if (await this.intentSource() !== previousIntent) this.quarantine();
+        },
+      });
+      let published = false;
+      let identity: string | undefined;
+      const fileIdentity = async (): Promise<string | undefined> => {
+        try {
+          const value = await lstat(this.filePath);
+          return [value.dev, value.ino, value.size, value.mtimeMs, value.ctimeMs].join(':');
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+          throw error;
+        }
+      };
+      const assertPublication = async (): Promise<void> => {
+        if ((await this.read()).source !== publication || await fileIdentity() !== identity) {
+          throw Object.assign(new Error('Configuration changed during provider transaction.'), {
+            status: 409, code: 'CONFIGURATION_CHANGED',
+          });
+        }
+      };
+      try {
+        if (changed) {
+          await atomicWriteStableFile(this.filePath, publication!, {
+            overwrite: true, mode: 0o600, maxBytes: MAX_CONFIGURATION_BYTES,
+            beforeCommit: async () => {
+              if ((await this.read()).source !== before.source || await this.intentSource() !== intent) {
+                throw Object.assign(new Error('Configuration changed before commit.'), { status: 409, code: 'CONFIGURATION_CHANGED' });
+              }
+            },
+          });
+          published = true;
+        }
+        identity = await fileIdentity();
+        await assertPublication();
+        await commit();
+        await assertPublication();
+        // Do not clear the durable intent inside the registry's callback. Its
+        // own rollback/runtime reconciliation has not returned yet.
+        this.finishRebind = async () => {
+          await assertPublication();
+          await atomicWriteStableFile(this.intentPath, '{"version":1,"state":"settled"}\n', {
+            overwrite: true, mode: 0o600, maxBytes: 2_048,
+            beforeCommit: async () => {
+              await assertPublication();
+              if (await this.intentSource() !== intent) this.quarantine();
+            },
+          });
+        };
+        this.data = snapshot;
+      } catch (error) {
+        this.quarantined = true;
+        if (published) {
+          try {
+            // Exact bytes AND publication identity; even ABA is an intervening write.
+            await assertPublication();
+            await atomicWriteStableFile(this.filePath, before.source!, {
+              overwrite: true, mode: 0o600, maxBytes: MAX_CONFIGURATION_BYTES,
+              beforeCommit: assertPublication,
+            });
+            this.data = before.data;
+          } catch {
+            throw Object.assign(new Error('Provider reference rollback refused; reconcile offline.'), {
+              status: 500, code: 'PROVIDER_RENAME_UNCERTAIN', uncertain: true,
+            });
+          }
+        }
+        throw Object.assign(new Error('Provider transaction failed; reconcile offline.'), {
+          status: (error as { status?: number }).status ?? 500,
+          code: (error as { code?: string }).code ?? 'PROVIDER_TRANSACTION_QUARANTINED', uncertain: true,
+        });
+      }
+    });
+  }
+
+  /** Host success handshake AFTER registry.renameProvider has fully returned.
+   * Settlement errors never trigger either file's rollback: the two committed
+   * files are already coherent. Pending intents remain quarantined on restart.
+   */
+  async finishProviderRebind(): Promise<void> {
+    return this.serialise(async () => {
+      if (!this.finishRebind) return;
+      try { await this.finishRebind(); this.finishRebind = undefined; }
+      catch { this.quarantine(); }
+    });
+  }
 
   private async read(): Promise<{ data: ConfigurationFile; source?: string }> {
     try {
@@ -132,6 +306,7 @@ export class ConfigurationStore {
 
   async load(): Promise<void> {
     return this.serialise(async () => {
+      await this.assertProviderTransactionSafe();
       const snapshot = await this.read();
       this.data = snapshot.data;
       this.loaded = true;
@@ -230,6 +405,7 @@ export class ConfigurationStore {
     update: (target: ScopedConfigurationValues, globalBase: ScopedConfigurationValues) => ScopedConfigurationValues): Promise<ScopedConfigurationValues> {
     return this.serialise(async () => {
       const key = path.resolve(this.filePath);
+      await this.assertProviderTransactionSafe();
       // Fresh read, serialized by pathname across service generations. Never
       // replace unreadable settings or publish an uncommitted value in memory.
       const before = await this.read();
@@ -252,6 +428,7 @@ export class ConfigurationStore {
       await atomicWriteStableFile(key, `${JSON.stringify(snapshot, null, 2)}\n`, {
         overwrite: true, mode: 0o600, maxBytes: MAX_CONFIGURATION_BYTES,
         beforeCommit: async () => {
+          await this.assertProviderTransactionSafe();
           if ((await this.read()).source !== before.source) {
             throw Object.assign(new Error('Configuration changed before commit.'), { status: 409, code: 'CONFIGURATION_CHANGED' });
           }
@@ -263,6 +440,7 @@ export class ConfigurationStore {
   }
 
   private assertLoaded(): void {
+    if (this.quarantined) this.quarantine();
     if (!this.loaded) throw new Error('ConfigurationStore.load() must be awaited before use.');
   }
 }

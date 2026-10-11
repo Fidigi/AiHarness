@@ -425,3 +425,51 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     expect(types.stderr).toBe('');
   }, 60_000);
 });
+
+// Provider addition: original installed executable/declaration/PATH probes above
+// remain intact. This case consumes only freshly packed, actually installed Core.
+it('validates installed public provider discovery declarations and keyless based-path runtime', async () => {
+  await writeFile(path.join(consumer, 'provider-public.ts'), `
+    import { OpenAiProvider, AnthropicProvider, AiProvider } from '@ai-harness/core';
+    const provider: AiProvider = new OpenAiProvider({ type: 'openai', baseUrl: 'http://127.0.0.1:1/gateway/v1/chat/completions' });
+    const eligible: boolean = provider.canDiscoverModels();
+    const anthropic: boolean = new AnthropicProvider({ type: 'anthropic', baseUrl: 'http://127.0.0.1:1/proxy/v1/messages' }).canDiscoverModels();
+    void eligible; void anthropic;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'provider-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'provider-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { OpenAiProvider, AnthropicProvider } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const paths = [];
+    const server = createServer((req, res) => { paths.push(req.url); assert.equal(req.headers.authorization, undefined); assert.equal(req.headers['x-api-key'], undefined); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ data: [{ id: 'public-model' }] })); });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const base = 'http://127.0.0.1:' + server.address().port;
+    try {
+      for (const provider of [new OpenAiProvider({ type: 'openai', baseUrl: base + '/gateway/v1/chat/completions' }), new AnthropicProvider({ type: 'anthropic', baseUrl: base + '/proxy/v1/messages' })]) {
+        assert.equal(provider.canDiscoverModels(), true); assert.deepEqual(await provider.getAvailableModels(), ['public-model']);
+      }
+      assert.deepEqual(paths, ['/gateway/v1/models', '/proxy/v1/models']);
+    } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('fresh installed provider declarations/runtime OK');
+  `);
+  const runtime = await run(process.execPath, ['provider-public.mjs'], consumer, environment);
+  expect(runtime).toEqual({ code: 0, stdout: 'fresh installed provider declarations/runtime OK\n', stderr: '' });
+  // Stronger separate declaration control; the original SDK probe remains intact.
+  const sdkTypes = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'consumer.ts'], consumer, environment);
+  expect(sdkTypes.stdout).toBe(''); expect(sdkTypes.stderr).toBe('');
+  const evidence = process.env.AIH_INSTALLED_EVIDENCE_DIR;
+  if (evidence) {
+    expect(outside(path.resolve(evidence), checkout)).toBe(true);
+    for (const name of await readdir(artifactRoot)) if (name.endsWith('.tgz')) await cp(path.join(artifactRoot, name), path.join(evidence, name));
+    for (const name of ['provider-public.ts', 'provider-public.mjs', 'consumer.ts', 'consumer.mjs', 'package.json', 'package-lock.json']) await cp(path.join(consumer, name), path.join(evidence, name));
+    await cp(path.join(consumer, 'node_modules', '@ai-harness', 'core', 'dist'), path.join(evidence, 'installed-core-dist'), { recursive: true });
+    await writeFile(path.join(evidence, 'provider-results.json'), JSON.stringify({ checkout, consumer, types, sdkTypes, runtime,
+      strictTypeArguments: ['--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node'],
+      readOnlyRequired: process.env.AIH_INSTALLED_REQUIRE_READ_ONLY_SOURCE === '1',
+      binRealpath: await realpath(path.join(consumer, 'node_modules', '.bin', 'ai-harness')) }, null, 2));
+  }
+}, 60_000);

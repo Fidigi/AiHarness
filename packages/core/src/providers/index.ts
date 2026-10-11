@@ -6,6 +6,7 @@
 
 import type { Message, ProviderConfig, ToolCall, TokenUsage } from '../types/index.js';
 import { ProviderType } from '../types/index.js';
+import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
 import {
   validateClassificationRequest, validateImageGenerationRequest, validateGeneratedImages,
   type SpecializedModel, type ClassificationRequest, type ClassificationResult,
@@ -305,6 +306,16 @@ export abstract class AiProvider {
     return [];
   }
 
+  /** Discovery can be unauthenticated at an explicitly configured endpoint. */
+  canDiscoverModels(): boolean {
+    try { if (this.validateConfig()) return true; } catch { /* Invalid extensions remain unavailable. */ }
+    if (typeof this.config.baseUrl !== 'string' || !this.config.baseUrl.trim()) return false;
+    try {
+      const url = new URL(this.config.baseUrl);
+      return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash;
+    } catch { return false; }
+  }
+
   /** Expose the non-secret provider type without leaking its configuration. */
   getProviderType(): string {
     return String(this.config.type);
@@ -530,7 +541,7 @@ export class OpenAiProvider extends AiProvider {
 
   async getAvailableModels(): Promise<string[]> {
     if (this.azure) return [];
-    const response = await this.request(`${this.baseUrl}/models`, {
+    const response = await this.request(resolveProviderDiscoveryEndpoint('openai-completions', this.baseUrl), {
       headers: this.getHeaders(),
     });
     if (!response.ok) rejectProviderResponse(response, `Model discovery failed (${response.status}).`);
@@ -1412,7 +1423,7 @@ export class OpenAiResponsesProvider extends AiProvider {
   }
 
   async getAvailableModels(): Promise<string[]> {
-    const response = await this.request(`${this.baseUrl}/models`, { headers: this.headers(false) });
+    const response = await this.request(resolveProviderDiscoveryEndpoint('openai-responses', this.baseUrl), { headers: this.headers(false) });
     if (!response.ok) rejectProviderResponse(response, `Model discovery failed (${response.status}).`);
     const body = await this.boundedJson(response);
     return boundedModelIds(body.data, item => (item as { id?: unknown })?.id);
@@ -1797,7 +1808,9 @@ export class GeminiProvider extends AiProvider {
   }
 
   async getAvailableModels(): Promise<string[]> {
-    const response = await this.request(`${this.baseUrl}/models?key=${encodeURIComponent(String(this.config.apiKey || ''))}`, {
+    const endpoint = new URL(resolveProviderDiscoveryEndpoint('google', this.baseUrl));
+    if (this.config.apiKey) endpoint.searchParams.set('key', String(this.config.apiKey));
+    const response = await this.request(endpoint, {
       headers: this.requestHeaders(),
     });
     if (!response.ok) rejectProviderResponse(response, `Model discovery failed (${response.status}).`);
@@ -2216,10 +2229,10 @@ export class AnthropicProvider extends AiProvider {
   }
 
   async getAvailableModels(): Promise<string[]> {
-    const response = await this.request(`${this.baseUrl}/v1/models`, {
+    const response = await this.request(resolveProviderDiscoveryEndpoint('anthropic', this.baseUrl), {
       headers: {
         ...configuredHeaders(this.config),
-        'x-api-key': String(this.config.apiKey),
+        ...(this.config.apiKey ? { 'x-api-key': String(this.config.apiKey) } : {}),
         'anthropic-version': AnthropicProvider.API_VERSION,
       },
     });

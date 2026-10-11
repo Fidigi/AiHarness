@@ -52,6 +52,10 @@ function SettingsView() {
   const hydrateSkillCatalog = useSessionStore(state => state.hydrateSkillCatalog);
   const sessionCount = useSessionStore(state => state.sessions.length);
   const workspaceId = useSessionStore(state => state.workspace?.id);
+  const activeSessionId = useSessionStore(state => state.activeSessionId);
+  const [providerNames, setProviderNames] = useState<Record<string, string>>({});
+  const [providerReload, setProviderReload] = useState(0);
+  const [providerInvalidation, setProviderInvalidation] = useState(0);
   const { t } = useI18n();
   const [authToken, updateAuthToken] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
@@ -217,7 +221,7 @@ function SettingsView() {
         >
           {Object.keys(providers.available).map(type => (
             <option key={type} value={type}>
-              {getProviderOptionLabel(type as ProviderType, t)}
+              {providerNames[type] ? `${providerNames[type]} (${type})` : getProviderOptionLabel(type as ProviderType, t)}
             </option>
           ))}
         </select>
@@ -268,7 +272,10 @@ function SettingsView() {
         </div>
       </section>
 
-      <ProviderLifecycleSettings />
+      <ProviderLifecycleSettings key={`${workspaceId}:${activeSessionId}:${providers.active}:${providerInvalidation}`}
+        onSelectionInvalidated={() => setProviderInvalidation(value => value + 1)}
+        onProvidersLoaded={items => setProviderNames(Object.fromEntries(items.map(item => [item.id, item.name])))}
+        onCanonicalReload={() => setProviderReload(value => value + 1)} />
 
       <section className="settings-section" id="transport">
         <h3>{t('settings.realtimeTransport')}</h3>
@@ -369,8 +376,8 @@ function SettingsView() {
         </details>
       </section>
 
-      <DefaultModelSettings />
-      <CustomModelSettings />
+      <DefaultModelSettings key={`provider-defaults:${providerReload}`} />
+      <CustomModelSettings key={`provider-models:${providerReload}`} />
 
       <section className="settings-section" id="skills">
         <h3>{t('settings.skills.title')}</h3>

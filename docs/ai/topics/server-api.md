@@ -34,7 +34,7 @@ The browser contract is summarized in [`web-app-architecture.md`](./web-app-arch
 | Terminals | `/api/terminals` plus per-terminal events/input/resize/delete |
 | Configuration | `/api/configuration` and legacy `/api/settings` alias; effective values include provenance; admin `PATCH /defaults` independently saves model/provider or thinking |
 | Models | `GET /api/models`; `PATCH /api/models/enabled` and `/enabled/batch` |
-| Provider registry | `/api/provider-registry/auth`, OAuth flows, tests, custom providers and custom models |
+| Provider registry | `/api/provider-registry/auth`, OAuth flows, tests, custom providers and custom models; strict admin `POST /custom/:id/rename` accepts only `{ id, revision }`, OFF by default, with passive `GET /custom` capability metadata. See [restricted provider lifecycle](./providers.md#custom-lifecycle-and-restricted-rename) for exclusions/recovery |
 | MCP configuration | `GET /api/mcp` for global configuration; optional canonical `?cwd=` adds trust-gated project data and fresh volatile Test/runtime status; admin-only `POST /api/mcp/test` connects one fresh file entry once; `/preview` reparses paste without writing; `/actions` performs atomic import/replacement or local mutations. Agent runs use a separate Core-owned persistent host, not these administration routes |
 | Tools/packages/resources | `/api/tools`; `/api/plugins` plus `PATCH /api/plugins/enabled`; `/api/skills`; `/api/push` |
 | Child agents | settings; profile list/create/update/delete/duplicate; run list/start/get/stop/acknowledge under `/api/subagents` |

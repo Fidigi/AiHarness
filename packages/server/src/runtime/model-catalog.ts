@@ -4,6 +4,7 @@ import {
   getPublishedModelMetadata,
   inferModelCapabilities,
   type PublishedModelMetadata,
+  type AiProvider,
 } from '@ai-harness/core';
 import type {
   ModelCapabilities,
@@ -22,6 +23,7 @@ export type PublishedModel = PublishedModelMetadata;
 /** Cached, non-secret catalogue assembled from published metadata and live provider discovery. */
 export class ModelCatalogService {
   private readonly discovered = new Map<string, string[]>();
+  private readonly discoverySources = new Map<string, AiProvider>();
   private updatedAt?: string;
   private refreshedAt = 0;
   private refreshPromise?: Promise<void>;
@@ -33,7 +35,11 @@ export class ModelCatalogService {
   ) {}
 
   async getCatalog(refresh = false): Promise<ProviderModelCatalog[]> {
-    if (refresh || !this.updatedAt || Date.now() - this.refreshedAt >= this.cacheTtlMs) await this.refresh();
+    const changedSource = this.proxy.getProviders().some(({ type }) => {
+      const provider = this.proxy.getAgentProvider(type);
+      return provider?.canDiscoverModels() && this.discoverySources.get(type) !== provider;
+    });
+    if (refresh || changedSource || !this.updatedAt || Date.now() - this.refreshedAt >= this.cacheTtlMs) await this.refresh();
     return this.buildCatalog();
   }
 
@@ -57,15 +63,33 @@ export class ModelCatalogService {
     return published?.pricing ? { ...published.pricing } : undefined;
   }
 
+  /** Drop source-bound discovery after provider replacement/removal/rename. */
+  invalidateProvider(provider: string): void {
+    this.discovered.delete(provider);
+    this.discoverySources.delete(provider);
+    this.refreshedAt = 0;
+    this.updatedAt = undefined;
+  }
+
   async refresh(): Promise<void> {
     if (this.refreshPromise) return this.refreshPromise;
     this.refreshPromise = (async () => {
-      const configuredProviders = this.proxy.getProviders().filter(provider => provider.configured);
+      for (const [type, source] of this.discoverySources) {
+        if (this.proxy.getAgentProvider(type) !== source) {
+          this.discoverySources.delete(type);
+          this.discovered.delete(type);
+        }
+      }
+      const configuredProviders = this.proxy.getProviders().filter(({ type }) =>
+        this.proxy.getAgentProvider(type)?.canDiscoverModels());
       await Promise.all(configuredProviders.map(async ({ type }) => {
         const provider = this.proxy.getAgentProvider(type);
         if (!provider) return;
+        if (this.discoverySources.get(type) !== provider) this.discovered.delete(type);
+        this.discoverySources.set(type, provider);
         try {
-          this.discovered.set(type, await discoverProviderModelIds(provider));
+          const models = await discoverProviderModelIds(provider);
+          if (this.proxy.getAgentProvider(type) === provider) this.discovered.set(type, models);
         } catch {
           // Discovery is optional. Keep the last successful bounded cache.
         }
@@ -87,7 +111,8 @@ export class ModelCatalogService {
       provider,
       configured,
       configuredModel: this.proxy.getAgentProvider(provider)?.getConfiguredModel(),
-      discoveredModels: this.discovered.get(provider),
+      discoveredModels: this.discoverySources.get(provider) === this.proxy.getAgentProvider(provider)
+        ? this.discovered.get(provider) : undefined,
     })), this.customModels());
   }
 }

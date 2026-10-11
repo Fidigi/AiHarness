@@ -10,6 +10,7 @@ import type {
 } from '@ai-harness/core';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { McpImportPreview, type McpReplacementOutcome } from './McpImportPreview';
+import { OAuthPasteInput } from './OAuthPastePanel';
 import { mcpTestMessage, type McpTestMessageKey } from './mcp-test-messages';
 import { useI18n } from '../hooks/useI18n';
 import { getMcpConfig } from '../services/api';
@@ -182,8 +183,6 @@ function McpOAuthPanel({
   onLogout(): void;
 }) {
   const { t } = useI18n();
-  const [redirect, setRedirect] = useState('');
-  useEffect(() => setRedirect(''), [flow?.flowId]);
   const active = activeOAuthFlow(flow);
   const authorizationUrl = safeAuthorizationLink(flow?.authorizationUrl);
   const statusKey = status?.signedIn
@@ -206,14 +205,20 @@ function McpOAuthPanel({
           {t('settings.mcp.oauth.openAuthorization')}
         </a>
         : <small className="status-warning">{t('settings.mcp.oauth.invalidAuthorizationUrl')}</small>}
+      <OAuthPasteInput key={flow.flowId} busy={busy}
+        label={t('settings.mcp.oauth.redirectLabel')}
+        placeholder={t('settings.mcp.oauth.redirectPlaceholder')}
+        submitLabel={t('settings.mcp.oauth.submitRedirect')} onPaste={onPaste}
+        renderControls={({ redirect, setRedirect, submit: onPaste }) => <>
       <label>
         <span>{t('settings.mcp.oauth.redirectLabel')}</span>
-        <input value={redirect} disabled={busy}
+        <input value={redirect} disabled={busy} maxLength={8_192} autoComplete="off" spellCheck={false}
           placeholder={t('settings.mcp.oauth.redirectPlaceholder')}
           onChange={event => setRedirect(event.currentTarget.value)} />
       </label>
       <button type="button" disabled={busy || redirect.trim().length === 0}
         onClick={() => onPaste(redirect)}>{t('settings.mcp.oauth.submitRedirect')}</button>
+        </>} />
       {flow.redirectUrl && <small>{t('settings.mcp.oauth.callback', { url: flow.redirectUrl })}</small>}
     </div>}
     {flow && !active && <small role="status"

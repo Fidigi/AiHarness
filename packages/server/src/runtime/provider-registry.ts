@@ -1,10 +1,13 @@
-import { mkdir } from 'node:fs/promises';
+import { lstat, mkdir } from 'node:fs/promises';
+import type { Stats } from 'node:fs';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type {
   CredentialRedactor} from '@ai-harness/core';
 import {
   AnthropicProvider,
   atomicWriteStableFile,
+  discoverProviderModelIds,
   GeminiProvider,
   OpenAiProvider,
   OpenAiResponsesProvider,
@@ -25,6 +28,7 @@ const MAX_CUSTOM_PROVIDERS = 256;
 const MAX_CUSTOM_MODELS = 10_000;
 const MAX_PROVIDER_SECRET_BYTES = 64 * 1024;
 const MAX_REGISTRY_BYTES = 1024 * 1024;
+const registryMutations = new Map<string, Promise<void>>();
 const FORBIDDEN_HEADERS = new Set([
   'host', 'content-length', 'cookie', 'set-cookie',
   'authorization', 'openai-beta', 'session-id', 'x-client-request-id',
@@ -32,6 +36,9 @@ const FORBIDDEN_HEADERS = new Set([
 
 interface StoredProvider {
   id: string;
+  /** Stable private-store identity, retained on rename. */
+  credentialId?: string;
+  disconnected?: boolean;
   name: string;
   baseUrl: string;
   dialect: ProviderDialect;
@@ -144,12 +151,18 @@ function storedTimestamp(value: unknown): string {
 
 function parseRegistryState(value: unknown): RegistryState {
   if (!isRecord(value) || value.version !== 1
+    || Object.keys(value).some(key => !['version', 'providers', 'models'].includes(key))
     || !Array.isArray(value.providers) || value.providers.length > MAX_CUSTOM_PROVIDERS
     || !Array.isArray(value.models) || value.models.length > MAX_CUSTOM_MODELS) {
     badRequest('Provider registry is invalid.');
   }
   const providers = value.providers.map(raw => {
-    if (!isRecord(raw) || !Array.isArray(raw.headerNames) || raw.headerNames.length > 40) {
+    if (!isRecord(raw) || Object.keys(raw).some(key => !['id', 'credentialId', 'disconnected', 'name', 'baseUrl', 'dialect', 'headerNames', 'createdAt', 'updatedAt'].includes(key))
+      || raw.disconnected !== undefined && typeof raw.disconnected !== 'boolean'
+      || raw.credentialId !== undefined && (typeof raw.credentialId !== 'string'
+        || !/^(?:custom-[a-f0-9-]{36}|[a-z][a-z0-9_-]{1,63})$/.test(raw.credentialId)
+        || BUILTIN_IDS.has(raw.credentialId))
+      || !Array.isArray(raw.headerNames) || raw.headerNames.length > 40) {
       badRequest('Provider registry is invalid.');
     }
     const names = raw.headerNames.map(name => {
@@ -162,6 +175,8 @@ function parseRegistryState(value: unknown): RegistryState {
     }
     return {
       id: providerId(raw.id),
+      ...(raw.credentialId === undefined ? {} : { credentialId: boundedString(raw.credentialId, 'credential identity', 100) }),
+      ...(raw.disconnected === true ? { disconnected: true } : {}),
       name: boundedString(raw.name, 'name', 200),
       baseUrl: baseUrl(raw.baseUrl),
       dialect: dialect(raw.dialect),
@@ -173,9 +188,14 @@ function parseRegistryState(value: unknown): RegistryState {
   if (new Set(providers.map(provider => provider.id)).size !== providers.length) {
     badRequest('Provider registry is invalid.');
   }
+  if (new Set(providers.map(provider => provider.credentialId ?? provider.id)).size !== providers.length) {
+    badRequest('Provider registry credential identities are invalid.');
+  }
   const configuredProviders = new Set(providers.map(provider => provider.id));
   const models = value.models.map(raw => {
-    if (!isRecord(raw)) badRequest('Provider registry is invalid.', 'INVALID_MODEL');
+    if (!isRecord(raw) || Object.keys(raw).some(key => !['key', 'provider', 'id', 'name', 'capabilities', 'contextWindow', 'maxOutputTokens', 'pricing', 'compatibility', 'createdAt', 'updatedAt'].includes(key))) {
+      badRequest('Provider registry is invalid.', 'INVALID_MODEL');
+    }
     const provider = boundedString(raw.provider, 'provider', 64).toLowerCase();
     if (!BUILTIN_IDS.has(provider) && !configuredProviders.has(provider)) {
       badRequest('Provider registry is invalid.', 'INVALID_MODEL');
@@ -238,7 +258,9 @@ export class ProviderRegistryService {
   private readonly secretStore?: EncryptedCredentialStore;
   private readonly credentialService: ProviderCredentialService;
   private writeQueue: Promise<void> = Promise.resolve();
-  private mutationQueue: Promise<void> = Promise.resolve();
+  private source?: string;
+  private sourceIdentity?: Stats;
+  private readonly revisionKey = randomBytes(32);
 
   constructor(
     private readonly filePath: string,
@@ -257,9 +279,13 @@ export class ProviderRegistryService {
 
   async load(): Promise<void> {
     try {
-      this.state = parseRegistryState(JSON.parse(
-        await readBoundedResourceText(this.filePath, MAX_REGISTRY_BYTES),
-      ));
+      const { source, identity } = await this.readSource();
+      if (source !== undefined) {
+        const state = parseRegistryState(JSON.parse(source));
+        this.source = source;
+        this.sourceIdentity = identity;
+        this.state = state;
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
@@ -272,13 +298,42 @@ export class ProviderRegistryService {
     }
   }
 
-  listProviders(): CustomProviderDefinition[] {
-    return this.state.providers.map(provider => ({
+  /** Canonical reconciliation after a stale/uncertain outcome. */
+  async reload(): Promise<void> {
+    return this.withMutation(async () => {
+      const before = this.state.providers.map(provider => provider.id);
+      // Missing metadata is a canonical empty registry, not a stale memory copy.
+      const previous = this.state;
+      const source = this.source;
+      const identity = this.sourceIdentity;
+      this.state = { version: 1, providers: [], models: [] };
+      this.source = undefined;
+      this.sourceIdentity = undefined;
+      try { await this.load(); }
+      catch (error) { this.state = previous; this.source = source; this.sourceIdentity = identity; throw error; }
+      for (const id of before) {
+        if (!this.state.providers.some(provider => provider.id === id)) {
+          this.proxy.removeProvider(id);
+          this.volatileSecrets.delete(id);
+        }
+      }
+    });
+  }
+
+  getRevision(): string {
+    return createHmac('sha256', this.revisionKey).update(this.source ?? '').digest('hex');
+  }
+
+  listProviders(): Array<CustomProviderDefinition & { revision: string }> {
+    return this.state.providers.map(({ credentialId: _privateIdentity, ...provider }) => ({
       ...provider,
-      configured: Boolean(this.readSecrets(provider.id)),
+      revision: this.getRevision(),
+      configured: this.proxy.isConfigured(provider.id),
       modelCount: this.state.models.filter(model => model.provider === provider.id).length,
     }));
   }
+
+  hasCredentials(id: string): boolean { return Boolean(this.readSecrets(id)); }
 
   getModels(): CustomModelDefinition[] { return structuredClone(this.state.models); }
 
@@ -287,13 +342,25 @@ export class ProviderRegistryService {
   }
 
   private async upsertProviderUnlocked(input: Record<string, unknown>, existingId?: string): Promise<CustomProviderDefinition> {
+    if (!isRecord(input) || Object.keys(input).some(key => !['id', 'name', 'baseUrl', 'dialect', 'headers', 'apiKey'].includes(key))) {
+      badRequest('Provider input contains unknown fields.');
+    }
     const id = providerId(existingId ?? input.id);
+    if (existingId && input.id !== undefined && providerId(input.id) !== id) {
+      badRequest('Use the provider rename operation to change identity.', 'PROVIDER_RENAME_REQUIRED');
+    }
     const previous = this.state.providers.find(provider => provider.id === id);
+    if (previous && !existingId) badRequest('Provider already exists.', 'PROVIDER_EXISTS');
     if (!previous && existingId) throw Object.assign(new Error('Custom provider not found.'), { status: 404 });
     const now = new Date().toISOString();
     const customHeaders = input.headers === undefined ? undefined : headers(input.headers);
     const record: StoredProvider = {
       id,
+      // Keep the existing first-use credential namespace contract. A public ID
+      // retained by a renamed record is reserved; reusing it gets a fresh identity.
+      credentialId: previous?.credentialId ?? (previous ? previous.id
+        : this.state.providers.some(provider => (provider.credentialId ?? provider.id) === id)
+          ? `custom-${randomUUID()}` : id),
       name: input.name === undefined && previous ? previous.name : boundedString(input.name, 'name', 200),
       baseUrl: input.baseUrl === undefined && previous ? previous.baseUrl : baseUrl(input.baseUrl),
       dialect: input.dialect === undefined && previous ? previous.dialect : dialect(input.dialect),
@@ -316,7 +383,8 @@ export class ProviderRegistryService {
         : currentSecrets.apiKey ? { apiKey: currentSecrets.apiKey } : {}),
       headers: customHeaders ?? currentSecrets.headers,
     };
-    await this.saveSecrets(id, nextSecrets);
+    await this.assertSource();
+    await this.saveSecrets(id, nextSecrets, record.credentialId);
     const previousState = this.state;
     this.state = {
       ...previousState,
@@ -326,12 +394,77 @@ export class ProviderRegistryService {
     try { await this.persist(); }
     catch (error) {
       this.state = previousState;
-      await this.saveSecrets(id, currentSecrets).catch(() => undefined);
+      try { await this.saveSecrets(id, currentSecrets, record.credentialId); }
+      catch { throw Object.assign(new Error('Provider update rollback failed.'), { status: 500, uncertain: true }); }
       throw error;
     }
     await this.proxy.resetNetworkDispatchers();
     this.applyProvider(record);
     return this.listProviders().find(provider => provider.id === id)!;
+  }
+
+  /** Rebind only metadata; the credential identity and encrypted bytes never move.
+   * Host must hold its fresh whole-configuration transaction around commit.
+   */
+  async renameProvider(oldValue: string, newValue: string, revision: string,
+    rebind: (commit: () => Promise<void>) => Promise<void>): Promise<CustomProviderDefinition> {
+    return this.withMutation(async () => {
+      const oldId = providerId(oldValue);
+      const newId = providerId(newValue);
+      await this.assertSource();
+      if (revision !== this.getRevision()) {
+        throw Object.assign(new Error('Provider registry changed; refresh before retrying.'), {
+          status: 409, code: 'PROVIDER_REGISTRY_STALE',
+        });
+      }
+      const previous = this.state.providers.find(provider => provider.id === oldId);
+      if (!previous) throw Object.assign(new Error('Custom provider not found.'), { status: 404 });
+      if (oldId === newId) return this.listProviders().find(provider => provider.id === oldId)!;
+      if (this.state.providers.some(provider => provider.id === newId) || this.proxy.getAgentProvider(newId)) {
+        throw Object.assign(new Error('Provider already exists.'), { status: 409, code: 'PROVIDER_EXISTS' });
+      }
+      const before = this.state;
+      const renamed: StoredProvider = { ...previous, id: newId,
+        credentialId: previous.credentialId ?? oldId, updatedAt: new Date().toISOString() };
+      let committed = false;
+      try {
+        await rebind(async () => {
+          if (committed) throw new Error('Provider rename commit already called.');
+          this.state = { ...before,
+            providers: before.providers.map(provider => provider.id === oldId ? renamed : provider),
+            models: before.models.map(model => model.provider === oldId
+              ? { ...model, provider: newId, key: `${newId}:${model.id}` } : model),
+          };
+          try { await this.persist(); } catch (error) { this.state = before; throw error; }
+          committed = true;
+        });
+        if (!committed) throw new Error('Provider reference transaction did not commit.');
+      } catch (error) {
+        if (committed) {
+          const published = this.state;
+          this.state = before;
+          try { await this.persist(); }
+          catch {
+            this.state = published;
+            const secrets = this.readSecrets(oldId);
+            if (secrets) this.volatileSecrets.set(newId, secrets);
+            this.volatileSecrets.delete(oldId);
+            this.proxy.removeProvider(oldId);
+            this.applyProvider(renamed);
+            throw Object.assign(new Error('Provider rename outcome is uncertain; refresh.'), {
+              status: 500, code: 'PROVIDER_RENAME_UNCERTAIN', uncertain: true,
+            });
+          }
+        }
+        throw error;
+      }
+      const secrets = this.readSecrets(oldId);
+      if (secrets) this.volatileSecrets.set(newId, secrets);
+      this.volatileSecrets.delete(oldId);
+      this.proxy.removeProvider(oldId);
+      this.applyProvider(renamed);
+      return this.listProviders().find(provider => provider.id === newId)!;
+    });
   }
 
   async deleteProvider(idValue: string): Promise<boolean> {
@@ -341,6 +474,8 @@ export class ProviderRegistryService {
   private async deleteProviderUnlocked(idValue: string): Promise<boolean> {
     const id = providerId(idValue);
     if (!this.state.providers.some(provider => provider.id === id)) return false;
+    await this.assertSource();
+    const identity = this.storageId(id);
     const previousSecrets = this.readSecrets(id) ?? { headers: {} };
     try {
       await this.saveSecrets(id, { headers: {} });
@@ -357,9 +492,9 @@ export class ProviderRegistryService {
     try { await this.persist(); }
     catch (error) {
       this.state = previous;
-      try { await this.saveSecrets(id, previousSecrets); }
+      try { await this.saveSecrets(id, previousSecrets, identity); }
       catch {
-        throw Object.assign(new Error('Provider deletion rollback failed.'), { status: 500 });
+        throw Object.assign(new Error('Provider deletion rollback failed.'), { status: 500, uncertain: true });
       }
       throw error;
     }
@@ -377,12 +512,23 @@ export class ProviderRegistryService {
     const id = providerId(idValue);
     const provider = this.state.providers.find(item => item.id === id);
     if (!provider) throw Object.assign(new Error('Custom provider not found.'), { status: 404 });
+    await this.assertSource();
     const previousSecrets = this.readSecrets(id) ?? { headers: {} };
     try {
       await this.saveSecrets(id, { headers: {} });
     } catch (error) {
       try { await this.saveSecrets(id, previousSecrets); }
       catch { throw Object.assign(new Error('Provider disconnection rollback failed.'), { status: 500 }); }
+      throw error;
+    }
+    const before = this.state;
+    this.state = { ...before, providers: before.providers.map(item => item.id === id
+      ? { ...item, disconnected: true, updatedAt: new Date().toISOString() } : item) };
+    try { await this.persist(); }
+    catch (error) {
+      this.state = before;
+      try { await this.saveSecrets(id, previousSecrets); }
+      catch { throw Object.assign(new Error('Provider disconnection rollback failed.'), { status: 500, uncertain: true }); }
       throw error;
     }
     this.volatileSecrets.delete(id);
@@ -395,7 +541,7 @@ export class ProviderRegistryService {
     const id = providerId(idValue);
     const provider = this.proxy.getAgentProvider(id);
     if (!provider) throw Object.assign(new Error('Provider is not connected.'), { status: 409 });
-    const models = await provider.getAvailableModels();
+    const models = await discoverProviderModelIds(provider);
     return { ok: true, models: models.slice(0, 500), checkedAt: new Date().toISOString() };
   }
 
@@ -484,8 +630,13 @@ export class ProviderRegistryService {
   async importProviderModels(providerId: string): Promise<CustomModelDefinition[]> {
     const provider = this.proxy.getAgentProvider(providerId);
     if (!provider) throw Object.assign(new Error('Provider is not connected.'), { status: 409 });
-    const models = [...new Set(await provider.getAvailableModels())].filter(id => id && id.length <= 500).slice(0, 500);
+    const models = await discoverProviderModelIds(provider);
     return this.withMutation(async () => {
+      if (this.proxy.getAgentProvider(providerId) !== provider) {
+        throw Object.assign(new Error('Provider changed during discovery; refresh before retrying.'), {
+          status: 409, code: 'PROVIDER_REGISTRY_STALE',
+        });
+      }
       const imported: CustomModelDefinition[] = [];
       for (const id of models) {
         const key = `${providerId}:${id}`;
@@ -511,9 +662,11 @@ export class ProviderRegistryService {
   }
 
   private withMutation<T>(operation: () => Promise<T>): Promise<T> {
-    const previous = this.mutationQueue;
-    const next = previous.catch(() => undefined).then(operation);
-    this.mutationQueue = next.then(() => undefined, () => undefined);
+    const key = path.resolve(this.filePath);
+    const next = (registryMutations.get(key) ?? Promise.resolve()).then(operation);
+    const queued = next.then(() => undefined, () => undefined);
+    registryMutations.set(key, queued);
+    void queued.then(() => { if (registryMutations.get(key) === queued) registryMutations.delete(key); });
     return next;
   }
 
@@ -522,7 +675,12 @@ export class ProviderRegistryService {
     return value ? structuredClone(value) : undefined;
   }
 
-  private async saveSecrets(id: string, value: ProviderSecrets): Promise<void> {
+  private storageId(id: string): string {
+    const record = this.state.providers.find(provider => provider.id === id);
+    return record?.credentialId ?? id;
+  }
+
+  private async saveSecrets(id: string, value: ProviderSecrets, identity = this.storageId(id)): Promise<void> {
     this.redactor.add(value.apiKey);
     this.redactor.addAll(Object.values(value.headers));
     const hasSecrets = Boolean(value.apiKey) || Object.keys(value.headers).length > 0;
@@ -531,29 +689,30 @@ export class ProviderRegistryService {
     }
     if (this.secretStore) {
       await this.secretStore.update({
-        [`provider:${id}`]: value.apiKey
+        [`provider:${identity}`]: value.apiKey
           ? JSON.stringify({ version: 1, type: 'api-key', apiKey: value.apiKey })
           : undefined,
-        [this.headerStorageName(id)]: Object.keys(value.headers).length
+        [`provider-headers:${identity}`]: Object.keys(value.headers).length
           ? JSON.stringify(value.headers)
           : undefined,
       });
-      this.credentialService.synchronizeFromStore(id);
+      this.credentialService.synchronizeFromStore(identity);
     } else {
-      await this.credentialService.delete(id);
+      await this.credentialService.delete(identity);
     }
     if (hasSecrets) this.volatileSecrets.set(id, structuredClone(value));
     else this.volatileSecrets.delete(id);
   }
 
   private async hydrateSecrets(id: string): Promise<void> {
-    const resolved = await this.credentialService.resolve(id, { env: {} });
+    const resolved = await this.credentialService.resolve(this.storageId(id), { env: {} });
     const storedHeaders = this.secretStore?.get(this.headerStorageName(id));
     let customHeaders: Record<string, string> = {};
     if (storedHeaders) {
       try { customHeaders = headers(JSON.parse(storedHeaders)); }
       catch { customHeaders = {}; }
     }
+    this.volatileSecrets.delete(id);
     const apiKey = resolved?.credential.type === 'api-key'
       ? resolved.credential.apiKey
       : resolved?.credential.accessToken;
@@ -569,7 +728,7 @@ export class ProviderRegistryService {
   private async migrateLegacySecrets(): Promise<void> {
     if (!this.secretStore) return;
     for (const provider of this.state.providers) {
-      const storageName = `provider:${provider.id}`;
+      const storageName = `provider:${this.storageId(provider.id)}`;
       const raw = this.secretStore.get(storageName);
       if (!raw) continue;
       let legacy: ProviderSecrets | undefined;
@@ -591,22 +750,22 @@ export class ProviderRegistryService {
           ? JSON.stringify(legacy.headers)
           : undefined,
       });
-      this.credentialService.synchronizeFromStore(provider.id);
+      this.credentialService.synchronizeFromStore(this.storageId(provider.id));
     }
   }
 
   private headerStorageName(id: string): string {
-    return `provider-headers:${id}`;
+    return `provider-headers:${this.storageId(id)}`;
   }
 
   private applyProvider(record: StoredProvider): void {
+    if (record.disconnected) { this.proxy.removeProvider(record.id); return; }
     const secrets = this.readSecrets(record.id);
-    if (!secrets) return;
     const config: ProviderConfig = {
       type: record.id,
       baseUrl: record.baseUrl,
-      apiKey: secrets.apiKey ?? 'custom',
-      customHeaders: secrets.headers,
+      apiKey: secrets?.apiKey,
+      customHeaders: secrets?.headers,
       model: this.state.models.find(model => model.provider === record.id)?.id,
     };
     const provider = record.dialect === 'openai-completions' ? new OpenAiProvider(config)
@@ -614,6 +773,38 @@ export class ProviderRegistryService {
         : record.dialect === 'anthropic' ? new AnthropicProvider(config)
           : new GeminiProvider(config);
     this.proxy.setCustomProvider(record.id, provider);
+  }
+
+  private sameIdentity(first: Stats | undefined, second: Stats | undefined): boolean {
+    if (!first || !second) return first === second;
+    return first.dev === second.dev && first.ino === second.ino && first.size === second.size
+      && first.mtimeMs === second.mtimeMs && first.ctimeMs === second.ctimeMs
+      && first.nlink === second.nlink && first.mode === second.mode;
+  }
+
+  private staleSource(): never {
+    throw Object.assign(new Error('Provider registry changed; refresh before retrying.'), {
+      status: 409, code: 'PROVIDER_REGISTRY_STALE',
+    });
+  }
+
+  private async readSource(): Promise<{ source?: string; identity?: Stats }> {
+    let before: Stats;
+    try { before = await lstat(this.filePath); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}; throw error; }
+    const source = await readBoundedResourceText(this.filePath, MAX_REGISTRY_BYTES);
+    const after = await lstat(this.filePath);
+    if (!this.sameIdentity(before, after)) this.staleSource();
+    return { source, identity: after };
+  }
+
+  /** Bytes AND observed file identity, including rollback over this publication.
+   * Rejects same-byte replacement/ABA; not an OS atomic compare-exchange against
+   * arbitrary external writers racing between beforeCommit and rename.
+   */
+  private async assertSource(): Promise<void> {
+    const current = await this.readSource();
+    if (current.source !== this.source || !this.sameIdentity(current.identity, this.sourceIdentity)) this.staleSource();
   }
 
   private persist(): Promise<void> {
@@ -628,7 +819,12 @@ export class ProviderRegistryService {
         overwrite: true,
         maxBytes: MAX_REGISTRY_BYTES,
         mode: 0o600,
+        beforeCommit: () => this.assertSource(),
       });
+      const published = await this.readSource();
+      if (published.source !== serialized) this.staleSource();
+      this.source = serialized;
+      this.sourceIdentity = published.identity;
     });
     this.writeQueue = operation.catch(() => undefined);
     return operation;

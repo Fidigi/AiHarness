@@ -2022,8 +2022,33 @@ export function disconnectProvider(type: string): Promise<ApiResponse<unknown>> 
   return jsonApi(`/provider-registry/auth/${encodeURIComponent(type)}`, { method: 'DELETE' });
 }
 
-export function getCustomProviders(): Promise<ApiResponse<CustomProviderDefinition[]>> {
-  return jsonApi('/provider-registry/custom');
+export interface ProviderRenameCapability {
+  supported: boolean;
+  mode: 'disabled' | 'exclusive-host-single-writer';
+  reason: 'exclusive-host-required' | 'restricted-single-writer' | 'unavailable';
+}
+
+/** Array data remains compatible; capability is additive to the client envelope.
+ * Missing/invalid metadata fails closed, including older/shared hosts. */
+export async function getCustomProviders(): Promise<ApiResponse<CustomProviderDefinition[]> & {
+  renameCapability: ProviderRenameCapability;
+}> {
+  const disabled: ProviderRenameCapability = { supported: false, mode: 'disabled', reason: 'unavailable' };
+  try {
+    const response = await apiFetch(`${API_BASE}/provider-registry/custom`);
+    if (!response.ok) return { success: false, renameCapability: disabled };
+    const data: unknown = await response.json();
+    if (!Array.isArray(data)) return { success: false, renameCapability: disabled };
+    let renameCapability = disabled;
+    try {
+      const metadata = JSON.parse(response.headers.get('X-AiHarness-Provider-Rename') || '{}') as ProviderRenameCapability;
+      if (metadata.supported === true && metadata.mode === 'exclusive-host-single-writer'
+        && metadata.reason === 'restricted-single-writer') renameCapability = metadata;
+      else if (metadata.supported === false && metadata.mode === 'disabled'
+        && metadata.reason === 'exclusive-host-required') renameCapability = metadata;
+    } catch { /* Older hosts have no capability metadata. */ }
+    return { success: true, data: data as CustomProviderDefinition[], renameCapability };
+  } catch { return { success: false, renameCapability: disabled }; }
 }
 
 export function saveCustomProvider(

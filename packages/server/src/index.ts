@@ -65,6 +65,7 @@ import {
 } from './runtime/services.js';
 import { getAppUpdateStatus } from './runtime/app-update.js';
 import { ProviderOAuthService } from './runtime/provider-oauth.js';
+import { providerOperation } from './runtime/provider-administration.js';
 
 export type { ChatOptions } from '@ai-harness/core';
 
@@ -113,6 +114,7 @@ let activeServices: Promise<RuntimeServices> | undefined;
 interface CredentialRuntime {
   readonly filePath: string;
   readonly services: Promise<RuntimeServices>;
+  readonly exclusiveHost: boolean;
   service?: ProviderCredentialService;
   mcpOAuth?: McpOAuthCredentialManager;
   mcpOAuthFlows?: McpOAuthFlowService;
@@ -122,6 +124,7 @@ interface CredentialRuntime {
 let activeCredentialRuntime: CredentialRuntime | undefined;
 let activeProviderOAuth: ProviderOAuthService | undefined;
 let applicationGeneration = 0;
+let applicationExclusiveHost = false;
 const sharedSessions = new Map<string, { sessionId: string; expiresAt: number }>();
 
 async function settleWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
@@ -198,6 +201,12 @@ function initializeCredentials(
     const services = await runtime.services;
     await services.sessionManager.loadAllSessions();
     const credentialEnvironment = { ...process.env };
+    if (runtime.exclusiveHost && (Object.keys(settings.providerApiKeyCommands ?? {}).length
+      || Object.keys(process.env).some(key => key.endsWith('_API_KEY_COMMAND') && process.env[key]))) {
+      throw Object.assign(new Error('Credential commands are unavailable in exclusive provider-administration mode.'), {
+        status: 409, code: 'PROVIDER_REFERENCE_OWNER_UNAVAILABLE',
+      });
+    }
     for (const [provider, command] of Object.entries(settings.providerApiKeyCommands ?? {})) {
       credentialEnvironment[credentialCommandVariable(provider)] = command;
     }
@@ -352,6 +361,14 @@ function sessionMetadata(value: unknown): Record<string, unknown> | undefined {
 /** Create Express app with all routes configured */
 export function createApp(config?: ServerConfig): express.Application {
   const { port, host } = serverAddress(config);
+  const exclusiveHost = config?.providerRenameExclusiveHost ?? process.env.AI_HARNESS_PROVIDER_RENAME_EXCLUSIVE_HOST === '1';
+  if (exclusiveHost && activeServices) {
+    // Bounded asynchronous replacement cleanup cannot prove that an old shell,
+    // terminal or privileged extension has settled. Never activate over it.
+    throw Object.assign(new Error('Stop the previous host before exclusive provider administration.'), {
+      status: 409, code: 'PROVIDER_ADMINISTRATION_BUSY',
+    });
+  }
   if (config?.webRoot !== undefined && (typeof config.webRoot !== 'string'
     || Buffer.byteLength(config.webRoot) > 4_096 || config.webRoot.includes('\0'))) {
     throw new Error('Invalid web root.');
@@ -391,11 +408,21 @@ export function createApp(config?: ServerConfig): express.Application {
   if (config?.proxy && config.proxy === replacedProxy) void applicationProxy.rotateNetworkScope();
   proxyServer = applicationProxy;
   if (config?.proxy) applicationProxy.setCredentialRedactor(redactor);
-  const runtimeConfig = { ...(config ?? {}), dataDir };
-  const servicesPromise = (config?.runtimeServicesFactory ?? createRuntimeServices)(applicationProxy, runtimeConfig);
+  applicationExclusiveHost = exclusiveHost;
+  const runtimeConfig = { ...(config ?? {}), dataDir, providerRenameExclusiveHost: exclusiveHost };
+  const servicesPromise = (config?.runtimeServicesFactory ?? createRuntimeServices)(applicationProxy, runtimeConfig).then(services => {
+    // Activate only this fully wired restricted host generation, never a stale
+    // asynchronous initialization after createApp replacement or shutdown.
+    if (exclusiveHost && generation === applicationGeneration) services.providerAdministration.activateForExclusiveHost();
+    return services;
+  });
+  // Embedders may create the app before calling start; failed initialization
+  // stays observable by start/handlers without an unhandled rejection.
+  void servicesPromise.catch(() => undefined);
   const credentialRuntime: CredentialRuntime = {
     filePath: path.join(dataDir, 'credentials.enc'),
     services: servicesPromise,
+    exclusiveHost,
   };
   activeServices = servicesPromise;
   activeCredentialRuntime = credentialRuntime;
@@ -403,15 +430,10 @@ export function createApp(config?: ServerConfig): express.Application {
   const app = express();
   appInstance = app;
   type AsyncRoute = (request: Request, response: Response, next: NextFunction) => Promise<void>;
-  const wrapAsync = (handler: AsyncRoute) => (
-    request: Request,
-    response: Response,
-    next: NextFunction,
-  ): void => { void handler(request, response, next).catch(next); };
-  const asyncGet = (route: string, handler: AsyncRoute): void => { app.get(route, wrapAsync(handler)); };
-  const asyncPost = (route: string, handler: AsyncRoute): void => { app.post(route, wrapAsync(handler)); };
-  const asyncPatch = (route: string, handler: AsyncRoute): void => { app.patch(route, wrapAsync(handler)); };
-  const asyncDelete = (route: string, handler: AsyncRoute): void => { app.delete(route, wrapAsync(handler)); };
+  const asyncGet = (route: string, handler: AsyncRoute): void => { app.get(route, providerOperation(servicesPromise, handler)); };
+  const asyncPost = (route: string, handler: AsyncRoute): void => { app.post(route, providerOperation(servicesPromise, handler)); };
+  const asyncPatch = (route: string, handler: AsyncRoute): void => { app.patch(route, providerOperation(servicesPromise, handler)); };
+  const asyncDelete = (route: string, handler: AsyncRoute): void => { app.delete(route, providerOperation(servicesPromise, handler)); };
   app.use((_request, response, next) => {
     if (generation !== applicationGeneration) {
       response.status(503).json({ error: 'Application runtime is no longer active.' });
@@ -475,7 +497,7 @@ export function createApp(config?: ServerConfig): express.Application {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  app.get('/share/:token', originMiddleware(), publicReadLimiter, wrapAsync(async (req: Request, res: Response): Promise<void> => {
+  app.get('/share/:token', originMiddleware(), publicReadLimiter, providerOperation(servicesPromise, async (req: Request, res: Response): Promise<void> => {
     res.setHeader('Cache-Control', 'no-store');
     if (!/^[a-f0-9]{32}$/u.test(req.params.token)) {
       res.status(404).send('Partage introuvable ou expiré.');
@@ -547,6 +569,24 @@ export function createApp(config?: ServerConfig): express.Application {
   });
 
   app.use('/api', originMiddleware(), authenticationMiddleware(), rateLimit(), jsonBody);
+  if (exclusiveHost) app.use('/api', (request, response, next) => {
+    // Express routes/mounts are case-insensitive by default.
+    const route = request.path.toLowerCase();
+    const legacy = route === '/chat' || route.startsWith('/chat/');
+    const unsupportedMutation = !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
+      && ['/models', '/tools', '/terminals', '/files', '/plugins', '/skills', '/workspaces', '/mcp', '/agent/commands', '/config']
+        .some(prefix => route === prefix || route.startsWith(`${prefix}/`));
+    // File GETs include Git status/diff; repository configuration can execute
+    // helpers. Keep these unleased subprocess surfaces unavailable as well.
+    const unsafeRead = ['/files', '/workspaces'].some(prefix => route === prefix || route.startsWith(`${prefix}/`));
+    const unsupportedCommand = !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
+      && /^\/agent\/sessions\/[^/]+\/commands(?:\/|$)/.test(route);
+    if (legacy || unsupportedMutation || unsafeRead || unsupportedCommand) {
+      response.status(409).json({ error: 'This operation is unavailable in exclusive provider-administration mode.', code: 'PROVIDER_REFERENCE_OWNER_UNAVAILABLE' });
+      return;
+    }
+    next();
+  });
   app.use('/api', async (request, _response, next) => {
     // Inventory is a passive file/trust read. It must not create or open the credential store.
     if (request.method === 'GET' && request.path === '/mcp') {
@@ -1461,16 +1501,23 @@ export async function start(config?: ServerConfig): Promise<{ port: number; host
     createApp(config);
   }
 
-  // start() publishes a usable composition, not merely a bound socket.
+  const initializingServices = activeServices;
+  const startingApp = appInstance;
   const startingGeneration = applicationGeneration;
-  await activeServices;
+  const exclusiveHost = applicationExclusiveHost;
+  if (!initializingServices || !startingApp) throw new Error('Runtime initialization is unavailable.');
+  // start() publishes a usable composition, not merely a bound socket.
+  await initializingServices;
   if (startingGeneration !== applicationGeneration) {
     throw new Error('Application runtime is no longer active.');
   }
-
-  return new Promise((resolve, reject) => {
-    const server = createServer(appInstance!);
-    const serverGeneration = applicationGeneration;
+  return new Promise<{ port: number; host: string; app: express.Application }>((resolve, reject) => {
+    if (startingGeneration !== applicationGeneration || startingApp !== appInstance) {
+      reject(new Error('Application runtime is no longer active.'));
+      return;
+    }
+    const server = createServer(startingApp);
+    const serverGeneration = startingGeneration;
     const serverProxy = getProxy();
     httpServer = server;
     server.on('upgrade', (request, socket, head) => {
@@ -1479,11 +1526,22 @@ export async function start(config?: ServerConfig): Promise<{ port: number; host
         socket.destroy();
         return;
       }
+      if (exclusiveHost) {
+        socket.write('HTTP/1.1 409 Conflict\r\nConnection: close\r\n\r\n');
+        socket.end(() => socket.destroy());
+        return;
+      }
       handleWebSocketUpgrade(request, socket, serverProxy, head);
     });
     server.listen(port, host, () => {
+      if (serverGeneration !== applicationGeneration || startingApp !== appInstance) {
+        if (httpServer === server) httpServer = null;
+        server.close();
+        reject(new Error('Application runtime is no longer active.'));
+        return;
+      }
       const address = server.address() as AddressInfo | string | null;
-      resolve({ port: typeof address === 'object' && address ? address.port : port, host, app: appInstance! });
+      resolve({ port: typeof address === 'object' && address ? address.port : port, host, app: startingApp });
     });
     server.on('error', reject);
   });

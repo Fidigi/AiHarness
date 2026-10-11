@@ -12,6 +12,7 @@ import { resolveEffectiveConfiguration } from '../config/effective-configuration
 import { serializeSessionPage } from './session-pagination.js';
 import { requireCapability } from '../security/request-security.js';
 import { SseChannel } from './sse-channel.js';
+import { providerAdministration, providerOperation } from '../runtime/provider-administration.js';
 
 function stringValue(value: unknown, name: string, options: { optional?: boolean; max?: number } = {}): string | undefined {
   if (value === undefined && options.optional) return undefined;
@@ -104,6 +105,7 @@ function initialSessionTitle(input: string): string {
 
 export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Router {
   const router = Router();
+  const operation = (handler: Parameters<typeof providerOperation>[1]) => providerOperation(servicesPromise, handler);
 
   router.get('/palette', async (request, response, next) => {
     try {
@@ -178,7 +180,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
     } catch (error) { next(error); }
   });
 
-  router.post('/reload', requireCapability('packages'), async (request, response, next) => {
+  router.post('/reload', requireCapability('packages'), operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       const cwd = stringValue(request.body?.cwd, 'cwd', { optional: true, max: 4_096 });
@@ -187,7 +189,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
   router.post('/sessions/:sessionId/interactions/:requestId', async (request, response, next) => {
     try {
@@ -212,42 +214,47 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       const services = await servicesPromise;
       // Bind before session/trust awaits: an old command cannot inherit a later generation.
       const requestInteraction = services.agentRuntime.createExtensionInteractionRequester(request.params.sessionId);
-      const session = services.sessionManager.get(request.params.sessionId)
-        ?? await services.sessionManager.loadFromStore(request.params.sessionId);
-      if (!session) {
-        response.status(404).json({ error: 'Session not found' });
-        return;
-      }
-      const command = services.extensionRegistry.getCommand(request.params.name);
-      if (!command) {
-        response.status(404).json({ error: 'Extension command not found' });
-        return;
-      }
-      const rawArgs = typeof request.body?.args === 'string' ? request.body.args.slice(0, 100_000) : '';
-      const args = services.redactText(rawArgs);
-      const effective = resolveEffectiveConfiguration(services, {
-        projectId: session.workspaceId, sessionId: session.id, session,
-      });
-      const providerName = services.redactText(
-        effective.values.provider ?? String(session.providerConfig?.type ?? 'mock'),
-      );
-      const output = await command.handler(args, {
-        sessionManager: services.sessionManager,
-        currentSessionId: session.id,
-        providerName,
-        provider: services.resolveProvider(providerName),
-        toolPreset: effective.values.toolPreset,
-        cwd: session.cwd,
-        workspaceId: session.workspaceId,
-        projectTrusted: session.cwd ? await services.trustManager.isTrusted(session.cwd) : false,
-        notify: (message, level = 'info') => services.agentRuntime.publishSessionEvent(
-          session.id, 'notice', { message, level },
-        ),
-        requestInteraction,
-      });
-      response.json({
-        output: typeof output === 'string' ? services.redactText(output.slice(0, 200_000)) : '',
-      });
+      const execute = async (): Promise<void> => {
+        const session = services.sessionManager.get(request.params.sessionId)
+          ?? await services.sessionManager.loadFromStore(request.params.sessionId);
+        if (!session) {
+          response.status(404).json({ error: 'Session not found' });
+          return;
+        }
+        const command = services.extensionRegistry.getCommand(request.params.name);
+        if (!command) {
+          response.status(404).json({ error: 'Extension command not found' });
+          return;
+        }
+        const rawArgs = typeof request.body?.args === 'string' ? request.body.args.slice(0, 100_000) : '';
+        const args = services.redactText(rawArgs);
+        const effective = resolveEffectiveConfiguration(services, {
+          projectId: session.workspaceId, sessionId: session.id, session,
+        });
+        const providerName = services.redactText(
+          effective.values.provider ?? String(session.providerConfig?.type ?? 'mock'),
+        );
+        const output = await command.handler(args, {
+          sessionManager: services.sessionManager,
+          currentSessionId: session.id,
+          providerName,
+          provider: services.resolveProvider(providerName),
+          toolPreset: effective.values.toolPreset,
+          cwd: session.cwd,
+          workspaceId: session.workspaceId,
+          projectTrusted: session.cwd ? await services.trustManager.isTrusted(session.cwd) : false,
+          notify: (message, level = 'info') => services.agentRuntime.publishSessionEvent(
+            session.id, 'notice', { message, level },
+          ),
+          requestInteraction,
+        });
+        response.json({
+          output: typeof output === 'string' ? services.redactText(output.slice(0, 200_000)) : '',
+        });
+        };
+      const administration = providerAdministration(services);
+      if (administration) await administration.withOperation(execute);
+      else await execute();
     } catch (error) {
       next(error);
     }
@@ -327,7 +334,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
     }
   });
 
-  router.post('/runs', async (request: Request, response: Response, next): Promise<void> => {
+  router.post('/runs', operation(async (request: Request, response: Response, next): Promise<void> => {
     try {
       const services = await servicesPromise;
       const body = request.body as Record<string, unknown>;
@@ -455,7 +462,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
   router.get('/runs/:runId', async (request, response, next) => {
     try {
@@ -550,7 +557,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
     }
   });
 
-  router.post('/sessions/:sessionId/compact', async (request, response, next) => {
+  router.post('/sessions/:sessionId/compact', operation(async (request, response, next) => {
     const controller = new AbortController();
     const abort = () => controller.abort();
     request.once('aborted', abort);
@@ -636,9 +643,9 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       });
       next(error);
     }
-  });
+  }));
 
-  router.post('/commands', requireCapability('terminal'), async (request, response, next) => {
+  router.post('/commands', requireCapability('terminal'), operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       const sessionId = stringValue(request.body?.sessionId, 'sessionId', { max: 200 })!;
@@ -657,16 +664,20 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         response.status(409).json({ error: 'Workspace non approuvé.', code: 'PROJECT_TRUST_REQUIRED' });
         return;
       }
-      response.status(202).json(services.commandRuntime.start({
+      const started = services.commandRuntime.start({
         sessionId,
         command,
         cwd,
         excludedFromContext: request.body?.excludedFromContext === true,
-      }));
+      });
+      response.status(202).json(started);
+      // Shell work can create reference files after the 202/disconnect. Keep
+      // the operation leased until its REAL durable settlement, not HTTP finish.
+      if (providerAdministration(services)?.isActivatedForExclusiveHost) await services.commandRuntime.wait(started.id);
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
   router.get('/commands/:commandId', requireCapability('terminal'), async (request, response) => {
     const services = await servicesPromise;

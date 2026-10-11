@@ -3,6 +3,7 @@ import type { ConfigurationScope } from '@ai-harness/core';
 import type { RuntimeServices } from '../runtime/services.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { requireCapability } from '../security/request-security.js';
+import { providerOperation } from '../runtime/provider-administration.js';
 
 function scope(value: unknown): ConfigurationScope | undefined {
   return value === 'global' || value === 'project' || value === 'session' ? value : undefined;
@@ -10,8 +11,9 @@ function scope(value: unknown): ConfigurationScope | undefined {
 
 export function createConfigurationRouter(servicesPromise: Promise<RuntimeServices>): Router {
   const router = Router();
+  const operation = (handler: Parameters<typeof providerOperation>[1]) => providerOperation(servicesPromise, handler);
 
-  router.get('/effective', async (request, response, next) => {
+  router.get('/effective', operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       await services.configurationStore.load();
@@ -27,9 +29,9 @@ export function createConfigurationRouter(servicesPromise: Promise<RuntimeServic
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
-  router.get('/scope', async (request, response, next) => {
+  router.get('/scope', operation(async (request, response, next) => {
     try {
       const selectedScope = scope(request.query.scope);
       if (!selectedScope) {
@@ -49,9 +51,9 @@ export function createConfigurationRouter(servicesPromise: Promise<RuntimeServic
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
-  router.patch('/scope', requireCapability('configuration'), async (request, response, next) => {
+  router.patch('/scope', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const selectedScope = scope(request.body?.scope);
       if (!selectedScope) {
@@ -68,9 +70,9 @@ export function createConfigurationRouter(servicesPromise: Promise<RuntimeServic
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
-  router.patch('/defaults', requireCapability('configuration'), async (request, response, next) => {
+  router.patch('/defaults', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const body = request.body as Record<string, unknown> | undefined;
       const model = body?.kind === 'model';
@@ -97,9 +99,9 @@ export function createConfigurationRouter(servicesPromise: Promise<RuntimeServic
         ['project', 'environment'].includes(effective.provenance[key as keyof typeof effective.provenance]?.scope ?? ''));
       response.json({ values, overridden, effective });
     } catch (error) { next(error); }
-  });
+  }));
 
-  router.put('/scope', requireCapability('configuration'), async (request, response, next) => {
+  router.put('/scope', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const selectedScope = scope(request.body?.scope);
       if (!selectedScope) {
@@ -116,7 +118,7 @@ export function createConfigurationRouter(servicesPromise: Promise<RuntimeServic
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
   return router;
 }

@@ -9,7 +9,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Domain | File | Context Load |
 |---|---|---|
 | Project overview | [`project-map.md`](./project-map.md) | ~550 lines — load first for global navigation |
-| AI Providers | [`topics/providers.md`](./topics/providers.md) | ~120 lines |
+| AI Providers | [`topics/providers.md`](./topics/providers.md) | ~150 lines |
 | Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~125 lines |
 | TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~35 lines |
 | Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~150 lines |

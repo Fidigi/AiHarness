@@ -1,5 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   AgentRuntime,
   ExtensionModuleLoader,
@@ -33,6 +34,7 @@ import { McpInventoryService } from './mcp-inventory-service.js';
 import { ModelCatalogService } from './model-catalog.js';
 import { PluginService } from './plugin-service.js';
 import { ProviderRegistryService } from './provider-registry.js';
+import { ProviderAdministration, assertProviderAdministrationRoots, assertProviderReferenceOwners } from './provider-administration.js';
 import { createRuntimeCloser } from './runtime-lifecycle.js';
 import { PushService } from './push-service.js';
 import { SkillCatalogService } from './skill-catalog.js';
@@ -48,6 +50,8 @@ export interface RuntimeServiceOptions {
   defaultCwd?: string;
   trustFile?: string;
   configurationFile?: string;
+  /** Temporary restricted SINGLE-WRITER administration; no shared CLI/server writers. */
+  providerRenameExclusiveHost?: boolean;
 }
 
 export interface RuntimeServices {
@@ -58,6 +62,7 @@ export interface RuntimeServices {
   linkedDirectories: LinkedDirectoriesService;
   trustManager: ProjectTrustManager;
   configurationStore: ConfigurationStore;
+  providerAdministration: ProviderAdministration;
   agentSettings: ResolvedAgentSettings;
   codemodeSelfTest?: CodemodeSelfTest;
   extensionRegistry: ExtensionRegistry;
@@ -103,14 +108,17 @@ export async function createRuntimeServices(
   const dataDir = options.dataDir ?? process.env.AI_HARNESS_DATA_DIR
     ?? path.join(os.homedir(), '.ai-harness');
   const requestedDefaultCwd = options.defaultCwd ?? process.env.AI_HARNESS_DEFAULT_CWD ?? process.cwd();
+  const exclusiveHost = options.providerRenameExclusiveHost ?? process.env.AI_HARNESS_PROVIDER_RENAME_EXCLUSIVE_HOST === '1';
   const sessionsDir = options.sessionsDir ?? path.join(dataDir, 'sessions');
+  const configurationStore = new ConfigurationStore(options.configurationFile ?? path.join(dataDir, 'config.json'));
+  // ALL modes must fail before initializing any executable/provider generation.
+  await configurationStore.load();
   const sessionStore = new JsonlSessionStore(sessionsDir);
   const sessionManager = new SessionManager({
     redactText: value => proxy.redactText(value),
     redactJson: value => proxy.redactJson(value),
   });
   sessionManager.setStore(sessionStore);
-  await sessionManager.loadAllSessions();
 
   const workspaceManager = new WorkspaceManager({
     allowedRoots: options.allowedRoots ?? environmentRoots(),
@@ -118,6 +126,16 @@ export async function createRuntimeServices(
   });
   await workspaceManager.initialize();
   const defaultCwd = await workspaceManager.getDefaultCwd();
+  if (exclusiveHost) await assertProviderAdministrationRoots(workspaceManager.getAllowedRoots(), [
+    dataDir, sessionsDir, options.configurationFile ?? path.join(dataDir, 'config.json'),
+    options.trustFile ?? path.join(dataDir, 'trust.json'),
+    // File tools must not be able to replace host/worker/dependency code that
+    // a later operation would execute with access to private reference stores.
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'),
+    path.resolve(path.dirname(fileURLToPath(import.meta.resolve('@ai-harness/core'))), '..'),
+    path.resolve(path.dirname(fileURLToPath(import.meta.resolve('express'))), '..'),
+  ]);
+  await sessionManager.loadAllSessions();
   const codemodeSelfTest = await (codemodeSelfTestPromise ??= testCodemodeSandbox());
 
   const trustManager = new ProjectTrustManager(options.trustFile ?? path.join(dataDir, 'trust.json'));
@@ -142,10 +160,6 @@ export async function createRuntimeServices(
     protectedPaths: [sessionsDir, path.dirname(options.trustFile ?? path.join(dataDir, 'trust.json'))],
   }, value => proxy.redactText(value));
   const mcpInventory = new McpInventoryService(dataDir, workspaceManager, trustManager, { host: mcpHost });
-  const configurationStore = new ConfigurationStore(
-    options.configurationFile ?? path.join(dataDir, 'config.json'),
-  );
-  await configurationStore.load();
   const subagentService = new SubagentService(
     workspaceManager,
     trustManager,
@@ -193,6 +207,12 @@ export async function createRuntimeServices(
   const extensionRegistry = new ExtensionRegistry();
   extensionRegistry.attachSessionManager(sessionManager);
   await registerWorkspaceTools(extensionRegistry, workspaceManager);
+  if (exclusiveHost) await extensionRegistry.load('builtin:provider-administration-policy', api => {
+    // Shell tools bypass the file-path boundary. Git-backed search tools can
+    // invoke repository-controlled fsmonitor helpers too. Neither is sandboxed
+    // to allowed roots with the server's OS identity.
+    api.before('before:tool', data => ['bash', 'powershell', 'grep', 'find', 'codemode'].includes(data.tool) ? false : undefined);
+  });
   await extensionRegistry.load('builtin:skills', api => {
     api.registerTool({
       name: 'load_skill',
@@ -243,7 +263,8 @@ export async function createRuntimeServices(
     redactText: value => proxy.redactText(value),
     redactJson: value => proxy.redactJson(value),
     createTextRedactor: () => proxy.getCredentialRedactor().createStream(),
-    mcpHost,
+    // Third-party MCP processes/tools are not sandboxed to allowed roots.
+    ...(exclusiveHost ? {} : { mcpHost }),
     onNotification: (category, run) => {
       const session = sessionManager.get(run.sessionId);
       return pushService.notify(category, proxy.redactJson({
@@ -268,6 +289,21 @@ export async function createRuntimeServices(
     value => proxy.redactText(value),
     value => proxy.redactJson(value),
   );
+  const providerAdministration = new ProviderAdministration(configurationStore, oldId => assertProviderReferenceOwners({
+    oldId,
+    sessions: sessionManager.list(),
+    running: [
+      ...agentRuntime.listRunning(),
+      ...subagentRuntime.list().filter(run => ['queued', 'running'].includes(run.status)),
+      ...terminalRuntime.list().filter(terminal => terminal.status === 'running'),
+    ],
+    sessionsDir,
+    subagentsFile: path.join(dataDir, 'subagents.json'),
+    agentSettingsFile: path.join(providerSettings.agentDir, 'settings.json'),
+    projectDirectories: [defaultCwd, ...sessionManager.list().flatMap(session => session.cwd ? [session.cwd] : [])],
+    projectRoots: workspaceManager.getAllowedRoots(),
+    extensionIds: extensionRegistry.list().map(extension => extension.id),
+  }));
   await extensionRegistry.load('builtin:subagents', api => {
     api.registerTool({
       name: 'spawn_subagent',
@@ -288,14 +324,15 @@ export async function createRuntimeServices(
         if (typeof values.profile !== 'string' || typeof values.task !== 'string') {
           throw new Error('profile and task are required.');
         }
-        const run = await subagentRuntime.start({
+        const childInput = {
           parentSessionId: context.currentSessionId,
           profileId: values.profile,
           task: values.task,
           provider: context.providerName,
           parentToolPreset: context.toolPreset,
           ...(typeof values.background === 'boolean' ? { background: values.background } : {}),
-        });
+        };
+        const run = await providerAdministration.withOperation(() => subagentRuntime.start(childInput));
         if (run.background) return {
           content: `Subagent ${run.profileName} started in the background.`,
           details: { runId: run.id, childSessionId: run.childSessionId, background: true },
@@ -332,7 +369,9 @@ export async function createRuntimeServices(
     cwd: extensionContext.cwd,
     includeGlobalLocation: false,
     includeProjectLocation: false,
-    paths: async () => [
+    // No arbitrary Node generation may execute (including reload/startup)
+    // in the restricted host, even if it currently has no provider reference.
+    paths: async () => exclusiveHost ? [] : [
       path.join(dataDir, 'extensions'),
       ...(extensionContext.trusted ? [path.join(extensionContext.cwd, '.ai-harness', 'extensions')] : []),
       ...await pluginService.getEnabledExtensionFiles({
@@ -342,7 +381,7 @@ export async function createRuntimeServices(
     ],
     isProjectTrusted: () => extensionContext.trusted,
   });
-  const reloadResources: RuntimeServices['reloadResources'] = async (input = {}) => {
+  const reloadResources: RuntimeServices['reloadResources'] = async (input = {}) => providerAdministration.withOperation(async () => {
     const cwd = await workspaceManager.resolve(input.cwd ?? extensionContext.cwd, { kind: 'directory' });
     const trusted = await trustManager.isTrusted(cwd);
     const descriptor = await workspaceManager.describe(cwd, trusted);
@@ -370,7 +409,7 @@ export async function createRuntimeServices(
         message: proxy.redactText(item.error.message),
       })),
     };
-  };
+  });
   extensionRegistry.setReloadHandler(async () => { await reloadResources(); });
   const initialExtensionLoad = await reloadResources();
   for (const error of initialExtensionLoad.errors) {
@@ -461,6 +500,7 @@ export async function createRuntimeServices(
     linkedDirectories,
     trustManager,
     configurationStore,
+    providerAdministration,
     agentSettings: providerSettings,
     codemodeSelfTest,
     extensionRegistry,
@@ -471,7 +511,7 @@ export async function createRuntimeServices(
     modelCatalog,
     pluginService,
     resolvePluginOperation: input => createConfiguredPluginService({
-      workspaceManager, trustManager, dataDir, restricted: false,
+      workspaceManager, trustManager, dataDir, restricted: exclusiveHost,
     }, input),
     providerRegistry,
     pushService,

@@ -230,7 +230,7 @@ export async function collectProviderModelCatalog(
     let configured = false;
     try { configured = provider.validateConfig(); } catch { /* Treat invalid providers as unavailable. */ }
     let discoveredModels: string[] = [];
-    if (configured) {
+    if (provider.canDiscoverModels()) {
       try {
         discoveredModels = await discoverProviderModelIds(provider, options);
       } catch {
