@@ -1474,7 +1474,7 @@ export function createApp(config?: ServerConfig): express.Application {
     });
   }
 
-  console.log(redactor.redact(`[Server] AiHarness server running on http://${host}:${port}`));
+  console.log(redactor.redact(`[Server] AiHarness application configured for http://${host}:${port}`));
   console.log(redactor.redact(`[Server] Providers: ${applicationProxy.getProviders().map(p => `${p.type}=${p.configured ? '✓' : '✗'}`).join(', ')}`));
 
   return app;

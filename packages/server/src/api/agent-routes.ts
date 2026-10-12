@@ -185,7 +185,10 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       const services = await servicesPromise;
       const cwd = stringValue(request.body?.cwd, 'cwd', { optional: true, max: 4_096 });
       const projectId = stringValue(request.body?.projectId, 'projectId', { optional: true, max: 500 });
-      response.json(await services.reloadResources({ cwd, projectId }));
+      const result = await services.reloadResources({ cwd, projectId });
+      // The runtime owns interaction retirement: a committed generation revokes
+      // it, as does clearing old handlers after a failed workspace replacement.
+      response.json(result);
     } catch (error) {
       next(error);
     }

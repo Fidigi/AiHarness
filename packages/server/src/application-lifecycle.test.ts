@@ -17,6 +17,19 @@ afterEach(async () => {
 });
 
 describe('Server application lifecycle', () => {
+  it('reports configuration rather than claiming a listening server during app construction', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    createApp({
+      port: 43123,
+      host: '127.0.0.1',
+      runtimeServicesFactory: async () => runtime(),
+      enableMockProvider: true,
+    });
+    const messages = log.mock.calls.map(args => args.join(' '));
+    expect(messages).toContain('[Server] AiHarness application configured for http://127.0.0.1:43123');
+    expect(messages.some(message => message.includes('server running'))).toBe(false);
+  });
+
   it('retires the previous Express generation before the replacement serves', async () => {
     const firstClose = vi.fn(async () => undefined);
     const secondClose = vi.fn(async () => undefined);

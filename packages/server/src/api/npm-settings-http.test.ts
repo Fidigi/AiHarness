@@ -12,7 +12,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
 interface Execution { executable: string; args: string[]; cwd: string; env: Record<string, string>; }
-async function fixture() {
+async function fixture(restricted = false) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-server-npm-')); roots.push(root);
   const dataDir = path.join(root, 'data'); const defaultCwd = path.join(root, 'default');
   const cwd = path.join(root, 'source'); const local = path.join(cwd, '.ai-harness'); const bin = path.join(root, 'path');
@@ -44,10 +44,11 @@ else {
   await mkdir(path.join(defaultCwd, '.ai-harness'));
   await writeFile(path.join(defaultCwd, '.ai-harness', 'settings.json'), JSON.stringify({ npmCommand: ['/missing-default-command'] }));
   vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'npm-admin'); vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'npm-admin');
+  vi.stubEnv('AI_HARNESS_PROVIDER_RENAME_EXCLUSIVE_HOST', '');
   vi.stubEnv('PATH', `${bin}${path.delimiter}${process.env.PATH}`);
   vi.stubEnv('NPM_CONFIG_USERCONFIG', '/private-must-not-inherit');
   let servicesPromise!: Promise<RuntimeServices>;
-  createApp({ dataDir, defaultCwd, allowedRoots: [cwd, defaultCwd], port: 0, host: '127.0.0.1',
+  createApp({ dataDir, defaultCwd, allowedRoots: [cwd, defaultCwd], port: 0, host: '127.0.0.1', providerRenameExclusiveHost: restricted,
     runtimeServicesFactory: (proxy, options) => (servicesPromise = createRuntimeServices(proxy, options)),
   });
   const { port } = await start(); const services = await servicesPromise;
@@ -292,4 +293,22 @@ describe('real HTTP npm settings admission (disposable executables, no network)'
     await noResidue(f.dataDir);
   });
 
+  it('restricted provider administration still refuses every package/executable operation and import', async () => {
+    const f = await fixture(true);
+    for (const [route, body] of [
+      ['', { action: 'install', scope: 'global', source: 'npm:server-forbidden' }],
+      ['', { action: 'update' }], ['/check', {}], ['/reload', {}],
+    ] as const) {
+      const result = await f.request(route, body); expect(result.status).toBe(409);
+      expect(result.body).toMatchObject({ code: 'PROVIDER_REFERENCE_OWNER_UNAVAILABLE' });
+    }
+    await expect(f.services.resolvePluginOperation({ cwd: f.cwd })).rejects.toMatchObject({ code: 'PROVIDER_REFERENCE_OWNER_UNAVAILABLE' });
+    expect(await readFile(f.log, 'utf8')).toBe('');
+    // A real arbitrary extension must not be imported on restricted reload.
+    const extensions = path.join(f.dataDir, 'extensions'); await mkdir(extensions);
+    const marker = path.join(f.root, 'import-marker');
+    await writeFile(path.join(extensions, 'forbidden.mjs'), `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(marker)}, 'executed'); export default () => {};`);
+    expect((await f.services.reloadResources({ cwd: f.cwd })).loadedExtensions).toEqual([]);
+    expect(await readdir(f.root)).not.toContain('import-marker');
+  });
 });
