@@ -24,6 +24,17 @@ export const suites = Object.freeze([
   ['demo', 'demo/playwright.config.ts'],
 ].map(([name, config]) => Object.freeze({ name, config })));
 
+// Each CI job has its own checkout/container/server/quota. Only the standard
+// fullyParallel suite is sharded; serial/owning-host suites stay whole.
+export const ciPartitions = Object.freeze([
+  ['interactions'],
+  ['linked', 'pane'],
+  ['locale', 'workspace', 'title'],
+  ['progress', 'demo'],
+].map((names, index) => Object.freeze({
+  index: index + 1, total: 4, suites: Object.freeze(names),
+})));
+
 function execute(command, args, env) {
   return new Promise(resolve => {
     const child = spawn(command, args, { stdio: 'inherit', env: { ...process.env, ...env } });
@@ -33,19 +44,36 @@ function execute(command, args, env) {
 }
 
 /** No arguments runs every whole-file lifetime. Explicit arguments retain focused
- * Playwright operation; --all-suites applies flags (e.g. reporter selection) to all. */
+ * Playwright operation; --ci-partition=N/4 selects a complete isolated CI job. */
 export async function runE2e(args, run = execute) {
-  const all = args.length === 0 || args.includes('--all-suites');
-  const flags = args.filter(arg => arg !== '--all-suites');
+  const selectors = args.filter(arg => arg.startsWith('--ci-partition'));
+  let partition;
+  if (selectors.length) {
+    const match = selectors.length === 1 && /^--ci-partition=([1-4])\/4$/.exec(selectors[0]);
+    if (!match) throw new Error('Expected exactly one --ci-partition=N/4 with N between 1 and 4');
+    partition = ciPartitions[Number(match[1]) - 1];
+  }
+  const flags = args.filter(arg => arg !== '--all-suites' && !selectors.includes(arg));
+  if (partition && (args.includes('--all-suites')
+    || flags.some(arg => arg !== '--list' && !/^--reporter=\S+$/.test(arg)))) {
+    throw new Error('CI partitions cannot filter tests or override owning configurations, shards, workers or retries');
+  }
+  const all = !!partition || args.length === 0 || args.includes('--all-suites');
   if (all && flags.some(arg => arg === '--config' || arg.startsWith('--config='))) {
     throw new Error('--all-suites cannot replace the owning configurations');
   }
-  const plan = all ? suites : [{ name: 'focused' }];
+  const plan = partition ? suites.filter(suite => suite.name === 'standard' || partition.suites.includes(suite.name))
+    : all ? suites : [{ name: 'focused' }];
   const results = [];
   const build = await run('npm', ['run', 'build'], {});
   if (build) return { status: build, results: [{ name: 'build', status: build }] };
   for (const { name, config } of plan) {
-    const env = { PLAYWRIGHT_HTML_OUTPUT_DIR: `playwright-report/${name}` };
+    const artifact = `${partition ? `partition-${partition.index}/` : ''}${name}`;
+    // Reporter environment paths must be absolute: JSON resolves relative names
+    // from each config directory, which would strand preview/demo reports outside
+    // the directories collected by Make and uploaded by GitHub.
+    const env = { PLAYWRIGHT_HTML_OUTPUT_DIR: path.resolve(`playwright-report/${artifact}`),
+      PLAYWRIGHT_JSON_OUTPUT_NAME: path.resolve(`test-results/${artifact}/report.json`) };
     if (name === 'demo' || config === 'demo/playwright.config.ts'
       || flags.some(arg => arg.includes('demo/playwright.config'))) {
       env.DEMO_BASE = process.env.DEMO_BASE ?? '/AiHarness/';
@@ -63,15 +91,18 @@ export async function runE2e(args, run = execute) {
       }
       if (failed) { results.push({ name, status: failed }); continue; }
     }
-    console.log(`E2E suite: ${name}`);
+    const shard = partition && name === 'standard' ? `${partition.index}/${partition.total}` : undefined;
+    console.log(`E2E suite: ${name}${shard ? ` (shard ${shard})` : ''}`);
     const status = await run(process.execPath, [
       '--no-maglev', 'node_modules/@playwright/test/cli.js', 'test',
       ...(config ? [`--config=${config}`] : []), ...flags,
-      '--workers=1', '--retries=0', ...(all ? [`--output=test-results/${name}`] : []),
+      ...(shard ? [`--shard=${shard}`] : []),
+      '--workers=1', '--retries=0', ...(all ? [`--output=test-results/${artifact}`] : []),
     ], env);
-    results.push({ name, status });
+    results.push({ name, status, ...(shard ? { shard } : {}) });
   }
-  return { status: results.find(result => result.status)?.status ?? 0, results };
+  return { status: results.find(result => result.status)?.status ?? 0, results,
+    ...(partition ? { partition: { index: partition.index, total: partition.total } } : {}) };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

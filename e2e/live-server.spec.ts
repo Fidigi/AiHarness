@@ -51,6 +51,9 @@ test.describe('Intégration navigateur avec le vrai serveur', () => {
     await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
     const explorer = page.getByRole('complementary', { name: 'Workspace explorer' });
     await expect(explorer).toBeVisible();
+    // The upload bypassed the explorer UI. Refresh its directory explicitly so
+    // this case also works on a fresh server, without an earlier case warming it.
+    await explorer.getByRole('button', { name: 'Refresh files', exact: true }).click();
     // Exercise the mounted file row, not a window event racing lazy hydration.
     await explorer.getByRole('button', { name: /^📄 aih-live-upload\.txt(?:\s|$)/ }).click();
     await expect(page.locator('.file-viewer')).toContainText('LIVE_FILE_OK');
