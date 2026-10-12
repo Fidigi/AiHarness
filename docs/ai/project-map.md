@@ -526,6 +526,8 @@ When code and documentation disagree, verify the behavior against source/tests a
 
 The test Dockerfile pins supported Node 24.15.0 LTS with npm 12.1.0. Retain earlier Node 26 signal exits (including `pure virtual method called` / SIGABRT) as failed runtime evidence; an LTS run is not a causal diagnosis of all historical crashes. Do not loosen product budgets/assertions or retry a failed case to hide a worker exit.
 
+The test image builds Core, then CLI and Server before Vitest starts: subprocess tests consume their emitted JavaScript independently of Vitest's TypeScript aliases. `.docker/test-build.test.mjs` runs during the image build to check emitted entries/declarations, executable modes and real CLI help outside the checkout. Root Vitest serializes CI test files because executable tests already spawn Node children; preserve existing case deadlines and assertions rather than increasing them to mask cross-file CPU contention.
+
 The `Makefile` explicitly requires tests and type checks to run in Docker. Do not run `npm test`, Vitest, Playwright, or TypeScript validation directly on the host. Preferred commands:
 
 ```bash

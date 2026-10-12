@@ -4,8 +4,9 @@ import path from 'path';
 export default defineConfig({
   test: {
     globals: true,
-    // Bound CI worker/process fan-out: executable contract tests spawn their own Node children.
-    maxWorkers: process.env.CI ? 4 : undefined,
+    // Serialize CI files: executable contract tests already spawn real Node children.
+    // Parallel files contend with their existing per-case deadlines on small runners.
+    maxWorkers: process.env.CI ? 1 : undefined,
     include: [
       'packages/core/src/**/*.test.ts',
       'packages/cli/src/**/*.test.ts',

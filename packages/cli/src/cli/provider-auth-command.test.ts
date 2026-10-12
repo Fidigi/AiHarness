@@ -14,6 +14,7 @@ const execute = promisify(execFile);
 let root: string, cwd: string, agent: string;
 let server: Server | undefined;
 let requests: string[];
+let transportErrors: { name: string; code?: string }[];
 let endpoint: string;
 let mode: 'success' | 'device-stall' | 'token-stall' | 'pending' | 'publication-failure';
 let activeResponses = 0;
@@ -54,6 +55,8 @@ beforeEach(async () => {
   cwd = path.join(root, 'workspace'); agent = path.join(root, 'agent');
   await mkdir(cwd); await mkdir(agent);
   requests = []; mode = 'success'; activeResponses = 0; deviceUserCode = 'VISIBLE-123';
+  const caseTransportErrors: typeof transportErrors = [];
+  transportErrors = caseTransportErrors;
   await execute('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', path.join(root, 'key.pem'),
     '-out', path.join(root, 'cert.pem'), '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1']);
   server = createServer({ key: await readFile(path.join(root, 'key.pem')), cert: await readFile(path.join(root, 'cert.pem')) }, (req, res) => {
@@ -71,6 +74,9 @@ beforeEach(async () => {
       verification_uri: `${endpoint}/verify?private=do-not-print`, verification_uri_complete: `${endpoint}/verify?device=private-device-code-743`,
       expires_in: 30, interval: 0.01,
     } : mode === 'pending' ? { error: 'authorization_pending' } : { access_token: token, refresh_token: refresh, expires_in: 3600, token_type: 'Bearer' }));
+  });
+  server.on('tlsClientError', (error: NodeJS.ErrnoException) => {
+    caseTransportErrors.push({ name: error.name, code: error.code });
   });
   await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
   endpoint = `https://127.0.0.1:${(server.address() as { port: number }).port}`;
@@ -160,7 +166,9 @@ describe('actual top-level provider auth CLI', () => {
     mode = selected;
     const start = Date.now();
     const result = await invoke(['auth', 'login', 'openai', '--timeout=1']);
-    expect(result).toMatchObject({ code: 124, signal: null, stdout: '', stderr: expect.stringContaining('Auth deadline exceeded.') });
+    expect(result, JSON.stringify({ requests, transportErrors })).toMatchObject({
+      code: 124, signal: null, stdout: '', stderr: expect.stringContaining('Auth deadline exceeded.'),
+    });
     expect(Date.now() - start).toBeLessThan(4000);
     expect(activeResponses).toBe(0);
     await expect(readFile(path.join(agent, 'credentials.enc'))).rejects.toMatchObject({ code: 'ENOENT' });

@@ -39,6 +39,7 @@ test-results/
 !.docker/e2e-suites.mjs
 !.docker/e2e-suites.d.mts
 !.docker/e2e-suites.test.mjs
+!.docker/test-build.test.mjs
 !.docker/baseline-artifacts.mjs
 !.docker/baseline-artifacts.test.mjs
 !.docker/run-e2e.mjs

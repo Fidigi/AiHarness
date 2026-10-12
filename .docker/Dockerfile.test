@@ -66,9 +66,12 @@ RUN npm ci
 
 COPY . .
 
-# Server/CLI tests import the package export (dist), not Core's TS source.
-# Always rebuild it so a stale local dist cannot affect reproducibility.
-RUN npm run build --workspace @ai-harness/core
+# Process tests consume emitted Core, CLI and Server entries, not TS aliases.
+# Build dependencies first; never rely on a local dist surviving COPY.
+RUN npm run build --workspace @ai-harness/core \
+    && npm run build --workspace @ai-harness/cli \
+    && npm run build --workspace @ai-harness/server
+RUN node --test .docker/test-build.test.mjs
 
 # Run against COPY's filtered context, not a later source overlay. Fail the image
 # build if the E2E entry point, declarations or owning configurations are missing.
