@@ -244,15 +244,43 @@ test.describe('Conversation detached agent', () => {
     ]);
     session.autoCompaction = true;
     await installMockApi(page, { sessions: [session], automaticCompaction: true });
-    await page.goto('/chat/automatic-session');
-    await expect(page.getByText('Old context that must disappear')).toBeVisible();
-    await page.getByPlaceholder(/Type your message/).fill('Trigger automatic compaction');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    let connected!: () => void;
+    const firstConnection = new Promise<void>(resolve => { connected = resolve; });
+    let initial = true;
+    await page.route('**/api/agent/sessions/automatic-session/events*', async route => {
+      if (!initial) { await route.fallback(); return; }
+      initial = false;
+      // Capture readiness before the prompt, as a live server would. The finite
+      // mock stream reconnects afterward with canonical running state before it
+      // completes compaction. Generating initial readiness only after Send can
+      // instead make catch-up skip an already-completed historical notification.
+      const body = `event: connection.ready\ndata: ${JSON.stringify({
+        snapshot: { sessionId: session.id, lastSequence: 0 }, reset: false,
+      })}\n\n`;
+      connected();
+      await held;
+      await route.fulfill({ contentType: 'text/event-stream', body });
+    });
+    try {
+      await page.goto('/chat/automatic-session');
+      await expect(page.getByText('Old context that must disappear')).toBeVisible();
+      await firstConnection;
+      const started = page.waitForResponse(response => response.request().method() === 'POST'
+        && response.url().endsWith('/api/agent/runs'));
+      await page.getByPlaceholder(/Type your message/).fill('Trigger automatic compaction');
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await started;
+      release();
 
-    await expect(page.getByRole('status').filter({ hasText: '120 → 40 tokens (80 saved)' })).toBeVisible();
-    await expect(page.getByText('Old context that must disappear')).toBeHidden();
-    await expect(page.locator('.message.user')).toContainText('Trigger automatic compaction');
-    await expect(page.locator('.message.assistant')).toContainText('Mock response');
+      await expect(page.getByRole('status').filter({ hasText: '120 → 40 tokens (80 saved)' })).toBeVisible();
+      await expect(page.getByText('Old context that must disappear')).toBeHidden();
+      await expect(page.locator('.message.user')).toContainText('Trigger automatic compaction');
+      await expect(page.locator('.message.assistant')).toContainText('Mock response');
+    } finally {
+      release();
+    }
   });
 
   test('affiche une erreur d’agent', async ({ page }) => {

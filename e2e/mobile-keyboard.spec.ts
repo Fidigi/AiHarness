@@ -318,7 +318,22 @@ test.describe('real product and disposable server', () => {
     await expect(preview).toBeInViewport();
     await expect(paste).toBeFocused();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-    await capture(page, 'keyboard-live-mcp-mobile-light.png', '.mcp-import-panel');
+    const panel = page.locator('.mcp-import-panel');
+    await panel.scrollIntoViewIfNeeded();
+    // Real server sections above this panel vary between isolated CI shards.
+    // Normalize only the capture's fractional pixel origin, not its dimensions,
+    // typography, controls or focus. Keep the original golden and 2% tolerance.
+    const previousTranslate = await panel.evaluate(element => {
+      const previous = element.style.translate;
+      const top = element.getBoundingClientRect().top;
+      element.style.translate = `0px ${Math.round(top) - top}px`;
+      return previous;
+    });
+    try {
+      await capture(page, 'keyboard-live-mcp-mobile-light.png', '.mcp-import-panel');
+    } finally {
+      await panel.evaluate((element, previous) => { element.style.translate = previous; }, previousTranslate);
+    }
   });
 });
 
