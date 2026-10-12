@@ -81,16 +81,18 @@ export function createWorkspaceRouter(
   });
 
   router.get('/default', async (_request, response, next) => {
+    response.setHeader('Cache-Control', 'no-store');
     try {
       const services = await servicesPromise;
       const cwd = await services.workspaceManager.getDefaultCwd();
       response.json(await describeWorkspace(services, cwd));
     } catch (error) {
-      next(error);
+      if (!sendWorkspacePathError(response, error)) next(error);
     }
   });
 
   router.post('/validate', async (request, response, next) => {
+    response.setHeader('Cache-Control', 'no-store');
     try {
       const services = await servicesPromise;
       if (typeof request.body?.cwd !== 'string') {
@@ -100,7 +102,7 @@ export function createWorkspaceRouter(
       const cwd = await services.workspaceManager.resolve(request.body.cwd, { kind: 'directory' });
       response.json(await describeWorkspace(services, cwd));
     } catch (error) {
-      next(error);
+      if (!sendWorkspacePathError(response, error)) next(error);
     }
   });
 

@@ -198,6 +198,7 @@ export interface SessionState {
   sessions: StoredSession[];
   activeSessionId: string | null;
   workspace: WorkspaceDescriptor | null;
+  workspaceUnavailable: boolean;
   recentWorkspaces: WorkspaceDescriptor[];
   runs: Record<string, AgentRunSnapshot>;
   runAuthorities: Record<string, RunAuthority>;
@@ -688,12 +689,24 @@ function scheduleSessionViewCache(state: SessionCacheState): void {
 
 function readWorkspaceState(): { current?: string; recent: WorkspaceDescriptor[] } {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(WORKSPACE_STATE_KEY) || '{}') as {
+    const raw = window.localStorage.getItem(WORKSPACE_STATE_KEY) || '{}';
+    if (raw.length > 65_536) return { recent: [] };
+    const parsed = JSON.parse(raw) as {
       version?: number;
       current?: string;
       recent?: WorkspaceDescriptor[];
     };
-    if (parsed.version === 1 && Array.isArray(parsed.recent)) return { current: parsed.current, recent: parsed.recent.slice(0, 8) };
+    if (parsed.version === 1 && Array.isArray(parsed.recent)) {
+      const boundedPath = (value: unknown): value is string => typeof value === 'string'
+        && value.length > 0 && value.length <= 4_096 && !value.includes('\0');
+      const recent = parsed.recent.filter(item => item && boundedPath(item.cwd)
+        && typeof item.id === 'string' && item.id.length <= 256
+        && typeof item.name === 'string' && item.name.length <= 256).slice(0, 8)
+        .map(item => ({ id: item.id, cwd: item.cwd, name: item.name, trusted: false,
+          ...(boundedPath(item.displayPath) ? { displayPath: item.displayPath } : {}),
+        }));
+      return { ...(boundedPath(parsed.current) ? { current: parsed.current } : {}), recent };
+    }
   } catch { /* Storage is optional. */ }
   return { recent: [] };
 }
@@ -712,6 +725,7 @@ export const useSessionStore = create<AppState>((set, get) => ({
   sessions: [],
   activeSessionId: null,
   workspace: null,
+  workspaceUnavailable: false,
   recentWorkspaces: [],
   runs: {},
   runAuthorities: {},
@@ -754,10 +768,14 @@ export const useSessionStore = create<AppState>((set, get) => ({
     const stored = readWorkspaceState();
     const candidate = requestedCwd || stored.current;
     const selected = candidate ? await validateWorkspace(candidate) : await getDefaultWorkspace();
-    const fallback = !selected.success || !selected.data ? await getDefaultWorkspace() : selected;
-    if (sequence !== workspaceHydrationSequence || !fallback.success || !fallback.data) return;
+    const fallback = candidate && (!selected.success || !selected.data) ? await getDefaultWorkspace() : selected;
+    if (sequence !== workspaceHydrationSequence) return;
+    if (!fallback.success || !fallback.data) {
+      set({ workspace: null, workspaceUnavailable: true });
+      return;
+    }
     const recent = [fallback.data, ...stored.recent.filter(item => item.cwd !== fallback.data!.cwd)].slice(0, 8);
-    set({ workspace: fallback.data, recentWorkspaces: recent });
+    set({ workspace: fallback.data, workspaceUnavailable: false, recentWorkspaces: recent });
     writeWorkspaceState(fallback.data, recent);
   },
 
@@ -772,7 +790,7 @@ export const useSessionStore = create<AppState>((set, get) => ({
       refreshed.data,
       ...get().recentWorkspaces.filter(item => item.cwd !== refreshed.data!.cwd),
     ].slice(0, 8);
-    set({ workspace: refreshed.data, recentWorkspaces: recent });
+    set({ workspace: refreshed.data, workspaceUnavailable: false, recentWorkspaces: recent });
     writeWorkspaceState(refreshed.data, recent);
   },
 
@@ -785,6 +803,7 @@ export const useSessionStore = create<AppState>((set, get) => ({
     const recent = [workspace, ...get().recentWorkspaces.filter(item => item.cwd !== workspace.cwd)].slice(0, 8);
     set(state => ({
       workspace,
+      workspaceUnavailable: false,
       recentWorkspaces: recent,
       activeSessionId: null,
       sessions: [],

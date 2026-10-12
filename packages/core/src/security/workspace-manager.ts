@@ -16,6 +16,8 @@ export type WorkspacePathKind = 'any' | 'file' | 'directory';
 export interface WorkspaceDescriptor {
   id: string;
   cwd: string;
+  /** Display only; cwd remains the canonical path used for persistence and authority. */
+  displayPath?: string;
   name: string;
   trusted: boolean;
   /** Persisted effective allow suitable for trust-requiring operations. */
@@ -75,10 +77,13 @@ function expandHome(input: string, homeDir: string): string {
 /** Canonical path boundary shared by workspaces, files, Git, tools and terminals. */
 export class WorkspaceManager {
   private roots: string[] = [];
+  private configuredRootPaths: string[] = [];
   private initialized = false;
   private readonly configuredRoots: string[];
   private readonly homeDir: string;
   private readonly defaultPath: string;
+  private readonly launchCwd = process.cwd();
+  private canonicalHome?: string;
 
   constructor(options: { allowedRoots?: string[]; defaultCwd?: string; homeDir?: string } = {}) {
     this.homeDir = options.homeDir ?? os.homedir();
@@ -88,8 +93,10 @@ export class WorkspaceManager {
 
   async initialize(): Promise<void> {
     const canonical: string[] = [];
+    const configuredPaths: string[] = [];
     for (const configured of this.configuredRoots) {
-      const expanded = path.resolve(expandHome(configured, this.homeDir));
+      const expanded = path.resolve(this.launchCwd, expandHome(configured, this.homeDir));
+      configuredPaths.push(expanded);
       try {
         const resolved = await realpath(expanded);
         if ((await stat(resolved)).isDirectory()) canonical.push(resolved);
@@ -97,7 +104,9 @@ export class WorkspaceManager {
         throw new WorkspacePathError('NOT_FOUND', `Racine de workspace introuvable : ${expanded}`);
       }
     }
+    this.canonicalHome = await realpath(this.homeDir).catch(() => undefined);
     this.roots = [...new Set(canonical)].sort();
+    this.configuredRootPaths = configuredPaths;
     this.initialized = true;
   }
 
@@ -108,7 +117,21 @@ export class WorkspaceManager {
   }
 
   async getDefaultCwd(): Promise<string> {
-    return this.resolve(this.defaultPath, { kind: 'directory' });
+    this.assertInitialized();
+    if (!validBoundedPath(this.defaultPath)) throw new WorkspacePathError('INVALID_PATH', 'Chemin invalide.');
+    // Resolve a relative configured default once, not relative to itself.
+    const configured = path.resolve(this.launchCwd, expandHome(this.defaultPath, this.homeDir));
+    if (!validBoundedPath(configured)) throw new WorkspacePathError('INVALID_PATH', 'Chemin invalide.');
+    // A declared root may itself be a symlink. Only that explicit lexical scope
+    // may be canonicalized here; final authority remains the initialized roots.
+    if (!this.roots.some(root => inside(root, configured))
+      && this.configuredRootPaths.some(root => inside(root, configured))) {
+      const canonical = await realpath(configured).catch(() => {
+        throw new WorkspacePathError('NOT_FOUND', 'Chemin introuvable.');
+      });
+      return this.resolve(canonical, { kind: 'directory' });
+    }
+    return this.resolve(configured, { kind: 'directory' });
   }
 
   async resolve(
@@ -122,7 +145,7 @@ export class WorkspaceManager {
     const expanded = expandHome(input, this.homeDir);
     const base = options.base
       ? await this.resolve(options.base, { kind: 'directory' })
-      : await this.canonicalConfiguredDefault();
+      : path.isAbsolute(expanded) ? this.launchCwd : await this.canonicalConfiguredDefault();
     const absolute = path.resolve(base, expanded);
     if (!validBoundedPath(absolute)) throw new WorkspacePathError('INVALID_PATH', 'Chemin invalide.');
     // Reject lexical escapes before realpath/lstat so an untrusted path cannot probe
@@ -169,7 +192,7 @@ export class WorkspaceManager {
     const expanded = expandHome(input, this.homeDir);
     const base = options.base
       ? await this.resolve(options.base, { kind: 'directory' })
-      : await this.canonicalConfiguredDefault();
+      : path.isAbsolute(expanded) ? this.launchCwd : await this.canonicalConfiguredDefault();
     const absolute = path.resolve(base, expanded);
     if (!validBoundedPath(absolute)) throw new WorkspacePathError('INVALID_PATH', 'Chemin invalide.');
     if (!this.roots.some(root => inside(root, absolute))) {
@@ -231,6 +254,9 @@ export class WorkspaceManager {
     return {
       id: createHash('sha256').update(canonical).digest('hex').slice(0, 24),
       cwd: canonical,
+      displayPath: this.canonicalHome && inside(this.canonicalHome, canonical)
+        ? (canonical === this.canonicalHome ? '~' : `~/${path.relative(this.canonicalHome, canonical).split(path.sep).join('/')}`)
+        : canonical,
       name: path.basename(canonical) || canonical,
       trusted,
       ...(git ? { git } : {}),
@@ -503,12 +529,8 @@ export class WorkspaceManager {
   }
 
   private async canonicalConfiguredDefault(): Promise<string> {
-    const absolute = path.resolve(expandHome(this.defaultPath, this.homeDir));
-    try {
-      return await realpath(absolute);
-    } catch {
-      return this.roots[0];
-    }
+    // Relative inputs have no safe implicit base when the default is unavailable.
+    return this.getDefaultCwd();
   }
 
   private assertInitialized(): void {

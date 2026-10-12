@@ -23,6 +23,7 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSessionStore } from '../store/session-store';
 import LanguageSelector from './LanguageSelector';
 import { linkedDirectoryMessages } from './linked-directory-messages';
+import { workspaceFeedback } from './workspace-feedback';
 import LinkedDirectoryBoundary from './LinkedDirectoryBoundary';
 
 interface SidebarProps {
@@ -71,6 +72,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
   const linkedDirectoryNavigation = JSON.stringify([location.key, location.pathname, location.search, location.hash]);
   const sessions = useSessionStore(state => state.sessions);
   const workspace = useSessionStore(state => state.workspace);
+  const workspaceUnavailable = useSessionStore(state => state.workspaceUnavailable);
   const recentWorkspaces = useSessionStore(state => state.recentWorkspaces);
   const runs = useSessionStore(state => state.runs);
   const providers = useSessionStore(state => state.providers);
@@ -81,6 +83,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
   const renameLocal = useSessionStore(state => state.renameSession);
   const activeSessionId = useSessionStore(state => state.activeSessionId);
   const { t, locale } = useI18n();
+  const feedback = workspaceFeedback(locale);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [linkedDirectoryRequest, setLinkedDirectoryRequest] = useState<{ cwd: string; navigation: string }>();
   const linkedDirectoryOpen = Boolean(linkedDirectoryRequest && workspace?.cwd === linkedDirectoryRequest.cwd
@@ -373,8 +376,8 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
             setPickerOpen(true);
             void browse(workspace?.cwd);
           }} title={workspace?.cwd}>
-            <span>{workspace?.name ?? t('workspace.loading')}</span>
-            <small>{workspace?.git?.branch ?? workspace?.cwd ?? ''}</small>
+            <span>{workspace?.name ?? t(workspaceUnavailable ? 'workspace.choose' : 'workspace.loading')}</span>
+            <small>{workspace?.git?.branch ?? workspace?.displayPath ?? workspace?.cwd ?? ''}</small>
           </button>
           {workspace && fileManagerAvailable && (
             <button className="workspace-file-manager" disabled={fileManagerOpening}
@@ -384,6 +387,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
             </button>
           )}
         </div>
+        {workspaceUnavailable && <p role="alert">{feedback.unavailable}</p>}
         {workspace && <button className="workspace-linked-directories" onClick={() => setLinkedDirectoryRequest({ cwd: workspace.cwd, navigation: linkedDirectoryNavigation })}>
           {linkedDirectoryMessages(locale).title}
         </button>}
@@ -548,7 +552,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
             {recentWorkspaces.length > 0 && (
               <div className="recent-workspaces" aria-label={t('workspace.recent')}>
                 {recentWorkspaces.map(item => (
-                  <button key={item.id} onClick={() => void browse(item.cwd)}>{item.name}<small>{item.cwd}</small></button>
+                  <button key={item.id} onClick={() => void browse(item.cwd)}>{item.name}<small>{item.displayPath ?? item.cwd}</small></button>
                 ))}
               </div>
             )}

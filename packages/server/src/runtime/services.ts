@@ -17,6 +17,7 @@ import {
   testCodemodeSandbox,
   type CodemodeSelfTest,
   WorkspaceManager,
+  WorkspacePathError,
 } from '@ai-harness/core';
 import type {
   AiProvider,
@@ -105,8 +106,8 @@ export async function createRuntimeServices(
   proxy: AiProxyServer,
   options: RuntimeServiceOptions = {},
 ): Promise<RuntimeServices> {
-  const dataDir = options.dataDir ?? process.env.AI_HARNESS_DATA_DIR
-    ?? path.join(os.homedir(), '.ai-harness');
+  const dataDir = path.resolve(options.dataDir ?? process.env.AI_HARNESS_DATA_DIR
+    ?? path.join(os.homedir(), '.ai-harness'));
   const requestedDefaultCwd = options.defaultCwd ?? process.env.AI_HARNESS_DEFAULT_CWD ?? process.cwd();
   const exclusiveHost = options.providerRenameExclusiveHost ?? process.env.AI_HARNESS_PROVIDER_RENAME_EXCLUSIVE_HOST === '1';
   const sessionsDir = options.sessionsDir ?? path.join(dataDir, 'sessions');
@@ -125,7 +126,13 @@ export async function createRuntimeServices(
     defaultCwd: requestedDefaultCwd,
   });
   await workspaceManager.initialize();
-  const defaultCwd = await workspaceManager.getDefaultCwd();
+  let defaultCwd: string | undefined;
+  try { defaultCwd = await workspaceManager.getDefaultCwd(); }
+  catch (error) {
+    // Valid explicit roots may remain usable even when the default is unavailable.
+    // Do not select another workspace or hide unrelated initialization failures.
+    if (!(error instanceof WorkspacePathError)) throw error;
+  }
   if (exclusiveHost) await assertProviderAdministrationRoots(workspaceManager.getAllowedRoots(), [
     dataDir, sessionsDir, options.configurationFile ?? path.join(dataDir, 'config.json'),
     options.trustFile ?? path.join(dataDir, 'trust.json'),
@@ -141,10 +148,10 @@ export async function createRuntimeServices(
   const trustManager = new ProjectTrustManager(options.trustFile ?? path.join(dataDir, 'trust.json'));
   await trustManager.load();
   const providerSettings = await loadAgentSettings({
-    cwd: defaultCwd,
+    cwd: defaultCwd ?? dataDir,
     agentDir: dataDir,
     agentDirTrusted: true,
-    projectTrusted: await trustManager.isTrusted(defaultCwd),
+    projectTrusted: defaultCwd ? await trustManager.isTrusted(defaultCwd) : false,
   });
   proxy.setNetworkSettings(resolveAgentProviderNetworkSettings(providerSettings.settings));
   const mcpHost = new McpSessionHost({
@@ -300,7 +307,7 @@ export async function createRuntimeServices(
     sessionsDir,
     subagentsFile: path.join(dataDir, 'subagents.json'),
     agentSettingsFile: path.join(providerSettings.agentDir, 'settings.json'),
-    projectDirectories: [defaultCwd, ...sessionManager.list().flatMap(session => session.cwd ? [session.cwd] : [])],
+    projectDirectories: [...(defaultCwd ? [defaultCwd] : []), ...sessionManager.list().flatMap(session => session.cwd ? [session.cwd] : [])],
     projectRoots: workspaceManager.getAllowedRoots(),
     extensionIds: extensionRegistry.list().map(extension => extension.id),
   }));
@@ -358,31 +365,10 @@ export async function createRuntimeServices(
       },
     });
   });
-  let extensionContext = {
-    cwd: await workspaceManager.getDefaultCwd(),
-    projectId: undefined as string | undefined,
-    trusted: false,
-  };
-  extensionContext.trusted = await trustManager.isTrusted(extensionContext.cwd);
-  extensionContext.projectId = (await workspaceManager.describe(extensionContext.cwd, extensionContext.trusted)).id;
-  const extensionLoader = new ExtensionModuleLoader(extensionRegistry, {
-    cwd: extensionContext.cwd,
-    includeGlobalLocation: false,
-    includeProjectLocation: false,
-    // No arbitrary Node generation may execute (including reload/startup)
-    // in the restricted host, even if it currently has no provider reference.
-    paths: async () => exclusiveHost ? [] : [
-      path.join(dataDir, 'extensions'),
-      ...(extensionContext.trusted ? [path.join(extensionContext.cwd, '.ai-harness', 'extensions')] : []),
-      ...await pluginService.getEnabledExtensionFiles({
-        cwd: extensionContext.cwd,
-        projectId: extensionContext.projectId,
-      }),
-    ],
-    isProjectTrusted: () => extensionContext.trusted,
-  });
+  let extensionContext: { cwd?: string; projectId?: string; trusted: boolean } = { cwd: defaultCwd, trusted: false };
+  let extensionLoader: ExtensionModuleLoader | undefined;
   const reloadResources: RuntimeServices['reloadResources'] = async (input = {}) => providerAdministration.withOperation(async () => {
-    const cwd = await workspaceManager.resolve(input.cwd ?? extensionContext.cwd, { kind: 'directory' });
+    const cwd = await workspaceManager.resolve(input.cwd ?? extensionContext.cwd ?? await workspaceManager.getDefaultCwd(), { kind: 'directory' });
     const trusted = await trustManager.isTrusted(cwd);
     const descriptor = await workspaceManager.describe(cwd, trusted);
     if (input.projectId && input.projectId !== descriptor.id) {
@@ -390,6 +376,20 @@ export async function createRuntimeServices(
     }
     const contextChanged = cwd !== extensionContext.cwd;
     extensionContext = { cwd, projectId: descriptor.id, trusted };
+    // Bind discovery only after a real workspace has been validated; the private
+    // data directory is never a substitute workspace for executable discovery.
+    extensionLoader ??= new ExtensionModuleLoader(extensionRegistry, {
+      cwd,
+      includeGlobalLocation: false,
+      includeProjectLocation: false,
+      // Restricted hosts never execute an arbitrary Node generation.
+      paths: async () => exclusiveHost || !extensionContext.cwd ? [] : [
+        path.join(dataDir, 'extensions'),
+        ...(extensionContext.trusted ? [path.join(extensionContext.cwd, '.ai-harness', 'extensions')] : []),
+        ...await pluginService.getEnabledExtensionFiles({ cwd: extensionContext.cwd, projectId: extensionContext.projectId }),
+      ],
+      isProjectTrusted: () => extensionContext.trusted,
+    });
     let result = await extensionLoader.reload();
     // Never keep executable handlers from another workspace when its replacement is invalid.
     if (contextChanged && !result.committed) {
@@ -411,9 +411,20 @@ export async function createRuntimeServices(
     };
   });
   extensionRegistry.setReloadHandler(async () => { await reloadResources(); });
-  const initialExtensionLoad = await reloadResources();
-  for (const error of initialExtensionLoad.errors) {
-    console.error(proxy.redactText(`[ExtensionLoader] ${error.path}: ${error.message}`));
+  // No executable generation is selected on behalf of an unavailable workspace.
+  if (defaultCwd) {
+    try {
+      const initialExtensionLoad = await reloadResources();
+      for (const error of initialExtensionLoad.errors) {
+        console.error(proxy.redactText(`[ExtensionLoader] ${error.path}: ${error.message}`));
+      }
+    } catch (error) {
+      // The default can also disappear during the preceding bootstrap awaits.
+      if (!(error instanceof WorkspacePathError)) throw error;
+      defaultCwd = undefined;
+      extensionContext = { trusted: false };
+      extensionLoader = undefined;
+    }
   }
 
   sessionManager.setAutoCompactionPolicy(session => {
