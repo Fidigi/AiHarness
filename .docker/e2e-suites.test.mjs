@@ -10,6 +10,17 @@ function recorder(fail = () => 0) {
   } };
 }
 
+test('container E2E entry point and preparation inputs survive the Docker build context', async () => {
+  const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
+  assert.equal(packageJson.scripts['test:e2e'], 'node .docker/e2e-suites.mjs');
+  for (const file of [
+    '.docker/e2e-suites.mjs', '.docker/e2e-suites.d.mts', '.docker/run-e2e.mjs',
+    '.docker/baseline-artifacts.mjs', '.docker/test-fonts.test.mjs', '.docker/test-fonts.conf',
+    'playwright.config.ts', 'demo/tests/demo.test.mjs', 'demo/scripts/build.mjs',
+    'demo/tsconfig.json', '.github/workflows/demo-pages.yml',
+  ]) assert.ok((await readFile(file)).length > 0, `Missing container input: ${file}`);
+});
+
 test('every excluded development file belongs to a mandatory whole-file suite', async () => {
   const owners = new Set();
   for (const { config } of suites.filter(suite => suite.name !== 'standard')) {

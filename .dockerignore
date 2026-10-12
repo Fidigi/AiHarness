@@ -34,6 +34,11 @@ test-results/
 
 # Fichiers de configuration Docker (non nécessaires dans le contexte)
 .docker/*
+# Required by the test image's E2E entry point and build-time packaging controls.
+!.docker/Dockerfile.test
+!.docker/e2e-suites.mjs
+!.docker/e2e-suites.d.mts
+!.docker/e2e-suites.test.mjs
 !.docker/baseline-artifacts.mjs
 !.docker/baseline-artifacts.test.mjs
 !.docker/run-e2e.mjs

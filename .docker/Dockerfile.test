@@ -7,6 +7,9 @@ ARG NODE_VERSION=24.15.0
 ARG NPM_VERSION=12.1.0
 FROM node:${NODE_VERSION}-bookworm-slim AS base
 ARG NPM_VERSION
+# Optional build-only resource controls; runtime callers keep their own limits.
+ARG NODE_OPTIONS
+ARG RAYON_NUM_THREADS
 RUN npm install --global npm@${NPM_VERSION}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -66,6 +69,10 @@ COPY . .
 # Server/CLI tests import the package export (dist), not Core's TS source.
 # Always rebuild it so a stale local dist cannot affect reproducibility.
 RUN npm run build --workspace @ai-harness/core
+
+# Run against COPY's filtered context, not a later source overlay. Fail the image
+# build if the E2E entry point, declarations or owning configurations are missing.
+RUN node --test .docker/e2e-suites.test.mjs
 
 FROM base AS test-runner
 ENV PLAYWRIGHT_BROWSERS_PATH=/usr
