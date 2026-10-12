@@ -19,11 +19,12 @@ async function invoke(
   input?: string,
   environment: NodeJS.ProcessEnv = {},
   workingDirectory?: string,
+  command: readonly string[] = ['--import', tsxImport, entry],
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
   const cwd = workingDirectory ?? await mkdtemp(path.join(os.tmpdir(), 'aih-cli-invocation-'));
   if (!workingDirectory) temporaryDirectories.push(cwd);
   const home = path.join(cwd, 'home');
-  const child = spawn(process.execPath, ['--import', tsxImport, entry, ...args], {
+  const child = spawn(process.execPath, [...command, ...args], {
     cwd,
     env: {
       ...process.env,
@@ -279,26 +280,31 @@ describe('CLI invocation contract', () => {
       '---\nname: package-audit\ndescription: Audit a package\n---\nAudit instructions',
     );
     const environment = { AI_HARNESS_AGENT_DIR: agentDir, PACKAGE_MARKER: marker };
+    // This lifecycle needs seven fresh CLI processes within the same 5s case.
+    // Run the delivered entry built by the test image instead of reloading tsx
+    // seven times; retain real startup, Core state, discovery and process exits.
+    const command = [fileURLToPath(new URL('../../dist/index.js', import.meta.url))];
+    const run = (args: string[], input?: string) => invoke(args, input, environment, cwd, command);
 
-    const installed = await invoke(['package', 'install', packageRoot, '--approve', '--json'], undefined, environment, cwd);
+    const installed = await run(['package', 'install', packageRoot, '--approve', '--json']);
     expect(installed).toMatchObject({ code: 0, stderr: '' });
     expect(JSON.parse(installed.stdout)).toMatchObject({
       packages: [expect.objectContaining({ packageName: '@demo/cli-package', scope: 'global', status: 'active' })],
     });
 
-    const listed = await invoke(['list', '--approve', '--json'], undefined, environment, cwd);
+    await expect(readFile(marker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    const listed = await run(['list', '--approve', '--json']);
     expect(listed.code).toBe(0);
     expect(JSON.parse(listed.stdout).packages).toHaveLength(1);
+    await expect(readFile(marker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
 
-    const active = await invoke(['--approve', '--print', '--no-session', 'hello'], undefined, environment, cwd);
+    const active = await run(['--approve', '--print', '--no-session', 'hello']);
     expect(active).toEqual({ code: 0, stdout: '[Mock AI Response]\n', stderr: '' });
     expect(await readFile(marker, 'utf8')).toBe('loaded');
 
-    const rpc = await invoke(
+    const rpc = await run(
       ['--approve', '--mode', 'rpc', '--no-session'],
       '{"type":"get_commands","id":"packages"}\n',
-      environment,
-      cwd,
     );
     expect(rpc.code).toBe(0);
     expect(JSON.parse(rpc.stdout)).toMatchObject({
@@ -310,19 +316,19 @@ describe('CLI invocation contract', () => {
       ]) },
     });
 
-    const configured = await invoke([
+    const configured = await run([
       'config', '@demo/cli-package', '--approve', '--extensions=', '--prompts=+prompts/review.md', '--json',
-    ], undefined, environment, cwd);
+    ]);
     expect(configured.code).toBe(0);
     expect(JSON.parse(configured.stdout).packages[0]).toMatchObject({
       counts: { extensions: 0, prompts: 1 },
       resourceFilters: { extensions: [], prompts: ['+prompts/review.md'] },
     });
     await rm(marker, { force: true });
-    expect((await invoke(['--approve', '--print', '--no-session', 'hello'], undefined, environment, cwd)).code).toBe(0);
+    expect((await run(['--approve', '--print', '--no-session', 'hello'])).code).toBe(0);
     await expect(readFile(marker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
 
-    const removed = await invoke(['remove', '@demo/cli-package', '--approve', '--json'], undefined, environment, cwd);
+    const removed = await run(['remove', '@demo/cli-package', '--approve', '--json']);
     expect(removed.code).toBe(0);
     expect(JSON.parse(removed.stdout).packages).toEqual([]);
   });
