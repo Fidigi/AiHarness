@@ -595,6 +595,12 @@ To explore the interface without a key:
 4. keep **Mock** provider in **Settings**;
 5. send `Hello`: the session is only created on the server at this point.
 
+### Default Workspace and Recovery
+
+The server takes its default from `AI_HARNESS_DEFAULT_CWD` or its launch directory. Relative defaults resolve from that launch directory; `~` denotes the server user's home. Defaults and custom selections undergo the same allowed-directory validation. The sidebar/recent list may shorten home paths to `~`, but the browser saves and revalidates the canonical absolute cwd, never that display label. Selecting a folder does not approve it.
+
+If the saved choice and default are unavailable, the sidebar explains the failure and offers **Choose a workspace**. Select an existing allowed directory; old saved choices are preserved until successful validation. With separately configured valid `AI_HARNESS_ALLOWED_ROOTS`, the server can start without a valid default, without choosing another root or loading optional extensions. After choosing a valid folder, explicitly reload resources when needed. If the allowed roots themselves are unavailable, correct the server configuration and restart; the browser cannot widen them.
+
 ### Configuring Web UI
 
 The **Settings** page allows:

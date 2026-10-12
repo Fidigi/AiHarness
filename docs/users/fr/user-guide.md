@@ -595,6 +595,12 @@ Pour découvrir l’interface sans clé :
 4. conservez le provider **Mock** dans **Settings** ;
 5. envoyez `Hello` : la session n’est créée sur le serveur qu’à cet instant.
 
+### Workspace par défaut et récupération
+
+Le serveur utilise `AI_HARNESS_DEFAULT_CWD` ou son dossier de lancement. Un défaut relatif se résout depuis ce dossier ; `~` désigne le home de l’utilisateur du serveur. Défaut et sélection personnalisée passent par la même validation de dossier autorisé. La barre latérale et les dossiers récents peuvent raccourcir un chemin home en `~`, mais le navigateur enregistre et revalide le cwd absolu canonique, jamais cette étiquette. Choisir un dossier ne lui accorde pas la confiance.
+
+Si la sélection enregistrée et le défaut sont indisponibles, la barre latérale explique l’échec et propose **Choisir un espace de travail**. Sélectionnez un dossier autorisé existant ; les anciens choix enregistrés sont conservés jusqu’à une validation réussie. Avec des `AI_HARNESS_ALLOWED_ROOTS` valides configurées séparément, le serveur peut démarrer sans défaut valide, sans choisir une autre racine ni charger les extensions facultatives. Après avoir choisi un dossier valide, rechargez explicitement les ressources si nécessaire. Si les racines autorisées elles-mêmes sont indisponibles, corrigez la configuration serveur et redémarrez ; le navigateur ne peut pas les élargir.
+
 ### Configurer le Web
 
 La page **Settings** permet de :

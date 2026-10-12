@@ -46,6 +46,8 @@ Workspace descriptors returned by `default`, `validate` and worktree creation di
 
 ## Workspace Filesystem Invariants
 
+`GET /api/workspaces/default` and `POST /api/workspaces/validate` share Core directory/allowed-root validation and return canonical `cwd` plus optional display-only `displayPath`; success and path-error responses are no-store, with fixed path-free error codes. A failed default never selects another root. With independently valid configured roots, startup remains available when the default is absent or disappears during bootstrap; it selects no optional executable generation until an explicit valid-cwd reload. Root initialization errors and unrelated failures still reject startup. The private data directory supplies global settings only, not a replacement workspace. Selection/reload does not grant project trust.
+
 `GET /api/workspaces/browse` canonicalizes the directory through Core and returns at most 500 entries plus `truncated`. `POST /api/workspaces/browse` requires `workspace:write`, accepts exactly bounded `{ parent, name }`, and asks Core to create one direct child only. Separators, traversal names, control/format characters, escaping links, existing targets and unknown request keys are rejected with stable codes.
 
 `GET /api/workspaces/file-manager` is a no-store availability probe. `POST` additionally requires `workspace:write`, accepts exactly `{ cwd }`, resolves that directory through `WorkspaceManager`, and launches only when both the HTTP Host and socket peer are loopback and the platform is macOS, Windows or Linux. Core passes one argument to a platform command without a shell, bounds startup, and allowlists desktop environment variables rather than inheriting provider/server secrets. Unsupported, remote, invalid-path and launch failures are explicit and do not expose process details.
@@ -170,6 +172,7 @@ Administrator `PATCH /api/skills/enabled/batch` accepts exactly `{changes: [{key
 
 ## Associated Tests
 
+- `packages/server/src/api/{workspace-default,workspace-default-process}.test.ts`, `e2e/workspace-default-server.mjs` and `e2e/workspace-defaults.spec.ts` — real HTTP permissions/errors plus plain-Node public Core/built Server defaults, bootstrap disappearance, canonical display, explicit reload and ungranted trust; production Web recovery has no intercepted API
 - `packages/server/src/api/session-notice-process.test.ts` — real public Core/built Server process checks across completed/failed/stopped: active correlation, terminal session-command notices without `runId`, and captured tool notices retaining the original ID over session SSE
 - `packages/server/src/api/{interaction-queue-http,queue-reconciliation-http,queue-generation-http,queue-generation-process}.test.ts` — concurrent IDs, current-schema validation, durable stop replay and active-run generation revocation/preservation
 - `packages/server/src/start-readiness.test.ts` and `packages/server/src/application-lifecycle.test.ts` — gated startup publication, initialization rejection, stop-during-bootstrap/late cleanup and existing application-generation retirement

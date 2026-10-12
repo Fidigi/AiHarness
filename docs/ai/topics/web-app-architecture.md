@@ -31,6 +31,7 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 | Persisted sessions/messages | Server JSONL; browser keeps indexed windows only |
 | `draft:*` conversation | Browser until first `POST /api/agent/runs` |
 | Workspace cache | Per-tab `sessionStorage`, schema v2, 2 MiB and bounded entries |
+| Workspace selection | `localStorage` key `ai-harness-workspaces-v1`, canonical current cwd and at most eight recent descriptors; no cached trust authority |
 | Scroll restoration | Separate per-workspace map, 24 entries and 24-hour expiry |
 | Preferences | `localStorage`, schema v4 with v1/v2/v3 migration, validated Enter or Mod+Enter send mode, and cross-tab updates |
 | PTY tabs | Per-tab and keyed by workspace; server owns processes and replay |
@@ -74,6 +75,8 @@ Open the composer Model/Thinking scope disclosures to save the current model/pro
 - Keep full export server-side.
 
 ## Workspace and Terminal Boundaries
+
+Workspace hydration validates URL/saved candidates or requests the server default once. An invalid candidate may fall back only to a server-validated default. Failure withdraws the active descriptor, preserves saved choices and shows local EN/FR accessible recovery feedback instead of permanent Loading; newer selection supersedes stale replies. Persist canonical cwd only; Sidebar/recent labels use optional `displayPath`, tooltips and operations keep canonical paths, and the picker validates original input rather than a display label. Read the existing v1 selection cache under a 65,536-code-unit bound, filter metadata and discard cached trust/Git grants before fresh validation; this is separate from the v2 session-view cache.
 
 Sidebar directory reads are sequence guarded and visibly report the server's 500-entry truncation. Its focus-trapped creation dialog submits one direct-child name and navigates into the server-returned canonical folder. A host-file-manager button appears only after the no-store availability probe succeeds; it submits only the current cwd. Dirty worktree removal sends `force: false`, then asks separately before the one explicit `force: true` retry.
 
@@ -135,7 +138,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 
 - Settings, optional file-pane and extension-form JS/CSS, terminal/xterm, Mermaid, syntax highlighting, and other heavy surfaces stay lazy where configured.
 - `packages/web/scripts/check-bundle-budget.mjs` fails eager, async, or CSS budget regressions.
-- E2E snapshots comprise 206 PNGs: 178 earlier accepted baselines, twelve mobile keyboard, eight linked-directory, four provider-rename and four interaction-queue additions. This includes the MCP state/import-preview matrix in Light/Dark desktop/mobile layouts; optional form extraction adds no PNGs and the independent static demo has separate captures.
+- The versioned E2E inventory contains 234 PNGs: 178 earlier baselines, twelve mobile keyboard, eight linked-directory, four provider-rename, four interaction-queue, 24 generic-progress and four workspace-default selector crops. Inventory is not a claim that every current comparison passes. This includes the MCP state/import-preview matrix in Light/Dark desktop/mobile layouts; optional form extraction adds no PNGs and the independent static demo has separate captures.
 - Performance tests protect cache bounds, virtualization, and lazy loading.
 
 ## Generic Progress Regression Scope — Audit Remains Partial
@@ -144,6 +147,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 
 ## Associated Tests
 
+- `packages/web/src/store/workspace-hydration.test.ts` and `e2e/workspace-defaults.spec.ts` — canonical default/relative/home persistence, legacy/malformed cache, one-request unavailable recovery, withdrawn/stale descriptors, EN/FR desktop/mobile Light/Dark axe/overflow/focus and four reviewed crops; an emitted production Server/Web journey separately proves recovery without trust or provider submission
 - `packages/web/src/store/canonical-session-sync.test.ts` — private session binding, fresh same-run/known-terminal transcript publication without setter authority, stale/foreign/deleted/generation and identity-ABA rejection
 - `.docker/e2e-suites.test.mjs`, `tests/e2e-budget.test.ts` — exhaustive owning-host dispatch, retained sibling failures/artifacts, selected demo base rebuild ordering and real quota-window scheduling; see the canonical workflow in `project-map.md`
 - `e2e/visual.spec.ts` checks that accessible minimap role prefixes are out of grid flow and previews retain their wide cell; missing previews are fixed in CSS, not approved as new screenshots.

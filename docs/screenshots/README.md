@@ -30,6 +30,10 @@ Use Light and Dark variants when a state benefits from a theme comparison. File 
 | `07-mobile/` | `workspace-drawer-tablet-light.png` | `workspace-files-tablet-light-chromium-linux.png` |
 | `08-accessibility/` | `command-palette-focus-light.png` | `command-palette-desktop-light-chromium-linux.png` |
 
+### Workspace-default recovery
+
+Four reviewed selector crops stay beside their owning `e2e/workspace-defaults.spec.ts`, not in the general visual directory. They show a missing default without exposing server paths: English Light [desktop](../../e2e/workspace-defaults.spec.ts-snapshots/workspace-unavailable-desktop-light-chromium-linux.png) / [mobile](../../e2e/workspace-defaults.spec.ts-snapshots/workspace-unavailable-mobile-light-chromium-linux.png), and French Dark [desktop](../../e2e/workspace-defaults.spec.ts-snapshots/workspace-unavailable-desktop-dark-chromium-linux.png) / [mobile](../../e2e/workspace-defaults.spec.ts-snapshots/workspace-unavailable-mobile-dark-chromium-linux.png). Source viewports are 1440×900 and 390×900; these PNGs crop only the workspace selector. Generate new baselines through that owning file, then validate without updates; unrelated historical baselines are unchanged.
+
 ### Refresh procedure
 
 1. Regenerate the visual baselines in Docker:
@@ -72,6 +76,10 @@ Utilisez les variantes Light et Dark lorsqu’un état mérite une comparaison d
 | `06-extensions/` | `interaction-confirm-light.png` | `extension-interaction-desktop-light-chromium-linux.png` |
 | `07-mobile/` | `workspace-drawer-tablet-light.png` | `workspace-files-tablet-light-chromium-linux.png` |
 | `08-accessibility/` | `command-palette-focus-light.png` | `command-palette-desktop-light-chromium-linux.png` |
+
+### Récupération du workspace par défaut
+
+Quatre recadrages examinés du sélecteur restent à côté de leur scénario `e2e/workspace-defaults.spec.ts`, hors du dossier visuel général. Ils montrent un défaut absent sans exposer de chemin serveur : anglais Light [desktop](../../e2e/workspace-defaults.spec.ts-snapshots/workspace-unavailable-desktop-light-chromium-linux.png) / [mobile](../../e2e/workspace-defaults.spec.ts-snapshots/workspace-unavailable-mobile-light-chromium-linux.png), français Dark [desktop](../../e2e/workspace-defaults.spec.ts-snapshots/workspace-unavailable-desktop-dark-chromium-linux.png) / [mobile](../../e2e/workspace-defaults.spec.ts-snapshots/workspace-unavailable-mobile-dark-chromium-linux.png). Les viewports sources sont 1440×900 et 390×900 ; ces PNG recadrent uniquement le sélecteur de workspace. Générez les nouvelles références via ce fichier propriétaire, puis validez sans mise à jour ; les références historiques non liées sont conservées.
 
 ### Procédure de mise à jour
 
