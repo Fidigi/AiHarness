@@ -20,7 +20,7 @@ function environmentConfiguration(): ScopedConfigurationValues {
   return {
     ...(process.env.AI_HARNESS_DEFAULT_PROVIDER ? { provider: process.env.AI_HARNESS_DEFAULT_PROVIDER } : {}),
     ...(process.env.AI_HARNESS_DEFAULT_MODEL ? { model: process.env.AI_HARNESS_DEFAULT_MODEL } : {}),
-    ...(thinking && ['off', 'low', 'medium', 'high', 'xhigh', 'max'].includes(thinking)
+    ...(thinking && ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(thinking)
       ? { thinking: thinking as NonNullable<ScopedConfigurationValues['thinking']> }
       : {}),
     ...(toolPreset && ['configured', 'chat-only', 'read-only', 'default', 'full'].includes(toolPreset)

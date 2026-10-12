@@ -9,6 +9,8 @@ import type {
 } from '@ai-harness/core';
 import type { SubagentService } from './subagent-service.js';
 
+type SubagentSystemPromptResolver = (input: { cwd: string; basePrompt: string }) => Promise<string>;
+
 export interface StartSubagentRequest {
   parentSessionId: string;
   profileId: string;
@@ -57,6 +59,9 @@ export class SubagentRuntime {
     private readonly profiles: SubagentService,
     private readonly agentRuntime: AgentRuntime,
     private readonly sessionManager: SessionManager,
+    private readonly resolveSystemPrompt: SubagentSystemPromptResolver = async input => input.basePrompt,
+    private readonly redactText: (value: string) => string = value => value,
+    private readonly redactJson: <T>(value: T) => T = value => value,
   ) {}
 
   async start(request: StartSubagentRequest): Promise<SubagentRunSnapshot> {
@@ -73,14 +78,14 @@ export class SubagentRuntime {
 
   get(id: string): SubagentRunSnapshot | undefined {
     const run = this.runs.get(id);
-    return run ? structuredClone(run) : undefined;
+    return run ? this.redactJson(structuredClone(run)) : undefined;
   }
 
   list(parentSessionId?: string): SubagentRunSnapshot[] {
     return [...this.runs.values()]
       .filter(run => !parentSessionId || run.parentSessionId === parentSessionId)
       .sort((left, right) => right.startedAt.localeCompare(left.startedAt))
-      .map(run => structuredClone(run));
+      .map(run => this.redactJson(structuredClone(run)));
   }
 
   async wait(id: string): Promise<SubagentRunSnapshot | undefined> {
@@ -91,7 +96,7 @@ export class SubagentRuntime {
 
   stop(id: string): SubagentRunSnapshot {
     const run = this.requireRun(id);
-    if (TERMINAL_PHASES.has(run.status)) return structuredClone(run);
+    if (TERMINAL_PHASES.has(run.status)) return this.redactJson(structuredClone(run));
     const agentRunId = this.childAgentRuns.get(id);
     if (agentRunId) this.agentRuntime.stop(agentRunId);
     run.status = 'stopped';
@@ -101,13 +106,13 @@ export class SubagentRuntime {
     this.unsubscribers.get(id)?.();
     this.unsubscribers.delete(id);
     this.publishParent(run, 'subagent.updated');
-    return structuredClone(run);
+    return this.redactJson(structuredClone(run));
   }
 
   acknowledge(id: string): SubagentRunSnapshot {
     const run = this.requireRun(id);
     run.attention = false;
-    return structuredClone(run);
+    return this.redactJson(structuredClone(run));
   }
 
   async shutdown(): Promise<void> {
@@ -135,6 +140,7 @@ export class SubagentRuntime {
     if (typeof request.task !== 'string' || !request.task.trim() || request.task.length > 100_000) {
       throw Object.assign(new Error('Tâche de sous-agent invalide.'), { status: 400 });
     }
+    const safeTask = this.redactText(request.task);
     const configuration = await this.profiles.getConfiguration({
       cwd: parent.cwd,
       projectId: parent.workspaceId,
@@ -156,7 +162,7 @@ export class SubagentRuntime {
 
     const id = crypto.randomUUID();
     const child = await this.sessionManager.create({
-      title: `${profile.name}: ${request.task.trim().replace(/\s+/g, ' ').slice(0, 64)}`,
+      title: this.redactText(`${profile.name}: ${safeTask.trim().replace(/\s+/g, ' ').slice(0, 64)}`),
       cwd: parent.cwd,
       workspaceId: parent.workspaceId,
       gitBranch: parent.gitBranch,
@@ -168,7 +174,7 @@ export class SubagentRuntime {
       thinking: profile.thinking ?? parent.thinking,
       toolPreset: request.parentToolPreset ?? parent.toolPreset ?? 'default',
       autoCompaction: false,
-      messages: profile.inheritContext ? inheritedMessages(parent) : [],
+      messages: profile.inheritContext ? this.redactJson(inheritedMessages(parent)) : [],
       metadata: {
         subagent: true,
         subagentRunId: id,
@@ -183,10 +189,12 @@ export class SubagentRuntime {
       childSessionId: child.id,
       workspaceId: parent.workspaceId,
       profileId: profile.id,
-      profileName: profile.name,
-      task: request.task.trim(),
-      provider: request.provider,
-      model: profile.model ?? parent.model,
+      profileName: this.redactText(profile.name),
+      task: safeTask.trim(),
+      provider: this.redactText(request.provider),
+      model: (profile.model ?? parent.model)
+        ? this.redactText((profile.model ?? parent.model)!)
+        : undefined,
       status: 'queued',
       phase: 'queued',
       background,
@@ -202,6 +210,10 @@ export class SubagentRuntime {
     this.unsubscribers.set(id, unsubscribe);
     let agentRun: AgentRunSnapshot;
     try {
+      const systemPrompt = await this.resolveSystemPrompt({
+        cwd: parent.cwd,
+        basePrompt: this.systemPrompt(profile),
+      });
       agentRun = await this.agentRuntime.start({
         sessionId: child.id,
         cwd: parent.cwd,
@@ -212,7 +224,7 @@ export class SubagentRuntime {
         thinking: profile.thinking ?? parent.thinking,
         toolPreset: request.parentToolPreset ?? parent.toolPreset ?? 'default',
         persistSettings: false,
-        systemPrompt: this.systemPrompt(profile),
+        systemPrompt,
         maxToolRounds: profile.maxTurns,
         agentId: id,
         allowedTools: this.allowedTools(profile, parentDepth + 1),
@@ -223,7 +235,7 @@ export class SubagentRuntime {
       snapshot.status = 'failed';
       snapshot.phase = 'failed';
       snapshot.completedAt = new Date().toISOString();
-      snapshot.error = error instanceof Error ? error.message : String(error);
+      snapshot.error = this.redactText(error instanceof Error ? error.message : String(error));
       snapshot.attention = true;
       unsubscribe();
       this.unsubscribers.delete(id);
@@ -235,7 +247,7 @@ export class SubagentRuntime {
     snapshot.phase = agentRun.phase;
     this.publishParent(snapshot, 'subagent.started');
     void this.agentRuntime.wait(agentRun.id).then(() => this.complete(id));
-    return structuredClone(snapshot);
+    return this.redactJson(structuredClone(snapshot));
   }
 
   private onChildEvent(id: string, event: AgentEvent): void {
@@ -269,7 +281,8 @@ export class SubagentRuntime {
       ? 'completed'
       : agent?.phase === 'stopped' ? 'stopped' : 'failed';
     run.completedAt = agent?.completedAt ?? new Date().toISOString();
-    run.output = outputFor(this.sessionManager.get(run.childSessionId));
+    const output = outputFor(this.sessionManager.get(run.childSessionId));
+    run.output = output === undefined ? undefined : this.redactText(output);
     run.error = agent?.error;
     run.attention = true;
     this.unsubscribers.get(id)?.();

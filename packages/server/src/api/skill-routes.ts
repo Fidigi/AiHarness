@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { requireCapability } from '../security/request-security.js';
 import type { RuntimeServices } from '../runtime/services.js';
 
+import { resourceBatchBody } from '../runtime/resource-batches.js';
+
 function optionalString(value: unknown, field: string, max = 4_096): string | undefined {
   if (value === undefined || value === null || value === '') return undefined;
   if (typeof value !== 'string' || value.length > max || /[\u0000-\u001f\u007f]/.test(value)) {
@@ -31,6 +33,11 @@ export function createSkillRouter(servicesPromise: Promise<RuntimeServices>): Ro
     try {
       const services = await servicesPromise;
       const projectId = optionalString(request.query.projectId, 'projectId', 200);
+      try { await services.configurationStore.load(); }
+      catch {
+        response.status(409).json({ error: 'Canonical configuration is unreadable.', code: 'CONFIGURATION_UNREADABLE' });
+        return;
+      }
       const catalog = await services.skillCatalog.getCatalog({
         cwd: optionalString(request.query.cwd, 'cwd'),
         projectId,
@@ -98,6 +105,26 @@ export function createSkillRouter(servicesPromise: Promise<RuntimeServices>): Ro
       });
       response.json({ result, catalog });
     } catch (error) { next(error); }
+  });
+
+  router.patch('/enabled/batch', requireCapability('configuration'), async (request, response, next) => {
+    try {
+      const services = await servicesPromise;
+      const changes = resourceBatchBody(request.body, ['cwd', 'projectId']);
+      response.json(await services.skillCatalog.setEnabledBatch({
+        cwd: optionalString(request.body?.cwd, 'cwd'),
+        projectId: optionalString(request.body?.projectId, 'projectId', 200), changes,
+      }));
+    } catch (error) {
+      if (error !== null && typeof error === 'object'
+        && Object.getOwnPropertyDescriptor(error, 'code')?.value === 'SKILL_BATCH_UNCERTAIN') {
+        response.status(409).json({ error: 'Skill batch state is uncertain; canonical reconciliation required.',
+          code: 'SKILL_BATCH_UNCERTAIN', uncertain: true,
+          outcomes: Object.getOwnPropertyDescriptor(error, 'outcomes')?.value });
+        return;
+      }
+      next(error);
+    }
   });
 
   router.patch('/enabled', requireCapability('configuration'), async (request, response, next) => {

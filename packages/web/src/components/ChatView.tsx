@@ -1,18 +1,29 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { FormEvent, KeyboardEvent, ReactNode, RefObject } from 'react';
-import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, ExtensionInteractionSnapshot, Message, ModelCatalog, ProviderType, Session, TokenUsage } from '@ai-harness/core';
+import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, FormEvent, KeyboardEvent, ReactNode } from 'react';
+import { parseShellCommandInput } from '@ai-harness/core/shell-input';
+import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, Message, ModelCatalog, ProviderType, Session, TokenUsage } from '@ai-harness/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { AgentCapabilities, CommandSnapshot, ExtensionWidget, PaletteItem, SessionInfo } from '../services/api';
 import type { DraftAttachment, StoredSession } from '../store/session-store';
 import type { TranslationFunction } from '../i18n/types';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useI18n } from '../hooks/useI18n';
-import { useSessionStore } from '../store/session-store';
+import { registerFeatureLocaleMessages } from '../i18n/registry';
+import { canSyncCanonicalSession, captureCanonicalRunGuard, captureInteractionReplyGuard, interactionReplyComparison, getSessionRecord, getRunAuthority, getStoredRun, useSessionStore, type RunRequestGuard } from '../store/session-store';
 import { usePreferences } from '../store/preferences';
 import MarkdownContent from './MarkdownContent';
 import { SubagentPanel } from './SubagentPanel';
+import { applyCodemodeProgress, codemodeDetails } from './codemode-state';
+import { applyToolProgress } from './tool-progress-state';
+import ToolProgressBoundary from './ToolProgressBoundary';
+import { composerKeySubmits } from './composer-submit';
+import { clipboardTextToMarkdown } from './markdown-paste';
+import { getMarkdownListContinuation } from './markdown-list-continuation';
+import { InteractionPresentationLedger } from '../services/interaction-presentation';
+import { InteractionViewLifetime, interactionEpochKey, interactionViewKey as queueInteractionViewKey } from '../services/interaction-scope';
 import { publishNotice, type NoticeLevel } from '../services/notices';
-import { useFocusTrap } from '../hooks/useFocusTrap';
+import ExtensionInteractionBoundary from './ExtensionInteractionBoundary';
+import { mobileKeyboardViewKey, useMobileKeyboard } from '../hooks/useMobileKeyboard';
 import {
   cancelCommand,
   clearAgentQueue,
@@ -33,8 +44,13 @@ import {
   getSessionTree,
   reloadAgentResources,
   respondToExtensionInteraction,
+  orderedExtensionRequests,
+  reconcileInteractionSnapshot,
+  extensionInteractionChanges,
+  isFreshInteractionSnapshot,
   runExtensionCommand,
   searchFiles,
+  saveNewSessionDefault,
   startAgentRun,
   startCommand,
   stopAgentRun,
@@ -43,9 +59,17 @@ import {
   updateSession,
 } from '../services/api';
 
+// Presentation-only copy uses the accepted synchronous bounded fill-only registry.
+registerFeatureLocaleMessages({
+  en: { 'chat.extensionInteraction.waiting': '{count} waiting' },
+  fr: { 'chat.extensionInteraction.waiting': '{count} en attente' },
+});
+
 interface ChatViewProps {
   onStreamingUpdate?: (content: string) => void;
 }
+
+const CodemodeCard = lazy(() => import('./CodemodeCard').then(module => ({ default: module.CodemodeCard })));
 
 type QueueMode = 'steer' | 'follow-up';
 const EMPTY_ATTACHMENTS: DraftAttachment[] = [];
@@ -83,7 +107,7 @@ function readSessionScroll(cwd: string, sessionId: string): SessionScrollPositio
   try {
     const parsed = JSON.parse(sessionStorage.getItem(scrollStorageKey(cwd)) ?? '{}') as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
-    return normalizeSessionScroll((parsed as Record<string, unknown>)[sessionId]);
+    return normalizeSessionScroll(getSessionRecord(parsed as Record<string, unknown>, sessionId));
   } catch {
     return undefined;
   }
@@ -127,6 +151,11 @@ function isActivePhase(phase?: string): boolean {
   return Boolean(phase && !['completed', 'failed', 'stopped'].includes(phase));
 }
 
+function displayToolName(name: string): string {
+  const match = /^mcp__([^_]+(?:_[^_]+)*)__([^_]+(?:_[^_]+)*?)(?:__[a-f0-9]{10})?$/u.exec(name);
+  return match ? `MCP ${match[1]} / ${match[2]}` : name;
+}
+
 interface FileSuggestion {
   path: string;
   isDirectory: boolean;
@@ -153,34 +182,6 @@ function rankFileSuggestions(items: FileSuggestion[], query: string): FileSugges
     .map(entry => entry.item);
 }
 
-function clipboardHtmlToMarkdown(html: string): string {
-  const document = new DOMParser().parseFromString(html, 'text/html');
-  const convert = (node: Node): string => {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
-    if (!(node instanceof HTMLElement)) return '';
-    if (['script', 'style', 'template', 'iframe', 'object'].includes(node.tagName.toLowerCase())) return '';
-    const content = [...node.childNodes].map(convert).join('');
-    switch (node.tagName.toLowerCase()) {
-      case 'h1': case 'h2': case 'h3': case 'h4': case 'h5': case 'h6':
-        return `${'#'.repeat(Number(node.tagName.slice(1)))} ${content.trim()}\n\n`;
-      case 'strong': case 'b': return `**${content}**`;
-      case 'em': case 'i': return `*${content}*`;
-      case 'code': return node.parentElement?.tagName.toLowerCase() === 'pre' ? content : `\`${content}\``;
-      case 'pre': return `\n\`\`\`\n${content.replace(/\n+$/, '')}\n\`\`\`\n\n`;
-      case 'a': {
-        const href = node.getAttribute('href') ?? '';
-        return /^(?:https?:|file:)/i.test(href) ? `[${content}](${href})` : content;
-      }
-      case 'li': return `- ${content.trim()}\n`;
-      case 'blockquote': return `${content.trim().split('\n').map(line => `> ${line}`).join('\n')}\n\n`;
-      case 'br': return '\n';
-      case 'p': case 'div': return `${content.trim()}\n\n`;
-      default: return content;
-    }
-  };
-  return [...document.body.childNodes].map(convert).join('').replace(/\n{3,}/g, '\n\n').trim();
-}
-
 function locationMessageId(hash: string): string | undefined {
   if (!hash.startsWith('#') || hash.length < 2) return undefined;
   try { return decodeURIComponent(hash.slice(1)); } catch { return undefined; }
@@ -204,12 +205,17 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const sessions = useSessionStore(state => state.sessions);
   const currentSession = sessions.find(session => session.id === id);
   const workspace = useSessionStore(state => state.workspace);
-  const activeProviderType = useSessionStore(state => state.providers.active);
+  const mobileKeyboard = useMobileKeyboard(mobileKeyboardViewKey(workspace?.id, workspace?.cwd, id, location.key));
+  const selectedProviderType = useSessionStore(state => state.providers.active);
+  const [effectiveConfiguration, setEffectiveConfiguration] = useState<EffectiveConfiguration>();
+  const configurationKey = `${workspace?.id ?? ''}:${currentSession?.id ?? ''}`;
+  const [configurationReadyFor, setConfigurationReadyFor] = useState<string>();
+  const activeProviderType = (currentSession?.draft ? effectiveConfiguration?.values.provider : undefined) as ProviderType | undefined ?? selectedProviderType;
   const providerConfig = useSessionStore(state => state.providers.available[activeProviderType]);
   const modelCatalog = useSessionStore(state => state.providers.catalog);
-  const currentRun = useSessionStore(state => id ? state.runs[id] : undefined);
-  const input = useSessionStore(state => id ? state.drafts[id] ?? '' : '');
-  const attachments = useSessionStore(state => id ? state.attachments[id] ?? EMPTY_ATTACHMENTS : EMPTY_ATTACHMENTS);
+  const currentRun = useSessionStore(state => id ? getStoredRun(state.runs, id) : undefined);
+  const input = useSessionStore(state => id ? getSessionRecord(state.drafts, id) ?? '' : '');
+  const attachments = useSessionStore(state => id ? getSessionRecord(state.attachments, id) ?? EMPTY_ATTACHMENTS : EMPTY_ATTACHMENTS);
   const setDraft = useSessionStore(state => state.setDraft);
   const createLocalSession = useSessionStore(state => state.createSession);
   const addAttachments = useSessionStore(state => state.addAttachments);
@@ -224,13 +230,22 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const upsertAssistantMessage = useSessionStore(state => state.upsertAssistantMessage);
   const updateSessionSettings = useSessionStore(state => state.updateSessionSettings);
   const renameLocalSession = useSessionStore(state => state.renameSession);
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [preferences] = usePreferences();
   const [starting, setStarting] = useState(false);
+  const [stagedEdit, setStagedEdit] = useState<{ sessionId: string; messageId: string; previousDraft: string }>();
+  useEffect(() => { setStagedEdit(undefined); }, [id, workspace?.cwd]);
   const [queueMode, setQueueMode] = useState<QueueMode>('steer');
   const setNotice = (message?: string, level: NoticeLevel = 'error', options: { id?: string; progress?: number; timeoutMs?: number } = {}) => {
     if (message) publishNotice(message, { level, ...options });
   };
+  // Failure can settle before SSE attaches (or be restored by readiness/GET).
+  // Publish from admitted state as well as the live frame, using one stable ID.
+  useEffect(() => {
+    if (currentRun?.phase === 'failed') publishNotice(currentRun.error || t('chat.unexpectedError'), {
+      level: 'error', id: `run-error:${currentRun.sessionId}:${currentRun.id}`,
+    });
+  }, [currentRun?.id, currentRun?.sessionId, currentRun?.phase, currentRun?.error, t]);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [branchesOpen, setBranchesOpen] = useState(false);
@@ -249,13 +264,123 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
   const [compacting, setCompacting] = useState(false);
   const [automaticCompacting, setAutomaticCompacting] = useState(false);
-  const [effectiveConfiguration, setEffectiveConfiguration] = useState<EffectiveConfiguration>();
+  const [savingDefault, setSavingDefault] = useState(false);
+  const [defaultWarning, setDefaultWarning] = useState(false);
   const [selection, setSelection] = useState<{ text: string; x: number; y: number }>();
   const [copiedMessageId, setCopiedMessageId] = useState<string>();
   const [sessionUnavailable, setSessionUnavailable] = useState<string>();
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [minimapOpen, setMinimapOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const interactionLifetime = useRef(new InteractionViewLifetime());
+  const interactionView = interactionLifetime.current.enter(queueInteractionViewKey(workspace?.id, workspace?.cwd, id, location.key,
+    { pathname: location.pathname, search: location.search, hash: location.hash }));
+  const interactionMount = useRef<symbol | undefined>(Symbol('interaction owner'));
+  useLayoutEffect(() => {
+    const mount = interactionMount.current ?? Symbol('mounted interaction owner');
+    interactionMount.current = mount;
+    return () => { if (interactionMount.current === mount) interactionMount.current = undefined; };
+  }, []);
+  const interactionEpoch = interactionEpochKey(interactionView, currentRun?.id);
+  const forkAdmission = useRef<{ token: string; sessionId: string; workspaceId: string; cwd: string; pathname: string; search: string; originView: string; view?: string; retired?: boolean } | undefined>(undefined);
+  const pendingFork = forkAdmission.current;
+  if (pendingFork && pendingFork.view && pendingFork.view !== interactionView) pendingFork.retired = true;
+  if (pendingFork && !pendingFork.retired && !pendingFork.view && (location.state as { interactionFork?: string } | null)?.interactionFork === pendingFork.token
+    && workspace?.id === pendingFork.workspaceId && workspace.cwd === pendingFork.cwd && id === pendingFork.sessionId
+    && location.pathname === pendingFork.pathname && location.search === pendingFork.search && location.hash === '') pendingFork.view = interactionView;
+  else if (pendingFork && !pendingFork.view && pendingFork.originView !== interactionView) pendingFork.retired = true;
+  useLayoutEffect(() => {
+    if (!pendingFork || pendingFork.retired || pendingFork.view !== interactionView) setStarting(false);
+  }, [interactionView]);
+  const interactionScopeRef = useRef({ workspaceId: workspace?.id, cwd: workspace?.cwd, sessionId: id, runId: currentRun?.id });
+  interactionScopeRef.current = { workspaceId: workspace?.id, cwd: workspace?.cwd, sessionId: id, runId: currentRun?.id };
+  const interactionAddressRef = useRef(interactionView);
+  interactionAddressRef.current = interactionView;
+  const interactionEpochRef = useRef(interactionEpoch);
+  interactionEpochRef.current = interactionEpoch;
+  const interactionWatermark = useRef({ view: interactionView, sequence: 0 });
+  if (interactionWatermark.current.view !== interactionView) interactionWatermark.current = { view: interactionView, sequence: 0 };
+  const interactionLedger = useRef(new InteractionPresentationLedger());
+  const ledgerFor = (runId: string) => interactionLedger.current.forRun(runId);
+  // Observe the accepted store, not just Chat's own GET/SSE path. App polling can
+  // commit an empty baseline and then a new head before Chat's next resync.
+  useLayoutEffect(() => {
+    if (!id) return;
+    interactionLedger.current.clear();
+    const observe = () => {
+      const state = useSessionStore.getState();
+      const run = getStoredRun(state.runs, id);
+      if (!run || run.sessionId !== id || (workspace && run.cwd !== workspace.cwd)) return;
+      interactionLedger.current.observe(run);
+    };
+    observe();
+    return useSessionStore.subscribe(observe);
+  }, [interactionView]);
+  const acceptInteractionSnapshot = (snapshot: { sessionId: string; lastSequence: number; run?: AgentRunSnapshot }, captured?: RunRequestGuard): boolean => {
+    if (!interactionMount.current || !id || interactionWatermark.current.view !== interactionView || snapshot.sessionId !== id
+      || (snapshot.run && workspace && snapshot.run.cwd !== workspace.cwd)) return false;
+    const current = useSessionStore.getState();
+    const live = getStoredRun(current.runs, id);
+    const authority = getRunAuthority(current.runAuthorities, id);
+    if (authority?.deleted || !isFreshInteractionSnapshot(snapshot, interactionReplyComparison(current, id, captured),
+      Math.max(interactionWatermark.current.sequence, authority?.sequence ?? 0))) return false;
+    const ledger = snapshot.run ? ledgerFor(snapshot.run.id) : undefined;
+    // The store also owns retired IDs, deletion tombstones and workspace epochs.
+    // Do not consume a watermark (or close a ledger) when it rejects this run.
+    const admitted = setRun(id, reconcileInteractionSnapshot(snapshot.run, ledger?.closed), {
+      ...(captured ?? { epoch: current.runEpoch, authority, activeSessionId: current.activeSessionId }),
+      ...(snapshot.run ? { snapshotSequence: snapshot.lastSequence } : { absenceSequence: snapshot.lastSequence }),
+    });
+    if (!admitted) return false;
+    interactionWatermark.current.sequence = snapshot.lastSequence;
+    if (live && live.id !== snapshot.run?.id) for (const request of orderedExtensionRequests(live)) ledgerFor(live.id).closed.add(request.id);
+    if (ledger) {
+      const requests = orderedExtensionRequests(snapshot.run);
+      for (const request of requests) {
+        // The first accepted projection is restoration, not live attention.
+        // Later new IDs in this observed run can first appear via polling/resync.
+        if (!ledger.restored && !ledger.known.has(request.id)) ledger.sounded.add(request.id);
+        ledger.known.add(request.id);
+      }
+      ledger.restored = true;
+      if (live?.id === snapshot.run?.id) for (const request of orderedExtensionRequests(live)) {
+        if (!requests.some(entry => entry.id === request.id)) ledger.closed.add(request.id);
+      }
+    }
+    return true;
+  };
+  const interactions = currentRun && currentRun.sessionId === id && (!workspace || currentRun.cwd === workspace.cwd)
+    ? orderedExtensionRequests(currentRun).filter(request => !ledgerFor(currentRun.id).closed.has(request.id)) : [];
+  const displayedInteraction = interactions[0];
+  useEffect(() => {
+    if (!displayedInteraction || !currentRun) return;
+    const ledger = ledgerFor(currentRun.id);
+    // App may render a poll before Chat classifies it; do not consume unknown attention.
+    if (!ledger.known.has(displayedInteraction.id) || ledger.sounded.has(displayedInteraction.id)) return;
+    ledger.sounded.add(displayedInteraction.id);
+    if (preferences.sound && preferences.soundEvents.attention) playCompletionSound(preferences.soundVolume, true);
+    if (preferences.notifications && preferences.notificationEvents.attention
+      && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification(useSessionStore.getState().sessions.find(session => session.id === id)?.title || 'AiHarness', { body: displayedInteraction.message, tag: `agent:${id}:attention` });
+    }
+  }, [interactionEpoch, displayedInteraction, preferences.sound, preferences.soundEvents.attention,
+    preferences.soundVolume, preferences.notifications, preferences.notificationEvents.attention, currentSession?.title, id]);
+  useEffect(() => {
+    interactionEpochRef.current = interactionEpoch;
+    return () => { interactionEpochRef.current = ''; };
+  }, [interactionEpoch]);
+  const interactionViewKey = interactionEpoch;
+  const interactionViewRef = useRef(interactionViewKey);
+  interactionViewRef.current = interactionViewKey;
+  const interactionFocusKey = JSON.stringify([workspace?.id, workspace?.cwd, id, currentRun?.id,
+    displayedInteraction?.id, displayedInteraction?.kind]);
+  const interactionFocusAdmission = useRef({ view: interactionViewKey, request: interactionFocusKey, allowed: true });
+  if (interactionFocusAdmission.current.request !== interactionFocusKey) {
+    interactionFocusAdmission.current = { view: interactionViewKey, request: interactionFocusKey, allowed: true };
+  } else if (interactionFocusAdmission.current.view !== interactionViewKey) {
+    // Re-presenting the same pending request in a replacement route is not new focus intent.
+    interactionFocusAdmission.current = { view: interactionViewKey, request: interactionFocusKey, allowed: false };
+  }
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
@@ -279,6 +404,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const settingMutationVersions = useRef(new Map<string, number>());
   const effectiveRefreshVersion = useRef(0);
   const composingRef = useRef(false);
+  const lastCompositionEndRef = useRef(0);
   const streamContent = useRef(new Map<string, string>());
   const streamReasoning = useRef(new Map<string, string>());
   const mentionMatch = input.match(/(^|\s)@(?:"([^"]*)|([^\s"]*))$/);
@@ -321,6 +447,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   useEffect(() => {
     let current = true;
     setAutomaticCompacting(false);
+    setEffectiveConfiguration(undefined);
+    setConfigurationReadyFor(undefined);
+    setDefaultWarning(false);
     if (!workspace?.id) {
       setEffectiveConfiguration(undefined);
       return () => { current = false; };
@@ -329,10 +458,16 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       workspace.id,
       currentSession?.draft ? undefined : currentSession?.id,
     ).then(result => {
-      if (current && result.success && result.data) setEffectiveConfiguration(result.data);
+      if (!current) return;
+      if (!result.success || !result.data) {
+        setNotice(result.error || t('settings.defaults.failed'));
+        return;
+      }
+      setEffectiveConfiguration(result.data);
+      setConfigurationReadyFor(configurationKey);
     });
     return () => { current = false; };
-  }, [currentSession?.draft, currentSession?.id, workspace?.id]);
+  }, [currentSession?.draft, currentSession?.id, workspace?.id, configurationKey]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -350,7 +485,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   useEffect(() => () => compactionController.current?.abort(), [currentSession?.id]);
 
   useEffect(() => {
-    if (!workspace?.trusted) {
+    if (!(workspace?.operationTrusted ?? workspace?.trusted)) {
       setFileIndex({ items: [], truncated: false });
       return;
     }
@@ -366,10 +501,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       });
     });
     return () => controller.abort();
-  }, [workspace?.cwd, workspace?.trusted]);
+  }, [workspace?.cwd, workspace?.operationTrusted, workspace?.trusted]);
 
   useEffect(() => {
-    if (mentionQuery === undefined || !workspace?.trusted || !fileIndex.truncated || !mentionQuery) {
+    if (mentionQuery === undefined || !(workspace?.operationTrusted ?? workspace?.trusted) || !fileIndex.truncated || !mentionQuery) {
       setRemoteFileSuggestions([]);
       return;
     }
@@ -387,7 +522,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [fileIndex.truncated, mentionQuery, workspace?.cwd, workspace?.trusted]);
+  }, [fileIndex.truncated, mentionQuery, workspace?.cwd, workspace?.operationTrusted, workspace?.trusted]);
 
   useLayoutEffect(() => {
     const sessionId = currentSession?.id;
@@ -580,21 +715,59 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   }, [currentSession?.messages, id, mergeMessagePage, t]);
 
   useEffect(() => {
-    if (!id || id.startsWith('draft:')) return;
+    // Do not start a disposable unknown-cwd stream before workspace bootstrap.
+    // Its first frames cannot belong to the later admitted workspace lifetime.
+    if (!workspace?.id || !workspace.cwd || !id || id.startsWith('draft:')) return;
     const controller = new AbortController();
     let mounted = true;
     let sequence = 0;
 
     const applyEvent = async (event: AgentEvent): Promise<void> => {
-      sequence = Math.max(sequence, event.sequence);
-      if (!mounted) return;
+      if (!mounted || controller.signal.aborted || event.sessionId !== id
+        || !Number.isSafeInteger(event.sequence) || event.sequence < 0
+        || event.sequence <= Math.max(sequence, interactionWatermark.current.sequence, getStoredRun(useSessionStore.getState().runs, id)?.lastSequence ?? 0)) return;
+      const state = useSessionStore.getState();
+      const authority = getRunAuthority(state.runAuthorities, id);
+      // Event correlation must be admitted before consuming sequence/presentation state.
+      // Discovery/connection.ready, not an arbitrary foreign event, admits a new run.
+      const sessionEvent = event.type === 'notice' || event.type.startsWith('compaction.') || event.type.startsWith('subagent.');
+      // Core publishes terminal run.phase before its corresponding settlement
+      // event. Admit that exact final event, not late tool/UI/notice callbacks.
+      const terminalCompletion = ['run.completed', 'run.failed', 'run.stopped'].includes(event.type)
+        && getStoredRun(state.runs, id)?.phase === event.type.slice(4);
+      if (authority?.deleted) return;
+      if (event.runId && getStoredRun(state.runs, id)?.id !== event.runId) {
+        // A run started outside this browser can finish before the running-list
+        // poll ever sees it. Its lifecycle frame is only a discovery hint: do
+        // not consume its version or payload, and require fresh canonical state
+        // to independently name that exact run before admitting anything.
+        if (event.type === 'run.started' && !authority?.retired.includes(event.runId)) {
+          const discoveryGuard = captureCanonicalRunGuard(state, id);
+          const discovered = await getAgentState(id);
+          if (!mounted || controller.signal.aborted) return;
+          if (discovered.success && discovered.data?.run?.id === event.runId) {
+            const accepted = acceptInteractionSnapshot(discovered.data, discoveryGuard);
+            if (accepted) sequence = Math.max(sequence, discovered.data.lastSequence);
+            if (accepted || canSyncCanonicalSession(useSessionStore.getState(), id, discovered.data, discoveryGuard, interactionWatermark.current.sequence)) {
+              syncSession(discovered.data.session);
+            }
+          }
+        }
+        return;
+      }
+      if ((!event.runId && !sessionEvent) || (event.runId && ((authority?.terminal && !terminalCompletion)
+        || authority?.retired.includes(event.runId)))) return;
+      sequence = event.sequence;
+      interactionWatermark.current.sequence = sequence;
       const runId = event.runId;
       const patchRun = (changes: Partial<AgentRunSnapshot>): void => {
-        const existing = useSessionStore.getState().runs[id];
+        const existing = getStoredRun(useSessionStore.getState().runs, id);
         if (!existing || (runId && existing.id !== runId)) return;
-        setRun(id, { ...existing, ...changes });
+        const before = useSessionStore.getState();
+        setRun(id, { ...existing, ...changes, lastSequence: sessionEvent ? existing.lastSequence : event.sequence },
+          { epoch: before.runEpoch, authority: getRunAuthority(before.runAuthorities, id), snapshotSequence: event.sequence });
       };
-      const eventData = event.data as { content?: unknown; messageId?: unknown };
+      const eventData = (event.data && typeof event.data === 'object' ? event.data : {}) as { content?: unknown; messageId?: unknown };
       const messageId = typeof eventData.messageId === 'string'
         ? eventData.messageId
         : runId ? `stream:${runId}` : undefined;
@@ -628,24 +801,32 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         }
       }
       if (event.type === 'tool.started') {
-        const tool = event.data as { id?: unknown; name?: unknown; input?: unknown };
-        if (typeof tool.id === 'string' && typeof tool.name === 'string') patchRun({
+        const tool = event.data as { id?: unknown; name?: unknown; input?: unknown; parentId?: unknown };
+        if (tool.parentId === undefined && typeof tool.id === 'string' && typeof tool.name === 'string') patchRun({
           phase: 'tool',
           activeTool: { id: tool.id, name: tool.name, input: tool.input, startedAt: event.timestamp },
         });
       }
-      if (event.type === 'tool.completed' || event.type === 'tool.failed') patchRun({ activeTool: undefined });
+      if (event.type === 'tool.progress') {
+        const tool = getStoredRun(useSessionStore.getState().runs, id)?.activeTool;
+        const next = applyToolProgress(applyCodemodeProgress(tool, event.data), event.data);
+        if (next !== tool) patchRun({ activeTool: next });
+      }
+      if (event.type === 'tool.completed' || event.type === 'tool.failed') {
+        const data = event.data as { call?: { id?: unknown }; id?: unknown; parentId?: unknown };
+        const tool = getStoredRun(useSessionStore.getState().runs, id)?.activeTool;
+        if (data.parentId === undefined && tool?.id === (data.call?.id ?? data.id)) patchRun({ activeTool: undefined });
+      }
       if (event.type === 'extension.ui') {
-        const data = event.data as { action?: unknown; request?: unknown };
-        if (data.action === 'request' && data.request && typeof data.request === 'object') {
-          const request = data.request as ExtensionInteractionSnapshot;
-          patchRun({ extensionRequest: request });
-          if (preferences.sound && preferences.soundEvents.attention) playCompletionSound(preferences.soundVolume, true);
-          if (preferences.notifications && preferences.notificationEvents.attention
-            && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-            new Notification(currentSession?.title || 'AiHarness', { body: request.message, tag: `agent:${id}:attention` });
-          }
-        } else if (data.action === 'resolved') patchRun({ extensionRequest: undefined });
+        const existing = getStoredRun(useSessionStore.getState().runs, id);
+        if (existing && (!runId || existing.id === runId)) {
+          const ledger = ledgerFor(existing.id);
+          const data = eventData as { action?: unknown; requestId?: unknown };
+          if (data.action === 'resolved' && typeof data.requestId === 'string') ledger.closed.add(data.requestId);
+          const changes = extensionInteractionChanges(existing, event.data, ledger.closed);
+          for (const request of orderedExtensionRequests({ ...existing, ...changes })) ledger.known.add(request.id);
+          patchRun(changes);
+        }
       }
       if (event.type === 'notice') {
         const data = event.data as { message?: unknown; level?: unknown; progress?: unknown; id?: unknown };
@@ -691,7 +872,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         if (preferences.sound && preferences.soundEvents.completion) playCompletionSound(preferences.soundVolume);
         if (preferences.notifications && preferences.notificationEvents.completion
           && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-          const notification = new Notification(currentSession?.title || 'AiHarness', {
+          const notification = new Notification(useSessionStore.getState().sessions.find(session => session.id === id)?.title || 'AiHarness', {
             body: t('chat.agentCompleted'),
             tag: `agent:${id}:${event.runId ?? ''}`,
           });
@@ -702,32 +883,49 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           };
         }
       }
+      if (['run.completed', 'run.failed', 'run.stopped'].includes(event.type)) {
+        const live = getStoredRun(useSessionStore.getState().runs, id);
+        if (live && (!runId || runId === live.id)) for (const request of orderedExtensionRequests(live)) ledgerFor(live.id).closed.add(request.id);
+      }
       if (event.type === 'run.failed') {
         const message = (event.data as { message?: unknown }).message;
         const detail = typeof message === 'string' ? message : t('chat.unexpectedError');
         patchRun({ phase: 'failed', error: typeof message === 'string' ? message : undefined, retry: undefined, activeTool: undefined });
-        setNotice(detail);
+        setNotice(detail, 'error', { id: `run-error:${id}:${event.runId}` });
         if (preferences.sound && preferences.soundEvents.attention) playCompletionSound(preferences.soundVolume, true);
         if (preferences.notifications && preferences.notificationEvents.attention
           && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-          new Notification(currentSession?.title || 'AiHarness', { body: detail, tag: `agent:${id}:attention` });
+          new Notification(useSessionStore.getState().sessions.find(session => session.id === id)?.title || 'AiHarness', { body: detail, tag: `agent:${id}:attention` });
         }
       }
       if (event.type === 'run.completed') patchRun({ phase: 'completed', retry: undefined, activeTool: undefined });
       if (event.type === 'run.stopped') patchRun({ phase: 'stopped', retry: undefined, activeTool: undefined });
+      // Stamp the event after its queue/phase projection, never before it.
+      // An eager version-only stamp would make this event's real membership
+      // change look like a same-version forged snapshot to the store.
+      patchRun({});
       if (['run.completed', 'run.failed', 'run.stopped', 'tool.completed', 'tool.failed', 'compaction.completed', 'compaction.failed'].includes(event.type)) {
-        const state = await getAgentState(id);
-        if (state.success && state.data && mounted) {
-          syncSession(state.data.session);
-          if (state.data.run) setRun(id, state.data.run);
-        }
+        const before = useSessionStore.getState();
+        const guard = captureCanonicalRunGuard(before, id);
+        void getAgentState(id).then(state => {
+          if (state.success && state.data && mounted && !controller.signal.aborted) {
+            const accepted = acceptInteractionSnapshot(state.data, guard);
+            if (accepted) sequence = Math.max(sequence, state.data.lastSequence);
+            if (accepted || canSyncCanonicalSession(useSessionStore.getState(), id, state.data, guard, interactionWatermark.current.sequence)) {
+              syncSession(state.data.session);
+            }
+          }
+        });
       }
     };
 
     void (async () => {
       while (mounted && !controller.signal.aborted) {
         try {
+          const before = useSessionStore.getState();
+          const guard = captureCanonicalRunGuard(before, id);
           const state = await getAgentState(id);
+          if (!mounted || controller.signal.aborted) break;
           if (!state.success || !state.data) {
             if (/\b404\b|not found|introuvable/i.test(state.error ?? '')) {
               removeSession(id);
@@ -737,26 +935,46 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             throw new Error(state.error || t('chat.unexpectedError'));
           }
           setSessionUnavailable(undefined);
-          syncSession(state.data.session);
-          sequence = state.data.lastSequence;
-          if (state.data.run) {
-            setRun(id, state.data.run);
+          const accepted = acceptInteractionSnapshot(state.data, guard);
+          sequence = Math.max(sequence, interactionWatermark.current.sequence, getStoredRun(useSessionStore.getState().runs, id)?.lastSequence ?? 0);
+          const transcriptAccepted = accepted || canSyncCanonicalSession(useSessionStore.getState(), id, state.data, guard, interactionWatermark.current.sequence);
+          if (transcriptAccepted) syncSession(state.data.session);
+          const canonicalSequence = transcriptAccepted ? state.data.lastSequence : -1;
+          if (accepted && state.data.run) {
             if (state.data.run.partialMessage) {
               streamContent.current.set(state.data.run.partialMessage.id, state.data.run.partialMessage.content);
               streamReasoning.current.set(state.data.run.partialMessage.id, state.data.run.partialMessage.reasoning ?? '');
               upsertAssistantMessage(id, state.data.run.partialMessage.id, state.data.run.partialMessage.content, state.data.run.partialMessage.reasoning);
             }
           }
+          const beforeStream = useSessionStore.getState();
+          const streamGuard = captureCanonicalRunGuard(beforeStream, id);
           for await (const record of streamAgentEvents(id, sequence, controller.signal)) {
+            if (!mounted || controller.signal.aborted) break;
             if (record.type === 'connection.ready') {
-              sequence = Math.max(sequence, record.snapshot.lastSequence);
-              if (record.snapshot.run) {
-                setRun(id, record.snapshot.run);
-                if (record.snapshot.run.partialMessage) {
-                  streamContent.current.set(record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.content);
-                  streamReasoning.current.set(record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.reasoning ?? '');
-                  upsertAssistantMessage(id, record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.content, record.snapshot.run.partialMessage.reasoning);
+              const readyAccepted = acceptInteractionSnapshot(record.snapshot, streamGuard);
+              if (readyAccepted) sequence = Math.max(sequence, record.snapshot.lastSequence);
+              let snapshot = readyAccepted ? record.snapshot : undefined;
+              // Readiness contains no transcript. Replay through its watermark
+              // is skipped, so catch up durable messages with a fresh owned GET.
+              if (record.reset || record.snapshot.lastSequence > canonicalSequence) {
+                const resumedGuard = captureCanonicalRunGuard(useSessionStore.getState(), id);
+                const resumed = await getAgentState(id);
+                if (!mounted || controller.signal.aborted) break;
+                if (!resumed.success || !resumed.data) throw new Error(resumed.error || t('chat.unexpectedError'));
+                const resumedAccepted = acceptInteractionSnapshot(resumed.data, resumedGuard);
+                if (resumedAccepted) {
+                  sequence = Math.max(sequence, resumed.data.lastSequence);
+                  snapshot = resumed.data;
                 }
+                if (resumedAccepted || canSyncCanonicalSession(useSessionStore.getState(), id, resumed.data, resumedGuard, interactionWatermark.current.sequence)) {
+                  syncSession(resumed.data.session);
+                }
+              }
+              if (snapshot?.run?.partialMessage) {
+                streamContent.current.set(snapshot.run.partialMessage.id, snapshot.run.partialMessage.content);
+                streamReasoning.current.set(snapshot.run.partialMessage.id, snapshot.run.partialMessage.reasoning ?? '');
+                upsertAssistantMessage(id, snapshot.run.partialMessage.id, snapshot.run.partialMessage.content, snapshot.run.partialMessage.reasoning);
               }
             } else await applyEvent(record.event);
           }
@@ -780,7 +998,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       mounted = false;
       controller.abort();
     };
-  }, [currentSession?.title, id, navigate, onStreamingUpdate, preferences.notificationEvents, preferences.notifications, preferences.sound, preferences.soundEvents, preferences.soundVolume, removeSession, setRun, syncSession, t, upsertAssistantMessage, workspace?.cwd]);
+  }, [id, interactionView, navigate, onStreamingUpdate, preferences.notificationEvents, preferences.notifications, preferences.sound, preferences.soundEvents, preferences.soundVolume, removeSession, setRun, syncSession, t, upsertAssistantMessage, workspace?.cwd]);
 
   const active = isActivePhase(currentRun?.phase);
   const modelLocked = effectiveConfiguration?.provenance.model?.scope === 'environment';
@@ -817,6 +1035,18 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     : effectiveConfiguration?.provenance[key]?.scope ?? 'default';
   const modelScope = settingScope('model', currentSession?.model !== undefined);
   const thinkingScope = settingScope('thinking', currentSession?.thinking !== undefined);
+  const saveDefault = async (kind: 'model' | 'thinking') => {
+    if (savingDefault) return;
+    setSavingDefault(true);
+    try {
+      const result = await saveNewSessionDefault({ projectId: workspace?.id,
+        ...(kind === 'model' ? { kind, provider: activeProviderType, model } : { kind, thinking }) });
+      if (!result.success || !result.data) { setNotice(result.error || t('settings.defaults.failed')); return; }
+      setDefaultWarning(result.data.overridden.length > 0);
+      setNotice(t(result.data.overridden.length ? 'settings.defaults.overrideWarning' : 'settings.defaults.saved'),
+        result.data.overridden.length ? 'warning' : 'success');
+    } finally { setSavingDefault(false); }
+  };
   const toolPresetScope = settingScope('toolPreset', currentSession?.toolPreset !== undefined);
   const autoCompactionScope = settingScope('autoCompaction', currentSession?.autoCompaction !== undefined);
   const slashQuery = input.startsWith('/') && !input.includes(' ') ? input.slice(1).toLocaleLowerCase() : undefined;
@@ -829,7 +1059,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   ).slice(0, 10);
   const suggestionCount = paletteResults.length || fileResults.length;
   const busyCompacting = compacting || automaticCompacting;
-  const canSend = Boolean((input.trim() || attachments.length) && currentSession && workspace && !starting && !busyCompacting);
+  const workspaceOperationTrusted = Boolean(workspace
+    && (workspace.operationTrusted ?? workspace.trusted));
+  const canSend = Boolean((input.trim() || attachments.length) && currentSession && workspaceOperationTrusted
+    && !starting && !busyCompacting && (!currentSession.draft || configurationReadyFor === configurationKey));
   const status = busyCompacting
     ? t('chat.status.compacting')
     : starting
@@ -841,7 +1074,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           message: currentRun.retry.message,
         })
       : currentRun?.phase === 'tool' && currentRun.activeTool
-        ? t('chat.status.toolNamed', { tool: currentRun.activeTool.name })
+        ? t('chat.status.toolNamed', { tool: displayToolName(currentRun.activeTool.name) })
         : active
           ? t(`chat.status.${currentRun?.phase}`)
           : undefined;
@@ -880,6 +1113,28 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     if (!currentSession || !workspace || !raw.startsWith('/')) return false;
     const [name, ...parts] = raw.slice(1).trim().split(/\s+/);
     const argument = parts.join(' ');
+    // Resolve ownership afresh: a reload can change who owns /mcp while a run streams.
+    if (name.toLocaleLowerCase() === 'mcp') {
+      const latest = await getAgentPalette(workspace.cwd, workspace.id);
+      if (!latest.success || !latest.data) {
+        setNotice(latest.error || t('chat.extensionCommandFailed'));
+        return true;
+      }
+      setPalette(latest.data);
+      const owner = latest.data.find(item => item.name === 'mcp' && item.source === 'extension');
+      if (owner) {
+        if (currentSession.draft) setNotice(t('chat.extensionCommandFailed'), 'warning');
+        else {
+          const result = await runExtensionCommand(currentSession.id, 'mcp', argument);
+          if (!result.success) setNotice(result.error || t('chat.extensionCommandFailed'));
+          else if (result.data?.output) setNotice(result.data.output, 'info');
+        }
+        return true;
+      }
+      if (!argument) navigate('/settings#mcp');
+      else setNotice(t('chat.unknownCommand', { command: raw }), 'warning');
+      return true;
+    }
     switch (name.toLocaleLowerCase()) {
       case 'auto-compact': {
         const mode = argument.trim().toLocaleLowerCase();
@@ -1022,12 +1277,12 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
 
   const runShellCommand = async (raw: string) => {
     if (!currentSession || !workspace) return;
-    const excludedFromContext = raw.startsWith('!!');
-    const command = raw.slice(excludedFromContext ? 2 : 1).trim();
-    if (!command) {
+    const parsed = parseShellCommandInput(raw);
+    if (!parsed?.command) {
       setNotice(t('chat.commandMissing'), 'warning');
       return;
     }
+    const { command, excludedFromContext } = parsed;
     let sessionId = currentSession.id;
     if (currentSession.draft) {
       const created = await createApiSession(command.slice(0, 50), workspace.cwd);
@@ -1084,17 +1339,17 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     setHistoryIndex(-1);
     setNotice(undefined);
 
-    if (content.startsWith('/')) {
+    if (!stagedEdit && content.startsWith('/')) {
       await executeSlashCommand(content);
       return;
     }
 
-    if (content.startsWith('!')) {
+    if (!stagedEdit && content.startsWith('!')) {
       await runShellCommand(content);
       return;
     }
 
-    if (active && currentRun) {
+    if (!stagedEdit && active && currentRun) {
       const queued = await enqueueAgentMessage(currentRun.id, queueMode, content, [
         { type: 'text', text: content },
         ...attachments.map(attachment => ({
@@ -1106,7 +1361,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         })),
       ]);
       if (queued.success && queued.data) {
-        setRun(currentSession.id, queued.data);
+        if (interactionEpochRef.current === interactionEpoch) acceptInteractionSnapshot({ sessionId: currentSession.id, lastSequence: queued.data.lastSequence, run: queued.data });
         clearAttachments(currentSession.id);
       }
       else {
@@ -1117,10 +1372,39 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     }
 
     setStarting(true);
-    const localId = currentSession.id;
+    let localId = currentSession.id;
+    const originEpoch = interactionEpoch;
+    const originMount = interactionMount.current;
+    const ownsStart = () => {
+      if (!originMount || interactionMount.current !== originMount) return false;
+      if (interactionEpochRef.current === originEpoch) return true;
+      const admission = forkAdmission.current;
+      const current = interactionScopeRef.current;
+      return Boolean(admission && !admission.retired && admission.sessionId === localId
+        && admission.view === interactionAddressRef.current && current.sessionId === localId
+        && current.workspaceId === workspace.id && current.cwd === workspace.cwd);
+    };
+    const beforeStart = useSessionStore.getState();
+    let completedView: string | undefined;
     try {
+      if (stagedEdit?.sessionId === currentSession.id) {
+        const forked = await forkSession(currentSession.id, { messageId: stagedEdit.messageId, before: true,
+          title: `${currentSession.title || t('sidebar.untitled')} (branch)` });
+        if (!forked.success || !forked.data) throw new Error(forked.error || t('session.branchFailed'));
+        if (!ownsStart()) return;
+        localId = forked.data.id;
+        setStagedEdit(undefined);
+        const loaded = await getSession(localId);
+        if (!ownsStart()) return;
+        if (loaded.success && loaded.data) syncSession(loaded.data);
+        const pathname = `/chat/${encodeURIComponent(localId)}`;
+        const search = `?cwd=${encodeURIComponent(workspace.cwd)}`;
+        const token = crypto.randomUUID();
+        forkAdmission.current = { token, sessionId: localId, workspaceId: workspace.id, cwd: workspace.cwd, pathname, search, originView: interactionView };
+        navigate(pathname + search, { state: { interactionFork: token } });
+      }
       const result = await startAgentRun({
-        ...(currentSession.draft ? {} : { sessionId: currentSession.id }),
+        ...(currentSession.draft ? {} : { sessionId: localId }),
         cwd: workspace.cwd,
         provider: activeProviderType,
         input: content,
@@ -1142,19 +1426,36 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         autoCompaction: currentSession.autoCompaction ?? autoCompaction,
         settingOverrides,
       });
+      if (!ownsStart()) return;
+      completedView = interactionAddressRef.current;
       if (!result.success || !result.data) throw new Error(result.error || t('chat.unexpectedError'));
       replaceSession(localId, result.data.session);
       clearAttachments(result.data.session.id);
       if (localId !== result.data.session.id) clearAttachments(localId);
-      setRun(result.data.session.id, result.data.run);
+      const started = result.data.run;
+      const live = getStoredRun(useSessionStore.getState().runs, result.data.session.id);
+      const scope = interactionScopeRef.current;
+      const admission = forkAdmission.current;
+      const pendingForkView = localId !== currentSession.id && admission?.sessionId === localId && !admission.retired
+        && admission.view === interactionAddressRef.current
+        && scope.workspaceId === workspace.id && scope.cwd === workspace.cwd && scope.sessionId === localId
+        && (scope.runId === undefined || scope.runId === started.id);
+      if ((interactionEpochRef.current === interactionEpoch || pendingForkView)
+        && isFreshInteractionSnapshot({ sessionId: result.data.session.id, lastSequence: started.lastSequence, run: started }, live,
+          result.data.session.id === id ? interactionWatermark.current.sequence : 0)) {
+        setRun(result.data.session.id, reconcileInteractionSnapshot(started, ledgerFor(started.id).closed),
+          captureCanonicalRunGuard(beforeStart, result.data.session.id, false));
+      }
       if (localId !== result.data.session.id) {
         navigate(`/chat/${encodeURIComponent(result.data.session.id)}?cwd=${encodeURIComponent(workspace.cwd)}`, { replace: true });
       }
     } catch (error) {
+      if (!ownsStart()) return;
       setDraft(localId, content);
       setNotice(error instanceof Error ? error.message : t('chat.unexpectedError'));
     } finally {
-      setStarting(false);
+      if (originMount && interactionMount.current === originMount
+        && (ownsStart() || completedView === interactionAddressRef.current)) setStarting(false);
     }
   };
 
@@ -1185,6 +1486,13 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    const enterKey = event.key === 'Enter' && !event.shiftKey;
+    const recentlyComposed = Date.now() - lastCompositionEndRef.current < 100;
+    const isComposing = composingRef.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229;
+    if (enterKey && (isComposing || recentlyComposed)) {
+      if (recentlyComposed) event.preventDefault();
+      return;
+    }
     if (suggestionCount && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
       event.preventDefault();
       setPaletteIndex(index => event.key === 'ArrowDown'
@@ -1192,15 +1500,38 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         : (index - 1 + suggestionCount) % suggestionCount);
       return;
     }
-    if (suggestionCount && (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey && !composingRef.current))) {
+    if (suggestionCount && (event.key === 'Tab' || enterKey)) {
       event.preventDefault();
       selectSuggestion();
       return;
     }
-    if (event.key === 'Enter' && !event.shiftKey && !composingRef.current) {
+    if (composerKeySubmits({
+      key: event.key,
+      shiftKey: event.shiftKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      isComposing,
+      keyCode: event.nativeEvent.keyCode,
+    }, preferences.sendMode)) {
       event.preventDefault();
       void sendMessage();
       return;
+    }
+    if (event.key === 'Enter' && !isComposing && !recentlyComposed
+      && !event.ctrlKey && !event.metaKey && !event.altKey && currentSession) {
+      const target = event.currentTarget;
+      const edit = getMarkdownListContinuation(input, target.selectionStart, target.selectionEnd);
+      if (edit) {
+        event.preventDefault();
+        const nextDraft = `${input.slice(0, edit.start)}${edit.text}${input.slice(edit.end)}`;
+        setDraft(currentSession.id, nextDraft);
+        const caret = edit.start + edit.text.length;
+        requestAnimationFrame(() => {
+          if (target.isConnected && textareaRef.current === target && target.value === nextDraft
+            && useSessionStore.getState().activeSessionId === currentSession.id) target.setSelectionRange(caret, caret);
+        });
+        return;
+      }
     }
     if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && !input.includes('\n') && history.length) {
       const next = event.key === 'ArrowUp'
@@ -1251,22 +1582,16 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     }
   }
 
-  const branchFrom = async (messageId: string, content: string, edit = false) => {
-    if (!currentSession || currentSession.draft || active) return;
-    const result = await forkSession(currentSession.id, { messageId, title: `${currentSession.title || t('sidebar.untitled')} (branch)` });
-    if (!result.success || !result.data) {
-      setNotice(result.error || t('session.branchFailed'));
-      return;
-    }
-    const loaded = await getSession(result.data.id);
-    if (loaded.success && loaded.data) syncSession(loaded.data);
-    await updateSession(currentSession.id, { activeLeafId: result.data.id });
-    if (edit) setDraft(result.data.id, content);
-    navigate(`/chat/${encodeURIComponent(result.data.id)}?cwd=${encodeURIComponent(workspace!.cwd)}`);
+  const stageHistoryEdit = (messageId: string, content: string) => {
+    if (!currentSession || currentSession.draft || active || starting) return;
+    setStagedEdit({ sessionId: currentSession.id, messageId,
+      previousDraft: stagedEdit?.previousDraft ?? input });
+    setDraft(currentSession.id, content);
+    window.setTimeout(() => textareaRef.current?.focus(), 0);
   };
 
   const cloneFrom = async (messageId: string) => {
-    if (!currentSession || currentSession.draft || active) return;
+    if (!currentSession || currentSession.draft || starting) return;
     const result = await cloneSession(currentSession.id, `${currentSession.title || t('sidebar.untitled')} (copy)`, messageId);
     if (!result.success || !result.data) {
       setNotice(result.error || t('session.cloneFailed'));
@@ -1309,9 +1634,17 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       return;
     }
     if (!currentRun) return;
+    if (!currentSession) return;
+    const epoch = interactionEpoch;
+    const mount = interactionMount.current;
+    const before = useSessionStore.getState();
+    const guard = { epoch: before.runEpoch, authority: getRunAuthority(before.runAuthorities, currentSession.id), activeSessionId: before.activeSessionId };
     const result = await stopAgentRun(currentRun.id);
+    if (!mount || interactionMount.current !== mount || interactionEpochRef.current !== epoch || getStoredRun(useSessionStore.getState().runs, currentSession.id)?.id !== currentRun.id
+      || useSessionStore.getState().runEpoch !== guard.epoch
+      || getRunAuthority(useSessionStore.getState().runAuthorities, currentSession.id) !== guard.authority) return;
     if (!result.success) setNotice(result.error || t('chat.stopFailed'));
-    else if (result.data) setRun(currentSession!.id, result.data);
+    else if (result.data?.id === currentRun.id) acceptInteractionSnapshot({ sessionId: currentSession.id, lastSequence: result.data.lastSequence, run: result.data }, guard);
   };
 
   const loadHistoryBefore = async (beforeMessageId?: string) => {
@@ -1396,6 +1729,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     }
   };
 
+  const toolInputs = useMemo(() => new Map((currentSession?.messages ?? []).flatMap(message =>
+    (message.toolCalls ?? message.blocks?.flatMap(block => block.type === 'tool_call' ? [block] : []) ?? [])
+      .map(call => [call.id, call.input] as const))), [currentSession?.messages]);
   const historyGaps = historyGapMessageIds(currentSession);
   const historyPage = currentSession?.messagePage;
   const sessionIndex = sessions.findIndex(session => session.id === currentSession?.id);
@@ -1433,7 +1769,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           : message.role === 'system' ? t('chat.role.system')
             : `🤖 ${t('chat.role.assistant')}`}
     </div>
-    <div className="message-content">{renderMessage(message, preferences.reasoningOpen, t)}</div>
+    <div className="message-content">{renderMessage(message, preferences.reasoningOpen, t,
+      message.toolCallId ? toolInputs.get(message.toolCallId) : undefined)}</div>
     <footer className="message-meta">
       <time dateTime={message.timestamp.toISOString()}>{message.timestamp.toLocaleTimeString()}</time>
       {message.model && <span>{message.model}</span>}
@@ -1441,9 +1778,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       <button onClick={() => void copyMessage(message)} aria-live="polite">
         {copiedMessageId === message.id ? t('chat.copied') : t('chat.copy')}
       </button>
-      {!currentSession.draft && !active && message.role === 'user' && (
+      {!currentSession.draft && message.role === 'user' && (
         <>
-          <button onClick={() => void branchFrom(message.id, message.content, true)}>{t('session.editFromHere')}</button>
+          {!active && <button onClick={() => stageHistoryEdit(message.id, message.content)}>{t('session.editFromHere')}</button>}
           <button onClick={() => void cloneFrom(message.id)}>{t('session.newFromHere')}</button>
         </>
       )}
@@ -1460,7 +1797,11 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   );
 
   return (
-    <div className="chat-view">
+    <div className="chat-view" data-mobile-keyboard={mobileKeyboard.keyboardOpen}
+      style={mobileKeyboard.keyboardOpen ? {
+        '--mobile-keyboard-height': `${mobileKeyboard.viewportHeight}px`,
+        '--mobile-keyboard-top': `${mobileKeyboard.viewportOffsetTop}px`,
+      } as CSSProperties : undefined}>
       <header className="chat-toolbar">
         <div>
           <strong>{currentSession.title || t('sidebar.untitled')}</strong>
@@ -1503,15 +1844,32 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         </details>)}
       </aside>}
 
-      {currentRun?.extensionRequest && <ExtensionInteractionDialog
-        key={currentRun.extensionRequest.id}
-        request={currentRun.extensionRequest}
+      {displayedInteraction && currentRun && <ExtensionInteractionBoundary
+        key={interactionViewKey}
+        request={displayedInteraction}
+        waitingCount={Math.max(0, interactions.length - 1)}
+        locale={locale}
         restoreFocusRef={textareaRef}
-        onResolve={async result => {
-          const response = await respondToExtensionInteraction(currentSession.id, currentRun.extensionRequest!.id, result);
-          if (response.success && response.data) setRun(currentSession.id, response.data);
-          else setNotice(response.error || t('chat.extensionInteractionFailed'));
-          window.requestAnimationFrame(() => textareaRef.current?.focus());
+        canRestoreFocus={() => Boolean(interactionMount.current) && interactionViewRef.current === interactionViewKey}
+        canFocusInitially={() => Boolean(interactionMount.current) && interactionViewRef.current === interactionViewKey && interactionFocusAdmission.current.allowed}
+        renderOutput={content => <AnsiOutput content={content} />}
+        onResolve={async (result, signal) => {
+          const epoch = interactionEpoch;
+          const mount = interactionMount.current;
+          const before = useSessionStore.getState();
+          const guard = captureInteractionReplyGuard(before, currentSession.id, displayedInteraction.id);
+          const response = await respondToExtensionInteraction(currentSession.id, displayedInteraction.id, result, signal);
+          const live = getStoredRun(useSessionStore.getState().runs, currentSession.id);
+          if (signal.aborted) return;
+          if (!mount || interactionMount.current !== mount || interactionEpochRef.current !== epoch || live?.id !== currentRun.id
+            || useSessionStore.getState().runEpoch !== guard.epoch
+            || getRunAuthority(useSessionStore.getState().runAuthorities, currentSession.id) !== guard.authority) return;
+          if (response.success && response.data) {
+            if (response.data.id === live.id) acceptInteractionSnapshot({ sessionId: currentSession.id, lastSequence: response.data.lastSequence, run: response.data }, guard);
+          } else if (!ledgerFor(live.id).closed.has(displayedInteraction.id)
+            && orderedExtensionRequests(live)[0]?.id === displayedInteraction.id) {
+            setNotice(response.error || t('chat.extensionInteractionFailed'));
+          }
         }} t={t} />}
 
       {!currentSession.draft && (
@@ -1555,7 +1913,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             <summary>{t('chat.activeTools', { count: capabilities.tools.length })}</summary>
             {capabilities.tools.map(tool => (
               <details key={tool.name} className="tool-definition">
-                <summary>{tool.name}</summary>
+                <summary>{displayToolName(tool.name)}</summary>
                 <p>{tool.description}</p>
                 <pre>{JSON.stringify(tool.parameters, null, 2)}</pre>
               </details>
@@ -1600,15 +1958,18 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
               const tool = message.blocks?.find(block => block.type === 'tool_call' || block.type === 'tool_result');
               const kind = tool ? 'tool' : message.role;
               const preview = tool && 'name' in tool
-                ? `${tool.type === 'tool_call' ? 'Tool' : 'Result'}: ${tool.name || message.name || 'tool'}`
+                ? `${tool.type === 'tool_call' ? 'Tool' : 'Result'}: ${displayToolName(tool.name || message.name || 'tool')}`
                 : message.content.replace(/\s+/g, ' ').slice(0, 44) || message.role;
               return (
                 <Fragment key={`minimap:${message.id}`}>
                   {historyGaps.has(message.id) && <span className="minimap-gap" aria-label={t('chat.historyGap')}>⋯</span>}
                   <button className={`minimap-entry ${kind}`} onClick={() => scrollToMessage(message.id)}
-                    aria-label={`${kind}: ${preview}`} title={message.content.slice(0, 160)}>
+                    aria-label={tool ? `${kind}: ${preview}` : undefined} title={tool ? preview : undefined}>
                     <span aria-hidden="true" />
-                    <small>{preview}</small>
+                    {!tool && <span className="sr-only">{kind}: </span>}
+                    <small>{!tool && ['user', 'assistant'].includes(message.role)
+                      ? <MarkdownContent content={message.content} compact keepLineBreaks={message.role === 'user'} />
+                      : preview}</small>
                   </button>
                 </Fragment>
               );
@@ -1730,11 +2091,18 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             </section>
           ))}
           <button className="clear-queues" onClick={() => void clearAgentQueue(currentRun.id).then(result => {
-            if (result.success && result.data) setRun(currentSession.id, result.data);
+            if (result.success && result.data && interactionEpochRef.current === interactionEpoch) acceptInteractionSnapshot({ sessionId: currentSession.id, lastSequence: result.data.lastSequence, run: result.data });
           })}>{t('chat.clearQueues')}</button>
         </div>
       )}
 
+      {currentRun?.activeTool && currentRun.activeTool.name !== 'codemode' && <ToolProgressBoundary
+        key={`${currentRun.id}:${currentRun.activeTool.id}`}
+        value={currentRun.activeTool.progress} toolCallId={currentRun.activeTool.id} toolName={currentRun.activeTool.name} />}
+      {currentRun?.activeTool?.name === 'codemode' && <Suspense fallback={null}><CodemodeCard running
+        code={typeof (currentRun.activeTool.input as { code?: unknown })?.code === 'string'
+          ? (currentRun.activeTool.input as { code: string }).code : undefined}
+        calls={currentRun.activeTool.nestedCalls} /></Suspense>}
       <form onSubmit={handleSubmit} className="input-container"
         onDragOver={event => { if ([...event.dataTransfer.items].some(item => item.type.startsWith('image/'))) event.preventDefault(); }}
         onDrop={event => {
@@ -1780,6 +2148,14 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             ))}
           </div>
         )}
+        {stagedEdit?.sessionId === currentSession.id && <div className="staged-history-edit" role="status">
+          <span>{t('session.editStaged')}</span>
+          <button type="button" disabled={starting} onClick={() => {
+            setDraft(currentSession.id, stagedEdit.previousDraft);
+            setStagedEdit(undefined);
+            textareaRef.current?.focus();
+          }}>{t('session.cancelEdit')}</button>
+        </div>}
         <textarea
           ref={textareaRef}
           value={input}
@@ -1797,19 +2173,28 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             }
             const html = event.clipboardData.getData('text/html');
             if (html) {
-              const markdown = clipboardHtmlToMarkdown(html);
+              const markdown = clipboardTextToMarkdown(event.clipboardData.getData('text/plain'), html);
               if (!markdown) return;
               event.preventDefault();
               const start = event.currentTarget.selectionStart;
               const end = event.currentTarget.selectionEnd;
-              setDraft(currentSession.id, `${input.slice(0, start)}${markdown}${input.slice(end)}`);
+              const target = event.currentTarget;
+              const nextDraft = `${input.slice(0, start)}${markdown}${input.slice(end)}`;
+              setDraft(currentSession.id, nextDraft);
+              requestAnimationFrame(() => {
+                if (target.isConnected && textareaRef.current === target && target.value === nextDraft
+                  && useSessionStore.getState().activeSessionId === currentSession.id) target.setSelectionRange(start + markdown.length, start + markdown.length);
+              });
             }
           }}
           onCompositionStart={() => { composingRef.current = true; }}
-          onCompositionEnd={() => { composingRef.current = false; }}
+          onCompositionEnd={() => {
+            composingRef.current = false;
+            lastCompositionEndRef.current = Date.now();
+          }}
           placeholder={t('chat.inputPlaceholder', { provider: activeProviderType })}
           aria-label={t('chat.inputLabel')}
-          autoFocus
+          autoFocus={!displayedInteraction}
           rows={1}
           disabled={starting || busyCompacting}
         />
@@ -1845,7 +2230,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
               ? undefined
               : event.target.value as Session['thinking'])}>
             <option value="auto">{t('chat.setting.auto')} · {thinking}</option>
-            {['off', 'low', 'medium', 'high', 'xhigh', 'max'].map(level => <option key={level} value={level}>{level}</option>)}
+            {['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map(level => <option key={level} value={level}>{level}</option>)}
           </select>
           <select
             className="composer-setting"
@@ -1885,80 +2270,29 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           <button type="submit" disabled={!canSend}>{starting ? '…' : active ? t('chat.queue') : t('chat.send')}</button>
         </div>
         <div className="composer-setting-scopes" aria-label={t('chat.settingScopes')}>
-          <span>{t('settings.model')}: {t(`chat.scope.${modelScope}`)}</span>
-          <span>{t('chat.thinking')}: {t(`chat.scope.${thinkingScope}`)}</span>
+          <details>
+            <summary aria-label={t('chat.defaults.modelActions')}>{t('settings.model')}: {t(`chat.scope.${modelScope}`)}</summary>
+            <button type="button" disabled={savingDefault || !model || modelLocked}
+              onClick={() => void saveDefault('model')}>{t('chat.defaults.saveModel')}</button>
+          </details>
+          <details>
+            <summary aria-label={t('chat.defaults.thinkingActions')}>{t('chat.thinking')}: {t(`chat.scope.${thinkingScope}`)}</summary>
+            <button type="button" disabled={savingDefault || thinkingLocked}
+              onClick={() => void saveDefault('thinking')}>{t('chat.defaults.saveThinking')}</button>
+          </details>
           <span>{t('chat.tools')}: {t(`chat.scope.${toolPresetScope}`)}</span>
           <span>{t('chat.autoCompaction')}: {t(`chat.scope.${autoCompactionScope}`)}</span>
+          {defaultWarning && <p role="status">{t('settings.defaults.overrideWarning')}</p>}
         </div>
       </form>
     </div>
   );
 }
 
-function ExtensionInteractionDialog({ request, onResolve, restoreFocusRef, t }: {
-  request: ExtensionInteractionSnapshot;
-  onResolve(response: { cancelled: boolean; value?: unknown }): Promise<void>;
-  restoreFocusRef: RefObject<HTMLElement | null>;
-  t: TranslationFunction;
-}) {
-  const initial = request.kind === 'custom'
-    ? Object.fromEntries((request.fields ?? []).map(field => [field.name,
-        field.type === 'checkbox' ? false : field.type === 'select' && field.required ? field.options?.[0]?.value ?? '' : '']))
-    : request.kind === 'select' ? request.options?.[0]?.value ?? '' : '';
-  const [value, setValue] = useState<unknown>(initial);
-  const [submitting, setSubmitting] = useState(false);
-  const custom = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  const resolve = async (response: { cancelled: boolean; value?: unknown }) => {
-    if (submitting) return;
-    setSubmitting(true);
-    try { await onResolve(response); } finally { setSubmitting(false); }
-  };
-  const dialogRef = useRef<HTMLFormElement>(null);
-  useFocusTrap(true, dialogRef, () => { void resolve({ cancelled: true }); }, restoreFocusRef);
-  return <div className="modal-overlay extension-interaction-overlay" onMouseDown={event => {
-    if (!submitting && event.target === event.currentTarget) void resolve({ cancelled: true });
-  }}>
-    <form ref={dialogRef} tabIndex={-1} className="extension-interaction" role="dialog" aria-modal="true" aria-labelledby={`extension-title-${request.id}`}
-      onSubmit={event => { event.preventDefault(); void resolve({ cancelled: false, value: request.kind === 'confirm' ? true : value }); }}>
-      <header><h3 id={`extension-title-${request.id}`}>{request.title}</h3></header>
-      {request.message && <p>{request.message}</p>}
-      {request.output && (/\u001b\[[0-9;]*m/.test(request.output)
-        ? <AnsiOutput content={request.output} /> : <pre className="extension-output">{request.output}</pre>)}
-      {request.kind === 'input' && <input data-autofocus required value={String(value)} placeholder={request.placeholder}
-        onChange={event => setValue(event.target.value)} aria-label={request.title} />}
-      {request.kind === 'editor' && <textarea data-autofocus required rows={10} value={String(value)} placeholder={request.placeholder}
-        onChange={event => setValue(event.target.value)} aria-label={request.title} />}
-      {request.kind === 'select' && <select data-autofocus value={String(value)} onChange={event => setValue(event.target.value)} aria-label={request.title}>
-        {request.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>}
-      {request.kind === 'custom' && <details className="extension-custom-panel" open>
-        <summary>{t('chat.extensionInteraction.fields')}</summary>
-        <div className="extension-fields">
-          {request.fields?.map(field => <label key={field.name}>
-            <span>{field.label}</span>
-            {field.type === 'textarea' ? <textarea required={field.required} placeholder={field.placeholder}
-              value={String(custom[field.name] ?? '')} onChange={event => setValue({ ...custom, [field.name]: event.target.value })} />
-              : field.type === 'select' ? <select required={field.required} value={String(custom[field.name] ?? '')}
-                onChange={event => setValue({ ...custom, [field.name]: event.target.value })}>
-                {!field.required && <option value="" />}
-                {field.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-                : field.type === 'checkbox' ? <input type="checkbox" checked={custom[field.name] === true}
-                  onChange={event => setValue({ ...custom, [field.name]: event.target.checked })} />
-                  : <input required={field.required} placeholder={field.placeholder} value={String(custom[field.name] ?? '')}
-                    onChange={event => setValue({ ...custom, [field.name]: event.target.value })} />}
-          </label>)}
-        </div>
-      </details>}
-      <footer>
-        <button type="button" disabled={submitting} onClick={() => void resolve({ cancelled: true })}>{t('common.cancel')}</button>
-        <button type="submit" disabled={submitting}>{request.kind === 'confirm' ? t('common.confirm') : t('common.submit')}</button>
-      </footer>
-    </form>
-  </div>;
-}
-
-function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationFunction): ReactNode {
+function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationFunction, callInput?: unknown): ReactNode {
+  const codeDetails = message.name === 'codemode' && message.toolCallId
+    ? codemodeDetails(message.metadata?.codemode, message.toolCallId) : undefined;
+  const script = callInput && typeof callInput === 'object' && 'code' in callInput && typeof callInput.code === 'string' ? callInput.code : undefined;
   const reasoning = message.blocks?.filter(block => block.type === 'reasoning') ?? [];
   const images = message.blocks?.filter(block => block.type === 'image') ?? [];
   const toolBlocks = message.blocks?.filter(block => block.type === 'tool_call' || block.type === 'tool_result' || block.type === 'command') ?? [];
@@ -1981,11 +2315,15 @@ function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationF
             filename={`reasoning-${message.id}.txt`} t={t} />
         ))}
         {toolBlocks.map((block, index) => {
+          if (block.type === 'tool_result' && codeDetails) return <Suspense key={`tool-${index}`}
+            fallback={<pre className="tool-block-pre">{block.content?.slice(0, 8_000)}</pre>}>
+            <CodemodeCard code={script} output={block.fullContent ?? block.content} calls={codeDetails.nestedCalls} details={codeDetails} />
+          </Suspense>;
           const content = block.type === 'tool_call' ? JSON.stringify(block.input, null, 2)
             : (block.type === 'tool_result' ? block.content : block.output) ?? '';
           const fullContent = block.type === 'tool_result' ? block.fullContent : undefined;
-          const summary = block.type === 'tool_call' ? `${t('chat.toolCall')}: ${block.name}`
-            : block.type === 'tool_result' ? `${block.isError ? t('chat.toolError') : t('chat.toolResult')}: ${block.name || ''}`
+          const summary = block.type === 'tool_call' ? `${t('chat.toolCall')}: ${displayToolName(block.name)}`
+            : block.type === 'tool_result' ? `${block.isError ? t('chat.toolError') : t('chat.toolResult')}: ${displayToolName(block.name || '')}`
               : `${t('chat.command')}: ${block.command}`;
           return <ProcessBlock className="tool-block" key={`tool-${index}`} summary={summary}
             content={content} fullContent={fullContent} truncated={block.type === 'tool_result' && block.truncated}
@@ -1993,8 +2331,11 @@ function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationF
             error={block.type === 'tool_result' && block.isError} t={t} />;
         })}
       </section>}
-      {(message.content || images.length > 0) && <section className="message-output" aria-label={message.role === 'assistant' ? t('chat.response') : undefined}>
-        {message.content && renderMessageContent(message.content)}
+      {message.role === 'tool' && message.name && message.name !== 'codemode' && message.toolCallId && <ToolProgressBoundary
+        key={`${message.id}:${message.toolCallId}`} terminal value={message.metadata?.toolProgress}
+        toolCallId={message.toolCallId} toolName={message.name} />}
+      {((!codeDetails && message.content) || images.length > 0) && <section className="message-output" aria-label={message.role === 'assistant' ? t('chat.response') : undefined}>
+        {message.content && renderMessageContent(message.content, message.role === 'user')}
         {images.map((block, index) => block.type === 'image' && (
           <a className="message-image" href={block.url} target="_blank" rel="noopener noreferrer" key={`image-${index}`}>
             <img src={block.url} alt={block.name || 'Attachment'} loading="lazy" />
@@ -2115,8 +2456,8 @@ function ToolOutput({ content }: { content: string }) {
   })}</pre>;
 }
 
-function renderMessageContent(content: string): ReactNode {
-  return <MarkdownContent content={content} />;
+function renderMessageContent(content: string, keepLineBreaks = false): ReactNode {
+  return <MarkdownContent content={content} keepLineBreaks={keepLineBreaks} />;
 }
 
 async function fileDataUrl(file: Blob): Promise<string> {

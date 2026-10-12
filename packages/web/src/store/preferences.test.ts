@@ -30,8 +30,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('versioned browser preferences', () => {
   it('uses safe defaults for missing or corrupt state', () => {
-    expect(readPreferences()).toMatchObject({ version: 3, theme: 'system', contentWidth: 1000, fontSize: 16 });
-    values.set('ai-harness-preferences-v3', '{broken');
+    expect(readPreferences()).toMatchObject({ version: 4, theme: 'system', sendMode: 'enter', contentWidth: 1000, fontSize: 16 });
+    values.set('ai-harness-preferences-v4', '{broken');
     expect(readPreferences()).toMatchObject({ theme: 'system', selectionActions: true });
   });
 
@@ -39,6 +39,7 @@ describe('versioned browser preferences', () => {
     writePreferences({
       ...readPreferences(),
       theme: 'pine',
+      sendMode: 'mod-enter',
       contentWidth: 99_999,
       fontSize: 1,
       reasoningOpen: true,
@@ -51,8 +52,8 @@ describe('versioned browser preferences', () => {
       lastSettingsSection: 'shortcuts',
       keybindings: { newSession: 'Mod+N' } as never,
     });
-    expect(JSON.parse(values.get('ai-harness-preferences-v3')!)).toMatchObject({
-      version: 3, theme: 'pine', contentWidth: 2000, fontSize: 12, soundVolume: 1, pushNotifications: true,
+    expect(JSON.parse(values.get('ai-harness-preferences-v4')!)).toMatchObject({
+      version: 4, theme: 'pine', sendMode: 'mod-enter', contentWidth: 2000, fontSize: 12, soundVolume: 1, pushNotifications: true,
     });
     expect(document.documentElement.dataset.theme).toBe('pine');
     expect(properties.get('--content-width')).toBe('2000px');
@@ -68,11 +69,11 @@ describe('versioned browser preferences', () => {
       contentWidth: 1200, fontSize: 18, lastSettingsSection: 'shortcuts',
     }));
     expect(readPreferences()).toMatchObject({
-      version: 3, theme: 'rose', filesOpen: false, sidebarVisible: false,
+      version: 4, theme: 'rose', sendMode: 'enter', filesOpen: false, sidebarVisible: false,
       contentWidth: 1200, fontSize: 18, lastSettingsSection: 'shortcuts',
     });
-    expect(JSON.parse(values.get('ai-harness-preferences-v3')!)).toMatchObject({
-      version: 3, filesOpen: false, sidebarVisible: false,
+    expect(JSON.parse(values.get('ai-harness-preferences-v4')!)).toMatchObject({
+      version: 4, sendMode: 'enter', filesOpen: false, sidebarVisible: false,
     });
   });
 
@@ -82,7 +83,7 @@ describe('versioned browser preferences', () => {
       reasoningOpen: 'yes', sound: 1, notifications: true, selectionActions: false,
     }));
     expect(readPreferences()).toEqual({
-      version: 3, theme: 'system', contentWidth: 900, fontSize: 20,
+      version: 4, theme: 'system', sendMode: 'enter', contentWidth: 900, fontSize: 20,
       reasoningOpen: false, sound: false, soundVolume: .25,
       soundEvents: { completion: true, attention: true },
       notifications: true, pushNotifications: false,

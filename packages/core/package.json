@@ -9,6 +9,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./shell-input": {
+      "import": "./dist/tools/shell-input.js",
+      "types": "./dist/tools/shell-input.d.ts"
     }
   },
   "scripts": {
@@ -18,7 +22,11 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "quickjs-emscripten": "^0.31.0",
+    "undici": "^6.21.0"
+  },
   "devDependencies": {
     "@types/node": "^26.0.0",
     "typescript": "^5.9.3",

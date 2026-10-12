@@ -1,17 +1,21 @@
 # =============================================================================
 # Dockerfile de test - AiHarness
-# Exécute la suite avec Node.js 26 et npm 12.1 par défaut.
+# Exécute la suite avec Node.js 24 LTS figé et npm 12.1 par défaut.
 # =============================================================================
 
-ARG NODE_VERSION=26
+ARG NODE_VERSION=24.15.0
 ARG NPM_VERSION=12.1.0
 FROM node:${NODE_VERSION}-bookworm-slim AS base
 ARG NPM_VERSION
+# Optional build-only resource controls; runtime callers keep their own limits.
+ARG NODE_OPTIONS
+ARG RAYON_NUM_THREADS
 RUN npm install --global npm@${NPM_VERSION}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     fonts-liberation \
+    fonts-noto-cjk \
     fonts-noto-color-emoji \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -49,6 +53,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
+COPY .docker/test-fonts.conf /etc/fonts/local.conf
+
 WORKDIR /app
 
 COPY package.json package-lock.json .npmrc ./
@@ -60,9 +66,16 @@ RUN npm ci
 
 COPY . .
 
-# Server/CLI tests import the package export (dist), not Core's TS source.
-# Always rebuild it so a stale local dist cannot affect reproducibility.
-RUN npm run build --workspace @ai-harness/core
+# Process tests consume emitted Core, CLI and Server entries, not TS aliases.
+# Build dependencies first; never rely on a local dist surviving COPY.
+RUN npm run build --workspace @ai-harness/core \
+    && npm run build --workspace @ai-harness/cli \
+    && npm run build --workspace @ai-harness/server
+RUN node --test .docker/test-build.test.mjs
+
+# Run against COPY's filtered context, not a later source overlay. Fail the image
+# build if the E2E entry point, declarations or owning configurations are missing.
+RUN node --test .docker/e2e-suites.test.mjs
 
 FROM base AS test-runner
 ENV PLAYWRIGHT_BROWSERS_PATH=/usr

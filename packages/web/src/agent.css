@@ -21,7 +21,7 @@ html[data-theme="light"] .login-view .login-error { color: #a51f38; }
 /* Workspace and conversation navigation */
 .workspace-selector { padding: .65rem; border-bottom: 1px solid #0f3460; }
 .workspace-label { display: block; padding: 0 .35rem .35rem; color: #aab8d0; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; }
-.workspace-button { width: 100%; padding: .6rem; border: 1px solid #30466e; border-radius: 7px; color: #eee; background: #1a1a2e; text-align: left; cursor: pointer; overflow: hidden; }
+.workspace-button { width: 100%; min-width: 0; flex: 1; padding: .6rem; border: 1px solid #30466e; border-radius: 7px; color: #eee; background: #1a1a2e; text-align: left; cursor: pointer; overflow: hidden; }
 .workspace-button span, .workspace-button small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-button small { margin-top: .2rem; color: #b2bdd0; }
 .trust-warning { display: block; padding: .4rem 0 0; border: 0; color: #ffca65; background: transparent; font-size: .75rem; text-align: left; cursor: pointer; }
@@ -164,17 +164,8 @@ html[data-theme="light"] .subagent-run.stopped > header span { color: #9b243a; }
 .extension-widgets { display: flex; flex-wrap: wrap; gap: .45rem; padding: .45rem .75rem; border-bottom: 1px solid #30405f; background: #111a2e; }
 .extension-widgets details { min-width: min(18rem, 100%); padding: .35rem .5rem; border: 1px solid #40527b; border-radius: 5px; }
 .extension-widgets summary { cursor: pointer; }
-.extension-widgets pre, .extension-output { max-height: 18rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.extension-widgets pre { max-height: 18rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .modal-overlay { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 1rem; background: #050914b8; backdrop-filter: blur(3px); }
-.extension-interaction { display: grid; gap: .75rem; width: min(42rem, 100%); max-height: min(90vh, 50rem); overflow: auto; padding: 1rem; border: 1px solid #52668f; border-radius: 10px; color: #eef3fc; background: #111a31; box-shadow: 0 24px 80px #000c; }
-.extension-interaction h3 { margin: 0; }
-.extension-interaction input:not([type="checkbox"]), .extension-interaction textarea, .extension-interaction select { width: 100%; }
-.extension-interaction footer { display: flex; justify-content: flex-end; gap: .5rem; }
-.extension-custom-panel { border: 1px solid #40527b; border-radius: 5px; padding: .45rem; }
-.extension-custom-panel summary { cursor: pointer; color: #aebad0; }
-.extension-custom-panel[open] summary { margin-bottom: .55rem; }
-.extension-fields { display: grid; gap: .65rem; }
-.extension-fields label { display: grid; gap: .25rem; }
 .agent-process { margin: 0 0 .75rem; padding: .5rem; border-left: 3px solid #536b9e; border-radius: 5px; background: color-mix(in srgb, #10182f 88%, transparent); text-align: left; }
 .agent-process > header { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; padding: 0 .15rem .45rem; color: #aab5cb; font-size: .78rem; }
 .agent-process > header strong { margin-right: auto; }
@@ -264,10 +255,12 @@ html[data-theme="light"] .subagent-run.stopped > header span { color: #9b243a; }
 .conversation-minimap nav { flex: 1; overflow-y: auto; padding: .35rem; }
 .conversation-minimap .minimap-entry { width: 100%; display: grid; grid-template-columns: 6px minmax(0, 1fr); align-items: center; gap: .4rem; padding: .25rem .35rem; border: 0; border-radius: 3px; color: #aebad1; background: transparent; text-align: left; cursor: pointer; }
 .conversation-minimap .minimap-entry:hover, .conversation-minimap .minimap-entry:focus-visible { color: #fff; background: #29395f; }
-.conversation-minimap .minimap-entry > span { width: 5px; height: 14px; border-radius: 3px; background: #7b89a5; }
-.conversation-minimap .minimap-entry.user > span { background: #e94560; }
-.conversation-minimap .minimap-entry.assistant > span { background: #6aa6ff; }
-.conversation-minimap .minimap-entry.tool > span { background: #70d6a5; }
+.conversation-minimap .minimap-entry > span[aria-hidden="true"] { width: 5px; height: 14px; border-radius: 3px; background: #7b89a5; }
+.conversation-minimap .minimap-entry.user > span[aria-hidden="true"] { background: #e94560; }
+.conversation-minimap .minimap-entry.assistant > span[aria-hidden="true"] { background: #6aa6ff; }
+.conversation-minimap .minimap-entry.tool > span[aria-hidden="true"] { background: #70d6a5; }
+/* Accessible role prefixes must not become a third grid cell and hide previews. */
+.conversation-minimap .minimap-entry > .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .conversation-minimap .minimap-entry small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conversation-minimap .minimap-gap { display: block; padding: .1rem; color: #71809c; text-align: center; }
 .conversation-minimap footer { display: flex; align-items: center; justify-content: space-between; gap: .4rem; padding: .45rem; border-top: 1px solid #30466e; }
@@ -294,6 +287,10 @@ html[data-theme="light"] .subagent-run.stopped > header span { color: #9b243a; }
 .composer-controls button { margin-left: auto; padding: .5rem 1rem; }
 .composer-setting-scopes { display: flex; flex-wrap: wrap; gap: .25rem .75rem; padding-top: .3rem; color: #8291ad; font-size: .65rem; }
 .composer-setting-scopes span { white-space: nowrap; }
+.staged-history-edit { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding-bottom: .5rem; font-size: .8rem; }
+.staged-history-edit span { flex: 1 1 200px; }
+.composer-setting-scopes details button { background: #a12645; color: #fff; }
+.staged-history-edit button { padding: .4rem .6rem; background: #a12645; color: #fff; }
 
 html[data-theme="light"] body, html[data-theme="light"] .main-content { color: #172033; background: #f5f7fb; }
 html[data-theme="light"] .sidebar, html[data-theme="light"] .chat-toolbar, html[data-theme="light"] .input-container,

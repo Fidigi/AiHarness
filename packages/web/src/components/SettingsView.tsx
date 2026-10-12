@@ -6,6 +6,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import '../settings.css';
 import { useSessionStore } from '../store/session-store';
 import { useI18n } from '../hooks/useI18n';
+import { SettingsLocaleBoundary } from './SettingsLocaleBoundary';
 import type { ProviderType } from '@ai-harness/core';
 import type { TranslationFunction } from '../i18n/types';
 import {
@@ -18,6 +19,7 @@ import {
   type AppUpdateStatus,
 } from '../services/api';
 import { SubagentSettings } from './SubagentSettings';
+import { McpSettings } from './McpSettings';
 import { usePreferences } from '../store/preferences';
 import { chordFromEvent, defaultKeybindings, shortcutActions, shortcutLabel } from '../services/keyboard';
 import { pushSupported, syncPushSubscription, type NotificationEvent } from '../services/push';
@@ -28,6 +30,8 @@ import {
   SkillRegistryPanel,
   ToolSettingsPanel,
 } from './EcosystemSettings';
+
+import { ResourceBatchReport, ResourceGroupButtons, useResourceBatches } from './ResourceBatchControls';
 
 const PluginSettings = lazy(async () => ({
   default: (await import('./PluginSettings')).PluginSettings,
@@ -43,13 +47,15 @@ function SettingsView() {
   const updateApiKey = useSessionStore(state => state.updateApiKey);
   const setModel = useSessionStore(state => state.setModel);
   const hydrateModelCatalog = useSessionStore(state => state.hydrateModelCatalog);
-  const setModelEnabled = useSessionStore(state => state.setModelEnabled);
-  const setAllModelsEnabled = useSessionStore(state => state.setAllModelsEnabled);
+  const batches = useResourceBatches();
   const skills = useSessionStore(state => state.skills);
   const hydrateSkillCatalog = useSessionStore(state => state.hydrateSkillCatalog);
-  const setSkillModelInvocable = useSessionStore(state => state.setSkillModelInvocable);
   const sessionCount = useSessionStore(state => state.sessions.length);
   const workspaceId = useSessionStore(state => state.workspace?.id);
+  const activeSessionId = useSessionStore(state => state.activeSessionId);
+  const [providerNames, setProviderNames] = useState<Record<string, string>>({});
+  const [providerReload, setProviderReload] = useState(0);
+  const [providerInvalidation, setProviderInvalidation] = useState(0);
   const { t } = useI18n();
   const [authToken, updateAuthToken] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
@@ -78,15 +84,16 @@ function SettingsView() {
       || model.name.toLocaleLowerCase().includes(normalizedModelFilter)),
   })).filter(group => group.models.length > 0) ?? [];
   const normalizedSkillFilter = skillFilter.trim().toLocaleLowerCase();
-  const visibleSkillGroups = (['project', 'global', 'path', 'package'] as const).map(scope => ({
-    scope,
-    skills: (skills.catalog?.skills ?? []).filter(skill => skill.scope === scope && (
+  const visibleSkillGroups = (['project', 'global', 'path', 'package'] as const).flatMap(scope => {
+    const candidates = (skills.catalog?.skills ?? []).filter(skill => skill.scope === scope && (
       !normalizedSkillFilter
       || skill.name.toLocaleLowerCase().includes(normalizedSkillFilter)
       || skill.description.toLocaleLowerCase().includes(normalizedSkillFilter)
       || skill.source.toLocaleLowerCase().includes(normalizedSkillFilter)
-    )),
-  })).filter(group => group.skills.length > 0);
+    ));
+    const sources = scope === 'package' || scope === 'path' ? [...new Set(candidates.map(skill => skill.source))] : [''];
+    return sources.map(source => ({ scope, source, skills: candidates.filter(skill => !source || skill.source === source) }));
+  }).filter(group => group.skills.length > 0);
 
   const checkForUpdate = async (refresh = false) => {
     setCheckingUpdate(true);
@@ -101,7 +108,12 @@ function SettingsView() {
 
   useEffect(() => {
     const target = window.location.hash.slice(1) || preferences.lastSettingsSection;
-    window.setTimeout(() => document.getElementById(target)?.scrollIntoView({ block: 'start' }), 0);
+    const timer = window.setTimeout(() => {
+      const section = document.getElementById(target);
+      section?.scrollIntoView({ block: 'start' });
+      if (target === 'mcp' && window.location.hash === '#mcp') section?.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []); // Restore only on entry; interacting with controls must not move the page.
 
   useEffect(() => {
@@ -209,7 +221,7 @@ function SettingsView() {
         >
           {Object.keys(providers.available).map(type => (
             <option key={type} value={type}>
-              {getProviderOptionLabel(type as ProviderType, t)}
+              {providerNames[type] ? `${providerNames[type]} (${type})` : getProviderOptionLabel(type as ProviderType, t)}
             </option>
           ))}
         </select>
@@ -260,7 +272,10 @@ function SettingsView() {
         </div>
       </section>
 
-      <ProviderLifecycleSettings />
+      <ProviderLifecycleSettings key={`${workspaceId}:${activeSessionId}:${providers.active}:${providerInvalidation}`}
+        onSelectionInvalidated={() => setProviderInvalidation(value => value + 1)}
+        onProvidersLoaded={items => setProviderNames(Object.fromEntries(items.map(item => [item.id, item.name])))}
+        onCanonicalReload={() => setProviderReload(value => value + 1)} />
 
       <section className="settings-section" id="transport">
         <h3>{t('settings.realtimeTransport')}</h3>
@@ -302,15 +317,13 @@ function SettingsView() {
                 onChange={event => setModelFilter(event.target.value)} />
             </label>
             <div>
-              <button type="button" disabled={providers.catalogLoading} onClick={() => void hydrateModelCatalog(true)}>
+              <button type="button" disabled={providers.catalogLoading || batches.busy} onClick={() => void hydrateModelCatalog(true)}>
                 {t('settings.modelCatalog.refresh')}
               </button>
-              <button type="button" disabled={providers.catalogLoading || !providers.catalog} onClick={() => void setAllModelsEnabled(true)}>
-                {t('settings.modelCatalog.enableAll')}
-              </button>
-              <button type="button" disabled={providers.catalogLoading || !providers.catalog} onClick={() => void setAllModelsEnabled(false)}>
-                {t('settings.modelCatalog.disableAll')}
-              </button>
+              <ResourceGroupButtons group={t('settings.modelCatalog.manage')}
+                rows={visibleModelGroups.flatMap(group => group.models.map(model => ({ key: model.key, enabled: model.enabled })))}
+                disabled={!!providers.catalogLoading || batches.busy}
+                save={changes => batches.save('models', changes)} />
             </div>
           </div>
           {providers.catalog && <p className="model-catalog-meta">
@@ -322,6 +335,8 @@ function SettingsView() {
           {!providers.catalogLoading && providers.catalog && visibleModelGroups.length === 0 && (
             <p>{t('settings.modelCatalog.empty')}</p>
           )}
+          <ResourceBatchReport busy={batches.busy} outcomes={batches.reports.models} error={batches.errors.models}
+            names={new Map(providers.catalog?.providers.flatMap(group => group.models.map(model => [model.key, model.name] as const)))} />
           <div className="model-catalog-groups">
             {visibleModelGroups.map(group => (
               <fieldset key={group.provider} data-provider={group.provider}>
@@ -331,11 +346,15 @@ function SettingsView() {
                     {group.configured ? t('settings.modelCatalog.configured') : t('settings.modelCatalog.unavailable')}
                   </span>
                 </legend>
+                <ResourceGroupButtons group={getTypeLabel(group.provider as ProviderType, t)}
+                  rows={group.models.map(model => ({ key: model.key, enabled: model.enabled }))}
+                  disabled={!!providers.catalogLoading || batches.busy}
+                  save={changes => batches.save('models', changes)} />
                 {group.models.map(model => (
                   <label key={model.key} className="model-catalog-row">
-                    <input type="checkbox" checked={model.enabled} disabled={providers.catalogLoading}
+                    <input type="checkbox" checked={model.enabled} disabled={providers.catalogLoading || batches.busy}
                       aria-label={t('settings.modelCatalog.toggle', { model: model.name, provider: getTypeLabel(group.provider as ProviderType, t) })}
-                      onChange={event => void setModelEnabled(model.key, event.target.checked)} />
+                      onChange={event => void batches.save('models', [{ key: model.key, enabled: event.target.checked }])} />
                     <span className="model-catalog-identity">
                       <strong>{model.name}</strong>
                       <code>{model.id}</code>
@@ -357,8 +376,8 @@ function SettingsView() {
         </details>
       </section>
 
-      <DefaultModelSettings />
-      <CustomModelSettings />
+      <DefaultModelSettings key={`provider-defaults:${providerReload}`} />
+      <CustomModelSettings key={`provider-models:${providerReload}`} />
 
       <section className="settings-section" id="skills">
         <h3>{t('settings.skills.title')}</h3>
@@ -370,7 +389,7 @@ function SettingsView() {
               onChange={event => setSkillFilter(event.target.value)} />
           </label>
           <div>
-            <button type="button" disabled={skills.loading} onClick={() => void hydrateSkillCatalog(true)}>
+            <button type="button" disabled={skills.loading || batches.busy} onClick={() => void hydrateSkillCatalog(true)}>
               {t('settings.skills.refresh')}
             </button>
           </div>
@@ -392,17 +411,22 @@ function SettingsView() {
         {skills.error && <p role="alert" className="status-warning">{skills.error}</p>}
         {!skills.loading && skills.catalog && visibleSkillGroups.length === 0 && <p>{t('settings.skills.empty')}</p>}
         <SkillRegistryPanel />
+        <ResourceBatchReport busy={batches.busy} outcomes={batches.reports.skills} error={batches.errors.skills}
+          names={new Map(skills.catalog?.skills.map(skill => [skill.key, skill.name] as const))} />
         <div className="skill-catalog-groups">
           {visibleSkillGroups.map(group => (
-            <fieldset key={group.scope} data-scope={group.scope}>
-              <legend>{t(`settings.skills.scope.${group.scope}`)}</legend>
+            <fieldset key={`${group.scope}:${group.source}`} data-scope={group.scope} data-source={group.source}>
+              <legend>{t(`settings.skills.scope.${group.scope}`)}{group.source && ` · ${group.source}`}</legend>
+              <ResourceGroupButtons group={group.source || t(`settings.skills.scope.${group.scope}`)}
+                rows={group.skills.map(skill => ({ key: skill.key, enabled: skill.modelInvocable }))}
+                disabled={!!skills.loading || batches.busy} save={changes => batches.save('skills', changes)} />
               {group.skills.map(skill => (
                 <label key={skill.key} className="skill-catalog-row">
                   <input type="checkbox" checked={skill.modelInvocable}
-                    disabled={skills.loading || !skill.trusted}
+                    disabled={skills.loading || batches.busy || !skill.trusted}
                     title={!skill.trusted ? t('settings.skills.requiresTrust') : undefined}
                     aria-label={t('settings.skills.toggle', { skill: skill.name })}
-                    onChange={event => void setSkillModelInvocable(skill.key, event.target.checked)} />
+                    onChange={event => void batches.save('skills', [{ key: skill.key, enabled: event.target.checked }])} />
                   <span className="skill-catalog-identity">
                     <strong>{skill.name}</strong>
                     <span>{skill.description}</span>
@@ -442,6 +466,13 @@ function SettingsView() {
               {['system', 'light', 'dark', 'mist', 'rose', 'pine'].map(theme => (
                 <option key={theme} value={theme}>{t(`settings.theme.${theme}`)}</option>
               ))}
+            </select>
+          </label>
+          <label>{t('settings.sendMode')}
+            <select value={preferences.sendMode}
+              onChange={event => setPreferences({ sendMode: event.target.value as typeof preferences.sendMode })}>
+              <option value="enter">{t('settings.sendMode.enter')}</option>
+              <option value="mod-enter">{t('settings.sendMode.modEnter')}</option>
             </select>
           </label>
           <label>{t('settings.contentWidth', { width: preferences.contentWidth })}
@@ -543,6 +574,8 @@ function SettingsView() {
         <p>{t('settings.totalSessions', { count: sessionCount })}</p>
         <small>{t('settings.sessionsLocation')}</small>
       </section>
+
+      <McpSettings />
 
       {/* About */}
       <section className="settings-section about" id="about">
@@ -674,4 +707,8 @@ function getModelOptions(
   }
 }
 
-export default SettingsView;
+function LocalizedSettingsView() {
+  return <SettingsLocaleBoundary><SettingsView /></SettingsLocaleBoundary>;
+}
+
+export default LocalizedSettingsView;

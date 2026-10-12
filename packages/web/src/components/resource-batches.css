@@ -1,0 +1,8 @@
+.resource-group-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+.resource-group-actions button { max-width: 100%; white-space: normal; }
+.resource-batch-report { overflow-wrap: anywhere; }
+.resource-batch-report ul { padding-inline-start: 1.5rem; }
+@media (max-width: 600px) {
+  .resource-group-actions button { flex: 1 1 8rem; }
+  #model .model-catalog-row, #skills .skill-catalog-row { min-width: 0; }
+}

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import type { ToolSettings } from '@ai-harness/core';
+import { CODEMODE_REGISTRATION, TOOL_SEARCH_REGISTRATION, READ_ONLY_AGENT_TOOL_NAMES, type RegisteredAgentTool, type ToolSettings } from '@ai-harness/core';
 import type { RuntimeServices } from '../runtime/services.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { requireCapability } from '../security/request-security.js';
@@ -30,19 +30,40 @@ function settings(services: RuntimeServices, projectId?: string): ToolSettings {
   const enabled = effective.values.enabledTools === undefined ? undefined : new Set(effective.values.enabledTools);
   const provenance = effective.provenance.enabledTools ?? effective.provenance.toolPreset;
   const powershellAvailable = process.platform === 'win32';
+  const registered = services.extensionRegistry.getTools();
+  const tools = [...registered, ...[CODEMODE_REGISTRATION, TOOL_SEARCH_REGISTRATION]
+    .filter(tool => !registered.some(existing => existing.name === tool.name))];
+  const disabledReason = (tool: RegisteredAgentTool): ToolSettings['tools'][number]['disabledReason'] => {
+    if (effective.values.toolPreset === 'chat-only') return 'chat-only';
+    if (effective.values.toolPreset === 'read-only' && !(READ_ONLY_AGENT_TOOL_NAMES as readonly string[]).includes(tool.name)) return 'read-only';
+    if (tool.exposure === 'hidden') return 'hidden';
+    if (enabled && !enabled.has(tool.name)) return 'not-selected';
+    if (tool.extensionId === 'builtin:codemode' && services.codemodeSelfTest?.state !== 'passed') return 'sandbox-unavailable';
+    if ((tool.extensionId === 'builtin:codemode' && !effective.values.codemodeEnabled)
+      || (tool.extensionId === 'builtin:tool-search' && !enabled?.has(tool.name))) return 'automatic';
+    return undefined;
+  };
   return {
     scope: provenance?.scope ?? 'default',
     source: provenance?.source ?? 'built-in',
     preset: effective.values.toolPreset ?? 'default',
     powershellAvailable,
     powershellEnabled: powershellAvailable && effective.values.powershellEnabled === true,
-    tools: services.extensionRegistry.getTools().map(tool => ({
+    codemode: {
+      enabled: effective.values.codemodeEnabled ?? false,
+      mode: effective.values.codemodeMode ?? 'on',
+      inlineBudget: effective.values.codemodeInlineBudget ?? 3_000,
+      selfTest: { state: services.codemodeSelfTest?.state ?? 'not-run', engine: 'QuickJS' },
+    },
+    tools: tools.map(tool => ({
       name: tool.name,
       description: tool.description,
       extensionId: tool.extensionId,
       enabled: (enabled === undefined || enabled.has(tool.name))
         && (tool.name !== 'powershell' || effective.values.powershellEnabled === true),
-      available: tool.name !== 'powershell' || powershellAvailable,
+      available: (tool.name !== 'powershell' || powershellAvailable)
+        && (tool.extensionId !== 'builtin:codemode' || services.codemodeSelfTest?.state === 'passed'),
+      ...(disabledReason(tool) ? { disabledReason: disabledReason(tool) } : {}),
       ...(tool.name === 'powershell' && !powershellAvailable
         ? { unavailableReason: 'PowerShell is only available on Windows hosts.' } : {}),
     })),
@@ -72,7 +93,13 @@ export function createToolRouter(servicesPromise: Promise<RuntimeServices>): Rou
         optionalString(request.body?.cwd, 'cwd'),
         optionalString(request.body?.projectId, 'projectId', 500),
       );
-      const known = new Set(services.extensionRegistry.getTools().map(tool => tool.name));
+      if (!request.body || Object.keys(request.body).some(key => ![
+        'cwd', 'projectId', 'enabledTools', 'toolPreset', 'powershellEnabled',
+        'codemodeEnabled', 'codemodeMode', 'codemodeInlineBudget',
+      ].includes(key))) {
+        response.status(400).json({ error: 'Tool settings payload is invalid.', code: 'INVALID_TOOL_SETTINGS' }); return;
+      }
+      const known = new Set([...services.extensionRegistry.getTools().map(tool => tool.name), 'codemode', 'tool_search']);
       const enabledTools = request.body?.enabledTools;
       if (!Array.isArray(enabledTools) || enabledTools.length > 2_000
         || !enabledTools.every((tool: unknown) => typeof tool === 'string' && known.has(tool))) {
@@ -96,6 +123,9 @@ export function createToolRouter(servicesPromise: Promise<RuntimeServices>): Rou
         enabledTools: [...new Set(enabledTools)],
         toolPreset,
         powershellEnabled: request.body.powershellEnabled,
+        ...(request.body.codemodeEnabled !== undefined ? { codemodeEnabled: request.body.codemodeEnabled } : {}),
+        ...(request.body.codemodeMode !== undefined ? { codemodeMode: request.body.codemodeMode } : {}),
+        ...(request.body.codemodeInlineBudget !== undefined ? { codemodeInlineBudget: request.body.codemodeInlineBudget } : {}),
       }, selected.projectId);
       response.json(settings(services, selected.projectId));
     } catch (error) { next(error); }

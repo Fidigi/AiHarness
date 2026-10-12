@@ -1,5 +1,6 @@
-import type { MessageContentBlock } from '../types/index.js';
+import type { CodemodeCall, MessageContentBlock } from '../types/index.js';
 import type { ExtensionInteractionRequest } from '../extensions/extension-registry.js';
+import type { ToolProgressSnapshot } from './tool-progress.js';
 
 export const AGENT_EVENT_PROTOCOL_VERSION = 1 as const;
 
@@ -74,7 +75,7 @@ export interface AgentRetrySnapshot {
   scheduledAt: string;
 }
 
-export interface ExtensionInteractionSnapshot extends ExtensionInteractionRequest {
+export interface ExtensionInteractionSnapshot extends Omit<ExtensionInteractionRequest, 'signal' | 'timeoutMs'> {
   id: string;
   extensionId?: string;
   createdAt: string;
@@ -85,6 +86,8 @@ export interface ActiveToolSnapshot {
   name: string;
   input: unknown;
   startedAt: string;
+  nestedCalls?: CodemodeCall[];
+  progress?: ToolProgressSnapshot;
 }
 
 export interface AgentRunSnapshot {
@@ -100,7 +103,10 @@ export interface AgentRunSnapshot {
   error?: string;
   retry?: AgentRetrySnapshot;
   activeTool?: ActiveToolSnapshot;
+  /** Compatibility projection: first entry of extensionRequests. */
   extensionRequest?: ExtensionInteractionSnapshot;
+  /** Complete bounded admission-ordered queue for reconnect; events carry only one changed request/ID. */
+  extensionRequests?: ExtensionInteractionSnapshot[];
   partialMessage?: { id: string; content: string; reasoning?: string };
   steerQueue: QueuedAgentMessage[];
   followUpQueue: QueuedAgentMessage[];

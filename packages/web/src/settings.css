@@ -34,17 +34,102 @@
 .custom-resource-editor > summary, .skill-registry > summary { color: #dce6f8; font-weight: 600; cursor: pointer; }
 .custom-resource-editor form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin: .75rem 0; }
 .custom-resource-editor form > label { min-width: 0; display: grid; gap: .25rem; font-size: .78rem; }
-.custom-resource-editor form input, .custom-resource-editor form select, .custom-resource-editor form textarea,
+.custom-resource-editor form input, .custom-resource-editor form select, .custom-resource-editor form textarea { width: 100%; min-height: 2.2rem; }
+#defaults button:not(:disabled) { background: #a12645; color: #fff; }
 #defaults input, #defaults select, #tools select { width: 100%; min-height: 2.2rem; }
 .custom-resource-editor form > div { grid-column: 1 / -1; display: flex; gap: .4rem; }
+.codemode-settings { min-width: 0; display: grid; gap: .65rem; margin-top: 1rem; padding: .75rem; border: 1px solid #40527b; border-radius: 6px; }
+.codemode-settings > label { min-width: 0; display: grid; gap: .3rem; }
+.codemode-settings p { margin: 0; overflow-wrap: anywhere; }
+.codemode-settings input { width: 100%; min-height: 2.2rem; }
+.mcp-per-tool-exposure { width: 100%; min-width: 0; text-align: left; overflow-wrap: anywhere; }
+.mcp-per-tool-exposure > summary { cursor: pointer; margin: .35rem 0; }
+.mcp-per-tool-exposure > label { margin-top: .4rem; }
+html[data-theme="light"] .codemode-settings { border-color: #b8c3d4; }
 .tool-settings-list { display: grid; gap: .35rem; margin: .7rem 0; }
 .tool-settings-list > label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: .5rem; padding: .45rem; border-bottom: 1px solid #30405f; }
 .tool-settings-list span { display: grid; gap: .15rem; }
 .tool-settings-list small { color: #98a6bd; }
+.mcp-settings-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.mcp-settings-heading h3, .mcp-settings-heading p { margin-top: 0; }
+.mcp-scope { min-width: 0; margin-top: .75rem; padding: .55rem; border: 1px solid #40527b; border-radius: 6px; }
+.mcp-scope legend { padding: 0 .35rem; color: #e9eef8; font-weight: 600; }
+.mcp-server-card > .mcp-server-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; max-width: 15rem; align-items: center; }
+.mcp-test-report { grid-column: 1 / -1; min-width: 0; display: grid; gap: .3rem; margin-top: .15rem; padding: .55rem; border: 1px solid #344c75; border-radius: 5px; background: #0c1429; }
+.mcp-test-summary { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .35rem .7rem; }
+.mcp-test-report small { color: #b5c0d3; }
+.mcp-test-tools { display: grid; gap: .35rem; margin: .25rem 0 0; padding: 0; list-style: none; }
+.mcp-test-tools li { display: grid; gap: .1rem; padding: .35rem .4rem; border-left: 2px solid #526fa4; background: #111c35; }
+.mcp-test-tools span { color: #d1daea; font-size: .76rem; }
+.mcp-test-output, .mcp-test-stderr pre { box-sizing: border-box; max-width: 100%; max-height: 9rem; overflow: auto; margin: .2rem 0 0; padding: .45rem; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid #63435b; border-radius: 4px; color: #ffd9e1; background: #1c1221; font-size: .72rem; }
+.mcp-test-stderr summary { color: #b9c7de; cursor: pointer; font-size: .76rem; }
+.mcp-oauth-panel .mcp-config-lines { display: grid; gap: .45rem; min-width: 0; }
+.mcp-oauth-panel label { display: grid; gap: .25rem; min-width: 0; color: #c7d2e5; font-size: .76rem; }
+.mcp-oauth-panel input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 2.2rem; padding: .5rem; border: 1px solid #40527b; border-radius: 4px; color: #eef3fc; background: #10182d; }
+.mcp-oauth-panel input::placeholder { color: #98a6bd; }
+.mcp-oauth-panel a { width: fit-content; overflow-wrap: anywhere; color: #a6c8ff; }
+.mcp-oauth-panel .mcp-config-lines > button { justify-self: start; }
+.mcp-oauth-panel :is(a, input):focus-visible { outline: 2px solid #a6c8ff; outline-offset: 2px; }
+.mcp-group-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .4rem; margin: 0 0 .5rem; }
+.mcp-row-actions { display: flex; flex-wrap: wrap; flex-basis: 100%; justify-content: flex-end; gap: .35rem; margin-top: .2rem; }
+.mcp-row-actions button, .mcp-group-actions button { min-height: 2rem; padding: .3rem .55rem; }
+.mcp-exposure-control { display: grid; gap: .2rem; width: 100%; color: #aebad0; font-size: .72rem; text-align: left; }
+.mcp-exposure-control select { width: 100%; min-height: 2rem; padding: .3rem .45rem; }
+.mcp-exposure-control select:disabled { opacity: .5; cursor: not-allowed; }
+.mcp-remove-button { border-color: #a9485a; color: #ffd8df; }
+.mcp-action-feedback { margin: .55rem 0; }
+.mcp-undo { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: .55rem 0; padding: .55rem .65rem; border: 1px solid #5270a6; border-radius: 6px; background: #10182f; }
+.mcp-remove-backdrop, .mcp-import-backdrop { position: fixed; z-index: 70; inset: 0; display: grid; place-items: center; padding: 1rem; background: rgba(5, 8, 20, .78); }
+.mcp-remove-dialog, .mcp-import-dialog { box-sizing: border-box; padding: 1rem; border: 1px solid #536b9e; border-radius: 8px; color: #e9eef8; background: #16213e; box-shadow: 0 20px 60px #0009; }
+.mcp-remove-dialog { width: min(30rem, 100%); }
+.mcp-remove-dialog h4, .mcp-import-dialog h4 { margin-top: 0; }
+.mcp-remove-dialog code { display: block; overflow-wrap: anywhere; margin: .75rem 0; }
+.mcp-dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; }
+.mcp-diagnostics { margin: .35rem 0 0; padding-left: 1.1rem; color: #ff9aad; font-size: .75rem; }
+.mcp-file-diagnostics { margin-top: .8rem; border-top: 1px solid #30466e; padding-top: .65rem; }
+.mcp-file-diagnostics > summary { color: #dce6f8; cursor: pointer; }
+.mcp-file-diagnostics > div { margin-top: .55rem; }
+.mcp-file-diagnostics ul { margin: .3rem 0; }
+.mcp-import-panel { min-width: 0; margin: .8rem 0; padding-top: .65rem; border-top: 1px solid #30466e; }
+.mcp-import-panel > summary { color: #dce6f8; font-weight: 600; cursor: pointer; }
+.mcp-import-body { display: grid; gap: .55rem; margin-top: .7rem; }
+.mcp-import-body > label:not(.mcp-import-syntax) { color: #aebad0; font-size: .8rem; font-weight: 600; }
+.mcp-import-body textarea { box-sizing: border-box; width: 100%; min-height: 8rem; resize: vertical; padding: .65rem; border: 1px solid #40527b; border-radius: 5px; color: #eef3fc; background: #10182d; font: .78rem/1.45 ui-monospace, monospace; }
+.mcp-import-syntax { display: flex; align-items: flex-start; gap: .45rem; font-size: .84rem; }
+.mcp-import-syntax input { margin-top: .15rem; }
+.mcp-import-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
+.mcp-import-results { min-width: 0; margin-top: .25rem; padding-top: .65rem; border-top: 1px solid #30466e; }
+.mcp-import-results h4 { margin: 0; }
+.settings-resource-card.mcp-import-entry { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+.mcp-import-entry > header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: .45rem; }
+.mcp-import-entry > header > div, .mcp-import-persisted { min-width: 0; display: grid; gap: .2rem; }
+.mcp-import-entry h5 { margin: .3rem 0 .2rem; }
+.mcp-import-entry section { min-width: 0; }
+.mcp-import-entry ul, .mcp-import-notes { margin: .3rem 0; padding-left: 1.2rem; font-size: .78rem; }
+.mcp-import-entry code, .mcp-import-entry small { overflow-wrap: anywhere; }
+.settings-resource-card > .mcp-import-scopes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; gap: .55rem; }
+.mcp-import-scope-result { min-width: 0; padding: .45rem; border: 1px solid #30466e; border-radius: 5px; }
+.mcp-import-scope-result > span { display: block; margin-top: .15rem; font-size: .75rem; }
+.mcp-import-scope-result ul { margin-bottom: 0; }
+.mcp-import-save-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
+.mcp-import-panel button:disabled, .mcp-import-dialog button:disabled { opacity: .5; cursor: not-allowed; }
+.mcp-import-dialog { width: min(42rem, 100%); max-height: calc(100vh - 2rem); overflow-y: auto; }
+.mcp-import-dialog form { display: grid; gap: .75rem; }
+.mcp-import-dialog form > label:not(.mcp-import-confirmation) { display: grid; gap: .3rem; color: #aebad0; font-size: .8rem; font-weight: 600; }
+.mcp-import-dialog input[type="text"], .mcp-import-dialog input[type="password"], .mcp-import-dialog form > input { box-sizing: border-box; width: 100%; min-height: 2.35rem; padding: .45rem .55rem; border: 1px solid #40527b; border-radius: 4px; color: #eef3fc; background: #10182d; }
+.mcp-import-field, .mcp-import-secret-references { min-width: 0; display: grid; gap: .5rem; margin: 0; padding: .65rem; border: 1px solid #40527b; border-radius: 6px; }
+.mcp-import-field legend, .mcp-import-secret-references legend { padding: 0 .3rem; }
+.mcp-import-field > label:not(.mcp-import-reference-toggle), .mcp-import-secret-references > label { min-width: 0; display: grid; gap: .3rem; font-size: .78rem; }
+.mcp-import-secret-references code { overflow-wrap: anywhere; }
+.mcp-import-reference-toggle, .mcp-import-confirmation { display: flex; align-items: flex-start; gap: .45rem; font-size: .82rem; }
+.mcp-import-reference-toggle input, .mcp-import-confirmation input { flex: 0 0 auto; margin-top: .15rem; }
+.mcp-import-note-error { color: #ff9aad; }
+.mcp-import-note-warning { color: #f2c36b; }
 
 html[data-theme="light"] .settings-help, html[data-theme="light"] .model-catalog-meta { color: #52627b; }
 html[data-theme="light"] .custom-resource-editor > summary, html[data-theme="light"] .skill-registry > summary { color: #26344e; }
 html[data-theme="light"] .settings-resource-card, html[data-theme="light"] .oauth-device-flow { color: #172033; background: #f8f9fc; border-color: #b8c3d4; }
+html[data-theme="light"] .mcp-exposure-control { color: #52627b; }
 html[data-theme="light"] .custom-resource-editor, html[data-theme="light"] .skill-registry,
 html[data-theme="light"] .tool-settings-list > label { border-color: #d8dee9; }
 html[data-theme="light"] .tool-settings-list small { color: #52627b; }
@@ -60,12 +145,46 @@ html[data-theme="light"] .model-catalog-identity code, html[data-theme="light"] 
 html[data-theme="light"] .skill-catalog-identity span { color: #52627b; }
 html[data-theme="light"] .model-capabilities small { color: #244d8f; border-color: #9eabc1; }
 html[data-theme="light"] .model-capabilities small.unavailable { color: #7a4b08; border-color: #c59a5b; }
+html[data-theme="light"] .mcp-scope { border-color: #b8c3d4; }
+html[data-theme="light"] .mcp-scope legend, html[data-theme="light"] .mcp-file-diagnostics > summary { color: #26344e; }
+html[data-theme="light"] .mcp-test-report { color: #172033; border-color: #b8c3d4; background: #eef3fb; }
+html[data-theme="light"] .mcp-test-report small, html[data-theme="light"] .mcp-test-stderr summary,
+html[data-theme="light"] .mcp-oauth-panel label { color: #52627b; }
+html[data-theme="light"] .mcp-oauth-panel input { color: #172033; border-color: #9eabc1; background: #fff; }
+html[data-theme="light"] .mcp-oauth-panel input::placeholder { color: #52627b; }
+html[data-theme="light"] .mcp-oauth-panel a { color: #244d8f; }
+html[data-theme="light"] .mcp-oauth-panel :is(a, input):focus-visible { outline-color: #244d8f; }
+html[data-theme="light"] .mcp-test-tools li { border-left-color: #6079a6; background: #fff; }
+html[data-theme="light"] .mcp-test-tools span { color: #52627b; }
+html[data-theme="light"] .mcp-test-output, html[data-theme="light"] .mcp-test-stderr pre { color: #8b1e32; border-color: #d4a8b0; background: #fff2f4; }
+html[data-theme="light"] .mcp-file-diagnostics { border-color: #d8dee9; }
+html[data-theme="light"] .mcp-diagnostics { color: #9b1c31; }
+html[data-theme="light"] .mcp-undo { color: #172033; border-color: #b8c3d4; background: #f8f9fc; }
+html[data-theme="light"] .mcp-remove-dialog, html[data-theme="light"] .mcp-import-dialog { color: #172033; border-color: #aeb9ca; background: #fff; }
+html[data-theme="light"] .mcp-remove-button { color: #8b1e32; border-color: #b85b6b; }
+html[data-theme="light"] .mcp-import-panel, html[data-theme="light"] .mcp-import-results { border-color: #d8dee9; }
+html[data-theme="light"] .mcp-import-panel > summary { color: #26344e; }
+html[data-theme="light"] .mcp-import-body > label:not(.mcp-import-syntax) { color: #52627b; }
+html[data-theme="light"] .mcp-import-body textarea { color: #172033; background: #fff; border-color: #aeb9ca; }
+html[data-theme="light"] .mcp-import-scope-result, html[data-theme="light"] .mcp-import-field,
+html[data-theme="light"] .mcp-import-secret-references { border-color: #c5cede; }
+html[data-theme="light"] .mcp-import-dialog form > label:not(.mcp-import-confirmation) { color: #52627b; }
+html[data-theme="light"] .mcp-import-dialog input[type="text"], html[data-theme="light"] .mcp-import-dialog input[type="password"],
+html[data-theme="light"] .mcp-import-dialog form > input { color: #172033; background: #fff; border-color: #aeb9ca; }
+html[data-theme="light"] .mcp-import-note-error { color: #9b1c31; }
+html[data-theme="light"] .mcp-import-note-warning { color: #7a4b08; }
 
 @media (max-width: 560px) {
   .shortcut-grid label { grid-template-columns: 1fr; }
   .shortcut-grid small { grid-column: 1; }
   .model-catalog-row, .skill-catalog-row { grid-template-columns: auto minmax(0, 1fr); }
   .settings-resource-card, .custom-resource-editor form { grid-template-columns: 1fr; }
-  .settings-resource-card > div:last-child { justify-content: flex-start; }
+  .settings-resource-card > div:last-child { max-width: none; justify-content: flex-start; }
+  .mcp-group-actions, .mcp-row-actions { justify-content: flex-start; }
+  .mcp-undo { align-items: flex-start; }
+  .settings-resource-card > .mcp-import-scopes { grid-template-columns: 1fr; }
+  .mcp-import-actions button, .mcp-import-save-actions button { flex: 1 1 auto; }
+  .mcp-import-backdrop { align-items: end; padding: .5rem; }
+  .mcp-import-dialog { width: 100%; max-height: calc(100dvh - 1rem); border-radius: 10px 10px 5px 5px; }
   .model-capabilities { grid-column: 2; justify-content: flex-start; }
 }

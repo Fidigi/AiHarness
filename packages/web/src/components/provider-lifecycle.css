@@ -1,0 +1,27 @@
+.settings-resource-card.provider-custom-card {
+  grid-template-columns: minmax(0, 1fr);
+}
+.provider-oauth-paste,
+.provider-rename-panel {
+  display: grid;
+  gap: .6rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.provider-oauth-paste input,
+.provider-rename-panel input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: .5rem;
+  color: inherit;
+  background: transparent;
+  border: 1px solid #7c8ca8;
+  border-radius: 4px;
+}
+.provider-lifecycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-top: .5rem;
+}

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,6 +20,15 @@ import { SubagentRuntime } from './subagent-runtime.js';
 import { SubagentService } from './subagent-service.js';
 
 const temporaryDirectories: string[] = [];
+
+class CapturingProvider extends MockProvider {
+  systemPrompt?: string;
+
+  override async streamChat(...args: Parameters<MockProvider['streamChat']>): Promise<void> {
+    this.systemPrompt = args[4]?.systemPrompt;
+    await super.streamChat(...args);
+  }
+}
 
 class HoldingProvider extends AiProvider {
   validateConfig(): boolean { return true; }
@@ -43,7 +52,10 @@ class HoldingProvider extends AiProvider {
   }
 }
 
-async function fixture(provider: AiProvider = new MockProvider({ type: ProviderType.MOCK })) {
+async function fixture(
+  provider: AiProvider = new MockProvider({ type: ProviderType.MOCK }),
+  resolveSystemPrompt?: (input: { cwd: string; basePrompt: string }) => Promise<string>,
+) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-subagent-runtime-'));
   temporaryDirectories.push(root);
   const project = path.join(root, 'project');
@@ -65,7 +77,7 @@ async function fixture(provider: AiProvider = new MockProvider({ type: ProviderT
     resolveProvider: () => provider,
     isProjectTrusted: () => true,
   });
-  const runtime = new SubagentRuntime(profiles, agents, sessions);
+  const runtime = new SubagentRuntime(profiles, agents, sessions, resolveSystemPrompt);
   const parent = await sessions.create({
     title: 'Parent', cwd: project, workspaceId: descriptor.id, model: 'mock-model', toolPreset: 'read-only',
   });
@@ -79,7 +91,11 @@ afterEach(async () => {
 
 describe('SubagentRuntime', () => {
   it('runs a linked child session with bounded inherited context and publishes completion', async () => {
-    const { runtime, sessions, agents, parent } = await fixture();
+    const provider = new CapturingProvider({ type: ProviderType.MOCK });
+    const resolver = vi.fn(async ({ cwd, basePrompt }: { cwd: string; basePrompt: string }) => (
+      `resolved for ${cwd}\n\n${basePrompt}`
+    ));
+    const { runtime, sessions, agents, parent } = await fixture(provider, resolver);
     for (let index = 0; index < 45; index++) {
       await sessions.addMessage(parent.id, { role: index % 2 ? 'assistant' : 'user', content: `Context ${index}` });
     }
@@ -101,6 +117,8 @@ describe('SubagentRuntime', () => {
       turn: 1,
     });
     expect(completed?.output).toContain('Mock AI Response');
+    expect(resolver).toHaveBeenCalledWith({ cwd: parent.cwd, basePrompt: expect.stringContaining('Explore') });
+    expect(provider.systemPrompt).toContain(`resolved for ${parent.cwd}`);
     const child = sessions.get(started.childSessionId);
     expect(child).toMatchObject({ parentId: parent.id, parentAgentId: parent.agentId, cwd: parent.cwd });
     const inherited = child?.messages.filter(message => message.metadata?.inheritedFromSession === parent.id) ?? [];

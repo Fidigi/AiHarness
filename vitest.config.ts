@@ -4,11 +4,15 @@ import path from 'path';
 export default defineConfig({
   test: {
     globals: true,
+    // Serialize CI files: executable contract tests already spawn real Node children.
+    // Parallel files contend with their existing per-case deadlines on small runners.
+    maxWorkers: process.env.CI ? 1 : undefined,
     include: [
       'packages/core/src/**/*.test.ts',
       'packages/cli/src/**/*.test.ts',
       'packages/server/src/**/*.test.ts',
       'packages/web/src/**/*.test.ts',
+      'tests/functional-parity/**/*.test.ts',
     ],
     exclude: [
       '**/node_modules/**',
@@ -39,10 +43,11 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      '@ai-harness/core': path.resolve(import.meta.dirname, 'packages/core/src/index.ts'),
-      '@ai-harness/cli': path.resolve(import.meta.dirname, 'packages/cli/src/index.ts'),
-      '@ai-harness/server': path.resolve(import.meta.dirname, 'packages/server/src/index.ts'),
-    },
+    alias: [
+      { find: '@ai-harness/core/shell-input', replacement: path.resolve(import.meta.dirname, 'packages/core/src/tools/shell-input.ts') },
+      { find: '@ai-harness/core', replacement: path.resolve(import.meta.dirname, 'packages/core/src/index.ts') },
+      { find: '@ai-harness/cli', replacement: path.resolve(import.meta.dirname, 'packages/cli/src/index.ts') },
+      { find: '@ai-harness/server', replacement: path.resolve(import.meta.dirname, 'packages/server/src/index.ts') },
+    ],
   },
 });

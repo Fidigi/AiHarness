@@ -1,9 +1,12 @@
+import { CredentialRedactor } from '@ai-harness/core';
 import { describe, expect, it, vi } from 'vitest';
 import {
   TerminalRuntime,
   type PseudoTerminal,
   type SpawnPseudoTerminal,
 } from './terminal-runtime.js';
+
+vi.mock('node-pty', () => ({ spawn: vi.fn() }));
 
 class FakePty implements PseudoTerminal {
   readonly pid = 42;
@@ -77,6 +80,32 @@ describe('TerminalRuntime', () => {
     }
   });
 
+  it('redacts credentials fragmented across PTY chunks before replay or subscribers', () => {
+    const terminals: FakePty[] = [];
+    const redactor = new CredentialRedactor(['runtime-terminal-secret']);
+    const runtime = new TerminalRuntime({
+      spawn: () => {
+        const terminal = new FakePty();
+        terminals.push(terminal);
+        return terminal;
+      },
+      createRedactionStream: () => redactor.createStream(),
+    });
+    const created = runtime.create({ cwd: '/workspace' });
+    const listener = vi.fn();
+    runtime.subscribe(created.id, listener);
+
+    terminals[0]!.emitData('token=runtime-ter');
+    terminals[0]!.emitData('minal-secret\r\n$ ');
+    terminals[0]!.emitExit(0);
+
+    const serialized = JSON.stringify(runtime.replay(created.id, 0));
+    expect(serialized).not.toContain('runtime-terminal-secret');
+    expect(runtime.replay(created.id, 0).events
+      .flatMap(event => event.type === 'output' ? [event.data] : []).join('')).toContain('token=[REDACTED]');
+    expect(JSON.stringify(listener.mock.calls)).not.toContain('runtime-terminal-secret');
+  });
+
   it('replays bounded ANSI output by UTF-8 byte offset and signals reset', () => {
     const { runtime, terminals } = fixture({ maxReplayBytes: 8 });
     const created = runtime.create({ cwd: '/workspace' });
@@ -113,6 +142,29 @@ describe('TerminalRuntime', () => {
     expect(terminals[0]!.killed).toBe(false);
     expect(terminals[1]!.killed).toBe(true);
     expect(runtime.get(second.id)).toBeUndefined();
+  });
+
+  it('bounds retained terminal records and subscribers', () => {
+    const terminals: FakePty[] = [];
+    const runtime = new TerminalRuntime({
+      spawn: () => {
+        const terminal = new FakePty();
+        terminals.push(terminal);
+        return terminal;
+      },
+      maxRecords: 2,
+      maxListenersPerTerminal: 1,
+    });
+    const first = runtime.create({ cwd: '/workspace' });
+    terminals[0]!.emitExit(0);
+    const second = runtime.create({ cwd: '/workspace' });
+    terminals[1]!.emitExit(0);
+    const third = runtime.create({ cwd: '/workspace' });
+
+    expect(runtime.get(first.id)).toBeUndefined();
+    expect(runtime.list().map(item => item.id)).toEqual([second.id, third.id]);
+    runtime.subscribe(third.id, vi.fn());
+    expect(() => runtime.subscribe(third.id, vi.fn())).toThrow(/abonnés/i);
   });
 
   it('validates input, dimensions, active count and lifecycle', () => {

@@ -1,16 +1,21 @@
 import DOMPurify from 'dompurify';
-import { Fragment, isValidElement, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, isValidElement, memo, useEffect, useRef, useState, type ReactNode } from 'react';
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
+import { markdownPreviewText, markdownRemarkPlugins, normalizeMarkdownMath, remarkKeepLineBreaks } from './markdown-semantics';
 import 'katex/dist/katex.min.css';
+import './MarkdownContent.css';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useI18n } from '../hooks/useI18n';
+import { openWorkspaceFile } from './workspace-file-intent';
 
 const sanitizeSchema = {
   ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    code: [['className', /^language-./, 'math-inline', 'math-display']],
+  },
   protocols: {
     ...defaultSchema.protocols,
     href: [...(defaultSchema.protocols?.href ?? []), 'file'],
@@ -26,11 +31,6 @@ function plainText(value: ReactNode): string {
 
 function slug(value: ReactNode): string {
   return plainText(value).toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'section';
-}
-
-function openWorkspaceFile(reference: string): void {
-  window.dispatchEvent(new CustomEvent('aih-show-files'));
-  window.setTimeout(() => window.dispatchEvent(new CustomEvent('aih-open-file', { detail: reference })), 0);
 }
 
 function HighlightedCode({ code, language }: { code: string; language: string }) {
@@ -146,7 +146,7 @@ const components: Components = {
   a: ({ href, children }) => {
     if (href?.toLocaleLowerCase().startsWith('file:')) return <a href={href} onClick={event => {
       event.preventDefault();
-      openWorkspaceFile(href.slice(5));
+      openWorkspaceFile(href.slice(5), event.currentTarget);
     }}>{children}</a>;
     if (href && /^https?:\/\//i.test(href)) return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
     return href ? <a href={href}>{children}</a> : <span>{children}</span>;
@@ -160,13 +160,23 @@ const components: Components = {
   },
 };
 
-export default function MarkdownContentRenderer({ content }: { content: string }) {
+export interface MarkdownContentProps {
+  content: string;
+  /** Preserve typed/pasted line breaks in user messages, including tight lists. */
+  keepLineBreaks?: boolean;
+  /** Noninteractive text projection for navigation previews; never nests links/buttons. */
+  compact?: boolean;
+}
+
+export default memo(function MarkdownContentRenderer({ content, keepLineBreaks = false, compact = false }: MarkdownContentProps) {
+  if (compact) return <span className="markdown-compact">{markdownPreviewText(content)}</span>;
   return <div className="markdown-content">
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
+      remarkPlugins={keepLineBreaks ? [...markdownRemarkPlugins, remarkKeepLineBreaks] : markdownRemarkPlugins}
+      skipHtml
       rehypePlugins={[[rehypeSanitize, sanitizeSchema], [rehypeKatex, { strict: 'warn', trust: false }]]}
       components={components}
       urlTransform={url => /^file:/i.test(url) ? url : defaultUrlTransform(url)}
-    >{content}</ReactMarkdown>
+    >{normalizeMarkdownMath(content)}</ReactMarkdown>
   </div>;
-}
+});

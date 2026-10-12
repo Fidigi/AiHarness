@@ -1,0 +1,10 @@
+.extension-interaction .extension-output { max-height: 18rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.extension-interaction { display: grid; gap: .75rem; width: min(42rem, 100%); max-height: min(90vh, 50rem); overflow: auto; padding: 1rem; border: 1px solid #52668f; border-radius: 10px; color: #eef3fc; background: #111a31; box-shadow: 0 24px 80px #000c; }
+.extension-interaction h3 { margin: 0; }
+.extension-interaction input:not([type="checkbox"]), .extension-interaction textarea, .extension-interaction select { width: 100%; }
+.extension-interaction footer { display: flex; justify-content: flex-end; gap: .5rem; }
+.extension-custom-panel { border: 1px solid #40527b; border-radius: 5px; padding: .45rem; }
+.extension-custom-panel summary { cursor: pointer; color: #aebad0; }
+.extension-custom-panel[open] summary { margin-bottom: .55rem; }
+.extension-fields { display: grid; gap: .65rem; }
+.extension-fields label { display: grid; gap: .25rem; }

@@ -77,8 +77,8 @@ export class KeyBindingManager {
   private readonly actions = new Map<string, Omit<KeyBindingHandler, 'keys'>>();
   private isStreaming = false;
 
-  /** Create a new KeyBindingManager with default bindings */
-  constructor() {
+  /** Create a new KeyBindingManager with default bindings. */
+  constructor(private readonly redactText: (value: string) => string = value => value) {
     this.registerDefaults();
   }
 
@@ -185,7 +185,9 @@ export class KeyBindingManager {
       await binding.handler(ctx);
       return true; // Binding was handled
     } catch (error) {
-      console.error(`[KeyBinding] Error executing handler for ${keys.join('+')}:`, error);
+      console.error(this.redactText(
+        `[KeyBinding] Error executing handler for ${keys.join('+')}: ${error instanceof Error ? error.message : String(error)}`,
+      ));
       return false;
     }
   }
@@ -252,9 +254,11 @@ export class KeyBindingManager {
         if (!action) continue;
         this.registerHandler({ keys: binding.keys, ...action });
       }
-      console.log(`[KeyBinding] Loaded ${bindings.length} custom bindings from ${filePath}`);
+      console.log(this.redactText(`[KeyBinding] Loaded ${bindings.length} custom bindings from ${filePath}`));
     } catch (error) {
-      console.warn('[KeyBinding] Failed to load custom bindings:', error);
+      console.warn(this.redactText(
+        `[KeyBinding] Failed to load custom bindings: ${error instanceof Error ? error.message : String(error)}`,
+      ));
     }
   }
 
@@ -265,7 +269,9 @@ export class KeyBindingManager {
       const content = JSON.stringify(this.getBindings(), null, 2);
       await fs.writeFile(filePath, content);
     } catch (error) {
-      console.error('[KeyBinding] Failed to save bindings:', error);
+      console.error(this.redactText(
+        `[KeyBinding] Failed to save bindings: ${error instanceof Error ? error.message : String(error)}`,
+      ));
     }
   }
 

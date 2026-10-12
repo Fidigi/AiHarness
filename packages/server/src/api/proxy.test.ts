@@ -6,24 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { AiProxyServer } from './proxy';
+import { EventEmitter } from 'node:events';
+import { CredentialRedactor, type AiProvider } from '@ai-harness/core';
+import { AiProxyServer, sanitizedProxyChatOptions, writeSSEStream } from './proxy';
 
 // ===================================================================
 // Test helpers
 // ===================================================================
 
-function createMockFetchResponse(status: number, body: unknown): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    text: () => Promise.resolve(typeof body === 'string' ? body : JSON.stringify(body)),
-    json: () => Promise.resolve(body),
-    body: null as ReadableStream | null,
-  } as Response;
-}
-
 function createMockReadableStream(chunks: string[]): ReadableStream<Uint8Array> {
-  let index = 0;
   return new ReadableStream({
     start(controller) {
       for (const chunk of chunks) {
@@ -192,6 +183,118 @@ describe('AiProxyServer', () => {
       const result2 = await proxy.sendChatSSE('OpenAI', []);
       expect(result2.stream).toBeDefined();
     });
+  });
+
+  it('redacts credentials fragmented at the final SSE response boundary', async () => {
+    const output: string[] = [];
+    const response = Object.assign(new EventEmitter(), {
+      destroyed: false,
+      writableEnded: false,
+      write: (chunk: string | Uint8Array) => {
+        output.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+        return true;
+      },
+      end() { this.writableEnded = true; },
+    });
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: error\ndata: boundary-'));
+        controller.enqueue(encoder.encode('secret\n\n'));
+        controller.close();
+      },
+    });
+
+    await writeSSEStream(stream, response as never, new CredentialRedactor(['boundary-secret']));
+
+    expect(output.join('')).toBe('event: error\ndata: [REDACTED]\n\n');
+  });
+
+  it('redacts raw and encoded runtime credentials from provider SSE errors', async () => {
+    const secret = 'short+runtime-secret';
+    const provider = {
+      config: { type: 'untrusted', apiKey: secret, customHeaders: { 'X-Private': 'header-secret' } },
+      validateConfig: () => true,
+      getAvailableModels: async () => [],
+      getConfiguredModel: () => 'model',
+      chat: async () => { throw new Error('unused'); },
+      streamChat: async (_messages: unknown, _chunk: unknown, _complete: unknown, onError?: (error: Error) => void) => {
+        onError?.(new Error(`failed ${secret} ${encodeURIComponent(secret)} ${Buffer.from(secret).toString('base64')} header-secret`));
+      },
+    } as unknown as AiProvider;
+    proxy.setCustomProvider('untrusted', provider);
+
+    const result = await proxy.sendChatSSE('untrusted', []);
+    const reader = result.stream.getReader();
+    let output = '';
+    while (true) {
+      const item = await reader.read();
+      if (item.done) break;
+      output += new TextDecoder().decode(item.value);
+    }
+
+    expect(output).not.toContain(secret);
+    expect(output).not.toContain(encodeURIComponent(secret));
+    expect(output).not.toContain(Buffer.from(secret).toString('base64'));
+    expect(output).not.toContain('header-secret');
+    expect(output).toContain('Provider request failed.');
+  });
+
+  it('redacts every encoded credential variant split across provider SSE chunks', async () => {
+    const secret = 'split+server-secret';
+    const variants = [
+      secret,
+      encodeURIComponent(secret),
+      encodeURI(secret),
+      Buffer.from(secret).toString('base64'),
+      Buffer.from(secret).toString('base64url'),
+      Buffer.from(secret).toString('hex'),
+      JSON.stringify(secret).slice(1, -1),
+    ];
+    const provider = {
+      config: { type: 'fragmented', apiKey: secret },
+      validateConfig: () => true,
+      getAvailableModels: async () => [],
+      getConfiguredModel: () => 'model',
+      chat: async () => ({ content: 'unused' }),
+      streamChat: async (_messages: unknown, onChunk: (chunk: string) => Promise<void>, onComplete?: () => void) => {
+        for (const variant of variants) {
+          const split = Math.max(1, Math.floor(variant.length / 2));
+          await onChunk(variant.slice(0, split));
+          await onChunk(`${variant.slice(split)}|`);
+        }
+        onComplete?.();
+      },
+    } as unknown as AiProvider;
+    proxy.setCustomProvider('fragmented', provider);
+
+    const result = await proxy.sendChatSSE('fragmented', []);
+    const reader = result.stream.getReader();
+    let output = '';
+    while (true) {
+      const item = await reader.read();
+      if (item.done) break;
+      output += new TextDecoder().decode(item.value);
+    }
+
+    for (const variant of variants) expect(output).not.toContain(variant);
+    expect(output.match(/\[REDACTED\]/g)?.length).toBeGreaterThanOrEqual(variants.length);
+  });
+
+  it('copies only bounded provider options from untrusted JSON payloads', () => {
+    const signal = { hostile: true };
+    expect(sanitizedProxyChatOptions({
+      model: ' model-1 ', temperature: 0.5, maxTokens: 128, maxRetries: 2,
+      thinking: 'high', sessionId: 'session-1', stream: true, signal, ignored: 'value',
+      tools: [{ name: 'read', description: 'Read a file', parameters: { type: 'object' } }],
+    })).toEqual({
+      model: 'model-1', temperature: 0.5, maxTokens: 128, maxRetries: 2,
+      thinking: 'high', sessionId: 'session-1', stream: true,
+      tools: [{ name: 'read', description: 'Read a file', parameters: { type: 'object' } }],
+    });
+    expect(sanitizedProxyChatOptions({ maxTokens: 0 })).toBeNull();
+    expect(sanitizedProxyChatOptions({ systemPrompt: 'x'.repeat(1024 * 1024 + 1) })).toBeNull();
+    expect(sanitizedProxyChatOptions({ tools: Array.from({ length: 1_025 }, () => ({})) })).toBeNull();
   });
 
   describe('setApiKey()', () => {

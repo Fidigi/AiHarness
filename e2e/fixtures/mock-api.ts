@@ -1,14 +1,20 @@
 import type { Page, Route } from '@playwright/test';
 import type {
   CustomModelDefinition,
+  CodemodeCall,
   CustomProviderDefinition,
   ExtensionInteractionSnapshot,
+  McpConfigInventory,
+  McpImportPreview,
+  McpServerTestResult,
   ModelCatalog,
   ModelCatalogEntry,
   PluginCatalog,
   PluginPackageInfo,
   ProviderAuthStatus,
   ProviderModelCatalog,
+  ResourceEnableChange,
+  ResourceEnableOutcome,
   SkillCatalog,
   SkillRegistry,
   SubagentConfiguration,
@@ -30,6 +36,10 @@ export interface MockMessage {
     cacheWriteTokens?: number; totalTokens?: number; costUsd?: number;
   };
   blocks?: unknown[];
+  metadata?: Record<string, unknown>;
+  name?: string;
+  toolCallId?: string;
+  toolCalls?: Array<{ id: string; name: string; input: unknown }>;
 }
 
 export interface MockSession {
@@ -77,6 +87,7 @@ export interface MockWorkspaceBrowse {
   cwd: string;
   parent?: string;
   entries: Array<{ name: string; path: string; isDirectory: boolean; isSymbolicLink: boolean }>;
+  truncated?: boolean;
 }
 export interface RecordedApiRequest {
   method: string;
@@ -88,6 +99,9 @@ export interface MockApiOptions {
   sessions?: MockSession[];
   providers?: MockProvider[];
   modelCatalog?: ModelCatalog;
+  mcpConfig?: McpConfigInventory;
+  mcpImportPreview?: McpImportPreview;
+  mcpTestResult?: McpServerTestResult;
   pluginCatalog?: PluginCatalog;
   skillCatalog?: SkillCatalog;
   skillRegistry?: SkillRegistry;
@@ -97,6 +111,7 @@ export interface MockApiOptions {
   toolSettings?: ToolSettings;
   subagentConfiguration?: SubagentConfiguration;
   subagentRuns?: SubagentRunSnapshot[];
+  configurationScopes?: Partial<Record<'global' | 'project', Record<string, unknown>>>;
   effectiveConfiguration?: {
     values?: { model?: string; thinking?: string; toolPreset?: string; autoCompaction?: boolean };
     provenance?: Record<string, { value: unknown; scope: 'default' | 'global' | 'project' | 'session' | 'environment'; source: string }>;
@@ -115,6 +130,7 @@ export interface MockApiOptions {
     error?: { code: 'disabled' | 'unavailable' | 'invalid-response'; message: string };
   };
   workspaceTrusted?: boolean;
+  workspaceOperationTrusted?: boolean;
   indexedFiles?: string[];
   indexedDirectories?: string[];
   fileIndexTruncated?: boolean;
@@ -136,6 +152,8 @@ export interface MockApiOptions {
   paletteItems?: Array<{ name: string; description: string; source: 'builtin' | 'extension' | 'prompt' | 'skill'; usage?: string }>;
   workspaceBrowse?: Record<string, MockWorkspaceBrowse>;
   worktrees?: MockWorktree[];
+  worktreeForceRequired?: string[];
+  fileManagerAvailable?: boolean;
 }
 export interface MockApiController {
   requests: RecordedApiRequest[];
@@ -148,7 +166,7 @@ export interface MockApiController {
     phase: 'queued' | 'prompting' | 'streaming' | 'tool' | 'command' | 'compacting' | 'completed' | 'failed' | 'stopped',
     details?: {
       retry?: { attempt: number; max: number; delayMs: number; message: string; scheduledAt: string };
-      activeTool?: { id: string; name: string; input: unknown; startedAt: string };
+      activeTool?: { id: string; name: string; input: unknown; startedAt: string; nestedCalls?: CodemodeCall[] };
     },
   ) => void;
 }
@@ -174,6 +192,24 @@ const MOCK_CATALOG_MODELS: Record<string, Array<{ id: string; name: string; reas
   bedrock: [{ id: 'anthropic.claude-3-haiku-20240307-v1:0', name: 'Claude 3 Haiku', images: true, tools: true }],
   local: [{ id: 'local-model', name: 'Local server model' }],
 };
+
+function fixtureBatchChanges(body: unknown, resource: 'models' | 'skills'): ResourceEnableChange[] | undefined {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return undefined;
+  const input = body as Record<string, unknown>;
+  const allowed = resource === 'models' ? ['changes', 'projectId'] : ['changes', 'cwd', 'projectId'];
+  if (Object.keys(input).some(key => !allowed.includes(key)) || !Array.isArray(input.changes)
+    || input.changes.length > 500) return undefined;
+  const seen = new Set<string>();
+  const result: ResourceEnableChange[] = [];
+  for (const change of input.changes) {
+    if (!change || typeof change !== 'object' || Array.isArray(change)
+      || Object.keys(change).some(key => !['key', 'enabled'].includes(key))
+      || typeof change.key !== 'string' || !change.key.length || change.key.length > 500
+      || /[\u0000-\u001f\u007f]/.test(change.key) || typeof change.enabled !== 'boolean' || seen.has(change.key)) return undefined;
+    seen.add(change.key); result.push({ key: change.key, enabled: change.enabled });
+  }
+  return result;
+}
 
 function mockModelCatalog(providers: MockProvider[]): ModelCatalog {
   const groups: ProviderModelCatalog[] = providers.map(provider => ({
@@ -313,7 +349,7 @@ function mockSubagentConfiguration(workspace: typeof WORKSPACE): SubagentConfigu
   const base = (id: string, name: string, kind: SubagentProfile['kind'], background: boolean): SubagentProfile => ({
     id, name, kind, background, builtIn: true, enabled: true,
     description: `${name} child-agent profile`, instructions: `${name} the delegated task.`,
-    tools: kind === 'general' ? [] : ['list_files', 'read_file', 'search_files'],
+    tools: kind === 'general' ? [] : ['ls', 'read', 'grep', 'find'],
     skills: [], extensions: [], maxTurns: kind === 'general' ? 12 : 8, inheritContext: true,
   });
   return {
@@ -396,15 +432,82 @@ export function mockSession(
 }
 
 export async function installMockApi(page: Page, options: MockApiOptions = {}): Promise<MockApiController> {
-  const workspace = { ...WORKSPACE, trusted: options.workspaceTrusted ?? true };
+  const workspace = {
+    ...WORKSPACE,
+    trusted: options.workspaceTrusted ?? true,
+    operationTrusted: options.workspaceOperationTrusted ?? options.workspaceTrusted ?? true,
+  };
   const workspaceFiles = structuredClone(options.workspaceFiles ?? []);
   const indexedFiles = options.indexedFiles ?? workspaceFiles.map(file => file.path);
   const indexedDirectories = options.indexedDirectories ?? [];
   const worktrees = structuredClone(options.worktrees ?? [
     { path: workspace.cwd, branch: workspace.git.branch, bare: false, detached: false },
   ]);
+  const workspaceBrowse = structuredClone(options.workspaceBrowse ?? {});
+  const worktreeForceRequired = new Set(options.worktreeForceRequired ?? []);
   const providers = structuredClone(options.providers ?? [{ type: 'mock', configured: true }]);
   let modelCatalog = structuredClone(options.modelCatalog ?? mockModelCatalog(providers));
+  const mcpConfig = structuredClone(options.mcpConfig ?? {
+    files: [
+      { scope: 'global', path: '/agent/mcp.json', exists: false, contentRead: false, problems: [] },
+      { scope: 'project', path: `${workspace.cwd}/.ai-harness/mcp.json`, exists: false, contentRead: false, problems: [] },
+    ],
+    servers: [],
+    project: {
+      cwd: workspace.cwd, contentTrusted: workspace.operationTrusted, requiresTrust: false,
+      decision: workspace.operationTrusted ? true : null, inherited: false, trustError: false,
+      ...(!workspace.operationTrusted ? { trustAndWrite: { allowed: true as const } } : {}),
+    },
+  } satisfies McpConfigInventory);
+  const mcpImportPreview = structuredClone(options.mcpImportPreview ?? {
+    ok: false,
+    entries: [],
+    notes: [{ code: 'no-server', severity: 'error' }],
+  } satisfies McpImportPreview);
+  const mcpTestResult = structuredClone(options.mcpTestResult ?? {
+    state: 'connected',
+    testedAt: DEFAULT_DATE,
+    durationMs: 84,
+    tools: [
+      { name: 'search_docs', description: 'Search documentation', readOnly: true, exposure: 'deferred' },
+      { name: 'publish_note', description: 'Publish a note', readOnly: false, exposure: 'deferred' },
+    ],
+    toolCount: 2,
+    resources: 3,
+    resourceTemplates: 1,
+    prompts: 2,
+    cwd: '/workspace',
+    serverInfo: { name: 'docs-fixture', version: '1.2.3', title: 'Documentation' },
+  } satisfies McpServerTestResult);
+  let mcpRevisionSequence = 1;
+  for (const file of mcpConfig.files) {
+    if (file.exists && file.contentRead && !file.revision) {
+      file.revision = mcpRevisionSequence.toString(16).padStart(64, '0');
+      mcpRevisionSequence++;
+    }
+  }
+  const mcpUndo = new Map<string, {
+    server: McpConfigInventory['servers'][number]; index: number; revision: string; scope: 'global' | 'project';
+  }>();
+  let mcpUndoSequence = 0;
+  const bumpMcpRevision = (scope: 'global' | 'project'): string => {
+    const revision = mcpRevisionSequence.toString(16).padStart(64, '0');
+    mcpRevisionSequence++;
+    const file = mcpConfig.files.find(item => item.scope === scope);
+    if (file) file.revision = revision;
+    return revision;
+  };
+  const reconcileMcpShadowing = (): void => {
+    const projectNames = new Set(mcpConfig.servers
+      .filter(server => server.scope === 'project' && server.valid)
+      .map(server => server.name));
+    const globalNames = new Set(mcpConfig.servers.filter(server => server.scope === 'global').map(server => server.name));
+    mcpConfig.servers = mcpConfig.servers.map(server => ({
+      ...server,
+      shadowedByProject: server.scope === 'global' && projectNames.has(server.name),
+      replacesGlobal: server.scope === 'project' && server.valid && globalNames.has(server.name),
+    }));
+  };
   let pluginCatalog = structuredClone(options.pluginCatalog ?? mockPluginCatalog(workspace));
   let skillCatalog = structuredClone(options.skillCatalog ?? mockSkillCatalog(workspace));
   let skillRegistry = structuredClone(options.skillRegistry ?? {
@@ -422,17 +525,40 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
   } satisfies ProviderAuthStatus)));
   let customProviders = structuredClone(options.customProviders ?? []);
   let customModels = structuredClone(options.customModels ?? []);
-  let toolSettings = structuredClone(options.toolSettings ?? {
+  const toolSettings: ToolSettings = structuredClone(options.toolSettings ?? {
     scope: 'project', source: workspace.id, preset: 'default', powershellAvailable: false, powershellEnabled: false,
     tools: [
-      { name: 'read_file', description: 'Read a workspace file', extensionId: 'server:workspace', enabled: true, available: true },
-      { name: 'write_file', description: 'Write a workspace file', extensionId: 'server:workspace', enabled: true, available: true },
-      { name: 'powershell', description: 'Run PowerShell', extensionId: 'server:workspace', enabled: false, available: false, unavailableReason: 'Windows only' },
+      { name: 'read', description: 'Read a workspace file', extensionId: 'builtin:workspace-tools', enabled: true, available: true },
+      { name: 'write', description: 'Write a workspace file', extensionId: 'builtin:workspace-tools', enabled: true, available: true },
+      { name: 'powershell', description: 'Run PowerShell', extensionId: 'builtin:workspace-tools', enabled: false, available: false, unavailableReason: 'Windows only' },
     ],
   } satisfies ToolSettings);
+  const toolSettingsByScope: Record<'global' | 'project', ToolSettings> = {
+    global: { ...structuredClone(toolSettings), scope: 'global', source: 'global' },
+    project: structuredClone(toolSettings),
+  };
   const configurationScopes: Record<'global' | 'project', Record<string, unknown>> = {
-    global: { provider: 'mock', model: 'mock-model', toolPreset: 'default' },
-    project: { provider: 'mock', model: 'mock-model', toolPreset: 'default' },
+    global: structuredClone(options.configurationScopes?.global ?? { provider: 'mock', model: 'mock-model', toolPreset: 'default' }),
+    project: structuredClone(options.configurationScopes?.project ?? { provider: 'mock', model: 'mock-model', toolPreset: 'default' }),
+  };
+  let configurationChanged = Boolean(options.configurationScopes);
+  const effectiveConfiguration = (projectId?: string | null, sessionId?: string | null) => {
+    const values: Record<string, unknown> = { thinking: 'off', toolPreset: 'default', autoCompaction: true };
+    const provenance: Record<string, { value: unknown; scope: 'default' | 'global' | 'project' | 'session' | 'environment'; source: string }> =
+      Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { value, scope: 'default', source: 'built-in' }]));
+    if (configurationChanged) for (const scope of ['global', ...(projectId ? ['project' as const] : [])] as const) {
+      for (const [key, value] of Object.entries(configurationScopes[scope])) {
+        values[key] = value; provenance[key] = { value, scope, source: scope === 'project' ? projectId! : 'global' };
+      }
+    }
+    Object.assign(values, options.effectiveConfiguration?.values);
+    Object.assign(provenance, options.effectiveConfiguration?.provenance);
+    const session = sessionId ? controller.sessions.find(item => item.id === sessionId) : undefined;
+    for (const key of ['model', 'thinking', 'toolPreset', 'autoCompaction'] as const) {
+      if (session?.[key] === undefined || options.effectiveConfiguration?.provenance?.[key]?.scope === 'environment') continue;
+      values[key] = session[key]; provenance[key] = { value: session[key], scope: 'session', source: session.id };
+    }
+    return { values, provenance };
   };
   let subagentConfiguration = structuredClone(options.subagentConfiguration ?? mockSubagentConfiguration(workspace));
   const subagentRuns = structuredClone(options.subagentRuns ?? []);
@@ -448,7 +574,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     steerQueue: Array<{ id: string; kind: 'steer'; content: string; createdAt: string }>;
     followUpQueue: Array<{ id: string; kind: 'follow-up'; content: string; createdAt: string }>;
     retry?: { attempt: number; max: number; delayMs: number; message: string; scheduledAt: string };
-    activeTool?: { id: string; name: string; input: unknown; startedAt: string };
+    activeTool?: { id: string; name: string; input: unknown; startedAt: string; nestedCalls?: CodemodeCall[] };
     extensionRequest?: ExtensionInteractionSnapshot;
     lastSequence: number;
   }>();
@@ -482,6 +608,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       cwd,
       name: cwd.split('/').filter(Boolean).at(-1) || cwd,
       trusted: workspace.trusted,
+      operationTrusted: workspace.operationTrusted,
       git: { root: workspace.cwd, branch: worktree?.branch ?? 'main', detached: worktree?.detached ?? false },
     };
   };
@@ -655,16 +782,252 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       customModels = customModels.map(model => model.key === key ? { ...model, ...input, key: `${input.provider}:${input.id}`, updatedAt: DEFAULT_DATE } : model);
       await fulfillJson(route, customModels.find(model => model.key === `${input.provider}:${input.id}`)); return;
     }
-    if (url.pathname === '/api/tools' && method === 'GET') { await fulfillJson(route, toolSettings); return; }
+    if (url.pathname === '/api/mcp' && method === 'GET') { await fulfillJson(route, mcpConfig); return; }
+    if (url.pathname === '/api/mcp/preview' && method === 'POST') {
+      await fulfillJson(route, mcpImportPreview); return;
+    }
+    if (url.pathname === '/api/mcp/test' && method === 'POST') {
+      const input = body as Record<string, unknown>;
+      const scope = input.scope === 'project' ? 'project' : 'global';
+      const server = mcpConfig.servers.find(item => item.scope === scope && item.name === input.name);
+      if (!server || !server.configKey) {
+        await fulfillJson(route, { error: 'The MCP server is not configured.', code: 'server-not-found' }, 404);
+        return;
+      }
+      server.testStatus = structuredClone(mcpTestResult);
+      await fulfillJson(route, {
+        scope,
+        name: server.name,
+        configKey: server.configKey,
+        result: structuredClone(mcpTestResult),
+      });
+      return;
+    }
+    if (url.pathname === '/api/mcp/actions' && method === 'POST') {
+      const input = body as Record<string, any>;
+      if (input.action === 'restore') {
+        const record = mcpUndo.get(String(input.undoToken));
+        if (record) mcpUndo.delete(String(input.undoToken));
+        if (!record) {
+          await fulfillJson(route, {
+            error: 'The MCP restoration token is unavailable or expired.',
+            code: 'target-not-found', uncertain: false,
+          }, 404); return;
+        }
+        const file = mcpConfig.files.find(item => item.scope === record.scope);
+        if ((file?.revision ?? null) !== record.revision) {
+          await fulfillJson(route, {
+            error: 'The MCP configuration changed; reload it before retrying.',
+            code: 'stale-revision', uncertain: false,
+          }, 409); return;
+        }
+        if (mcpConfig.servers.some(server => server.scope === record.scope && server.name === record.server.name)) {
+          await fulfillJson(route, {
+            error: 'The MCP server name is already configured.', code: 'target-conflict', uncertain: false,
+          }, 409); return;
+        }
+        mcpConfig.servers.splice(Math.min(record.index, mcpConfig.servers.length), 0, record.server);
+        bumpMcpRevision(record.scope);
+        reconcileMcpShadowing();
+        await fulfillJson(route, { inventory: structuredClone(mcpConfig) }); return;
+      }
+
+      const scope = input.scope === 'project' ? 'project' : 'global';
+      const file = mcpConfig.files.find(item => item.scope === scope);
+      if ((file?.revision ?? null) !== (input.revision ?? null)) {
+        await fulfillJson(route, {
+          error: 'The MCP configuration changed; reload it before retrying.',
+          code: 'stale-revision', uncertain: false,
+        }, 409); return;
+      }
+      if (input.action === 'replace') {
+        const previewEntry = mcpImportPreview.entries[Number(input.entryIndex)];
+        const name = typeof input.name === 'string' ? input.name : previewEntry?.name;
+        const targetIndex = mcpConfig.servers.findIndex(server => (
+          server.scope === scope && server.name === input.targetName
+        ));
+        if (!previewEntry || !name) {
+          await fulfillJson(route, { error: 'Invalid MCP replacement.', code: 'import-invalid', uncertain: false }, 409); return;
+        }
+        if (targetIndex < 0) {
+          await fulfillJson(route, {
+            error: 'The MCP server no longer exists.', code: 'target-not-found', uncertain: false,
+          }, 404); return;
+        }
+        if (mcpConfig.servers.some((server, index) => (
+          index !== targetIndex && server.scope === scope && server.name === name
+        ))) {
+          await fulfillJson(route, {
+            error: 'The MCP server name is already configured.', code: 'target-conflict', uncertain: false,
+          }, 409); return;
+        }
+        mcpConfig.servers[targetIndex] = {
+          name,
+          scope,
+          sourcePath: file?.path ?? (scope === 'project' ? `${workspace.cwd}/.ai-harness/mcp.json` : '/agent/mcp.json'),
+          valid: previewEntry.persisted.valid,
+          enabled: previewEntry.persisted.enabled,
+          exposure: previewEntry.persisted.exposure,
+          ...(previewEntry.persisted.transport ? { transport: previewEntry.persisted.transport } : {}),
+          ...(previewEntry.persisted.command ? { command: previewEntry.persisted.command } : {}),
+          ...(previewEntry.persisted.args ? { args: previewEntry.persisted.args } : {}),
+          ...(previewEntry.persisted.url ? { url: previewEntry.persisted.url } : {}),
+          envNames: previewEntry.persisted.envNames,
+          headerNames: previewEntry.persisted.headerNames,
+          commandFields: previewEntry.persisted.commandFields,
+          variableReferences: previewEntry.persisted.variableReferences,
+          masked: previewEntry.persisted.masked,
+          shadowedByProject: false,
+          replacesGlobal: false,
+          problems: [],
+        };
+        if (file) {
+          file.exists = true;
+          file.contentRead = true;
+          file.problems = [];
+        }
+        bumpMcpRevision(scope);
+        reconcileMcpShadowing();
+        await fulfillJson(route, {
+          inventory: structuredClone(mcpConfig),
+          updated: { scope, previousName: String(input.targetName), name },
+        }); return;
+      }
+      if (input.action === 'import') {
+        const previewEntry = mcpImportPreview.entries[Number(input.entryIndex)];
+        const name = typeof input.name === 'string' ? input.name : previewEntry?.name;
+        if (!previewEntry || !name) {
+          await fulfillJson(route, { error: 'Invalid MCP import.', code: 'import-invalid', uncertain: false }, 409); return;
+        }
+        if (mcpConfig.servers.some(server => server.scope === scope && server.name === name)) {
+          await fulfillJson(route, {
+            error: 'The MCP server name is already configured.', code: 'target-conflict', uncertain: false,
+          }, 409); return;
+        }
+        mcpConfig.servers.push({
+          name,
+          scope,
+          sourcePath: file?.path ?? (scope === 'project' ? `${workspace.cwd}/.ai-harness/mcp.json` : '/agent/mcp.json'),
+          valid: previewEntry.persisted.valid,
+          enabled: previewEntry.persisted.enabled,
+          exposure: previewEntry.persisted.exposure,
+          ...(previewEntry.persisted.transport ? { transport: previewEntry.persisted.transport } : {}),
+          ...(previewEntry.persisted.command ? { command: previewEntry.persisted.command } : {}),
+          ...(previewEntry.persisted.args ? { args: previewEntry.persisted.args } : {}),
+          ...(previewEntry.persisted.url ? { url: previewEntry.persisted.url } : {}),
+          envNames: previewEntry.persisted.envNames,
+          headerNames: previewEntry.persisted.headerNames,
+          commandFields: previewEntry.persisted.commandFields,
+          variableReferences: previewEntry.persisted.variableReferences,
+          masked: previewEntry.persisted.masked,
+          shadowedByProject: false,
+          replacesGlobal: false,
+          problems: [],
+        });
+        if (file) {
+          file.exists = true;
+          file.contentRead = true;
+          file.problems = [];
+        }
+        if (scope === 'project' && input.trustProject === true && mcpConfig.project) {
+          workspace.trusted = true;
+          workspace.operationTrusted = true;
+          mcpConfig.project = {
+            ...mcpConfig.project,
+            contentTrusted: true,
+            requiresTrust: true,
+            decision: true,
+            decisionPath: workspace.cwd,
+            inherited: false,
+            trustError: false,
+          };
+        }
+        bumpMcpRevision(scope);
+        reconcileMcpShadowing();
+        await fulfillJson(route, {
+          inventory: structuredClone(mcpConfig), added: { scope, name },
+        }); return;
+      }
+      if (input.action === 'set-enabled') {
+        let changed = false;
+        const outcomes = (Array.isArray(input.names) ? input.names : []).map((name: string) => {
+          const server = mcpConfig.servers.find(item => item.scope === scope && item.name === name);
+          if (!server) return { name, status: 'missing' };
+          if (!server.valid) return { name, status: 'invalid' };
+          if (server.enabled === input.enabled) return { name, status: 'unchanged' };
+          server.enabled = input.enabled === true;
+          changed = true;
+          return { name, status: 'changed' };
+        });
+        if (changed) bumpMcpRevision(scope);
+        await fulfillJson(route, { inventory: structuredClone(mcpConfig), outcomes }); return;
+      }
+      if (input.action === 'set-exposure') {
+        const server = mcpConfig.servers.find(item => item.scope === scope && item.name === input.name);
+        if (!server) {
+          await fulfillJson(route, {
+            error: 'The MCP server no longer exists.', code: 'target-not-found', uncertain: false,
+          }, 404); return;
+        }
+        if (!server.valid) {
+          await fulfillJson(route, {
+            error: 'The MCP server entry is invalid and was not changed.', code: 'target-invalid', uncertain: false,
+          }, 409); return;
+        }
+        if (input.exposure !== 'direct' && input.exposure !== 'codemode' && input.exposure !== 'deferred' && input.exposure !== 'hidden') {
+          await fulfillJson(route, { error: 'Action MCP invalide.', code: 'invalid-request', uncertain: false }, 400); return;
+        }
+        if (typeof input.tool === 'string') {
+          server.toolExposure = { ...server.toolExposure, [input.tool]: input.exposure };
+          server.configKey = bumpMcpRevision(scope);
+          delete server.testStatus; delete server.runtimeStatus;
+        } else if (server.exposure !== input.exposure) {
+          server.exposure = input.exposure;
+          server.configKey = bumpMcpRevision(scope);
+          delete server.testStatus; delete server.runtimeStatus;
+        }
+        await fulfillJson(route, { inventory: structuredClone(mcpConfig) }); return;
+      }
+      if (input.action === 'remove') {
+        const index = mcpConfig.servers.findIndex(server => server.scope === scope && server.name === input.name);
+        if (index < 0) {
+          await fulfillJson(route, {
+            error: 'The MCP server no longer exists.', code: 'target-not-found', uncertain: false,
+          }, 404); return;
+        }
+        const [server] = mcpConfig.servers.splice(index, 1);
+        const revision = bumpMcpRevision(scope);
+        reconcileMcpShadowing();
+        mcpUndoSequence++;
+        const token = `00000000-0000-4000-8000-${String(mcpUndoSequence).padStart(12, '0')}`;
+        mcpUndo.set(token, { server: server!, index, revision, scope });
+        await fulfillJson(route, {
+          inventory: structuredClone(mcpConfig),
+          undo: { token, expiresAt: new Date(Date.now() + 60_000).toISOString() },
+        }); return;
+      }
+      await fulfillJson(route, { error: 'Action MCP invalide.', code: 'invalid-request', uncertain: false }, 400); return;
+    }
+    if (url.pathname === '/api/tools' && method === 'GET') {
+      await fulfillJson(route, toolSettingsByScope[url.searchParams.has('projectId') ? 'project' : 'global']); return;
+    }
     if (url.pathname === '/api/tools' && method === 'PATCH') {
-      const input = body as { enabledTools?: string[]; toolPreset?: ToolSettings['preset']; powershellEnabled?: boolean; projectId?: string };
+      const input = body as { enabledTools?: string[]; toolPreset?: ToolSettings['preset']; powershellEnabled?: boolean; projectId?: string;
+        codemodeEnabled?: boolean; codemodeMode?: 'on' | 'only'; codemodeInlineBudget?: number };
       const enabled = new Set(input.enabledTools ?? []);
-      toolSettings = {
-        ...toolSettings, scope: input.projectId ? 'project' : 'global', source: input.projectId || 'global',
-        preset: input.toolPreset ?? toolSettings.preset, powershellEnabled: input.powershellEnabled === true,
-        tools: toolSettings.tools.map(tool => ({ ...tool, enabled: enabled.has(tool.name) && tool.available })),
+      const scope = input.projectId ? 'project' : 'global';
+      const previous = toolSettingsByScope[scope];
+      const preset = input.toolPreset ?? previous.preset;
+      toolSettingsByScope[scope] = {
+        ...previous, scope, source: input.projectId || 'global', preset, powershellEnabled: input.powershellEnabled === true,
+        ...(previous.codemode ? { codemode: { ...previous.codemode, enabled: input.codemodeEnabled ?? previous.codemode.enabled,
+          mode: input.codemodeMode ?? previous.codemode.mode, inlineBudget: input.codemodeInlineBudget ?? previous.codemode.inlineBudget } } : {}),
+        tools: previous.tools.map(tool => ({ ...tool, enabled: enabled.has(tool.name),
+          disabledReason: preset === 'chat-only' ? 'chat-only'
+            : preset === 'read-only' && ['write', 'edit', 'bash', 'powershell'].includes(tool.name) ? 'read-only'
+            : !enabled.has(tool.name) ? 'not-selected' : undefined })),
       };
-      await fulfillJson(route, toolSettings); return;
+      await fulfillJson(route, toolSettingsByScope[scope]); return;
     }
     if (url.pathname === '/api/skills/registry' && method === 'GET') {
       const query = (url.searchParams.get('query') || '').toLowerCase();
@@ -688,12 +1051,50 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     if (url.pathname === '/api/configuration/scope' && method === 'PATCH') {
       const input = body as { scope?: 'global' | 'project'; values?: Record<string, unknown>; scopeId?: string };
       const scope = input.scope === 'global' ? 'global' : 'project';
-      configurationScopes[scope] = { ...configurationScopes[scope], ...(input.values ?? {}) };
+      configurationChanged = true;
+      for (const [key, value] of Object.entries(input.values ?? {})) {
+        if (value === null) delete configurationScopes[scope][key];
+        else configurationScopes[scope][key] = value;
+      }
       await fulfillJson(route, { scope, scopeId: input.scopeId, values: configurationScopes[scope] }); return;
+    }
+    if (url.pathname === '/api/configuration/defaults' && method === 'PATCH') {
+      const input = body as { kind: string; provider?: string; model?: string; thinking?: string; projectId?: string };
+      configurationChanged = true;
+      const patch = input.kind === 'model' ? { provider: input.provider, model: input.model } : { thinking: input.thinking };
+      Object.assign(configurationScopes.global, patch);
+      const effective = effectiveConfiguration(input.projectId);
+      const overridden = Object.keys(patch).filter(key => input.projectId && Object.hasOwn(configurationScopes.project, key)
+        || effective.provenance[key]?.scope === 'environment');
+      await fulfillJson(route, { values: configurationScopes.global, overridden, effective }); return;
     }
     if (url.pathname === '/api/models' && method === 'GET') {
       if (url.searchParams.get('refresh') === 'true') modelCatalog.updatedAt = '2025-01-01T12:01:00.000Z';
       await fulfillJson(route, modelCatalog); return;
+    }
+    if (url.pathname === '/api/models/enabled/batch' && method === 'PATCH') {
+      const changes = fixtureBatchChanges(body, 'models');
+      if (!changes) { await fulfillJson(route, { error: 'Invalid model batch', code: 'INVALID_RESOURCE_BATCH' }, 400); return; }
+      const known = new Map(modelCatalog.providers.flatMap(provider => provider.models.map(model => [model.key, model] as const)));
+      const outcomes: ResourceEnableOutcome[] = changes.map(change => {
+        const model = known.get(change.key);
+        return model ? { ...change, status: model.enabled === change.enabled ? 'unchanged' : 'changed' }
+          : { ...change, status: 'failed', code: 'UNKNOWN_RESOURCE' };
+      });
+      const targets = new Map(outcomes.filter(outcome => outcome.status !== 'failed').map(outcome => [outcome.key, outcome.enabled]));
+      const projectId = (body as { projectId?: string }).projectId;
+      const changed = outcomes.some(outcome => outcome.status === 'changed');
+      modelCatalog = { ...modelCatalog, ...(changed ? { enabledScope: projectId ? 'project' as const : 'global' as const,
+        enabledSource: projectId || 'global' } : {}),
+        providers: modelCatalog.providers.map(provider => ({ ...provider,
+          models: provider.models.map(model => ({ ...model, enabled: targets.get(model.key) ?? model.enabled })) })) };
+      const scope = projectId ? 'project' : 'global';
+      const enabled = new Set((configurationScopes[scope].enabledModels
+        ?? configurationScopes.global.enabledModels
+        ?? [...known.values()].filter(model => model.enabled).map(model => model.key)) as string[]);
+      for (const [key, value] of targets) { if (value) enabled.add(key); else enabled.delete(key); }
+      if (changed) configurationScopes[scope].enabledModels = [...enabled];
+      await fulfillJson(route, { outcomes, catalog: modelCatalog }); return;
     }
     if (url.pathname === '/api/models/enabled' && method === 'PATCH') {
       const enabledModels = Array.isArray((body as { enabledModels?: unknown[] })?.enabledModels)
@@ -714,6 +1115,23 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     if (url.pathname === '/api/skills' && method === 'GET') {
       if (url.searchParams.get('refresh') === 'true') skillCatalog.updatedAt = '2025-01-01T12:01:00.000Z';
       await fulfillJson(route, skillCatalog); return;
+    }
+    if (url.pathname === '/api/skills/enabled/batch' && method === 'PATCH') {
+      const changes = fixtureBatchChanges(body, 'skills');
+      if (!changes) { await fulfillJson(route, { error: 'Invalid skill batch', code: 'INVALID_RESOURCE_BATCH' }, 400); return; }
+      const known = new Map(skillCatalog.skills.map(skill => [skill.key, skill]));
+      const outcomes: ResourceEnableOutcome[] = changes.map(change => {
+        const skill = known.get(change.key);
+        if (!skill) return { ...change, status: 'failed', code: 'UNKNOWN_RESOURCE' };
+        if (!skill.trusted) return { ...change, status: 'failed', code: 'PROJECT_TRUST_REQUIRED' };
+        return { ...change, status: skill.modelInvocable === change.enabled && skill.defaultModelInvocable === change.enabled
+          ? 'unchanged' : 'changed' };
+      });
+      const targets = new Map(outcomes.filter(outcome => outcome.status !== 'failed').map(outcome => [outcome.key, outcome.enabled]));
+      skillCatalog = { ...skillCatalog, skills: skillCatalog.skills.map(skill => ({ ...skill,
+        modelInvocable: targets.get(skill.key) ?? skill.modelInvocable,
+        defaultModelInvocable: targets.get(skill.key) ?? skill.defaultModelInvocable })) };
+      await fulfillJson(route, { outcomes, catalog: skillCatalog }); return;
     }
     if (url.pathname === '/api/skills/enabled' && method === 'PATCH') {
       const enabledSkills = Array.isArray((body as { enabledSkills?: unknown[] })?.enabledSkills)
@@ -745,6 +1163,42 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
           standaloneExtensions: pluginCatalog.standaloneExtensions.filter(extension => extension.scope === 'global'),
         });
       await fulfillJson(route, scopedCatalog); return;
+    }
+    if (url.pathname === '/api/plugins/enabled' && method === 'PATCH') {
+      const input = body as {
+        changes?: Array<{ key?: string; scope?: 'global' | 'project'; enabled?: boolean }>;
+      };
+      if (!Array.isArray(input.changes) || input.changes.length === 0 || input.changes.length > 100) {
+        await fulfillJson(route, { error: 'Invalid plugin batch', code: 'INVALID_PLUGIN_BATCH' }, 400); return;
+      }
+      const changedPackages: PluginPackageInfo[] = [];
+      const outcomes = input.changes.map(change => {
+        const pkg = pluginCatalog.packages.find(candidate => candidate.key === change.key && candidate.scope === change.scope);
+        if (!pkg) {
+          return { ...change, state: 'failed', code: 'PLUGIN_NOT_FOUND', message: 'Package not found.' };
+        }
+        if (change.enabled === true && pkg.scope === 'project' && !workspace.trusted) {
+          return {
+            key: pkg.key, scope: pkg.scope, enabled: true, state: 'failed',
+            code: 'PROJECT_TRUST_REQUIRED', message: 'Project trust required.',
+          };
+        }
+        if (typeof change.enabled !== 'boolean' || pkg.enabled === change.enabled) {
+          return { key: pkg.key, scope: pkg.scope, enabled: pkg.enabled, state: 'unchanged' };
+        }
+        changedPackages.push(pkg);
+        pkg.enabled = change.enabled;
+        pkg.status = change.enabled ? 'active' : 'disabled';
+        pkg.updatedAt = '2025-01-01T12:02:00.000Z';
+        return { key: pkg.key, scope: pkg.scope, enabled: change.enabled, state: 'changed' };
+      });
+      pluginCatalog = withPluginTotals({ ...pluginCatalog, updatedAt: '2025-01-01T12:02:00.000Z' });
+      await fulfillJson(route, {
+        catalog: pluginCatalog,
+        outcomes,
+        reloadRequired: changedPackages.some(pkg => pkg.counts.extensions > 0
+          || (pkg.scope === 'project' && !workspace.trusted)),
+      }); return;
     }
     if (url.pathname === '/api/plugins' && method === 'POST') {
       const input = body as {
@@ -921,24 +1375,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       await fulfillJson(route, run ?? { error: 'Run not found' }, run ? 200 : 404); return;
     }
     if (url.pathname === '/api/configuration/effective' && method === 'GET') {
-      const sessionId = url.searchParams.get('sessionId');
-      const session = sessionId ? controller.sessions.find(item => item.id === sessionId) : undefined;
-      const values: Record<string, unknown> = {
-        thinking: 'off', toolPreset: 'default', autoCompaction: true,
-        ...(options.effectiveConfiguration?.values ?? {}),
-      };
-      const provenance: Record<string, { value: unknown; scope: 'default' | 'global' | 'project' | 'session' | 'environment'; source: string }> = {
-        thinking: { value: values.thinking, scope: 'default', source: 'built-in' },
-        toolPreset: { value: values.toolPreset, scope: 'default', source: 'built-in' },
-        autoCompaction: { value: values.autoCompaction, scope: 'default', source: 'built-in' },
-        ...(options.effectiveConfiguration?.provenance ?? {}),
-      };
-      for (const key of ['model', 'thinking', 'toolPreset', 'autoCompaction'] as const) {
-        if (session?.[key] === undefined || options.effectiveConfiguration?.provenance?.[key]?.scope === 'environment') continue;
-        values[key] = session[key];
-        provenance[key] = { value: session[key], scope: 'session', source: session.id };
-      }
-      await fulfillJson(route, { values, provenance }); return;
+      await fulfillJson(route, effectiveConfiguration(url.searchParams.get('projectId'), url.searchParams.get('sessionId'))); return;
     }
     if (url.pathname === '/api/app-update' && method === 'GET') {
       await fulfillJson(route, {
@@ -964,11 +1401,38 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     }
     if (url.pathname === '/api/workspaces/browse' && method === 'GET') {
       const cwd = normalizeWorkspacePath(url.searchParams.get('path'));
-      const configured = options.workspaceBrowse?.[cwd];
+      const configured = workspaceBrowse[cwd];
       const parent = cwd !== workspace.cwd && cwd.startsWith(`${workspace.cwd}/`)
         ? cwd.slice(0, cwd.lastIndexOf('/')) || workspace.cwd
         : undefined;
-      await fulfillJson(route, configured ?? { cwd, ...(parent ? { parent } : {}), entries: [] }); return;
+      await fulfillJson(route, configured ?? { cwd, ...(parent ? { parent } : {}), entries: [], truncated: false }); return;
+    }
+    if (url.pathname === '/api/workspaces/browse' && method === 'POST') {
+      const input = body as { parent?: string; name?: string };
+      const parent = normalizeWorkspacePath(input.parent);
+      const name = input.name?.trim();
+      if (!name || /[\\/]/.test(name) || name === '.' || name === '..') {
+        await fulfillJson(route, { error: 'Invalid directory name', code: 'invalid-path' }, 400); return;
+      }
+      const created = `${parent.replace(/\/$/, '')}/${name}`;
+      const listing = workspaceBrowse[parent] ?? { cwd: parent, entries: [] };
+      if (listing.entries.some(entry => entry.name === name)) {
+        await fulfillJson(route, { error: 'A file or directory already has this name.', code: 'already-exists' }, 409); return;
+      }
+      listing.entries.push({ name, path: created, isDirectory: true, isSymbolicLink: false });
+      workspaceBrowse[parent] = listing;
+      workspaceBrowse[created] = { cwd: created, parent, entries: [] };
+      await fulfillJson(route, { path: created }, 201); return;
+    }
+    if (url.pathname === '/api/workspaces/file-manager' && method === 'GET') {
+      await fulfillJson(route, { available: options.fileManagerAvailable === true,
+        ...(options.fileManagerAvailable === true ? {} : { reason: 'remote-request' }) }); return;
+    }
+    if (url.pathname === '/api/workspaces/file-manager' && method === 'POST') {
+      if (options.fileManagerAvailable !== true) {
+        await fulfillJson(route, { error: 'File manager unavailable', code: 'remote-request' }, 403); return;
+      }
+      await fulfillJson(route, { opened: true }); return;
     }
     if (url.pathname === '/api/workspaces/worktrees' && method === 'GET') {
       await fulfillJson(route, worktrees); return;
@@ -981,15 +1445,31 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       await fulfillJson(route, describeWorkspace(path), 201); return;
     }
     if (url.pathname === '/api/workspaces/worktrees' && method === 'DELETE') {
-      const input = body as { path?: string; confirm?: boolean };
-      const index = worktrees.findIndex(item => item.path === normalizeWorkspacePath(input.path));
+      const input = body as { path?: string; confirm?: boolean; force?: boolean };
+      const target = normalizeWorkspacePath(input.path);
+      const index = worktrees.findIndex(item => item.path === target);
       if (index < 0 || input.confirm !== true) { await fulfillJson(route, { error: 'Unknown worktree' }, 400); return; }
+      if (worktreeForceRequired.has(target) && input.force !== true) {
+        await fulfillJson(route, { error: 'Worktree removal requires force confirmation.', code: 'force-required' }, 409); return;
+      }
+      worktreeForceRequired.delete(target);
       worktrees.splice(index, 1);
       await fulfillJson(route, { success: true }); return;
     }
     if (url.pathname === '/api/workspaces/trust') {
       const input = (body as { cwd?: string } | undefined)?.cwd ?? url.searchParams.get('cwd');
       workspace.trusted = method !== 'DELETE';
+      workspace.operationTrusted = method !== 'DELETE';
+      if (mcpConfig.project) {
+        mcpConfig.project = {
+          ...mcpConfig.project,
+          contentTrusted: workspace.operationTrusted,
+          decision: workspace.operationTrusted ? true : false,
+          decisionPath: workspace.cwd,
+          inherited: false,
+          trustError: false,
+        };
+      }
       skillCatalog = {
         ...skillCatalog,
         projectTrusted: workspace.trusted,
@@ -1017,7 +1497,11 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
           ? trustedPluginDefaults.standaloneExtensions
           : pluginCatalog.standaloneExtensions.filter(extension => extension.scope === 'global'),
       });
-      await fulfillJson(route, { cwd: normalizeWorkspacePath(input), trusted: workspace.trusted }); return;
+      await fulfillJson(route, {
+        cwd: normalizeWorkspacePath(input),
+        trusted: workspace.trusted,
+        operationTrusted: workspace.operationTrusted,
+      }); return;
     }
 
     if (url.pathname === '/api/files' && method === 'GET') {
@@ -1203,7 +1687,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     if (capabilities && method === 'GET') {
       const session = controller.sessions.find(item => item.id === decodeURIComponent(capabilities[1]!));
       const preset = session?.toolPreset ?? options.effectiveConfiguration?.values?.toolPreset ?? 'default';
-      const readOnly = new Set(['read_file', 'list_files', 'search_files', 'git_status', 'git_diff', 'load_skill']);
+      const readOnly = new Set(['read', 'grep', 'find', 'ls', 'load_skill']);
       const tools = (options.capabilities?.tools ?? []).filter(tool => (
         preset !== 'chat-only' && (preset !== 'read-only' || readOnly.has(tool.name))
       ));
@@ -1347,11 +1831,11 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     if (branchMatch && method === 'POST') {
       const source = controller.sessions.find(item => item.id === decodeURIComponent(branchMatch[1]!));
       if (!source) { await fulfillJson(route, { error: 'Session not found' }, 404); return; }
-      const input = body as { messageIndex?: number; messageId?: string; title?: string } | undefined;
+      const input = body as { messageIndex?: number; messageId?: string; before?: boolean; title?: string } | undefined;
       const messageIndex = input?.messageId
         ? source.messages.findIndex(message => message.id === input.messageId)
         : input?.messageIndex;
-      const end = messageIndex === undefined || messageIndex < 0 ? source.messages.length : messageIndex + 1;
+      const end = messageIndex === undefined || messageIndex < 0 ? source.messages.length : messageIndex + (input?.before ? 0 : 1);
       const branched: MockSession = {
         ...structuredClone(source),
         id: `e2e-session-${nextSessionId++}`,
@@ -1498,6 +1982,9 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
         if (options.holdAgentRun) {
           records = ready;
         } else if (streamError) {
+          // Core stores the redacted error before publishing failure; canonical
+          // recovery must not replace the live reason with an empty snapshot.
+          run.error = streamError;
           run.phase = 'failed';
           run.lastSequence = 2;
           records = ready + `id: ${sessionId}:2\nevent: run.failed\ndata: ${JSON.stringify({ protocolVersion: 1, id: `${sessionId}:2`, sequence: 2, sessionId, runId: run.id, type: 'run.failed', timestamp: DEFAULT_DATE, data: { message: streamError } })}\n\n`;

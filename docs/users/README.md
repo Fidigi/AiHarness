@@ -12,6 +12,8 @@ Guide complet d'utilisation en français :
 |---|---|
 | [user-guide.md](fr/user-guide.md) | Guide utilisateur complet : installation, configuration CLI/Web, commandes, sessions, sécurité |
 | [containerization.md](fr/containerization.md) | Exécution conteneurisée Docker pour le CLI et le Web |
+| [linked-directories.md](fr/linked-directories.md) | Consentement exact, confiance indépendante et navigation limitée |
+| [static-demo.md](fr/static-demo.md) | Démonstration statique synthétique, hors ligne et sans autorité hôte |
 
 ### [English](en/)
 
@@ -19,6 +21,8 @@ Guide complet d'utilisation en français :
 |---|---|
 | [user-guide.md](en/user-guide.md) | Full user guide: installation, CLI/Web configuration, commands, sessions and security |
 | [containerization.md](en/containerization.md) | Docker-based CLI and Web execution |
+| [linked-directories.md](en/linked-directories.md) | Exact consent, independent trust and scoped browsing |
+| [static-demo.md](en/static-demo.md) | Synthetic offline static demonstration without host authority |
 
 ## 🖼️ Captures d'écran
 
@@ -48,11 +52,13 @@ docs/users/
 ├── fr/                    # Documentation française
 │   ├── README.md
 │   ├── user-guide.md
-│   └── containerization.md
+│   ├── containerization.md
+│   └── static-demo.md
 └── en/                    # English documentation
     ├── README.md
     ├── user-guide.md
-    └── containerization.md
+    ├── containerization.md
+    └── static-demo.md
 ```
 
 ## ✏️ Contribuer

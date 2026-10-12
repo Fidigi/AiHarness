@@ -1,0 +1,20 @@
+{"data":{"content":"[","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"M","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"o","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"c","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"k","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":" ","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"A","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"I","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":" ","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"R","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"e","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"s","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"p","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"o","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"n","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"s","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"e","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"]","requestId":"legacy-chat","sessionId":"contract-rpc"},"event":"text_delta"}
+{"data":{"content":"[Mock AI Response]","model":"mock-model","requestId":"legacy-chat","sessionId":"contract-rpc","usage":{"completionTokens":4.5,"promptTokens":10,"totalTokens":14.5}},"event":"message_end"}
+{"id":"legacy-chat","result":{"content":"[Mock AI Response]","model":"mock-model","usage":{"completionTokens":4.5,"promptTokens":10,"totalTokens":14.5}}}

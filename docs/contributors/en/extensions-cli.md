@@ -7,6 +7,7 @@
 - [Available API](#available-api)
   - [Transforming and cancellable hooks](#transforming-and-cancellable-hooks)
   - [Automatic tool invocations](#automatic-tool-invocations)
+- [Package management](#package-management)
 - [Management commands](#management-commands)
 - [Current limitations](#current-limitations)
 
@@ -26,7 +27,7 @@ ai-harness --extension ./extensions/example.mjs
 
 Multiple paths can be provided with multiple `--extension` options, or with `AI_HARNESS_EXTENSIONS` separated by the system path separator.
 
-TypeScript extensions must currently be compiled to JavaScript before loading.
+TypeScript extensions must currently be compiled to JavaScript before loading. An installed package can additionally declare extensions, skills, prompts, and JSON themes through `aiHarness` (the legacy `pi` manifest key is also accepted). Enabled extensions, skills, and prompts join CLI and RPC startup through the same Core catalogue used by the Web server; a selected package theme joins interactive CLI startup.
 
 ## Example
 
@@ -85,6 +86,9 @@ export default function exampleExtension(api) {
 
 ## Available API
 
+Every factory receives `api.version`. Version `1` is also exported as `AI_HARNESS_EXTENSION_API_VERSION` from `@ai-harness/core`; extensions should reject an unsupported major before registering behavior.
+
+- `version`: current major version of the AiHarness-owned extension contract.
 - `registerCommand(name, definition)`: adds a `/name` command.
 - `registerTool(definition)`: adds an executable tool. Tools are listed by `/tools` and can be tested with `/tool <name> <json>`.
 - `registerProvider(type, definition)`: adds a provider factory selectable with `/provider <type>`.
@@ -115,7 +119,25 @@ api.before('before:provider', data => ({
 
 ### Automatic Tool Invocations
 
-Tool schemas automatically pass through the shared provider contract; the OpenAI/Azure, Anthropic, Gemini/Vertex, Bedrock, and local-compatible adapters translate them when the model allows tool calls. When the model requests a tool, the CLI persists the tool call, executes the tool, persists its result (errors included), then resumes the model call. The loop is limited to eight consecutive turns to avoid infinite calls. A `Ctrl+C` interruption cancels the provider request and propagates the signal to the active tool.
+Tool schemas automatically pass through the shared provider contract; the OpenAI/Azure, Anthropic, Gemini/Vertex, Bedrock, and local-compatible adapters translate them when the model allows tool calls. When the model requests a tool, the CLI persists the tool call, executes the tool, persists its result (errors included), then resumes the model call. The loop is limited to eight consecutive turns to avoid infinite calls. An `Escape` or `Ctrl+C` interruption cancels the provider request and propagates the signal to the active tool.
+
+## Package Management
+
+Package state and source policy live in `@ai-harness/core`; CLI and Web do not maintain separate installers. Use `ai-harness package --help` for all options:
+
+```bash
+ai-harness package install npm:@scope/review-kit@^2 --global
+ai-harness package install ./review-kit --project --approve
+ai-harness package configure @scope/review-kit --extensions='extensions/*.mjs,!extensions/unsafe.mjs'
+ai-harness package list --json
+ai-harness package check @scope/review-kit
+ai-harness package update @scope/review-kit
+ai-harness package remove @scope/review-kit
+```
+
+`npm:`, restricted HTTPS `git:`, and explicit local paths are supported. `--extensions`, `--skills`, `--prompts`, and `--themes` only narrow manifest resources; an empty value disables a kind and `--reset` restores defaults. Installing, configuring, enabling, updating, or loading project packages requires project trust; disabling and removal remain available for safe cleanup. Packages run trusted Node code without a sandbox, so review sources before installation.
+
+Web Project/Global **Enable all** and **Disable all** controls delegate one bounded batch to Core. Core preserves resource filters, commits allowed changes with one atomic state write, reports per-entry trust/not-found failures, and flags executable changes for the separate resource reload.
 
 ## Management Commands
 
@@ -133,3 +155,4 @@ Unloading automatically removes commands, tools, providers, UI panels and listen
 - The CLI and Web server load separate extension generations: `/reload` reloads only the CLI process, while the Web API has its own reload routes.
 - CLI panels registered with `registerUI` are text-only and visible only in fullscreen mode; the server separately returns its text widgets and declarative interactions.
 - Executable modules are trusted Node code run in the host process, without a security sandbox.
+- Public compatibility and golden-probe rules are defined in the [AiHarness public contract policy](./public-contract-policy.md).

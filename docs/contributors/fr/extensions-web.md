@@ -7,6 +7,8 @@
 - [Widgets, notices et requêtes interactives](#widgets-notices-et-requêtes-interactives)
   - [Types d'interactions](#types-dinteractions)
   - [Cycle de vie](#cycle-de-vie)
+  - [Chargement du formulaire optionnel et focus](#chargement-du-formulaire-optionnel-et-focus)
+  - [Contrat de la file du runtime détaché](#contrat-de-la-file-du-runtime-détaché)
 - [Sécurité et limites du chargeur](#sécurité-et-limites-du-chargeur)
 - [Administration via Settings](#administration-via-settings)
 
@@ -57,7 +59,7 @@ Une extension peut publier :
 1. Extension active → AgentRuntime publie un événement `extension.ui`
 2. Le serveur stocke la demande dans le snapshot du run actif
 3. L'événement est diffusé au navigateur par SSE
-4. ChatView rend le dialogue avec focus trap et gestion Escape
+4. ChatView affiche un chargement/une erreur locale, puis charge le formulaire déclaratif et son CSS
 5. L'utilisateur répond ou annule (`POST /api/agent/sessions/:sessionId/interactions/:requestId`)
 6. Le serveur revalide la réponse structurée avant de résoudre l'extension
 7. Si l'onglet n'est pas visible, une notification Web Push catégorie "attention" est envoyée
@@ -67,7 +69,41 @@ Une extension peut publier :
 - Une interaction nécessite **toujours un run actif**. Sans run, elle est ignorée.
 - Les formulaires `custom` restent déclaratifs : jamais de HTML arbitraire ni d'accès DOM direct.
 - La réponse structurée est revalidée par `AgentRuntime` avant résolution.
-- Le focus reste piégé dans le dialogue tant qu'il est ouvert, puis revient au contrôle précédent.
+- Le formulaire monté possède son focus trap et la gestion ordinaire d’Escape ; le retour respecte la vue courante, le focus plus récent et les autres dialogues au lieu de toujours restaurer le contrôle précédent.
+
+Les nouvelles notices de commandes d’extension publiées via l’API de session omettent `runId` lorsque le run courant de la session est `completed`, `failed` ou `stopped` ; tant que ce run est actif, la corrélation est conservée. Un callback `notify` lié au run et capturé dans le contexte d’un outil conserve son `runId` initial, même s’il est appelé après la fin de ce run. Ce contrat de corrélation des événements ne garantit ni leur présentation dans le navigateur ni une nouvelle admission d’interaction.
+
+Les métadonnées du titre de session ne définissent pas la durée de vie de l’abonnement SSE de ChatView : une actualisation du titre canonique ne doit ni retirer le flux ni perdre une notice valide. Les notifications existantes d’attention/de fin/d’échec lisent, lors de leur émission, le dernier titre canonique déjà présent dans le store navigateur pour la session abonnée, avec `AiHarness` comme repli si le titre est absent ou vide. Le remplacement de session/cwd et le démontage de la vue annulent toujours le transport possédé ; cela n’ajoute ni epochs SSE pour l’adresse complète ni livraison complète de la file/des notifications d’attention côté navigateur.
+
+### Chargement du formulaire optionnel et focus
+
+`ExtensionInteractionBoundary.tsx` reste eager ; seule une demande unique en attente importe `ExtensionInteractionDialog.tsx` et sa feuille de style. Le chargement/l’erreur reste non modal et traduit, avec Fermer/Annuler disponibles, tandis que le composeur et Stop restent utilisables. Les imports échoués restent en cache même après réouverture. **Recharger et réessayer** recharge la page : copiez d’abord le texte non envoyé.
+
+Le remplacement de la demande/du schéma ou de la vue abandonne le transport de réponse et empêche une publication navigateur périmée ; il n’annule pas une réponse déjà acceptée par Server. Le tuple de vue comprend l’ID/cwd du workspace, la session, le run et tous les champs d’identité de route. Les contrôles compatibles de même ID/type conservent leur brouillon et leur composition connectée. Les contrôles modifiés/supprimés sont réinitialisés. Enter/Escape pendant l’IME ou avec le code clavier historique 229 restent de l’édition native, sans validation/annulation du formulaire ; un Enter ordinaire après la composition peut envoyer une seule réponse.
+
+Le focus initial est admis avant la fin de l’import puis revérifié à la première frame du renderer. Un focus plus récent (même suivi d’un blur), un autre dialogue ou la même demande réaffichée dans une route de remplacement refusent cette admission. Le retour exige une vue courante, une cible de repli inchangée et disponible, sans focus/dialogue plus récent. Un pointeur coarse évite le focus éditable non sollicité, mais un retour gardé au composeur reste possible après une édition manuelle dans le formulaire ; un focus externe efface cette intention d’édition.
+
+`extension-interaction-dialog.test.ts` protège les champs, le texte inerte, CSS/transport/copie et la projection du brouillon. `e2e/interaction-single-asset-load.spec.ts`, en preview de production, teste les vrais JS/CSS retardés/refusés, le rechargement et les gardes focus/IME/durée de vie. `e2e/interaction-live-boundary.spec.ts` prouve séparément la validation réelle extension/HTTP et réponse/annulation via le provider mock. L’émulation tactile Chromium ne certifie pas Android/iOS/Safari physiques.
+
+### Contrat de la file du runtime détaché
+
+Le runtime détaché Core/Server prend en charge plusieurs demandes en attente. Le client Web présente la tête ordonnée et le compteur, avec notifications tenant compte de la restauration et gardes locales contre les réponses/découvertes périmées. Le formulaire avance sans restitution intermédiaire du focus. Ces gardes ne prouvent pas le règlement de Stop côté backend, les transactions générales de fork retardé ni le comportement sur appareils physiques.
+
+- `requestInteraction(request)` renvoie une Promise que l’on peut attendre. Le runtime détaché fournit aussi un `id` en lecture seule et les contrôles `update(replacement)` et `close()` ; les autres adaptateurs peuvent les omettre. Conservez le handle retourné : connaître un ID ne confère aucun droit de modification ou de fermeture.
+- `update` remplace entièrement l’affichage et le schéma sans changer l’ID, l’ordre d’admission, la date de création, l’AbortSignal ou l’échéance initiale. Les champs d’affichage omis disparaissent. La réponse suivante est validée contre le dernier schéma.
+- Réponse, fermeture, abandon et expiration résolvent la Promise une seule fois. Les contrôles périmés ou déjà résolus renvoient `false`. Sans run actif, le résultat est `{cancelled: true}`.
+- Par run : 16 demandes en attente, 128 000 octets JSON UTF-8 par demande normalisée et 512 000 octets cumulés. Une admission ou modification dépassant ces bornes lève `409 EXTENSION_INTERACTION_QUEUE_FULL` sans remplacer l’état précédent. La normalisation conserve les limites existantes des champs/chaînes et le masquage des secrets.
+- Le délai facultatif doit être fini, positif ou nul, et ne pas dépasser 2 147 483 647 ms ; sinon `400 INVALID_EXTENSION_INTERACTION_TIMEOUT`. Signaux et délais ne sont jamais sérialisés dans les snapshots de reconnexion.
+- `extensionRequests` contient la file complète dans l’ordre d’admission ; `extensionRequest` reste le premier élément. Les événements ne transportent que la demande modifiée ou l’ID fermé. Réponse/annulation HTTP reste liée aux IDs session/demande ; une réponse périmée, étrangère ou répétée retourne 404.
+- Stop, fin du run, engagement réussi d’une génération exécutable/d’outils et nettoyage de sécurité après échec d’un changement de workspace annulent les demandes et révoquent les anciens callbacks. Lectures passives et candidates échouées dans le même workspace conservent la génération. Server capture les callbacks des commandes avant les attentes session/trust.
+
+Ces demandes sont en mémoire, sans durabilité après crash ni parité UI concurrente CLI/RPC. Le registre existant des runs terminés n’est pas nouvellement borné. L’accusé de réception de Stop ne vaut pas règlement durable : la comptabilité des outils interrompus est encore persistée avant le rejeu terminal.
+
+## Progression générique des outils expérimentale — WIP
+
+`ToolProgressBoundary`, `ToolProgressCard` et `tool-progress-state.ts` conservent un adaptateur navigateur en cours de développement pour la progression v1 émise par le runtime. Texte/détails restent inertes et bornés ; la progression personnalisée ne remplace pas la carte spécialisée code-mode et n’acquiert aucune autorité sur l’invocation, l’usage ou le store.
+
+Cette livraison **n’est pas qualifiée côté navigateur**. Compilation/build/lint Docker et les 1 917 tests unitaires plus cinq tests Node passent. Le fichier complet `e2e/tool-progress.spec.ts`, avec une vraie extension, compte 13 échecs/un succès en développement et 14 échecs en preview compilée, avec `node --no-maglev` explicite, un worker et aucun retry. Affichage terminal/rechargement, rattrapage après readiness, assets différés et captures proposées restent à résoudre. Les 24 PNG de progression sont des attentes de test provisoires, pas des références produit validées. Aucun snapshot ni assertion n’a été assoupli ; ce checkpoint WIP ne clôt aucun critère d’audit.
 
 ## Sécurité et limites du chargeur
 

@@ -7,21 +7,29 @@ import type {
   AgentEvent,
   AgentRunSnapshot,
   AgentStateSnapshot,
+  ExtensionInteractionSnapshot,
   CustomModelDefinition,
   CustomProviderDefinition,
   EffectiveConfiguration,
   GitWorktree,
   Message,
+  McpConfigInventory,
   ModelCatalog,
   PluginCatalog,
+  PluginEnableBatchResult,
+  PluginEnableChange,
   PluginReloadResult,
   PluginScope,
   PluginUpdateResult,
+  ProjectTrustStatus,
   ProviderAuthStatus,
   SkillCatalog,
   SkillRegistry,
   SkillRegistryEntry,
   SerializedSession,
+  Session,
+  ShellCommandEvent,
+  ShellCommandSnapshot,
   SubagentConfiguration,
   SubagentProfile,
   SubagentRunSnapshot,
@@ -30,6 +38,12 @@ import type {
 } from '@ai-harness/core';
 
 const API_BASE = '/api';
+const MAX_CHAT_STREAM_CHUNK_BYTES = 16 * 1024 * 1024;
+const MAX_CHAT_STREAM_BYTES = 64 * 1024 * 1024;
+const MAX_CHAT_STREAM_EVENTS = 100_000;
+const MAX_CHAT_WEBSOCKET_QUEUE = 1_024;
+const MAX_CHAT_WEBSOCKET_QUEUE_BYTES = 32 * 1024 * 1024;
+const CHAT_STREAM_IDLE_TIMEOUT_MS = 120_000;
 let authToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ai-harness-auth-token') ?? '' : '';
 let chatTransport: 'sse' | 'websocket' = typeof localStorage !== 'undefined' && localStorage.getItem('ai-harness-transport') === 'websocket'
   ? 'websocket' : 'sse';
@@ -44,14 +58,21 @@ export function getChatTransport(): 'sse' | 'websocket' {
 }
 
 export function setAuthToken(token: string): void {
-  authToken = token.trim();
+  const candidate = typeof token === 'string' ? token.trim() : '';
+  authToken = candidate.length <= 10_000 && utf8ByteLength(candidate) <= 10_000
+    && !/[\u0000-\u001f\u007f-\u009f]/u.test(candidate)
+    ? candidate : '';
   if (typeof sessionStorage !== 'undefined') {
     if (authToken) sessionStorage.setItem('ai-harness-auth-token', authToken);
     else sessionStorage.removeItem('ai-harness-auth-token');
   }
 }
 
-function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+export function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   const headers: Record<string, string> = { ...(init.headers as Record<string, string> | undefined) };
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
   return fetch(input, { ...init, headers, credentials: init.credentials ?? 'same-origin' }).then(response => {
@@ -127,10 +148,11 @@ export async function getAppUpdateStatus(refresh = false): Promise<ApiResponse<A
 }
 
 /** Standardized response wrapper */
-interface ApiResponse<T> {
+export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+  code?: string;
 }
 
 export interface SessionMessagePageInfo {
@@ -168,6 +190,12 @@ export interface WorkspaceBrowseResponse {
   cwd: string;
   parent?: string;
   entries: Array<{ name: string; path: string; isDirectory: boolean; isSymbolicLink: boolean }>;
+  truncated?: boolean;
+}
+
+export interface FileManagerAvailability {
+  available: boolean;
+  reason?: 'remote-request' | 'unsupported-platform';
 }
 
 /** Provider configuration from backend */
@@ -289,26 +317,11 @@ export async function enqueueAgentMessage(
   }
 }
 
-export interface CommandSnapshot {
-  id: string;
-  sessionId: string;
-  command: string;
-  cwd: string;
-  excludedFromContext: boolean;
-  status: 'running' | 'completed' | 'failed' | 'cancelled';
-  startedAt: string;
-  completedAt?: string;
-  exitCode?: number;
-  output: string;
-  truncated: boolean;
-  lastSequence: number;
-}
+export type CommandSnapshot = ShellCommandSnapshot;
 
-export interface CommandEvent {
-  sequence: number;
-  type: 'output' | 'exit' | 'error' | 'cancelled';
+export type CommandEvent = Omit<ShellCommandEvent, 'data'> & {
   data: { stream?: string; chunk?: string; truncated?: boolean; exitCode?: number; message?: string };
-}
+};
 
 export interface PaletteItem {
   name: string;
@@ -410,14 +423,96 @@ export async function runExtensionCommand(
   }
 }
 
+/** Validate partial transport payloads before any declarative controls consume them. */
+function isInteraction(value: unknown): value is ExtensionInteractionSnapshot {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const request = value as Record<string, unknown>;
+  const optionsValid = (options: unknown) => options === undefined || (Array.isArray(options)
+    && options.every(option => option && typeof option === 'object'
+      && typeof option.value === 'string' && typeof option.label === 'string'));
+  return typeof request.id === 'string' && request.id.length > 0 && typeof request.title === 'string'
+    && typeof request.createdAt === 'string' && ['confirm', 'input', 'select', 'editor', 'custom'].includes(String(request.kind))
+    && ['message', 'placeholder', 'output'].every(key => request[key] === undefined || typeof request[key] === 'string')
+    && optionsValid(request.options) && (request.fields === undefined || (Array.isArray(request.fields)
+      && request.fields.every(field => field && typeof field === 'object' && typeof field.name === 'string'
+        && typeof field.label === 'string' && ['text', 'textarea', 'select', 'checkbox'].includes(field.type)
+        && (field.required === undefined || typeof field.required === 'boolean')
+        && (field.placeholder === undefined || typeof field.placeholder === 'string') && optionsValid(field.options))));
+}
+
+/** Explicit plural (including []) wins; only absent plural uses the legacy primary. */
+export function orderedExtensionRequests(run?: AgentRunSnapshot): ExtensionInteractionSnapshot[] {
+  if (!run || ['completed', 'failed', 'stopped'].includes(run.phase)) return [];
+  const requests = run.extensionRequests === undefined ? (run.extensionRequest ? [run.extensionRequest] : []) : run.extensionRequests;
+  if (!Array.isArray(requests)) return [];
+  const ordered = new Map<string, ExtensionInteractionSnapshot>();
+  for (const request of requests.slice(0, 16)) if (isInteraction(request)) ordered.set(request.id, request);
+  return [...ordered.values()];
+}
+
+export function reconcileInteractionSnapshot(run?: AgentRunSnapshot, closed: ReadonlySet<string> = new Set()): AgentRunSnapshot | undefined {
+  if (!run) return undefined;
+  const extensionRequests = orderedExtensionRequests(run).filter(request => !closed.has(request.id));
+  return { ...run, extensionRequests, extensionRequest: extensionRequests[0] };
+}
+
+/** Compare session-wide sequences, not just IDs: old runs and missing-run snapshots can be stale too. */
+export function isFreshInteractionSnapshot(snapshot: AgentStateSnapshot, current: AgentRunSnapshot | undefined, watermark: number): boolean {
+  return !(current && snapshot.run?.id === current.id && snapshot.run.lastSequence === current.lastSequence
+    && !['completed', 'failed', 'stopped'].includes(snapshot.run.phase)
+    && JSON.stringify(orderedExtensionRequests(snapshot.run).map(request => request.id)) !== JSON.stringify(orderedExtensionRequests(current).map(request => request.id)))
+    && Number.isSafeInteger(snapshot.lastSequence) && snapshot.lastSequence >= Math.max(watermark, current?.lastSequence ?? 0)
+    && (!snapshot.run || (snapshot.run.sessionId === snapshot.sessionId
+      && Number.isSafeInteger(snapshot.run.lastSequence) && snapshot.run.lastSequence >= 0 && snapshot.run.lastSequence <= snapshot.lastSequence
+      && (snapshot.run.id !== current?.id || snapshot.run.lastSequence >= current.lastSequence)))
+    && !(current && snapshot.run && current.id !== snapshot.run.id && snapshot.lastSequence <= current.lastSequence)
+    && !(current && ['completed', 'failed', 'stopped'].includes(current.phase)
+      && snapshot.run?.id === current.id && !['completed', 'failed', 'stopped'].includes(snapshot.run.phase));
+}
+
+export function extensionInteractionChanges(run: AgentRunSnapshot, data: unknown, closed: ReadonlySet<string> = new Set()): Partial<AgentRunSnapshot> {
+  const event = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+  let requests = orderedExtensionRequests(run);
+  if (event.action === 'request' && isInteraction(event.request) && !closed.has(event.request.id)
+    && !['completed', 'failed', 'stopped'].includes(run.phase)) {
+    const request = event.request;
+    const index = requests.findIndex(entry => entry.id === request.id);
+    requests = index < 0 ? [...requests, request].slice(0, 16)
+      : requests.map((entry, position) => position === index ? request : entry);
+  } else if (event.action === 'resolved' && typeof event.requestId === 'string') {
+    requests = requests.filter(request => request.id !== event.requestId);
+  }
+  return { extensionRequests: requests, extensionRequest: requests[0] };
+}
+
+/** Same-ID replacements retain only values compatible with both the old and new schema. */
+export function interactionDraft(request: ExtensionInteractionSnapshot, previous?: ExtensionInteractionSnapshot, value?: unknown): unknown {
+  const same = request.id === previous?.id && request.kind === previous.kind;
+  if (request.kind === 'custom') {
+    const values = same && value && typeof value === 'object' ? value as Record<string, unknown> : {};
+    return Object.fromEntries((request.fields ?? []).map(field => {
+      const old = previous?.fields?.find(entry => entry.name === field.name);
+      const compatible = same && old?.type === field.type;
+      const draft = compatible ? values[field.name] : undefined;
+      return [field.name, field.type === 'checkbox' ? draft === true
+        : field.type === 'select' ? field.options?.some(option => option.value === draft) ? draft
+          : field.required ? field.options?.[0]?.value ?? '' : ''
+          : typeof draft === 'string' ? draft : ''];
+    }));
+  }
+  if (request.kind === 'select') return same && request.options?.some(option => option.value === value) ? value : request.options?.[0]?.value ?? '';
+  return same && typeof value === 'string' ? value : '';
+}
+
 export async function respondToExtensionInteraction(
   sessionId: string,
   requestId: string,
   responseValue: { cancelled: boolean; value?: unknown },
+  signal?: AbortSignal,
 ): Promise<ApiResponse<AgentRunSnapshot>> {
   try {
     const response = await apiFetch(`${API_BASE}/agent/sessions/${encodeURIComponent(sessionId)}/interactions/${encodeURIComponent(requestId)}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(responseValue),
+      signal, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(responseValue),
     });
     const data = await response.json().catch(() => ({})) as AgentRunSnapshot & { error?: string };
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
@@ -513,30 +608,12 @@ export async function* streamCommandEvents(
     { headers: { Accept: 'text/event-stream' }, signal },
   );
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No command event stream');
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let eventName = '';
-  let data = '';
-  while (true) {
-    const read = await reader.read();
-    buffer += decoder.decode(read.value, { stream: !read.done });
-    const lines = buffer.split('\n');
-    buffer = read.done ? '' : lines.pop() ?? '';
-    for (const raw of lines) {
-      const line = raw.replace(/\r$/, '');
-      if (line.startsWith('event:')) eventName = line.slice(6).trim();
-      else if (line.startsWith('data:')) data += line.slice(5).trimStart();
-      else if (!line && data) {
-        const parsed = JSON.parse(data) as CommandEvent | { snapshot: CommandSnapshot };
-        if (eventName === 'connection.ready' && 'snapshot' in parsed) yield { snapshot: parsed.snapshot };
-        else if ('sequence' in parsed) yield { event: parsed };
-        eventName = '';
-        data = '';
-      }
-    }
-    if (read.done) break;
+  for await (const record of boundedSseRecords(response)) {
+    const parsed: unknown = JSON.parse(record.data);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Command event stream was invalid.');
+    if (record.event === 'connection.ready' && 'snapshot' in parsed) {
+      yield { snapshot: (parsed as { snapshot: CommandSnapshot }).snapshot };
+    } else if ('sequence' in parsed) yield { event: parsed as CommandEvent };
   }
 }
 
@@ -572,48 +649,14 @@ export async function* streamAgentEvents(
     const payload = await response.json().catch(() => ({})) as { error?: string };
     throw new Error(payload.error || `HTTP ${response.status}`);
   }
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No agent event stream');
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let eventName = 'message';
-  let dataLines: string[] = [];
-  const records: AgentStreamRecord[] = [];
-  const consumeLine = (rawLine: string): void => {
-    const line = rawLine.replace(/\r$/, '');
-    if (!line) {
-      if (dataLines.length) {
-        try {
-          const data = JSON.parse(dataLines.join('\n')) as AgentEvent | {
-            snapshot: AgentStateSnapshot;
-            reset?: boolean;
-          };
-          if (eventName === 'connection.ready' && 'snapshot' in data) {
-            records.push({ type: 'connection.ready', snapshot: data.snapshot, reset: Boolean(data.reset) });
-          } else if ('sequence' in data) {
-            records.push({ type: 'event', event: data });
-          }
-        } catch { /* Ignore malformed records and continue the replay. */ }
-      }
-      eventName = 'message';
-      dataLines = [];
-    } else if (line.startsWith('event:')) eventName = line.slice(6).trim();
-    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
-  };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (value) buffer += decoder.decode(value, { stream: !done });
-    if (done) buffer += decoder.decode();
-    const lines = buffer.split('\n');
-    buffer = done ? '' : lines.pop() ?? '';
-    for (const line of lines) consumeLine(line);
-    while (records.length) yield records.shift()!;
-    if (done) {
-      if (buffer) consumeLine(buffer);
-      consumeLine('');
-      while (records.length) yield records.shift()!;
-      break;
+  for await (const record of boundedSseRecords(response)) {
+    const data: unknown = JSON.parse(record.data);
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Agent event stream was invalid.');
+    if (record.event === 'connection.ready' && 'snapshot' in data) {
+      const ready = data as { snapshot: AgentStateSnapshot; reset?: boolean };
+      yield { type: 'connection.ready', snapshot: ready.snapshot, reset: Boolean(ready.reset) };
+    } else if ('sequence' in data) {
+      yield { type: 'event', event: data as AgentEvent };
     }
   }
 }
@@ -622,6 +665,90 @@ export async function* streamAgentEvents(
 // Legacy stateless chat API - retained for API compatibility
 // ===================================================================
 
+async function readChatStreamChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('Provider stream was idle for too long.')), CHAT_STREAM_IDLE_TIMEOUT_MS);
+  });
+  try { return await Promise.race([reader.read(), deadline]); }
+  finally { if (timer) clearTimeout(timer); }
+}
+
+async function* boundedSseRecords(response: Response): AsyncGenerator<{ event: string; data: string }, void> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No event stream');
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  let buffer = '';
+  let event = 'message';
+  let dataLines: string[] = [];
+  let eventBytes = 0;
+  let transportedBytes = 0;
+  let events = 0;
+  let linesSeen = 0;
+  let completed = false;
+  const dispatch = (): { event: string; data: string } | undefined => {
+    if (!dataLines.length) { event = 'message'; return undefined; }
+    if (++events > MAX_CHAT_STREAM_EVENTS) throw new Error('Event stream exceeded its limit.');
+    const record = { event, data: dataLines.join('\n') };
+    event = 'message';
+    dataLines = [];
+    eventBytes = 0;
+    return record;
+  };
+  try {
+    while (true) {
+      const { done, value } = await readChatStreamChunk(reader);
+      if (value) {
+        transportedBytes += value.byteLength;
+        if (value.byteLength > MAX_CHAT_STREAM_CHUNK_BYTES || transportedBytes > MAX_CHAT_STREAM_BYTES) {
+          throw new Error('Event stream exceeded its output limit.');
+        }
+        buffer += decoder.decode(value, { stream: !done });
+      }
+      if (done) { buffer += decoder.decode(); completed = true; }
+      if (utf8ByteLength(buffer) > MAX_CHAT_STREAM_CHUNK_BYTES) {
+        throw new Error('Event stream record exceeded its output limit.');
+      }
+      const lines = buffer.split('\n');
+      buffer = done ? '' : lines.pop() ?? '';
+      for (const rawLine of lines) {
+        if (++linesSeen > MAX_CHAT_STREAM_EVENTS * 4) throw new Error('Event stream exceeded its limit.');
+        const line = rawLine.replace(/\r$/u, '');
+        if (!line) {
+          const record = dispatch();
+          if (record) yield record;
+          continue;
+        }
+        if (line.startsWith(':')) continue;
+        if (line.startsWith('event:')) {
+          const candidate = line.slice(6).trim();
+          if (!/^[A-Za-z0-9._-]{1,128}$/u.test(candidate)) throw new Error('Event stream was invalid.');
+          event = candidate;
+          continue;
+        }
+        if (line.startsWith('data:')) {
+          const valueText = line.slice(5).replace(/^ /u, '');
+          eventBytes += utf8ByteLength(valueText);
+          if (eventBytes > MAX_CHAT_STREAM_CHUNK_BYTES || dataLines.length >= 10_000) {
+            throw new Error('Event stream record exceeded its output limit.');
+          }
+          dataLines.push(valueText);
+        }
+      }
+      if (done) {
+        const record = dispatch();
+        if (record) yield record;
+        break;
+      }
+    }
+  } finally {
+    if (!completed) void reader.cancel('event-stream-abandoned').catch(() => undefined);
+    try { reader.releaseLock(); } catch { /* A pending hostile reader may retain the lock. */ }
+  }
+}
+
 /** Send a chat message and stream the response back */
 export async function* streamChat(
   providerType: string,
@@ -629,7 +756,8 @@ export async function* streamChat(
   options?: Record<string, unknown>,
 ): AsyncGenerator<{ type: string; content?: string }, void> {
   if (options?.transport === 'websocket' || (!options?.transport && chatTransport === 'websocket')) {
-    yield* streamChatWebSocket(providerType, messages, options ?? {});
+    try { yield* streamChatWebSocket(providerType, messages, options ?? {}); }
+    catch { yield { type: 'error', content: 'Connexion WebSocket impossible' }; }
     return;
   }
   try {
@@ -648,46 +776,80 @@ export async function* streamChat(
     const reader = response.body?.getReader();
     if (!reader) throw new Error('No streaming body');
 
-    const decoder = new TextDecoder();
+    const decoder = new TextDecoder('utf-8', { fatal: true });
     let buffer = '';
     let currentEvent = 'message';
+    let transportedBytes = 0;
+    let events = 0;
+    let linesSeen = 0;
+    let terminalReceived = false;
+    let completed = false;
 
-    let streamDone = false;
-    while (!streamDone) {
-      const { done, value } = await reader.read();
-      streamDone = done;
-      if (value) buffer += decoder.decode(value, { stream: !done });
-      if (done) buffer += decoder.decode();
-
-      const lines = buffer.split('\n');
-      buffer = done ? '' : lines.pop() || '';
-
-      for (const rawLine of lines) {
-        const line = rawLine.replace(/\r$/, '');
-        // Parse SSE format: "event: <type>\ndata: <json>"
-        if (!line) {
-          currentEvent = 'message';
-          continue;
+    try {
+      while (true) {
+        const { done, value } = await readChatStreamChunk(reader);
+        if (value) {
+          transportedBytes += value.byteLength;
+          if (value.byteLength > MAX_CHAT_STREAM_CHUNK_BYTES || transportedBytes > MAX_CHAT_STREAM_BYTES) {
+            throw new Error('Provider stream exceeded its output limit.');
+          }
+          buffer += decoder.decode(value, { stream: !done });
+        }
+        if (done) {
+          buffer += decoder.decode();
+          completed = true;
+        }
+        if (utf8ByteLength(buffer) > MAX_CHAT_STREAM_CHUNK_BYTES) {
+          throw new Error('Provider stream event exceeded its output limit.');
         }
 
-        if (line.startsWith('data: ')) {
-          try {
-            const dataStr = line.slice(6);
-            const data = JSON.parse(dataStr) as { type?: unknown; content?: unknown };
-            const type = typeof data.type === 'string' ? data.type : currentEvent;
-            const content = typeof data.content === 'string'
-              ? data.content
-              : typeof (data as { message?: unknown }).message === 'string'
-                ? (data as { message: string }).message
-                : undefined;
-            yield { type, content };
-          } catch {
-            // Skip malformed SSE events
+        const lines = buffer.split('\n');
+        buffer = done ? '' : lines.pop() || '';
+        for (const rawLine of lines) {
+          if (++linesSeen > MAX_CHAT_STREAM_EVENTS * 4) throw new Error('Provider stream exceeded its event limit.');
+          const line = rawLine.replace(/\r$/u, '');
+          if (!line) {
+            currentEvent = 'message';
+            continue;
           }
-        } else if (line.startsWith('event: ')) {
-          currentEvent = line.slice(7).trim() || 'message';
+          if (line.startsWith('event:')) {
+            const candidate = line.slice(6).trim();
+            if (!/^[A-Za-z0-9._-]{1,128}$/u.test(candidate)) {
+              throw new Error('Provider stream was invalid.');
+            }
+            currentEvent = candidate;
+            continue;
+          }
+          if (!line.startsWith('data:')) continue;
+          const dataStr = line.slice(5).trimStart();
+          if (++events > MAX_CHAT_STREAM_EVENTS || utf8ByteLength(dataStr) > MAX_CHAT_STREAM_CHUNK_BYTES) {
+            throw new Error('Provider stream exceeded its event limit.');
+          }
+          let data: { type?: unknown; content?: unknown; message?: unknown };
+          try { data = JSON.parse(dataStr) as { type?: unknown; content?: unknown; message?: unknown }; }
+          catch { throw new Error('Provider stream was invalid.'); }
+          if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            throw new Error('Provider stream was invalid.');
+          }
+          const type = typeof data.type === 'string' ? data.type : currentEvent;
+          if (!/^[A-Za-z0-9._-]{1,128}$/u.test(type)) throw new Error('Provider stream was invalid.');
+          const content = typeof data.content === 'string'
+            ? data.content : typeof data.message === 'string' ? data.message : undefined;
+          if (content !== undefined && utf8ByteLength(content) > MAX_CHAT_STREAM_CHUNK_BYTES) {
+            throw new Error('Provider stream event exceeded its output limit.');
+          }
+          if (type === 'message_end' || type === 'error') terminalReceived = true;
+          yield { type, content };
+          if (terminalReceived) return;
+        }
+        if (done) {
+          if (!terminalReceived) throw new Error('Provider stream ended without a terminal event.');
+          break;
         }
       }
+    } finally {
+      if (!completed) void reader.cancel('chat-stream-abandoned').catch(() => undefined);
+      try { reader.releaseLock(); } catch { /* A pending hostile reader may retain the lock. */ }
     }
   } catch (error) {
     yield { type: 'error', content: error instanceof Error ? error.message : 'Unknown error' };
@@ -701,39 +863,142 @@ async function* streamChatWebSocket(
 ): AsyncGenerator<{ type: string; content?: string }, void> {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${protocol}//${location.host}/api/chat/ws`;
-  const socket = authToken
-    ? new WebSocket(url, `aih.bearer.${encodeBase64Url(authToken)}`)
-    : new WebSocket(url);
-  const queue: Array<{ type: string; content?: string }> = [];
+  // The server selects only the fixed application protocol; the bearer protocol
+  // authenticates the upgrade but is deliberately never reflected.
+  const socket = new WebSocket(url, authToken
+    ? ['aih.v1', `aih.bearer.${encodeBase64Url(authToken)}`]
+    : ['aih.v1']);
+  const queue: Array<{ record: { type: string; content?: string }; bytes: number }> = [];
+  let queueBytes = 0;
+  let transportedBytes = 0;
+  let events = 0;
+  let linesSeen = 0;
+  let buffer = '';
+  let eventType = 'message';
   let wake: (() => void) | undefined;
   let complete = false;
-  socket.onopen = () => socket.send(JSON.stringify({ provider, messages, options: { ...options, transport: undefined } }));
-  socket.onmessage = event => {
-    const lines = String(event.data).split('\n');
-    let eventType = 'message';
-    for (const line of lines) {
-      if (line.startsWith('event: ')) eventType = line.slice(7).trim();
-      if (!line.startsWith('data: ')) continue;
-      try {
-        const data = JSON.parse(line.slice(6)) as { content?: unknown; message?: unknown };
-        queue.push({
-          type: eventType,
-          content: typeof data.content === 'string' ? data.content : typeof data.message === 'string' ? data.message : undefined,
-        });
-      } catch { /* Ignore malformed event frames. */ }
-    }
-    wake?.();
+  let failed = false;
+  let terminalReceived = false;
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  const notify = (): void => { wake?.(); wake = undefined; };
+  const closeSocket = (): void => {
+    try { socket.close(); } catch { /* The socket may not have completed its handshake. */ }
   };
-  socket.onerror = () => {
-    queue.push({ type: 'error', content: 'Connexion WebSocket impossible' });
+  const fail = (message = 'Provider stream was invalid.'): void => {
+    if (failed) return;
+    failed = true;
     complete = true;
-    wake?.();
+    queue.length = 0;
+    queueBytes = 0;
+    queue.push({ record: { type: 'error', content: message }, bytes: utf8ByteLength(message) });
+    queueBytes = utf8ByteLength(message);
+    if (idleTimer) clearTimeout(idleTimer);
+    closeSocket();
+    notify();
   };
-  socket.onclose = () => { complete = true; wake?.(); };
-  while (!complete || queue.length) {
-    if (!queue.length) await new Promise<void>(resolve => { wake = resolve; });
-    wake = undefined;
-    while (queue.length) yield queue.shift()!;
+  const resetIdleTimer = (): void => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => fail('Provider stream was idle for too long.'), CHAT_STREAM_IDLE_TIMEOUT_MS);
+  };
+  const enqueue = (record: { type: string; content?: string }): void => {
+    const bytes = utf8ByteLength(record.type) + (record.content ? utf8ByteLength(record.content) : 0);
+    if (queue.length >= MAX_CHAT_WEBSOCKET_QUEUE || bytes > MAX_CHAT_STREAM_CHUNK_BYTES
+      || queueBytes + bytes > MAX_CHAT_WEBSOCKET_QUEUE_BYTES) {
+      fail('Provider stream exceeded its queue limit.');
+      return;
+    }
+    queue.push({ record, bytes });
+    queueBytes += bytes;
+  };
+  const consume = (chunk: string, final = false): void => {
+    if (failed) return;
+    buffer += chunk;
+    if (utf8ByteLength(buffer) > MAX_CHAT_STREAM_CHUNK_BYTES) {
+      throw new Error('Provider stream event exceeded its output limit.');
+    }
+    const lines = buffer.split('\n');
+    buffer = final ? '' : lines.pop() ?? '';
+    for (const rawLine of lines) {
+      if (++linesSeen > MAX_CHAT_STREAM_EVENTS * 4) throw new Error('limit');
+      const line = rawLine.replace(/\r$/u, '');
+      if (!line) { eventType = 'message'; continue; }
+      if (line.startsWith('event:')) {
+        const candidate = line.slice(6).trim();
+        if (!/^[A-Za-z0-9._-]{1,128}$/u.test(candidate)) throw new Error('invalid');
+        eventType = candidate;
+        continue;
+      }
+      if (!line.startsWith('data:')) continue;
+      if (terminalReceived || ++events > MAX_CHAT_STREAM_EVENTS) throw new Error('limit');
+      const dataText = line.slice(5).trimStart();
+      if (utf8ByteLength(dataText) > MAX_CHAT_STREAM_CHUNK_BYTES) throw new Error('limit');
+      const data: unknown = JSON.parse(dataText);
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('invalid');
+      const payload = data as { type?: unknown; content?: unknown; message?: unknown };
+      const type = typeof payload.type === 'string' ? payload.type : eventType;
+      if (!/^[A-Za-z0-9._-]{1,128}$/u.test(type)) throw new Error('invalid');
+      const content = typeof payload.content === 'string'
+        ? payload.content : typeof payload.message === 'string' ? payload.message : undefined;
+      enqueue({ type, content });
+      if (type === 'message_end' || type === 'error') terminalReceived = true;
+      eventType = 'message';
+      if (failed) return;
+    }
+  };
+
+  socket.onopen = () => {
+    try {
+      const payload = JSON.stringify({ provider, messages, options: { ...options, transport: undefined } });
+      if (utf8ByteLength(payload) > 14 * 1024 * 1024) throw new Error('limit');
+      socket.send(payload);
+      resetIdleTimer();
+    } catch { fail('Invalid chat request.'); }
+  };
+  socket.onmessage = event => {
+    try {
+      if (typeof event.data !== 'string') throw new Error('invalid');
+      const bytes = utf8ByteLength(event.data);
+      transportedBytes += bytes;
+      if (bytes > MAX_CHAT_STREAM_CHUNK_BYTES || transportedBytes > MAX_CHAT_STREAM_BYTES) throw new Error('limit');
+      consume(event.data);
+      if (terminalReceived) {
+        complete = true;
+        if (idleTimer) clearTimeout(idleTimer);
+        closeSocket();
+      } else {
+        resetIdleTimer();
+      }
+      notify();
+    } catch { fail(); }
+  };
+  socket.onerror = () => fail('Connexion WebSocket impossible');
+  socket.onclose = () => {
+    try { if (buffer) consume('', true); }
+    catch { fail(); return; }
+    if (!failed && !terminalReceived) { fail('Provider stream closed before completion.'); return; }
+    complete = true;
+    if (idleTimer) clearTimeout(idleTimer);
+    notify();
+  };
+  resetIdleTimer();
+
+  try {
+    while (!complete || queue.length) {
+      if (!queue.length) await new Promise<void>(resolve => { wake = resolve; });
+      wake = undefined;
+      while (queue.length) {
+        const item = queue.shift()!;
+        queueBytes = Math.max(0, queueBytes - item.bytes);
+        yield item.record;
+      }
+    }
+  } finally {
+    if (idleTimer) clearTimeout(idleTimer);
+    socket.onopen = null;
+    socket.onmessage = null;
+    socket.onerror = null;
+    socket.onclose = null;
+    closeSocket();
   }
 }
 
@@ -1017,7 +1282,7 @@ export async function deleteSession(sessionId: string, cascade = false): Promise
 /** Fork a session from a specific message index */
 export async function forkSession(
   sessionId: string,
-  options?: { messageIndex?: number; messageId?: string; title?: string },
+  options?: { messageIndex?: number; messageId?: string; before?: boolean; title?: string },
 ): Promise<ApiResponse<{ id: string; title?: string }>> {
   try {
     const response = await apiFetch(`${API_BASE}/sessions/${sessionId}/fork`, {
@@ -1124,6 +1389,52 @@ export async function browseWorkspace(path?: string, parent = false): Promise<Ap
   }
 }
 
+export async function createWorkspaceDirectory(parent: string, name: string): Promise<ApiResponse<{ path: string }>> {
+  try {
+    const response = await apiFetch(`${API_BASE}/workspaces/browse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent, name }),
+    });
+    const data = await response.json().catch(() => ({})) as { path?: string; error?: string; code?: string };
+    if (!response.ok || !data.path) return {
+      success: false,
+      error: data.error || `HTTP ${response.status}`,
+      code: data.code,
+    };
+    return { success: true, data: { path: data.path } };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to create directory' };
+  }
+}
+
+export async function getFileManagerAvailability(signal?: AbortSignal): Promise<ApiResponse<FileManagerAvailability>> {
+  try {
+    const response = await apiFetch(`${API_BASE}/workspaces/file-manager`, { signal, cache: 'no-store' });
+    const data = await response.json().catch(() => ({})) as FileManagerAvailability & { error?: string };
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'File manager availability failed' };
+  }
+}
+
+export async function openWorkspaceInFileManager(cwd: string): Promise<ApiResponse<void>> {
+  try {
+    const response = await apiFetch(`${API_BASE}/workspaces/file-manager`, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd }),
+    });
+    const data = await response.json().catch(() => ({})) as { error?: string; code?: string };
+    if (!response.ok) return { success: false, error: data.error || `HTTP ${response.status}`, code: data.code };
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to open the file manager' };
+  }
+}
+
 export async function listWorktrees(cwd: string, signal?: AbortSignal): Promise<ApiResponse<GitWorktree[]>> {
   try {
     const response = await apiFetch(`${API_BASE}/workspaces/worktrees?cwd=${encodeURIComponent(cwd)}`, { signal });
@@ -1163,22 +1474,28 @@ export async function removeWorktree(cwd: string, path: string, force = false): 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd, path, force, confirm: true }),
     });
-    const data = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    const data = await response.json().catch(() => ({})) as { error?: string; code?: string };
+    if (!response.ok) return {
+      success: false,
+      error: data.error || `HTTP ${response.status}`,
+      code: data.code,
+    };
     return { success: true };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to remove worktree' };
   }
 }
 
-export async function setWorkspaceTrust(cwd: string, trusted: boolean): Promise<ApiResponse<{ cwd: string; trusted: boolean }>> {
+export type WorkspaceTrustStatus = ProjectTrustStatus & { operationTrusted: boolean };
+
+export async function setWorkspaceTrust(cwd: string, trusted: boolean): Promise<ApiResponse<WorkspaceTrustStatus>> {
   try {
     const response = await apiFetch(`${API_BASE}/workspaces/trust`, {
       method: trusted ? 'POST' : 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd, confirm: true }),
     });
-    const data = await response.json().catch(() => ({})) as { cwd: string; trusted: boolean; error?: string };
+    const data = await response.json().catch(() => ({})) as WorkspaceTrustStatus & { error?: string };
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
     return { success: true, data };
   } catch (error) {
@@ -1314,8 +1631,14 @@ export async function uploadFiles(
     signal?: AbortSignal;
   } = {},
 ): Promise<ApiResponse<{ files: string[]; collision?: string }>> {
-  const totalSourceBytes = files.reduce((total, file) => total + file.size, 0);
   try {
+    if (!Array.isArray(files) || files.length < 1 || files.length > 20
+      || files.some(file => !file || !Number.isSafeInteger(file.size) || file.size < 0
+        || file.size > 6 * 1024 * 1024 || typeof file.name !== 'string' || file.name.length > 255)) {
+      throw new Error('Invalid upload selection.');
+    }
+    const totalSourceBytes = files.reduce((total, file) => total + file.size, 0);
+    if (totalSourceBytes > 9 * 1024 * 1024) throw new Error('Upload selection is too large.');
     const encoded: Array<{ name: string; content: string }> = [];
     let preparedBytes = 0;
     options.onProgress?.({
@@ -1325,12 +1648,15 @@ export async function uploadFiles(
     for (const [fileIndex, file] of files.entries()) {
       if (options.signal?.aborted) throw new DOMException('Upload cancelled.', 'AbortError');
       const bytes = new Uint8Array(await file.arrayBuffer());
+      if (bytes.byteLength > 6 * 1024 * 1024 || preparedBytes + bytes.byteLength > 9 * 1024 * 1024) {
+        throw new Error('Upload selection is too large.');
+      }
       let binary = '';
       for (let index = 0; index < bytes.length; index += 0x8000) {
         binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
       }
       encoded.push({ name: file.name, content: btoa(binary) });
-      preparedBytes += file.size;
+      preparedBytes += bytes.byteLength;
       options.onProgress?.({
         phase: 'preparing', loadedBytes: preparedBytes, totalBytes: totalSourceBytes,
         completedFiles: fileIndex + 1, totalFiles: files.length,
@@ -1342,6 +1668,7 @@ export async function uploadFiles(
       const request = new XMLHttpRequest();
       const abort = () => request.abort();
       request.open('POST', `${API_BASE}/files/upload`);
+      request.timeout = 120_000;
       request.withCredentials = true;
       request.setRequestHeader('Content-Type', 'application/json');
       if (authToken) request.setRequestHeader('Authorization', `Bearer ${authToken}`);
@@ -1355,8 +1682,10 @@ export async function uploadFiles(
       request.addEventListener('load', () => {
         options.signal?.removeEventListener('abort', abort);
         let response: { files: string[]; collision?: string; error?: string };
-        try { response = JSON.parse(request.responseText || '{}') as typeof response; }
-        catch { response = { files: [], error: `HTTP ${request.status}` }; }
+        try {
+          if (request.responseText.length > 1024 * 1024) throw new Error('limit');
+          response = JSON.parse(request.responseText || '{}') as typeof response;
+        } catch { response = { files: [], error: `HTTP ${request.status}` }; }
         if (request.status === 401 && typeof window !== 'undefined') window.dispatchEvent(new Event('aih-auth-required'));
         if (request.status < 200 || request.status >= 300) reject(new Error(response.error || `HTTP ${request.status}`));
         else resolve(response);
@@ -1368,6 +1697,10 @@ export async function uploadFiles(
       request.addEventListener('abort', () => {
         options.signal?.removeEventListener('abort', abort);
         reject(new DOMException('Upload cancelled.', 'AbortError'));
+      });
+      request.addEventListener('timeout', () => {
+        options.signal?.removeEventListener('abort', abort);
+        reject(new Error('Upload timed out.'));
       });
       options.signal?.addEventListener('abort', abort, { once: true });
       request.send(body);
@@ -1392,32 +1725,14 @@ export async function* streamFileChanges(
     { headers: { Accept: 'text/event-stream' }, signal },
   );
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No file event stream');
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let eventName = 'connection.ready';
-  let data = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (value) buffer += decoder.decode(value, { stream: !done });
-    if (done) buffer += decoder.decode();
-    const lines = buffer.split('\n');
-    buffer = done ? '' : lines.pop() ?? '';
-    for (const raw of lines) {
-      const line = raw.replace(/\r$/, '');
-      if (line.startsWith('event:')) eventName = line.slice(6).trim();
-      else if (line.startsWith('data:')) data += line.slice(5).trimStart();
-      else if (!line && data) {
-        const payload = JSON.parse(data) as { revision?: number };
-        if (eventName === 'connection.ready' || eventName === 'file.changed' || eventName === 'file.unavailable') {
-          yield { type: eventName, revision: payload.revision ?? 0 };
-        }
-        eventName = '';
-        data = '';
-      }
+  for await (const record of boundedSseRecords(response)) {
+    const payload: unknown = JSON.parse(record.data);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('File event stream was invalid.');
+    const revision = (payload as { revision?: unknown }).revision ?? 0;
+    if (!Number.isSafeInteger(revision) || (revision as number) < 0) throw new Error('File event stream was invalid.');
+    if (record.event === 'connection.ready' || record.event === 'file.changed' || record.event === 'file.unavailable') {
+      yield { type: record.event, revision: revision as number };
     }
-    if (done) break;
   }
 }
 
@@ -1531,42 +1846,14 @@ export async function* streamTerminalEvents(
     const payload = await response.json().catch(() => ({})) as { error?: string };
     throw new Error(payload.error || `HTTP ${response.status}`);
   }
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No terminal event stream');
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let eventName = '';
-  let dataLines: string[] = [];
-  const records: TerminalStreamRecord[] = [];
-  const consume = (raw: string): void => {
-    const line = raw.replace(/\r$/, '');
-    if (!line) {
-      if (dataLines.length) {
-        const data = JSON.parse(dataLines.join('\n')) as TerminalEvent | {
-          snapshot: TerminalSnapshot; reset: boolean; oldestOffset: number; lastOffset: number;
-        };
-        if (eventName === 'connection.ready' && 'snapshot' in data) {
-          records.push({ type: 'connection.ready', ...data });
-        } else if ('terminalId' in data) records.push({ type: 'event', event: data });
-      }
-      eventName = '';
-      dataLines = [];
-    } else if (line.startsWith('event:')) eventName = line.slice(6).trim();
-    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
-  };
-  while (true) {
-    const { done, value } = await reader.read();
-    if (value) buffer += decoder.decode(value, { stream: !done });
-    if (done) buffer += decoder.decode();
-    const lines = buffer.split('\n');
-    buffer = done ? '' : lines.pop() ?? '';
-    for (const line of lines) consume(line);
-    while (records.length) yield records.shift()!;
-    if (done) {
-      if (buffer) consume(buffer);
-      consume('');
-      while (records.length) yield records.shift()!;
-      break;
+  for await (const record of boundedSseRecords(response)) {
+    const data: unknown = JSON.parse(record.data);
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Terminal event stream was invalid.');
+    if (record.event === 'connection.ready' && 'snapshot' in data) {
+      const ready = data as { snapshot: TerminalSnapshot; reset: boolean; oldestOffset: number; lastOffset: number };
+      yield { type: 'connection.ready', ...ready };
+    } else if ('terminalId' in data) {
+      yield { type: 'event', event: data as TerminalEvent };
     }
   }
 }
@@ -1649,6 +1936,20 @@ export async function updateEnabledSkills(
   }
 }
 
+/** Read a redacted file-only inventory. The server never connects or resolves MCP values for this request. */
+export async function getMcpConfig(cwd?: string): Promise<ApiResponse<McpConfigInventory>> {
+  try {
+    const query = new URLSearchParams();
+    if (cwd) query.set('cwd', cwd);
+    const response = await apiFetch(`${API_BASE}/mcp${query.size ? `?${query}` : ''}`);
+    const data = await response.json().catch(() => ({})) as McpConfigInventory & { error?: string };
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to load MCP configuration' };
+  }
+}
+
 export type PluginMutationAction = 'install' | 'enable' | 'disable' | 'remove' | 'update';
 
 /** Read metadata only. Install and remote checks always require an explicit POST action. */
@@ -1690,6 +1991,25 @@ export async function mutatePlugin(input: {
     return { success: true, data };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Plugin action failed' };
+  }
+}
+
+export async function setPluginsEnabled(input: {
+  cwd?: string;
+  projectId?: string;
+  changes: PluginEnableChange[];
+}): Promise<ApiResponse<PluginEnableBatchResult>> {
+  try {
+    const response = await apiFetch(`${API_BASE}/plugins/enabled`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const data = await response.json().catch(() => ({})) as PluginEnableBatchResult & { error?: string };
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Plugin group action failed' };
   }
 }
 
@@ -1785,8 +2105,33 @@ export function disconnectProvider(type: string): Promise<ApiResponse<unknown>> 
   return jsonApi(`/provider-registry/auth/${encodeURIComponent(type)}`, { method: 'DELETE' });
 }
 
-export function getCustomProviders(): Promise<ApiResponse<CustomProviderDefinition[]>> {
-  return jsonApi('/provider-registry/custom');
+export interface ProviderRenameCapability {
+  supported: boolean;
+  mode: 'disabled' | 'exclusive-host-single-writer';
+  reason: 'exclusive-host-required' | 'restricted-single-writer' | 'unavailable';
+}
+
+/** Array data remains compatible; capability is additive to the client envelope.
+ * Missing/invalid metadata fails closed, including older/shared hosts. */
+export async function getCustomProviders(): Promise<ApiResponse<CustomProviderDefinition[]> & {
+  renameCapability: ProviderRenameCapability;
+}> {
+  const disabled: ProviderRenameCapability = { supported: false, mode: 'disabled', reason: 'unavailable' };
+  try {
+    const response = await apiFetch(`${API_BASE}/provider-registry/custom`);
+    if (!response.ok) return { success: false, renameCapability: disabled };
+    const data: unknown = await response.json();
+    if (!Array.isArray(data)) return { success: false, renameCapability: disabled };
+    let renameCapability = disabled;
+    try {
+      const metadata = JSON.parse(response.headers.get('X-AiHarness-Provider-Rename') || '{}') as ProviderRenameCapability;
+      if (metadata.supported === true && metadata.mode === 'exclusive-host-single-writer'
+        && metadata.reason === 'restricted-single-writer') renameCapability = metadata;
+      else if (metadata.supported === false && metadata.mode === 'disabled'
+        && metadata.reason === 'exclusive-host-required') renameCapability = metadata;
+    } catch { /* Older hosts have no capability metadata. */ }
+    return { success: true, data: data as CustomProviderDefinition[], renameCapability };
+  } catch { return { success: false, renameCapability: disabled }; }
 }
 
 export function saveCustomProvider(
@@ -1859,8 +2204,15 @@ export function getToolSettings(cwd?: string, projectId?: string): Promise<ApiRe
 
 export function updateToolSettings(input: {
   enabledTools: string[]; toolPreset: string; powershellEnabled: boolean; cwd?: string; projectId?: string;
+  codemodeEnabled?: boolean; codemodeMode?: 'on' | 'only'; codemodeInlineBudget?: number;
 }): Promise<ApiResponse<ToolSettings>> {
   return jsonApi('/tools', { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export function saveNewSessionDefault(
+  input: ({ kind: 'model'; provider: string; model: string } | { kind: 'thinking'; thinking: NonNullable<Session['thinking']> }) & { projectId?: string },
+): Promise<ApiResponse<{ values: Record<string, unknown>; overridden: string[]; effective: EffectiveConfiguration }>> {
+  return jsonApi('/configuration/defaults', { method: 'PATCH', body: JSON.stringify(input) });
 }
 
 export function getConfigurationScope(scope: 'global' | 'project', scopeId?: string): Promise<ApiResponse<{ values: Record<string, unknown> }>> {

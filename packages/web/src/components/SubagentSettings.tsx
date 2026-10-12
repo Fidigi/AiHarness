@@ -78,7 +78,7 @@ export function SubagentSettings() {
     setLoading(false);
   };
 
-  useEffect(() => { void load(); }, [workspace?.id, targetScope]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, [workspace?.id, targetScope]);
 
   const visible = useMemo(() => {
     const query = filter.trim().toLocaleLowerCase();

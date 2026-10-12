@@ -13,6 +13,7 @@ import {
   getAppUpdateStatus,
   getChatTransport,
   getEffectiveConfiguration,
+  getMcpConfig,
   getModelCatalog,
   getPluginCatalog,
   getProviders,
@@ -32,6 +33,7 @@ import {
   setAuthToken,
   setChatTransport,
   setProviderApiKey,
+  setPluginsEnabled,
   stopSubagentRun,
   streamAgentEvents,
   updateEnabledModels,
@@ -40,6 +42,21 @@ import {
   streamChat,
   uploadFiles,
 } from './api';
+import {
+  cancelMcpOAuthFlow,
+  getMcpOAuthStatuses,
+  importMcpConfigServer,
+  logoutMcpOAuth,
+  previewMcpImport,
+  removeMcpConfigServer,
+  replaceMcpConfigServer,
+  restoreMcpConfigServer,
+  setMcpConfigEnabled,
+  setMcpConfigExposure,
+  startMcpOAuth,
+  pasteMcpOAuthRedirect,
+  readMcpOAuthFlow,
+} from './mcp-api';
 
 function sseResponse(chunks: string[], ok = true): Response {
   const encoder = new TextEncoder();
@@ -55,6 +72,7 @@ function sseResponse(chunks: string[], ok = true): Response {
 describe('Web API service', () => {
   afterEach(() => {
     setAuthToken('');
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -114,12 +132,30 @@ describe('Web API service', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([
       'event: text_',
       'delta\ndata: {"content":"chunk"}\n\n',
+      'event: message_end\ndata: {"content":"chunk"}\n\n',
     ])));
 
     const events = [];
     for await (const event of streamChat('mock', [])) events.push(event);
 
-    expect(events).toEqual([{ type: 'text_delta', content: 'chunk' }]);
+    expect(events).toEqual([
+      { type: 'text_delta', content: 'chunk' },
+      { type: 'message_end', content: 'chunk' },
+    ]);
+  });
+
+  it('fails closed when an SSE stream ends without a terminal event', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([
+      'event: text_delta\ndata: {"content":"partial"}\n\n',
+    ])));
+
+    const events = [];
+    for await (const event of streamChat('mock', [])) events.push(event);
+
+    expect(events).toEqual([
+      { type: 'text_delta', content: 'partial' },
+      { type: 'error', content: 'Provider stream ended without a terminal event.' },
+    ]);
   });
 
   it('parses the final SSE record even when the stream has no trailing newline', async () => {
@@ -241,6 +277,265 @@ describe('Web API service', () => {
     expect(JSON.stringify(catalog)).not.toContain('instructions');
   });
 
+  it('loads the redacted MCP inventory for the selected workspace', async () => {
+    const inventory = {
+      files: [{ scope: 'global', path: '/agent/mcp.json', exists: true, contentRead: true, problems: [] }],
+      servers: [{
+        name: 'docs', scope: 'global', sourcePath: '/agent/mcp.json', valid: true, enabled: true,
+        exposure: 'direct', transport: 'http', url: 'https://example.test/•••', envNames: [],
+        headerNames: ['Authorization'], commandFields: [], variableReferences: [], masked: true,
+        shadowedByProject: false, replacesGlobal: false, problems: [],
+      }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(inventory), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getMcpConfig('/workspace/project')).resolves.toEqual({ success: true, data: inventory });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/mcp?cwd=%2Fworkspace%2Fproject',
+      { headers: {}, credentials: 'same-origin' },
+    );
+  });
+
+  it('posts only pasted text and context for an MCP import preview', async () => {
+    const preview = {
+      ok: true,
+      entries: [{
+        name: 'docs', source: 'mcp-json', complete: true,
+        persisted: {
+          valid: true, enabled: true, exposure: 'direct', transport: 'stdio', command: 'npx',
+          envNames: [], headerNames: [], oauthFields: [], commandFields: [], variableReferences: [], masked: false,
+        },
+        fields: [], variables: [], literalSecretFields: [], referenceableLiteralSecretFields: [],
+        scopes: {
+          global: { allowed: true, reasons: [], confirmations: [] },
+          project: { allowed: false, reasons: ['no-project'], confirmations: [] },
+        },
+        notes: [],
+      }],
+      notes: [],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(preview), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(previewMcpImport({
+      text: '{"mcpServers":{"docs":{"command":"npx"}}}',
+      syntax: 'foreign',
+      cwd: '/workspace',
+    })).resolves.toEqual(preview);
+    expect(fetchMock).toHaveBeenCalledWith('/api/mcp/preview', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        text: '{"mcpServers":{"docs":{"command":"npx"}}}',
+        syntax: 'foreign',
+        cwd: '/workspace',
+      }),
+      credentials: 'same-origin',
+    }));
+  });
+
+  it('posts original MCP import text with explicit completion and confirmations', async () => {
+    const inventory = { files: [], servers: [] };
+    const payload = { inventory, added: { scope: 'project', name: 'docs' } };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(importMcpConfigServer({
+      scope: 'project', cwd: '/workspace', revision: null, trustProject: true,
+      syntax: 'foreign', entryIndex: 0, text: 'ORIGINAL-PASTE', name: 'docs',
+      values: { 'headers.X-Tenant': { reference: 'TENANT_TOKEN' } },
+      secretReferences: { 'headers.Authorization': 'DOCS_TOKEN' },
+      confirmations: { remoteHostVariables: ['DOCS_TOKEN', 'TENANT_TOKEN'] },
+    })).resolves.toEqual({ success: true, data: payload });
+    expect(fetchMock).toHaveBeenCalledWith('/api/mcp/actions', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'import', scope: 'project', cwd: '/workspace', revision: null, trustProject: true,
+        syntax: 'foreign', entryIndex: 0, text: 'ORIGINAL-PASTE', name: 'docs',
+        values: { 'headers.X-Tenant': { reference: 'TENANT_TOKEN' } },
+        secretReferences: { 'headers.Authorization': 'DOCS_TOKEN' },
+        confirmations: { remoteHostVariables: ['DOCS_TOKEN', 'TENANT_TOKEN'] },
+      }),
+    }));
+  });
+
+  it('posts replacement preview identity and original text without a writable configuration', async () => {
+    const revision = 'c'.repeat(64);
+    const preview = { ok: true, entries: [], notes: [] };
+    const inventory = { files: [], servers: [] };
+    const payload = {
+      inventory,
+      updated: { scope: 'global', previousName: 'docs', name: 'renamed-docs' },
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(preview), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(payload), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(previewMcpImport({
+      text: 'ORIGINAL-REPLACEMENT-PASTE',
+      syntax: 'aiharness',
+      cwd: '/workspace',
+      replacement: { scope: 'global', name: 'docs', revision },
+    })).resolves.toEqual(preview);
+    await expect(replaceMcpConfigServer({
+      scope: 'global', cwd: '/workspace', revision, targetName: 'docs',
+      text: 'ORIGINAL-REPLACEMENT-PASTE', syntax: 'aiharness', entryIndex: 0,
+      name: 'renamed-docs', values: {}, secretReferences: {}, confirmations: { literalSecret: true },
+    })).resolves.toEqual({ success: true, data: payload });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/mcp/preview', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        text: 'ORIGINAL-REPLACEMENT-PASTE', syntax: 'aiharness', cwd: '/workspace',
+        replacement: { scope: 'global', name: 'docs', revision },
+      }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/mcp/actions', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'replace', scope: 'global', cwd: '/workspace', revision, targetName: 'docs',
+        text: 'ORIGINAL-REPLACEMENT-PASTE', syntax: 'aiharness', entryIndex: 0,
+        name: 'renamed-docs', values: {}, secretReferences: {}, confirmations: { literalSecret: true },
+      }),
+    }));
+    expect(Object.keys(JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string))).not.toContain('configuration');
+  });
+
+  it('posts bounded MCP actions and retains typed certainty without exposing undo material', async () => {
+    const inventory = {
+      files: [{
+        scope: 'global', path: '/agent/mcp.json', exists: true, contentRead: true,
+        revision: 'b'.repeat(64), problems: [],
+      }],
+      servers: [],
+    };
+    const success = { inventory, outcomes: [{ name: 'docs', status: 'changed' }] };
+    const removal = { inventory, undo: { token: 'opaque-token-1234', expiresAt: '2026-10-04T00:01:00.000Z' } };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(success), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ inventory }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(removal), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ inventory }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: 'Reload required.', code: 'stale-revision', uncertain: false, trustKept: true,
+      }), { status: 409 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(setMcpConfigEnabled('project', ['docs'], false, 'a'.repeat(64), '/workspace'))
+      .resolves.toEqual({ success: true, data: success });
+    await expect(setMcpConfigExposure('global', 'docs', 'deferred', 'b'.repeat(64), '/workspace'))
+      .resolves.toEqual({ success: true, data: { inventory } });
+    await expect(removeMcpConfigServer('global', 'private', 'b'.repeat(64), '/workspace'))
+      .resolves.toEqual({ success: true, data: removal });
+    await expect(restoreMcpConfigServer('opaque-token-1234', '/workspace'))
+      .resolves.toEqual({ success: true, data: { inventory } });
+    await expect(setMcpConfigEnabled('global', ['docs'], true, 'b'.repeat(64)))
+      .resolves.toEqual({
+        success: false, error: 'Reload required.', code: 'stale-revision', uncertain: false, trustKept: true,
+      });
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/mcp/actions', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'set-enabled', scope: 'project', names: ['docs'], enabled: false,
+        revision: 'a'.repeat(64), cwd: '/workspace',
+      }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/mcp/actions', expect.objectContaining({
+      body: JSON.stringify({
+        action: 'set-exposure', scope: 'global', name: 'docs', exposure: 'deferred',
+        revision: 'b'.repeat(64), cwd: '/workspace',
+      }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/mcp/actions', expect.objectContaining({
+      body: JSON.stringify({
+        action: 'remove', scope: 'global', name: 'private', revision: 'b'.repeat(64), cwd: '/workspace',
+      }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/mcp/actions', expect.objectContaining({
+      body: JSON.stringify({ action: 'restore', undoToken: 'opaque-token-1234', cwd: '/workspace' }),
+    }));
+  });
+
+  it('uses the explicit MCP OAuth endpoints without sending server URLs or receiving tokens', async () => {
+    const descriptor = { scope: 'global' as const, name: 'docs', configKey: 'a'.repeat(64) };
+    const flow = {
+      flowId: 'oauth-flow-1234567890123456',
+      scope: 'global' as const,
+      name: 'docs',
+      configKey: descriptor.configKey,
+      phase: 'authorize' as const,
+      authorizationUrl: 'https://login.example.test/authorize?state=public-state',
+      redirectUrl: 'http://127.0.0.1:32123/oauth/callback',
+      expiresAt: '2026-01-01T00:05:00.000Z',
+    };
+    const responses = [
+      { statuses: [{ ...descriptor, available: true, stateStored: false, signedIn: false }] },
+      { ...flow, joined: false },
+      flow,
+      flow,
+      { ...flow, phase: 'cancelled' },
+      { ...descriptor, removed: true },
+    ];
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(
+      JSON.stringify(responses.shift()),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const inventoryRow = { ...descriptor, url: 'https://mcp.example.test/private', usesOAuth: true, enabled: true };
+    await expect(getMcpOAuthStatuses([inventoryRow])).resolves.toMatchObject({
+      success: true,
+      data: { statuses: [expect.objectContaining({ signedIn: false })] },
+    });
+    await expect(startMcpOAuth(inventoryRow)).resolves.toMatchObject({
+      success: true, data: { joined: false, ...flow },
+    });
+    await expect(readMcpOAuthFlow(flow.flowId)).resolves.toEqual({ success: true, data: flow });
+    await expect(pasteMcpOAuthRedirect(flow.flowId, `${flow.redirectUrl}?code=public-code&state=public-state`))
+      .resolves.toEqual({ success: true, data: flow });
+    await expect(cancelMcpOAuthFlow(flow.flowId)).resolves.toMatchObject({
+      success: true, data: { phase: 'cancelled' },
+    });
+    await expect(logoutMcpOAuth(inventoryRow)).resolves.toMatchObject({ success: true, data: { removed: true } });
+
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      '/api/mcp/oauth/status',
+      '/api/mcp/oauth/start',
+      `/api/mcp/oauth/flows/${flow.flowId}`,
+      `/api/mcp/oauth/flows/${flow.flowId}/redirect`,
+      `/api/mcp/oauth/flows/${flow.flowId}`,
+      '/api/mcp/oauth/logout',
+    ]);
+    const bodies = fetchMock.mock.calls
+      .map(call => (call[1] as RequestInit | undefined)?.body)
+      .filter((value): value is string => typeof value === 'string');
+    expect(bodies.map(value => JSON.parse(value))).toEqual([
+      { servers: [descriptor] },
+      descriptor,
+      { redirectUrl: `${flow.redirectUrl}?code=public-code&state=public-state` },
+      descriptor,
+    ]);
+    expect(JSON.stringify(bodies)).not.toContain('mcp.example');
+    expect(JSON.stringify(flow)).not.toContain('access_token');
+  });
+
+  it('marks an MCP action timeout as uncertain so callers reload inventory', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+    })));
+
+    const pending = setMcpConfigEnabled('global', ['docs'], false, null);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await expect(pending).resolves.toEqual({
+      success: false,
+      error: 'The MCP action timed out.',
+      code: 'timeout',
+      uncertain: true,
+    });
+  });
+
   it('loads and explicitly mutates, checks, and reloads the plugin catalogue', async () => {
     const catalog = {
       updatedAt: '2026-10-01T00:00:00.000Z', generation: 2, cwd: '/workspace', projectId: 'workspace-1',
@@ -282,6 +577,35 @@ describe('Web API service', () => {
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/plugins/check', expect.objectContaining({ method: 'POST' }));
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/plugins/reload', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('posts plugin group activation as one bounded request and retains partial outcomes', async () => {
+    const catalog = {
+      updatedAt: '2026-10-01T00:00:00.000Z', generation: 2, cwd: '/workspace', projectId: 'workspace-1',
+      projectTrusted: false, projectResourcesLoaded: false, packages: [], standaloneExtensions: [],
+      totals: { extensions: 0, skills: 0, prompts: 0, themes: 0 }, diagnostics: [],
+    };
+    const changes = [
+      { key: 'global:global:01234567890123456789', scope: 'global' as const, enabled: true },
+      { key: 'project:workspace-1:11234567890123456789', scope: 'project' as const, enabled: true },
+    ];
+    const batch = {
+      catalog,
+      outcomes: [
+        { ...changes[0]!, state: 'changed' },
+        { ...changes[1]!, state: 'failed', code: 'PROJECT_TRUST_REQUIRED' },
+      ],
+      reloadRequired: true,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(batch), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(setPluginsEnabled({ cwd: '/workspace', projectId: 'workspace-1', changes }))
+      .resolves.toEqual({ success: true, data: batch });
+    expect(fetchMock).toHaveBeenCalledWith('/api/plugins/enabled', expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ cwd: '/workspace', projectId: 'workspace-1', changes }),
+    }));
   });
 
   it('loads sub-agent settings, creates profiles and controls child runs', async () => {
@@ -484,6 +808,7 @@ describe('Web API service', () => {
     vi.stubGlobal('localStorage', storage);
     vi.stubGlobal('location', { protocol: 'https:', host: 'chat.example.test' });
 
+    let selectedProtocols: string | string[] | undefined;
     class MockWebSocket {
       onopen?: () => void;
       onmessage?: (event: { data: string }) => void;
@@ -491,7 +816,8 @@ describe('Web API service', () => {
       onclose?: () => void;
       readonly sent: string[] = [];
 
-      constructor(readonly url: string) {
+      constructor(readonly url: string, protocols?: string | string[]) {
+        selectedProtocols = protocols;
         queueMicrotask(() => {
           this.onopen?.();
           this.onmessage?.({ data: 'event: text_delta\ndata: {"content":"Salut"}\n' });
@@ -513,6 +839,7 @@ describe('Web API service', () => {
     }
 
     expect(getChatTransport()).toBe('websocket');
+    expect(selectedProtocols).toEqual(['aih.v1']);
     expect(storage.setItem).toHaveBeenCalledWith('ai-harness-transport', 'websocket');
     expect(events).toEqual([
       { type: 'text_delta', content: 'Salut' },

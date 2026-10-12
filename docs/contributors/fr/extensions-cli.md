@@ -7,6 +7,7 @@
 - [API disponible](#api-disponible)
   - [Hooks transformants et annulables](#hooks-transformants-et-annulables)
   - [Appels automatiques d'outils](#appels-automatiques-doutils)
+- [Gestion des packages](#gestion-des-packages)
 - [Commandes de gestion](#commandes-de-gestion)
 - [Limites actuelles](#limites-actuelles)
 
@@ -26,7 +27,7 @@ ai-harness --extension ./extensions/example.mjs
 
 Plusieurs chemins peuvent être fournis avec plusieurs options `--extension`, ou avec `AI_HARNESS_EXTENSIONS` séparé par le séparateur de chemins du système.
 
-Les extensions TypeScript doivent actuellement être compilées en JavaScript avant leur chargement.
+Les extensions TypeScript doivent actuellement être compilées en JavaScript avant leur chargement. Un package installé peut aussi déclarer des extensions, skills, prompts et thèmes JSON via `aiHarness` (la clé historique `pi` du manifeste est également acceptée). Les extensions, skills et prompts actifs rejoignent le démarrage CLI et RPC depuis le même catalogue Core que le serveur Web ; un thème de package sélectionné rejoint le démarrage CLI interactif.
 
 ## Exemple
 
@@ -85,6 +86,9 @@ export default function exampleExtension(api) {
 
 ## API disponible
 
+Chaque factory reçoit `api.version`. La version `1` est aussi exportée sous le nom `AI_HARNESS_EXTENSION_API_VERSION` par `@ai-harness/core` ; une extension doit refuser une version majeure non prise en charge avant d’enregistrer son comportement.
+
+- `version` : version majeure courante du contrat d’extension propre à AiHarness.
 - `registerCommand(name, definition)` : ajoute une commande `/name`.
 - `registerTool(definition)` : ajoute un outil exécutable. Les outils sont listés par `/tools` et peuvent être testés avec `/tool <nom> <json>`.
 - `registerProvider(type, definition)` : ajoute une factory de provider sélectionnable avec `/provider <type>`.
@@ -115,7 +119,25 @@ api.before('before:provider', data => ({
 
 ### Appels automatiques d'outils
 
-Les schémas des outils passent automatiquement par le contrat provider partagé ; les adaptateurs OpenAI/Azure, Anthropic, Gemini/Vertex, Bedrock et locaux compatibles les traduisent lorsque le modèle autorise les appels d’outils. Quand le modèle demande un outil, le CLI persiste le tool call, exécute l'outil, persiste son résultat (erreurs comprises), puis reprend l'appel modèle. La boucle est limitée à huit tours consécutifs pour éviter les appels infinis. Une interruption `Ctrl+C` annule la requête provider et propage le signal à l'outil actif.
+Les schémas des outils passent automatiquement par le contrat provider partagé ; les adaptateurs OpenAI/Azure, Anthropic, Gemini/Vertex, Bedrock et locaux compatibles les traduisent lorsque le modèle autorise les appels d’outils. Quand le modèle demande un outil, le CLI persiste le tool call, exécute l'outil, persiste son résultat (erreurs comprises), puis reprend l'appel modèle. La boucle est limitée à huit tours consécutifs pour éviter les appels infinis. Une interruption `Escape` ou `Ctrl+C` annule la requête provider et propage le signal à l'outil actif.
+
+## Gestion des packages
+
+L’état et la politique des sources résident dans `@ai-harness/core` ; le CLI et le Web ne maintiennent pas deux installateurs. `ai-harness package --help` décrit toutes les options :
+
+```bash
+ai-harness package install npm:@scope/review-kit@^2 --global
+ai-harness package install ./review-kit --project --approve
+ai-harness package configure @scope/review-kit --extensions='extensions/*.mjs,!extensions/unsafe.mjs'
+ai-harness package list --json
+ai-harness package check @scope/review-kit
+ai-harness package update @scope/review-kit
+ai-harness package remove @scope/review-kit
+```
+
+Les sources `npm:`, `git:` HTTPS restreintes et les chemins locaux explicites sont acceptés. `--extensions`, `--skills`, `--prompts` et `--themes` ne peuvent que restreindre les ressources du manifeste ; une valeur vide désactive le type et `--reset` rétablit les valeurs par défaut. Installer, configurer, activer, mettre à jour ou charger un package projet exige la confiance du projet ; sa désactivation et sa suppression restent disponibles pour un nettoyage sûr. Un package exécute du code Node de confiance sans sandbox : contrôlez sa source avant installation.
+
+Dans le Web, les contrôles **Enable all** et **Disable all** des groupes Project/Global délèguent un unique lot borné à Core. Core conserve les filtres de ressources, valide les changements permis par une seule écriture atomique, rapporte les refus de confiance ou packages absents entrée par entrée, puis signale les changements exécutables qui exigent le reload séparé des ressources.
 
 ## Commandes de gestion
 
@@ -133,3 +155,4 @@ Le déchargement retire automatiquement les commandes, outils, providers, pannea
 - Le CLI et le serveur Web chargent des générations d’extensions séparées : `/reload` recharge uniquement le processus CLI, tandis que l’API Web possède ses propres routes de reload.
 - Les panneaux CLI enregistrés avec `registerUI` sont textuels et visibles uniquement en mode plein écran ; le serveur restitue séparément ses widgets texte et interactions déclaratives.
 - Les modules exécutables sont du code Node de confiance exécuté dans le processus hôte, sans sandbox de sécurité.
+- Les règles de compatibilité publique et de probes golden sont décrites dans la [politique des contrats publics AiHarness](./public-contract-policy.md).

@@ -2,24 +2,106 @@
 // Terminal UI Tests
 // ============================================================
 
+import { CredentialRedactor, SessionManager } from '@ai-harness/core';
+import chalk from 'chalk';
+import { createTerminalStatus } from './status.js';
+import { terminalWidth } from './terminal-text.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TerminalUI } from './terminal-ui';
 
 describe('TerminalUI', () => {
   let terminal: TerminalUI;
-  let stdoutSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     terminal = new TerminalUI({ title: 'Test Harness' });
     
     // Capture console output
-    stdoutSpy = vi.spyOn(console, 'log').mockImplementation();
-    const originalClear = process.stdout.write;
+    vi.spyOn(console, 'log').mockImplementation();
     vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as any);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('redacts every normal terminal boundary across chunks and reserves the explicit reveal bypass', () => {
+    const secret = 'terminal-boundary-secret';
+    const redactor = new CredentialRedactor([secret]);
+    const protectedTerminal = new TerminalUI({
+      redactText: value => redactor.redact(value),
+      createTextRedactor: () => redactor.createStream(),
+    });
+
+    protectedTerminal.displayUserMessage(`typed ${secret}`);
+    protectedTerminal.writeOutput(`command ${secret}`);
+    const stream = protectedTerminal.startStreaming();
+    stream.write('terminal-boundary-');
+    stream.write('secret');
+    stream.finish();
+
+    const normalOutput = [
+      ...vi.mocked(console.log).mock.calls.flat().map(String),
+      ...vi.mocked(process.stdout.write).mock.calls.map(call => String(call[0])),
+    ].join('');
+    expect(normalOutput).not.toContain(secret);
+    expect(normalOutput).toContain('[REDACTED]');
+
+    vi.mocked(process.stdout.write).mockClear();
+    protectedTerminal.writeExplicitCredentialReveal(secret);
+    expect(vi.mocked(process.stdout.write).mock.calls.map(call => String(call[0])).join('')).toContain(secret);
+  });
+
+  it('prints real snapshot status at prompt boundaries, stacking after resize and deferring during streaming', async () => {
+    const manager = new SessionManager();
+    const session = await manager.create({ title: 'session', cwd: '/work' });
+    await manager.addMessage(session.id, { role: 'assistant', content: 'reply', usage: { inputTokens: 9 } });
+    terminal.setStatus(await createTerminalStatus({ sessionManager: manager, sessionId: session.id,
+      cwd: '/work\x1b[2J', provider: 'mock', model: 'mock\x1b]0;FORGED\x07',
+      resources: { skills: 1, prompts: 2, extensions: 3, instructions: 4, diagnostics: 0 } }));
+    const oldColumns = process.stdout.columns;
+    try {
+      process.stdout.columns = 18;
+      terminal.displayStatus();
+      const output = vi.mocked(console.log).mock.calls.flat().map(String);
+      expect(output.every(line => terminalWidth(line) <= 18)).toBe(true);
+      expect(output.join('')).toContain('cost unknown');
+      expect(output.join('')).toContain('1 skills');
+      expect(output.join('')).not.toContain('FORGED');
+      process.stdout.columns = 120;
+      vi.mocked(console.log).mockClear();
+      terminal.displayStatus();
+      expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain('full history (all branches)');
+      const stream = terminal.startStreaming();
+      vi.mocked(console.log).mockClear();
+      terminal.displayStatus();
+      expect(console.log).not.toHaveBeenCalled();
+      stream.finish();
+    } finally { process.stdout.columns = oldColumns; }
+  });
+
+  it('sanitizes model/user/progress/output and split streaming controls without stripping trusted command styling', () => {
+    const previous = chalk.level;
+    chalk.level = 1;
+    try {
+      terminal.displayUserMessage('user\x1b]52;c;FORGED\x07\x1b[2J');
+      terminal.displayCommand('progress\x1b[?1049h', 'text\x1b]0;FORGED\x07');
+      terminal.writeOutput(chalk.red('trusted styled output') + '\x1b]52;c;FORGED\x07');
+      const stream = terminal.startStreaming();
+      stream.write('model\x1b]52;c;');
+      stream.write('FORGED\x1b');
+      stream.write('\\safe\x1b[');
+      stream.write('2Jtext');
+      stream.finish();
+      const output = vi.mocked(console.log).mock.calls.flat().join('')
+        + vi.mocked(process.stdout.write).mock.calls.map(call => String(call[0])).join('');
+      expect(output).not.toContain('FORGED');
+      expect(output).not.toContain('\x1b[2J');
+      expect(output).not.toContain('\x1b[?1049h');
+      expect(output).toContain('\x1b[31mtrusted styled output');
+      expect(output).toContain('model');
+      expect(output).toContain('safe');
+      expect(output).toContain('text');
+    } finally { chalk.level = previous; }
   });
 
   // Welcome tests
@@ -48,7 +130,6 @@ describe('TerminalUI', () => {
     });
 
     it('should prefix with > symbol', () => {
-      const mockWrite = vi.spyOn(process.stdout, 'write');
       terminal.displayUserMessage('Test message');
       
       // Check that output contains the expected format
@@ -65,7 +146,6 @@ describe('TerminalUI', () => {
     });
 
     it('should wrap in assistant format', () => {
-      const mockWrite = vi.spyOn(process.stdout, 'write');
       terminal.displayAssistantMessage('Response content');
       
       // Should output formatted message
@@ -81,13 +161,28 @@ describe('TerminalUI', () => {
       expect(console.log).toHaveBeenCalledWith(expect.stringContaining('[test]'));
       expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Output content'));
     });
+
+    it('streams shell output and reports truncation retention', () => {
+      const writer = terminal.startShellCommand('printf test', true);
+      writer.write('test');
+      writer.finish({
+        status: 'completed', exitCode: 0, truncated: true, fullOutputPath: '/tmp/output.log',
+      });
+
+      const output = vi.mocked(process.stdout.write).mock.calls.map(call => String(call[0])).join('');
+      expect(output).toContain('$ printf test');
+      expect(output).toContain('excluded from model context');
+      expect(output).toContain('test');
+      expect(output).toContain('truncated');
+      expect(output).toContain('/tmp/output.log');
+    });
   });
 
   // Show error tests
   describe('showError()', () => {
     it('should display error message', () => {
       const originalError = console.error;
-      let captured: string[] = [];
+      const captured: string[] = [];
       console.error = (...args) => captured.push(args.join(' '));
 
       terminal.showError('Something went wrong');
@@ -374,7 +469,7 @@ describe('TerminalUI', () => {
       let completed = false;
       
       await terminal.displayStreamingResponse(
-        (chunk) => {},
+        (_chunk) => {},
         () => { completed = true; },
       );
 
@@ -395,8 +490,8 @@ describe('TerminalUI', () => {
 
       // The streaming should be cleared
       const isStillStreaming = terminal.isCurrentlyStreaming();
-      // Note: displayUserMessage calls clearCurrentLine but doesn't set isStreaming to false
-      // This test verifies the output was written
+      // displayUserMessage clears the line but intentionally keeps the active stream.
+      expect(isStillStreaming).toBe(true);
       expect(mockWrite).toHaveBeenCalled();
     });
   });

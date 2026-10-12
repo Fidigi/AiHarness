@@ -1,0 +1,1 @@
+{"type":"bash","id":"bash-contract","command":"printf parity","excludeFromContext":true}

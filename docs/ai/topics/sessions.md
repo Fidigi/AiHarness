@@ -4,7 +4,9 @@
 
 ## Overview
 
-Sessions are the shared conversation record for CLI and Server. Core owns the runtime `Session` contract, JSONL v2 storage, branches/clones, effective model context, compaction, and JSON wire serialization.
+Effective provider context orders known message/command ancestry before wall-clock time. This prevents queued turns from moving ahead of their parents after a clock regression; unlinked legacy roots retain chronological fallback. Command projections retain their parent and original-ID alias, including after durable reload.
+
+Sessions are the shared conversation record for CLI and Server. Core owns the runtime `Session` contract, the custom JSONL v2 journal, active/abandoned branches, forks/clones, effective model context, compaction, and JSON wire serialization. The persisted v2 marker is independent from `AI_HARNESS_CORE_API_VERSION`; advancing one does not silently advance the other.
 
 Provider and tool turns described in [`providers.md`](./providers.md) are persisted incrementally. Web hydration and pagination must preserve the same IDs, dates, revisions, and branch relationships.
 
@@ -30,17 +32,17 @@ SessionManager -> in-memory domain state
 
 ## JSONL v2 Contract
 
-Each line is one entry with a Unix-millisecond `timestamp`; v2 entries also carry `version: 2`.
+Each line is one entry with a Unix-millisecond `timestamp`; v2 entries also carry `version: 2`. The manager advances newly appended message timestamps monotonically so context order survives coarse or backward-moving wall clocks.
 
 | Entry | Purpose |
 |---|---|
 | `metadata` | Session identity, dates, workspace, branch, settings and cumulative usage |
-| `message` | User/assistant/system/tool content, rich blocks, tool calls/results and usage |
-| `command` | Shell command, output, exit state and context policy |
-| `compaction` | Summary, first retained entry, token estimate and metrics |
-| `branch_summary` | Named summary attached to branch navigation |
+| `message` | User/assistant/system/tool content, rich blocks, tool calls/results, parent and normalized usage |
+| `command` | Shell command, parent, output, exit state and context policy |
+| `compaction` | Parent, summary, first retained entry, token estimate, provider/model and summary-generation usage |
+| `branch_summary` | Named summary with a durable parent in the entry tree |
 
-Legacy unversioned message-only JSONL remains readable. Runtime dates are `Date`; API/import-export dates are ISO strings; persisted entry dates are numbers. `serializeSession()` does not write JSONL—it converts a whole session for JSON transport.
+Legacy unversioned message-only JSONL remains readable. Runtime dates are `Date`; API/import-export dates are ISO strings; persisted entry dates are numbers. `serializeSession()` does not write JSONL—it converts a whole session for JSON transport. This remains an AiHarness v2 format; RPC tree responses are transport projections rather than the persisted representation.
 
 ## Critical Flows
 
@@ -48,28 +50,38 @@ Legacy unversioned message-only JSONL remains readable. Runtime dates are `Date`
 
 ```text
 SessionManager.create -> JsonlSessionStore.saveSession(metadata + initial entries)
-SessionManager.addMessage -> JsonlSessionStore.appendMessage -> update memory/events
-SessionManager.addCommand -> JsonlSessionStore.appendCommand -> update memory/events
+SessionManager.addMessage -> append with active parent -> advance leaf -> update memory/events
+SessionManager.addCommand -> append command -> advance leaf -> update memory/events
+SessionManager.getRawEntries -> complete journal, including pre-compaction and abandoned entries
 ```
 
-Await every write before reporting success. `JsonlSessionStore` validates session IDs and writes files with restrictive permissions.
+The manager maintains the same journal semantics in process memory under `--no-session`. Saving metadata merges known entries without deleting durable descendants, although v2 metadata updates still rewrite the file rather than using an append-only metadata revision. Rewrites use owner-only exclusive staging, `fsync`, atomic rename and directory synchronization. Appends, rewrites and deletes share a bounded per-session heartbeat lock across cooperating processes, so a metadata save cannot discard a concurrent append. Await every write before reporting success.
+
+`JsonlSessionStore` limits IDs to 256 bytes, each file to 64 MiB and inventory to 10,000 files. It creates a private `0700` directory without traversing symbolic-link components, opens only stable UTF-8 regular files with one link, checks inode/device/size/timestamps around reads, and forces files to `0600`. Inventory uses the shared bounded stable-directory handle/listing and deterministic O(n log n) ordering.
+
+CLI and RPC choose storage in this order: an explicit `--session <path>` parent, `--session-dir`, `AI_HARNESS_SESSIONS_DIR`, merged agent setting `sessionDir`, then `~/.ai-harness/sessions`. Project `sessionDir` participates only after project trust resolves; no project settings body is read before trust. `--no-session` bypasses the store regardless of the resolved directory.
 
 ### Effective context and compaction
 
 1. Resolve manual or inherited automatic policy.
 2. Estimate the effective entries and select a safe compaction target.
 3. Ask the configured provider for a summary under the run AbortSignal.
-4. Append a `compaction` entry only after successful completion.
+4. Append a `compaction` entry only after successful completion, including its parent and summary-call provider/model/usage when available.
 5. Recompute effective context and emit metrics/sequenced events.
 
-Cancellation must not apply a partial summary. Compaction entries remain in the journal while replaced messages disappear only from effective model context.
+Cancellation must not apply a partial summary. Compaction entries remain in the journal while replaced messages disappear only from effective model context. CLI and RPC initialize Core policy from agent settings `compaction.enabled`, `reserveTokens`, `keepRecentTokens`, and exact `modelOverrides["provider/model"]`; the policy is resolved for the startup model and currently requires restart after settings or model changes. `branchSummary` settings are validated but branch-summary generation is not yet wired to them.
 
 ### Fork versus clone
 
 | Operation | Result |
 |---|---|
-| Fork | Copies through a selected message and keeps `parentId` plus branch lineage. |
-| Clone | Creates an independent root, clears branch lineage, and records `metadata.clonedFromSessionId`. |
+| RPC in-place fork | Moves `activeLeafId` to immediately before a selected active-path user entry; the next append creates a sibling while abandoned descendants remain in the same durable journal. |
+| Startup/copy fork | Creates a related session from a selected durable path for flows that require a separate file. |
+| Clone | Creates an independent root, remaps active message/command IDs and internal parents, clears branch lineage, and records `metadata.clonedFromSessionId`. |
+
+Web can fork or clone an explicitly targeted persisted message while its source agent continues; the copy uses a serialized snapshot and does not move or stop the source. Core `forkSession`/`cloneSession` accept stable message IDs alongside legacy numeric positions and resolve IDs against that same serialized snapshot, so a concurrent compaction cannot silently change the selected message. A removed target fails without creating a copy; HTTP returns `409 MESSAGE_TARGET_CHANGED`. Full-source copies during a run require an explicit target; unwritten stream IDs and prefixes containing running commands are refused. `PATCH activeLeafId` remains locked until the source run is idle. Web history edits are staged locally: only Send creates a related session via `POST /api/sessions/:id/fork` with `{messageId, before: true}`. Core's `forkSessionAtEntry(..., {before: true})` copies ancestors but omits that user message, including the empty-prefix case. Cancel, navigation and reload cannot create or move a branch. No persisted schema changes are needed.
+
+Raw RPC entries/tree include all retained branches; normal messages, fork candidates, and effective context follow only the active parent chain. Branch summaries and compactions also advance that chain. The format is still v2, so labels and clone handling for every custom entry remain incomplete.
 
 ### Web windows
 
@@ -77,20 +89,23 @@ Lists return metadata rather than full histories. Session state starts with a bo
 
 ## Invariants
 
-- Redact provider secrets before disk or API serialization.
-- Round-trip rich blocks, tool metadata, usage/cost, workspace/agent metadata, settings, and branches.
+- Redact provider, tool, extension and shell content before disk or API serialization; stateful redactors join credentials split across chunks.
+- After credentials are discovered late, reload and atomically rewrite legacy JSONL so raw and encoded historical values do not survive on disk.
+- Round-trip rich blocks, tool metadata, normalized usage/cost, compaction usage, workspace/agent metadata, settings, and parent links.
 - Keep message IDs stable across JSONL, API windows, SSE replay, and Web reconciliation.
 - Use `SessionManager` for domain mutations; do not mutate its internal maps.
-- Treat IDs, imported JSON, cursors, and persisted legacy entries as untrusted input.
+- Treat IDs, imported JSON, cursors, and persisted legacy entries as untrusted input; validate finite non-negative usage fields and never follow a session-file symlink.
 
 ## Associated Tests
 
-- `packages/core/src/sessions/session-manager.test.ts` — JSONL, IDs, writes, branches, clones and context
+- `packages/core/src/sessions/session-manager.test.ts` — JSONL, IDs, 64 MiB/inventory/path bounds, stable reads, atomic rewrites, concurrent independent-store append/save locking, redaction, branches, clones and context
 - `packages/core/src/sessions/serialization.test.ts` — dates, rich data, redaction and legacy files
 - `packages/core/src/sessions/compaction.test.ts` — estimates, policy and compaction targets
 - `packages/server/src/api/session-pagination.test.ts` — bounded stable windows
 - `packages/server/src/web-server.test.ts` — session HTTP, persistence, import/export and cascade behavior
+- `packages/server/src/api/session-live-mutations.test.ts` — active-run prefix copies, source independence, busy branch-switch protection and invalid/running-command refusals
 - `packages/web/src/store/session-store.test.ts` and `e2e/sessions.spec.ts` — hydration and browser lifecycle
+- `tests/functional-parity/functional-parity.test.ts` — current tree projection, unversioned read/rewrite migration and malformed/future-line rejection through the public Core entry point
 
 ## Common Changes
 

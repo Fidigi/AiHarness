@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type {
@@ -7,28 +6,36 @@ import type {
   SkillCatalogEntry,
   SkillCatalogScope,
   SkillDiagnostic,
+  SkillDefinition,
+  ResourceProvenance,
+  ResourceEnableChange,
+  ResourceEnableOutcome,
+  SkillEnableBatchResult,
 } from '@ai-harness/core';
 import type { ConfigurationStore } from '../config/config-store.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import type { RuntimeServices } from './services.js';
-import type { ProjectTrustManager, WorkspaceManager } from '@ai-harness/core';
+import {
+  ResourceManager,
+  disposeStableFilePublicationReceipt,
+  type StableFilePublicationResult,
+  parseResourceMarkdown,
+  type ProjectTrustManager,
+  type WorkspaceManager,
+} from '@ai-harness/core';
 
-const MAX_SKILL_BYTES = 256 * 1024;
+import { mergeResourceChanges } from './resource-batches.js';
+import { readSkillMarkdown, skillInvocationMarkdown, withSkillMutation, writeSkillMarkdown } from './skill-markdown.js';
+
 const MAX_SKILLS = 500;
-const MAX_SCAN_ENTRIES = 5_000;
 const MAX_PATH_ROOTS = 32;
-const MAX_DEPTH = 4;
-
-interface SkillRoot {
-  directory: string;
-  scope: SkillCatalogScope;
-  source: string;
-  displayRoot: string;
-  trusted: boolean;
-}
+const MAX_CACHED_WORKSPACES = 16;
+const MAX_CACHE_BYTES = 128 * 1024 * 1024;
+const MAX_CONCURRENT_REFRESHES = 32;
 
 export interface PackageSkillRoot {
   directory: string;
+  scope?: 'global' | 'project';
   source: string;
   displayRoot: string;
   trusted: boolean;
@@ -36,6 +43,8 @@ export interface PackageSkillRoot {
 
 interface SkillRecord extends Omit<SkillCatalogEntry, 'modelInvocable'> {
   instructions: string;
+  absolutePath: string;
+  provenance: ResourceProvenance;
 }
 
 interface ModelInvocableSkill {
@@ -56,80 +65,6 @@ interface CachedSkills {
   projectTrusted: boolean;
 }
 
-interface SkillDocument {
-  attributes: Record<string, string>;
-  body: string;
-  frontmatter: boolean;
-}
-
-function parseDocument(source: string): SkillDocument {
-  const normalized = source.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
-  if (!normalized.startsWith('---\n')) return { attributes: {}, body: normalized.trim(), frontmatter: false };
-  const end = normalized.indexOf('\n---\n', 4);
-  if (end < 0) return { attributes: {}, body: normalized.trim(), frontmatter: false };
-  const attributes: Record<string, string> = {};
-  for (const line of normalized.slice(4, end).split('\n')) {
-    const match = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
-    if (!match) continue;
-    attributes[match[1].toLowerCase()] = match[2].trim().replace(/^(['"])(.*)\1$/, '$2');
-  }
-  return { attributes, body: normalized.slice(end + 5).trim(), frontmatter: true };
-}
-
-function normalizeName(value: string): string {
-  const name = value.trim().toLowerCase().replace(/\s+/g, '-');
-  if (!/^[a-z][a-z0-9:_-]*$/.test(name) || name.length > 120) {
-    throw new Error('Invalid skill name');
-  }
-  return name;
-}
-
-function bounded(value: string | undefined, fallback: string, max: number): string {
-  const normalized = value?.trim() || fallback;
-  return normalized.slice(0, max);
-}
-
-async function directoryExists(directory: string): Promise<boolean> {
-  try {
-    return (await lstat(directory)).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-async function findSkillFiles(
-  root: string,
-  budget: { files: number; entries: number },
-): Promise<{ files: string[]; errors: number }> {
-  if (budget.files <= 0 || budget.entries <= 0 || !await directoryExists(root)) return { files: [], errors: 0 };
-  const files: string[] = [];
-  let errors = 0;
-
-  async function walk(directory: string, depth: number): Promise<void> {
-    if (budget.files <= 0 || budget.entries <= 0) return;
-    let entries;
-    try {
-      entries = await readdir(directory, { withFileTypes: true });
-      entries.sort((left, right) => left.name.localeCompare(right.name));
-    } catch {
-      errors++;
-      return;
-    }
-    for (const item of entries) {
-      if (budget.files <= 0 || budget.entries <= 0) break;
-      budget.entries--;
-      const itemPath = path.join(directory, item.name);
-      if (item.isFile() && item.name.toLowerCase() === 'skill.md') {
-        files.push(itemPath);
-        budget.files--;
-      } else if (item.isDirectory() && depth < MAX_DEPTH) await walk(itemPath, depth + 1);
-    }
-  }
-
-  await walk(root, 0);
-  return { files: files.sort(), errors };
-}
-
 function environmentPaths(name: string): string[] {
   return (process.env[name] ?? '')
     .split(path.delimiter)
@@ -139,35 +74,69 @@ function environmentPaths(name: string): string[] {
     .map(value => path.resolve(value));
 }
 
-function displayFile(filePath: string, root: SkillRoot): string {
+function inside(root: string, candidate: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function catalogueScope(provenance: ResourceProvenance): SkillCatalogScope {
+  if (provenance.scope === 'project' && provenance.source !== 'package') return 'project';
+  if (provenance.source === 'package') return 'package';
+  if (provenance.source === 'settings' || provenance.source === 'cli') return 'path';
+  return provenance.scope === 'project' ? 'project' : 'global';
+}
+
+function matchingRoot(filePath: string, roots: readonly PackageSkillRoot[]): PackageSkillRoot | undefined {
+  return roots.filter(root => inside(root.directory, filePath))
+    .sort((left, right) => right.directory.length - left.directory.length)[0];
+}
+
+function displayPath(filePath: string, root: { directory: string; displayRoot: string }): string {
   const relative = path.relative(root.directory, filePath).split(path.sep).join('/');
   return root.displayRoot ? `${root.displayRoot.replace(/\/$/, '')}/${relative}` : relative;
 }
 
-async function parseSkill(filePath: string, root: SkillRoot): Promise<SkillRecord> {
-  const file = await lstat(filePath);
-  if (!file.isFile() || file.size > MAX_SKILL_BYTES) throw new Error('Skill file is too large');
-  const document = parseDocument(await readFile(filePath, 'utf8'));
-  if (!document.frontmatter) throw new Error('Agent Skills frontmatter is required');
-  if (!document.body) throw new Error('Skill body is empty');
-  if (!document.attributes.name) throw new Error('Skill frontmatter requires name');
-  if (!document.attributes.description) throw new Error('Skill frontmatter requires description');
-  const fallbackName = path.basename(path.dirname(filePath));
-  const name = normalizeName(document.attributes.name);
-  if (name !== normalizeName(fallbackName)) throw new Error('Skill name must match its directory name');
-  const fingerprint = createHash('sha256').update(filePath).digest('hex').slice(0, 12);
-  const disabledByDefault = document.attributes['disable-model-invocation']?.toLowerCase() === 'true';
+function skillRecord(
+  skill: SkillDefinition,
+  context: { cwd: string },
+  roots: readonly PackageSkillRoot[],
+  dataDir: string,
+): SkillRecord {
+  const scope = catalogueScope(skill.provenance);
+  const packageRoot = matchingRoot(skill.filePath, roots);
+  const configuredRoot = environmentPaths('AI_HARNESS_SKILL_PATHS')
+    .filter(root => inside(root, skill.filePath)).sort((left, right) => right.length - left.length)[0];
+  const projectRoot = inside(context.cwd, skill.filePath)
+    ? { directory: context.cwd, displayRoot: '' }
+    : undefined;
+  const agentRoot = inside(path.join(dataDir, 'skills'), skill.filePath)
+    ? { directory: path.join(dataDir, 'skills'), displayRoot: '~/.ai-harness/skills' }
+    : undefined;
+  const specificationRoot = inside(path.join(os.homedir(), '.agents', 'skills'), skill.filePath)
+    ? { directory: path.join(os.homedir(), '.agents', 'skills'), displayRoot: '~/.agents/skills' }
+    : undefined;
+  const root = packageRoot ?? (configuredRoot
+    ? { directory: configuredRoot, displayRoot: configuredRoot }
+    : projectRoot ?? agentRoot ?? specificationRoot);
+  const source = packageRoot?.source
+    ?? (configuredRoot ? `configured path ${environmentPaths('AI_HARNESS_SKILL_PATHS').indexOf(configuredRoot) + 1}`
+      : scope === 'project' ? '.agents/skills'
+        : agentRoot ? '~/.ai-harness/skills'
+          : specificationRoot ? '~/.agents/skills' : skill.provenance.selector);
+  const fingerprint = createHash('sha256').update(skill.filePath).digest('hex').slice(0, 12);
   return {
-    key: `${root.scope}:${name}:${fingerprint}`,
-    name,
-    description: bounded(document.attributes.description, name, 500),
-    ...(document.attributes.version ? { version: bounded(document.attributes.version, '', 100) } : {}),
-    scope: root.scope,
-    source: root.source,
-    filePath: displayFile(filePath, root),
-    trusted: root.trusted,
-    defaultModelInvocable: !disabledByDefault,
-    instructions: document.body,
+    key: `${scope}:${skill.name}:${fingerprint}`,
+    name: skill.name,
+    description: (skill.description || skill.name).slice(0, 500),
+    ...(skill.version ? { version: skill.version.slice(0, 100) } : {}),
+    scope,
+    source,
+    filePath: root ? displayPath(skill.filePath, root) : skill.filePath,
+    trusted: skill.provenance.trusted,
+    defaultModelInvocable: !skill.disableModelInvocation,
+    instructions: skill.instructions,
+    absolutePath: skill.filePath,
+    provenance: structuredClone(skill.provenance),
   };
 }
 
@@ -178,6 +147,9 @@ function scopeOrder(scope: SkillCatalogScope): number {
 /** Discovers Agent Skills documents without exposing their instructions through the catalogue API. */
 export class SkillCatalogService {
   private readonly cache = new Map<string, CachedSkills>();
+  private readonly cacheBytes = new Map<string, number>();
+  private totalCacheBytes = 0;
+  private cacheGeneration = 0;
   private readonly refreshes = new Map<string, Promise<CachedSkills>>();
 
   constructor(
@@ -195,7 +167,7 @@ export class SkillCatalogService {
     configurationScope?: 'global' | 'project';
   } = {}): Promise<SkillCatalog> {
     const context = await this.context(input.cwd, input.projectId);
-    let cached = this.cache.get(context.cwd);
+    let cached = this.cached(context.cwd);
     if (input.refresh || !cached || cached.projectTrusted !== context.projectTrusted) cached = await this.refresh(context);
     return this.withEnabledState(cached, input.configurationScope);
   }
@@ -206,7 +178,7 @@ export class SkillCatalogService {
     allowedSkills?: string[];
   } = {}): Promise<ModelInvocableSkill[]> {
     const context = await this.context(input.cwd, input.projectId);
-    const existing = this.cache.get(context.cwd);
+    const existing = this.cached(context.cwd);
     const cached = !existing || existing.projectTrusted !== context.projectTrusted
       ? await this.refresh(context)
       : existing;
@@ -226,10 +198,109 @@ export class SkillCatalogService {
       }));
   }
 
+  async setEnabledBatch(input: {
+    cwd?: string; projectId?: string; changes: ResourceEnableChange[];
+  }): Promise<SkillEnableBatchResult> {
+    const context = await this.context(input.cwd, input.projectId);
+    const cached = this.cached(context.cwd) ?? await this.refresh(context);
+    const records = new Map(cached.records.map(record => [record.key, record]));
+    const outcomes: ResourceEnableOutcome[] = [];
+    const scope = input.projectId ? 'project' : 'global';
+    // Each entry is independently authorized and committed; a bad file never
+    // discards earlier successes. Selectors resolve only through owned discovery.
+    for (const change of input.changes) {
+      const record = records.get(change.key);
+      if (!record) {
+        outcomes.push({ ...change, status: 'failed', code: 'UNKNOWN_RESOURCE' });
+        continue;
+      }
+      try {
+        const outcome = await withSkillMutation(record.absolutePath, async () => {
+          const authorize = async (): Promise<void> => {
+            if (!record.trusted || ((record.provenance.scope === 'project' || inside(context.cwd, record.absolutePath))
+              && !await this.trustManager.isTrusted(context.cwd))) {
+              throw Object.assign(new Error('Project trust required.'), { code: 'PROJECT_TRUST_REQUIRED' });
+            }
+          };
+          await authorize();
+          const before = await readSkillMarkdown(record.absolutePath);
+          const after = skillInvocationMarkdown(before, record.name, change.enabled);
+          let currentEnabled = parseResourceMarkdown(before).attributes['disable-model-invocation'] !== 'true';
+          await this.configurationStore.update(scope, (target, inherited) => {
+            const configured = target.enabledSkills ?? inherited.enabledSkills;
+            if (configured !== undefined) currentEnabled = configured.includes(record.key) || configured.includes(record.name);
+            return target;
+          }, input.projectId ? context.projectId : undefined);
+          if (currentEnabled === change.enabled) return { ...change, status: 'unchanged' as const };
+          let publication: StableFilePublicationResult | undefined;
+          const settingsOutcomes: ResourceEnableOutcome[] = [];
+          try {
+            publication = await writeSkillMarkdown(record.absolutePath, before, after, authorize);
+            if (publication && 'error' in publication) throw publication.error;
+            await this.configurationStore.update(scope, (target, inherited) => {
+              if (target.enabledSkills === undefined && inherited.enabledSkills === undefined) return target;
+              return mergeResourceChanges(target, inherited, 'enabledSkills', cached.records.map(skill => ({
+                key: skill.key, alias: skill.name, defaultEnabled: skill.defaultModelInvocable,
+              })), [change], settingsOutcomes);
+            }, input.projectId ? context.projectId : undefined);
+          } catch (error) {
+            // The settings writer also has a void ABI: rejection may follow
+            // publication. Reload canonical settings even if Markdown rollback succeeds.
+            // A post-publication failure is not evidence of an unchanged file.
+            // Restore only the exact owned publication, never an ABA replacement.
+            if (publication && publication.publication !== 'not-published') {
+              let rollback: StableFilePublicationResult | undefined;
+              try {
+                if (!publication.receipt) throw new Error('Owned publication unavailable.');
+                rollback = await writeSkillMarkdown(record.absolutePath, after, before, authorize, publication.receipt);
+                if (rollback && 'error' in rollback) throw rollback.error;
+              } catch {
+                throw Object.assign(new Error('Skill rollback failed; reconcile canonical state.'), {
+                  code: 'SKILL_ROLLBACK_FAILED',
+                });
+              } finally {
+                if (rollback?.receipt) await disposeStableFilePublicationReceipt(rollback.receipt);
+              }
+            }
+            throw error;
+          } finally {
+            if (publication?.receipt) await disposeStableFilePublicationReceipt(publication.receipt);
+          }
+          return { ...change, status: before !== after || settingsOutcomes.some(item => item.status === 'changed')
+            ? 'changed' as const : 'unchanged' as const };
+        });
+        outcomes.push(outcome);
+      } catch (error) {
+        const code = error !== null && typeof error === 'object'
+          ? Object.getOwnPropertyDescriptor(error, 'code')?.value : undefined;
+        outcomes.push({ ...change, status: 'failed', code: typeof code === 'string' && /^[A-Z0-9_]{1,64}$/.test(code)
+          ? code : 'SKILL_WRITE_FAILED' });
+      }
+    }
+    // Global/package files may also be cached in other workspaces.
+    this.invalidate();
+    // A writer rejection can follow publication, or the initial read can fail.
+    // Always reconcile before returning a catalogue; never bless stale memory.
+    try { await this.configurationStore.load(); }
+    catch {
+      throw Object.assign(new Error('Skill batch state is uncertain; canonical reconciliation required.'), {
+        status: 409, code: 'SKILL_BATCH_UNCERTAIN', uncertain: true, outcomes,
+      });
+    }
+    const catalog = await this.getCatalog({ cwd: context.cwd, projectId: input.projectId,
+      configurationScope: scope, refresh: true });
+    return { outcomes, catalog };
+  }
+
   /** Invalidate discovery after an atomic plugin-resource generation change. */
   invalidate(cwd?: string): void {
-    if (cwd) this.cache.delete(cwd);
-    else this.cache.clear();
+    this.cacheGeneration++;
+    if (cwd) this.deleteCached(cwd);
+    else {
+      this.cache.clear();
+      this.cacheBytes.clear();
+      this.totalCacheBytes = 0;
+    }
   }
 
   /** Resolve duplicate names using project > configured path > package > global precedence. */
@@ -237,6 +308,7 @@ export class SkillCatalogService {
     name: string,
     input: { cwd?: string; projectId?: string; allowedSkills?: string[] } = {},
   ): Promise<ModelInvocableSkill | undefined> {
+    if (typeof name !== 'string' || Buffer.byteLength(name) > 128) return undefined;
     const requested = name.trim().toLowerCase();
     return [...await this.getModelInvocableSkills(input)].reverse()
       .find(candidate => candidate.name === requested);
@@ -263,84 +335,97 @@ export class SkillCatalogService {
   }
 
   private async refresh(context: { cwd: string; projectId: string; projectTrusted: boolean }): Promise<CachedSkills> {
-    const active = this.refreshes.get(context.cwd);
+    const refreshKey = `${this.cacheGeneration}\0${context.cwd}\0${context.projectTrusted ? 'trusted' : 'untrusted'}`;
+    const active = this.refreshes.get(refreshKey);
     if (active) return active;
-    const refresh = this.scan(context).finally(() => this.refreshes.delete(context.cwd));
-    this.refreshes.set(context.cwd, refresh);
+    if (this.refreshes.size >= MAX_CONCURRENT_REFRESHES) {
+      throw Object.assign(new Error('Too many skill catalog refreshes are active.'), { status: 429 });
+    }
+    const generation = this.cacheGeneration;
+    const refresh = this.scan(context).finally(() => this.refreshes.delete(refreshKey));
+    this.refreshes.set(refreshKey, refresh);
     const cached = await refresh;
-    this.cache.set(context.cwd, cached);
+    if (generation === this.cacheGeneration) this.setCached(context.cwd, cached);
     return cached;
   }
 
+  private cached(cwd: string): CachedSkills | undefined {
+    const value = this.cache.get(cwd);
+    if (!value) return undefined;
+    this.cache.delete(cwd);
+    this.cache.set(cwd, value);
+    return value;
+  }
+
+  private deleteCached(cwd: string): void {
+    if (!this.cache.delete(cwd)) return;
+    this.totalCacheBytes -= this.cacheBytes.get(cwd) ?? 0;
+    this.cacheBytes.delete(cwd);
+  }
+
+  private setCached(cwd: string, cached: CachedSkills): void {
+    this.deleteCached(cwd);
+    const bytes = cached.records.reduce((total, record) => total
+      + Buffer.byteLength(record.instructions)
+      + Buffer.byteLength(record.name)
+      + Buffer.byteLength(record.description)
+      + Buffer.byteLength(record.filePath)
+      + Buffer.byteLength(record.source), 0)
+      + cached.diagnostics.reduce((total, diagnostic) => total + Buffer.byteLength(diagnostic.message), 0);
+    if (bytes > MAX_CACHE_BYTES) return;
+    while (this.cache.size >= MAX_CACHED_WORKSPACES || this.totalCacheBytes + bytes > MAX_CACHE_BYTES) {
+      const oldest = this.cache.keys().next().value as string | undefined;
+      if (!oldest) break;
+      this.deleteCached(oldest);
+    }
+    this.cache.set(cwd, cached);
+    this.cacheBytes.set(cwd, bytes);
+    this.totalCacheBytes += bytes;
+  }
+
   private async scan(context: { cwd: string; projectId: string; projectTrusted: boolean }): Promise<CachedSkills> {
-    const home = os.homedir();
     let packageRoots: PackageSkillRoot[] = [];
     try {
       packageRoots = (await this.packageRoots?.({ cwd: context.cwd, projectId: context.projectId }) ?? [])
+        .filter(root => root.trusted)
         .slice(0, MAX_PATH_ROOTS * 4);
     } catch {
       // Plugin catalogue diagnostics own package failures; skill discovery remains available.
     }
-    const roots: SkillRoot[] = [
-      {
-        directory: path.join(home, '.agents', 'skills'), scope: 'global', source: '~/.agents/skills',
-        displayRoot: '~/.agents/skills', trusted: true,
-      },
-      {
-        directory: path.join(this.dataDir, 'skills'), scope: 'global', source: '~/.ai-harness/skills',
-        displayRoot: '~/.ai-harness/skills', trusted: true,
-      },
-      {
-        directory: path.join(this.dataDir, 'packages'), scope: 'package', source: 'legacy installed packages',
-        displayRoot: 'packages', trusted: true,
-      },
-      ...packageRoots.map((root): SkillRoot => ({ ...root, scope: 'package' })),
-      ...environmentPaths('AI_HARNESS_SKILL_PATHS').map((directory, index): SkillRoot => ({
-        directory, scope: 'path', source: `configured path ${index + 1}`, displayRoot: directory, trusted: true,
-      })),
-      {
-        directory: path.join(context.cwd, '.agents', 'skills'), scope: 'project', source: '.agents/skills',
-        displayRoot: '.agents/skills', trusted: context.projectTrusted,
-      },
-      {
-        directory: path.join(context.cwd, '.ai-harness', 'skills'), scope: 'project', source: '.ai-harness/skills',
-        displayRoot: '.ai-harness/skills', trusted: context.projectTrusted,
-      },
-    ];
-
-    const records: SkillRecord[] = [];
-    const budget = { files: MAX_SKILLS, entries: MAX_SCAN_ENTRIES };
-    let errorCount = 0;
-    const diagnostics: SkillDiagnostic[] = [];
-    for (const root of roots) {
-      if (budget.files <= 0 || budget.entries <= 0) break;
-      const found = await findSkillFiles(root.directory, budget);
-      errorCount += found.errors;
-      if (found.errors) diagnostics.push({
-        code: 'SKILL_SCAN_FAILED',
-        message: `${found.errors} director${found.errors === 1 ? 'y' : 'ies'} could not be scanned.`,
-        path: root.displayRoot,
-      });
-      for (const filePath of found.files) {
-        if (records.length >= MAX_SKILLS) break;
-        try {
-          records.push(await parseSkill(filePath, root));
-        } catch (error) {
-          errorCount++;
-          if (diagnostics.length < 100) diagnostics.push({
-            code: 'INVALID_SKILL_DOCUMENT',
-            message: error instanceof Error ? error.message : String(error),
-            path: displayFile(filePath, root),
-          });
-        }
-      }
-    }
-    records.sort((a, b) => scopeOrder(a.scope) - scopeOrder(b.scope)
-      || a.name.localeCompare(b.name)
-      || a.filePath.localeCompare(b.filePath));
+    const legacyPackageRoot: PackageSkillRoot = {
+      directory: path.join(this.dataDir, 'packages'), scope: 'global', source: 'legacy installed packages',
+      displayRoot: 'packages', trusted: true,
+    };
+    const allPackageRoots = [legacyPackageRoot, ...packageRoots];
+    const manager = new ResourceManager({
+      cwd: context.cwd,
+      homeDir: os.homedir(),
+      agentDir: this.dataDir,
+      agentDirTrusted: true,
+      projectTrusted: context.projectTrusted,
+      globalSkillPaths: environmentPaths('AI_HARNESS_SKILL_PATHS'),
+      globalPackageSkillPaths: allPackageRoots
+        .filter(root => root.scope !== 'project')
+        .map(root => root.directory),
+      projectPackageSkillPaths: context.projectTrusted
+        ? allPackageRoots.filter(root => root.scope === 'project').map(root => root.directory)
+        : [],
+      disablePrompts: true,
+      strictSkills: true,
+    });
+    const loaded = await manager.loadAll();
+    const records = manager.listSkillCandidates().slice(0, MAX_SKILLS)
+      .map(skill => skillRecord(skill, context, allPackageRoots, this.dataDir))
+      .sort((a, b) => scopeOrder(a.scope) - scopeOrder(b.scope)
+        || a.name.localeCompare(b.name)
+        || a.filePath.localeCompare(b.filePath));
+    const diagnostics: SkillDiagnostic[] = loaded.errors.slice(0, 100).map(error => ({
+      code: 'INVALID_SKILL_DOCUMENT',
+      message: error.message,
+    }));
     return {
       records,
-      errorCount,
+      errorCount: loaded.errors.length,
       diagnostics,
       updatedAt: new Date().toISOString(),
       ...context,
@@ -362,7 +447,7 @@ export class SkillCatalogService {
       projectTrusted: cached.projectTrusted,
       enabledScope: provenance?.scope ?? 'default',
       enabledSource: provenance?.source ?? 'skill metadata',
-      skills: cached.records.map(({ instructions: _instructions, ...skill }) => ({
+      skills: cached.records.map(({ instructions: _instructions, absolutePath: _absolutePath, ...skill }) => ({
         ...skill,
         modelInvocable: skill.trusted && (enabled === undefined
           ? skill.defaultModelInvocable

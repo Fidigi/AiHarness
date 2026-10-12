@@ -1,5 +1,47 @@
-import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { expect, test } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
+
+for (const scenario of [
+  { name: 'desktop-dark', width: 1440, theme: 'dark' },
+  { name: 'desktop-light', width: 1440, theme: 'light' },
+  { name: 'mobile-dark', width: 390, theme: 'dark' },
+  { name: 'mobile-light', width: 390, theme: 'light' },
+] as const) {
+  test(`${scenario.name} stages history edits without side effects and restores composer focus on cancel`, async ({ page }) => {
+    await page.setViewportSize({ width: scenario.width, height: 1000 });
+    await page.addInitScript(theme => localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme })), scenario.theme);
+    const api = await installMockApi(page, { holdAgentRun: true, sessions: [mockSession('history-edit', 'Historical edit', [
+      { role: 'user', content: 'Original saved question' }, { role: 'assistant', content: 'Original saved answer' },
+    ])] });
+    await page.goto('/chat/history-edit');
+    const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
+    await composer.fill('My unsent draft');
+    await page.getByRole('button', { name: 'Edit from here', exact: true }).click();
+    await expect(composer).toHaveValue('Original saved question');
+    await expect(composer).toBeFocused();
+    await expect(page.locator('.staged-history-edit')).toBeVisible();
+    expect(api.requests.some(request => request.path.endsWith('/fork'))).toBe(false);
+    const axe = await new AxeBuilder({ page }).include('.staged-history-edit')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    expect(axe.violations).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
+    await page.evaluate(() => document.fonts.ready);
+    await expect(page.locator('.input-container')).toHaveScreenshot(`history-edit-${scenario.name}.png`, {
+      animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
+    });
+    await page.getByRole('button', { name: 'Cancel history edit' }).click();
+    await expect(composer).toHaveValue('My unsent draft');
+    await expect(composer).toBeFocused();
+    expect(api.sessions).toHaveLength(1);
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Stop model', exact: true })).toBeVisible();
+    await page.getByLabel('Thinking level').selectOption('high');
+    await expect.poll(() => api.sessions[0]?.thinking).toBe('high');
+    expect(api.requests.filter(request => request.method === 'POST' && request.path === '/api/agent/runs')).toHaveLength(1);
+    expect(api.requests.some(request => /\/(stop|queue)$/.test(request.path))).toBe(false);
+  });
+}
 
 test.describe('Sessions', () => {
   test('hydrate la liste et ouvre une conversation existante', async ({ page }) => {
@@ -326,6 +368,27 @@ test.describe('Sessions', () => {
     await expect(info.getByRole('link', { name: 'Download full history' })).toHaveAttribute('href', '/api/sessions/diagnostics/export?format=json');
   });
 
+  test('copies a persisted user entry while its source run continues', async ({ page }) => {
+    const api = await installMockApi(page, { sessions: [mockSession('running-source', 'Running source', [
+      { role: 'user', content: 'Persisted question' }, { role: 'assistant', content: 'Persisted answer' },
+    ])], holdAgentRun: true });
+    await page.goto('/chat/running-source');
+    await page.getByPlaceholder(/Type your message/).fill('Continue in the source');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Stop model', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Edit from here' })).toHaveCount(0);
+    await page.locator('.message.user').first().getByRole('button', { name: 'New chat from here' }).click();
+    await expect(page).toHaveURL(/\/chat\/e2e-session-1/);
+    await expect(page.locator('.message.user')).toHaveCount(1);
+    await expect(page.locator('.message.user')).toContainText('Persisted question');
+    expect(api.requests.some(request => /\/stop$/.test(request.path))).toBe(false);
+    expect(api.requests.find(request => request.path === '/api/sessions/running-source/clone')?.body)
+      .toMatchObject({ messageId: 'running-source-message-1' });
+    await page.goto('/chat/running-source');
+    await expect(page.getByRole('button', { name: 'Stop model', exact: true })).toBeVisible();
+    await expect(page.locator('.message.user').last()).toContainText('Continue in the source');
+  });
+
   test('crée une branche et une copie indépendante depuis un message utilisateur', async ({ page }) => {
     const api = await installMockApi(page, {
       sessions: [mockSession('source', 'Conversation source', [
@@ -336,10 +399,25 @@ test.describe('Sessions', () => {
     await page.goto('/chat/source');
     const userMessage = page.locator('.message.user');
     await userMessage.getByRole('button', { name: 'Edit from here' }).click();
-    await expect(page).toHaveURL(/\/chat\/e2e-session-1/);
+    await expect(page).toHaveURL(/\/chat\/source/);
     await expect(page.getByPlaceholder(/Type your message/)).toHaveValue('Point de branchement');
+    expect(api.requests.some(request => request.path === '/api/sessions/source/fork')).toBe(false);
+    await page.getByRole('button', { name: 'Cancel history edit' }).click();
+    await expect(page.getByPlaceholder(/Type your message/)).toHaveValue('');
+    await userMessage.getByRole('button', { name: 'Edit from here' }).click();
+    await page.reload();
+    expect(api.requests.some(request => request.path === '/api/sessions/source/fork')).toBe(false);
+    await expect(page.getByRole('button', { name: 'Cancel history edit' })).toHaveCount(0);
+    await userMessage.getByRole('button', { name: 'Edit from here' }).click();
+    await page.getByPlaceholder(/Type your message/).fill('Edited question');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page).toHaveURL(/\/chat\/e2e-session-1/);
+    await expect(page.locator('.message.user')).toHaveCount(1);
+    await expect(page.locator('.message.user')).toContainText('Edited question');
+    expect(api.sessions.find(session => session.id === 'source')?.messages.map(message => message.content))
+      .toEqual(['Point de branchement', 'Réponse']);
     expect(api.requests.find(request => request.method === 'POST' && request.path === '/api/sessions/source/fork')?.body)
-      .toMatchObject({ messageId: 'source-message-1' });
+      .toMatchObject({ messageId: 'source-message-1', before: true });
 
     await page.locator('.session-main').filter({
       has: page.locator('.session-title').filter({ hasText: /^Conversation source$/ }),

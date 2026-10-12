@@ -191,7 +191,7 @@ describe('SessionStore', () => {
       const useStore = create((set) => ({
         sessions: [] as Array<{ id: string }>,
         activeSessionId: null as string | null,
-        createSession: (title?: string) => set((state) => {
+        createSession: (_title?: string) => set((state) => {
           const id = generateId();
           return { 
             sessions: [{ id }, ...state.sessions],
@@ -215,7 +215,7 @@ describe('SessionStore', () => {
       const useStore = create((set) => ({
         sessions: [] as Array<{ id: string }>,
         activeSessionId: null as string | null,
-        createSession: (title?: string) => set((state) => {
+        createSession: (_title?: string) => set((state) => {
           const id = generateId();
           return { 
             sessions: [{ id }, ...state.sessions],
@@ -346,7 +346,7 @@ describe('ProviderStore', () => {
         custom: { type: 'custom' },
       };
       
-      const useStore = create((set) => ({
+      const useStore = create((_set) => ({
         providers: { active: 'mock' as ProviderType, available: providers },
       }));
 

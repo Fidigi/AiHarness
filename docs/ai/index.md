@@ -8,14 +8,18 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 
 | Domain | File | Context Load |
 |---|---|---|
-| Project overview | [`project-map.md`](./project-map.md) | ~400 lines — load first for global navigation |
-| AI Providers | [`topics/providers.md`](./topics/providers.md) | ~100 lines |
-| Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~115 lines |
-| Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~120 lines |
-| CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~110 lines |
-| Server API | [`topics/server-api.md`](./topics/server-api.md) | ~110 lines |
-| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~115 lines |
-| Security & Trust | [`topics/security.md`](./topics/security.md) | ~115 lines |
+| Project overview | [`project-map.md`](./project-map.md) | ~560 lines — load first for global navigation |
+| AI Providers | [`topics/providers.md`](./topics/providers.md) | ~150 lines |
+| Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~125 lines |
+| TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~35 lines |
+| Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~160 lines |
+| CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~320 lines |
+| QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
+| Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~210 lines |
+| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~190 lines |
+| Static Demonstration | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
+| Linked-Directory Consent | [topics/linked-directories.md](./topics/linked-directories.md) | ~66 lines |
+| Security & Trust | [`topics/security.md`](./topics/security.md) | ~200 lines |
 | Child Agents | [`topics/child-agents.md`](./topics/child-agents.md) | ~115 lines |
 
 ### Reference Documentation
@@ -53,22 +57,41 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 **A CLI command** → Load only `cli-reference.md` + `project-map.md` §3
 ```
 → packages/cli/src/index.ts (composition root)
-→ packages/cli/src/commands/handler.ts (command router)
+→ packages/cli/src/cli/{provider-auth-command,export-command}.ts (standalone operations)
+→ packages/cli/src/commands/handler.ts (conversation command router)
 → packages/cli/src/tui/*.ts (UI implementations)
+→ tests/functional-parity/ (public contract probes and reviewed goldens)
 ```
 
-**A server API endpoint** → Load only `server-api.md` + `project-map.md` §§3–4
+**A server API endpoint or startup lifecycle** → Load only `server-api.md` + `project-map.md` §§3–4
 ```
 → packages/server/src/index.ts (Express app, middleware)
 → packages/server/src/api/{domain}-routes.ts
 → packages/web/src/services/api.ts (client counterpart)
 ```
 
-**The React/Web client** → Load only `web-app-architecture.md` + `project-map.md` §§3–4
+**The React/Web client, including router/store identity and optional-pane/form lifetimes** → Load only `web-app-architecture.md` + `project-map.md` §§3–4
 ```
 → packages/web/src/index.tsx, App.tsx
 → packages/web/src/store/*.ts
 → packages/web/src/components/{domain}.tsx
+```
+
+**The separate static demo or Pages artifact** → Load `static-demo.md` + the root/validation rows in `project-map.md`; use `bash demo/run-docker.sh`, not production agent APIs.
+
+**MCP hosting, OAuth, or discovery** → Load `security.md` + the MCP flow in `project-map.md` §4; add `server-api.md` or `cli-reference.md` for the adapter
+```
+→ packages/core/src/mcp/{session-host,oauth,oauth-provider-factory,oauth-flow}.ts
+→ packages/core/src/tools/tool-search.ts
+→ packages/server/src/api/mcp-routes.ts
+→ packages/web/src/components/McpSettings.tsx
+```
+
+**Code-mode sandbox or nested calls** → Load `codemode.md` + the code-mode flow in `project-map.md` §4
+```
+→ packages/core/src/tools/{codemode,codemode-worker,tool-search}.ts
+→ packages/server/src/api/tool-routes.ts
+→ e2e/codemode.spec.ts
 ```
 
 **Child agents** → Load only `child-agents.md` + `project-map.md` §4
@@ -77,6 +100,8 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → packages/server/src/api/subagent-routes.ts
 → packages/web/src/components/SubagentPanel.tsx, SubagentSettings.tsx
 ```
+
+**Linked-directory browsing/consent** → Load [linked-directories.md](./topics/linked-directories.md) plus the workspace/security rows in `project-map.md`; keep source trust independent and re-admit every target/descendant handle.
 
 **A security change** → Load only `security.md` + the security rows/flows in `project-map.md` §§3–6
 ```
@@ -112,6 +137,12 @@ These files do NOT belong to the agent documentation system:
 | Web architecture | Contributors | [FR](../contributors/fr/web-architecture.md) / [EN](../contributors/en/web-architecture.md) |
 | CLI extensions | Contributors | [FR](../contributors/fr/extensions-cli.md) / [EN](../contributors/en/extensions-cli.md) |
 | Web extensions | Contributors | [FR](../contributors/fr/extensions-web.md) / [EN](../contributors/en/extensions-web.md) |
-| Internationalization | Contributors | [FR](../contributors/fr/i18n.md) / [EN](../contributors/en/i18n.md) |
+| Public contracts and parity | Contributors | [FR](../contributors/fr/public-contract-policy.md) / [EN](../contributors/en/public-contract-policy.md) |
+| Resource group batches | Users / contributors | [FR user](../users/fr/resource-batches.md) / [EN user](../users/en/resource-batches.md); [FR contributor](../contributors/fr/resource-batches.md) / [EN contributor](../contributors/en/resource-batches.md) |
+| Session SDK | Contributors | [FR](../contributors/fr/session-sdk.md) / [EN](../contributors/en/session-sdk.md) |
+| Internationalization and lazy Settings copy | Contributors / users | [FR contributor](../contributors/fr/i18n.md) / [EN contributor](../contributors/en/i18n.md); [FR loading](../users/fr/settings-loading.md) / [EN loading](../users/en/settings-loading.md) |
+| Optional file-pane loading | Users | [FR](../users/fr/workspace-loading.md) / [EN](../users/en/workspace-loading.md) |
+| Standalone authentication/export | Users / operators | [FR](../users/fr/standalone-operations.md) / [EN](../users/en/standalone-operations.md) |
+| Mobile keyboard layout | Users | [FR](../users/fr/mobile-keyboard.md) / [EN](../users/en/mobile-keyboard.md); conservative detection and device limits |
 | User/contributor navigation | Humans | [`users/README.md`](../users/README.md) / [`contributors/README.md`](../contributors/README.md) |
 | Screenshot inventory | Humans | [`screenshots/README.md`](../screenshots/README.md) |

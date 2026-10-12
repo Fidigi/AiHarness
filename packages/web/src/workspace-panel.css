@@ -1,3 +1,7 @@
+.panel-linked-directories { margin: .45rem; padding: .4rem; border: 1px solid #52668f; border-radius: 5px; color: #d9e3f4; background: #223154; text-align: left; cursor: pointer; }
+.file-node > .file-link-reason { padding-left: .6rem; color: #ffd478; font-size: .72rem; white-space: normal; }
+html[data-theme="light"] .panel-linked-directories { color: #26344e; background: #f8f9fc; border-color: #9eabc1; }
+html[data-theme="light"] .file-node > .file-link-reason { color: #744d00; }
 .workspace-panel { position: relative; flex: 0 0 320px; min-width: 230px; max-width: min(1200px, 65vw); display: flex; flex-direction: column; border-left: 1px solid #0f3460; background: #131d37; }
 .workspace-panel.viewer-open { min-width: 360px; }
 .workspace-panel.viewer-expanded { position: fixed; z-index: 45; inset: 0; width: 100vw !important; max-width: none; }

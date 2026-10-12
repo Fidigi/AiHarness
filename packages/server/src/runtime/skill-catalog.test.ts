@@ -50,7 +50,7 @@ describe('SkillCatalogService', () => {
     const service = new SkillCatalogService(workspaces, trust, configuration, data);
 
     const untrusted = await service.getCatalog({ cwd: project });
-    expect(new Set(untrusted.skills.map(entry => entry.scope))).toEqual(new Set(['global', 'package', 'path', 'project']));
+    expect(new Set(untrusted.skills.map(entry => entry.scope))).toEqual(new Set(['global', 'package', 'path']));
     expect(untrusted.projectTrusted).toBe(false);
     expect(untrusted.skills.find(entry => entry.name === 'global-review')).toMatchObject({
       trusted: true, modelInvocable: true, filePath: '~/.ai-harness/skills/global-review/SKILL.md',
@@ -58,9 +58,7 @@ describe('SkillCatalogService', () => {
     expect(untrusted.skills.find(entry => entry.name === 'path-review')).toMatchObject({
       trusted: true, defaultModelInvocable: false, modelInvocable: false,
     });
-    expect(untrusted.skills.find(entry => entry.name === 'project-review')).toMatchObject({
-      trusted: false, modelInvocable: false, source: '.agents/skills',
-    });
+    expect(untrusted.skills.find(entry => entry.name === 'project-review')).toBeUndefined();
 
     await trust.trust(project);
     const trusted = await service.getCatalog({ cwd: project });
@@ -144,6 +142,11 @@ describe('SkillCatalogService', () => {
     await expect(service.getCatalog({ cwd: project, projectId: 'wrong' })).rejects.toMatchObject({
       code: 'WORKSPACE_MISMATCH',
     });
+    const untrusted = await service.getCatalog({ cwd: project });
+    expect(untrusted.errorCount).toBe(0);
+    expect(untrusted.skills).toEqual([]);
+
+    await trust.trust(project);
     const catalog = await service.getCatalog({ cwd: project });
     expect(catalog.errorCount).toBe(1);
     expect(catalog.skills).toEqual([]);

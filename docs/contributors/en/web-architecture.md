@@ -25,8 +25,13 @@ The React application is organized around these main components:
 | `CommandPalette` | keyboard search and execution of commands, sessions, settings and files |
 | `StatusCenter` | bounded global queue of successes, warnings, errors and progressions, preserved during navigation with expiration suspended on hover/focus |
 | `PluginSettings` | global/project packages, explicit installation, inventory, activation, updates, diagnostics and session-linked reload |
+| `McpSettings`, `McpImportPreview` | redacted global/trusted-project inventory, non-mutating paste/replacement preview, completion/confirmation-gated atomic import—including fresh-project trust-plus-first-write—or whole-entry replacement, atomic enable/disable and exposure selection, confirmed removal and short-lived undo without starting servers |
 | `EcosystemSettings` | provider lifecycle/OAuth, custom providers and models, defaults, tools and skill registry |
 | `SubagentSettings`, `SubagentPanel`, `SubagentMonitor` | global/project profiles, permissions, progress, attention, global notifications, stop and parent/child navigation |
+
+`McpImportPreview` sends original text plus an explicit foreign/AiHarness syntax mode to the administrator-only Server route; parsing, secret/reference policy and scope eligibility remain in Core. Its response contains masked targets, structural fields, variable names and fixed diagnostics, not env/header/OAuth values, argument text, source excerpts or a writable normalized config. Changing text, syntax, workspace or inventory invalidates the in-flight result. A focus-trapped scope dialog collects only Core-declared missing fields, optional variable substitutions and explicit global-literal/remote-variable confirmations. For a decision-free fresh project it also requires a separate trust confirmation, then sends only `trustProject: true`; Core serializes the exact allow and first write and rolls that allow back if writing fails. Saving always resends the original text and bounded choices. Success and failure refresh authoritative workspace trust, while every failure clears stale controls and reloads inventory.
+
+A row **Edit** action fixes scope/name/revision before preview and asks for a complete replacement paste. Existing hidden values never enter browser fields and omissions are deliberately removed. Concurrent mutation controls are disabled; cancellation, rename success and failure restore focus against canonical inventory.
 
 For project overview, see [architecture-overview.md](./architecture-overview.md).
 
@@ -86,13 +91,13 @@ The production bundle is a PWA with an installable manifest/icon, offline fallba
 
 Vitest covers Core contracts, the agent/extension runtime, providers, JSONL, workspace/Git, commands, PTY, configuration, catalogs and registries, OAuth, priced metrics, Push, subagents, security, real routes, and Web stores. Playwright covers the interface with an intercepted deterministic API **and** an end-to-end flow through Express, the mock provider, persistence, PTY, and files. `web-server.test.ts` adds Git/worktree/diff/upload/watch, PTY, and HTTP contracts without a browser. Dedicated suites verify axe/WCAG, focus and keyboard behavior, virtualization/cache, restoration, and deferred loading.
 
-The 114 Light/Dark desktop/tablet/mobile baselines cover custom models/providers, the skill registry, extension process and dialogs, and established surfaces, with a maximum 2% difference threshold.
+The 118 Light/Dark desktop/tablet/mobile baselines cover custom models/providers, the skill registry, MCP inventory/import preview/atomic import/whole-entry edit/exposure/local actions, extension process and dialogs, and established surfaces, with a maximum 2% difference threshold.
 
 The Web build runs `packages/web/scripts/check-bundle-budget.mjs` after Vite and fails beyond:
 
 | Budget | Limit |
 |---|---|
-| Raw entry / gzip | 500 KiB / 150 KiB |
+| Raw entry / gzip | 504 KiB / 150 KiB |
 | Eager JS assets gzip | 180 KiB |
 | Async chunk raw / gzip | 1.6 MiB / 500 KiB |
 | Raw CSS leaf | 64 KiB |

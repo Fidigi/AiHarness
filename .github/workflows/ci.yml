@@ -36,20 +36,26 @@ jobs:
         run: make test
 
   test-e2e:
-    name: E2E tests (Playwright)
+    name: E2E tests (partition ${{ matrix.partition }}/4)
     runs-on: ubuntu-latest
+    strategy:
+      # Keep every partition's failures and artifacts; do not cancel siblings.
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        partition: [1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Run Playwright suite (Docker)
-        run: make test-e2e
+      - name: Run isolated Playwright partition (Docker)
+        run: make test-e2e E2E_ARGS='--ci-partition=${{ matrix.partition }}/4'
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v5
         with:
-          name: playwright-report
+          name: playwright-report-partition-${{ matrix.partition }}
           path: |
             playwright-report/
             test-results/
@@ -74,7 +80,7 @@ jobs:
     steps:
       - name: Check required jobs
         run: |
-          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+          if [[ "${{ needs.typecheck.result == 'success' && needs.test.result == 'success' && needs.test-e2e.result == 'success' && needs.build-prod.result == 'success' }}" != "true" ]]; then
             echo "One or more required jobs did not succeed."
             exit 1
           fi

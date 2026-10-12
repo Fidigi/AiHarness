@@ -6,15 +6,15 @@
 
 JavaScript extensions register commands, tools, providers, plain-text terminal UI components, lifecycle listeners, and cancellable `before:*` hooks. CLI and Server share the bounded Core loader but own discovery context, trust checks, and runtime composition.
 
-Server plugin packages are a separate administration layer: they inventory package resources and make enabled executable extension files available only during explicit resource reload. See [`security.md`](./security.md) for trust and executable-code boundaries.
+Package administration is also Core-owned. CLI commands and the Server/Web routes use the same `PluginService`, `plugins.json`, source validation, resource filters, locking, inventory and update behavior. Enabled package extensions, skills, prompts and themes feed each runtime through interface-specific composition; see [`security.md`](./security.md) for trust and executable-code boundaries.
 
 ## Architecture
 
 ```text
 ExtensionModuleLoader -> candidate JS modules -> ExtensionRegistry generation
-CLI loader -> global/project/explicit files -> terminal runtime
-PluginService -> install/state/inventory -> enabled extension files
-Server reload -> trusted workspace generation -> AgentRuntime/Web metadata
+Core PluginService -> install/locked state/filtered inventory/bounded batch state -> enabled resources
+  |-> CLI package commands + CLI/RPC startup/reload
+  `-> Server API adapter + trusted workspace generation -> AgentRuntime/Web metadata
 ```
 
 ## Main Entry Points
@@ -23,26 +23,40 @@ Server reload -> trusted workspace generation -> AgentRuntime/Web metadata
 |---|---|
 | `packages/core/src/extensions/extension-registry.ts` | Owned registrations, hooks, execution, cleanup and rollback |
 | `packages/core/src/extensions/module-loader.ts` | Bounded discovery/import and atomic managed generations |
-| `packages/cli/src/extensions/extension-loader.ts` | Explicit CLI extension paths and loader orchestration |
-| `packages/cli/src/resources/resource-manager.ts` | Markdown prompts and model-invocable resource discovery |
-| `packages/server/src/runtime/plugin-service.ts` | npm/Git/path package state, staging, inventory and updates |
-| `packages/server/src/api/plugin-routes.ts` | Explicit package administration and reload routes |
+| `packages/cli/src/extensions/extension-loader.ts` | Explicit, configured and package extension paths plus loader orchestration |
+| `packages/cli/src/resources/resource-manager.ts` | Local/package Markdown prompts and model-invocable resource discovery |
+| `packages/cli/src/cli/package-command.ts` | Top-level package lifecycle, scope and resource-filter adapter |
+| `packages/core/src/plugins/plugin-service.ts` | Shared npm/Git/path package state, staging, filters, inventory, locks and updates |
+| `packages/server/src/runtime/plugin-service.ts` | Thin compatibility re-export of the Core service |
+| `packages/server/src/api/plugin-routes.ts` | Explicit Web package administration and reload routes |
 | `packages/server/src/runtime/services.ts` | Server loader composition and workspace generation switching |
 
 ## Extension Contracts
 
-`ExtensionAPI` supports:
+`ExtensionAPI` is an AiHarness-owned versioned contract. Core exports `AI_HARNESS_EXTENSION_API_VERSION` (`1`) and supplies the same literal as `api.version` before an extension registers behavior.
 
 | Registration | Contract |
 |---|---|
+| `version` | Read-only extension API major used for compatibility checks |
+| `registerOption` / `getOption` | Owned bounded boolean/string startup flags, defaults, generated help and literal completion |
 | `registerCommand` | Slash command handler with runtime context |
 | `registerTool` | Model/manual tool with JSON schema, AbortSignal and structured result |
 | `registerProvider` | Runtime `AiProvider` factory and optional defaults |
 | `registerUI` | Plain-text `header`/`status` terminal component |
-| `before` | `before:agent`, `before:provider`, or `before:tool` transform/cancellation hook |
+| `before` | `before:agent`, `before:provider`, `before:tool`, or `before:model` transform/cancellation hook |
 | `on` | Session/message/compaction lifecycle listener |
 
-Prompts, package skills, and themes are discovered resources, not `ExtensionAPI` registrations. Web interaction requests use `ExtensionRuntimeContext.requestInteraction`; they are suspended runtime requests rather than executable browser components.
+A registered tool can set `exposure` to `direct`/`model-only` for immediate declaration, `deferred` for schema-free discovery followed by next-turn declaration through `tool_search`, `codemode` for searchable but permanently script-only exposure, or `hidden` to remain unavailable to model dispatch. Optional namespace metadata enriches ranking and the bounded [QuickJS namespace helpers](./codemode.md). Exposure does not grant trust, authorization, or sandboxing: normal selection policy, declaration checks, hooks, cancellation, and runtime guards still apply, and static selected tools win dynamic name collisions.
+
+Registered and hosted tools may await `context.onProgress({version: 1, content, details})`. Core owns immutable outer-call correlation, monotonic timing, one in-flight sink/latest pending snapshot, submission/delivery/output bounds and once-only terminal persistence. Replacement snapshots retain omitted fields; details are display-only JSON, never accounting/store/activation authority. Cancellation drops pending/late updates. Oversized strings are suppressed before redaction to avoid credential-prefix leaks; accepted arrays preserve bounded JSON index shape without invoking getters/toJSON. Producers, proxy traps, enumeration internals and redactors remain privileged code, not a CPU/memory sandbox. CLI JSON/RPC share the awaited encoder; print remains final-text-only. See `agent/tool-progress.ts` and its real child-process tests.
+
+`before:model` receives `{type, request, context, signal}` for hosted classifier/image requests. It can transform `request` or cancel; the host revalidates kind, live model identity, exact request fields and cancellation after the hook, within the model deadline. This additive API is separate from conversational `before:provider`; the code-mode outer result owns usage/persistence. No hook can supply guest credentials or increase sandbox budgets.
+
+Prompts, package skills, and themes are discovered resources, not `ExtensionAPI` registrations. Declarative interactions use `ExtensionRuntimeContext.requestInteraction`, returning an awaitable `ExtensionInteractionPromise`; adapters may omit controls. Detached Core hosts return an `ExtensionInteractionHandle` with readonly host ID and closure-owned `update(replacement)` / `close()`. The ID alone grants neither capability. Updates replace display/schema in place, retaining admission order, created time and the original signal/deadline; snapshots omit both signal and timeout.
+
+Core owns at most 16 pending requests per run, 128,000 UTF-8 JSON bytes per normalized request and 512,000 aggregate bytes. Oversized admission/update throws `409 EXTENSION_INTERACTION_QUEUE_FULL` without changing prior state. A supplied timeout must be finite, nonnegative and at most 2,147,483,647 ms; otherwise `400 INVALID_EXTENSION_INTERACTION_TIMEOUT`. No active run returns a cancelled Promise. Responses validate the latest schema and settle once; late controls return false. `extensionRequests` is the complete ordered reconnect snapshot; `extensionRequest` remains its first-entry compatibility projection. The Web adapter reads the complete ordered queue (explicit empty plural wins over the compatibility alias), presents its head and waiting count, and suppresses restored attention replay. Client admission remains separate from exactly-once Core settlement and backend cancellation.
+
+Session-scoped extension-command `notify` uses `AgentRuntime.publishSessionEvent`: notices omit `runId` when the current session run is `completed`, `failed` or `stopped`, while nonterminal correlation is retained. Run-bound tool-context `notify` callbacks retain their original run ID after termination. This changes event correlation only, not interaction admission or browser queue/notice acceptance; see [the session event contract](./server-api.md#current-event-contract).
 
 ## Critical Flows
 
@@ -55,30 +69,45 @@ Prompts, package skills, and themes are discovered resources, not `ExtensionAPI`
 5. On any discovery/import/registration error, keep or restore the previous generation.
 6. On workspace change, clear old handlers if the new candidate cannot commit.
 
+CLI startup loads one trusted generation before strict contributed-option parsing and reuses it in interactive, print, JSON and RPC modes. Built-in help/version never import extensions; `--extension-help` and `--completion` are explicit trust-gated operations. Reload gives ESM and CommonJS entries a fresh identity after successful or failed attempts, without replacing preexisting CommonJS cache entries. Dependencies retain ordinary caches; executable side effects are not transactional. See the [EN startup-option contract](../../contributors/en/extension-startup-options.md) and [FR contract](../../contributors/fr/extension-startup-options.md).
+
 ### Administer a plugin package
 
 ```text
-explicit install/update
-  -> parse npm:/HTTPS Git/allowed local path
+explicit CLI or Web install/update
+  -> Core parses npm:/HTTPS Git/allowed local path
   -> stage without npm lifecycle scripts or with shallow Git clone
   -> bounded symlink-free manifest/convention inventory
-  -> atomically replace package and non-secret state
-  -> expose extension files only to explicit reload
+  -> apply package-relative include/exclude filters
+  -> lock and atomically replace package plus non-secret state
+  -> expose enabled resources to the selected runtime composition
 ```
 
-`GET /api/plugins` is metadata-only: it must not execute code, install, update, or contact npm/Git. Enabled package resources are workspace/scope filtered; project resources remain hidden until trust.
+`ai-harness package list` and `GET /api/plugins` are metadata-only: they must not execute code, install, update, or contact npm/Git. CLI package actions exit before agent startup. Enabled package resources are workspace/scope filtered; project resources remain hidden until trust. Interactive `/reload` re-resolves package resources for the CLI generation, while Server reload validates and publishes its own runtime generation.
+
+### Change a Web package group
+
+`PluginSettings` offers **Enable all** and **Disable all** independently for Project and Global packages. It submits only rows whose enabled state changes in one bounded `PATCH /api/plugins/enabled` request. Core validates at most 100 unique selectors, evaluates trust per entry, applies allowed changes under one inter-process lock and commits them in one atomic state write. The response preserves input order and reports each selector as `changed`, `unchanged`, or `failed`; missing and untrusted project entries do not erase allowed global changes. Only `enabled` and `updatedAt` change, so resource filters remain intact. Disabling an untrusted project entry is safe cleanup, while enabling it is refused. If an affected package contains executable extensions, Web keeps an explicit reload-pending notice until **Reload resources** succeeds. Because Core must not reopen an untrusted project package to classify its resources, disabling one conservatively raises the same notice in case its prior runtime generation still contains executable code.
 
 ### Request declarative UI
 
 ```text
 extension tool/hook -> context.requestInteraction(schema)
-  -> active AgentRuntime stores one pending request
+  -> active AgentRuntime admits a bounded ordered request and issues an awaitable handle
   -> extension.ui event -> ChatView text/form controls
   -> response/cancel endpoint validates IDs, kind, fields, options and size
   -> extension resumes or receives cancellation
 ```
 
-Never accept extension-provided React, DOM, script, style, or arbitrary HTML. Focus trap, Escape, restoration, reconnect recovery, and cancellation are transport behavior.
+Never accept extension-provided React, DOM, script, style, or arbitrary HTML. Stop, settlement, executable/tool-generation commit and failed-workspace safety clear cancel pending requests and revoke captured requesters. Passive inventory and failed same-cwd candidates preserve the current generation. Bind Server command requesters before session/trust awaits; an old command must not inherit a new epoch. Focus trap, Escape, restoration, reconnect recovery, and cancellation remain adapter responsibilities. This queue is in-memory, not crash-durable; inherited completed-run retention is not newly bounded.
+
+### Optional Web form lifecycle
+
+`ChatView` delegates ordered-head presentation to `components/ExtensionInteractionBoundary.tsx`; only an actual pending request loads `ExtensionInteractionDialog.tsx` and its own CSS. Loading/error is a local nonmodal region with translated Close/Cancel, not a global Suspense or focus trap. Failed imports remain cached on reopen; explicit page reload warns about unsent text.
+
+The boundary aborts its response transport on schema/request replacement or view retirement. Chat suppresses an aborted reply before updating state; abort does not undo a response already accepted by Server. Workspace ID/cwd, session, run and the full route tuple own presentation. Same-ID/kind compatible fields retain drafts and connected composition; changed controls reset. The mounted form suppresses IME/legacy-229 Enter acknowledgement and Escape propagation without preventing native editing. Ordinary post-composition Enter can submit once.
+
+Initial focus is admitted before the renderer exists and checked again at its first frame: newer focus (including focus then blur), another modal, or re-presentation of the same request in a replacement route defeats it. Return needs the current view, unchanged available fallback and no newer focus/modal. Coarse pointers avoid unsolicited editable autofocus; guarded composer return remains possible after owned manual editing, whose intent is cleared by external focus. Head changes retain the modal but reset owned editable intent; browser-local receipts distinguish accepted duplicate observations from rejected stale callbacks. Exact same-version HTTP head removal requires a private captured reply witness. These are adapter controls, not new runtime authority, crash durability or a general fork-transaction guarantee.
 
 ## Security Invariants
 
@@ -87,22 +116,37 @@ Never accept extension-provided React, DOM, script, style, or arbitrary HTML. Fo
 - Keep catalogue reads side-effect free and diagnostics free of source bodies, command output, and secrets.
 - Preserve registration ownership so unload removes every command/tool/provider/UI/hook/listener.
 - Pass cancellation to active tool and interaction work.
-- Validate package source, bounds, symlinks, and rollback before changing active state.
+- Validate package source, bounded manifests/state, package-relative filters, symlinks, and rollback before changing active state.
+- Serialize CLI/Server mutations with the Core heartbeat lock and owner-only atomic state writes; group activation remains bounded, uses one write, and returns value-free per-entry failures.
 
 ## Associated Tests
 
-- `packages/core/src/extensions/extension-registry.test.ts` — ownership, hooks, tools, providers, UI and atomic replacement
+- `packages/server/src/api/session-notice-process.test.ts` — public Core/real built Server process coverage for completed/failed/stopped session-command notice correlation, active correlation and captured tool callbacks over HTTP/SSE; not browser queue delivery
+- `packages/core/src/extensions/extension-registry.test.ts` — API version, ownership, hooks, tools, providers, UI and atomic replacement
+- `packages/core/src/agent/runtime-interaction-queue.test.ts` and `runtime-interaction-process.test.ts` — order, updates, exactly-once settlement, bounds, signal/deadline and original subprocess controls
+- `packages/server/src/api/{interaction-queue-http,queue-reconciliation-http,queue-generation-http,queue-generation-process}.test.ts` — latest-schema HTTP validation, stop accounting before terminal replay, same-cwd preservation and revocation while the run remains active
+- `packages/core/src/tools/{tool-search,codemode}.test.ts` — deferred/script-only exposure, BM25 ranking, activation/store provenance, bounded QuickJS, policy revalidation and branch restoration
 - `packages/cli/src/extensions/extension-loader.test.ts` — explicit path parsing and loader behavior
-- `packages/server/src/runtime/plugin-service.test.ts` — source validation, inventory and transactional package state
+- `packages/core/src/plugins/plugin-service.test.ts` — source validation, filters, trust, bounded one-write group activation, partial outcomes, concurrency, inventory and transactional package state
+- `packages/cli/src/cli/{package-command,invocation}.test.ts` — strict command parsing and real package resource startup
 - `packages/server/src/web-server.test.ts` — plugin/reload HTTP, trust and runtime integration
 - `e2e/settings.spec.ts` — package administration flows
 - `e2e/chat.spec.ts` and `e2e/accessibility.spec.ts` — widgets, interactions, focus and response handling
+- `packages/web/src/components/extension-interaction-dialog.test.ts` — native declarative fields, inert output, CSS ownership, transport-only abort, bilingual cached-failure copy and compatible drafts
+- `e2e/interaction-single-asset-load.spec.ts` with `interaction-asset-load.config.ts` — actual production JS/CSS delay/refusal, cached reload, singular head/draft lifetime, held-response retirement, IME and newer-focus/coarse-pointer controls; controlled API fixtures
+- `e2e/interaction-queue.spec.ts`, `interaction-admission.spec.ts`, `interaction-asset-load.spec.ts` and `queue-reconciliation.spec.ts` — ordered queue/attention, stale response/Stop retirement, bootstrap and full-address ownership, optional assets and App discovery guards with controlled HTTP/SSE
+- `e2e/interaction-live-boundary.spec.ts` — real extension/runtime/HTTP latest-schema rejection and form response/cancellation through the mock provider
+- `tests/functional-parity/functional-parity.test.ts` — native extension positive/negative fixtures, RPC interaction and public type/runtime probes
 
 ## Common Changes
 
 ### Add an extension registration
 
 Change Core contracts/registry/public exports, both runtime compositions, cleanup/rollback tests, and declarative Web handling only if browser-visible.
+
+### Change interaction lifecycle
+
+Keep contracts in Core's `extensions/extension-registry.ts` and `agent/{events,interaction-handle,runtime}.ts`; preserve compatibility snapshots, capability ownership, original deadlines and active-run epoch tests. Revalidate genuine installed declarations/runtime and unchanged CLI/RPC goldens. Do not infer browser queue acceptance from Core/Server tests. Preserve the optional renderer's local loading/error, cached-reload warning, transport retirement, IME and initial/return-focus controls; validate the genuine production assets and unchanged mobile interaction journeys.
 
 ### Change module discovery
 
@@ -114,6 +158,7 @@ Update Core package metadata types, Server service/routes, Web API/settings, aut
 
 ## Related Domains
 
+- [`codemode.md`](./codemode.md) — hosted nested calls and model-only/script-only boundaries
 - [`providers.md`](./providers.md) — extension provider factories and provider hooks
 - [`server-api.md`](./server-api.md) — plugin reload and interaction endpoints
 - [`security.md`](./security.md) — trust, package sources and diagnostics

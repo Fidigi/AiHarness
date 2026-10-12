@@ -1,5 +1,15 @@
-import { expect, test, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
+import {
+  MCP_FILE_PROBLEM_MESSAGES,
+  MCP_FILE_PROBLEM_REASONS,
+  mcpFileProblemInventory,
+  mcpFreshProjectInventory,
+  mcpFreshProjectPreviewFixture,
+  mcpImportPreviewFixture,
+  mcpStateInventory,
+} from './fixtures/mcp';
 
 function settingsSection(page: Page, heading: string) {
   return page.getByRole('heading', { name: heading, exact: true }).locator('..');
@@ -31,6 +41,7 @@ test.describe('Settings and authentication', () => {
         { type: 'openai', configured: true },
         { type: 'anthropic', configured: false },
       ],
+      configurationScopes: { global: { provider: 'openai', model: 'gpt-4o', toolPreset: 'default' }, project: {} },
     });
     await page.goto('/settings#model');
     await settingsSection(page, 'AI Provider').locator('select').selectOption('openai');
@@ -47,24 +58,29 @@ test.describe('Settings and authentication', () => {
     await section.getByLabel('Filter models or providers').fill('');
 
     const o3 = section.getByRole('checkbox', { name: 'Enable o3 for OpenAI' });
-    await o3.uncheck();
-    await expect.poll(() => api.requests.filter(request => request.path === '/api/models/enabled').at(-1)?.body)
-      .toMatchObject({ projectId: 'workspace-e2e' });
-    expect((api.requests.filter(request => request.path === '/api/models/enabled').at(-1)?.body as { enabledModels: string[] }).enabledModels)
-      .not.toContain('openai:o3');
+    await o3.click();
+    await expect(o3).not.toBeChecked();
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/models/enabled/batch').at(-1)?.body)
+      .toEqual({ projectId: 'workspace-e2e', changes: [{ key: 'openai:o3', enabled: false }] });
 
-    await section.getByRole('button', { name: 'Disable all' }).click();
-    await expect.poll(() => (api.requests.filter(request => request.path === '/api/models/enabled').at(-1)?.body as { enabledModels: string[] })?.enabledModels)
-      .toEqual([]);
-    await section.getByRole('button', { name: 'Enable all' }).click();
-    await expect.poll(() => (api.requests.filter(request => request.path === '/api/models/enabled').at(-1)?.body as { enabledModels: string[] })?.enabledModels.length)
-      .toBeGreaterThan(1);
+    const keys = ['mock:mock-model', 'openai:gpt-4o', 'openai:gpt-4-turbo', 'openai:gpt-3.5-turbo',
+      'anthropic:claude-3-haiku-20240307'];
+    const catalogueActions = section.getByRole('group', { name: 'Manage model catalogue', exact: true });
+    await catalogueActions.getByRole('button', { name: 'Disable displayed', exact: true }).click();
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/models/enabled/batch').at(-1)?.body)
+      .toEqual({ projectId: 'workspace-e2e', changes: keys.map(key => ({ key, enabled: false })) });
+    await expect(section.locator('.model-catalog-row input:checked')).toHaveCount(0);
+    await catalogueActions.getByRole('button', { name: 'Enable displayed', exact: true }).click();
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/models/enabled/batch').at(-1)?.body)
+      .toEqual({ projectId: 'workspace-e2e', changes: [...keys.slice(0, 4), 'openai:o3', keys[4]].map(key => ({ key, enabled: true })) });
+    await expect(section.locator('.model-catalog-row input:checked')).toHaveCount(6);
 
     const catalogueRequests = api.requests.filter(request => request.path === '/api/models').length;
     await section.getByRole('button', { name: 'Refresh catalogue' }).click();
     await expect.poll(() => api.requests.filter(request => request.path === '/api/models').length).toBe(catalogueRequests + 1);
 
-    await o3.uncheck();
+    await o3.click();
+    await expect(o3).not.toBeChecked();
     await page.getByRole('button', { name: 'New chat' }).click();
     const suggestions = page.locator('#model-suggestions option');
     await expect.poll(() => suggestions.evaluateAll(options => options.map(option => (option as HTMLOptionElement).value)))
@@ -173,16 +189,16 @@ test.describe('Settings and authentication', () => {
     await section.getByLabel('Filter skills or sources').fill('');
 
     const release = section.getByRole('checkbox', { name: 'Allow release-notes for autonomous model invocation' });
-    await release.uncheck();
-    await expect.poll(() => api.requests.filter(request => request.path === '/api/skills/enabled').at(-1)?.body)
-      .toMatchObject({ cwd: '/workspace', projectId: 'workspace-e2e' });
-    expect((api.requests.filter(request => request.path === '/api/skills/enabled').at(-1)?.body as { enabledSkills: string[] }).enabledSkills)
-      .not.toContain('global:release-notes:e2e');
+    await release.click();
+    await expect(release).not.toBeChecked();
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/skills/enabled/batch').at(-1)?.body)
+      .toEqual({ cwd: '/workspace', projectId: 'workspace-e2e', changes: [{ key: 'global:release-notes:e2e', enabled: false }] });
 
     const documentation = section.getByRole('checkbox', { name: 'Allow documentation for autonomous model invocation' });
-    await documentation.check();
-    await expect.poll(() => (api.requests.filter(request => request.path === '/api/skills/enabled').at(-1)?.body as { enabledSkills: string[] })?.enabledSkills)
-      .toContain('path:documentation:e2e');
+    await documentation.click();
+    await expect(documentation).toBeChecked();
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/skills/enabled/batch').at(-1)?.body)
+      .toEqual({ cwd: '/workspace', projectId: 'workspace-e2e', changes: [{ key: 'path:documentation:e2e', enabled: true }] });
     await page.reload();
     await expect(section.getByRole('checkbox', { name: 'Allow release-notes for autonomous model invocation' })).not.toBeChecked();
     await expect(section.getByRole('checkbox', { name: 'Allow documentation for autonomous model invocation' })).toBeChecked();
@@ -198,6 +214,605 @@ test.describe('Settings and authentication', () => {
     await expect(section.getByRole('checkbox', { name: 'Allow release-notes for autonomous model invocation' })).toBeEnabled();
   });
 
+  test('présente un inventaire MCP expurgé et garde le fichier projet fermé avant confiance', async ({ page }) => {
+    const api = await installMockApi(page, {
+      workspaceTrusted: false,
+      mcpConfig: {
+        files: [
+          { scope: 'global', path: '/agent/mcp.json', exists: true, contentRead: true, problems: [] },
+          {
+            scope: 'project', path: '/workspace/.ai-harness/mcp.json', exists: true, contentRead: false,
+            problems: [{ reason: 'trust-required', message: 'Project trust required.' }],
+          },
+        ],
+        project: {
+          cwd: '/workspace', contentTrusted: false, requiresTrust: true, decision: null,
+          inherited: false, trustError: false,
+        },
+        servers: [{
+          name: 'documentation', scope: 'global', sourcePath: '/agent/mcp.json', valid: true,
+          enabled: true, exposure: 'deferred', transport: 'http', url: 'https://docs.example.test/•••?•••',
+          envNames: [], headerNames: ['Authorization'], commandFields: [],
+          variableReferences: [{ field: 'headers.X-Token', names: ['DOCS_TOKEN'] }], masked: true,
+          shadowedByProject: false, replacesGlobal: false, problems: [],
+        }],
+      },
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+
+    await expect(section.getByRole('heading', { name: 'MCP servers' })).toBeVisible();
+    await expect(section).toContainText('documentation');
+    await expect(section).toContainText('https://docs.example.test/•••?•••');
+    await expect(section).toContainText('Header names: Authorization');
+    await expect(section).toContainText('headers.X-Token reads host variables: DOCS_TOKEN');
+    await expect(section).toContainText('Project server names and values are not read before trust.');
+    await section.getByText('Configuration file diagnostics').click();
+    await expect(section).toContainText('Project trust is required before reading this file.');
+    await section.getByRole('button', { name: 'Refresh' }).click();
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/mcp').length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('présente tous les états de ligne MCP sans les confondre avec une connexion', async ({ page }) => {
+    await installMockApi(page, { mcpConfig: mcpStateInventory() });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+
+    await expect(section.getByRole('article', { name: 'remote-docs: Configured', exact: true })).toBeVisible();
+    await expect(section.getByRole('article', { name: 'local-tools: Disabled', exact: true })).toBeVisible();
+    await expect(section.getByRole('article', { name: 'shared: Replaced by project', exact: true })).toBeVisible();
+    await expect(section.getByRole('article', { name: 'bad\\u202ename: Invalid', exact: true })).toBeVisible();
+    const projectReplacement = section.locator('fieldset[data-scope="project"]')
+      .getByRole('article', { name: 'shared: Configured', exact: true });
+    await expect(projectReplacement).toContainText('replaces the global entry');
+    await expect(section.getByText('Connected', { exact: true })).toHaveCount(0);
+    await expect(section).toContainText('Command-backed fields: headers.X-Command');
+    await expect(section).toContainText('env.CACHE_DIR reads host variables: CACHE_DIR');
+    await section.getByText('Configuration file diagnostics').click();
+    await expect(section).toContainText(MCP_FILE_PROBLEM_MESSAGES['invalid-shape']);
+  });
+
+  test('affiche l’état de connexion MCP persistant sans le confondre avec la configuration', async ({ page }) => {
+    const inventory = mcpStateInventory();
+    inventory.servers[0] = {
+      ...inventory.servers[0]!,
+      runtimeStatus: {
+        state: 'connected',
+        sessionId: 'session-runtime',
+        updatedAt: '2026-10-08T12:00:00.000Z',
+        toolCount: 2,
+      },
+    };
+    await installMockApi(page, { mcpConfig: inventory });
+    await page.goto('/settings#mcp');
+
+    const card = page.locator('#mcp').getByRole('article', { name: 'remote-docs: Configured', exact: true });
+    await expect(card).toContainText('Connected · 2 tools');
+  });
+
+  for (const scenario of [
+    { name: 'desktop-dark', width: 1440, theme: 'dark' },
+    { name: 'desktop-light', width: 1440, theme: 'light' },
+    { name: 'mobile-dark', width: 390, theme: 'dark' },
+    { name: 'mobile-light', width: 390, theme: 'light' },
+  ] as const) {
+  test(`${scenario.name} connecte, colle le callback, déconnecte et annule un flux OAuth MCP sans exposer les jetons`, async ({ page }) => {
+    await page.setViewportSize({ width: scenario.width, height: 900 });
+    await page.addInitScript(({ theme }) => {
+      localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({
+        version: 4, theme, sendMode: 'enter', contentWidth: 1000, fontSize: 16,
+        reasoningOpen: false, sound: false, notifications: false, selectionActions: true,
+        filesOpen: true, sidebarVisible: true, lastSettingsSection: 'mcp', keybindings: {},
+      }));
+    }, { theme: scenario.theme });
+    const inventory = mcpStateInventory();
+    inventory.servers[0] = {
+      ...inventory.servers[0]!, usesOAuth: true, headerNames: ['X-Workspace', 'X-Command', 'X-Token'],
+    };
+    const api = await installMockApi(page, { mcpConfig: inventory });
+    const oauthRequests: Array<{ method: string; path: string; body?: unknown }> = [];
+    let signedIn = false;
+    let phase: 'authorize' | 'connected' | 'cancelled' = 'authorize';
+    const flowId = '00000000-0000-4000-8000-000000000123';
+    const flow = () => ({
+      flowId,
+      scope: 'global',
+      name: 'remote-docs',
+      configKey: inventory.servers[0]!.configKey!,
+      phase,
+      authorizationUrl: phase === 'authorize'
+        ? 'https://login.example.test/authorize?state=browser-state'
+        : undefined,
+      redirectUrl: 'http://127.0.0.1:32123/oauth/callback',
+      expiresAt: '2026-01-01T00:05:00.000Z',
+    });
+    await page.route('**/api/mcp/oauth/**', async route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const body = request.postData() ? request.postDataJSON() : undefined;
+      oauthRequests.push({ method: request.method(), path: url.pathname, ...(body === undefined ? {} : { body }) });
+      if (url.pathname === '/api/mcp/oauth/status') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+          statuses: [{
+            scope: 'global', name: 'remote-docs', configKey: inventory.servers[0]!.configKey!,
+            available: true, stateStored: signedIn, signedIn,
+          }],
+        }) });
+        return;
+      }
+      if (url.pathname === '/api/mcp/oauth/start') {
+        phase = 'authorize';
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(flow()) });
+        return;
+      }
+      if (url.pathname.endsWith('/redirect')) {
+        phase = 'connected';
+        signedIn = true;
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(flow()) });
+        return;
+      }
+      if (url.pathname === `/api/mcp/oauth/flows/${flowId}` && request.method() === 'DELETE') {
+        phase = 'cancelled';
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(flow()) });
+        return;
+      }
+      if (url.pathname === `/api/mcp/oauth/flows/${flowId}`) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(flow()) });
+        return;
+      }
+      if (url.pathname === '/api/mcp/oauth/logout') {
+        signedIn = false;
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+          scope: 'global', name: 'remote-docs', configKey: inventory.servers[0]!.configKey!, removed: true,
+        }) });
+        return;
+      }
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not found"}' });
+    });
+
+    await page.goto('/settings#mcp');
+    const card = page.locator('#mcp').getByRole('article', { name: 'remote-docs: Configured', exact: true });
+    await expect(card).toContainText('Not signed in');
+    await card.getByRole('button', { name: 'Sign in', exact: true }).click();
+    const authorization = card.getByRole('link', { name: 'Open the authorization page', exact: true });
+    await expect(authorization).toHaveAttribute('href', 'https://login.example.test/authorize?state=browser-state');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
+    const accessibility = await new AxeBuilder({ page }).include('.mcp-oauth-panel')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    expect(accessibility.violations).toEqual([]);
+    await expect(card).toHaveScreenshot(`mcp-oauth-authorize-${scenario.name}.png`, {
+      animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
+    });
+    await card.getByLabel('Full redirected address').fill(
+      'http://127.0.0.1:32123/oauth/callback?code=public-code&state=browser-state',
+    );
+    await card.getByRole('button', { name: 'Use redirected address', exact: true }).click();
+    await expect(card).toContainText('OAuth sign-in completed.');
+    await expect(card).toContainText('Signed in');
+    expect((await new AxeBuilder({ page }).include('.mcp-oauth-panel')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()).violations).toEqual([]);
+    await expect(card).toHaveScreenshot(`mcp-oauth-connected-${scenario.name}.png`, {
+      animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
+    });
+    await card.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect(card).toContainText('Not signed in');
+
+    await card.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(card.getByRole('button', { name: 'Cancel sign-in', exact: true })).toBeVisible();
+    await card.getByRole('button', { name: 'Cancel sign-in', exact: true }).click();
+    await expect(card).toContainText('OAuth sign-in was cancelled.');
+
+    const posted = oauthRequests.filter(item => item.body !== undefined).map(item => item.body);
+    expect(oauthRequests.find(item => item.path === '/api/mcp/oauth/start')?.body).toEqual({
+      scope: 'global', name: 'remote-docs', configKey: inventory.servers[0]!.configKey!, cwd: '/workspace',
+    });
+    expect(posted.some(body => JSON.stringify(body).includes('docs.example.test'))).toBe(false);
+    expect(JSON.stringify(posted)).not.toContain('access_token');
+    expect(await page.locator('body').innerText()).not.toContain('route-access-secret');
+    expect(api.requests.filter(item => item.path === '/api/mcp')).not.toHaveLength(0);
+  });
+  }
+
+  test('teste une entrée MCP sans envoyer sa configuration et détaille capacités, cwd et outils', async ({ page }) => {
+    const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const card = section.getByRole('article', { name: 'remote-docs: Configured', exact: true });
+
+    await card.getByRole('button', { name: 'Test remote-docs', exact: true }).click();
+    const report = card.getByRole('region', { name: 'Last connection test for remote-docs' });
+    await expect(report).toContainText('Connected');
+    await expect(report).toContainText('Server: docs-fixture 1.2.3');
+    await expect(report).toContainText('Working directory:');
+    await expect(report).toContainText('/workspace');
+    await expect(report).toContainText('2 tools · 3 resources · 1 templates · 2 prompts');
+    await expect(report).toContainText('search_docs');
+    await expect(report).toContainText('Search documentation');
+    await expect(report).toContainText('read-only hint · deferred tools');
+    await expect(report).toContainText('publish_note');
+    await expect(report).toContainText('may write · deferred tools');
+
+    const request = api.requests.find(item => item.path === '/api/mcp/test');
+    expect(request?.body).toEqual({ scope: 'global', name: 'remote-docs', cwd: '/workspace' });
+    expect(Object.keys(request?.body as object)).not.toContain('configuration');
+  });
+
+  test('reparcourt le texte MCP côté serveur et affiche seulement un aperçu expurgé', async ({ page }) => {
+    const api = await installMockApi(page, {
+      mcpConfig: mcpStateInventory(),
+      mcpImportPreview: mcpImportPreviewFixture(),
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    await section.getByText('Paste and preview a server').click();
+    const paste = '{"mcpServers":{"docs-import":{"url":"https://docs.example.test/private?token=SOURCE-SECRET","headers":{"Authorization":"Bearer ${DOCS_TOKEN}"}}}}';
+    await section.getByLabel('MCP server text').fill(paste);
+    await section.getByLabel('Treat resolved values as AiHarness syntax').check();
+    await section.getByRole('button', { name: 'Preview', exact: true }).click();
+
+    await expect(section.getByRole('heading', { name: 'Redacted import preview' })).toBeVisible();
+    const preview = section.getByRole('article', { name: 'docs-import' });
+    await expect(preview).toContainText('https://docs.example.test/•••?•••');
+    await expect(preview).toContainText('Header names: Authorization, X-Tenant');
+    await expect(preview).toContainText('headers.X-Tenant');
+    await expect(preview).toContainText('DOCS_TOKEN');
+    await expect(preview).toContainText('explicit confirmation required');
+    await expect(preview).toContainText('Confirmation is required before sending available host values remotely');
+    await expect(preview).toContainText('Confirmation is required before storing literal secrets globally');
+    await expect(preview).toContainText('Project configuration');
+    await expect(preview).toContainText('cannot contain literal secrets');
+    // The textarea intentionally retains the user's own paste; the rendered
+    // server response must not echo any literal from it.
+    await expect(preview).not.toContainText('SOURCE-SECRET');
+
+    const request = api.requests.find(item => item.path === '/api/mcp/preview');
+    expect(request?.body).toEqual({ text: paste, syntax: 'aiharness', cwd: '/workspace' });
+    expect(Object.keys(request?.body as object)).not.toContain('configuration');
+    expect(api.requests.filter(item => item.path === '/api/mcp/actions')).toHaveLength(0);
+
+    await section.getByLabel('MCP server text').fill('https://other.example.test');
+    await expect(section.getByRole('heading', { name: 'Redacted import preview' })).toHaveCount(0);
+  });
+
+  test('complète, confirme et persiste un import MCP depuis le texte original', async ({ page }) => {
+    const api = await installMockApi(page, {
+      mcpConfig: mcpStateInventory(),
+      mcpImportPreview: mcpImportPreviewFixture(),
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    await section.getByText('Paste and preview a server').click();
+    const paste = '{"mcpServers":{"docs-import":{"url":"https://docs.example.test/private?token=SOURCE-SECRET","headers":{"Authorization":"Bearer ${DOCS_TOKEN}"}}}}';
+    await section.getByLabel('MCP server text').fill(paste);
+    await section.getByLabel('Treat resolved values as AiHarness syntax').check();
+    await section.getByRole('button', { name: 'Preview', exact: true }).click();
+    const configure = section.getByRole('button', { name: 'Configure global import' });
+    await configure.click();
+
+    const dialog = page.getByRole('dialog', { name: 'Configure MCP import' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('Server name')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(configure).toBeFocused();
+    await configure.click();
+    await expect(dialog.getByLabel('Server name')).toBeFocused();
+    const tenant = dialog.getByRole('group', { name: 'headers.X-Tenant' });
+    await tenant.getByLabel('Use a host-variable reference').check();
+    await tenant.getByLabel('Host variable name').fill('TENANT_TOKEN');
+    await dialog.getByLabel('I confirm storing the remaining literal secret values in global configuration.').check();
+    await dialog.getByLabel(/I confirm that these host variables may be sent/u).check();
+    await dialog.getByRole('button', { name: 'Save atomically' }).click();
+
+    await expect(section).toContainText('The MCP server was imported.');
+    await expect(section.getByRole('article', { name: 'docs-import: Configured', exact: true })).toBeVisible();
+    await expect(section).not.toContainText('SOURCE-SECRET');
+    const request = api.requests.find(item => item.path === '/api/mcp/actions'
+      && (item.body as { action?: string } | undefined)?.action === 'import');
+    expect(request?.body).toEqual({
+      action: 'import', scope: 'global', revision: expect.any(String), text: paste,
+      syntax: 'aiharness', entryIndex: 0, name: 'docs-import',
+      values: { 'headers.X-Tenant': { reference: 'TENANT_TOKEN' } },
+      secretReferences: {},
+      confirmations: {
+        literalSecret: true,
+        remoteHostVariables: ['DOCS_TOKEN', 'TENANT_TOKEN'],
+      },
+      cwd: '/workspace',
+    });
+    expect(Object.keys(request?.body as object)).not.toContain('configuration');
+  });
+
+  test('confirme confiance et première écriture MCP dans un dossier projet neuf', async ({ page }) => {
+    const api = await installMockApi(page, {
+      workspaceTrusted: true,
+      workspaceOperationTrusted: false,
+      mcpConfig: mcpFreshProjectInventory(),
+      mcpImportPreview: mcpFreshProjectPreviewFixture(),
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    await section.getByText('Paste and preview a server').click();
+    const paste = 'npx -y fresh-mcp-tools';
+    await section.getByLabel('MCP server text').fill(paste);
+    await section.getByRole('button', { name: 'Preview', exact: true }).click();
+    await expect(section).toContainText('Explicit confirmation is required to trust this fresh folder');
+    await section.getByRole('button', { name: 'Configure project import' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Configure MCP import' });
+    await expect(section.getByRole('button', { name: 'Refresh' })).toBeDisabled();
+    const trust = dialog.getByLabel(/I trust this fresh project folder/u);
+    await expect(dialog.getByRole('button', { name: 'Save atomically' })).toBeDisabled();
+    await trust.check();
+    await expect(dialog.getByRole('button', { name: 'Save atomically' })).toBeEnabled();
+    await dialog.getByRole('button', { name: 'Save atomically' }).click();
+
+    await expect(dialog).toHaveCount(0);
+    await expect(section.getByRole('article', { name: 'fresh-tools: Configured', exact: true })).toBeVisible();
+    const request = api.requests.find(item => item.path === '/api/mcp/actions'
+      && (item.body as { action?: string } | undefined)?.action === 'import');
+    expect(request?.body).toMatchObject({
+      action: 'import', scope: 'project', cwd: '/workspace', revision: null,
+      trustProject: true, text: paste, entryIndex: 0,
+    });
+    expect(Object.keys(request?.body as object)).not.toContain('configuration');
+    await expect.poll(() => api.requests.some(item => item.path === '/api/workspaces/validate')).toBe(true);
+    expect(api.requests.some(item => item.path === '/api/workspaces/trust')).toBe(false);
+  });
+
+  test('recharge inventaire et confiance après un échec de transaction MCP projet', async ({ page }) => {
+    const api = await installMockApi(page, {
+      workspaceTrusted: true,
+      workspaceOperationTrusted: false,
+      mcpConfig: mcpFreshProjectInventory(),
+      mcpImportPreview: mcpFreshProjectPreviewFixture(),
+    });
+    await page.route('**/api/mcp/actions', async route => {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: 'Internal rollback detail must not render.',
+          code: 'write-failed',
+          uncertain: false,
+          trustKept: true,
+        }),
+      });
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    await section.getByText('Paste and preview a server').click();
+    await section.getByLabel('MCP server text').fill('npx -y fresh-mcp-tools');
+    await section.getByRole('button', { name: 'Preview', exact: true }).click();
+    await section.getByRole('button', { name: 'Configure project import' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Configure MCP import' });
+    await dialog.getByLabel(/I trust this fresh project folder/u).check();
+    const readsBefore = api.requests.filter(request => request.path === '/api/mcp').length;
+    await dialog.getByRole('button', { name: 'Save atomically' }).click();
+
+    await expect(dialog).toHaveCount(0);
+    await expect(section).toContainText('The MCP import failed. The canonical inventory was reloaded.');
+    await expect(section).not.toContainText('Internal rollback detail must not render.');
+    await expect(section.getByRole('article', { name: /fresh-tools: Configured/u })).toHaveCount(0);
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/mcp').length)
+      .toBeGreaterThan(readsBefore);
+    await expect.poll(() => api.requests.some(request => request.path === '/api/workspaces/validate'))
+      .toBe(true);
+  });
+
+  test('remplace une entrée MCP depuis le texte original et restaure le focus après renommage', async ({ page }) => {
+    const api = await installMockApi(page, {
+      mcpConfig: mcpStateInventory(),
+      mcpImportPreview: mcpImportPreviewFixture(),
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const edit = section.getByRole('button', { name: 'Edit remote-docs', exact: true });
+
+    await edit.click();
+    await expect(section.getByText('Replace remote-docs', { exact: true })).toBeVisible();
+    await expect(section.getByLabel('Replacement MCP server text')).toBeFocused();
+    await section.getByRole('button', { name: 'Cancel editing' }).click();
+    await expect(edit).toBeFocused();
+
+    await edit.click();
+    const paste = '{"mcpServers":{"docs-import":{"url":"https://docs.example.test/private?token=SOURCE-EDIT-SECRET","headers":{"Authorization":"Bearer ${DOCS_TOKEN}"}}}}';
+    await section.getByLabel('Replacement MCP server text').fill(paste);
+    await section.getByLabel('Treat resolved values as AiHarness syntax').check();
+    await section.getByRole('button', { name: 'Preview', exact: true }).click();
+    await expect(section.getByRole('heading', { name: 'Redacted replacement preview' })).toBeVisible();
+    await section.getByRole('button', { name: 'Configure replacement' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Configure MCP replacement' });
+    await expect(dialog.getByLabel('Server name')).toBeFocused();
+    await dialog.getByLabel('Server name').fill('remote-docs-v2');
+    await dialog.getByRole('group', { name: 'headers.X-Tenant' }).getByLabel('Value').fill('tenant-value');
+    await dialog.getByLabel('I confirm storing the remaining literal secret values in global configuration.').check();
+    await dialog.getByLabel(/I confirm that these host variables may be sent/u).check();
+    await dialog.getByRole('button', { name: 'Replace atomically' }).click();
+
+    await expect(section).toContainText('MCP configuration updated.');
+    await expect(section.getByRole('article', { name: 'remote-docs-v2: Configured', exact: true })).toBeVisible();
+    await expect(section.getByRole('article', { name: /remote-docs:/u })).toHaveCount(0);
+    await expect(section.getByRole('button', { name: 'Edit remote-docs-v2', exact: true })).toBeFocused();
+    await expect(section).not.toContainText('SOURCE-EDIT-SECRET');
+
+    const previewRequest = api.requests.find(item => item.path === '/api/mcp/preview'
+      && Boolean((item.body as { replacement?: unknown } | undefined)?.replacement));
+    expect(previewRequest?.body).toEqual({
+      text: paste,
+      syntax: 'aiharness',
+      cwd: '/workspace',
+      replacement: {
+        scope: 'global', name: 'remote-docs', revision: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      },
+    });
+    const request = api.requests.find(item => item.path === '/api/mcp/actions'
+      && (item.body as { action?: string } | undefined)?.action === 'replace');
+    expect(request?.body).toEqual({
+      action: 'replace', scope: 'global', revision: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      targetName: 'remote-docs', text: paste, syntax: 'aiharness', entryIndex: 0,
+      name: 'remote-docs-v2', values: { 'headers.X-Tenant': 'tenant-value' },
+      secretReferences: {},
+      confirmations: { literalSecret: true, remoteHostVariables: ['DOCS_TOKEN'] },
+      cwd: '/workspace',
+    });
+    expect(Object.keys(request?.body as object)).not.toContain('configuration');
+  });
+
+  test('invalide l’éditeur MCP et recharge après un résultat de remplacement incertain', async ({ page }) => {
+    const api = await installMockApi(page, {
+      mcpConfig: mcpStateInventory(),
+      mcpImportPreview: mcpImportPreviewFixture(),
+    });
+    await page.route('**/api/mcp/actions', async route => {
+      const body = route.request().postDataJSON() as { action?: string };
+      if (body.action !== 'replace') {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'uncertain', code: 'write-failed', uncertain: true }),
+      });
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const edit = section.getByRole('button', { name: 'Edit remote-docs', exact: true });
+    const readsBefore = api.requests.filter(request => request.path === '/api/mcp').length;
+
+    await edit.click();
+    await section.getByLabel('Replacement MCP server text').fill('npx replacement-server');
+    await section.getByRole('button', { name: 'Preview', exact: true }).click();
+    await section.getByRole('button', { name: 'Configure replacement' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Configure MCP replacement' });
+    await expect(dialog.getByLabel('Server name')).toBeFocused();
+    await dialog.getByRole('group', { name: 'headers.X-Tenant' }).getByLabel('Value').fill('tenant-value');
+    await dialog.getByLabel('I confirm storing the remaining literal secret values in global configuration.').check();
+    await dialog.getByLabel(/I confirm that these host variables may be sent/u).check();
+    await dialog.getByRole('button', { name: 'Replace atomically' }).click();
+
+    await expect(section).toContainText('The action result is uncertain and may have been committed. The inventory was reloaded.');
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/mcp').length)
+      .toBeGreaterThan(readsBefore);
+    await expect(section.getByText('Replace remote-docs', { exact: true })).toHaveCount(0);
+    await expect(edit).toBeFocused();
+    await expect(section.getByRole('article', { name: 'remote-docs: Configured', exact: true })).toBeVisible();
+  });
+
+  test('active et désactive les serveurs MCP par ligne ou groupe en une requête', async ({ page }) => {
+    const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const global = section.locator('fieldset[data-scope="global"]');
+
+    await global.getByRole('button', { name: 'Disable all', exact: true }).click();
+    await expect(global.getByRole('article', { name: 'remote-docs: Disabled', exact: true })).toBeVisible();
+    await expect(global.getByRole('article', { name: 'shared: Replaced by project', exact: true })).toBeVisible();
+    await expect(section).toContainText('MCP configuration updated.');
+    const groupRequest = api.requests.find(request => request.path === '/api/mcp/actions');
+    expect(groupRequest?.body).toMatchObject({
+      action: 'set-enabled', scope: 'global', names: ['remote-docs', 'shared'], enabled: false,
+    });
+
+    await global.getByRole('button', { name: 'Enable local-tools', exact: true }).click();
+    await expect(global.getByRole('article', { name: 'local-tools: Configured', exact: true })).toBeVisible();
+    const mutationRequests = api.requests.filter(request => request.path === '/api/mcp/actions');
+    expect(mutationRequests).toHaveLength(2);
+    expect(mutationRequests[1]?.body).toMatchObject({
+      action: 'set-enabled', scope: 'global', names: ['local-tools'], enabled: true,
+    });
+  });
+
+  test('modifie l’exposition MCP atomiquement et restaure le focus du sélecteur', async ({ page }) => {
+    const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const card = section.getByRole('article', { name: 'remote-docs: Configured', exact: true });
+    const exposure = card.getByRole('combobox', { name: 'Tool exposure for remote-docs' });
+
+    await expect(exposure).toHaveValue('deferred');
+    await exposure.selectOption('direct');
+    await expect(exposure).toHaveValue('direct');
+    await expect(exposure).toBeFocused();
+    await expect(section).toContainText('MCP configuration updated.');
+
+    const request = api.requests.find(item => item.path === '/api/mcp/actions'
+      && (item.body as { action?: string } | undefined)?.action === 'set-exposure');
+    expect(request?.body).toEqual({
+      action: 'set-exposure', scope: 'global', name: 'remote-docs', exposure: 'direct',
+      revision: expect.stringMatching(/^[a-f0-9]{64}$/u), cwd: '/workspace',
+    });
+    expect(Object.keys(request?.body as object)).not.toContain('configuration');
+  });
+
+  test('confirme une suppression MCP, restaure le focus et utilise un undo opaque', async ({ page }) => {
+    const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const remove = section.getByRole('button', { name: 'Remove remote-docs', exact: true });
+
+    await remove.click();
+    const dialog = page.getByRole('alertdialog', { name: 'Remove MCP server?' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(remove).toBeFocused();
+
+    await remove.click();
+    await dialog.getByRole('button', { name: 'Remove', exact: true }).click();
+    await expect(section.getByRole('article', { name: /remote-docs:/u })).toHaveCount(0);
+    const undo = section.getByRole('button', { name: 'Undo', exact: true });
+    await expect(undo).toBeFocused();
+    const removalRequest = api.requests.find(request => request.path === '/api/mcp/actions'
+      && (request.body as { action?: string } | undefined)?.action === 'remove');
+    expect(removalRequest?.body).toMatchObject({ action: 'remove', scope: 'global', name: 'remote-docs' });
+
+    await undo.click();
+    await expect(section.getByRole('article', { name: 'remote-docs: Configured', exact: true })).toBeVisible();
+    const restoreRequest = api.requests.find(request => request.path === '/api/mcp/actions'
+      && (request.body as { action?: string } | undefined)?.action === 'restore');
+    expect(restoreRequest?.body).toMatchObject({ action: 'restore', undoToken: expect.any(String) });
+    expect(Object.keys(restoreRequest?.body as object)).not.toContain('entry');
+  });
+
+  test('recharge l’inventaire après un échec MCP au résultat incertain', async ({ page }) => {
+    const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
+    await page.route('**/api/mcp/actions', async route => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'uncertain', code: 'write-failed', uncertain: true }),
+      });
+    });
+    await page.goto('/settings#mcp');
+    const section = page.locator('#mcp');
+    const readsBefore = api.requests.filter(request => request.path === '/api/mcp').length;
+
+    await section.getByRole('button', { name: 'Disable remote-docs', exact: true }).click();
+    await expect(section).toContainText('The action result is uncertain and may have been committed. The inventory was reloaded.');
+    await expect.poll(() => api.requests.filter(request => request.path === '/api/mcp').length)
+      .toBeGreaterThan(readsBefore);
+    await expect(section.getByRole('article', { name: 'remote-docs: Configured', exact: true })).toBeVisible();
+  });
+
+  for (const reason of MCP_FILE_PROBLEM_REASONS) {
+    test(`localise le diagnostic MCP ${reason} sans afficher le message source`, async ({ page }) => {
+      const trustProblem = reason === 'trust-required' || reason === 'trust-unavailable';
+      await installMockApi(page, {
+        workspaceTrusted: !trustProblem,
+        mcpConfig: mcpFileProblemInventory(reason),
+      });
+      await page.goto('/settings#mcp');
+      const section = page.locator('#mcp');
+
+      await section.getByText('Configuration file diagnostics').click();
+      await expect(section).toContainText(MCP_FILE_PROBLEM_MESSAGES[reason]);
+      await expect(section).not.toContainText('SOURCE-DIAGNOSTIC-MUST-NOT-RENDER');
+    });
+  }
+
   test('gère les plugins npm/git/path, leur inventaire et les mises à jour explicites', async ({ page }) => {
     const api = await installMockApi(page);
     await page.goto('/settings#plugins');
@@ -211,6 +826,19 @@ test.describe('Settings and authentication', () => {
     await globalCard.getByText('Resources and diagnostics').click();
     await expect(globalCard).toContainText('extensions/review-tools.js');
     await expect(globalCard).toContainText('skills/release-review');
+
+    const globalGroup = section.locator('fieldset[data-scope="global"]');
+    const disableRequestPromise = page.waitForRequest(request => request.url().endsWith('/api/plugins/enabled'));
+    await globalGroup.getByRole('button', { name: 'Disable all (1)' }).click();
+    const disableRequest = await disableRequestPromise;
+    expect(disableRequest.method()).toBe('PATCH');
+    expect(disableRequest.postDataJSON().changes).toEqual([{
+      key: 'global:global:11111111111111111111', scope: 'global', enabled: false,
+    }]);
+    await expect(globalCard.getByRole('checkbox')).not.toBeChecked();
+    await expect(section.getByText('Executable extension changes are pending.', { exact: false })).toBeVisible();
+    await globalGroup.getByRole('button', { name: 'Enable all (1)' }).click();
+    await expect(globalCard.getByRole('checkbox')).toBeChecked();
 
     await section.getByLabel('Filter packages').fill('workspace');
     await expect(section.locator('.plugin-card')).toHaveCount(1);
@@ -241,6 +869,28 @@ test.describe('Settings and authentication', () => {
     page.once('dialog', dialog => dialog.accept());
     await installed.getByRole('button', { name: 'Remove' }).click();
     await expect(installed).toHaveCount(0);
+  });
+
+  test('refuse indépendamment une activation groupée projet sans confiance', async ({ page }) => {
+    await installMockApi(page, { workspaceTrusted: false });
+    await page.goto('/settings#plugins');
+    const section = page.locator('#plugins');
+    const projectGroup = section.locator('fieldset[data-scope="project"]');
+    const projectCard = projectGroup.locator('.plugin-card').filter({ hasText: 'workspace-kit' });
+
+    await projectGroup.getByRole('button', { name: 'Disable all (1)' }).click();
+    await expect(projectCard.getByRole('checkbox')).not.toBeChecked();
+    await expect(section.getByText('Executable extension changes are pending.', { exact: false })).toBeVisible();
+    const requestPromise = page.waitForRequest(request => request.url().endsWith('/api/plugins/enabled'));
+    await projectGroup.getByRole('button', { name: 'Enable all (1)' }).click();
+    const request = await requestPromise;
+    expect(request.method()).toBe('PATCH');
+    expect(request.postDataJSON().changes).toEqual([{
+      key: 'project:workspace-e2e:22222222222222222222', scope: 'project', enabled: true,
+    }]);
+    await expect(section.getByRole('alert')).toContainText('Changed: 0 · unchanged: 0 · refused: 1.');
+    await expect(section).toContainText('workspace-kit: Project trust is required.');
+    await expect(projectCard.getByRole('checkbox')).not.toBeChecked();
   });
 
   test('verrouille les packages projet non approuvés sans bloquer l’administration globale', async ({ page }) => {
@@ -291,13 +941,13 @@ test.describe('Settings and authentication', () => {
     await dialog.getByLabel('Name').fill('Security review');
     await dialog.getByLabel('Description').fill('Review trust boundaries');
     await dialog.getByLabel('Instructions').fill('Inspect the selected trust boundaries.');
-    await dialog.getByLabel('Tools').fill('read_file, search_files');
+    await dialog.getByLabel('Tools').fill('read, grep');
     await dialog.getByLabel('Skills').fill('review-project');
     await dialog.getByLabel('Maximum turns').fill('6');
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(section.getByText('Security review', { exact: true })).toBeVisible();
     const custom = section.locator('.subagent-profile-card').filter({ hasText: 'Security review' });
-    await expect(custom).toContainText('read_file, search_files');
+    await expect(custom).toContainText('read, grep');
     await custom.getByRole('button', { name: 'Duplicate' }).click();
     await expect(section.getByText('Security review copy', { exact: true })).toBeVisible();
   });
@@ -346,22 +996,22 @@ test.describe('Settings and authentication', () => {
     await installMockApi(page);
     await page.goto('/settings');
     const appearance = settingsSection(page, 'Appearance');
-    await appearance.locator('select').selectOption('pine');
+    await appearance.getByLabel(/^Theme/u).selectOption('pine');
     await appearance.locator('input[type=range]').nth(0).fill('1200');
     await appearance.locator('input[type=range]').nth(1).fill('18');
     await appearance.locator('input[type=checkbox]').nth(0).check();
     await appearance.locator('input[type=checkbox]').nth(1).check();
 
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'pine');
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ai-harness-preferences-v3') || '{}')))
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ai-harness-preferences-v4') || '{}')))
       .toMatchObject({
-        version: 3, theme: 'pine', contentWidth: 1200, fontSize: 18, reasoningOpen: true, sound: true,
+        version: 4, theme: 'pine', sendMode: 'enter', contentWidth: 1200, fontSize: 18, reasoningOpen: true, sound: true,
         soundEvents: { completion: true, attention: true },
         notificationEvents: { completion: true, attention: true },
         pushEvents: { completion: true, attention: true },
       });
     await page.reload();
-    const theme = settingsSection(page, 'Appearance').locator('select');
+    const theme = settingsSection(page, 'Appearance').getByLabel(/^Theme/u);
     await expect(theme).toHaveValue('pine');
     await expect(theme.locator('option')).toHaveText(['System', 'Light', 'Dark', 'Mist', 'Rose', 'Pine']);
     await theme.selectOption('system');

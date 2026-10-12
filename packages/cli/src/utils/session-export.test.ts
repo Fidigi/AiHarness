@@ -48,6 +48,16 @@ describe('session HTML export', () => {
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
   });
 
+  it('escapes untrusted tool labels without double-escaping ordinary characters', () => {
+    for (const name of ['<img src=x onerror=alert(1)>', `a & b "q" 'x'`, 'normal-tool']) {
+      const html = renderSessionHtml(session({
+        messages: [{ id: 'tool-result', role: 'tool', name, content: 'Result', timestamp: new Date() }],
+      }));
+      expect(html).toContain(`<strong>Outil · ${escapeHtml(name)}</strong>`);
+      if (name.includes('<')) expect(html).not.toContain(name);
+    }
+  });
+
   it('renders an explicit empty-state paragraph', () => {
     expect(renderSessionHtml(session())).toContain('aucun message');
   });

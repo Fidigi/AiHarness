@@ -2,11 +2,10 @@
 // Web App - Main Component
 // ============================================================
 
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
-import WorkspacePanel from './components/WorkspacePanel';
+import WorkspacePanelBoundary from './components/WorkspacePanelBoundary';
 import LoginView from './components/LoginView';
 import PwaStatus from './components/PwaStatus';
 import CommandPalette from './components/CommandPalette';
@@ -14,11 +13,13 @@ import StatusCenter from './components/StatusCenter';
 import { SubagentMonitor } from './components/SubagentMonitor';
 import { useI18n } from './hooks/useI18n';
 import { getAgentRun, getWebAuthStatus, listRunningAgentRuns } from './services/api';
-import { useSessionStore } from './store/session-store';
+import { captureCanonicalRunGuard, useSessionStore } from './store/session-store';
 import { readPreferences, usePreferences } from './store/preferences';
 import { matchesShortcut } from './services/keyboard';
+import { InteractionViewLifetime } from './services/interaction-scope';
 
 const SettingsView = lazy(() => import('./components/SettingsView'));
+const Sidebar = lazy(() => import('./components/Sidebar'));
 const TerminalPanel = lazy(() => import('./components/TerminalPanel'));
 
 function App() {
@@ -85,27 +86,37 @@ function App() {
     navigate(`/chat/${encodeURIComponent(activeSessionId)}?cwd=${encodeURIComponent(workspace.cwd)}`, { replace: true });
   }, [activeSessionId, location.pathname, navigate, workspace]);
 
+  const runPollLifetime = useRef(new InteractionViewLifetime());
+  const runPollView = runPollLifetime.current.enter(JSON.stringify([workspace?.id, workspace?.cwd, activeSessionId, location.key, location.pathname, location.search, location.hash, authenticated]));
+  const runPollViewRef = useRef(runPollView);
+  runPollViewRef.current = runPollView;
   useEffect(() => {
-    if (!workspace) return;
+    if (!workspace || !authenticated) return;
     let disposed = false;
     let request: AbortController | undefined;
     const refreshRuns = async () => {
       request?.abort();
       request = new AbortController();
       const signal = request.signal;
+      // The unversioned list is only a discovery hint. It cannot overwrite work
+      // admitted/updated while this request was pending (including an empty list).
+      const captured = useSessionStore.getState();
+      const guardFor = (sessionId: string) => captureCanonicalRunGuard(captured, sessionId);
       const result = await listRunningAgentRuns(signal);
-      if (disposed || signal.aborted || !result.success || !result.data) return;
+      if (disposed || signal.aborted || runPollViewRef.current !== runPollView || !result.success || !result.data) return;
       const running = result.data.filter(run => run.workspaceId ? run.workspaceId === workspace.id : run.cwd === workspace.cwd);
       const runningIds = new Set(running.map(run => run.id));
-      for (const run of running) setRun(run.sessionId, run);
-      const stale = Object.values(useSessionStore.getState().runs).filter(run => (
+      for (const run of running) setRun(run.sessionId, run, guardFor(run.sessionId));
+      const stale = Object.values(captured.runs).filter(run => (
         (run.workspaceId ? run.workspaceId === workspace.id : run.cwd === workspace.cwd)
         && !['completed', 'failed', 'stopped'].includes(run.phase)
         && !runningIds.has(run.id)
       ));
       await Promise.all(stale.map(async run => {
         const terminal = await getAgentRun(run.id, signal);
-        if (!disposed && !signal.aborted && terminal.success && terminal.data) setRun(run.sessionId, terminal.data);
+        if (!disposed && !signal.aborted && runPollViewRef.current === runPollView && terminal.success && terminal.data && terminal.data.id === run.id) {
+          setRun(run.sessionId, terminal.data, { ...guardFor(run.sessionId), canonical: false });
+        }
       }));
     };
     const onVisibility = () => { if (!document.hidden) void refreshRuns(); };
@@ -118,7 +129,7 @@ function App() {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [setRun, workspace?.cwd, workspace?.id]);
+  }, [setRun, workspace?.cwd, workspace?.id, activeSessionId, location.pathname, location.search, location.hash, location.key, authenticated, runPollView]);
 
   useEffect(() => {
     const requestTerminal = () => {
@@ -141,7 +152,8 @@ function App() {
     };
   }, [location.pathname, workspace?.id]);
 
-  useEffect(() => {
+  // Register before the bootstrap DOM is observable, not in a later passive task.
+  useLayoutEffect(() => {
     const toggleFiles = () => {
       setFilesOpen(!filesOpen);
       setPreferences({ filesOpen: !filesOpen });
@@ -203,7 +215,8 @@ function App() {
   if (!authenticated) return <LoginView onLogin={() => setAuthenticated(true)} />;
 
   return (
-    <div className={`app ${sidebarVisible ? '' : 'sidebar-hidden'}`}>
+    <Suspense fallback={<div className="app-loading" role="status">{t('common.loading')}…</div>}>
+      <div className={`app ${sidebarVisible ? '' : 'sidebar-hidden'}`}>
       <button className="mobile-menu" onClick={() => setSidebarOpen(open => !open)}
         aria-expanded={sidebarOpen} aria-label={t('sidebar.toggle')}><span className="menu-icon" aria-hidden="true" /></button>
       {!location.pathname.startsWith('/settings') && <button className="mobile-files" onClick={() => {
@@ -223,7 +236,7 @@ function App() {
           }><SettingsView /></Suspense>} />
         </Routes>
       </main>
-      {!location.pathname.startsWith('/settings') && filesOpen && <WorkspacePanel isOpen={filesOpen} onRequestClose={() => {
+      {!location.pathname.startsWith('/settings') && workspace && filesOpen && <WorkspacePanelBoundary key={JSON.stringify([workspace?.id, workspace?.cwd, activeSessionId, location.key, location.pathname, location.search, location.hash])} onRequestClose={() => {
         setFilesOpen(false);
         setPreferences({ filesOpen: false });
       }} />}
@@ -236,7 +249,8 @@ function App() {
       <SubagentMonitor />
       <StatusCenter />
       <PwaStatus />
-    </div>
+      </div>
+    </Suspense>
   );
 }
 

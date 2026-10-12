@@ -1,8 +1,15 @@
 import type { AiProvider, ChatOptions } from '../providers/index.js';
+import type { BeforeSpecializedModel, SpecializedModelType, SpecializedModelRequest } from '../providers/specialized-models.js';
 import { ProviderFactory } from '../providers/index.js';
-import type { Message, ProviderConfig, Session } from '../types/index.js';
+import { AI_HARNESS_EXTENSION_API_VERSION } from '../public-api-version.js';
+import type { CodemodeProgress, Message, ProviderConfig, Session } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
+import type { AgentToolExposure, AgentToolNamespace } from '../tools/tool-selection.js';
+import type { ToolProgressInput } from '../agent/tool-progress.js';
 import { EventEmitter, type EventHandler, type EventMap } from '../utils/event-emitter.js';
+
+import { validateExtensionOption, type ExtensionOption, type ExtensionOptionDescriptor, type ExtensionOptionValue } from './startup-options.js';
+export type { ExtensionOption, ExtensionOptionDescriptor, ExtensionOptionValue } from './startup-options.js';
 
 export type ExtensionLogLevel = 'info' | 'success' | 'warning' | 'error';
 
@@ -33,12 +40,29 @@ export interface ExtensionInteractionRequest {
   fields?: ExtensionInteractionField[];
   output?: string;
   ansi?: boolean;
+  /** Optional host-side timeout for dialog interactions, in milliseconds. */
+  timeoutMs?: number;
+  /** Optional cancellation signal; never serialized to clients. */
+  signal?: AbortSignal;
 }
 
 export interface ExtensionInteractionResponse {
   cancelled: boolean;
   value?: unknown;
 }
+
+/** Full replacement of display/schema only; cancellation and deadline remain attached to the original request. */
+export type ExtensionInteractionUpdate = Omit<ExtensionInteractionRequest, 'signal' | 'timeoutMs'>;
+
+/** Optional on adapters; detached hosts issue these capabilities, never accept caller-owned IDs. */
+export interface ExtensionInteractionControls {
+  readonly id: string;
+  update(request: ExtensionInteractionUpdate): boolean;
+  close(): boolean;
+}
+
+export type ExtensionInteractionPromise = Promise<ExtensionInteractionResponse> & Partial<ExtensionInteractionControls>;
+export type ExtensionInteractionHandle = Promise<ExtensionInteractionResponse> & ExtensionInteractionControls;
 
 export interface ExtensionRuntimeContext {
   sessionManager: SessionManager;
@@ -53,7 +77,17 @@ export interface ExtensionRuntimeContext {
   workspaceId?: string;
   projectTrusted?: boolean;
   notify(message: string, level?: ExtensionLogLevel): void;
-  requestInteraction?(request: ExtensionInteractionRequest): Promise<ExtensionInteractionResponse>;
+  /** Host correlation/sink installed by the shared tool loop, never by guest source. */
+  toolCallId?: string;
+  onCodemodeProgress?(progress: CodemodeProgress): void;
+  /** Bounded display-only snapshots. Await to apply downstream backpressure. */
+  onProgress?(progress: ToolProgressInput): Promise<void>;
+  beforeSpecializedModel?: BeforeSpecializedModel;
+  /** Optional raw subprocess output sink; awaiting it applies downstream backpressure. */
+  onProcessOutput?(chunk: string): void | Promise<void>;
+  /** Host-owned path where the same complete subprocess stream is retained. */
+  processOutputPath?: string;
+  requestInteraction?(request: ExtensionInteractionRequest): ExtensionInteractionPromise;
 }
 
 export interface ExtensionCommand {
@@ -72,6 +106,10 @@ export interface ExtensionTool<TInput = Record<string, unknown>, TDetails = unkn
   name: string;
   description: string;
   parameters?: Record<string, unknown>;
+  /** Direct by default; codemode/deferred tools are loaded through tool_search. */
+  exposure?: AgentToolExposure;
+  /** Optional metadata used by deferred ranking and future nested runtimes. */
+  namespace?: AgentToolNamespace;
   execute(
     input: TInput,
     context: ExtensionRuntimeContext,
@@ -119,6 +157,8 @@ export interface BeforeHookMap {
   'before:agent': BeforeAgentData;
   'before:provider': BeforeProviderData;
   'before:tool': BeforeToolData;
+  /** Native/virtual SDK requests are not conversational provider turns. */
+  'before:model': { type: SpecializedModelType; request: SpecializedModelRequest; context: ExtensionRuntimeContext; signal: AbortSignal };
 }
 
 export interface HookCancellation {
@@ -145,6 +185,12 @@ export interface ExtensionInfo {
 }
 
 export interface ExtensionAPI {
+  /** Major version of this AiHarness-owned extension contract. */
+  readonly version: typeof AI_HARNESS_EXTENSION_API_VERSION;
+  /** Register an owned long startup option; disposing or unloading removes it. */
+  registerOption(name: string, option: ExtensionOption): () => void;
+  /** Reads only this extension's options. Explicit values are ready after startup parsing. */
+  getOption(name: string): ExtensionOptionValue | undefined;
   registerCommand(name: string, command: ExtensionCommand): void;
   registerTool(tool: ExtensionTool): void;
   registerProvider(type: string, provider: ExtensionProvider): void;
@@ -167,9 +213,11 @@ interface LoadedExtension {
   cleanups: Array<() => void | Promise<void>>;
 }
 
-type StoredBeforeHook = BeforeHookHandler<any>;
+type StoredBeforeHook = BeforeHookHandler<BeforeHookMap[keyof BeforeHookMap]>;
+type SessionEvent = 'session:create' | 'session:delete' | 'session:update' | 'session:switch'
+  | 'message:add' | 'message:clear' | 'compaction:start' | 'compaction:end' | 'compaction:error';
 
-const SESSION_EVENTS: Array<keyof EventMap> = [
+const SESSION_EVENTS: SessionEvent[] = [
   'session:create',
   'session:delete',
   'session:update',
@@ -183,6 +231,8 @@ const SESSION_EVENTS: Array<keyof EventMap> = [
 
 /** Runtime registry for extension commands, tools, providers and lifecycle hooks. */
 export class ExtensionRegistry {
+  private readonly startupOptions = new Map<string, Owned<ExtensionOption>>();
+  private startupOptionValues: Readonly<Record<string, ExtensionOptionValue>> = Object.freeze({});
   private readonly commands = new Map<string, Owned<ExtensionCommand>>();
   private readonly tools = new Map<string, Owned<ExtensionTool>>();
   private readonly providers = new Map<string, Owned<ExtensionProvider>>();
@@ -220,8 +270,8 @@ export class ExtensionRegistry {
     for (const cleanup of [...extension.cleanups].reverse()) {
       try {
         await cleanup();
-      } catch (error) {
-        console.error(`[ExtensionRegistry] Cleanup failed for "${id}":`, error);
+      } catch {
+        console.error('[ExtensionRegistry] Extension cleanup failed.');
       }
     }
     return true;
@@ -240,6 +290,7 @@ export class ExtensionRegistry {
     previousIds: Iterable<string>,
     candidates: Array<{ id: string; factory: ExtensionFactory }>,
   ): Promise<void> {
+    const previousOptionValues = this.startupOptionValues;
     const previous = [...new Set(previousIds)]
       .map(id => this.loaded.get(id))
       .filter((item): item is LoadedExtension => Boolean(item))
@@ -263,11 +314,32 @@ export class ExtensionRegistry {
           restoreErrors.push(`${item.id}: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`);
         }
       }
+      const restoredValues = Object.fromEntries(Object.entries(previousOptionValues).filter(([name, value]) =>
+        this.startupOptions.get(name)?.value.type === typeof value,
+      ));
+      this.setOptionValues(restoredValues);
       if (restoreErrors.length) {
         throw new AggregateError([error], `Extension reload failed and rollback was incomplete: ${restoreErrors.join('; ')}`);
       }
       throw error;
     }
+  }
+
+  getOptions(): ExtensionOptionDescriptor[] {
+    return [...this.startupOptions].map(([name, entry]) => ({ ...entry.value, name, extensionId: entry.owner }));
+  }
+
+  /** Host-only, atomic assignment after strict parsing; defaults are resolved by getOption. */
+  setOptionValues(values: Readonly<Record<string, ExtensionOptionValue>>): void {
+    if (Object.keys(values).length > 256) throw new Error('Too many extension option values.');
+    for (const [name, value] of Object.entries(values)) {
+      const option = this.startupOptions.get(name)?.value;
+      if (!option || typeof value !== option.type || (typeof value === 'string'
+        && (!value || value.length > 4096 || /[\x00-\x1f\x7f-\x9f]/.test(value)))) {
+        throw new Error('Invalid extension startup option value.');
+      }
+    }
+    this.startupOptionValues = Object.freeze({ ...values });
   }
 
   getCommand(name: string): ExtensionCommand | undefined {
@@ -295,25 +367,53 @@ export class ExtensionRegistry {
   ): Promise<ExtensionToolResult> {
     const tool = this.tools.get(this.normalizeName(name))?.value;
     if (!tool) throw new Error(`Unknown extension tool: ${name}`);
-    if (signal?.aborted) throw new Error(`Tool execution aborted: ${name}`);
+    return this.executeHostedTool(
+      tool.name,
+      input,
+      context,
+      (hostInput, hostContext, hostSignal) => tool.execute(
+        hostInput as Record<string, unknown>, hostContext, hostSignal,
+      ),
+      signal,
+    );
+  }
 
-    const hook = await this.runBefore('before:tool', { tool: tool.name, input, context });
+  /** Apply the same hooks/events to a session-hosted tool that is not in the static registry. */
+  async executeHostedTool(
+    name: string,
+    input: unknown,
+    context: ExtensionRuntimeContext,
+    execute: (
+      input: unknown,
+      context: ExtensionRuntimeContext,
+      signal?: AbortSignal,
+    ) => ExtensionToolResult | Promise<ExtensionToolResult>,
+    signal?: AbortSignal,
+  ): Promise<ExtensionToolResult> {
+    if (signal?.aborted) throw new Error(`Tool execution aborted: ${name}`);
+    const hostToolCallId = context.toolCallId;
+    const hostProgress = context.onProgress;
+    const hook = await this.runBefore('before:tool', { tool: name, input, context });
     if (hook.cancelled) {
-      throw new Error(hook.reason || `Tool execution cancelled by extension hook: ${tool.name}`);
+      throw new Error(hook.reason || `Tool execution cancelled by extension hook: ${name}`);
     }
 
-    await this.emit('tool:call', { tool: tool.name, input: hook.data.input });
+    await this.emit('tool:call', { tool: name, input: hook.data.input });
     try {
-      const result = await tool.execute(hook.data.input as Record<string, unknown>, hook.data.context, signal);
+      // Hooks may transform inputs/context, not replace host correlation or the
+      // bounded progress sink. Nested codemode contexts have no outer call ID.
+      const executionContext = { ...hook.data.context, toolCallId: hostToolCallId,
+        onProgress: hostToolCallId ? hostProgress : undefined };
+      const result = await execute(hook.data.input, executionContext, signal);
       await this.emit('tool:result', {
-        tool: tool.name,
+        tool: name,
         isError: Boolean(result.isError),
         contentLength: result.content.length,
       });
       return result;
     } catch (error) {
       await this.emit('tool:error', {
-        tool: tool.name,
+        tool: name,
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
@@ -363,16 +463,19 @@ export class ExtensionRegistry {
     data: BeforeHookMap[K],
   ): Promise<BeforeHookExecution<BeforeHookMap[K]>> {
     let transformed = { ...data } as BeforeHookMap[K];
+    const signal = event === 'before:model' ? (data as BeforeHookMap['before:model']).signal : undefined;
     for (const entry of this.beforeHooks.get(event) ?? []) {
+      if (signal?.aborted) return { data: transformed, cancelled: true };
       let result: BeforeHookResult<BeforeHookMap[K]>;
       try {
-        result = await entry.value(transformed);
+        const handler = entry.value as unknown as BeforeHookHandler<BeforeHookMap[K]>;
+        result = await handler(transformed);
       } catch (error) {
         throw new Error(
           `Extension hook "${String(event)}" failed in "${entry.owner}": ${error instanceof Error ? error.message : String(error)}`,
         );
       }
-      if (result === false) return { data: transformed, cancelled: true };
+      if (signal?.aborted || result === false) return { data: transformed, cancelled: true };
       if (result && 'cancel' in result && result.cancel === true) {
         return { data: transformed, cancelled: true, reason: result.reason };
       }
@@ -385,11 +488,12 @@ export class ExtensionRegistry {
     this.detachSessionEvents?.();
     const detach: Array<() => void> = [];
 
-    for (const event of SESSION_EVENTS) {
-      const handler: EventHandler<any> = data => this.lifecycle.emit(event as any, data);
-      sessionManager.on(event as any, handler);
-      detach.push(() => sessionManager.off(event as any, handler));
-    }
+    const attach = <K extends SessionEvent>(event: K): void => {
+      const handler: EventHandler<EventMap[K]> = data => this.lifecycle.emit(event, data);
+      sessionManager.on(event, handler);
+      detach.push(() => sessionManager.off(event, handler));
+    };
+    for (const event of SESSION_EVENTS) attach(event);
     this.detachSessionEvents = () => detach.forEach(remove => remove());
   }
 
@@ -412,6 +516,34 @@ export class ExtensionRegistry {
 
   private createApi(extension: LoadedExtension): ExtensionAPI {
     return {
+      version: AI_HARNESS_EXTENSION_API_VERSION,
+      registerOption: (name, metadata) => {
+        if (!this.loaded.has(extension.id) || this.loaded.get(extension.id) !== extension) {
+          throw new Error('Cannot register startup options for an unloaded extension.');
+        }
+        const option = validateExtensionOption(name, metadata);
+        if (this.startupOptions.size >= 256
+          || [...this.startupOptions.values()].filter(entry => entry.owner === extension.id).length >= 32) {
+          throw new Error('Extension startup option limit exceeded.');
+        }
+        this.assertAvailable(this.startupOptions, name, 'startup option');
+        const entry = { owner: extension.id, value: option };
+        this.startupOptions.set(name, entry);
+        const dispose = (): void => {
+          if (this.startupOptions.get(name) !== entry) return;
+          this.startupOptions.delete(name);
+          const values = { ...this.startupOptionValues };
+          delete values[name];
+          this.startupOptionValues = Object.freeze(values);
+        };
+        extension.cleanups.push(dispose);
+        return dispose;
+      },
+      getOption: name => {
+        const entry = this.startupOptions.get(name);
+        if (!entry || entry.owner !== extension.id || this.loaded.get(extension.id) !== extension) return undefined;
+        return Object.hasOwn(this.startupOptionValues, name) ? this.startupOptionValues[name] : entry.value.default;
+      },
       registerCommand: (name, command) => {
         const normalized = this.normalizeName(name);
         this.assertAvailable(this.commands, normalized, 'command');
@@ -448,7 +580,10 @@ export class ExtensionRegistry {
       },
       before: (event, handler) => {
         const hooks = this.beforeHooks.get(event) ?? [];
-        const entry: Owned<StoredBeforeHook> = { owner: extension.id, value: handler };
+        const entry: Owned<StoredBeforeHook> = {
+          owner: extension.id,
+          value: handler as unknown as StoredBeforeHook,
+        };
         hooks.push(entry);
         this.beforeHooks.set(event, hooks);
         const unsubscribe = () => {

@@ -7,6 +7,8 @@
 - [Widgets, notices and interactive requests](#widgets-notices-and-interactive-requests)
   - [Interaction types](#interaction-types)
   - [Lifecycle](#lifecycle)
+  - [Optional form loading and focus](#optional-form-loading-and-focus)
+  - [Detached host queue contract](#detached-host-queue-contract)
 - [Security and loader limits](#security-and-loader-limits)
 - [Administration via Settings](#administration-via-settings)
 
@@ -57,7 +59,7 @@ An extension can publish:
 1. Active extension → AgentRuntime publishes an `extension.ui` event
 2. Server stores the request in the active run snapshot
 3. Event broadcast to browser via SSE
-4. ChatView renders dialog with focus trap and Escape handling
+4. ChatView presents local loading/error, then lazily mounts the declarative form and its CSS
 5. User responds or cancels (`POST /api/agent/sessions/:sessionId/interactions/:requestId`)
 6. Server revalidates structured response before resolving extension
 7. If tab not visible, a Web Push notification category "attention" is sent
@@ -67,7 +69,41 @@ An extension can publish:
 - An interaction **always requires an active run**. Without a run, it is ignored.
 - Custom forms remain declarative: no arbitrary HTML or direct DOM access.
 - The structured response is revalidated by `AgentRuntime` before resolution.
-- Focus remains trapped in the dialog while open, then returns to previous control.
+- The mounted form owns its focus trap and ordinary Escape; return respects current view, newer focus and other modals rather than always restoring the previous control.
+
+New extension-command notices published through the session API omit `runId` when the session's current run is `completed`, `failed` or `stopped`; while that run is active, correlation is retained. A run-bound `notify` callback captured from a tool context retains its original `runId`, even when called after that run terminates. This is an event-correlation contract, not a guarantee of browser notice presentation or new interaction admission.
+
+Session title metadata does not define ChatView’s SSE subscription lifetime: canonical title refresh must not retire the stream or discard a valid notice. Existing attention/completion/failure notifications read the latest canonical title already in the browser store for the subscribed session at dispatch, falling back to `AiHarness` if absent or empty. Existing session/cwd replacement and view unmount still cancel owned transport; this does not add full-address SSE epochs or complete browser queue/attention delivery.
+
+### Optional Form Loading and Focus
+
+`ExtensionInteractionBoundary.tsx` remains eager; only a pending singular request imports `ExtensionInteractionDialog.tsx` and its stylesheet. Loading/error is nonmodal and translated, with Close/Cancel still available, while composer and Stop remain usable. Failed imports stay cached even after reopening. **Reload and retry** reloads the page, so copy unsent text first.
+
+Request/schema or view replacement aborts the response transport and suppresses stale browser publication; it does not roll back a response already accepted by Server. The view tuple includes workspace ID/cwd, session, run and all route identity fields. Same-ID/kind compatible controls retain drafts and connected composition. Changed/removed controls reset. IME and legacy key-code 229 Enter/Escape remain native editing, not form acknowledgement/cancellation; ordinary post-composition Enter can submit once.
+
+Initial focus is admitted before import completion and checked again on the renderer's first frame. Newer focus (even followed by blur), another modal, or the same request re-presented in a replacement route defeats admission. Return requires a current view, unchanged available fallback and no newer focus/modal. Coarse pointers avoid unsolicited editable focus, but guarded return to the composer remains possible after manual editing inside the form; external focus clears that editing intent.
+
+`extension-interaction-dialog.test.ts` protects fields, inert text, CSS/transport/copy and draft projection. Production-preview `e2e/interaction-single-asset-load.spec.ts` exercises actual JS/CSS delay/refusal, reload and focus/IME/lifetime controls. `e2e/interaction-live-boundary.spec.ts` separately proves real extension/HTTP validation and response/cancel through the mock provider. Chromium touch emulation is not physical Android/iOS/Safari certification.
+
+### Detached Host Queue Contract
+
+The detached Core/Server host supports concurrent pending requests. The Web client presents the ordered head and waiting count, with restoration-aware attention and browser-local stale-reply/discovery guards. The form advances without an intermediate focus return. These guards do not prove backend Stop settlement, general delayed fork transactions or physical-device behavior.
+
+- `requestInteraction(request)` returns an awaitable Promise. Detached hosts additionally issue readonly `id`, `update(replacement)` and `close()` controls; other adapters may omit them. Retain the returned handle: knowing an ID alone gives no update/close authority.
+- `update` fully replaces display/schema without changing ID, admission order, creation time, original AbortSignal or deadline. Omitted display fields are removed. The next response is checked against the latest schema.
+- Responses, close, abort and timeout settle once. Retired/settled controls return `false`. No active run yields `{cancelled: true}`.
+- Per run: 16 pending requests, 128,000 UTF-8 JSON bytes per normalized request and 512,000 aggregate bytes. Admission/updates exceeding these bounds throw `409 EXTENSION_INTERACTION_QUEUE_FULL` without replacing prior state. Normalization retains existing field/string limits and secret redaction.
+- An optional timeout must be finite, nonnegative and at most 2,147,483,647 ms; invalid values throw `400 INVALID_EXTENSION_INTERACTION_TIMEOUT`. Signals and timeouts never enter reconnect snapshots.
+- `extensionRequests` carries complete admission-order reconnect state; `extensionRequest` remains the first entry. Events carry only the changed request or closed ID. HTTP response/cancel stays bound to session/request IDs; stale, foreign or repeated responses return 404.
+- Stop, settlement, successful executable/tool-generation commits and failed-workspace safety clearing cancel requests and revoke old requesters. Passive reads and failed same-workspace candidates preserve the current generation. Server binds command requesters before session/trust awaits.
+
+These are in-memory requests, not crash-durable dialogs or concurrent CLI/RPC UI parity. The inherited completed-run registry is not newly bounded. Stop acknowledgement is not durable settlement: interrupted-tool accounting still persists before terminal replay.
+
+## Experimental Generic Tool Progress — WIP
+
+`ToolProgressBoundary`, `ToolProgressCard` and `tool-progress-state.ts` preserve a work-in-progress browser adapter for host-issued v1 progress. Text/details are inert and bounded; custom progress does not replace the specialized code-mode card or acquire invocation, usage or store authority.
+
+This delivery is **not browser-qualified**. Docker compilation/build/lint and all 1,917 unit plus five Node tests pass. The complete real-extension `e2e/tool-progress.spec.ts` has 13 failures/one pass in development and 14 failures against built preview, using explicit `node --no-maglev`, one worker and zero retries. Terminal display/reload, readiness catch-up, lazy assets and proposed captures remain unresolved. The 24 progress PNGs are provisional test expectations, not validated product baselines. No snapshots or assertions were weakened; no audit criterion is closed by this WIP checkpoint.
 
 ## Security and Loader Limits
 

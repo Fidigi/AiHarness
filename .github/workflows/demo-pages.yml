@@ -1,0 +1,114 @@
+name: Static demo Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'demo/**'
+      - 'e2e/demo*.spec.ts'
+      - '.github/workflows/demo-pages.yml'
+      - '.docker/Dockerfile.test'
+      - '.docker/test-fonts.conf'
+      - '.docker/test-fonts.test.mjs'
+      - '.dockerignore'
+      - 'Makefile'
+      - '.npmrc'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'packages/web/src/components/MarkdownContent*'
+      - 'packages/web/src/components/markdown-*.ts'
+      - 'packages/web/src/components/composer-submit.ts'
+      - 'packages/web/src/hooks/useFocusTrap.ts'
+      - 'packages/web/src/hooks/useI18n.tsx'
+      - 'packages/web/src/i18n/**'
+      - 'packages/web/src/store/preferences.ts' # composer-submit's type dependency
+      - 'packages/web/src/services/keyboard.ts'
+      - 'packages/core/**' # Dockerfile.test rebuilds Core before demo validation.
+      - 'packages/*/package.json'
+      - 'tsconfig.json'
+  pull_request:
+    paths:
+      - 'demo/**'
+      - 'e2e/demo*.spec.ts'
+      - '.github/workflows/demo-pages.yml'
+      - '.docker/Dockerfile.test'
+      - '.docker/test-fonts.conf'
+      - '.docker/test-fonts.test.mjs'
+      - '.dockerignore'
+      - 'Makefile'
+      - '.npmrc'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'packages/web/src/components/MarkdownContent*'
+      - 'packages/web/src/components/markdown-*.ts'
+      - 'packages/web/src/components/composer-submit.ts'
+      - 'packages/web/src/hooks/useFocusTrap.ts'
+      - 'packages/web/src/hooks/useI18n.tsx'
+      - 'packages/web/src/i18n/**'
+      - 'packages/web/src/store/preferences.ts'
+      - 'packages/web/src/services/keyboard.ts'
+      - 'packages/core/**'
+      - 'packages/*/package.json'
+      - 'tsconfig.json'
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy the validated artifact (main branch only; Pages must already use GitHub Actions)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: static-demo-pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Validate repository-derived Pages base, build and test in Docker
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          # Extract the validated base with Node inside Docker, never eval repository input.
+          DEMO_BASE="$(docker run --rm -e GITHUB_REPOSITORY -v "$PWD/demo/scripts:/scripts:ro" node:26-bookworm-slim node /scripts/base-path.mjs)"
+          export DEMO_BASE
+          bash demo/run-docker.sh
+      - name: Upload test evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: demo-test-evidence
+          path: |
+            demo/playwright-report/
+            demo/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Upload validated static Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: demo/dist
+          retention-days: 7
+
+  deploy:
+    # Fork/PR code can validate and upload, but never gains Pages or OIDC authority.
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy)) }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy the already validated artifact
+        id: deployment
+        uses: actions/deploy-pages@v4

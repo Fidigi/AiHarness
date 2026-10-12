@@ -1,19 +1,59 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { createServer, request as requestHttp } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { EncryptedCredentialStore, MockProvider, type ChatOptions } from '@ai-harness/core';
 import { start, stop } from './index.js';
 
 const html = '<!doctype html><html><head><title>AiHarness Test</title></head><body>Web bundle</body></html>';
 const execFileAsync = promisify(execFile);
+const openDirectory = vi.fn(async (_directory: string) => undefined);
+
+async function requestWithHost(
+  baseUrl: string,
+  method: 'GET' | 'POST',
+  route: string,
+  host: string,
+  body?: unknown,
+): Promise<{ status: number; body: unknown }> {
+  const target = new URL(baseUrl);
+  const serialized = body === undefined ? undefined : JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const request = requestHttp({
+      hostname: target.hostname,
+      port: target.port,
+      path: route,
+      method,
+      headers: {
+        Host: host,
+        ...(serialized ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(serialized) } : {}),
+      },
+    }, response => {
+      const chunks: Buffer[] = [];
+      response.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      response.on('end', () => {
+        try {
+          resolve({ status: response.statusCode ?? 0, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    request.once('error', reject);
+    request.end(serialized);
+  });
+}
 
 describe('combined Web server', () => {
   let webRoot = '';
   let baseUrl = '';
+  const previousMasterKey = process.env.AI_HARNESS_MASTER_KEY;
 
   beforeAll(async () => {
+    process.env.AI_HARNESS_MASTER_KEY = 'web-server-test-master-key';
     webRoot = await mkdtemp(path.join(os.tmpdir(), 'ai-harness-web-'));
     await writeFile(path.join(webRoot, 'index.html'), html);
     const server = await start({
@@ -24,17 +64,93 @@ describe('combined Web server', () => {
       allowedRoots: [webRoot],
       defaultCwd: webRoot,
       enableMockProvider: true,
+      fileManager: { platform: 'linux', openDirectory },
     });
     baseUrl = `http://127.0.0.1:${server.port}`;
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    openDirectory.mockClear();
   });
 
   afterAll(async () => {
     await stop();
     await rm(webRoot, { recursive: true, force: true });
+    if (previousMasterKey === undefined) delete process.env.AI_HARNESS_MASTER_KEY;
+    else process.env.AI_HARNESS_MASTER_KEY = previousMasterKey;
+  });
+
+  it('keeps the initial MCP inventory GET independent of credential-store initialization', async () => {
+    const load = vi.spyOn(EncryptedCredentialStore.prototype, 'load');
+    try {
+      const response = await fetch(`${baseUrl}/api/mcp`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      // Independently scheduled startup may finish loading custom-provider/Push
+      // stores; this GET must never initialize the built-in/MCP OAuth store.
+      expect(load.mock.contexts.some(store => Reflect.get(store, 'filePath')
+        === path.join(webRoot, '.data', 'credentials.enc'))).toBe(false);
+      await expect(readFile(path.join(webRoot, '.data', 'credentials.enc')))
+        .rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      load.mockRestore();
+    }
+  });
+
+  it('applies persisted live reasoning to the next request and restores inherited policy without restarting the run', async () => {
+    const cwd = path.join(webRoot, 'live-reasoning');
+    await mkdir(cwd);
+    const trusted = await fetch(`${baseUrl}/api/workspaces/trust`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd, confirm: true }) });
+    expect(trusted.status).toBe(200);
+    const session = await fetch(`${baseUrl}/api/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd, title: 'Live reasoning' }) }).then(response => response.json()) as { id: string; workspaceId: string };
+    const configured = await fetch(`${baseUrl}/api/configuration/scope`, { method: 'PUT',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scope: 'project', scopeId: session.workspaceId,
+        cwd, values: { thinking: 'low' } }) });
+    expect(configured.status).toBe(200);
+    const requests: ChatOptions[] = [];
+    const releases: Array<() => void> = [];
+    const stream = vi.spyOn(MockProvider.prototype, 'streamChat').mockImplementation(async (_messages, _chunk, complete, _error, options) => {
+      requests.push(options!);
+      if (requests.length < 3) await new Promise<void>(resolve => { releases.push(resolve); });
+      complete?.({ content: 'Reasoning request completed' });
+    });
+    try {
+      const started = await fetch(`${baseUrl}/api/agent/runs`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.id, cwd, provider: 'mock', input: 'first', thinking: 'off' }) });
+      expect(started.status).toBe(202);
+      const { run } = await started.json() as { run: { id: string } };
+      await vi.waitFor(() => expect(requests).toHaveLength(1));
+      const patch = (thinking: unknown) => fetch(`${baseUrl}/api/sessions/${session.id}`, { method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ thinking }) });
+      expect((await patch('invalid')).status).toBe(400);
+      expect((await patch('high')).status).toBe(200);
+      const queue = () => fetch(`${baseUrl}/api/agent/runs/${run.id}/queue`, { method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'follow-up', content: 'next' }) });
+      expect((await queue()).status).toBe(202);
+      expect(requests[0]?.thinking).toBe('off');
+      releases[0]!();
+      await vi.waitFor(() => expect(requests).toHaveLength(2));
+      expect(requests[1]?.thinking).toBe('high');
+      expect((await patch(null)).status).toBe(200);
+      expect((await queue()).status).toBe(202);
+      expect(requests[1]?.thinking).toBe('high');
+      releases[1]!();
+      await vi.waitFor(() => expect(requests).toHaveLength(3));
+      expect(requests[2]?.thinking).toBe('low');
+      await vi.waitFor(async () => {
+        const state = await fetch(`${baseUrl}/api/agent/runs/${run.id}`).then(response => response.json()) as { phase: string };
+        expect(state.phase).toBe('completed');
+      });
+      const persisted = await fetch(`${baseUrl}/api/sessions/${session.id}`).then(response => response.json());
+      expect(persisted).not.toHaveProperty('thinking');
+    } finally {
+      releases.forEach(release => release());
+      stream.mockRestore();
+      await fetch(`${baseUrl}/api/sessions/${session.id}`, { method: 'DELETE' });
+    }
   });
 
   it('serves the Web bundle from the root', async () => {
@@ -53,6 +169,919 @@ describe('combined Web server', () => {
     const response = await fetch(`${baseUrl}/api/providers`);
     expect(response.status).toBe(200);
     expect(await response.text()).toContain('openai');
+  });
+
+  it('creates one direct child through bounded workspace browsing and rejects malformed or escaping input', async () => {
+    const parent = path.join(webRoot, `directory-parent-${Date.now()}`);
+    await mkdir(parent);
+    const created = await fetch(`${baseUrl}/api/workspaces/browse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent, name: 'created-child' }),
+    });
+    expect(created.status).toBe(201);
+    const createdPath = path.join(parent, 'created-child');
+    expect(await created.json()).toEqual({ path: createdPath });
+    expect((await stat(createdPath)).isDirectory()).toBe(true);
+
+    const listing = await fetch(`${baseUrl}/api/workspaces/browse?path=${encodeURIComponent(parent)}`);
+    expect(await listing.json()).toMatchObject({
+      cwd: parent,
+      truncated: false,
+      entries: [expect.objectContaining({ name: 'created-child', path: createdPath, isDirectory: true })],
+    });
+    const duplicate = await fetch(`${baseUrl}/api/workspaces/browse`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent, name: 'created-child' }),
+    });
+    expect(duplicate.status).toBe(409);
+    expect(await duplicate.json()).toMatchObject({ code: 'already-exists' });
+    const traversal = await fetch(`${baseUrl}/api/workspaces/browse`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent, name: '../escape' }),
+    });
+    expect(traversal.status).toBe(400);
+    expect(await traversal.json()).toMatchObject({ code: 'invalid-path' });
+    const smuggled = await fetch(`${baseUrl}/api/workspaces/browse`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent, name: 'hidden-child', recursive: true }),
+    });
+    expect(smuggled.status).toBe(400);
+    await expect(stat(path.join(parent, 'hidden-child'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('opens only canonical allowed directories in a loopback host file manager', async () => {
+    const availability = await fetch(`${baseUrl}/api/workspaces/file-manager`);
+    expect(availability.status).toBe(200);
+    expect(availability.headers.get('cache-control')).toBe('no-store');
+    expect(await availability.json()).toEqual({ available: true });
+
+    const opened = await fetch(`${baseUrl}/api/workspaces/file-manager`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: webRoot }),
+    });
+    expect(opened.status).toBe(200);
+    expect(await opened.json()).toEqual({ opened: true });
+    expect(openDirectory).toHaveBeenCalledWith(webRoot);
+    openDirectory.mockClear();
+
+    openDirectory.mockRejectedValueOnce(new Error('desktop failure /secret/path'));
+    const failedLaunch = await fetch(`${baseUrl}/api/workspaces/file-manager`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: webRoot }),
+    });
+    expect(failedLaunch.status).toBe(503);
+    expect(await failedLaunch.json()).toEqual({
+      error: 'The host file manager could not be started.', code: 'launch-failed',
+    });
+    openDirectory.mockClear();
+
+    const outside = await fetch(`${baseUrl}/api/workspaces/file-manager`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: path.dirname(webRoot) }),
+    });
+    expect(outside.status).toBe(403);
+    expect(await outside.json()).toMatchObject({ code: 'outside-allowed-roots' });
+    expect(openDirectory).not.toHaveBeenCalled();
+
+    const remote = await requestWithHost(baseUrl, 'GET', '/api/workspaces/file-manager', 'example.test');
+    expect(remote.body).toEqual({ available: false, reason: 'remote-request' });
+    const remoteOpen = await requestWithHost(
+      baseUrl, 'POST', '/api/workspaces/file-manager', 'example.test', { cwd: webRoot },
+    );
+    expect(remoteOpen.status).toBe(403);
+    expect(remoteOpen.body).toMatchObject({ code: 'remote-request' });
+    expect(openDirectory).not.toHaveBeenCalled();
+  });
+
+  it('shares resource-sensitive exact, inherited, and refused trust status across workspace routes', async () => {
+    const parent = path.join(webRoot, `trust-parent-${Date.now()}`);
+    const project = path.join(parent, 'project');
+    const emptyProject = path.join(parent, 'empty-project');
+    await mkdir(path.join(project, '.ai-harness'), { recursive: true });
+    await mkdir(emptyProject);
+    await writeFile(path.join(project, '.ai-harness', 'settings.json'), '{}');
+    try {
+      const empty = await fetch(`${baseUrl}/api/workspaces/trust?cwd=${encodeURIComponent(emptyProject)}`);
+      expect(await empty.json()).toMatchObject({
+        cwd: emptyProject,
+        requiresTrust: false,
+        trusted: true,
+        operationTrusted: false,
+        resources: [],
+      });
+
+      const initial = await fetch(`${baseUrl}/api/workspaces/trust?cwd=${encodeURIComponent(project)}`);
+      expect(initial.status).toBe(200);
+      expect(await initial.json()).toMatchObject({
+        cwd: project,
+        requiresTrust: true,
+        trusted: false,
+        operationTrusted: false,
+        decision: null,
+        inherited: false,
+        resources: [expect.objectContaining({
+          relativePath: path.join('.ai-harness', 'settings.json'),
+          safeKind: true,
+        })],
+      });
+
+      const allowed = await fetch(`${baseUrl}/api/workspaces/trust`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: parent, confirm: true }),
+      });
+      expect(allowed.status).toBe(200);
+      const inherited = await fetch(`${baseUrl}/api/workspaces/trust?cwd=${encodeURIComponent(project)}`)
+        .then(response => response.json()) as Record<string, unknown>;
+      expect(inherited).toMatchObject({
+        trusted: true,
+        operationTrusted: true,
+        decision: true,
+        decisionPath: parent,
+        inherited: true,
+      });
+      expect((await fetch(`${baseUrl}/api/workspaces/validate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: project }),
+      }).then(response => response.json()))).toMatchObject({ trusted: true });
+
+      const refused = await fetch(`${baseUrl}/api/workspaces/trust`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: project, confirm: true }),
+      });
+      expect(refused.status).toBe(200);
+      expect(await refused.json()).toMatchObject({
+        trusted: false,
+        operationTrusted: false,
+        decision: false,
+        decisionPath: project,
+        inherited: false,
+      });
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  it('lists global and trusted project MCP files without resolving values or opening transports', async () => {
+    const dataDir = path.join(webRoot, '.data');
+    const globalFile = path.join(dataDir, 'mcp.json');
+    const project = path.join(webRoot, `mcp-project-${Date.now()}`);
+    await mkdir(path.join(project, '.ai-harness'), { recursive: true });
+    await writeFile(globalFile, JSON.stringify({
+      mcpServers: {
+        shared: {
+          url: 'https://user:global-literal-secret@example.test/private?token=global-literal-secret',
+          headers: { Authorization: 'Bearer global-literal-secret', Trace: '${TRACE_TOKEN}' },
+        },
+      },
+    }));
+    await writeFile(path.join(project, '.ai-harness', 'mcp.json'), JSON.stringify({
+      mcpServers: {
+        shared: { command: 'node', args: ['project-literal-secret'] },
+        project: { command: 'sh', env: { START: '!touch project-command-must-not-run' } },
+      },
+    }));
+    try {
+      const lockedResponse = await fetch(`${baseUrl}/api/mcp?cwd=${encodeURIComponent(project)}`);
+      expect(lockedResponse.status).toBe(200);
+      expect(lockedResponse.headers.get('cache-control')).toBe('no-store');
+      const locked = await lockedResponse.json() as {
+        project: { contentTrusted: boolean; decision: boolean | null };
+        files: Array<{ scope: string; contentRead: boolean; problems: Array<{ reason: string }> }>;
+        servers: Array<{ name: string; scope: string; url?: string }>;
+      };
+      expect(locked.project).toMatchObject({ contentTrusted: false, decision: null });
+      expect(locked.files[1]).toMatchObject({
+        scope: 'project', contentRead: false, problems: [{ reason: 'trust-required' }],
+      });
+      expect(locked.servers).toEqual([expect.objectContaining({
+        name: 'shared', scope: 'global', url: 'https://example.test/•••?•••',
+      })]);
+      expect(JSON.stringify(locked)).not.toContain('project-literal-secret');
+      expect(JSON.stringify(locked)).not.toContain('global-literal-secret');
+
+      const trust = await fetch(`${baseUrl}/api/workspaces/trust`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: project, confirm: true }),
+      });
+      expect(trust.status).toBe(200);
+
+      const trusted = await fetch(`${baseUrl}/api/mcp?cwd=${encodeURIComponent(project)}`).then(response => response.json()) as {
+        project: { contentTrusted: boolean; decision: boolean | null };
+        files: Array<{ scope: string; contentRead: boolean }>;
+        servers: Array<{
+          name: string; scope: string; shadowedByProject: boolean; replacesGlobal: boolean;
+          commandFields: string[]; args?: string[];
+        }>;
+      };
+      expect(trusted.project).toMatchObject({ contentTrusted: true, decision: true });
+      expect(trusted.files[1]).toMatchObject({ scope: 'project', contentRead: true });
+      expect(trusted.servers).toEqual([
+        expect.objectContaining({ name: 'shared', scope: 'global', shadowedByProject: true }),
+        expect.objectContaining({ name: 'shared', scope: 'project', replacesGlobal: true, args: ['•••'] }),
+        expect.objectContaining({ name: 'project', scope: 'project', commandFields: ['env.START'] }),
+      ]);
+      const serialized = JSON.stringify(trusted);
+      expect(serialized).not.toContain('global-literal-secret');
+      expect(serialized).not.toContain('project-literal-secret');
+      expect(serialized).not.toContain('project-command-must-not-run');
+    } finally {
+      await Promise.all([
+        rm(globalFile, { force: true }),
+        rm(project, { recursive: true, force: true }),
+      ]);
+    }
+  });
+
+  it('tests a fresh MCP entry server-side, redacts results, and exposes status only while its config matches', async () => {
+    const dataDir = path.join(webRoot, '.data');
+    const globalFile = path.join(dataDir, 'mcp.json');
+    const fixture = path.resolve(process.cwd(), 'packages/core/src/mcp/fixtures/test-server.mjs');
+    const marker = path.join(webRoot, `mcp-test-smuggled-${Date.now()}`);
+    const project = path.join(webRoot, `mcp-test-project-${Date.now()}`);
+    const projectDirectory = path.join(project, '.ai-harness');
+    const secret = 'ROUTE-MCP-TEST-SECRET-0123456789';
+    await mkdir(projectDirectory, { recursive: true });
+    await Promise.all([
+      writeFile(globalFile, JSON.stringify({
+        mcpServers: {
+          fixture: {
+            command: process.execPath,
+            args: [fixture],
+            env: { MCP_TEST_SECRET: secret },
+            exposure: 'codemode',
+            enabled: false,
+          },
+        },
+      })),
+      writeFile(path.join(projectDirectory, 'mcp.json'), JSON.stringify({
+        mcpServers: { local: { command: 'sh', args: ['-c', `touch ${marker}`] } },
+      })),
+    ]);
+    try {
+      const smuggled = await fetch(`${baseUrl}/api/mcp/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scope: 'global', name: 'fixture', configuration: { command: 'sh', args: ['-c', `touch ${marker}`] },
+        }),
+      });
+      expect(smuggled.status).toBe(400);
+      await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+
+      const invalidCwd = await fetch(`${baseUrl}/api/mcp/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'global', name: 'fixture', cwd: 'x'.repeat(4_097) }),
+      });
+      expect(invalidCwd.status).toBe(400);
+      expect(await invalidCwd.json()).toMatchObject({ code: 'invalid-request' });
+
+      const response = await fetch(`${baseUrl}/api/mcp/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'global', name: 'fixture' }),
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      const text = await response.text();
+      expect(text).not.toContain(secret);
+      expect(JSON.parse(text)).toMatchObject({
+        scope: 'global',
+        name: 'fixture',
+        configKey: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        result: {
+          state: 'connected',
+          toolCount: 2,
+          resources: 1,
+          resourceTemplates: 1,
+          prompts: 1,
+          tools: [
+            { name: 'lookup', description: 'Looks up •••', readOnly: true, exposure: 'codemode' },
+            { name: 'mutate', readOnly: false, exposure: 'codemode' },
+          ],
+        },
+      });
+
+      const overviewText = await fetch(`${baseUrl}/api/mcp`).then(value => value.text());
+      expect(overviewText).not.toContain(secret);
+      expect(JSON.parse(overviewText)).toMatchObject({
+        servers: [{ name: 'fixture', testStatus: { state: 'connected', toolCount: 2 } }],
+      });
+      await writeFile(globalFile, JSON.stringify({
+        mcpServers: { fixture: { command: process.execPath, args: [fixture, '--changed'] } },
+      }));
+      const changed = await fetch(`${baseUrl}/api/mcp`).then(value => value.json()) as {
+        servers: Array<{ testStatus?: unknown }>;
+      };
+      expect(changed.servers[0]?.testStatus).toBeUndefined();
+
+      const untrusted = await fetch(`${baseUrl}/api/mcp/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'project', name: 'local', cwd: project }),
+      });
+      expect(untrusted.status).toBe(403);
+      expect(await untrusted.json()).toMatchObject({ code: 'trust-required' });
+      await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+
+      const missing = await fetch(`${baseUrl}/api/mcp/test`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'global', name: 'missing' }),
+      });
+      expect(missing.status).toBe(404);
+    } finally {
+      await Promise.all([
+        rm(globalFile, { force: true }),
+        rm(project, { recursive: true, force: true }),
+        rm(marker, { force: true }),
+      ]);
+    }
+  });
+
+  it('previews MCP paste server-side without writes, resolution, execution, or source-value disclosure', async () => {
+    const dataDir = path.join(webRoot, '.data');
+    const globalFile = path.join(dataDir, 'mcp.json');
+    const project = path.join(webRoot, `mcp-preview-${Date.now()}`);
+    const projectDirectory = path.join(project, '.ai-harness');
+    const projectFile = path.join(projectDirectory, 'mcp.json');
+    const marker = path.join(project, 'must-not-exist');
+    await mkdir(projectDirectory, { recursive: true });
+    const globalSource = JSON.stringify({ mcpServers: { existing: { command: 'node' } } });
+    const projectSource = JSON.stringify({
+      mcpServers: { hidden: { command: 'node', env: { TOKEN: 'PROJECT-SOURCE-MUST-NOT-LEAK' } } },
+    });
+    await Promise.all([
+      writeFile(globalFile, globalSource),
+      writeFile(projectFile, projectSource),
+    ]);
+    vi.stubEnv('MCP_ROUTE_HOST_TOKEN', 'HOST-VALUE-MUST-NOT-LEAK');
+    try {
+      const pastedSecret = 'PASTED-VALUE-MUST-NOT-LEAK';
+      const response = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cwd: project,
+          syntax: 'foreign',
+          text: JSON.stringify({
+            mcpServers: {
+              existing: {
+                url: 'https://example.test/private/source-path',
+                headers: {
+                  Authorization: `Bearer ${pastedSecret}`,
+                  'X-Host': '${MCP_ROUTE_HOST_TOKEN}',
+                },
+              },
+            },
+          }),
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      const responseText = await response.text();
+      const preview = JSON.parse(responseText) as {
+        entries: Array<{
+          name: string;
+          variables: Array<{ name: string; availability: string; confirmationRequired: boolean }>;
+          scopes: { global: { allowed: boolean; reasons: string[] }; project: { allowed: boolean; reasons: string[] } };
+        }>;
+      };
+      expect(preview.entries[0]).toMatchObject({
+        name: 'existing',
+        variables: [{
+          name: 'MCP_ROUTE_HOST_TOKEN', availability: 'available', confirmationRequired: true,
+        }],
+        scopes: {
+          global: { allowed: false, reasons: ['name-taken'] },
+          project: { allowed: false, reasons: ['folder-not-fresh', 'literal-secret'] },
+        },
+      });
+      for (const value of [pastedSecret, 'HOST-VALUE-MUST-NOT-LEAK', 'PROJECT-SOURCE-MUST-NOT-LEAK', 'source-path']) {
+        expect(responseText).not.toContain(value);
+      }
+      expect(await readFile(globalFile, 'utf8')).toBe(globalSource);
+      expect(await readFile(projectFile, 'utf8')).toBe(projectSource);
+
+      const dangerous = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: `npx server; touch ${marker}` }),
+      });
+      expect(dangerous.status).toBe(200);
+      expect(await dangerous.json()).toMatchObject({
+        ok: false,
+        entries: [],
+        notes: [{ code: 'unsafe-shell', severity: 'error' }],
+      });
+      await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+
+      const objectInsteadOfText = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'npx server', configuration: { command: 'other' } }),
+      });
+      expect(objectInsteadOfText.status).toBe(400);
+      expect(await objectInsteadOfText.json()).toMatchObject({ code: 'invalid-request' });
+
+      const invalidCwd = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'npx server', cwd: null }),
+      });
+      expect(invalidCwd.status).toBe(400);
+      expect(await invalidCwd.json()).toMatchObject({ code: 'invalid-request' });
+    } finally {
+      await Promise.all([
+        rm(globalFile, { force: true }),
+        rm(project, { recursive: true, force: true }),
+      ]);
+    }
+  });
+
+  it('persists a reparsed MCP import atomically without returning source or host values', async () => {
+    const dataDir = path.join(webRoot, '.data');
+    const globalFile = path.join(dataDir, 'mcp.json');
+    const marker = path.join(webRoot, `mcp-import-marker-${Date.now()}`);
+    const source = `${JSON.stringify({ version: 1, mcpServers: {} }, null, 2)}\n`;
+    await writeFile(globalFile, source);
+    vi.stubEnv('MCP_IMPORT_ROUTE_TOKEN', 'HOST-SECRET-MUST-NOT-LEAK');
+    try {
+      const inventory = await fetch(`${baseUrl}/api/mcp`).then(response => response.json()) as {
+        files: Array<{ scope: string; revision?: string }>;
+      };
+      const revision = inventory.files.find(file => file.scope === 'global')!.revision!;
+      const pastedSecret = 'PASTED-IMPORT-SECRET-0123456789';
+      const text = JSON.stringify({
+        mcpServers: {
+          docs: {
+            url: 'https://docs.example.test/mcp',
+            headers: {
+              Authorization: `Bearer ${pastedSecret}`,
+              'X-Host': '${MCP_IMPORT_ROUTE_TOKEN}',
+            },
+          },
+        },
+      });
+      const needsConfirmation = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'import', scope: 'global', revision, text, syntax: 'foreign',
+          entryIndex: 0, confirmations: { literalSecret: true },
+        }),
+      });
+      expect(needsConfirmation.status).toBe(409);
+      expect(await needsConfirmation.json()).toMatchObject({ code: 'confirmation-required', uncertain: false });
+      expect(await readFile(globalFile, 'utf8')).toBe(source);
+
+      const imported = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'import', scope: 'global', revision, text, syntax: 'foreign', entryIndex: 0,
+          confirmations: { literalSecret: true, remoteHostVariables: ['MCP_IMPORT_ROUTE_TOKEN'] },
+        }),
+      });
+      expect(imported.status).toBe(200);
+      expect(imported.headers.get('cache-control')).toBe('no-store');
+      const responseText = await imported.text();
+      expect(JSON.parse(responseText)).toMatchObject({
+        added: { scope: 'global', name: 'docs' },
+        inventory: { servers: [expect.objectContaining({ name: 'docs', headerNames: ['Authorization', 'X-Host'] })] },
+      });
+      expect(responseText).not.toContain(pastedSecret);
+      expect(responseText).not.toContain('HOST-SECRET-MUST-NOT-LEAK');
+      expect(await readFile(globalFile, 'utf8')).toContain(pastedSecret);
+
+      const current = JSON.parse(responseText) as { inventory: { files: Array<{ scope: string; revision?: string }> } };
+      const rejected = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'import', scope: 'global',
+          revision: current.inventory.files.find(file => file.scope === 'global')!.revision,
+          text: JSON.stringify({ command: '<binary>', args: ['-c', `touch ${marker}`] }),
+          syntax: 'foreign', entryIndex: 0, values: { command: 'sh' }, configuration: { command: 'node' },
+        }),
+      });
+      expect(rejected.status).toBe(400);
+      expect(await rejected.json()).toMatchObject({ code: 'invalid-request' });
+      await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      vi.unstubAllEnvs();
+      await Promise.all([rm(globalFile, { force: true }), rm(marker, { force: true })]);
+    }
+  });
+
+  it('requires explicit fresh-project trust for the first MCP write and reconciles rollback', async () => {
+    const project = path.join(webRoot, `mcp-fresh-project-${Date.now()}`);
+    const racedProject = path.join(webRoot, `mcp-raced-project-${Date.now()}`);
+    const failedProject = path.join(webRoot, `mcp-failed-project-${Date.now()}`);
+    await Promise.all([mkdir(project), mkdir(racedProject), mkdir(failedProject)]);
+    const body = (cwd: string, extra: Record<string, unknown> = {}) => JSON.stringify({
+      action: 'import',
+      scope: 'project',
+      cwd,
+      revision: null,
+      text: 'npx fresh-mcp-server',
+      syntax: 'foreign',
+      entryIndex: 0,
+      ...extra,
+    });
+    try {
+      const preview = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'npx fresh-mcp-server', cwd: project }),
+      });
+      expect(preview.status).toBe(200);
+      const previewBody = await preview.json() as {
+        entries: Array<{ scopes: { project: { allowed: boolean; reasons: string[]; confirmations: string[] } } }>;
+      };
+      expect(previewBody.entries[0]?.scopes.project).toEqual({
+        allowed: true,
+        reasons: [],
+        confirmations: ['fresh-project-trust'],
+      });
+
+      const unconfirmed = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body(project),
+      });
+      expect(unconfirmed.status).toBe(403);
+      expect(await unconfirmed.json()).toMatchObject({ code: 'trust-required' });
+
+      const invalidConfirmation = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: body(project, { trustProject: false }),
+      });
+      expect(invalidConfirmation.status).toBe(400);
+      expect(await invalidConfirmation.json()).toMatchObject({ code: 'invalid-request' });
+
+      const imported = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: body(project, { trustProject: true }),
+      });
+      expect(imported.status).toBe(200);
+      expect(await imported.json()).toMatchObject({
+        added: { scope: 'project', name: 'fresh' },
+        inventory: { project: { contentTrusted: true, decision: true, decisionPath: project } },
+      });
+      expect(await readFile(path.join(project, '.ai-harness', 'mcp.json'), 'utf8'))
+        .toContain('fresh-mcp-server');
+      const validated = await fetch(`${baseUrl}/api/workspaces/validate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: project }),
+      });
+      expect(await validated.json()).toMatchObject({ trusted: true, operationTrusted: true });
+
+      await mkdir(path.join(racedProject, '.ai-harness'));
+      await writeFile(path.join(racedProject, '.ai-harness', 'settings.json'), '{}');
+      const raced = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: body(racedProject, { trustProject: true }),
+      });
+      expect(raced.status).toBe(409);
+      expect(await raced.json()).toMatchObject({ code: 'folder-not-fresh', uncertain: false });
+      expect(await fetch(`${baseUrl}/api/workspaces/trust?cwd=${encodeURIComponent(racedProject)}`)
+        .then(response => response.json())).toMatchObject({ decision: null, operationTrusted: false });
+
+      await mkdir(path.join(failedProject, '.ai-harness'));
+      await mkdir(path.join(failedProject, '.ai-harness', 'mcp.json.lock'));
+      const failed = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: body(failedProject, { trustProject: true }),
+      });
+      expect(failed.status).toBe(409);
+      expect(await failed.json()).toMatchObject({ code: 'unsafe-path', uncertain: false });
+      expect(await fetch(`${baseUrl}/api/workspaces/trust?cwd=${encodeURIComponent(failedProject)}`)
+        .then(response => response.json())).toMatchObject({ decision: null, operationTrusted: false });
+
+      const broadPreview = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'npx broad-mcp-server', cwd: webRoot }),
+      });
+      const broadPreviewBody = await broadPreview.json() as {
+        entries: Array<{ scopes: { project: { reasons: string[] } } }>;
+      };
+      expect(broadPreviewBody.entries[0]?.scopes.project.reasons).toEqual(['trust-too-broad']);
+    } finally {
+      await Promise.all([project, racedProject, failedProject]
+        .map(directory => rm(directory, { recursive: true, force: true })));
+    }
+  });
+
+  it('previews and atomically replaces one MCP server without disclosing old or pasted values', async () => {
+    const dataDir = path.join(webRoot, '.data');
+    const globalFile = path.join(dataDir, 'mcp.json');
+    const marker = path.join(webRoot, `mcp-replace-marker-${Date.now()}`);
+    const source = `${JSON.stringify({
+      version: 1,
+      mcpServers: {
+        docs: { command: 'node', env: { TOKEN: 'OLD-REPLACEMENT-SECRET' } },
+        occupied: { command: 'node' },
+      },
+    }, null, 2)}\n`;
+    await writeFile(globalFile, source);
+    try {
+      const inventory = await fetch(`${baseUrl}/api/mcp`).then(response => response.json()) as {
+        files: Array<{ scope: string; revision?: string }>;
+      };
+      const revision = inventory.files.find(file => file.scope === 'global')!.revision!;
+      const pastedSecret = 'PASTED-REPLACEMENT-SECRET-0123456789';
+      const text = JSON.stringify({
+        mcpServers: {
+          replacement: {
+            url: 'https://replacement.example.test/mcp',
+            headers: { Authorization: `Bearer ${pastedSecret}` },
+          },
+        },
+      });
+      const previewResponse = await fetch(`${baseUrl}/api/mcp/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          syntax: 'aiharness',
+          replacement: { scope: 'global', name: 'docs', revision },
+        }),
+      });
+      expect(previewResponse.status).toBe(200);
+      const previewText = await previewResponse.text();
+      expect(JSON.parse(previewText)).toMatchObject({
+        entries: [{ scopes: { global: { allowed: true, reasons: [] } } }],
+      });
+      expect(previewText).not.toContain(pastedSecret);
+      expect(previewText).not.toContain('OLD-REPLACEMENT-SECRET');
+
+      const unconfirmed = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'replace', scope: 'global', revision, targetName: 'docs', text,
+          syntax: 'aiharness', entryIndex: 0, name: 'renamed-docs',
+        }),
+      });
+      expect(unconfirmed.status).toBe(409);
+      expect(await unconfirmed.json()).toMatchObject({ code: 'confirmation-required', uncertain: false });
+      expect(await readFile(globalFile, 'utf8')).toBe(source);
+
+      const replacedResponse = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'replace', scope: 'global', revision, targetName: 'docs', text,
+          syntax: 'aiharness', entryIndex: 0, name: 'renamed-docs',
+          confirmations: { literalSecret: true },
+        }),
+      });
+      expect(replacedResponse.status).toBe(200);
+      expect(replacedResponse.headers.get('cache-control')).toBe('no-store');
+      const responseText = await replacedResponse.text();
+      const replaced = JSON.parse(responseText) as {
+        inventory: { files: Array<{ scope: string; revision?: string }> };
+      };
+      expect(replaced).toMatchObject({
+        updated: { scope: 'global', previousName: 'docs', name: 'renamed-docs' },
+        inventory: {
+          servers: [
+            expect.objectContaining({ name: 'renamed-docs', headerNames: ['Authorization'] }),
+            expect.objectContaining({ name: 'occupied' }),
+          ],
+        },
+      });
+      expect(responseText).not.toContain(pastedSecret);
+      expect(responseText).not.toContain('OLD-REPLACEMENT-SECRET');
+      const persisted = await readFile(globalFile, 'utf8');
+      expect(persisted).toContain(pastedSecret);
+      expect(persisted).not.toContain('OLD-REPLACEMENT-SECRET');
+
+      const currentRevision = replaced.inventory.files.find(file => file.scope === 'global')!.revision!;
+      const smuggled = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'replace', scope: 'global', revision: currentRevision,
+          targetName: 'renamed-docs', text: 'npx safe-server', syntax: 'foreign', entryIndex: 0,
+          configuration: { command: 'node' },
+        }),
+      });
+      expect(smuggled.status).toBe(400);
+      expect(await smuggled.json()).toMatchObject({ code: 'invalid-request', uncertain: false });
+
+      const prototypeSmuggled = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: `{"action":"replace","scope":"global","revision":"${currentRevision}","targetName":"renamed-docs","text":"npx safe-server","syntax":"foreign","entryIndex":0,"__proto__":{"targetName":"occupied"}}`,
+      });
+      expect(prototypeSmuggled.status).toBe(400);
+      expect(await prototypeSmuggled.json()).toMatchObject({ code: 'invalid-request', uncertain: false });
+
+      const dangerous = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'replace', scope: 'global', revision: currentRevision,
+          targetName: 'renamed-docs', text: `npx safe-server; touch ${marker}`,
+          syntax: 'foreign', entryIndex: 0,
+        }),
+      });
+      expect(dangerous.status).toBe(409);
+      expect(await dangerous.json()).toMatchObject({ code: 'import-invalid', uncertain: false });
+      await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await Promise.all([rm(globalFile, { force: true }), rm(marker, { force: true })]);
+    }
+  });
+
+  it('serializes atomic MCP activation, exposure, removal, and opaque one-shot restoration', async () => {
+    const dataDir = path.join(webRoot, '.data');
+    const globalFile = path.join(dataDir, 'mcp.json');
+    const project = path.join(webRoot, `mcp-mutation-${Date.now()}`);
+    const projectDirectory = path.join(project, '.ai-harness');
+    const projectFile = path.join(projectDirectory, 'mcp.json');
+    await mkdir(projectDirectory, { recursive: true });
+    await writeFile(globalFile, JSON.stringify({
+      version: 1,
+      mcpServers: {
+        alpha: { command: 'node' },
+        beta: { command: 'node' },
+        secret: { command: 'node', env: { TOKEN: 'SERVER-ONLY-UNDO-SECRET' } },
+      },
+    }));
+    await writeFile(projectFile, JSON.stringify({
+      mcpServers: { local: { command: 'node', env: { TOKEN: 'PROJECT-UNDO-SECRET' } } },
+    }));
+    try {
+      const initial = await fetch(`${baseUrl}/api/mcp?cwd=${encodeURIComponent(project)}`)
+        .then(response => response.json()) as {
+          files: Array<{ scope: string; revision?: string }>;
+        };
+      const initialRevision = initial.files.find(file => file.scope === 'global')!.revision!;
+      const enabled = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-enabled', scope: 'global', cwd: project,
+          revision: initialRevision, names: ['alpha', 'beta'], enabled: false,
+        }),
+      });
+      expect(enabled.status).toBe(200);
+      expect(enabled.headers.get('cache-control')).toBe('no-store');
+      const activated = await enabled.json() as {
+        inventory: { files: Array<{ scope: string; revision?: string }>; servers: Array<{ name: string; enabled: boolean }> };
+        outcomes: Array<{ name: string; status: string }>;
+      };
+      expect(activated.outcomes).toEqual([
+        { name: 'alpha', status: 'changed' },
+        { name: 'beta', status: 'changed' },
+      ]);
+      expect(activated.inventory.servers.filter(server => ['alpha', 'beta'].includes(server.name)))
+        .toEqual(expect.arrayContaining([
+          expect.objectContaining({ name: 'alpha', enabled: false }),
+          expect.objectContaining({ name: 'beta', enabled: false }),
+        ]));
+
+      const stale = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-enabled', scope: 'global', revision: initialRevision,
+          names: ['alpha'], enabled: true,
+        }),
+      });
+      expect(stale.status).toBe(409);
+      expect(await stale.json()).toMatchObject({ code: 'stale-revision', uncertain: false });
+      expect((JSON.parse(await readFile(globalFile, 'utf8')) as { mcpServers: Record<string, { enabled?: boolean }> })
+        .mcpServers.alpha?.enabled).toBe(false);
+
+      const currentRevision = activated.inventory.files.find(file => file.scope === 'global')!.revision!;
+      const smuggledExposure = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-exposure', scope: 'global', cwd: project, revision: currentRevision,
+          name: 'alpha', exposure: 'deferred', configuration: { exposure: 'direct' },
+        }),
+      });
+      expect(smuggledExposure.status).toBe(400);
+      expect(await smuggledExposure.json()).toMatchObject({ code: 'invalid-request', uncertain: false });
+
+      const exposureResponse = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-exposure', scope: 'global', cwd: project, revision: currentRevision,
+          name: 'alpha', exposure: 'deferred',
+        }),
+      });
+      expect(exposureResponse.status).toBe(200);
+      const exposureText = await exposureResponse.text();
+      expect(exposureText).not.toContain('SERVER-ONLY-UNDO-SECRET');
+      const exposed = JSON.parse(exposureText) as {
+        inventory: {
+          files: Array<{ scope: string; revision?: string }>;
+          servers: Array<{ name: string; exposure: string }>;
+        };
+      };
+      expect(exposed.inventory.servers).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: 'alpha', exposure: 'deferred' }),
+      ]));
+      expect((JSON.parse(await readFile(globalFile, 'utf8')) as {
+        mcpServers: Record<string, { exposure?: string }>;
+      }).mcpServers.alpha?.exposure).toBe('deferred');
+
+      const exposedRevision = exposed.inventory.files.find(file => file.scope === 'global')!.revision!;
+      const removedResponse = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'remove', scope: 'global', cwd: project, revision: exposedRevision, name: 'secret',
+        }),
+      });
+      expect(removedResponse.status).toBe(200);
+      const removedText = await removedResponse.text();
+      expect(removedText).not.toContain('SERVER-ONLY-UNDO-SECRET');
+      expect(removedText).not.toContain('entry');
+      const removed = JSON.parse(removedText) as { undo: { token: string; expiresAt: string } };
+      expect(removed.undo).toMatchObject({ token: expect.any(String), expiresAt: expect.any(String) });
+      expect((JSON.parse(await readFile(globalFile, 'utf8')) as { mcpServers: Record<string, unknown> })
+        .mcpServers.secret).toBeUndefined();
+
+      const restoredResponse = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restore', cwd: project, undoToken: removed.undo.token }),
+      });
+      expect(restoredResponse.status).toBe(200);
+      expect(await restoredResponse.text()).not.toContain('SERVER-ONLY-UNDO-SECRET');
+      expect((JSON.parse(await readFile(globalFile, 'utf8')) as {
+        mcpServers: Record<string, { env?: Record<string, string> }>;
+      }).mcpServers.secret?.env?.TOKEN).toBe('SERVER-ONLY-UNDO-SECRET');
+      expect((await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restore', cwd: project, undoToken: removed.undo.token }),
+      })).status).toBe(404);
+
+      const lockedInventory = await fetch(`${baseUrl}/api/mcp?cwd=${encodeURIComponent(project)}`)
+        .then(response => response.json()) as { files: Array<{ scope: string; revision?: string }> };
+      const lockedProjectRevision = lockedInventory.files.find(file => file.scope === 'project')?.revision;
+      expect(lockedProjectRevision).toBeUndefined();
+      const lockedMutation = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'remove', scope: 'project', cwd: project, revision: null, name: 'local',
+        }),
+      });
+      expect(lockedMutation.status).toBe(403);
+      expect(await lockedMutation.json()).toMatchObject({ code: 'trust-required' });
+      expect(await readFile(projectFile, 'utf8')).toContain('PROJECT-UNDO-SECRET');
+
+      await fetch(`${baseUrl}/api/workspaces/trust`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: project, confirm: true }),
+      });
+      const trusted = await fetch(`${baseUrl}/api/mcp?cwd=${encodeURIComponent(project)}`)
+        .then(response => response.json()) as { files: Array<{ scope: string; revision?: string }> };
+      const projectRevision = trusted.files.find(file => file.scope === 'project')!.revision!;
+      const projectExposureResponse = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-exposure', scope: 'project', cwd: project, revision: projectRevision,
+          name: 'local', exposure: 'codemode',
+        }),
+      });
+      expect(projectExposureResponse.status).toBe(200);
+      const projectExposureText = await projectExposureResponse.text();
+      expect(projectExposureText).not.toContain('PROJECT-UNDO-SECRET');
+      const projectExposed = JSON.parse(projectExposureText) as {
+        inventory: { files: Array<{ scope: string; revision?: string }> };
+      };
+      expect((JSON.parse(await readFile(projectFile, 'utf8')) as {
+        mcpServers: Record<string, { exposure?: string; env?: Record<string, string> }>;
+      }).mcpServers.local).toMatchObject({
+        exposure: 'codemode', env: { TOKEN: 'PROJECT-UNDO-SECRET' },
+      });
+      const projectExposureRevision = projectExposed.inventory.files
+        .find(file => file.scope === 'project')!.revision!;
+      const projectRemoval = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'remove', scope: 'project', cwd: project,
+          revision: projectExposureRevision, name: 'local',
+        }),
+      }).then(response => response.json()) as { undo: { token: string } };
+      await fetch(`${baseUrl}/api/workspaces/trust`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: project, confirm: true }),
+      });
+      const refusedRestore = await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restore', cwd: project, undoToken: projectRemoval.undo.token }),
+      });
+      expect(refusedRestore.status).toBe(403);
+      expect(await refusedRestore.json()).toMatchObject({ code: 'trust-required' });
+      expect((await fetch(`${baseUrl}/api/mcp/actions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restore', cwd: project, undoToken: projectRemoval.undo.token }),
+      })).status).toBe(404);
+    } finally {
+      await Promise.all([
+        rm(globalFile, { force: true }),
+        rm(project, { recursive: true, force: true }),
+      ]);
+    }
   });
 
   it('publishes a grouped model catalogue and persists project activation', async () => {
@@ -113,7 +1142,14 @@ describe('combined Web server', () => {
 
     const workspace = await fetch(`${baseUrl}/api/workspaces/default`).then(response => response.json()) as { id: string };
     const tools = await fetch(`${baseUrl}/api/tools?cwd=${encodeURIComponent(webRoot)}&projectId=${workspace.id}`)
-      .then(response => response.json()) as { tools: Array<{ name: string }> };
+      .then(response => response.json()) as { tools: Array<{ name: string; extensionId: string }> };
+    expect(tools.tools
+      .filter(tool => tool.extensionId === 'builtin:workspace-tools')
+      .map(tool => tool.name))
+      .toEqual([
+        'read', 'write', 'edit', 'ls', 'find', 'grep', 'bash',
+        ...(process.platform === 'win32' ? ['powershell'] : []),
+      ]);
     const toolUpdate = await fetch(`${baseUrl}/api/tools`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -163,10 +1199,9 @@ describe('combined Web server', () => {
     expect(JSON.stringify(catalog)).not.toContain('Never exposed instructions');
     expect(catalog.skills).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'global-review', scope: 'global', trusted: true, modelInvocable: true }),
-      expect.objectContaining({ name: 'project-review', scope: 'project', trusted: false, modelInvocable: false }),
     ]));
+    expect(catalog.skills.find(skill => skill.name === 'project-review')).toBeUndefined();
     const globalKey = catalog.skills.find(skill => skill.name === 'global-review')!.key;
-    const projectKey = catalog.skills.find(skill => skill.name === 'project-review')!.key;
 
     const unknown = await fetch(`${baseUrl}/api/skills/enabled`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -179,15 +1214,14 @@ describe('combined Web server', () => {
     });
     expect(globalResponse.status).toBe(200);
     expect((await globalResponse.json() as { enabledScope: string }).enabledScope).toBe('global');
-    const rejected = await fetch(`${baseUrl}/api/skills/enabled`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd: webRoot, projectId: workspace.id, enabledSkills: [projectKey] }),
-    });
-    expect(rejected.status).toBe(409);
     await fetch(`${baseUrl}/api/workspaces/trust`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd: webRoot, confirm: true }),
     });
+    const trustedCatalog = await fetch(
+      `${baseUrl}/api/skills?cwd=${encodeURIComponent(webRoot)}&projectId=${workspace.id}&refresh=true`,
+    ).then(response => response.json()) as typeof catalog;
+    const projectKey = trustedCatalog.skills.find(skill => skill.name === 'project-review')!.key;
     const updatedResponse = await fetch(`${baseUrl}/api/skills/enabled`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd: webRoot, projectId: workspace.id, enabledSkills: [globalKey, projectKey] }),
@@ -209,7 +1243,7 @@ describe('combined Web server', () => {
     await mkdir(path.join(pluginRoot, 'skills', 'http-plugin-review'), { recursive: true });
     await writeFile(path.join(pluginRoot, 'package.json'), JSON.stringify({
       name: 'http-plugin', version: '1.0.0', description: 'HTTP plugin fixture',
-      pi: { extensions: ['extensions/*.js'], skills: ['skills'] },
+      aiHarness: { extensions: ['extensions/*.js'], skills: ['skills'] },
     }));
     await writeFile(path.join(pluginRoot, 'extensions', 'index.js'), 'export default () => undefined;');
     await writeFile(path.join(pluginRoot, 'skills', 'http-plugin-review', 'SKILL.md'), [
@@ -306,15 +1340,45 @@ describe('combined Web server', () => {
     expect(mismatchedReloadResponse.status).toBe(409);
     expect(await mismatchedReloadResponse.json()).toMatchObject({ code: 'SESSION_WORKSPACE_MISMATCH' });
 
-    const disableResponse = await fetch(`${baseUrl}/api/plugins`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'disable', ...baseInput, key }),
+    const invalidBatch = await fetch(`${baseUrl}/api/plugins/enabled`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...baseInput, changes: [] }),
+    });
+    expect(invalidBatch.status).toBe(400);
+    const disableResponse = await fetch(`${baseUrl}/api/plugins/enabled`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...baseInput,
+        changes: [{ key, scope: 'project', enabled: false }],
+      }),
     });
     expect(disableResponse.status).toBe(200);
-    expect(await disableResponse.json()).toMatchObject({ packages: [expect.objectContaining({ enabled: false })] });
+    expect(await disableResponse.json()).toMatchObject({
+      catalog: { packages: [expect.objectContaining({ enabled: false })] },
+      outcomes: [{ key, state: 'changed' }],
+      reloadRequired: true,
+    });
     const disabledSkills = await fetch(`${baseUrl}/api/skills?cwd=${encodeURIComponent(webRoot)}&projectId=${workspace.id}&refresh=true`)
       .then(response => response.json()) as { skills: Array<{ name: string }> };
     expect(disabledSkills.skills.some(skill => skill.name === 'http-plugin-review')).toBe(false);
+
+    await fetch(`${baseUrl}/api/workspaces/trust`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: webRoot, confirm: true }),
+    });
+    const refusedResponse = await fetch(`${baseUrl}/api/plugins/enabled`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...baseInput,
+        changes: [{ key, scope: 'project', enabled: true }],
+      }),
+    });
+    expect(refusedResponse.status).toBe(200);
+    expect(await refusedResponse.json()).toMatchObject({
+      catalog: { packages: [expect.objectContaining({ enabled: false, trusted: false })] },
+      outcomes: [{ key, state: 'failed', code: 'PROJECT_TRUST_REQUIRED' }],
+      reloadRequired: false,
+    });
 
     const removeResponse = await fetch(`${baseUrl}/api/plugins`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -322,10 +1386,6 @@ describe('combined Web server', () => {
     });
     expect(removeResponse.status).toBe(200);
     expect((await removeResponse.json() as { packages: unknown[] }).packages).toEqual([]);
-    await fetch(`${baseUrl}/api/workspaces/trust`, {
-      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd: webRoot, confirm: true }),
-    });
   });
 
   it('manages sub-agent profiles and executes linked background children', async () => {
@@ -353,7 +1413,7 @@ describe('combined Web server', () => {
         profile: {
           id: 'http-review', name: 'HTTP review', description: 'Review through HTTP',
           instructions: 'Return a concise review.', kind: 'custom', enabled: true,
-          tools: ['read_file'], skills: [], extensions: [], maxTurns: 4,
+          tools: ['read'], skills: [], extensions: [], maxTurns: 4,
           inheritContext: true, background: true,
         },
       }),
@@ -573,6 +1633,58 @@ describe('combined Web server', () => {
     expect(replay).toContain('"sequence":');
   });
 
+  it('applies shared Core queue modes to detached Web runs', async () => {
+    const agentDirectory = path.join(webRoot, '.queue-agent');
+    await mkdir(agentDirectory, { recursive: true });
+    await writeFile(path.join(agentDirectory, 'settings.json'), JSON.stringify({
+      steeringMode: 'all',
+      followUpMode: 'all',
+    }));
+    vi.stubEnv('AI_HARNESS_AGENT_DIR', agentDirectory);
+    const trust = await fetch(`${baseUrl}/api/workspaces/trust`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: webRoot, confirm: true }),
+    });
+    expect(trust.status).toBe(200);
+
+    const startResponse = await fetch(`${baseUrl}/api/agent/runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: webRoot, provider: 'mock', input: 'queue initial' }),
+    });
+    expect(startResponse.status).toBe(202);
+    const started = await startResponse.json() as { run: { id: string; sessionId: string } };
+
+    const queued = await Promise.all(['follow one', 'follow two'].map(content => fetch(
+      `${baseUrl}/api/agent/runs/${started.run.id}/queue`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'follow-up', content }),
+      },
+    )));
+    expect(queued.map(item => item.status)).toEqual([202, 202]);
+
+    let state: {
+      run?: { phase: string };
+      session: { messages: Array<{ role: string; content: string }> };
+    } | undefined;
+    for (let attempt = 0; attempt < 200; attempt++) {
+      state = await fetch(`${baseUrl}/api/agent/sessions/${started.run.sessionId}/state`)
+        .then(response => response.json()) as typeof state;
+      if (state?.run?.phase === 'completed') break;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+
+    expect(state?.run?.phase).toBe('completed');
+    expect(state?.session.messages.filter(message => message.role === 'user').map(message => message.content))
+      .toEqual(['queue initial', 'follow one', 'follow two']);
+    expect(state?.session.messages.filter(message => message.role === 'assistant')).toHaveLength(2);
+    await fetch(`${baseUrl}/api/sessions/${started.run.sessionId}`, { method: 'DELETE' });
+    await rm(agentDirectory, { recursive: true, force: true });
+  });
+
   it('reports the exact tools enabled by each session preset', async () => {
     const created = await fetch(`${baseUrl}/api/sessions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -589,9 +1701,11 @@ describe('combined Web server', () => {
     });
     const readOnly = await fetch(`${baseUrl}/api/agent/sessions/${created.id}/capabilities`).then(response => response.json()) as { tools: Array<{ name: string }> };
     expect(readOnly.tools.map(tool => tool.name)).toEqual(expect.arrayContaining([
-      'list_files', 'read_file', 'git_status', 'git_diff', 'load_skill',
+      'read', 'grep', 'find', 'ls', 'load_skill',
     ]));
-    expect(readOnly.tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['write_file', 'bash']));
+    expect(readOnly.tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining([
+      'edit', 'write', 'bash',
+    ]));
     await fetch(`${baseUrl}/api/sessions/${created.id}`, { method: 'DELETE' });
   });
 
@@ -616,6 +1730,29 @@ describe('combined Web server', () => {
     expect(tooLarge.status).toBe(413);
     expect(await tooLarge.json()).toMatchObject({ path: 'large.log', tooLarge: true, downloadable: true });
     expect((await fetch(`${baseUrl}/api/files/content?cwd=${encodeURIComponent(webRoot)}&path=..`)).status).toBe(403);
+
+    const safeDownload = await fetch(`${baseUrl}/api/files/download?cwd=${encodeURIComponent(webRoot)}&path=source.ts`);
+    expect(safeDownload.status).toBe(200);
+    expect(await safeDownload.text()).toBe('export const value = 1;\n');
+
+    const downloadSecret = 'download-boundary-secret-do-not-emit';
+    const configured = await fetch(`${baseUrl}/api/provider-registry/custom`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: 'download-redaction-test', name: 'Download redaction test',
+        baseUrl: 'https://provider.example.test/v1', dialect: 'openai-completions', apiKey: downloadSecret,
+      }),
+    });
+    expect(configured.status).toBe(201);
+    await writeFile(path.join(webRoot, 'credential-download.bin'), Buffer.concat([
+      Buffer.alloc(64 * 1024 - 7, 65), Buffer.from(downloadSecret), Buffer.from([0, 1, 2]),
+    ]));
+    const blockedDownload = await fetch(
+      `${baseUrl}/api/files/download?cwd=${encodeURIComponent(webRoot)}&path=credential-download.bin`,
+    );
+    expect(blockedDownload.status).toBe(409);
+    expect(await blockedDownload.text()).not.toContain(downloadSecret);
+    await fetch(`${baseUrl}/api/provider-registry/custom/download-redaction-test`, { method: 'DELETE' });
 
     const index = await fetch(`${baseUrl}/api/files/index?cwd=${encodeURIComponent(webRoot)}&q=sre`).then(response => response.json()) as { files: string[]; directories: string[] };
     expect(index.files).toContain('source.ts');
@@ -643,11 +1780,19 @@ describe('combined Web server', () => {
     await writeFile(path.join(repository, 'deleted.txt'), 'removed content\n');
     await writeFile(path.join(repository, 'binary.bin'), Buffer.from([0, 1, 2, 3]));
     await writeFile(path.join(repository, 'renamed-old.txt'), 'renamed\n');
-    await execFileAsync('git', ['-C', repository, 'add', 'tracked.txt', 'deleted.txt', 'binary.bin', 'renamed-old.txt']);
+    await mkdir(path.join(repository, 'ignored-looking'));
+    await writeFile(path.join(repository, 'ignored-looking', 'tracked.md'), 'tracked despite ignore\n');
+    await writeFile(path.join(repository, '.gitignore'), 'ignored-looking/\nignored.tmp\n');
+    await execFileAsync('git', ['-C', repository, 'add',
+      'tracked.txt', 'deleted.txt', 'binary.bin', 'renamed-old.txt', '.gitignore']);
+    await execFileAsync('git', ['-C', repository, 'add', '-f', 'ignored-looking/tracked.md']);
     await execFileAsync('git', ['-C', repository, 'commit', '-qm', 'fixture']);
     await writeFile(path.join(repository, 'tracked.txt'), 'before\nafter\n');
     await writeFile(path.join(repository, 'binary.bin'), Buffer.from([0, 4, 5, 6]));
     await writeFile(path.join(repository, 'untracked.txt'), 'new file\n');
+    await writeFile(path.join(repository, 'ignored.tmp'), 'ignored\n');
+    await writeFile(path.join(repository, 'ignored-looking', 'untracked.md'), 'ignored\n');
+    await writeFile(path.join(repository, '.DS_Store'), 'hidden metadata\n');
     await rm(path.join(repository, 'deleted.txt'));
     await execFileAsync('git', ['-C', repository, 'mv', 'renamed-old.txt', 'renamed-new.txt']);
     await fetch(`${baseUrl}/api/workspaces/trust`, {
@@ -663,6 +1808,15 @@ describe('combined Web server', () => {
       expect.objectContaining({ name: 'untracked.txt', gitStatus: 'untracked' }),
       expect.objectContaining({ name: 'binary.bin', gitStatus: 'modified' }),
       expect.objectContaining({ name: 'renamed-new.txt', gitStatus: 'renamed' }),
+    ]));
+    expect(listing.entries.map(entry => entry.name)).not.toEqual(expect.arrayContaining(['.git', '.DS_Store']));
+    const indexed = await fetch(`${baseUrl}/api/files/index?cwd=${encodeURIComponent(repository)}&q=&limit=2000`)
+      .then(response => response.json()) as { files: string[] };
+    expect(indexed.files).toEqual(expect.arrayContaining([
+      'ignored-looking/tracked.md', 'untracked.txt',
+    ]));
+    expect(indexed.files).not.toEqual(expect.arrayContaining([
+      'ignored.tmp', 'ignored-looking/untracked.md', '.DS_Store',
     ]));
     const status = await fetch(`${baseUrl}/api/files/git/status?cwd=${encodeURIComponent(repository)}`).then(response => response.json()) as {
       files: Array<{ path: string; originalPath?: string; additions?: number; deletions?: number }>;
@@ -732,9 +1886,23 @@ describe('combined Web server', () => {
       expect.objectContaining({ path: checkout, branch: 'integration-worktree' }),
     ]));
 
-    const removed = await fetch(`${baseUrl}/api/workspaces/worktrees`, {
+    await writeFile(path.join(checkout, 'local-change.txt'), 'uncommitted');
+    const refused = await fetch(`${baseUrl}/api/workspaces/worktrees`, {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd: repository, path: checkout, confirm: true }),
+    });
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ code: 'force-required' });
+    const smuggledForce = await fetch(`${baseUrl}/api/workspaces/worktrees`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: repository, path: checkout, confirm: true, force: 'true' }),
+    });
+    expect(smuggledForce.status).toBe(400);
+    expect(await smuggledForce.json()).toMatchObject({ code: 'invalid-request' });
+
+    const removed = await fetch(`${baseUrl}/api/workspaces/worktrees`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: repository, path: checkout, confirm: true, force: true }),
     });
     expect(removed.status).toBe(200);
     expect(await removed.json()).toEqual({ success: true });
@@ -934,12 +2102,55 @@ describe('combined Web server', () => {
     expect((await fetch(`${baseUrl}/api/auth/logout`, { method: 'POST', headers: { Cookie: cookie } })).status).toBe(200);
     expect(await fetch(`${baseUrl}/api/auth/status`, { headers: { Cookie: cookie } }).then(response => response.json()))
       .toMatchObject({ authenticated: false });
+    const untrustedForwardedLogin = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https' },
+      body: JSON.stringify({ token: 'admin-token' }),
+    });
+    expect(untrustedForwardedLogin.headers.get('set-cookie')).not.toContain('Secure');
+    vi.stubEnv('AI_HARNESS_TRUST_PROXY', '1');
     const secureLogin = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https' },
       body: JSON.stringify({ token: 'admin-token' }),
     });
     expect(secureLogin.headers.get('set-cookie')).toContain('Secure');
+  });
+
+  it('guards every MCP OAuth endpoint with administrator capability and Origin checks', async () => {
+    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'user-token');
+    vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'admin-token');
+    const descriptor = { scope: 'global', name: 'docs', configKey: 'a'.repeat(64) };
+    const routes = [
+      { path: '/oauth/status', method: 'POST', body: { servers: [descriptor] } },
+      { path: '/oauth/start', method: 'POST', body: descriptor },
+      { path: '/oauth/flows/00000000-0000-4000-8000-000000000123', method: 'GET' },
+      { path: '/oauth/flows/00000000-0000-4000-8000-000000000123/redirect', method: 'POST', body: { redirectUrl: 'http://127.0.0.1/callback' } },
+      { path: '/oauth/flows/00000000-0000-4000-8000-000000000123', method: 'DELETE' },
+      { path: '/oauth/logout', method: 'POST', body: descriptor },
+    ];
+    for (const route of routes) {
+      const init = { method: route.method, body: route.body ? JSON.stringify(route.body) : undefined };
+      expect((await fetch(`${baseUrl}/api/mcp${route.path}`, {
+        ...init, headers: { 'Content-Type': 'application/json' },
+      })).status).toBe(401);
+      expect((await fetch(`${baseUrl}/api/mcp${route.path}`, {
+        ...init, headers: { Authorization: 'Bearer user-token', 'Content-Type': 'application/json' },
+      })).status).toBe(403);
+      if (route.method !== 'GET') {
+        expect((await fetch(`${baseUrl}/api/mcp${route.path}`, {
+          ...init,
+          headers: { Authorization: 'Bearer admin-token', 'Content-Type': 'application/json', Origin: 'https://evil.invalid' },
+        })).status).toBe(403);
+      }
+    }
+    const status = await fetch(`${baseUrl}/api/mcp/oauth/status`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer admin-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ servers: [] }),
+    });
+    expect(status.status).toBe(200);
+    expect(await status.json()).toEqual({ statuses: [] });
   });
 
   it('enforces user and administrator API permissions', async () => {
@@ -952,6 +2163,26 @@ describe('combined Web server', () => {
     })).status).toBe(200);
     expect((await fetch(`${baseUrl}/api/models`, {
       headers: { Authorization: 'Bearer user-token' },
+    })).status).toBe(200);
+    expect((await fetch(`${baseUrl}/api/mcp`, {
+      headers: { Authorization: 'Bearer user-token' },
+    })).status).toBe(200);
+    expect((await fetch(`${baseUrl}/api/mcp/actions`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer user-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'set-enabled', scope: 'global', revision: null, names: ['alpha'], enabled: false,
+      }),
+    })).status).toBe(403);
+    expect((await fetch(`${baseUrl}/api/mcp/preview`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer user-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'npx public-mcp-server' }),
+    })).status).toBe(403);
+    expect((await fetch(`${baseUrl}/api/mcp/preview`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer admin-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'npx public-mcp-server' }),
     })).status).toBe(200);
     expect((await fetch(`${baseUrl}/api/models/enabled`, {
       method: 'PATCH',
@@ -1085,11 +2316,17 @@ describe('combined Web server', () => {
     });
   });
 
-  it('runs with effective project settings without persisting them and supports explicit session overrides', async () => {
+  it('delivers shared instructions, keeps effective settings ephemeral, and supports explicit session overrides', async () => {
     await fetch(`${baseUrl}/api/workspaces/trust`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd: webRoot, confirm: true }),
     });
+    const projectInstructions = path.join(webRoot, 'AGENTS.override.md');
+    const agentDirectory = path.join(webRoot, '.data');
+    await writeFile(projectInstructions, 'ephemeral server-side project instructions');
+    await mkdir(agentDirectory, { recursive: true });
+    await writeFile(path.join(agentDirectory, 'SYSTEM.md'), 'server-side global system prompt');
+    await writeFile(path.join(agentDirectory, 'AGENTS.md'), 'server-side global context');
     const created = await fetch(`${baseUrl}/api/sessions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: 'Inherited run', cwd: webRoot }),
@@ -1101,15 +2338,102 @@ describe('combined Web server', () => {
         values: { model: 'project-model', thinking: 'high', toolPreset: 'chat-only', autoCompaction: false },
       }),
     });
-    const waitForCompletion = async (): Promise<void> => {
-      for (let attempt = 0; attempt < 100; attempt++) {
-        const state = await fetch(`${baseUrl}/api/agent/sessions/${created.id}/state`)
-          .then(response => response.json()) as { run?: { phase?: string } };
-        if (state.run?.phase === 'completed') return;
-        await new Promise(resolve => setTimeout(resolve, 10));
+    const waitForCompletion = async (runId: string): Promise<void> => {
+      // Polling every 10ms spends the shared GET quota on simulated typing.
+      // Replay/live SSE preserves the same one-second wait without retrying 429s.
+      const controller = new AbortController();
+      const deadline = setTimeout(() => controller.abort(), 1000);
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+      try {
+        const response = await fetch(`${baseUrl}/api/agent/sessions/${created.id}/events?after=0`, {
+          signal: controller.signal,
+        });
+        expect(response.status).toBe(200);
+        reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffered = '';
+        let completed = false;
+        while (!completed) {
+          const chunk = await reader.read();
+          if (chunk.done) throw new Error('Agent event stream ended before completion');
+          buffered += decoder.decode(chunk.value, { stream: true });
+          let boundary: number;
+          while ((boundary = buffered.indexOf('\n\n')) !== -1) {
+            const frame = buffered.slice(0, boundary); buffered = buffered.slice(boundary + 2);
+            const data = frame.split('\n').find(line => line.startsWith('data: '));
+            if (!data) continue;
+            const event = JSON.parse(data.slice(6)) as { type?: string; runId?: string; sessionId?: string };
+            // Earlier runs are replayed too; their terminal events cannot settle this wait.
+            if (event.runId !== runId || event.sessionId !== created.id) continue;
+            if (event.type === 'run.failed' || event.type === 'run.stopped') {
+              throw new Error(`Agent run terminated: ${event.type}`);
+            }
+            if (event.type === 'run.completed') completed = true;
+          }
+        }
+        const stateResponse = await fetch(`${baseUrl}/api/agent/sessions/${created.id}/state`, {
+          signal: controller.signal,
+        });
+        expect(stateResponse.status).toBe(200);
+        expect(await stateResponse.json()).toMatchObject({ run: { id: runId, phase: 'completed' } });
+      } finally {
+        clearTimeout(deadline);
+        controller.abort();
+        await reader?.cancel().catch(() => undefined);
       }
-      throw new Error('Agent run did not complete');
     };
+
+    let capturedProviderBody: { messages?: Array<{ role?: string; content?: string }> } | undefined;
+    const captureServer = createServer((request, response) => {
+      let requestBody = '';
+      request.setEncoding('utf8');
+      request.on('data', chunk => { requestBody += chunk; });
+      request.on('end', () => {
+        capturedProviderBody = JSON.parse(requestBody) as typeof capturedProviderBody;
+        response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        response.end('data: {"choices":[{"delta":{"content":"captured"}}]}\n\ndata: [DONE]\n\n');
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      captureServer.once('error', reject);
+      captureServer.listen(0, '127.0.0.1', resolve);
+    });
+    const captureAddress = captureServer.address();
+    if (!captureAddress || typeof captureAddress === 'string') throw new Error('Capture provider did not bind');
+    try {
+      const providerResponse = await fetch(`${baseUrl}/api/provider-registry/custom`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 'instruction-capture',
+          name: 'Instruction capture',
+          baseUrl: `http://127.0.0.1:${captureAddress.port}/v1`,
+          dialect: 'openai-completions',
+          apiKey: 'capture-key',
+        }),
+      });
+      expect(providerResponse.status).toBe(201);
+      const captureRun = await fetch(`${baseUrl}/api/agent/runs`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: created.id,
+          cwd: webRoot,
+          provider: 'instruction-capture',
+          input: 'Capture instructions',
+          settingOverrides: [],
+        }),
+      });
+      expect(captureRun.status).toBe(202);
+      const captured = await captureRun.json() as { run: { id: string } };
+      await waitForCompletion(captured.run.id);
+      const deliveredSystemPrompt = capturedProviderBody?.messages
+        ?.find(message => message.role === 'system')?.content;
+      expect(deliveredSystemPrompt).toContain('server-side global system prompt');
+      expect(deliveredSystemPrompt).toContain('server-side global context');
+      expect(deliveredSystemPrompt).toContain('ephemeral server-side project instructions');
+    } finally {
+      await fetch(`${baseUrl}/api/provider-registry/custom/instruction-capture`, { method: 'DELETE' });
+      await new Promise<void>((resolve, reject) => captureServer.close(error => error ? reject(error) : resolve()));
+    }
 
     const inherited = await fetch(`${baseUrl}/api/agent/runs`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1119,14 +2443,18 @@ describe('combined Web server', () => {
         settingOverrides: [],
       }),
     }).then(response => response.json()) as {
-      run: { model?: string }; session: Record<string, unknown>;
+      run: { id: string; model?: string }; session: Record<string, unknown>;
     };
     expect(inherited.run.model).toBe('project-model');
     expect(inherited.session).not.toHaveProperty('model');
     expect(inherited.session).not.toHaveProperty('thinking');
     expect(inherited.session).not.toHaveProperty('toolPreset');
     expect(inherited.session).not.toHaveProperty('autoCompaction');
-    await waitForCompletion();
+    await waitForCompletion(inherited.run.id);
+    const persistedAfterRun = await fetch(`${baseUrl}/api/sessions/${created.id}`).then(response => response.text());
+    expect(persistedAfterRun).not.toContain('server-side global system prompt');
+    expect(persistedAfterRun).not.toContain('server-side global context');
+    expect(persistedAfterRun).not.toContain('ephemeral server-side project instructions');
 
     const explicit = await fetch(`${baseUrl}/api/agent/runs`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1135,11 +2463,11 @@ describe('combined Web server', () => {
         model: 'session-model', thinking: 'max', toolPreset: 'full', autoCompaction: true,
         settingOverrides: ['model', 'thinking', 'toolPreset', 'autoCompaction'],
       }),
-    }).then(response => response.json()) as { session: Record<string, unknown> };
+    }).then(response => response.json()) as { run: { id: string }; session: Record<string, unknown> };
     expect(explicit.session).toMatchObject({
       model: 'session-model', thinking: 'max', toolPreset: 'full', autoCompaction: true,
     });
-    await waitForCompletion();
+    await waitForCompletion(explicit.run.id);
 
     const restored = await fetch(`${baseUrl}/api/agent/runs`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1148,11 +2476,11 @@ describe('combined Web server', () => {
         model: 'project-model', thinking: 'high', toolPreset: 'chat-only', autoCompaction: false,
         settingOverrides: [],
       }),
-    }).then(response => response.json()) as { run: { model?: string }; session: Record<string, unknown> };
+    }).then(response => response.json()) as { run: { id: string; model?: string }; session: Record<string, unknown> };
     expect(restored.run.model).toBe('project-model');
     expect(restored.session).not.toHaveProperty('model');
     expect(restored.session).not.toHaveProperty('autoCompaction');
-    await waitForCompletion();
+    await waitForCompletion(restored.run.id);
 
     const legacy = await fetch(`${baseUrl}/api/agent/runs`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1160,12 +2488,15 @@ describe('combined Web server', () => {
         sessionId: created.id, cwd: webRoot, provider: 'mock', input: 'Legacy setting request',
         model: 'legacy-model', thinking: 'low',
       }),
-    }).then(response => response.json()) as { run: { model?: string }; session: Record<string, unknown> };
+    }).then(response => response.json()) as { run: { id: string; model?: string }; session: Record<string, unknown> };
     expect(legacy.run.model).toBe('legacy-model');
     expect(legacy.session).toMatchObject({ model: 'legacy-model', thinking: 'low' });
-    await waitForCompletion();
+    await waitForCompletion(legacy.run.id);
 
     await fetch(`${baseUrl}/api/sessions/${created.id}`, { method: 'DELETE' });
+    await rm(projectInstructions, { force: true });
+    await rm(path.join(agentDirectory, 'SYSTEM.md'), { force: true });
+    await rm(path.join(agentDirectory, 'AGENTS.md'), { force: true });
     await fetch(`${baseUrl}/api/configuration/scope`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scope: 'project', scopeId: created.workspaceId, values: {} }),

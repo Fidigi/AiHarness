@@ -17,6 +17,7 @@ PROD_DATA_VOLUME   ?= $(PROJECT_NAME)-data
 PROD_BIND_ADDRESS  ?= 127.0.0.1
 PROD_PORT          ?= 3080
 PROD_DOCKER_ARGS   ?=
+E2E_DOCKER_ARGS    ?= --shm-size=1g
 
 # Couleurs pour le terminal
 GREEN  := \033[0;32m
@@ -39,6 +40,7 @@ help: ## Afficher cette aide
 	@echo "    make test              Lancer tous les tests unitaires"
 	@echo "    make test-watch        Lancer les tests en mode watch"
 	@echo "    make test-coverage     Lancer les tests avec couverture"
+	@echo "    make test-parity       Lancer les contrats CLI/JSON/RPC/session/extension/SDK"
 	@echo "    make test-e2e          Lancer les tests e2e (Playwright)"
 	@echo "    make typecheck         Vérifier les types TypeScript"
 	@echo ""
@@ -118,7 +120,7 @@ clean: clean-containers clean-images ## Nettoyage complet (images + conteneurs)
 # TESTS UNITAIRES (Vitest)
 # =============================================================================
 
-.PHONY: test test-watch test-coverage typecheck
+.PHONY: test test-watch test-coverage test-parity typecheck
 
 typecheck: ## Vérifier les types TypeScript dans Docker (rebuild inclus)
 	@printf "$(GREEN)[TYPECHECK] Build de l'image + vérification TypeScript...$(NC)\n"
@@ -168,6 +170,18 @@ test-coverage: ## Lancer les tests avec couverture dans Docker (rebuild inclus)
 		$(IMAGE_TEST_RUN) \
 		npm run test:coverage
 
+test-parity: ## Lancer le harnais de parité fonctionnelle dans Docker
+	@printf "$(GREEN)[TEST] Contrats fonctionnels CLI/JSON/RPC/session/extension/SDK...$(NC)\n"
+	docker build -f .docker/Dockerfile.test \
+		--target test-runner \
+		-t $(IMAGE_TEST_RUN) \
+		.
+	docker run --rm \
+		--name $(CONTAINER_PREFIX)-parity-$(RUN_ID) \
+		-e CI=true \
+		$(IMAGE_TEST_RUN) \
+		npm run test:parity
+
 # =============================================================================
 # TESTS E2E (Playwright)
 # =============================================================================
@@ -183,10 +197,10 @@ test-e2e: ## Lancer les tests e2e Playwright dans Docker (rebuild inclus)
 		cleanup() { \
 			status=$$?; \
 			trap - EXIT; \
-			mkdir -p playwright-report test-results e2e/visual.spec.ts-snapshots; \
+			mkdir -p playwright-report test-results; \
 			docker cp "$${container}:/app/playwright-report/." playwright-report/ 2>/dev/null || true; \
 			docker cp "$${container}:/app/test-results/." test-results/ 2>/dev/null || true; \
-			docker cp "$${container}:/app/e2e/visual.spec.ts-snapshots/." e2e/visual.spec.ts-snapshots/ 2>/dev/null || true; \
+			docker cp "$${container}:/app/.e2e-updated-baselines/." . 2>/dev/null || true; \
 			docker rm -f "$$container" >/dev/null 2>&1 || true; \
 			docker image rm "$$image" >/dev/null 2>&1 || true; \
 			exit $$status; \
@@ -201,8 +215,9 @@ test-e2e: ## Lancer les tests e2e Playwright dans Docker (rebuild inclus)
 		docker create \
 			--name "$$container" \
 			-e CI=true \
+			$(E2E_DOCKER_ARGS) \
 			"$$image" \
-			npm run test:e2e -- $(E2E_ARGS) >/dev/null; \
+			node .docker/run-e2e.mjs $(E2E_ARGS) >/dev/null; \
 		docker start --attach "$$container"
 
 # =============================================================================

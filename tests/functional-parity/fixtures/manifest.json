@@ -1,0 +1,299 @@
+{
+  "version": 1,
+  "processScenarios": [
+    {
+      "id": "cli-version",
+      "description": "locks the metadata-only executable version response",
+      "criteria": ["CLI-RUN-01"],
+      "args": ["--version"],
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/cli-version.stdout.txt",
+        "stderr": "goldens/empty.stderr.txt"
+      }
+    },
+    {
+      "id": "cli-invalid-option",
+      "description": "rejects an unknown startup option without contaminating stdout",
+      "criteria": ["CLI-RUN-01", "CLI-RUN-07"],
+      "args": ["--contract-option-does-not-exist"],
+      "expected": {
+        "exitCode": 2,
+        "stdout": "goldens/empty.stdout.txt",
+        "stderr": "goldens/cli-invalid-option.stderr.txt"
+      }
+    },
+    {
+      "id": "cli-invalid-tui-mode",
+      "description": "rejects an unsupported terminal mode before runtime startup",
+      "criteria": ["CLI-RUN-02"],
+      "args": ["--tui-mode", "unsupported"],
+      "expected": {
+        "exitCode": 2,
+        "stdout": "goldens/empty.stdout.txt",
+        "stderr": "goldens/cli-invalid-tui.stderr.txt"
+      }
+    },
+    {
+      "id": "cli-print-input",
+      "description": "combines piped, file, and option-terminated input while keeping print stdout final-text-only",
+      "criteria": ["CLI-RUN-03", "CLI-RUN-04"],
+      "args": ["--print", "--no-session", "--extension", "<FIXTURES>/extensions/contract-extension.mjs", "@notes.txt", "--", "--literal-message"],
+      "stdin": "piped context\n",
+      "workspaceFiles": [
+        { "source": "inputs/notes.txt", "destination": "notes.txt" }
+      ],
+      "environment": {
+        "AI_HARNESS_PARITY_CAPTURE": "<WORKSPACE>/captures/print.jsonl"
+      },
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/cli-print.stdout.txt",
+        "stderr": "goldens/empty.stderr.txt",
+        "files": [
+          { "path": "captures/print.jsonl", "fixture": "goldens/cli-print.capture.jsonl" }
+        ]
+      }
+    },
+    {
+      "id": "cli-persisted-session",
+      "description": "creates a named exact-ID session through the executable contract",
+      "criteria": ["CLI-RUN-08"],
+      "args": ["--print", "--session-dir", "<WORKSPACE>/sessions", "--session-id", "contract-session", "--name", "Contract session", "persist me"],
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/cli-print.stdout.txt",
+        "stderr": "goldens/empty.stderr.txt",
+        "files": [
+          { "path": "sessions/contract-session.jsonl", "fixture": "goldens/cli-session.jsonl" }
+        ]
+      }
+    },
+    {
+      "id": "cli-package-help",
+      "description": "keeps top-level package administration discoverable before agent startup",
+      "criteria": ["CLI-RUN-09"],
+      "args": ["package", "--help"],
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/cli-package-help.stdout.txt",
+        "stderr": "goldens/empty.stderr.txt"
+      }
+    },
+    {
+      "id": "json-lifecycle-purity",
+      "description": "emits a versioned JSON lifecycle and redirects extension stdout noise to stderr",
+      "criteria": ["CLI-RUN-05", "CLI-AUT-01"],
+      "args": ["--mode", "json", "--no-session", "--extension", "<FIXTURES>/extensions/noisy-extension.mjs", "hello"],
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/json-lifecycle.stdout.jsonl",
+        "stderr": "goldens/noisy-extension.stderr.txt"
+      }
+    },
+    {
+      "id": "json-missing-prompt",
+      "description": "fails a one-shot JSON invocation with no prompt and preserves empty stdout",
+      "criteria": ["CLI-AUT-01"],
+      "args": ["--mode", "json", "--no-session"],
+      "stdin": "",
+      "expected": {
+        "exitCode": 2,
+        "stdout": "goldens/empty.stdout.jsonl",
+        "stderr": "goldens/json-missing-prompt.stderr.txt"
+      }
+    },
+    {
+      "id": "rpc-state-purity",
+      "description": "returns a canonical correlated state response while redirecting extension noise",
+      "criteria": ["CLI-RUN-06", "CLI-AUT-02", "CLI-AUT-04"],
+      "args": ["--mode", "rpc", "--no-session", "--session-id", "contract-rpc", "--extension", "<FIXTURES>/extensions/noisy-extension.mjs"],
+      "stdinFixture": "transcripts/rpc-state.input.jsonl",
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/rpc-state.stdout.jsonl",
+        "stderr": "goldens/noisy-extension.stderr.txt"
+      }
+    },
+    {
+      "id": "rpc-invalid-envelope",
+      "description": "returns a fixed protocol error for a request without type or method",
+      "criteria": ["CLI-AUT-02"],
+      "args": ["--mode", "rpc", "--no-session", "--session-id", "contract-rpc"],
+      "stdinFixture": "transcripts/rpc-invalid.input.jsonl",
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/rpc-invalid.stdout.jsonl",
+        "stderr": "goldens/empty.stderr.txt"
+      }
+    },
+    {
+      "id": "rpc-legacy-chat-migration",
+      "description": "accepts the deprecated method/params envelope and emits its complete streamed result",
+      "criteria": ["CLI-AUT-03"],
+      "args": ["--mode", "rpc", "--no-session", "--session-id", "contract-rpc"],
+      "stdinFixture": "transcripts/rpc-legacy-chat.input.jsonl",
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/rpc-legacy-chat.stdout.jsonl",
+        "stderr": "goldens/empty.stderr.txt"
+      }
+    },
+    {
+      "id": "rpc-bash",
+      "description": "streams and completes a trusted bounded shell command over RPC",
+      "criteria": ["CLI-AUT-05"],
+      "args": ["--mode", "rpc", "--no-session", "--session-id", "contract-rpc", "--approve"],
+      "stdinFixture": "transcripts/rpc-bash.input.jsonl",
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/rpc-bash.stdout.jsonl",
+        "stderr": "goldens/empty.stderr.txt"
+      }
+    },
+    {
+      "id": "rpc-session-stats",
+      "description": "projects deterministic empty-session statistics through the public RPC command",
+      "criteria": ["CLI-AUT-06"],
+      "args": ["--mode", "rpc", "--no-session", "--session-id", "contract-rpc"],
+      "stdinFixture": "transcripts/rpc-stats.input.jsonl",
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/rpc-stats.stdout.jsonl",
+        "stderr": "goldens/empty.stderr.txt"
+      }
+    },
+    {
+      "id": "rpc-command-catalogue",
+      "description": "discovers extension commands through an AiHarness-owned command catalogue",
+      "criteria": ["CLI-RUN-10"],
+      "args": ["--mode", "rpc", "--no-session", "--session-id", "contract-rpc", "--extension", "<FIXTURES>/extensions/contract-extension.mjs"],
+      "stdinFixture": "transcripts/rpc-commands.input.jsonl",
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/rpc-commands.stdout.jsonl",
+        "stderr": "goldens/empty.stderr.txt"
+      }
+    },
+    {
+      "id": "rpc-extension-command",
+      "description": "loads and invokes a versioned native extension command without starting an agent turn",
+      "criteria": ["CLI-EXT-02", "CLI-AUT-03"],
+      "args": ["--mode", "rpc", "--no-session", "--session-id", "contract-rpc", "--extension", "<FIXTURES>/extensions/contract-extension.mjs"],
+      "stdinFixture": "transcripts/rpc-extension-command.input.jsonl",
+      "environment": {
+        "AI_HARNESS_PARITY_CAPTURE": "<WORKSPACE>/captures/extension-command.jsonl"
+      },
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/rpc-extension-command.stdout.jsonl",
+        "stderr": "goldens/empty.stderr.txt",
+        "files": [
+          { "path": "captures/extension-command.jsonl", "fixture": "goldens/rpc-extension-command.capture.jsonl" }
+        ]
+      }
+    },
+    {
+      "id": "rpc-extension-ui",
+      "description": "round-trips a correlated declarative extension confirmation over RPC",
+      "criteria": ["CLI-AUT-07"],
+      "args": ["--mode", "rpc", "--no-session", "--session-id", "contract-rpc", "--extension", "<FIXTURES>/extensions/contract-extension.mjs"],
+      "stdinFixture": "transcripts/rpc-extension-ui.input.jsonl",
+      "environment": {
+        "AI_HARNESS_PARITY_CAPTURE": "<WORKSPACE>/captures/extension-ui.jsonl"
+      },
+      "interaction": {
+        "method": "confirm",
+        "commandId": "extension-ui",
+        "response": { "confirmed": true }
+      },
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/rpc-extension-ui.stdout.jsonl",
+        "stderr": "goldens/empty.stderr.txt",
+        "files": [
+          { "path": "captures/extension-ui.jsonl", "fixture": "goldens/rpc-extension-ui.capture.jsonl" }
+        ]
+      }
+    },
+    {
+      "id": "rpc-invalid-extension",
+      "description": "reports an invalid extension on stderr and keeps the RPC channel usable",
+      "criteria": ["CLI-EXT-02"],
+      "args": ["--mode", "rpc", "--no-session", "--session-id", "contract-rpc", "--extension", "<FIXTURES>/extensions/invalid-extension.mjs"],
+      "stdinFixture": "transcripts/rpc-state.input.jsonl",
+      "expected": {
+        "exitCode": 0,
+        "stdout": "goldens/rpc-state.stdout.jsonl",
+        "stderr": "goldens/invalid-extension.stderr.txt"
+      }
+    }
+  ],
+  "sessionScenarios": [
+    {
+      "id": "session-v2-tree",
+      "description": "loads the current parent-linked entry tree and excludes its abandoned branch from active state",
+      "criteria": ["CLI-SES-03", "CLI-SES-04"],
+      "sessionId": "v2-tree",
+      "input": "sessions/v2-tree.input.jsonl",
+      "rewrite": false,
+      "expected": "sessions/v2-tree.expected.json"
+    },
+    {
+      "id": "session-legacy-migration",
+      "description": "reads legacy unversioned entries and rewrites them as the current AiHarness schema",
+      "criteria": ["CLI-SES-03"],
+      "sessionId": "legacy-unversioned",
+      "input": "sessions/legacy-unversioned.input.jsonl",
+      "rewrite": true,
+      "expected": "sessions/legacy-unversioned.expected.json"
+    },
+    {
+      "id": "session-invalid-lines",
+      "description": "skips malformed, future-version, unknown, and structurally invalid entries",
+      "criteria": ["CLI-SES-03", "CLI-SES-04"],
+      "sessionId": "invalid-lines",
+      "input": "sessions/invalid-lines.input.jsonl",
+      "rewrite": false,
+      "expected": "sessions/invalid-lines.expected.json"
+    }
+  ],
+  "sdkScenarios": [
+    {
+      "id": "sdk-specialized-models",
+      "description": "executes typed classifier/image bridges and credential/kind negatives through the public Core entry",
+      "criteria": ["CLI-MOD-09", "CLI-TOOL-06"],
+      "kind": "runtime",
+      "input": "sdk/models-probe.mjs",
+      "expected": "sdk/models-probe.expected.json",
+      "expectSuccess": true
+    },
+    {
+      "id": "sdk-runtime",
+      "description": "executes the built Core entry point with session and extension primitives",
+      "criteria": ["CLI-EXT-02", "CLI-AUT-08"],
+      "kind": "runtime",
+      "input": "sdk/runtime-probe.mjs",
+      "expected": "sdk/runtime-probe.expected.json",
+      "expectSuccess": true
+    },
+    {
+      "id": "sdk-types-positive",
+      "description": "compiles a consumer against the supported Core and extension declarations",
+      "criteria": ["CLI-AUT-08"],
+      "kind": "types",
+      "input": "sdk/types-positive.ts",
+      "expected": "sdk/types-positive.expected.json",
+      "expectSuccess": true
+    },
+    {
+      "id": "sdk-types-negative",
+      "description": "rejects an undeclared compatibility alias at the public package boundary",
+      "criteria": ["CLI-AUT-08"],
+      "kind": "types",
+      "input": "sdk/types-negative.ts",
+      "expected": "sdk/types-negative.expected.json",
+      "expectSuccess": false
+    }
+  ]
+}

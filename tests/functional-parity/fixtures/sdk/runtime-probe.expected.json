@@ -1,0 +1,53 @@
+{
+  "code": 0,
+  "stdout": {
+    "versions": {
+      "core": 1,
+      "extension": 1,
+      "factory": 1,
+      "session": 2
+    },
+    "command": "echo:value",
+    "tool": {
+      "content": "5",
+      "details": {
+        "kind": "sum"
+      }
+    },
+    "hook": {
+      "data": {
+        "sessionId": "sdk-contract-session",
+        "provider": "mock",
+        "input": "LOWERCASE"
+      },
+      "cancelled": false
+    },
+    "registry": [
+      {
+        "id": "sdk-probe",
+        "commands": ["sdk_echo"],
+        "tools": ["sdk_sum"],
+        "providers": [],
+        "uiComponents": [],
+        "hooks": ["before:agent"]
+      }
+    ],
+    "session": {
+      "id": "sdk-contract-session",
+      "schemaVersion": 2,
+      "title": "SDK contract",
+      "messages": [
+        {
+          "id": "sdk-message",
+          "role": "user",
+          "content": "Probe",
+          "timestamp": "2026-01-02T03:04:05.000Z"
+        }
+      ],
+      "createdAt": "2026-01-02T03:04:05.000Z",
+      "updatedAt": "2026-01-02T03:04:06.000Z",
+      "activeLeafId": "sdk-message"
+    }
+  },
+  "stderr": ""
+}

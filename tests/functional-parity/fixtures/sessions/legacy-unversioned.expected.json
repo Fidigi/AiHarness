@@ -1,0 +1,72 @@
+{
+  "session": {
+    "id": "legacy-unversioned",
+    "schemaVersion": 2,
+    "title": "Legacy question",
+    "messages": [
+      {
+        "id": "legacy-user",
+        "role": "user",
+        "content": "Legacy question",
+        "timestamp": "<TIMESTAMP>"
+      },
+      {
+        "id": "legacy-assistant",
+        "role": "assistant",
+        "content": "Legacy answer",
+        "timestamp": "<TIMESTAMP>",
+        "parentMessageId": "legacy-user"
+      }
+    ],
+    "createdAt": "<TIMESTAMP>",
+    "updatedAt": "<TIMESTAMP>"
+  },
+  "rawEntries": [
+    {
+      "id": "legacy-user",
+      "type": "message",
+      "version": 2,
+      "role": "user",
+      "content": "Legacy question",
+      "timestamp": "<TIMESTAMP>"
+    },
+    {
+      "id": "legacy-assistant",
+      "type": "message",
+      "version": 2,
+      "role": "assistant",
+      "content": "Legacy answer",
+      "timestamp": "<TIMESTAMP>",
+      "parentMessageId": "legacy-user"
+    }
+  ],
+  "diskEntries": [
+    {
+      "id": "session-metadata",
+      "type": "metadata",
+      "version": 2,
+      "schemaVersion": 2,
+      "timestamp": "<TIMESTAMP>",
+      "title": "Legacy question",
+      "createdAt": "<TIMESTAMP>",
+      "updatedAt": "<TIMESTAMP>"
+    },
+    {
+      "id": "legacy-user",
+      "type": "message",
+      "version": 2,
+      "role": "user",
+      "content": "Legacy question",
+      "timestamp": "<TIMESTAMP>"
+    },
+    {
+      "id": "legacy-assistant",
+      "type": "message",
+      "version": 2,
+      "role": "assistant",
+      "content": "Legacy answer",
+      "timestamp": "<TIMESTAMP>",
+      "parentMessageId": "legacy-user"
+    }
+  ]
+}

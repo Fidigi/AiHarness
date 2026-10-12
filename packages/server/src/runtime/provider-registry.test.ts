@@ -1,7 +1,8 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { EncryptedCredentialStore } from '@ai-harness/core';
 import { AiProxyServer } from '../api/proxy.js';
 import { ProviderRegistryService } from './provider-registry.js';
 
@@ -47,6 +48,79 @@ describe('ProviderRegistryService', () => {
     expect(restoredProxy.isConfigured('acme')).toBe(true);
   });
 
+  it('refuses volatile custom credentials when encrypted persistence is unavailable', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-provider-registry-volatile-'));
+    roots.push(root);
+    const service = new ProviderRegistryService(
+      path.join(root, 'providers.json'),
+      new AiProxyServer(),
+      path.join(root, 'secrets.enc'),
+      '',
+    );
+    await service.load();
+
+    await expect(service.upsertProvider({
+      id: 'acme', name: 'Acme', baseUrl: 'https://models.example/v1',
+      dialect: 'openai-completions', apiKey: 'must-not-be-volatile',
+    })).rejects.toMatchObject({ status: 503, message: 'Credential storage is unavailable.' });
+    expect(service.listProviders()).toEqual([]);
+  });
+
+  it('migrates the legacy combined secret payload to the shared credential namespace', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-provider-registry-legacy-'));
+    roots.push(root);
+    const metadataPath = path.join(root, 'providers.json');
+    const secretsPath = path.join(root, 'secrets.enc');
+    const key = 'test-master-key-with-32-characters';
+    await writeFile(metadataPath, JSON.stringify({
+      version: 1,
+      providers: [{
+        id: 'acme', name: 'Acme', baseUrl: 'https://models.example/v1', dialect: 'openai-responses',
+        headerNames: ['X-Private'], createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString(),
+      }],
+      models: [],
+    }));
+    const legacy = new EncryptedCredentialStore(secretsPath, key);
+    await legacy.load();
+    await legacy.set('provider:acme', JSON.stringify({
+      apiKey: 'legacy-api-secret', headers: { 'X-Private': 'legacy-header-secret' },
+    }));
+    const proxy = new AiProxyServer();
+    const service = new ProviderRegistryService(metadataPath, proxy, secretsPath, key);
+
+    await service.load();
+
+    expect(service.listProviders()).toEqual([expect.objectContaining({ id: 'acme', configured: true })]);
+    expect(proxy.isConfigured('acme')).toBe(true);
+    expect(proxy.redactText('legacy-api-secret legacy-header-secret')).toBe('[REDACTED] [REDACTED]');
+    const migrated = new EncryptedCredentialStore(secretsPath, key);
+    await migrated.load();
+    expect(JSON.parse(migrated.get('provider:acme')!)).toMatchObject({
+      version: 1, type: 'api-key', apiKey: 'legacy-api-secret',
+    });
+    expect(JSON.parse(migrated.get('provider-headers:acme')!)).toEqual({ 'X-Private': 'legacy-header-secret' });
+  });
+
+  it('restores provider credentials when metadata deletion cannot be persisted', async () => {
+    const { root, service } = await fixture();
+    const key = 'test-master-key-with-32-characters';
+    await service.upsertProvider({
+      id: 'acme', name: 'Acme', baseUrl: 'https://models.example/v1', dialect: 'openai-completions',
+      apiKey: 'rollback-api-secret', headers: { 'X-Private': 'rollback-header-secret' },
+    });
+    const metadataPath = path.join(root, 'providers.json');
+    await rm(metadataPath);
+    await mkdir(metadataPath);
+
+    await expect(service.deleteProvider('acme')).rejects.toThrow();
+
+    expect(service.listProviders()).toEqual([expect.objectContaining({ id: 'acme', configured: true })]);
+    const stored = new EncryptedCredentialStore(path.join(root, 'secrets.enc'), key);
+    await stored.load();
+    expect(JSON.parse(stored.get('provider:acme')!)).toMatchObject({ apiKey: 'rollback-api-secret' });
+    expect(JSON.parse(stored.get('provider-headers:acme')!)).toEqual({ 'X-Private': 'rollback-header-secret' });
+  });
+
   it('validates provider input, discovers models, and cascades provider deletion', async () => {
     const { service } = await fixture();
     await expect(service.upsertProvider({
@@ -58,6 +132,10 @@ describe('ProviderRegistryService', () => {
     await expect(service.upsertProvider({
       id: 'bad-provider', name: 'Bad', baseUrl: 'https://example.test', dialect: 'openai-completions',
       headers: { Host: 'internal' },
+    })).rejects.toMatchObject({ status: 400 });
+    await expect(service.upsertProvider({
+      id: 'bad-provider', name: 'Bad', baseUrl: 'https://example.test', dialect: 'openai-completions',
+      headers: { Authorization: 'Bearer untrusted' },
     })).rejects.toMatchObject({ status: 400 });
 
     await service.upsertProvider({

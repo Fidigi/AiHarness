@@ -17,6 +17,7 @@ function createInput(ui = createUI()) {
   const handlers = {
     onLine: vi.fn(),
     onInterrupt: vi.fn(),
+    onEscape: vi.fn(),
     onExit: vi.fn(),
     onError: vi.fn(),
   };
@@ -55,12 +56,12 @@ describe('FullscreenInput', () => {
     expect(controller.getValue()).toBe('');
   });
 
-  it('submits lines sequentially and stores history', async () => {
+  it('submits Enter as steering without blocking later input and stores history', async () => {
     const { controller, handlers } = createInput();
     for (const character of 'test') controller.handleKeypress(character, { name: character });
     controller.handleKeypress('\r', { name: 'return' });
 
-    await vi.waitFor(() => expect(handlers.onLine).toHaveBeenCalledWith('test'));
+    await vi.waitFor(() => expect(handlers.onLine).toHaveBeenCalledWith('test', 'steer'));
     controller.handleKeypress('', { name: 'up' });
     expect(controller.getValue()).toBe('test');
   });
@@ -70,6 +71,7 @@ describe('FullscreenInput', () => {
     const controller = new FullscreenInput(ui, {
       onLine: vi.fn(),
       onInterrupt: vi.fn(),
+      onEscape: vi.fn(),
       onExit: vi.fn(),
       complete: input => ['/prompts', '/provider'].filter(candidate => candidate.startsWith(input)),
     }, { resume: vi.fn(), pause: vi.fn(), on: vi.fn(), off: vi.fn() });
@@ -80,7 +82,32 @@ describe('FullscreenInput', () => {
     expect(controller.getValue()).toBe('/prompts ');
   });
 
-  it('dispatches interrupt, exit and transcript navigation', () => {
+  it('distinguishes follow-ups and restores queued text before transcript navigation', async () => {
+    const ui = createUI();
+    const onDequeue = vi.fn((current: string) => `queued\n${current}`);
+    const handlers = {
+      onLine: vi.fn(),
+      onInterrupt: vi.fn(),
+      onEscape: vi.fn(),
+      onExit: vi.fn(),
+      onError: vi.fn(),
+      onDequeue,
+    };
+    const controller = new FullscreenInput(ui, handlers, {
+      resume: vi.fn(), pause: vi.fn(), on: vi.fn(), off: vi.fn(),
+    });
+    for (const character of 'later') controller.handleKeypress(character, { name: character });
+    controller.handleKeypress('\r', { name: 'return', meta: true });
+    await vi.waitFor(() => expect(handlers.onLine).toHaveBeenCalledWith('later', 'follow-up'));
+
+    controller.replaceValue('draft');
+    controller.handleKeypress('', { name: 'up', meta: true });
+    expect(onDequeue).toHaveBeenCalledWith('draft');
+    expect(controller.getValue()).toBe('queued\ndraft');
+    expect(ui.scrollUp).not.toHaveBeenCalled();
+  });
+
+  it('dispatches interrupt, exit and transcript navigation when no queue is restored', () => {
     const { controller, handlers, ui } = createInput();
 
     controller.handleKeypress('', { name: 'c', ctrl: true });
@@ -92,5 +119,32 @@ describe('FullscreenInput', () => {
     expect(handlers.onExit).toHaveBeenCalledOnce();
     expect(ui.scrollUp).toHaveBeenCalledOnce();
     expect(ui.scrollDown).toHaveBeenCalledOnce();
+  });
+
+  it('dispatches a lone Escape without treating it as Ctrl+C', async () => {
+    const { controller, handlers } = createInput();
+    controller.handleKeypress('', { name: 'escape', meta: true });
+
+    expect(handlers.onEscape).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(handlers.onEscape).toHaveBeenCalledOnce());
+    expect(handlers.onInterrupt).not.toHaveBeenCalled();
+  });
+
+  it('recognizes terminals that report Alt+Enter as Escape then Enter', async () => {
+    const { controller, handlers } = createInput();
+    controller.handleKeypress('x', { name: 'x' });
+    controller.handleKeypress('', { name: 'escape', meta: true });
+    controller.handleKeypress('\r', { name: 'return' });
+
+    await vi.waitFor(() => expect(handlers.onLine).toHaveBeenCalledWith('x', 'follow-up'));
+    expect(handlers.onEscape).not.toHaveBeenCalled();
+  });
+
+  it('uses Ctrl+Q as a terminal-compatible follow-up shortcut', async () => {
+    const { controller, handlers } = createInput();
+    controller.handleKeypress('x', { name: 'x' });
+    controller.handleKeypress('', { name: 'q', ctrl: true });
+
+    await vi.waitFor(() => expect(handlers.onLine).toHaveBeenCalledWith('x', 'follow-up'));
   });
 });

@@ -3,6 +3,7 @@ import type { SubagentProfile } from '@ai-harness/core';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { requireCapability } from '../security/request-security.js';
 import type { RuntimeServices } from '../runtime/services.js';
+import { providerOperation } from '../runtime/provider-administration.js';
 
 function optionalString(value: unknown, field: string, max = 4_096): string | undefined {
   if (value === undefined || value === null || value === '') return undefined;
@@ -32,6 +33,7 @@ function context(query: Record<string, unknown>, body?: Record<string, unknown>)
 
 export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>): Router {
   const router = Router();
+  const operation = (handler: Parameters<typeof providerOperation>[1]) => providerOperation(servicesPromise, handler);
 
   router.get('/settings', async (request, response, next) => {
     try {
@@ -43,7 +45,7 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     }
   });
 
-  router.patch('/settings', requireCapability('configuration'), async (request, response, next) => {
+  router.patch('/settings', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       response.json(await services.subagentService.updateSettings(context(request.query, request.body), {
@@ -53,7 +55,7 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
   router.get('/profiles', async (request, response, next) => {
     try {
@@ -65,7 +67,7 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     }
   });
 
-  router.post('/profiles', requireCapability('configuration'), async (request, response, next) => {
+  router.post('/profiles', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       response.status(201).json(await services.subagentService.createProfile(
@@ -75,9 +77,9 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
-  router.post('/profiles/:profileId/duplicate', requireCapability('configuration'), async (request, response, next) => {
+  router.post('/profiles/:profileId/duplicate', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       response.status(201).json(await services.subagentService.duplicateProfile(
@@ -86,9 +88,9 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
-  router.patch('/profiles/:profileId', requireCapability('configuration'), async (request, response, next) => {
+  router.patch('/profiles/:profileId', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       response.json(await services.subagentService.updateProfile(
@@ -98,9 +100,9 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
-  router.delete('/profiles/:profileId', requireCapability('configuration'), async (request, response, next) => {
+  router.delete('/profiles/:profileId', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       response.json(await services.subagentService.deleteProfile(
@@ -109,7 +111,7 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
   router.get('/runs', async (request, response, next) => {
     try {
@@ -122,7 +124,7 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     }
   });
 
-  router.post('/runs', async (request, response, next) => {
+  router.post('/runs', operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       const parentSessionId = requiredString(request.body?.parentSessionId, 'parentSessionId', 200);
@@ -149,7 +151,7 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
   router.get('/runs/:runId', async (request, response, next) => {
     try {

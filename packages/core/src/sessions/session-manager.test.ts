@@ -2,7 +2,7 @@
 // Session Manager Tests - Persistence & Compaction
 // ============================================================
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -10,10 +10,10 @@ function sleep(ms: number): Promise<void> {
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
+import { CredentialRedactor } from '../providers/credentials.js';
 import {
   SessionManager,
   JsonlSessionStore,
-  SessionEntry,
 } from './session-manager';
 
 // ===================================================================
@@ -125,6 +125,74 @@ describe('JsonlSessionStore', () => {
       expect(loaded!.messages.length).toBe(2);
     });
 
+    it('never persists provider credentials with non-secret configuration', async () => {
+      const session = {
+        id: 'sanitized-provider',
+        messages: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        providerConfig: {
+          type: 'openai',
+          baseUrl: 'https://provider.example/v1',
+          openaiApiKey: 'secret-key',
+          clientSecret: 'secret-client',
+          refreshToken: 'secret-refresh',
+          headers: { Authorization: 'Bearer nested-secret', 'X-Region': 'eu-west-1' },
+        },
+      };
+
+      await store.saveSession(session);
+      const serialized = await fs.readFile(path.join(tempDir, 'sanitized-provider.jsonl'), 'utf8');
+      const loaded = await store.loadSession(session.id);
+
+      expect(serialized).not.toContain('secret-key');
+      expect(serialized).not.toContain('secret-client');
+      expect(serialized).not.toContain('secret-refresh');
+      expect(serialized).not.toContain('nested-secret');
+      expect(loaded?.providerConfig).toEqual({
+        type: 'openai',
+        baseUrl: 'https://provider.example/v1',
+        headers: { 'X-Region': 'eu-west-1' },
+      });
+    });
+
+    it('scrubs known raw and encoded credentials from legacy and newly persisted session data', async () => {
+      const secret = 'session+runtime-secret';
+      await store.saveSession({
+        id: 'legacy-secret-session',
+        title: `Legacy ${secret}`,
+        messages: [{
+          id: 'message-secret',
+          role: 'assistant',
+          content: `${secret} ${Buffer.from(secret).toString('base64')}`,
+          timestamp: new Date(),
+        }],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      expect(await fs.readFile(path.join(tempDir, 'legacy-secret-session.jsonl'), 'utf8')).toContain(secret);
+
+      const redactor = new CredentialRedactor([secret]);
+      const manager = new SessionManager({
+        store,
+        redactText: value => redactor.redact(value),
+        redactJson: value => redactor.redactJson(value),
+      });
+      const loaded = await manager.loadFromStore('legacy-secret-session');
+      await manager.addMessage('legacy-secret-session', {
+        role: 'tool',
+        content: `tool ${encodeURIComponent(secret)}`,
+      });
+
+      const boundary = JSON.stringify(loaded);
+      const serialized = await fs.readFile(path.join(tempDir, 'legacy-secret-session.jsonl'), 'utf8');
+      expect(boundary).not.toContain(secret);
+      expect(serialized).not.toContain(secret);
+      expect(serialized).not.toContain(Buffer.from(secret).toString('base64'));
+      expect(serialized).not.toContain(encodeURIComponent(secret));
+      expect(serialized).toContain('[REDACTED]');
+    });
+
     it('should preserve session metadata, title, and branch ancestry', async () => {
       const session = {
         id: 'metadata-session',
@@ -220,6 +288,38 @@ describe('JsonlSessionStore', () => {
       })).rejects.toThrow('Invalid session ID');
       await expect(store.loadSession('../escaped')).rejects.toThrow('Invalid session ID');
     });
+
+    it('does not discover, read, or overwrite symbolic-link session files', async () => {
+      const target = path.join(tempDir, 'outside.txt');
+      const link = path.join(tempDir, 'linked.jsonl');
+      await fs.writeFile(target, 'do not overwrite');
+      try {
+        await fs.symlink(target, link);
+      } catch {
+        return; // Symlinks may require additional privileges on Windows.
+      }
+
+      expect(await store.listSessionIds()).not.toContain('linked');
+      expect(await store.loadSession('linked')).toBeNull();
+      await expect(store.saveSession({
+        id: 'linked',
+        messages: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })).rejects.toThrow();
+      expect(await fs.readFile(target, 'utf8')).toBe('do not overwrite');
+
+      const hardLink = path.join(tempDir, 'hard-linked.jsonl');
+      await fs.link(target, hardLink);
+      expect(await store.loadSession('hard-linked')).toBeNull();
+      await expect(store.saveSession({
+        id: 'hard-linked',
+        messages: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })).rejects.toThrow();
+      expect(await fs.readFile(target, 'utf8')).toBe('do not overwrite');
+    });
   });
 
   describe('appendMessage()', () => {
@@ -284,6 +384,53 @@ describe('JsonlSessionStore', () => {
 
       expect(id1).not.toBe(id2);
       expect(id2).not.toBe(id3);
+    });
+
+    it.runIf(process.platform !== 'win32')('rejects weak or linked session lock files', async () => {
+      const weakLock = path.join(tempDir, 'weak-lock.jsonl.lock');
+      await fs.writeFile(weakLock, '', { mode: 0o644 });
+      await expect(store.appendMessage('weak-lock', 'user', 'blocked'))
+        .rejects.toThrow('Session file lock is unsafe.');
+
+      const lockTarget = path.join(tempDir, 'lock-target');
+      const linkedLock = path.join(tempDir, 'linked-lock.jsonl.lock');
+      await fs.writeFile(lockTarget, 'unsafe');
+      await fs.symlink(lockTarget, linkedLock);
+      await expect(store.appendMessage('linked-lock', 'user', 'blocked'))
+        .rejects.toThrow('Session file lock is unsafe.');
+    });
+
+    it('serializes concurrent appends from independent store instances', async () => {
+      const secondStore = new JsonlSessionStore(tempDir);
+      await Promise.all(Array.from({ length: 80 }, (_, index) => (
+        (index % 2 === 0 ? store : secondStore)
+          .appendMessage('concurrent-appends', 'user', `message-${index}`)
+      )));
+
+      const entries = await store.getRawEntries('concurrent-appends');
+      expect(entries).toHaveLength(80);
+      expect(new Set(entries.map(entry => entry.id)).size).toBe(80);
+      expect(new Set(entries.map(entry => (entry as { content?: string }).content)).size).toBe(80);
+    });
+
+    it('does not lose appends racing with atomic session rewrites', async () => {
+      const secondStore = new JsonlSessionStore(tempDir);
+      const session = {
+        id: 'concurrent-rewrite',
+        messages: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await store.saveSession(session);
+      await Promise.all(Array.from({ length: 40 }, (_, index) => (
+        index % 2 === 0
+          ? secondStore.appendMessage(session.id, 'user', `kept-${index}`)
+          : store.saveSession({ ...session, updatedAt: new Date() })
+      )));
+
+      const loaded = await store.loadSession(session.id);
+      expect(loaded?.messages).toHaveLength(20);
+      expect(new Set(loaded?.messages.map(item => item.content)).size).toBe(20);
     });
   });
 
@@ -431,6 +578,39 @@ describe('SessionManager with JSONL Persistence', () => {
 
       expect(session1.id).not.toBe(session2.id);
     });
+
+    it('refuses duplicate IDs without replacing memory or durable data', async () => {
+      await manager.create({ id: 'same-session', title: 'Original' });
+      await expect(manager.create({ id: 'same-session', title: 'Replacement' }))
+        .rejects.toThrow('Session already exists.');
+      expect(manager.get('same-session')?.title).toBe('Original');
+      await expect(store.loadSession('same-session')).resolves.toMatchObject({ title: 'Original' });
+    });
+
+    it('serializes cross-manager creation of the same durable ID', async () => {
+      const competing = new SessionManager();
+      competing.setStore(new JsonlSessionStore(tempDir));
+      const results = await Promise.allSettled([
+        manager.create({ id: 'contended-session', title: 'First' }),
+        competing.create({ id: 'contended-session', title: 'Second' }),
+      ]);
+      expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
+      const durable = await store.loadSession('contended-session');
+      expect(['First', 'Second']).toContain(durable?.title);
+    });
+
+    it('rejects duplicate imported entry IDs before persistence', async () => {
+      const timestamp = new Date();
+      await expect(manager.create({
+        id: 'duplicate-entries',
+        messages: [
+          { id: 'duplicate-entry', role: 'user', content: 'one', timestamp },
+          { id: 'duplicate-entry', role: 'assistant', content: 'two', timestamp },
+        ],
+      })).rejects.toThrow('Session message is invalid.');
+      await expect(store.loadSession('duplicate-entries')).resolves.toBeNull();
+    });
   });
 
   describe('addMessage()', async () => {
@@ -460,6 +640,99 @@ describe('SessionManager with JSONL Persistence', () => {
       expect(result).toBeNull();
     });
 
+    it('aggregates cache tokens without inventing a cumulative unknown cost', async () => {
+      const session = await manager.create();
+      await manager.addMessage(session.id, {
+        role: 'assistant',
+        content: 'Known',
+        usage: {
+          inputTokens: 10,
+          outputTokens: 2,
+          cacheReadTokens: 5,
+          cacheWriteTokens: 1,
+          costUsd: 0.1,
+        },
+      });
+      expect(session.usage).toMatchObject({ totalTokens: 18, costUsd: 0.1 });
+
+      await manager.addMessage(session.id, {
+        role: 'assistant',
+        content: 'Unknown price',
+        usage: { inputTokens: 3, outputTokens: 1, totalTokens: 4 },
+      });
+      expect(session.usage).toMatchObject({ totalTokens: 22 });
+      expect(session.usage?.costUsd).toBeUndefined();
+      expect((await store.loadSession(session.id))?.usage?.costUsd).toBeUndefined();
+    });
+
+    it('rejects malformed usage before appending and saturates valid counters', async () => {
+      const session = await manager.create();
+      await expect(manager.addMessage(session.id, {
+        role: 'assistant', content: 'invalid', usage: { inputTokens: Number.POSITIVE_INFINITY },
+      })).rejects.toThrow('Session usage is invalid.');
+      expect(session.messages).toHaveLength(0);
+      expect((await store.loadSession(session.id))?.messages).toHaveLength(0);
+
+      await manager.addMessage(session.id, {
+        role: 'assistant', content: 'first', usage: { inputTokens: Number.MAX_SAFE_INTEGER },
+      });
+      await manager.addMessage(session.id, {
+        role: 'assistant', content: 'second', usage: { inputTokens: Number.MAX_SAFE_INTEGER },
+      });
+      expect(session.usage?.inputTokens).toBe(Number.MAX_SAFE_INTEGER);
+      expect(session.usage?.totalTokens).toBe(Number.MAX_SAFE_INTEGER);
+    });
+
+    it('serializes concurrent mutations without losing messages in memory or on disk', async () => {
+      const session = await manager.create();
+      await Promise.all(Array.from({ length: 40 }, (_, index) => manager.addMessage(session.id, {
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `concurrent-${index}`,
+      })));
+
+      expect(session.messages).toHaveLength(40);
+      expect(new Set(session.messages.map(message => message.content)).size).toBe(40);
+      const loaded = await store.loadSession(session.id);
+      expect(loaded?.messages).toHaveLength(40);
+      expect(new Set(loaded?.messages.map(message => message.content)).size).toBe(40);
+    });
+
+    it('waits for accepted mutations before clearing process-local session state', async () => {
+      const session = await manager.create();
+      const originalSave = store.saveSession.bind(store);
+      let saveStarted!: () => void;
+      let releaseSave!: () => void;
+      const started = new Promise<void>(resolve => { saveStarted = resolve; });
+      const released = new Promise<void>(resolve => { releaseSave = resolve; });
+      vi.spyOn(store, 'saveSession').mockImplementationOnce(async (...args) => {
+        saveStarted();
+        await released;
+        return originalSave(...args);
+      });
+
+      const addition = manager.addMessage(session.id, { role: 'user', content: 'accepted' });
+      await started;
+      const clearing = manager.clear();
+      expect(manager.get(session.id)).toBeDefined();
+      releaseSave();
+      await Promise.all([addition, clearing]);
+
+      expect(manager.get(session.id)).toBeUndefined();
+    });
+
+    it('keeps memory unchanged when message persistence fails', async () => {
+      if (process.platform === 'win32') return;
+      const session = await manager.create({ id: 'unsafe-message-persistence', title: 'Original' });
+      const file = path.join(tempDir, `${session.id}.jsonl`);
+      await fs.rm(file);
+      await fs.symlink(path.join(tempDir, 'missing-message-target'), file);
+
+      await expect(manager.addMessage(session.id, { role: 'user', content: 'Not committed' }))
+        .rejects.toThrow('Session persistence failed.');
+      expect(session.messages).toEqual([]);
+      expect(session.title).toBe('Original');
+    });
+
     it('should persist multiple messages in order', async () => {
       const session = await manager.create();
       await manager.addMessage(session.id, { role: 'user', content: 'First' });
@@ -471,6 +744,8 @@ describe('SessionManager with JSONL Persistence', () => {
       expect(loaded!.messages[0].content).toBe('First');
       expect(loaded!.messages[1].content).toBe('Second');
       expect(loaded!.messages[2].content).toBe('Third');
+      expect(loaded!.messages.map(message => message.timestamp.getTime()))
+        .toEqual([...loaded!.messages.map(message => message.timestamp.getTime())].sort((left, right) => left - right));
     });
   });
 
@@ -490,6 +765,20 @@ describe('SessionManager with JSONL Persistence', () => {
       expect(loaded).toBeNull();
     });
 
+    it('keeps in-memory state when an unsafe durable target prevents update or deletion', async () => {
+      if (process.platform === 'win32') return;
+      const session = await manager.create({ id: 'unsafe-durable', title: 'Original' });
+      const file = path.join(tempDir, `${session.id}.jsonl`);
+      await fs.rm(file);
+      await fs.symlink(path.join(tempDir, 'missing-target'), file);
+
+      await expect(manager.update(session.id, { title: 'Changed' }))
+        .rejects.toThrow('Session persistence failed.');
+      expect(manager.get(session.id)?.title).toBe('Original');
+      await expect(manager.delete(session.id)).rejects.toThrow('Session deletion failed.');
+      expect(manager.get(session.id)).toBe(session);
+    });
+
     it('should return false for non-existent session', async () => {
       const deleted = await manager.delete('non-existent');
       expect(deleted).toBe(false);
@@ -504,6 +793,7 @@ describe('SessionManager with JSONL Persistence', () => {
 
       const sessions = manager.list();
       expect(sessions.length).toBe(2);
+      expect(sessions[0].id).toBe(session2.id);
       expect(sessions[0].title).toBe('New Session');
     });
   });
@@ -538,6 +828,177 @@ describe('SessionManager with JSONL Persistence', () => {
       expect(forked!.parentId).toBe(session.id);
     });
 
+    it('orders parent-linked context across wall-clock regressions, commands and durable reload', async () => {
+      const session = await manager.create({ activeLeafId: 'clock-child', messages: [
+        { id: 'clock-root', role: 'user', content: 'First', timestamp: new Date(3000) },
+        { id: 'clock-child', parentMessageId: 'clock-command', role: 'user', content: 'Second', timestamp: new Date(1000) },
+      ], commands: [{ id: 'clock-command', parentEntryId: 'clock-root', command: 'pwd', cwd: '/workspace',
+        status: 'completed', output: '/workspace', timestamp: new Date(2000) }] });
+      const ids = ['clock-root', 'context-clock-command', 'clock-child'];
+      expect(manager.getEffectiveContext(session.id).map(entry => entry.id)).toEqual(ids);
+      const reloaded = new SessionManager(); reloaded.setStore(store);
+      await reloaded.loadFromStore(session.id);
+      expect(reloaded.getEffectiveContext(session.id).map(entry => entry.id)).toEqual(ids);
+    });
+
+    it('forks a durable user entry hidden by compaction with its preceding command', async () => {
+      const session = await manager.create({ title: 'Original' });
+      await manager.addMessage(session.id, { role: 'user', content: 'First' });
+      await manager.addMessage(session.id, { role: 'assistant', content: 'Answer' });
+      await manager.addCommand(session.id, {
+        command: 'printf context', cwd: '/workspace', status: 'completed', output: 'context',
+      });
+      await manager.addMessage(session.id, { role: 'user', content: 'Old target' });
+      const targetId = session.messages.at(-1)!.id;
+      await manager.addMessage(session.id, { role: 'assistant', content: 'Old answer' });
+      await manager.addMessage(session.id, { role: 'user', content: 'Retained' });
+      const retainedId = session.messages.at(-1)!.id;
+      await manager.applyCompaction(session.id, 'Summary', retainedId);
+
+      expect(session.messages.some(message => message.id === targetId)).toBe(false);
+      const forked = await manager.forkSessionAtEntry(session.id, targetId, 'Historical fork');
+
+      expect(forked?.messages.map(message => message.content)).toEqual(['First', 'Answer', 'Old target']);
+      expect(forked?.commands?.map(command => command.command)).toEqual(['printf context']);
+      expect(forked?.activeLeafId).toBe(targetId);
+      expect(forked?.metadata?.compactionSummary).toBeUndefined();
+    });
+
+    it('forks before a durable user entry without copying the old prompt or mutating the source', async () => {
+      const session = await manager.create({ title: 'Edit source' });
+      await manager.addMessage(session.id, { role: 'user', content: 'First' });
+      const firstId = session.activeLeafId!;
+      await manager.addMessage(session.id, { role: 'assistant', content: 'Answer', usage: { totalTokens: 5, costUsd: 0.01 } });
+      const command = await manager.addCommand(session.id, { command: 'pwd', cwd: '/workspace', status: 'completed', output: '/workspace' });
+      await manager.addMessage(session.id, { role: 'user', content: 'Old prompt' });
+      const targetId = session.activeLeafId!;
+      await manager.addMessage(session.id, { role: 'assistant', content: 'Later answer' });
+      const source = structuredClone(session);
+      const forked = await manager.forkSessionAtEntry(session.id, targetId, 'Staged edit', { before: true });
+      expect(forked?.messages.map(message => message.content)).toEqual(['First', 'Answer']);
+      expect(forked?.activeLeafId).toBe(command?.id);
+      expect(forked?.usage).toMatchObject({ totalTokens: 5, costUsd: 0.01 });
+      expect(session).toEqual(source);
+      await manager.addMessage(forked!.id, { role: 'user', content: 'Edited prompt' });
+      expect(forked?.messages.at(-1)?.parentMessageId).toBe(command?.id);
+      const empty = await manager.forkSessionAtEntry(session.id, firstId, 'Empty edit', { before: true });
+      expect(empty?.messages).toEqual([]);
+      expect(empty?.activeLeafId).toBeUndefined();
+      const reloaded = new SessionManager({ store: new JsonlSessionStore(tempDir) });
+      await reloaded.loadAllSessions();
+      expect(reloaded.get(forked!.id)?.messages.map(message => message.content)).toEqual(['First', 'Answer', 'Edited prompt']);
+      expect(reloaded.get(empty!.id)?.messages).toEqual([]);
+      expect(reloaded.get(session.id)?.messages).toEqual(source.messages);
+    });
+
+    it('resolves stable copy targets against the serialized source snapshot after context changes', async () => {
+      const session = await manager.create();
+      await manager.addMessage(session.id, { role: 'user', content: 'Old root' });
+      const removedId = session.activeLeafId!;
+      await manager.addMessage(session.id, { role: 'assistant', content: 'Old answer' });
+      await manager.addMessage(session.id, { role: 'user', content: 'Retained target' });
+      const targetId = session.activeLeafId!;
+      await manager.applyCompaction(session.id, 'Summary', targetId);
+      expect((await manager.forkSession(session.id, targetId))?.messages.map(message => message.content))
+        .toEqual(['Retained target']);
+      expect((await manager.cloneSession(session.id, undefined, targetId))?.messages.map(message => message.content))
+        .toEqual(['Retained target']);
+      expect(await manager.forkSession(session.id, removedId)).toBeNull();
+      expect(await manager.cloneSession(session.id, undefined, removedId)).toBeNull();
+    });
+
+    it('refuses to copy a running command into a historical edit', async () => {
+      const session = await manager.create();
+      await manager.addCommand(session.id, { command: 'pending', cwd: '/workspace', status: 'running', output: '' });
+      await manager.addMessage(session.id, { role: 'user', content: 'Target' });
+      const count = manager.list().length;
+      expect(await manager.forkSessionAtEntry(session.id, session.activeLeafId!, undefined, { before: true })).toBeNull();
+      expect(manager.list()).toHaveLength(count);
+    });
+
+    it('branches in place while preserving the abandoned descendants in the durable tree', async () => {
+      const session = await manager.create({ title: 'Original' });
+      await manager.addMessage(session.id, { role: 'user', content: 'First' });
+      await manager.addMessage(session.id, { role: 'assistant', content: 'First answer' });
+      const command = await manager.addCommand(session.id, {
+        command: 'pwd', cwd: '/workspace', status: 'completed', output: '/workspace',
+      });
+      await manager.addMessage(session.id, { role: 'user', content: 'Original prompt' });
+      const originalPromptId = session.activeLeafId!;
+      await manager.addMessage(session.id, { role: 'assistant', content: 'Abandoned answer' });
+
+      const selected = await manager.branchBeforeEntry(session.id, originalPromptId);
+      expect(selected?.content).toBe('Original prompt');
+      expect(manager.get(session.id)?.activeLeafId).toBe(command?.id);
+      expect(manager.get(session.id)?.messages.map(message => message.content)).toEqual(['First', 'First answer']);
+
+      await manager.addMessage(session.id, { role: 'user', content: 'Edited prompt' });
+      const raw = await manager.getRawEntries(session.id);
+      const original = raw.find(entry => entry.id === originalPromptId);
+      const edited = raw.find(entry => entry.type === 'message' && entry.content === 'Edited prompt');
+      expect(original).toMatchObject({ parentMessageId: command?.id });
+      expect(edited).toMatchObject({ parentMessageId: command?.id });
+      expect(raw.some(entry => entry.type === 'message' && entry.content === 'Abandoned answer')).toBe(true);
+
+      const reloaded = new SessionManager({ store: new JsonlSessionStore(tempDir) });
+      await reloaded.loadAllSessions();
+      expect(reloaded.get(session.id)?.messages.map(message => message.content))
+        .toEqual(['First', 'First answer', 'Edited prompt']);
+    });
+
+    it('reconstructs compacted ancestors when branching in the process-local journal', async () => {
+      const volatile = new SessionManager();
+      const session = await volatile.create({ title: 'Volatile' });
+      await volatile.addMessage(session.id, { role: 'user', content: 'First' });
+      await volatile.addMessage(session.id, { role: 'assistant', content: 'Answer' });
+      const parentId = session.activeLeafId;
+      await volatile.addMessage(session.id, { role: 'user', content: 'Hidden target' });
+      const targetId = session.activeLeafId!;
+      await volatile.addMessage(session.id, { role: 'assistant', content: 'Abandoned answer' });
+      await volatile.addMessage(session.id, { role: 'user', content: 'Retained' });
+      await volatile.applyCompaction(session.id, 'Summary', session.activeLeafId!);
+      expect(session.messages.map(message => message.content)).toEqual(['Retained']);
+
+      await volatile.branchBeforeEntry(session.id, targetId);
+      expect(session.activeLeafId).toBe(parentId);
+      expect(session.messages.map(message => message.content)).toEqual(['First', 'Answer']);
+      expect(session.metadata?.compactionSummary).toBeUndefined();
+      await volatile.addMessage(session.id, { role: 'user', content: 'Edited target' });
+      expect(session.messages.map(message => message.content)).toEqual(['First', 'Answer', 'Edited target']);
+      expect((await volatile.getRawEntries(session.id)).some(
+        entry => entry.type === 'message' && entry.content === 'Abandoned answer',
+      )).toBe(true);
+    });
+
+    it('can branch before the first root entry without reviving the abandoned root', async () => {
+      const session = await manager.create();
+      await manager.addMessage(session.id, { role: 'user', content: 'Old root' });
+      const rootId = session.activeLeafId!;
+      await manager.addMessage(session.id, { role: 'assistant', content: 'Old answer' });
+
+      await manager.branchBeforeEntry(session.id, rootId);
+      expect(manager.get(session.id)?.messages).toEqual([]);
+      await manager.addMessage(session.id, { role: 'user', content: 'New root' });
+
+      const reloaded = new SessionManager({ store: new JsonlSessionStore(tempDir) });
+      await reloaded.loadAllSessions();
+      expect(reloaded.get(session.id)?.messages.map(message => message.content)).toEqual(['New root']);
+      expect((await reloaded.getRawEntries(session.id)).filter(entry => entry.type === 'message')).toHaveLength(3);
+    });
+
+    it('persists branch-summary ancestry and advances the active leaf', async () => {
+      const session = await manager.create({ title: 'Original' });
+      await manager.addMessage(session.id, { role: 'user', content: 'Branch point' });
+      const parentEntryId = session.activeLeafId;
+
+      const summary = await manager.addBranchSummary(session.id, 'Tried another path.', 'Alternative');
+      const persisted = (await manager.getRawEntries(session.id)).find(entry => entry.id === summary?.id);
+
+      expect(summary).toMatchObject({ parentEntryId, branchName: 'Alternative' });
+      expect(persisted).toMatchObject({ id: summary?.id, parentEntryId });
+      expect(session.activeLeafId).toBe(summary?.id);
+    });
+
     it('should clone a session with all messages', async () => {
       const session = await manager.create({ title: 'Original' });
       await manager.addMessage(session.id, { role: 'user', content: 'Hello' });
@@ -549,7 +1010,30 @@ describe('SessionManager with JSONL Persistence', () => {
       expect(cloned!.id).not.toBe(session.id); // Different session ID
       expect(cloned!.messages.length).toBe(2); // Same number of messages
       expect(cloned!.parentId).toBeUndefined(); // Independent root, unlike a fork
+      expect(cloned!.messages[0]?.id).not.toBe(session.messages[0]?.id);
+      expect(cloned!.messages[1]?.parentMessageId).toBe(cloned!.messages[0]?.id);
+      expect(cloned!.activeLeafId).toBe(cloned!.messages[1]?.id);
       expect(cloned!.metadata?.clonedFromSessionId).toBe(session.id);
+    });
+
+    it('remaps command ancestry when cloning an interleaved history', async () => {
+      const session = await manager.create({ title: 'Original' });
+      await manager.addMessage(session.id, { role: 'user', content: 'Inspect' });
+      const sourceUserId = session.activeLeafId;
+      const command = await manager.addCommand(session.id, {
+        command: 'pwd', cwd: '/workspace', status: 'completed', output: '/workspace',
+      });
+      await manager.addMessage(session.id, { role: 'assistant', content: 'Done' });
+
+      const cloned = await manager.cloneSession(session.id);
+      const clonedUser = cloned?.messages[0];
+      const clonedCommand = cloned?.commands?.[0];
+      const clonedAssistant = cloned?.messages[1];
+
+      expect(command?.parentEntryId).toBe(sourceUserId);
+      expect(clonedCommand?.id).not.toBe(command?.id);
+      expect(clonedCommand?.parentEntryId).toBe(clonedUser?.id);
+      expect(clonedAssistant?.parentMessageId).toBe(clonedCommand?.id);
     });
 
     it('should clone an independent session through a specific message', async () => {
@@ -748,6 +1232,8 @@ describe('SessionManager with JSONL Persistence', () => {
       const entries = await store.getRawEntries(session.id);
       const hasCompactionEntry = entries.some(e => e.type === 'compaction');
       expect(hasCompactionEntry).toBe(true);
+      expect((await manager.getRawEntries(session.id)).filter(entry => entry.type === 'message')).toHaveLength(10);
+      expect(updatedSession?.activeLeafId).toMatch(/^compaction-/);
 
       const reloaded = await store.loadSession(session.id);
       expect(reloaded?.messages).toHaveLength(1);
@@ -814,10 +1300,16 @@ describe('Token Estimation', () => {
     // Access the internal class through a test session
     const manager = new SessionManager();
 
-    const shortText = 'Hi';
-    const longText = 'This is a much longer piece of text that should have more tokens estimated because it contains many more characters and words in total.';
+    const shortSession = await manager.create();
+    await manager.addMessage(shortSession.id, { role: 'user', content: 'Hi' });
+    const longSession = await manager.create();
+    await manager.addMessage(longSession.id, {
+      role: 'user',
+      content: 'This is a much longer piece of text that should have more tokens estimated because it contains many more characters and words in total.',
+    });
 
     expect(manager.getTokenCount('non-existent')).toBe(0);
+    expect(manager.getTokenCount(longSession.id)).toBeGreaterThan(manager.getTokenCount(shortSession.id));
   });
 });
 
@@ -844,7 +1336,7 @@ describe('Auto-Compaction', () => {
   describe('setAutoCompactionCallback()', () => {
     it('should set the callback for auto-compaction', async () => {
       let callbackCalled = false;
-      manager.setAutoCompactionCallback(async (sessionId, toCompact, keptEntries) => {
+      manager.setAutoCompactionCallback(async (sessionId, toCompact, _keptEntries) => {
         callbackCalled = true;
         return `Summary of ${toCompact.length} compacted messages`;
       });
@@ -940,9 +1432,44 @@ describe('Auto-Compaction', () => {
       expect(manager.get(session.id)?.metadata?.compactionSummary).toBeUndefined();
     });
 
+    it('deduplicates concurrent automatic compaction runs for one session', async () => {
+      const session = await manager.create({ autoCompaction: false });
+      manager.setCompactionSettings({ enabled: true, reserveTokens: 10, keepRecentTokens: 20 });
+      for (let index = 0; index < 8; index++) {
+        await manager.addMessage(session.id, {
+          role: 'user', content: `Concurrent compaction ${index} ${'x'.repeat(80)}`,
+        });
+      }
+      await manager.update(session.id, { autoCompaction: true });
+      let callbackCalls = 0;
+      let started!: () => void;
+      let finish!: () => void;
+      const callbackStarted = new Promise<void>(resolve => { started = resolve; });
+      const callbackFinish = new Promise<void>(resolve => { finish = resolve; });
+      manager.setAutoCompactionCallback(async () => {
+        callbackCalls++;
+        started();
+        await callbackFinish;
+        return 'One shared summary';
+      });
+
+      const first = manager.checkAndTriggerCompaction(session.id);
+      await callbackStarted;
+      const second = manager.checkAndTriggerCompaction(session.id);
+      finish();
+
+      await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+      expect(callbackCalls).toBe(1);
+    });
+
     it('publishes automatic compaction statistics after applying the summary', async () => {
       let completed: { tokensBefore?: number; tokensAfter?: number; tokensSaved?: number } | undefined;
-      manager.setAutoCompactionCallback(async () => 'Short automatic summary');
+      manager.setAutoCompactionCallback(async () => ({
+        summary: 'Short automatic summary',
+        provider: 'openai',
+        model: 'o3',
+        usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12, costUsd: 0.001 },
+      }));
       manager.on('compaction:end', event => { completed = event; });
       manager.setCompactionSettings({ enabled: true, reserveTokens: 10, keepRecentTokens: 20 });
       const session = await manager.create({ autoCompaction: true });
@@ -959,7 +1486,12 @@ describe('Auto-Compaction', () => {
       expect(manager.get(session.id)?.metadata?.compactionStats).toMatchObject({
         tokensBefore: completed?.tokensBefore,
         tokensAfter: completed?.tokensAfter,
+        provider: 'openai',
+        model: 'o3',
+        usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12, costUsd: 0.001 },
       });
+      expect((await manager.getRawEntries(session.id)).find(entry => entry.type === 'compaction'))
+        .toMatchObject({ provider: 'openai', model: 'o3', usage: { totalTokens: 12 } });
       const context = manager.getEffectiveContext(session.id);
       expect(context[0]).toMatchObject({ role: 'system' });
       expect('content' in context[0]! ? context[0].content : '').toContain('[Context Summary] Short automatic summary');
@@ -975,7 +1507,7 @@ describe('Auto-Compaction', () => {
     it('should trigger compaction when threshold exceeded and callback is set', async () => {
       let summaryGenerated = '';
       
-      manager.setAutoCompactionCallback(async (sessionId, toCompact, keptEntries) => {
+      manager.setAutoCompactionCallback(async (sessionId, toCompact, _keptEntries) => {
         summaryGenerated = `Auto-summary: ${toCompact.length} messages compacted`;
         return summaryGenerated;
       });
@@ -1036,7 +1568,7 @@ describe('Auto-Compaction', () => {
     it('should automatically compact when threshold is exceeded', async () => {
       let summaryText = '';
       
-      manager.setAutoCompactionCallback(async (sessionId, toCompact, keptEntries) => {
+      manager.setAutoCompactionCallback(async (sessionId, toCompact, _keptEntries) => {
         summaryText = `Summary of ${toCompact.length} messages`;
         return summaryText;
       });

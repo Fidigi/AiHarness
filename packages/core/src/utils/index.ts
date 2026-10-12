@@ -25,6 +25,24 @@ const DEFAULT_RETRY_OPTIONS: Required<RetryOptions> = {
   retryableStatuses: [429, 500, 502, 503, 504],
 };
 
+function resolvedRetryOptions(options: Partial<RetryOptions> = {}): Required<RetryOptions> {
+  const integer = (value: unknown, fallback: number, min: number, max: number): number => (
+    Number.isSafeInteger(value) ? Math.max(min, Math.min(max, value as number)) : fallback
+  );
+  const multiplier = typeof options.backoffMultiplier === 'number' && Number.isFinite(options.backoffMultiplier)
+    ? Math.max(1, Math.min(10, options.backoffMultiplier)) : DEFAULT_RETRY_OPTIONS.backoffMultiplier;
+  const statuses = Array.isArray(options.retryableStatuses)
+    ? options.retryableStatuses.filter(value => Number.isSafeInteger(value) && value >= 400 && value <= 599).slice(0, 64)
+    : DEFAULT_RETRY_OPTIONS.retryableStatuses;
+  return {
+    maxRetries: integer(options.maxRetries, DEFAULT_RETRY_OPTIONS.maxRetries, 0, 10),
+    initialDelayMs: integer(options.initialDelayMs, DEFAULT_RETRY_OPTIONS.initialDelayMs, 0, 60_000),
+    maxDelayMs: integer(options.maxDelayMs, DEFAULT_RETRY_OPTIONS.maxDelayMs, 0, 60_000),
+    backoffMultiplier: multiplier,
+    retryableStatuses: statuses,
+  };
+}
+
 /** Check if an error indicates a retryable condition */
 export function isRetryableError(error: Error | unknown): boolean {
   const err = error instanceof Error ? error.message : String(error);
@@ -56,7 +74,7 @@ export function calculateRetryDelay(
   attempt: number,
   options: Partial<RetryOptions> = {},
 ): number {
-  const opts = { ...DEFAULT_RETRY_OPTIONS, ...options } as Required<RetryOptions>;
+  const opts = resolvedRetryOptions(options);
   
   // Exponential backoff: initialDelay * multiplier^attempt
   let delay = opts.initialDelayMs * Math.pow(opts.backoffMultiplier, attempt);
@@ -76,7 +94,7 @@ export async function withRetry<T>(
   fn: () => Promise<T>,
   options?: RetryOptions,
 ): Promise<T> {
-  const opts = { ...DEFAULT_RETRY_OPTIONS, ...options } as Required<RetryOptions>;
+  const opts = resolvedRetryOptions(options);
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt <= opts.maxRetries; attempt++) {
@@ -91,9 +109,7 @@ export async function withRetry<T>(
       // Check if this error is retryable - only retry on retryable errors
       const delay = calculateRetryDelay(attempt, options);
       console.warn(
-        `[withRetry] Attempt ${attempt + 1}/${opts.maxRetries + 1} failed:`,
-        lastError.message,
-        `\n[withRetry] Retrying in ${(delay / 1000).toFixed(1)}s...`
+        `[withRetry] Attempt ${attempt + 1}/${opts.maxRetries + 1} failed; retrying in ${(delay / 1000).toFixed(1)}s.`,
       );
       
       await sleep(delay);
@@ -108,7 +124,7 @@ export async function withRetryIfRetryable<T>(
   fn: () => Promise<T>,
   options?: RetryOptions,
 ): Promise<T> {
-  const opts = { ...DEFAULT_RETRY_OPTIONS, ...options } as Required<RetryOptions>;
+  const opts = resolvedRetryOptions(options);
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt <= opts.maxRetries; attempt++) {
@@ -123,19 +139,13 @@ export async function withRetryIfRetryable<T>(
       
       // Only retry on retryable errors - otherwise fail immediately
       if (!isRetryableError(err)) {
-        console.warn(
-          `[withRetryIfRetryable] Non-retryable error:`,
-          err.message,
-          `\n[withRetryIfRetryable] Failing immediately...`
-        );
+        console.warn('[withRetryIfRetryable] Non-retryable operation failed.');
         throw err;
       }
       
       const delay = calculateRetryDelay(attempt, options);
       console.warn(
-        `[withRetryIfRetryable] Attempt ${attempt + 1}/${opts.maxRetries + 1} failed:`,
-        err.message,
-        `\n[withRetryIfRetryable] Retrying in ${(delay / 1000).toFixed(1)}s...`
+        `[withRetryIfRetryable] Attempt ${attempt + 1}/${opts.maxRetries + 1} failed; retrying in ${(delay / 1000).toFixed(1)}s.`,
       );
       
       await sleep(delay);
@@ -177,13 +187,8 @@ export async function fetchWithRetry(
     if (!response.ok && retryOptions?.retryableStatuses) {
       const shouldRetry = retryOptions.retryableStatuses.includes(response.status);
       if (shouldRetry) {
-        let errorText: string;
-        try {
-          errorText = await response.text();
-        } catch {
-          errorText = 'No body';
-        }
-        throw new Error(`HTTP ${response.status} - ${errorText}`);
+        void response.body?.cancel().catch(() => undefined);
+        throw new Error(`HTTP ${response.status}`);
       }
     }
     

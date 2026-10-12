@@ -1,0 +1,1 @@
+{"apiVersion":1,"event":"before:agent","input":"piped context<file name=\"notes.txt\">\nfile context\n</file>\n--literal-message"}

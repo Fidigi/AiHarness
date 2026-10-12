@@ -1,5 +1,12 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
+
+// Relative conversation ages must not move every day in visual baselines.
+// Freeze Date only: browser timers, animations and network ordering stay real.
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-01T12:00:00.000Z'));
+});
 import { installMockApi, mockSession } from './fixtures/mock-api';
+import { mcpImportPreviewFixture, mcpStateInventory } from './fixtures/mcp';
 
 const scenarios = [
   { name: 'desktop-dark', width: 1440, height: 900, theme: 'dark' },
@@ -9,6 +16,8 @@ const scenarios = [
   { name: 'mobile-dark', width: 390, height: 844, theme: 'dark' },
   { name: 'mobile-light', width: 390, height: 844, theme: 'light' },
 ] as const;
+
+const mcpScenarios = scenarios.filter(scenario => scenario.name.startsWith('desktop') || scenario.name.startsWith('mobile'));
 
 test.describe('Régression visuelle confiance et PWA', () => {
   for (const scenario of scenarios) {
@@ -48,6 +57,50 @@ test.describe('Régression visuelle confiance et PWA', () => {
         animations: 'disabled',
         caret: 'hide',
         maxDiffPixelRatio: 0.02,
+      });
+    });
+  }
+});
+
+test.describe('Régression visuelle du sélecteur de workspace', () => {
+  for (const scenario of mcpScenarios) {
+    test(`${scenario.name} garde la création bornée et le gestionnaire hôte lisibles`, async ({ page }) => {
+      await page.setViewportSize({ width: scenario.width, height: scenario.height });
+      await page.addInitScript(({ theme }) => {
+        localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({
+          version: 4, theme, sendMode: 'enter', contentWidth: 1000, fontSize: 16,
+          reasoningOpen: false, sound: false, notifications: false, selectionActions: true,
+          filesOpen: true, sidebarVisible: true, lastSettingsSection: 'appearance', keybindings: {},
+        }));
+      }, { theme: scenario.theme });
+      await installMockApi(page, {
+        fileManagerAvailable: true,
+        workspaceBrowse: {
+          '/workspace': {
+            cwd: '/workspace',
+            truncated: true,
+            entries: [
+              { name: 'docs', path: '/workspace/docs', isDirectory: true, isSymbolicLink: false },
+              { name: 'packages', path: '/workspace/packages', isDirectory: true, isSymbolicLink: false },
+              { name: 'README.md', path: '/workspace/README.md', isDirectory: false, isSymbolicLink: false },
+            ],
+          },
+        },
+      });
+
+      await page.goto('/');
+      if (scenario.width <= 959) await page.getByRole('button', { name: 'Toggle navigation' }).click();
+      await page.locator('.workspace-button').click();
+      const picker = page.getByRole('dialog', { name: 'Choose a workspace' });
+      await picker.getByRole('button', { name: 'New folder' }).click();
+      const createDialog = page.getByRole('dialog', { name: 'Create a folder' });
+      await createDialog.getByLabel('Folder name').fill('release-notes');
+      await expect(createDialog.getByRole('button', { name: 'Create folder' })).toBeEnabled();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
+      await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
+      await page.evaluate(() => document.fonts.ready);
+      await expect(page).toHaveScreenshot(`workspace-picker-${scenario.name}.png`, {
+        animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });
     });
   }
@@ -175,7 +228,7 @@ test.describe('Régression visuelle des préférences d’apparence', () => {
       await page.addStyleTag({ content: '#plugins { display: none !important; }' });
       const appearance = page.getByRole('heading', { name: 'Appearance', exact: true }).locator('..');
       await appearance.scrollIntoViewIfNeeded();
-      await expect(appearance.locator('select')).toHaveValue(scenario.theme);
+      await expect(appearance.getByLabel(/^Theme/u)).toHaveValue(scenario.theme);
       await expect(appearance.locator('input[type=range]').nth(0)).toHaveValue('1200');
       await expect(appearance.locator('input[type=range]').nth(1)).toHaveValue('18');
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
@@ -210,6 +263,8 @@ test.describe('Régression visuelle du catalogue de modèles', () => {
       await page.goto('/settings#model');
       await page.addStyleTag({ content: '#skills, #plugins { display: none !important; }' });
       const section = page.getByRole('heading', { name: 'Model', exact: true }).locator('..');
+      const defaults = page.getByRole('heading', { name: 'Provider and model defaults', exact: true }).locator('..');
+      await expect(defaults.getByLabel('Model', { exact: true })).toBeEnabled();
       await section.getByText('Manage model catalogue').click();
       await section.getByLabel('Filter models or providers').fill('openai');
       await expect(section.locator('fieldset[data-provider="openai"]')).toContainText('GPT-4o (Recommended)');
@@ -217,6 +272,9 @@ test.describe('Régression visuelle du catalogue de modèles', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);
+      // Pin the reviewed scroll position after lazy sections/fonts finish laying out.
+      await section.evaluate(element => element.scrollIntoView({ block: 'start', behavior: 'instant' }));
+      await expect.poll(() => section.evaluate(element => Math.abs(element.getBoundingClientRect().top))).toBeLessThan(1);
       await expect(page).toHaveScreenshot(`model-catalog-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });
@@ -302,6 +360,54 @@ test.describe('Régression visuelle du catalogue de skills', () => {
   }
 });
 
+test.describe('Régression visuelle de l’inventaire MCP', () => {
+  for (const scenario of mcpScenarios) {
+    test(`${scenario.name} garde états, expurgation et diagnostics lisibles`, async ({ page }) => {
+      await page.setViewportSize({ width: scenario.width, height: scenario.height });
+      await page.addInitScript(({ theme }) => {
+        localStorage.setItem('ai-harness-preferences-v2', JSON.stringify({
+          version: 2, theme, contentWidth: 1000, fontSize: 16,
+          reasoningOpen: false, sound: false, notifications: false, selectionActions: true,
+          filesOpen: true, sidebarVisible: true, lastSettingsSection: 'mcp', keybindings: {},
+        }));
+      }, { theme: scenario.theme });
+      await installMockApi(page, {
+        mcpConfig: mcpStateInventory(),
+        mcpImportPreview: mcpImportPreviewFixture(),
+      });
+
+      await page.goto('/settings#mcp');
+      await page.addStyleTag({ content: `
+        html, body, .app, .main-content, .settings-view {
+          height: auto !important;
+          max-height: none !important;
+          overflow: visible !important;
+        }
+        .settings-section:not(#mcp), .mobile-menu { display: none !important; }
+      ` });
+      const section = page.locator('#mcp');
+      await section.getByText('Paste and preview a server').click();
+      await section.getByLabel('MCP server text').fill('https://docs.example.test/mcp');
+      await section.getByRole('button', { name: 'Preview', exact: true }).click();
+      await expect(section.getByRole('article', { name: 'docs-import' })).toBeVisible();
+      const testedServer = section.getByRole('article', { name: 'remote-docs: Configured', exact: true });
+      await expect(testedServer).toBeVisible();
+      await testedServer.getByRole('button', { name: 'Test remote-docs', exact: true }).click();
+      await expect(testedServer.getByRole('region', { name: 'Last connection test for remote-docs' })).toContainText('Connected');
+      await expect(section.getByRole('article', { name: 'local-tools: Disabled', exact: true })).toBeVisible();
+      await expect(section.getByRole('article', { name: 'shared: Replaced by project', exact: true })).toBeVisible();
+      await expect(section.getByRole('article', { name: 'bad\\u202ename: Invalid', exact: true })).toBeVisible();
+      await section.getByText('Configuration file diagnostics').click();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
+      await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
+      await page.evaluate(() => document.fonts.ready);
+      await expect(page).toHaveScreenshot(`mcp-inventory-${scenario.name}.png`, {
+        animations: 'disabled', caret: 'hide', fullPage: true, maxDiffPixelRatio: 0.02,
+      });
+    });
+  }
+});
+
 test.describe('Régression visuelle du catalogue de plugins', () => {
   for (const scenario of scenarios) {
     test(`${scenario.name} garde sources, ressources et actions explicites lisibles`, async ({ page }) => {
@@ -324,6 +430,8 @@ test.describe('Régression visuelle du catalogue de plugins', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);
+      await section.evaluate(element => element.scrollIntoView({ block: 'start', behavior: 'instant' }));
+      await expect.poll(() => section.evaluate(element => Math.abs(element.getBoundingClientRect().top))).toBeLessThan(1);
       await expect(page).toHaveScreenshot(`plugin-catalog-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });
@@ -431,6 +539,13 @@ test.describe('Régression visuelle des historiques paginés', () => {
         : page.locator('.chat-toolbar-actions');
       await actions.getByRole('button', { name: 'Conversation map' }).click();
       await expect(page.getByLabel('Conversation map')).toContainText('160 of 180 loaded');
+      // Role prefixes remain accessible, not extra grid cells that displace previews.
+      expect(await page.locator('.minimap-entry').evaluateAll(entries => entries.every(entry => {
+        const preview = entry.querySelector('small');
+        const prefix = entry.querySelector('.sr-only');
+        return preview && prefix && getComputedStyle(prefix).position === 'absolute'
+          && preview.getBoundingClientRect().width > entry.getBoundingClientRect().width / 2;
+      }))).toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.evaluate(() => document.fonts.ready);
       await expect(page).toHaveScreenshot(`history-minimap-${scenario.name}.png`, {
@@ -462,7 +577,7 @@ test.describe('Régression visuelle des métadonnées de message', () => {
       };
       session.messages[1]!.blocks = [
         { type: 'text', text: session.messages[1]!.content },
-        { type: 'tool_call', id: 'visual-write', name: 'write_file', input: { path: 'src/generated.ts', content: 'export {};' } },
+        { type: 'tool_call', id: 'visual-write', name: 'write', input: { path: 'src/generated.ts', content: 'export {};' } },
       ];
       await installMockApi(page, { sessions: [session], providers: [{ type: 'openai', configured: true }] });
 
@@ -473,16 +588,10 @@ test.describe('Régression visuelle des métadonnées de message', () => {
       });
       const imageWarning = page.getByRole('alert').filter({ hasText: 'may not support images' });
       await imageWarning.getByRole('button', { name: 'Close' }).click();
-      await page.locator('.message.assistant .message-content p').first().evaluate(element => {
-        const range = document.createRange();
-        range.selectNodeContents(element);
-        const selection = window.getSelection();
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-        element.closest('.messages-container')?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-      });
-      await expect(page.getByRole('toolbar', { name: 'Selected text actions' })).toBeVisible();
-      await expect(page.getByRole('img', { name: 'visual-attachment.svg' })).toBeVisible();
+      await expect(imageWarning).toBeHidden();
+      const attachment = page.getByRole('img', { name: 'visual-attachment.svg' });
+      await expect(attachment).toBeVisible();
+      await attachment.evaluate(element => (element as HTMLImageElement).decode());
       const metadata = page.locator('.message.assistant .message-meta');
       await expect(metadata).toContainText('mock-rich-model');
       await expect(metadata).toContainText('$0.0123');
@@ -490,6 +599,23 @@ test.describe('Régression visuelle des métadonnées de message', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);
+      // Selection coordinates must be measured after image/font/composer layout,
+      // not before an attachment-triggered scroll moves the selected paragraph.
+      const paragraph = page.locator('.message.assistant .message-content p').first();
+      await paragraph.scrollIntoViewIfNeeded();
+      await paragraph.evaluate(element => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        element.closest('.messages-container')?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      });
+      const selectionToolbar = page.getByRole('toolbar', { name: 'Selected text actions' });
+      await expect(selectionToolbar).toBeVisible();
+      const selectedTop = await page.evaluate(() => window.getSelection()!.getRangeAt(0).getBoundingClientRect().top);
+      const toolbarBox = (await selectionToolbar.boundingBox())!;
+      expect(toolbarBox.y + toolbarBox.height).toBeLessThanOrEqual(selectedTop);
       await expect(page).toHaveScreenshot(`message-metadata-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });
@@ -633,7 +759,7 @@ test.describe('Régression visuelle des versions et mises à jour', () => {
       });
 
       await page.goto('/settings#about');
-      await page.addStyleTag({ content: '#plugins { display: none !important; }' });
+      await page.addStyleTag({ content: '#plugins, #mcp { display: none !important; }' });
       const about = page.getByRole('heading', { name: 'About', exact: true }).locator('..');
       await about.scrollIntoViewIfNeeded();
       await about.getByText('Release notes').click();

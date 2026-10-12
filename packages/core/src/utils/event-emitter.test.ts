@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EventEmitter, EventMap } from './event-emitter';
+import type { EventMap } from './event-emitter';
+import { EventEmitter } from './event-emitter';
 
 describe('EventEmitter', () => {
   let emitter: EventEmitter<EventMap>;
@@ -88,10 +89,7 @@ describe('EventEmitter', () => {
     });
 
     await expect(emitter.emit('system:ready')).resolves.toBeUndefined();
-    expect(errorSpy).toHaveBeenCalledWith(
-      '[EventEmitter] Error in listener for "system:ready":',
-      expect.any(Error),
-    );
+    expect(errorSpy).toHaveBeenCalledWith('[EventEmitter] listener failed.');
   });
 
   it('supports events without payloads', async () => {

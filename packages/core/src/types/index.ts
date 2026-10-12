@@ -71,6 +71,8 @@ export interface ShellCommandRecord {
   cwd: string;
   timestamp: Date;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  /** Previous durable session entry, when known. */
+  parentEntryId?: string;
   output?: string;
   exitCode?: number;
   durationMs?: number;
@@ -107,6 +109,14 @@ export interface ProviderConfig {
   apiKey?: string;
   model?: string;
   baseUrl?: string;
+  /** Shared network settings resolved from agent settings. */
+  transport?: 'auto' | 'sse' | 'websocket' | 'websocket-cached';
+  httpProxy?: string;
+  httpIdleTimeoutMs?: number;
+  websocketConnectTimeoutMs?: number;
+  requestTimeoutMs?: number;
+  providerMaxRetries?: number;
+  providerMaxRetryDelayMs?: number;
   [key: string]: unknown;
 }
 
@@ -223,6 +233,15 @@ export interface SkillCatalogEntry {
   trusted: boolean;
   defaultModelInvocable: boolean;
   modelInvocable: boolean;
+  /** Core discovery provenance; contains metadata only, never resource contents. */
+  provenance?: {
+    scope: 'user' | 'project' | 'temporary';
+    source: 'auto' | 'settings' | 'package' | 'cli';
+    origin: 'top-level';
+    path: string;
+    selector: string;
+    trusted: boolean;
+  };
 }
 
 export interface SkillDiagnostic {
@@ -265,6 +284,9 @@ export type PluginScope = 'global' | 'project';
 export type PluginSourceType = 'npm' | 'git' | 'path';
 export type PluginResourceKind = 'extension' | 'skill' | 'prompt' | 'theme';
 
+/** Optional package-level selectors. Omitted kinds keep all manifest-approved resources. */
+export type PluginResourceFilters = Partial<Record<`${PluginResourceKind}s`, string[]>>;
+
 export interface PluginResourceCounts {
   extensions: number;
   skills: number;
@@ -305,6 +327,8 @@ export interface PluginPackageInfo {
   installedRevision?: string;
   counts: PluginResourceCounts;
   resources: PluginResourceInfo[];
+  /** User filters can only narrow resources already allowed by the package manifest. */
+  resourceFilters?: PluginResourceFilters;
   diagnostics: PluginDiagnostic[];
   status: 'active' | 'installed' | 'missing' | 'disabled' | 'error';
   /** Executable extension changes cannot be applied by a metadata-only resource reload. */
@@ -331,6 +355,26 @@ export interface PluginCatalog {
   standaloneExtensions: PluginStandaloneExtensionInfo[];
   totals: PluginResourceCounts;
   diagnostics: PluginDiagnostic[];
+}
+
+export interface PluginEnableChange {
+  key: string;
+  scope: PluginScope;
+  enabled: boolean;
+}
+
+export interface PluginEnableOutcome extends PluginEnableChange {
+  state: 'changed' | 'unchanged' | 'failed';
+  code?: 'PLUGIN_NOT_FOUND' | 'PROJECT_TRUST_REQUIRED';
+  /** Fixed, value-free diagnostic suitable for administrative clients. */
+  message?: string;
+}
+
+export interface PluginEnableBatchResult {
+  catalog: PluginCatalog;
+  outcomes: PluginEnableOutcome[];
+  /** Executable changes remain pending until the explicit runtime reload action succeeds. */
+  reloadRequired: boolean;
 }
 
 export type PluginUpdateState = 'update-available' | 'up-to-date' | 'unsupported' | 'error';
@@ -414,6 +458,8 @@ export interface SubagentRunSnapshot {
 }
 
 /** Supported AI provider types */
+export type { CodemodeCall, CodemodeProgress, CodemodeDetails } from './codemode.js';
+
 export enum ProviderType {
   OPENAI = 'openai',
   ANTHROPIC = 'anthropic',
@@ -446,7 +492,7 @@ export interface Session {
   workspaceId?: string;
   gitBranch?: string;
   model?: string;
-  thinking?: 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   toolPreset?: 'configured' | 'chat-only' | 'read-only' | 'default' | 'full';
   /** Explicit per-session override. Undefined inherits the effective scoped policy. */
   autoCompaction?: boolean;
@@ -493,6 +539,9 @@ export interface ScopedConfigurationValues {
   enabledPlugins?: string[];
   enabledTools?: string[];
   powershellEnabled?: boolean;
+  codemodeEnabled?: boolean;
+  codemodeMode?: 'on' | 'only';
+  codemodeInlineBudget?: number;
   systemPrompt?: string;
 }
 
@@ -514,6 +563,7 @@ export interface ToolSettingsEntry {
   enabled: boolean;
   available: boolean;
   unavailableReason?: string;
+  disabledReason?: 'chat-only' | 'read-only' | 'not-selected' | 'hidden' | 'automatic' | 'sandbox-unavailable';
 }
 
 export interface ToolSettings {
@@ -522,6 +572,12 @@ export interface ToolSettings {
   preset: Session['toolPreset'];
   powershellAvailable: boolean;
   powershellEnabled: boolean;
+  codemode?: {
+    enabled: boolean;
+    mode: 'on' | 'only';
+    inlineBudget: number;
+    selfTest: { state: 'passed' | 'failed' | 'not-run'; engine: 'QuickJS' };
+  };
   tools: ToolSettingsEntry[];
 }
 

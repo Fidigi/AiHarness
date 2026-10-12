@@ -51,11 +51,11 @@ describe('SubagentService', () => {
     const created = await service.createProfile({ cwd: project, projectId: workspaceId }, {
       id: 'security-review', name: 'Security review', description: 'Review boundaries',
       instructions: 'Inspect trust boundaries.', kind: 'custom', enabled: true,
-      tools: ['read_file'], skills: ['review'], extensions: ['safe-extension'],
+      tools: ['read'], skills: ['review'], extensions: ['safe-extension'],
       thinking: 'high', maxTurns: 6, inheritContext: false, background: true,
     });
     expect(created.profiles).toContainEqual(expect.objectContaining({
-      id: 'security-review', builtIn: false, tools: ['read_file'], skills: ['review'],
+      id: 'security-review', builtIn: false, tools: ['read'], skills: ['review'],
     }));
     const updated = await service.updateProfile(
       { cwd: project, projectId: workspaceId }, 'security-review', { maxTurns: 7, enabled: false },
