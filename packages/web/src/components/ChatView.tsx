@@ -9,7 +9,7 @@ import type { TranslationFunction } from '../i18n/types';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useI18n } from '../hooks/useI18n';
 import { registerFeatureLocaleMessages } from '../i18n/registry';
-import { captureCanonicalRunGuard, captureInteractionReplyGuard, interactionReplyComparison, getSessionRecord, getRunAuthority, getStoredRun, useSessionStore, type RunRequestGuard } from '../store/session-store';
+import { canSyncCanonicalSession, captureCanonicalRunGuard, captureInteractionReplyGuard, interactionReplyComparison, getSessionRecord, getRunAuthority, getStoredRun, useSessionStore, type RunRequestGuard } from '../store/session-store';
 import { usePreferences } from '../store/preferences';
 import MarkdownContent from './MarkdownContent';
 import { SubagentPanel } from './SubagentPanel';
@@ -239,6 +239,13 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const setNotice = (message?: string, level: NoticeLevel = 'error', options: { id?: string; progress?: number; timeoutMs?: number } = {}) => {
     if (message) publishNotice(message, { level, ...options });
   };
+  // Failure can settle before SSE attaches (or be restored by readiness/GET).
+  // Publish from admitted state as well as the live frame, using one stable ID.
+  useEffect(() => {
+    if (currentRun?.phase === 'failed') publishNotice(currentRun.error || t('chat.unexpectedError'), {
+      level: 'error', id: `run-error:${currentRun.sessionId}:${currentRun.id}`,
+    });
+  }, [currentRun?.id, currentRun?.sessionId, currentRun?.phase, currentRun?.error, t]);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [branchesOpen, setBranchesOpen] = useState(false);
@@ -724,8 +731,32 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       // Event correlation must be admitted before consuming sequence/presentation state.
       // Discovery/connection.ready, not an arbitrary foreign event, admits a new run.
       const sessionEvent = event.type === 'notice' || event.type.startsWith('compaction.') || event.type.startsWith('subagent.');
-      if (authority?.deleted || (!event.runId && !sessionEvent) || (event.runId && (getStoredRun(state.runs, id)?.id !== event.runId
-        || authority?.terminal || authority?.retired.includes(event.runId)))) return;
+      // Core publishes terminal run.phase before its corresponding settlement
+      // event. Admit that exact final event, not late tool/UI/notice callbacks.
+      const terminalCompletion = ['run.completed', 'run.failed', 'run.stopped'].includes(event.type)
+        && getStoredRun(state.runs, id)?.phase === event.type.slice(4);
+      if (authority?.deleted) return;
+      if (event.runId && getStoredRun(state.runs, id)?.id !== event.runId) {
+        // A run started outside this browser can finish before the running-list
+        // poll ever sees it. Its lifecycle frame is only a discovery hint: do
+        // not consume its version or payload, and require fresh canonical state
+        // to independently name that exact run before admitting anything.
+        if (event.type === 'run.started' && !authority?.retired.includes(event.runId)) {
+          const discoveryGuard = captureCanonicalRunGuard(state, id);
+          const discovered = await getAgentState(id);
+          if (!mounted || controller.signal.aborted) return;
+          if (discovered.success && discovered.data?.run?.id === event.runId) {
+            const accepted = acceptInteractionSnapshot(discovered.data, discoveryGuard);
+            if (accepted) sequence = Math.max(sequence, discovered.data.lastSequence);
+            if (accepted || canSyncCanonicalSession(useSessionStore.getState(), id, discovered.data, discoveryGuard, interactionWatermark.current.sequence)) {
+              syncSession(discovered.data.session);
+            }
+          }
+        }
+        return;
+      }
+      if ((!event.runId && !sessionEvent) || (event.runId && ((authority?.terminal && !terminalCompletion)
+        || authority?.retired.includes(event.runId)))) return;
       sequence = event.sequence;
       interactionWatermark.current.sequence = sequence;
       const runId = event.runId;
@@ -860,7 +891,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         const message = (event.data as { message?: unknown }).message;
         const detail = typeof message === 'string' ? message : t('chat.unexpectedError');
         patchRun({ phase: 'failed', error: typeof message === 'string' ? message : undefined, retry: undefined, activeTool: undefined });
-        setNotice(detail);
+        setNotice(detail, 'error', { id: `run-error:${id}:${event.runId}` });
         if (preferences.sound && preferences.soundEvents.attention) playCompletionSound(preferences.soundVolume, true);
         if (preferences.notifications && preferences.notificationEvents.attention
           && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
@@ -877,9 +908,12 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         const before = useSessionStore.getState();
         const guard = captureCanonicalRunGuard(before, id);
         void getAgentState(id).then(state => {
-          if (state.success && state.data && mounted && !controller.signal.aborted && acceptInteractionSnapshot(state.data, guard)) {
-            sequence = Math.max(sequence, state.data.lastSequence);
-            syncSession(state.data.session);
+          if (state.success && state.data && mounted && !controller.signal.aborted) {
+            const accepted = acceptInteractionSnapshot(state.data, guard);
+            if (accepted) sequence = Math.max(sequence, state.data.lastSequence);
+            if (accepted || canSyncCanonicalSession(useSessionStore.getState(), id, state.data, guard, interactionWatermark.current.sequence)) {
+              syncSession(state.data.session);
+            }
           }
         });
       }
@@ -903,7 +937,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           setSessionUnavailable(undefined);
           const accepted = acceptInteractionSnapshot(state.data, guard);
           sequence = Math.max(sequence, interactionWatermark.current.sequence, getStoredRun(useSessionStore.getState().runs, id)?.lastSequence ?? 0);
-          if (accepted) syncSession(state.data.session);
+          const transcriptAccepted = accepted || canSyncCanonicalSession(useSessionStore.getState(), id, state.data, guard, interactionWatermark.current.sequence);
+          if (transcriptAccepted) syncSession(state.data.session);
+          const canonicalSequence = transcriptAccepted ? state.data.lastSequence : -1;
           if (accepted && state.data.run) {
             if (state.data.run.partialMessage) {
               streamContent.current.set(state.data.run.partialMessage.id, state.data.run.partialMessage.content);
@@ -916,12 +952,29 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           for await (const record of streamAgentEvents(id, sequence, controller.signal)) {
             if (!mounted || controller.signal.aborted) break;
             if (record.type === 'connection.ready') {
-              if (!acceptInteractionSnapshot(record.snapshot, streamGuard)) continue;
-              sequence = Math.max(sequence, record.snapshot.lastSequence);
-              if (record.snapshot.run?.partialMessage) {
-                streamContent.current.set(record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.content);
-                streamReasoning.current.set(record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.reasoning ?? '');
-                upsertAssistantMessage(id, record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.content, record.snapshot.run.partialMessage.reasoning);
+              const readyAccepted = acceptInteractionSnapshot(record.snapshot, streamGuard);
+              if (readyAccepted) sequence = Math.max(sequence, record.snapshot.lastSequence);
+              let snapshot = readyAccepted ? record.snapshot : undefined;
+              // Readiness contains no transcript. Replay through its watermark
+              // is skipped, so catch up durable messages with a fresh owned GET.
+              if (record.reset || record.snapshot.lastSequence > canonicalSequence) {
+                const resumedGuard = captureCanonicalRunGuard(useSessionStore.getState(), id);
+                const resumed = await getAgentState(id);
+                if (!mounted || controller.signal.aborted) break;
+                if (!resumed.success || !resumed.data) throw new Error(resumed.error || t('chat.unexpectedError'));
+                const resumedAccepted = acceptInteractionSnapshot(resumed.data, resumedGuard);
+                if (resumedAccepted) {
+                  sequence = Math.max(sequence, resumed.data.lastSequence);
+                  snapshot = resumed.data;
+                }
+                if (resumedAccepted || canSyncCanonicalSession(useSessionStore.getState(), id, resumed.data, resumedGuard, interactionWatermark.current.sequence)) {
+                  syncSession(resumed.data.session);
+                }
+              }
+              if (snapshot?.run?.partialMessage) {
+                streamContent.current.set(snapshot.run.partialMessage.id, snapshot.run.partialMessage.content);
+                streamReasoning.current.set(snapshot.run.partialMessage.id, snapshot.run.partialMessage.reasoning ?? '');
+                upsertAssistantMessage(id, snapshot.run.partialMessage.id, snapshot.run.partialMessage.content, snapshot.run.partialMessage.reasoning);
               }
             } else await applyEvent(record.event);
           }

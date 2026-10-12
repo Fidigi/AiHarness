@@ -146,17 +146,52 @@ function authorityPublication(_state: SessionState, authorities: Record<string, 
   return { runAuthorities: authorities };
 }
 const CANONICAL = Symbol('current-state discovery');
-const canonicalWitnesses = new WeakMap<object, { generation: number }>();
+const canonicalWitnesses = new WeakMap<object, { generation: number; sessionId: string }>();
 export function captureCanonicalRunGuard(state: Pick<SessionState, 'runEpoch' | 'runAuthorities' | 'activeSessionId'>,
   sessionId: string, observeActive = true): RunRequestGuard {
   const witness = Object.freeze({});
-  canonicalWitnesses.set(witness, { generation: historyFor(state.runAuthorities).generation });
+  canonicalWitnesses.set(witness, { generation: historyFor(state.runAuthorities).generation, sessionId });
   return Object.freeze({ epoch: state.runEpoch, authority: getRunAuthority(state.runAuthorities, sessionId), canonical: true,
     ...(observeActive ? { activeSessionId: state.activeSessionId } : {}), [CANONICAL]: witness });
 }
 function canonicalGeneration(guard: RunRequestGuard | undefined): number | undefined {
   const witness = (guard as (RunRequestGuard & { [CANONICAL]?: object }) | undefined)?.[CANONICAL];
   return guard?.canonical && witness ? canonicalWitnesses.get(witness)?.generation : undefined;
+}
+
+/** Transcript publication is not run/queue admission. A fresh canonical read
+ * may contain durable messages after later SSE for the same run has retired its
+ * captured run setter. Never grant that reply authority to reopen a run. */
+export function canSyncCanonicalSession(
+  state: Pick<SessionState, 'runEpoch' | 'runAuthorities' | 'activeSessionId' | 'runs' | 'workspace'>,
+  sessionId: string,
+  snapshot: { sessionId: string; lastSequence: number; run?: AgentRunSnapshot; session: { id: string; cwd?: string } },
+  guard: RunRequestGuard,
+  watermark: number,
+): boolean {
+  const generation = canonicalGeneration(guard);
+  const authority = getRunAuthority(state.runAuthorities, sessionId);
+  const current = getStoredRun(state.runs, sessionId);
+  const witness = (guard as RunRequestGuard & { [CANONICAL]?: object })[CANONICAL];
+  if (generation === undefined || !witness || canonicalWitnesses.get(witness)?.sessionId !== sessionId
+    || generation !== historyFor(state.runAuthorities).generation
+    || guard.epoch !== state.runEpoch || guard.activeSessionId !== state.activeSessionId
+    || authority?.deleted || snapshot.sessionId !== sessionId || snapshot.session.id !== sessionId
+    || !state.workspace || snapshot.session.cwd !== state.workspace.cwd
+    || !Number.isSafeInteger(snapshot.lastSequence)
+    || snapshot.lastSequence < Math.max(watermark, authority?.sequence ?? 0, current?.lastSequence ?? 0)) return false;
+  if (!snapshot.run) return !current && guard.authority === authority;
+  const run = snapshot.run;
+  if (run.sessionId !== sessionId || run.cwd !== state.workspace.cwd
+    || (run.workspaceId && run.workspaceId !== state.workspace.id)
+    || !Number.isSafeInteger(run.lastSequence) || run.lastSequence < 0 || run.lastSequence > snapshot.lastSequence) return false;
+  if (current) return current.id === run.id && run.lastSequence >= current.lastSequence
+    && (guard.authority === authority || guard.authority?.runId === run.id);
+  // An empty poll can retire completed work before its canonical read returns.
+  // Only its known terminal transcript is eligible; the run remains absent.
+  return authority?.terminal === true && authority.retired.includes(run.id)
+    && ['completed', 'failed', 'stopped'].includes(run.phase)
+    && (guard.authority === authority || guard.authority?.runId === run.id);
 }
 
 export interface SessionState {

@@ -255,10 +255,12 @@ html[data-theme="light"] .subagent-run.stopped > header span { color: #9b243a; }
 .conversation-minimap nav { flex: 1; overflow-y: auto; padding: .35rem; }
 .conversation-minimap .minimap-entry { width: 100%; display: grid; grid-template-columns: 6px minmax(0, 1fr); align-items: center; gap: .4rem; padding: .25rem .35rem; border: 0; border-radius: 3px; color: #aebad1; background: transparent; text-align: left; cursor: pointer; }
 .conversation-minimap .minimap-entry:hover, .conversation-minimap .minimap-entry:focus-visible { color: #fff; background: #29395f; }
-.conversation-minimap .minimap-entry > span { width: 5px; height: 14px; border-radius: 3px; background: #7b89a5; }
-.conversation-minimap .minimap-entry.user > span { background: #e94560; }
-.conversation-minimap .minimap-entry.assistant > span { background: #6aa6ff; }
-.conversation-minimap .minimap-entry.tool > span { background: #70d6a5; }
+.conversation-minimap .minimap-entry > span[aria-hidden="true"] { width: 5px; height: 14px; border-radius: 3px; background: #7b89a5; }
+.conversation-minimap .minimap-entry.user > span[aria-hidden="true"] { background: #e94560; }
+.conversation-minimap .minimap-entry.assistant > span[aria-hidden="true"] { background: #6aa6ff; }
+.conversation-minimap .minimap-entry.tool > span[aria-hidden="true"] { background: #70d6a5; }
+/* Accessible role prefixes must not become a third grid cell and hide previews. */
+.conversation-minimap .minimap-entry > .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .conversation-minimap .minimap-entry small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conversation-minimap .minimap-gap { display: block; padding: .1rem; color: #71809c; text-align: center; }
 .conversation-minimap footer { display: flex; align-items: center; justify-content: space-between; gap: .4rem; padding: .45rem; border-top: 1px solid #30466e; }
