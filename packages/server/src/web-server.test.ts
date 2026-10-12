@@ -2338,15 +2338,49 @@ describe('combined Web server', () => {
         values: { model: 'project-model', thinking: 'high', toolPreset: 'chat-only', autoCompaction: false },
       }),
     });
-    const waitForCompletion = async (): Promise<void> => {
-      for (let attempt = 0; attempt < 100; attempt++) {
-        const state = await fetch(`${baseUrl}/api/agent/sessions/${created.id}/state`)
-          .then(response => response.json()) as { run?: { phase?: string; error?: string } };
-        if (state.run?.phase === 'completed') return;
-        if (state.run?.phase === 'failed') throw new Error(`Agent run failed: ${state.run.error}`);
-        await new Promise(resolve => setTimeout(resolve, 10));
+    const waitForCompletion = async (runId: string): Promise<void> => {
+      // Polling every 10ms spends the shared GET quota on simulated typing.
+      // Replay/live SSE preserves the same one-second wait without retrying 429s.
+      const controller = new AbortController();
+      const deadline = setTimeout(() => controller.abort(), 1000);
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+      try {
+        const response = await fetch(`${baseUrl}/api/agent/sessions/${created.id}/events?after=0`, {
+          signal: controller.signal,
+        });
+        expect(response.status).toBe(200);
+        reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffered = '';
+        let completed = false;
+        while (!completed) {
+          const chunk = await reader.read();
+          if (chunk.done) throw new Error('Agent event stream ended before completion');
+          buffered += decoder.decode(chunk.value, { stream: true });
+          let boundary: number;
+          while ((boundary = buffered.indexOf('\n\n')) !== -1) {
+            const frame = buffered.slice(0, boundary); buffered = buffered.slice(boundary + 2);
+            const data = frame.split('\n').find(line => line.startsWith('data: '));
+            if (!data) continue;
+            const event = JSON.parse(data.slice(6)) as { type?: string; runId?: string; sessionId?: string };
+            // Earlier runs are replayed too; their terminal events cannot settle this wait.
+            if (event.runId !== runId || event.sessionId !== created.id) continue;
+            if (event.type === 'run.failed' || event.type === 'run.stopped') {
+              throw new Error(`Agent run terminated: ${event.type}`);
+            }
+            if (event.type === 'run.completed') completed = true;
+          }
+        }
+        const stateResponse = await fetch(`${baseUrl}/api/agent/sessions/${created.id}/state`, {
+          signal: controller.signal,
+        });
+        expect(stateResponse.status).toBe(200);
+        expect(await stateResponse.json()).toMatchObject({ run: { id: runId, phase: 'completed' } });
+      } finally {
+        clearTimeout(deadline);
+        controller.abort();
+        await reader?.cancel().catch(() => undefined);
       }
-      throw new Error('Agent run did not complete');
     };
 
     let capturedProviderBody: { messages?: Array<{ role?: string; content?: string }> } | undefined;
@@ -2389,7 +2423,8 @@ describe('combined Web server', () => {
         }),
       });
       expect(captureRun.status).toBe(202);
-      await waitForCompletion();
+      const captured = await captureRun.json() as { run: { id: string } };
+      await waitForCompletion(captured.run.id);
       const deliveredSystemPrompt = capturedProviderBody?.messages
         ?.find(message => message.role === 'system')?.content;
       expect(deliveredSystemPrompt).toContain('server-side global system prompt');
@@ -2408,14 +2443,14 @@ describe('combined Web server', () => {
         settingOverrides: [],
       }),
     }).then(response => response.json()) as {
-      run: { model?: string }; session: Record<string, unknown>;
+      run: { id: string; model?: string }; session: Record<string, unknown>;
     };
     expect(inherited.run.model).toBe('project-model');
     expect(inherited.session).not.toHaveProperty('model');
     expect(inherited.session).not.toHaveProperty('thinking');
     expect(inherited.session).not.toHaveProperty('toolPreset');
     expect(inherited.session).not.toHaveProperty('autoCompaction');
-    await waitForCompletion();
+    await waitForCompletion(inherited.run.id);
     const persistedAfterRun = await fetch(`${baseUrl}/api/sessions/${created.id}`).then(response => response.text());
     expect(persistedAfterRun).not.toContain('server-side global system prompt');
     expect(persistedAfterRun).not.toContain('server-side global context');
@@ -2428,11 +2463,11 @@ describe('combined Web server', () => {
         model: 'session-model', thinking: 'max', toolPreset: 'full', autoCompaction: true,
         settingOverrides: ['model', 'thinking', 'toolPreset', 'autoCompaction'],
       }),
-    }).then(response => response.json()) as { session: Record<string, unknown> };
+    }).then(response => response.json()) as { run: { id: string }; session: Record<string, unknown> };
     expect(explicit.session).toMatchObject({
       model: 'session-model', thinking: 'max', toolPreset: 'full', autoCompaction: true,
     });
-    await waitForCompletion();
+    await waitForCompletion(explicit.run.id);
 
     const restored = await fetch(`${baseUrl}/api/agent/runs`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2441,11 +2476,11 @@ describe('combined Web server', () => {
         model: 'project-model', thinking: 'high', toolPreset: 'chat-only', autoCompaction: false,
         settingOverrides: [],
       }),
-    }).then(response => response.json()) as { run: { model?: string }; session: Record<string, unknown> };
+    }).then(response => response.json()) as { run: { id: string; model?: string }; session: Record<string, unknown> };
     expect(restored.run.model).toBe('project-model');
     expect(restored.session).not.toHaveProperty('model');
     expect(restored.session).not.toHaveProperty('autoCompaction');
-    await waitForCompletion();
+    await waitForCompletion(restored.run.id);
 
     const legacy = await fetch(`${baseUrl}/api/agent/runs`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2453,10 +2488,10 @@ describe('combined Web server', () => {
         sessionId: created.id, cwd: webRoot, provider: 'mock', input: 'Legacy setting request',
         model: 'legacy-model', thinking: 'low',
       }),
-    }).then(response => response.json()) as { run: { model?: string }; session: Record<string, unknown> };
+    }).then(response => response.json()) as { run: { id: string; model?: string }; session: Record<string, unknown> };
     expect(legacy.run.model).toBe('legacy-model');
     expect(legacy.session).toMatchObject({ model: 'legacy-model', thinking: 'low' });
-    await waitForCompletion();
+    await waitForCompletion(legacy.run.id);
 
     await fetch(`${baseUrl}/api/sessions/${created.id}`, { method: 'DELETE' });
     await rm(projectInstructions, { force: true });

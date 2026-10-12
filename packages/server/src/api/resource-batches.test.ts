@@ -406,14 +406,26 @@ describe('resource batch routes', () => {
     try {
       // More than Core's 64-capability ceiling: leaked success/rollback receipts
       // would exhaust capacity and change the fixed outcome or disk bytes.
+      // Exercise repeated service-level entries in one batch, not 70 complete
+      // discovery/reconciliation cycles. HTTP duplicate-selector refusal is tested above.
+      let reconciledEntries = 0;
       for (let index = 0; index < 70; index++) {
-        update.mockImplementationOnce(original).mockRejectedValueOnce(Object.assign(new Error('Settings unavailable'), {
+        update.mockImplementationOnce(async (...args) => {
+          // Before every publication, verify the preceding rollback's exact bytes.
+          expect(await readFile(file('lifecycle'), 'utf8')).toBe(source('lifecycle'));
+          reconciledEntries++;
+          return original(...args);
+        }).mockRejectedValueOnce(Object.assign(new Error('Settings unavailable'), {
           code: 'CONFIGURATION_UNREADABLE',
         }));
-        const result = await services.skillCatalog.setEnabledBatch({ cwd, projectId, changes: [{ key, enabled: false }] });
-        expect(result.outcomes).toMatchObject([{ status: 'failed', code: 'CONFIGURATION_UNREADABLE' }]);
-        expect(await readFile(file('lifecycle'), 'utf8')).toBe(source('lifecycle'));
       }
+      const result = await services.skillCatalog.setEnabledBatch({ cwd, projectId,
+        changes: Array.from({ length: 70 }, () => ({ key, enabled: false })) });
+      expect(reconciledEntries).toBe(70);
+      expect(update).toHaveBeenCalledTimes(140);
+      expect(result.outcomes).toEqual(Array.from({ length: 70 }, () => ({ key, enabled: false,
+        status: 'failed', code: 'CONFIGURATION_UNREADABLE' })));
+      expect(await readFile(file('lifecycle'), 'utf8')).toBe(source('lifecycle'));
       const success = await services.skillCatalog.setEnabledBatch({ cwd, projectId, changes: [{ key, enabled: false }] });
       expect(success.outcomes[0].status).toBe('changed');
     } finally { update.mockRestore(); }
