@@ -303,6 +303,33 @@ describe('high-level Core session SDK', () => {
     expect(sdk.resourceDiagnostics()).toEqual([]);
   });
 
+  it('stops during inherited compaction policy without invoking a summarizer or starting a provider turn', async () => {
+    const cwd = await root();
+    const provider = new Provider();
+    const entered = deferred();
+    const release = deferred();
+    const policy = vi.fn(async () => { entered.resolve(); await release.promise; return true; });
+    const summarize = vi.fn(async () => 'must not run');
+    const messages: Message[] = Array.from({ length: 4 }, (_, index) => ({
+      id: `policy-message-${index}`, role: index % 2 ? 'assistant' : 'user',
+      content: 'long '.repeat(80), timestamp: new Date(100 + index),
+    }));
+    const sdk = await session(cwd, provider, {
+      session: { kind: 'new', options: { messages } },
+      compaction: { settings: { keepRecentTokens: 1 }, policy, summarize },
+    });
+    await sdk.prompt('trigger policy');
+    await entered.promise;
+    expect((await sdk.stop())?.phase).toBe('stopped');
+    release.resolve();
+    expect((await sdk.wait())?.phase).toBe('stopped');
+    expect(summarize).not.toHaveBeenCalled();
+    expect(provider.turns).toEqual([]);
+    expect(sdk.messages().at(-1)?.content).toBe('trigger policy');
+    expect((await sdk.history()).some(entry => entry.type === 'compaction')).toBe(false);
+    expect(sdk.events().events.some(event => event.type.startsWith('compaction.'))).toBe(false);
+  });
+
   it('delegates automatic compaction and blocks application if a summarizer ignores abort', async () => {
     const cwd = await root();
     const entered = deferred();

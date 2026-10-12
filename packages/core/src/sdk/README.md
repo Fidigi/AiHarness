@@ -79,8 +79,11 @@ A saved refusal must remain a refusal; the SDK never grants or persists trust.
   the SDK invents no costs/model limits.
 - **compaction**: existing manager settings, optional summary callback and policy.
   Automatic compaction follows Core's existing thresholds. Callback output is
-  applied only if the signal is still live. A callback may call a model, but the
-  SDK does not create a separate provider summarization loop or retry policy.
+  admitted only while the signal, session identity, active leaf and local policy
+  remain eligible, including after inherited-policy, summary and manager-queue
+  waits. Cancellation does not roll back persistence that has already started.
+  A callback may call a model, but the SDK does not create a separate provider
+  summarization loop or retry policy.
   Policy/summary inputs and summary results are detached/redacted; the cancellation
   signal remains live. Value options and borrowed identities are captured before
   factory initialization, and mutable method arguments at call admission.
@@ -193,7 +196,10 @@ credentials ambiants uniquement lors du prompt explicite.
 `runDefaults`, `onUsage` et `compaction` composent les contrats existants du
 runtime/gestionnaire. Les arguments des callbacks et résultats de résumé sont
 copiés/expurgés ; seul le coût retourné par `onUsage` modifie la comptabilité.
-Le signal d'annulation reste vivant. Les options sont capturées avant
+Le signal d'annulation reste vivant. La compaction automatique revérifie
+l’identité de session, la branche et la politique locale après les attentes de
+politique/résumé/file du gestionnaire, avant d’admettre la persistance. Une
+persistance déjà démarrée n’est pas annulée rétroactivement. Les options sont capturées avant
 l'initialisation et les arguments mutables des méthodes lors de leur appel. Aucun coût, limite de modèle ou retry de résumé n'est
 inventé. La priorité Core du thinking enregistré est conservée : utilisez
 `setThinking` au repos. Les prompts système littéraux sont éphémères ; aucun

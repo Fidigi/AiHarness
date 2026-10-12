@@ -381,6 +381,8 @@ Les sorties de lecture, recherche, listing et commande sont limitées afin de ne
 
 La compaction nécessite un provider configuré et au moins trois messages.
 
+La compaction automatique revérifie l’annulation, la branche active et la politique locale avant de publier un résumé, y compris après l’attente d’un résumeur non coopératif ou d’une mutation de session en file. Une sortie tardive refusée ne remplace pas le contexte et ne signale pas de succès. L’annulation n’annule pas une persistance déjà démarrée ; un callback/stockage non coopératif peut retarder le règlement.
+
 ### Import, export et partage
 
 ```text

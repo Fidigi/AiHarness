@@ -381,6 +381,8 @@ File reads, searches, listings, and command output are bounded so they cannot ex
 
 Compaction requires a configured provider and at least three messages.
 
+Automatic compaction rechecks cancellation, the active branch and local policy before publishing a summary, including after waiting for a non-cooperative summarizer or a queued session mutation. Rejected late output cannot replace context or report success. Cancellation does not undo a persistence operation that has already started; a non-cooperative callback/store can delay settlement.
+
 ### Import, Export and Sharing
 
 ```text

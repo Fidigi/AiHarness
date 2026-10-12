@@ -71,6 +71,10 @@ CLI and RPC choose storage in this order: an explicit `--session <path>` parent,
 
 Cancellation must not apply a partial summary. Compaction entries remain in the journal while replaced messages disappear only from effective model context. CLI and RPC initialize Core policy from agent settings `compaction.enabled`, `reserveTokens`, `keepRecentTokens`, and exact `modelOverrides["provider/model"]`; the policy is resolved at startup and refreshed after interactive `/model` (including cycling), `/provider` and `/reload`, RPC `set_model`/`cycle_model`, and RPC `switch_session`. Each resolution starts from the current trusted settings snapshot, so leaving a model override restores inherited/default thresholds rather than retaining the prior model's values. RPC settings remain a startup snapshot; rereading files there still requires restart. Session `autoCompaction: false` remains authoritative. This does not add overflow recovery, model-context-aware thresholds or new compaction hooks. `branchSummary` settings are validated but branch-summary generation is not yet wired to them.
 
+Automatic compaction captures its process-local session identity, active leaf, enable/reserve/keep settings and callback/policy identities before awaiting inherited policy. It rechecks admission after that wait, after start observers, after summarization and inside the session mutation queue before starting persistence. An abort-ignoring late summary, replaced session/callback, changed branch or revoked local policy cannot publish a compaction entry or success event at those boundaries. Checks rejected before `compaction:start` emit no lifecycle; checks rejected afterward settle through the existing `compaction:error` event (`cancelled: true` only for abort). Admission is registered before policy/start callbacks can reenter without awaiting their own check, and is released after settlement. Do not await the admitted check from its own policy/start callback: that creates a self-wait. Metadata-only title updates and equivalent settings refreshes do not invalidate it.
+
+This is not a cross-process compare-and-swap, an inherited-policy watcher or a transaction over arbitrary custom history mutations. Once persistence has been admitted, cancellation does not roll back that write; its successful durable result still receives the completion event. Non-cooperative callbacks/stores can delay settlement. Manual `applyCompaction` retains its existing caller-owned boundary contract.
+
 ### Fork versus clone
 
 | Operation | Result |
@@ -101,6 +105,7 @@ Lists return metadata rather than full histories. Session state starts with a bo
 - `packages/core/src/sessions/session-manager.test.ts` — JSONL, IDs, 64 MiB/inventory/path bounds, stable reads, atomic rewrites, concurrent independent-store append/save locking, redaction, branches, clones and context
 - `packages/core/src/sessions/serialization.test.ts` — dates, rich data, redaction and legacy files
 - `packages/core/src/sessions/compaction.test.ts` — estimates, policy and compaction targets
+- `packages/core/src/sessions/session-compaction-admission.test.ts` — real JSONL cancellation, policy/branch/identity replacement, queued admission, reentrant deduplication and the started-persistence boundary
 - `packages/server/src/api/session-pagination.test.ts` — bounded stable windows
 - `packages/server/src/web-server.test.ts` — session HTTP, persistence, import/export and cascade behavior
 - `packages/server/src/api/session-live-mutations.test.ts` — active-run prefix copies, source independence, busy branch-switch protection and invalid/running-command refusals

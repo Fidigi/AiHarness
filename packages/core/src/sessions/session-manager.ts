@@ -1427,7 +1427,8 @@ export class SessionManager {
   async checkAndTriggerCompaction(sessionId: string, signal?: AbortSignal): Promise<boolean> {
     const active = this.autoCompactionRuns.get(sessionId);
     if (active) return active;
-    const run = this.checkAndTriggerCompactionUnlocked(sessionId, signal);
+    // Admit before invoking policy or lifecycle observers, which may reenter this method.
+    const run = Promise.resolve().then(() => this.checkAndTriggerCompactionUnlocked(sessionId, signal));
     this.autoCompactionRuns.set(sessionId, run);
     try { return await run; }
     finally {
@@ -1437,9 +1438,22 @@ export class SessionManager {
 
   private async checkAndTriggerCompactionUnlocked(sessionId: string, signal?: AbortSignal): Promise<boolean> {
     const session = this.sessions.get(sessionId);
-    if (!session || !this.compactionSettings.enabled || !this.autoCompactionCallback || signal?.aborted) return false;
+    const settings = { ...this.compactionSettings };
+    const summarize = this.autoCompactionCallback;
+    const policy = this.autoCompactionPolicy;
+    if (!session || !settings.enabled || !summarize || signal?.aborted) return false;
     if (session.autoCompaction === false) return false;
-    if (this.autoCompactionPolicy && !await this.autoCompactionPolicy(session)) return false;
+    const activeLeafId = session.activeLeafId;
+    const isCurrent = (): boolean => this.sessions.get(sessionId) === session
+      && session.activeLeafId === activeLeafId
+      && session.autoCompaction !== false
+      && this.compactionSettings.enabled
+      && this.compactionSettings.reserveTokens === settings.reserveTokens
+      && this.compactionSettings.keepRecentTokens === settings.keepRecentTokens
+      && this.autoCompactionCallback === summarize
+      && this.autoCompactionPolicy === policy;
+    if (policy && !await policy(session)) return false;
+    if (signal?.aborted || !isCurrent()) return false;
 
     const result = this.requestCompaction(sessionId);
     if (!result) return false;
@@ -1450,14 +1464,20 @@ export class SessionManager {
       ...result.keptEntries,
     ]);
 
+    const validateAdmission = (): void => {
+      if (signal?.aborted) throw new DOMException('Compaction cancelled', 'AbortError');
+      if (!isCurrent()) throw new Error('Compaction context or policy changed.');
+    };
     try {
       await this.emitter.emit('compaction:start', { sessionId, automatic: true, tokensBefore });
-      const generated = await this.autoCompactionCallback(
+      validateAdmission();
+      const generated = await summarize(
         sessionId,
         result.toCompact,
         result.keptEntries,
         signal,
       );
+      validateAdmission();
       const summary = typeof generated === 'string' ? generated : generated.summary;
       const tokensAfter = TokenEstimator.estimateTokens(summary)
         + TokenEstimator.totalMessages(result.keptEntries);
@@ -1469,8 +1489,8 @@ export class SessionManager {
           model: generated.model,
           usage: generated.usage,
         }),
-      });
-      if (!applied) return false;
+      }, validateAdmission);
+      if (!applied) throw new Error('Compaction context or policy changed.');
       await this.emitter.emit('compaction:end', {
         sessionId,
         summaryLength: summary.length,
@@ -2087,6 +2107,7 @@ export class SessionManager {
     summary: string,
     firstKeptEntryId: string,
     details: CompactionDetails = {},
+    validateAdmission?: () => void,
   ): Promise<boolean> {
     summary = this.redactText(summary);
     details = this.redactJson(details);
@@ -2102,6 +2123,8 @@ export class SessionManager {
     const normalizedUsage = normalizedSessionUsage(details.usage);
     details = { ...details, ...(normalizedUsage ? { usage: normalizedUsage } : { usage: undefined }) };
     const compacted = await this.withSessionMutation(sessionId, async () => {
+      // Recheck after queue waits, before beginning persistence. A started write is not rolled back.
+      validateAdmission?.();
       const session = this.sessions.get(sessionId);
       if (!session) return false;
 
