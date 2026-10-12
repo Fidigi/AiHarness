@@ -1,14 +1,15 @@
 import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, FormEvent, KeyboardEvent, ReactNode } from 'react';
 import { parseShellCommandInput } from '@ai-harness/core/shell-input';
-import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, ExtensionInteractionSnapshot, Message, ModelCatalog, ProviderType, Session, TokenUsage } from '@ai-harness/core';
+import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, Message, ModelCatalog, ProviderType, Session, TokenUsage } from '@ai-harness/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { AgentCapabilities, CommandSnapshot, ExtensionWidget, PaletteItem, SessionInfo } from '../services/api';
 import type { DraftAttachment, StoredSession } from '../store/session-store';
 import type { TranslationFunction } from '../i18n/types';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useI18n } from '../hooks/useI18n';
-import { useSessionStore } from '../store/session-store';
+import { registerFeatureLocaleMessages } from '../i18n/registry';
+import { captureCanonicalRunGuard, captureInteractionReplyGuard, interactionReplyComparison, getSessionRecord, getRunAuthority, getStoredRun, useSessionStore, type RunRequestGuard } from '../store/session-store';
 import { usePreferences } from '../store/preferences';
 import MarkdownContent from './MarkdownContent';
 import { SubagentPanel } from './SubagentPanel';
@@ -16,6 +17,8 @@ import { applyCodemodeProgress, codemodeDetails } from './codemode-state';
 import { composerKeySubmits } from './composer-submit';
 import { clipboardTextToMarkdown } from './markdown-paste';
 import { getMarkdownListContinuation } from './markdown-list-continuation';
+import { InteractionPresentationLedger } from '../services/interaction-presentation';
+import { InteractionViewLifetime, interactionEpochKey, interactionViewKey as queueInteractionViewKey } from '../services/interaction-scope';
 import { publishNotice, type NoticeLevel } from '../services/notices';
 import ExtensionInteractionBoundary from './ExtensionInteractionBoundary';
 import { mobileKeyboardViewKey, useMobileKeyboard } from '../hooks/useMobileKeyboard';
@@ -39,6 +42,10 @@ import {
   getSessionTree,
   reloadAgentResources,
   respondToExtensionInteraction,
+  orderedExtensionRequests,
+  reconcileInteractionSnapshot,
+  extensionInteractionChanges,
+  isFreshInteractionSnapshot,
   runExtensionCommand,
   searchFiles,
   saveNewSessionDefault,
@@ -49,6 +56,12 @@ import {
   streamCommandEvents,
   updateSession,
 } from '../services/api';
+
+// Presentation-only copy uses the accepted synchronous bounded fill-only registry.
+registerFeatureLocaleMessages({
+  en: { 'chat.extensionInteraction.waiting': '{count} waiting' },
+  fr: { 'chat.extensionInteraction.waiting': '{count} en attente' },
+});
 
 interface ChatViewProps {
   onStreamingUpdate?: (content: string) => void;
@@ -92,7 +105,7 @@ function readSessionScroll(cwd: string, sessionId: string): SessionScrollPositio
   try {
     const parsed = JSON.parse(sessionStorage.getItem(scrollStorageKey(cwd)) ?? '{}') as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
-    return normalizeSessionScroll((parsed as Record<string, unknown>)[sessionId]);
+    return normalizeSessionScroll(getSessionRecord(parsed as Record<string, unknown>, sessionId));
   } catch {
     return undefined;
   }
@@ -198,9 +211,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const activeProviderType = (currentSession?.draft ? effectiveConfiguration?.values.provider : undefined) as ProviderType | undefined ?? selectedProviderType;
   const providerConfig = useSessionStore(state => state.providers.available[activeProviderType]);
   const modelCatalog = useSessionStore(state => state.providers.catalog);
-  const currentRun = useSessionStore(state => id ? state.runs[id] : undefined);
-  const input = useSessionStore(state => id ? state.drafts[id] ?? '' : '');
-  const attachments = useSessionStore(state => id ? state.attachments[id] ?? EMPTY_ATTACHMENTS : EMPTY_ATTACHMENTS);
+  const currentRun = useSessionStore(state => id ? getStoredRun(state.runs, id) : undefined);
+  const input = useSessionStore(state => id ? getSessionRecord(state.drafts, id) ?? '' : '');
+  const attachments = useSessionStore(state => id ? getSessionRecord(state.attachments, id) ?? EMPTY_ATTACHMENTS : EMPTY_ATTACHMENTS);
   const setDraft = useSessionStore(state => state.setDraft);
   const createLocalSession = useSessionStore(state => state.createSession);
   const addAttachments = useSessionStore(state => state.addAttachments);
@@ -250,11 +263,108 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [minimapOpen, setMinimapOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const interactionViewKey = JSON.stringify([workspace?.id, workspace?.cwd, id, currentRun?.id, location.key, location.pathname, location.search, location.hash]);
+  const interactionLifetime = useRef(new InteractionViewLifetime());
+  const interactionView = interactionLifetime.current.enter(queueInteractionViewKey(workspace?.id, workspace?.cwd, id, location.key,
+    { pathname: location.pathname, search: location.search, hash: location.hash }));
+  const interactionMount = useRef<symbol | undefined>(Symbol('interaction owner'));
+  useLayoutEffect(() => {
+    const mount = interactionMount.current ?? Symbol('mounted interaction owner');
+    interactionMount.current = mount;
+    return () => { if (interactionMount.current === mount) interactionMount.current = undefined; };
+  }, []);
+  const interactionEpoch = interactionEpochKey(interactionView, currentRun?.id);
+  const forkAdmission = useRef<{ token: string; sessionId: string; workspaceId: string; cwd: string; pathname: string; search: string; originView: string; view?: string; retired?: boolean } | undefined>(undefined);
+  const pendingFork = forkAdmission.current;
+  if (pendingFork && pendingFork.view && pendingFork.view !== interactionView) pendingFork.retired = true;
+  if (pendingFork && !pendingFork.retired && !pendingFork.view && (location.state as { interactionFork?: string } | null)?.interactionFork === pendingFork.token
+    && workspace?.id === pendingFork.workspaceId && workspace.cwd === pendingFork.cwd && id === pendingFork.sessionId
+    && location.pathname === pendingFork.pathname && location.search === pendingFork.search && location.hash === '') pendingFork.view = interactionView;
+  else if (pendingFork && !pendingFork.view && pendingFork.originView !== interactionView) pendingFork.retired = true;
+  useLayoutEffect(() => {
+    if (!pendingFork || pendingFork.retired || pendingFork.view !== interactionView) setStarting(false);
+  }, [interactionView]);
+  const interactionScopeRef = useRef({ workspaceId: workspace?.id, cwd: workspace?.cwd, sessionId: id, runId: currentRun?.id });
+  interactionScopeRef.current = { workspaceId: workspace?.id, cwd: workspace?.cwd, sessionId: id, runId: currentRun?.id };
+  const interactionAddressRef = useRef(interactionView);
+  interactionAddressRef.current = interactionView;
+  const interactionEpochRef = useRef(interactionEpoch);
+  interactionEpochRef.current = interactionEpoch;
+  const interactionWatermark = useRef({ view: interactionView, sequence: 0 });
+  if (interactionWatermark.current.view !== interactionView) interactionWatermark.current = { view: interactionView, sequence: 0 };
+  const interactionLedger = useRef(new InteractionPresentationLedger());
+  const ledgerFor = (runId: string) => interactionLedger.current.forRun(runId);
+  // Observe the accepted store, not just Chat's own GET/SSE path. App polling can
+  // commit an empty baseline and then a new head before Chat's next resync.
+  useLayoutEffect(() => {
+    if (!id) return;
+    interactionLedger.current.clear();
+    const observe = () => {
+      const state = useSessionStore.getState();
+      const run = getStoredRun(state.runs, id);
+      if (!run || run.sessionId !== id || (workspace && run.cwd !== workspace.cwd)) return;
+      interactionLedger.current.observe(run);
+    };
+    observe();
+    return useSessionStore.subscribe(observe);
+  }, [interactionView]);
+  const acceptInteractionSnapshot = (snapshot: { sessionId: string; lastSequence: number; run?: AgentRunSnapshot }, captured?: RunRequestGuard): boolean => {
+    if (!interactionMount.current || !id || interactionWatermark.current.view !== interactionView || snapshot.sessionId !== id
+      || (snapshot.run && workspace && snapshot.run.cwd !== workspace.cwd)) return false;
+    const current = useSessionStore.getState();
+    const live = getStoredRun(current.runs, id);
+    const authority = getRunAuthority(current.runAuthorities, id);
+    if (authority?.deleted || !isFreshInteractionSnapshot(snapshot, interactionReplyComparison(current, id, captured),
+      Math.max(interactionWatermark.current.sequence, authority?.sequence ?? 0))) return false;
+    const ledger = snapshot.run ? ledgerFor(snapshot.run.id) : undefined;
+    // The store also owns retired IDs, deletion tombstones and workspace epochs.
+    // Do not consume a watermark (or close a ledger) when it rejects this run.
+    const admitted = setRun(id, reconcileInteractionSnapshot(snapshot.run, ledger?.closed), {
+      ...(captured ?? { epoch: current.runEpoch, authority, activeSessionId: current.activeSessionId }),
+      ...(snapshot.run ? { snapshotSequence: snapshot.lastSequence } : { absenceSequence: snapshot.lastSequence }),
+    });
+    if (!admitted) return false;
+    interactionWatermark.current.sequence = snapshot.lastSequence;
+    if (live && live.id !== snapshot.run?.id) for (const request of orderedExtensionRequests(live)) ledgerFor(live.id).closed.add(request.id);
+    if (ledger) {
+      const requests = orderedExtensionRequests(snapshot.run);
+      for (const request of requests) {
+        // The first accepted projection is restoration, not live attention.
+        // Later new IDs in this observed run can first appear via polling/resync.
+        if (!ledger.restored && !ledger.known.has(request.id)) ledger.sounded.add(request.id);
+        ledger.known.add(request.id);
+      }
+      ledger.restored = true;
+      if (live?.id === snapshot.run?.id) for (const request of orderedExtensionRequests(live)) {
+        if (!requests.some(entry => entry.id === request.id)) ledger.closed.add(request.id);
+      }
+    }
+    return true;
+  };
+  const interactions = currentRun && currentRun.sessionId === id && (!workspace || currentRun.cwd === workspace.cwd)
+    ? orderedExtensionRequests(currentRun).filter(request => !ledgerFor(currentRun.id).closed.has(request.id)) : [];
+  const displayedInteraction = interactions[0];
+  useEffect(() => {
+    if (!displayedInteraction || !currentRun) return;
+    const ledger = ledgerFor(currentRun.id);
+    // App may render a poll before Chat classifies it; do not consume unknown attention.
+    if (!ledger.known.has(displayedInteraction.id) || ledger.sounded.has(displayedInteraction.id)) return;
+    ledger.sounded.add(displayedInteraction.id);
+    if (preferences.sound && preferences.soundEvents.attention) playCompletionSound(preferences.soundVolume, true);
+    if (preferences.notifications && preferences.notificationEvents.attention
+      && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification(useSessionStore.getState().sessions.find(session => session.id === id)?.title || 'AiHarness', { body: displayedInteraction.message, tag: `agent:${id}:attention` });
+    }
+  }, [interactionEpoch, displayedInteraction, preferences.sound, preferences.soundEvents.attention,
+    preferences.soundVolume, preferences.notifications, preferences.notificationEvents.attention, currentSession?.title, id]);
+  useEffect(() => {
+    interactionEpochRef.current = interactionEpoch;
+    return () => { interactionEpochRef.current = ''; };
+  }, [interactionEpoch]);
+  const interactionViewKey = interactionEpoch;
   const interactionViewRef = useRef(interactionViewKey);
   interactionViewRef.current = interactionViewKey;
   const interactionFocusKey = JSON.stringify([workspace?.id, workspace?.cwd, id, currentRun?.id,
-    currentRun?.extensionRequest?.id, currentRun?.extensionRequest?.kind]);
+    displayedInteraction?.id, displayedInteraction?.kind]);
   const interactionFocusAdmission = useRef({ view: interactionViewKey, request: interactionFocusKey, allowed: true });
   if (interactionFocusAdmission.current.request !== interactionFocusKey) {
     interactionFocusAdmission.current = { view: interactionViewKey, request: interactionFocusKey, allowed: true };
@@ -596,21 +706,35 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   }, [currentSession?.messages, id, mergeMessagePage, t]);
 
   useEffect(() => {
-    if (!id || id.startsWith('draft:')) return;
+    // Do not start a disposable unknown-cwd stream before workspace bootstrap.
+    // Its first frames cannot belong to the later admitted workspace lifetime.
+    if (!workspace?.id || !workspace.cwd || !id || id.startsWith('draft:')) return;
     const controller = new AbortController();
     let mounted = true;
     let sequence = 0;
 
     const applyEvent = async (event: AgentEvent): Promise<void> => {
-      if (!mounted || event.sequence <= sequence) return;
+      if (!mounted || controller.signal.aborted || event.sessionId !== id
+        || !Number.isSafeInteger(event.sequence) || event.sequence < 0
+        || event.sequence <= Math.max(sequence, interactionWatermark.current.sequence, getStoredRun(useSessionStore.getState().runs, id)?.lastSequence ?? 0)) return;
+      const state = useSessionStore.getState();
+      const authority = getRunAuthority(state.runAuthorities, id);
+      // Event correlation must be admitted before consuming sequence/presentation state.
+      // Discovery/connection.ready, not an arbitrary foreign event, admits a new run.
+      const sessionEvent = event.type === 'notice' || event.type.startsWith('compaction.') || event.type.startsWith('subagent.');
+      if (authority?.deleted || (!event.runId && !sessionEvent) || (event.runId && (getStoredRun(state.runs, id)?.id !== event.runId
+        || authority?.terminal || authority?.retired.includes(event.runId)))) return;
       sequence = event.sequence;
+      interactionWatermark.current.sequence = sequence;
       const runId = event.runId;
       const patchRun = (changes: Partial<AgentRunSnapshot>): void => {
-        const existing = useSessionStore.getState().runs[id];
+        const existing = getStoredRun(useSessionStore.getState().runs, id);
         if (!existing || (runId && existing.id !== runId)) return;
-        setRun(id, { ...existing, ...changes });
+        const before = useSessionStore.getState();
+        setRun(id, { ...existing, ...changes, lastSequence: sessionEvent ? existing.lastSequence : event.sequence },
+          { epoch: before.runEpoch, authority: getRunAuthority(before.runAuthorities, id), snapshotSequence: event.sequence });
       };
-      const eventData = event.data as { content?: unknown; messageId?: unknown };
+      const eventData = (event.data && typeof event.data === 'object' ? event.data : {}) as { content?: unknown; messageId?: unknown };
       const messageId = typeof eventData.messageId === 'string'
         ? eventData.messageId
         : runId ? `stream:${runId}` : undefined;
@@ -651,26 +775,25 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         });
       }
       if (event.type === 'tool.progress') {
-        const tool = useSessionStore.getState().runs[id]?.activeTool;
+        const tool = getStoredRun(useSessionStore.getState().runs, id)?.activeTool;
         const next = applyCodemodeProgress(tool, event.data);
         if (next !== tool) patchRun({ activeTool: next });
       }
       if (event.type === 'tool.completed' || event.type === 'tool.failed') {
         const data = event.data as { call?: { id?: unknown }; id?: unknown; parentId?: unknown };
-        const tool = useSessionStore.getState().runs[id]?.activeTool;
+        const tool = getStoredRun(useSessionStore.getState().runs, id)?.activeTool;
         if (data.parentId === undefined && tool?.id === (data.call?.id ?? data.id)) patchRun({ activeTool: undefined });
       }
       if (event.type === 'extension.ui') {
-        const data = event.data as { action?: unknown; request?: unknown };
-        if (data.action === 'request' && data.request && typeof data.request === 'object') {
-          const request = data.request as ExtensionInteractionSnapshot;
-          patchRun({ extensionRequest: request });
-          if (preferences.sound && preferences.soundEvents.attention) playCompletionSound(preferences.soundVolume, true);
-          if (preferences.notifications && preferences.notificationEvents.attention
-            && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-            new Notification(useSessionStore.getState().sessions.find(session => session.id === id)?.title || 'AiHarness', { body: request.message, tag: `agent:${id}:attention` });
-          }
-        } else if (data.action === 'resolved') patchRun({ extensionRequest: undefined });
+        const existing = getStoredRun(useSessionStore.getState().runs, id);
+        if (existing && (!runId || existing.id === runId)) {
+          const ledger = ledgerFor(existing.id);
+          const data = eventData as { action?: unknown; requestId?: unknown };
+          if (data.action === 'resolved' && typeof data.requestId === 'string') ledger.closed.add(data.requestId);
+          const changes = extensionInteractionChanges(existing, event.data, ledger.closed);
+          for (const request of orderedExtensionRequests({ ...existing, ...changes })) ledger.known.add(request.id);
+          patchRun(changes);
+        }
       }
       if (event.type === 'notice') {
         const data = event.data as { message?: unknown; level?: unknown; progress?: unknown; id?: unknown };
@@ -727,6 +850,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           };
         }
       }
+      if (['run.completed', 'run.failed', 'run.stopped'].includes(event.type)) {
+        const live = getStoredRun(useSessionStore.getState().runs, id);
+        if (live && (!runId || runId === live.id)) for (const request of orderedExtensionRequests(live)) ledgerFor(live.id).closed.add(request.id);
+      }
       if (event.type === 'run.failed') {
         const message = (event.data as { message?: unknown }).message;
         const detail = typeof message === 'string' ? message : t('chat.unexpectedError');
@@ -740,19 +867,29 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       }
       if (event.type === 'run.completed') patchRun({ phase: 'completed', retry: undefined, activeTool: undefined });
       if (event.type === 'run.stopped') patchRun({ phase: 'stopped', retry: undefined, activeTool: undefined });
+      // Stamp the event after its queue/phase projection, never before it.
+      // An eager version-only stamp would make this event's real membership
+      // change look like a same-version forged snapshot to the store.
+      patchRun({});
       if (['run.completed', 'run.failed', 'run.stopped', 'tool.completed', 'tool.failed', 'compaction.completed', 'compaction.failed'].includes(event.type)) {
-        const state = await getAgentState(id);
-        if (state.success && state.data && mounted) {
-          syncSession(state.data.session);
-          if (state.data.run) setRun(id, state.data.run);
-        }
+        const before = useSessionStore.getState();
+        const guard = captureCanonicalRunGuard(before, id);
+        void getAgentState(id).then(state => {
+          if (state.success && state.data && mounted && !controller.signal.aborted && acceptInteractionSnapshot(state.data, guard)) {
+            sequence = Math.max(sequence, state.data.lastSequence);
+            syncSession(state.data.session);
+          }
+        });
       }
     };
 
     void (async () => {
       while (mounted && !controller.signal.aborted) {
         try {
+          const before = useSessionStore.getState();
+          const guard = captureCanonicalRunGuard(before, id);
           const state = await getAgentState(id);
+          if (!mounted || controller.signal.aborted) break;
           if (!state.success || !state.data) {
             if (/\b404\b|not found|introuvable/i.test(state.error ?? '')) {
               removeSession(id);
@@ -762,26 +899,27 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             throw new Error(state.error || t('chat.unexpectedError'));
           }
           setSessionUnavailable(undefined);
-          syncSession(state.data.session);
-          sequence = state.data.lastSequence;
-          if (state.data.run) {
-            setRun(id, state.data.run);
+          const accepted = acceptInteractionSnapshot(state.data, guard);
+          sequence = Math.max(sequence, interactionWatermark.current.sequence, getStoredRun(useSessionStore.getState().runs, id)?.lastSequence ?? 0);
+          if (accepted) syncSession(state.data.session);
+          if (accepted && state.data.run) {
             if (state.data.run.partialMessage) {
               streamContent.current.set(state.data.run.partialMessage.id, state.data.run.partialMessage.content);
               streamReasoning.current.set(state.data.run.partialMessage.id, state.data.run.partialMessage.reasoning ?? '');
               upsertAssistantMessage(id, state.data.run.partialMessage.id, state.data.run.partialMessage.content, state.data.run.partialMessage.reasoning);
             }
           }
+          const beforeStream = useSessionStore.getState();
+          const streamGuard = captureCanonicalRunGuard(beforeStream, id);
           for await (const record of streamAgentEvents(id, sequence, controller.signal)) {
+            if (!mounted || controller.signal.aborted) break;
             if (record.type === 'connection.ready') {
+              if (!acceptInteractionSnapshot(record.snapshot, streamGuard)) continue;
               sequence = Math.max(sequence, record.snapshot.lastSequence);
-              if (record.snapshot.run) {
-                setRun(id, record.snapshot.run);
-                if (record.snapshot.run.partialMessage) {
-                  streamContent.current.set(record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.content);
-                  streamReasoning.current.set(record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.reasoning ?? '');
-                  upsertAssistantMessage(id, record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.content, record.snapshot.run.partialMessage.reasoning);
-                }
+              if (record.snapshot.run?.partialMessage) {
+                streamContent.current.set(record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.content);
+                streamReasoning.current.set(record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.reasoning ?? '');
+                upsertAssistantMessage(id, record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.content, record.snapshot.run.partialMessage.reasoning);
               }
             } else await applyEvent(record.event);
           }
@@ -805,7 +943,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       mounted = false;
       controller.abort();
     };
-  }, [id, navigate, onStreamingUpdate, preferences.notificationEvents, preferences.notifications, preferences.sound, preferences.soundEvents, preferences.soundVolume, removeSession, setRun, syncSession, t, upsertAssistantMessage, workspace?.cwd]);
+  }, [id, interactionView, navigate, onStreamingUpdate, preferences.notificationEvents, preferences.notifications, preferences.sound, preferences.soundEvents, preferences.soundVolume, removeSession, setRun, syncSession, t, upsertAssistantMessage, workspace?.cwd]);
 
   const active = isActivePhase(currentRun?.phase);
   const modelLocked = effectiveConfiguration?.provenance.model?.scope === 'environment';
@@ -1168,7 +1306,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         })),
       ]);
       if (queued.success && queued.data) {
-        setRun(currentSession.id, queued.data);
+        if (interactionEpochRef.current === interactionEpoch) acceptInteractionSnapshot({ sessionId: currentSession.id, lastSequence: queued.data.lastSequence, run: queued.data });
         clearAttachments(currentSession.id);
       }
       else {
@@ -1180,16 +1318,35 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
 
     setStarting(true);
     let localId = currentSession.id;
+    const originEpoch = interactionEpoch;
+    const originMount = interactionMount.current;
+    const ownsStart = () => {
+      if (!originMount || interactionMount.current !== originMount) return false;
+      if (interactionEpochRef.current === originEpoch) return true;
+      const admission = forkAdmission.current;
+      const current = interactionScopeRef.current;
+      return Boolean(admission && !admission.retired && admission.sessionId === localId
+        && admission.view === interactionAddressRef.current && current.sessionId === localId
+        && current.workspaceId === workspace.id && current.cwd === workspace.cwd);
+    };
+    const beforeStart = useSessionStore.getState();
+    let completedView: string | undefined;
     try {
       if (stagedEdit?.sessionId === currentSession.id) {
         const forked = await forkSession(currentSession.id, { messageId: stagedEdit.messageId, before: true,
           title: `${currentSession.title || t('sidebar.untitled')} (branch)` });
         if (!forked.success || !forked.data) throw new Error(forked.error || t('session.branchFailed'));
+        if (!ownsStart()) return;
         localId = forked.data.id;
         setStagedEdit(undefined);
         const loaded = await getSession(localId);
+        if (!ownsStart()) return;
         if (loaded.success && loaded.data) syncSession(loaded.data);
-        navigate(`/chat/${encodeURIComponent(localId)}?cwd=${encodeURIComponent(workspace.cwd)}`);
+        const pathname = `/chat/${encodeURIComponent(localId)}`;
+        const search = `?cwd=${encodeURIComponent(workspace.cwd)}`;
+        const token = crypto.randomUUID();
+        forkAdmission.current = { token, sessionId: localId, workspaceId: workspace.id, cwd: workspace.cwd, pathname, search, originView: interactionView };
+        navigate(pathname + search, { state: { interactionFork: token } });
       }
       const result = await startAgentRun({
         ...(currentSession.draft ? {} : { sessionId: localId }),
@@ -1214,19 +1371,36 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         autoCompaction: currentSession.autoCompaction ?? autoCompaction,
         settingOverrides,
       });
+      if (!ownsStart()) return;
+      completedView = interactionAddressRef.current;
       if (!result.success || !result.data) throw new Error(result.error || t('chat.unexpectedError'));
       replaceSession(localId, result.data.session);
       clearAttachments(result.data.session.id);
       if (localId !== result.data.session.id) clearAttachments(localId);
-      setRun(result.data.session.id, result.data.run);
+      const started = result.data.run;
+      const live = getStoredRun(useSessionStore.getState().runs, result.data.session.id);
+      const scope = interactionScopeRef.current;
+      const admission = forkAdmission.current;
+      const pendingForkView = localId !== currentSession.id && admission?.sessionId === localId && !admission.retired
+        && admission.view === interactionAddressRef.current
+        && scope.workspaceId === workspace.id && scope.cwd === workspace.cwd && scope.sessionId === localId
+        && (scope.runId === undefined || scope.runId === started.id);
+      if ((interactionEpochRef.current === interactionEpoch || pendingForkView)
+        && isFreshInteractionSnapshot({ sessionId: result.data.session.id, lastSequence: started.lastSequence, run: started }, live,
+          result.data.session.id === id ? interactionWatermark.current.sequence : 0)) {
+        setRun(result.data.session.id, reconcileInteractionSnapshot(started, ledgerFor(started.id).closed),
+          captureCanonicalRunGuard(beforeStart, result.data.session.id, false));
+      }
       if (localId !== result.data.session.id) {
         navigate(`/chat/${encodeURIComponent(result.data.session.id)}?cwd=${encodeURIComponent(workspace.cwd)}`, { replace: true });
       }
     } catch (error) {
+      if (!ownsStart()) return;
       setDraft(localId, content);
       setNotice(error instanceof Error ? error.message : t('chat.unexpectedError'));
     } finally {
-      setStarting(false);
+      if (originMount && interactionMount.current === originMount
+        && (ownsStart() || completedView === interactionAddressRef.current)) setStarting(false);
     }
   };
 
@@ -1405,9 +1579,17 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       return;
     }
     if (!currentRun) return;
+    if (!currentSession) return;
+    const epoch = interactionEpoch;
+    const mount = interactionMount.current;
+    const before = useSessionStore.getState();
+    const guard = { epoch: before.runEpoch, authority: getRunAuthority(before.runAuthorities, currentSession.id), activeSessionId: before.activeSessionId };
     const result = await stopAgentRun(currentRun.id);
+    if (!mount || interactionMount.current !== mount || interactionEpochRef.current !== epoch || getStoredRun(useSessionStore.getState().runs, currentSession.id)?.id !== currentRun.id
+      || useSessionStore.getState().runEpoch !== guard.epoch
+      || getRunAuthority(useSessionStore.getState().runAuthorities, currentSession.id) !== guard.authority) return;
     if (!result.success) setNotice(result.error || t('chat.stopFailed'));
-    else if (result.data) setRun(currentSession!.id, result.data);
+    else if (result.data?.id === currentRun.id) acceptInteractionSnapshot({ sessionId: currentSession.id, lastSequence: result.data.lastSequence, run: result.data }, guard);
   };
 
   const loadHistoryBefore = async (beforeMessageId?: string) => {
@@ -1607,20 +1789,32 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         </details>)}
       </aside>}
 
-      {currentRun?.extensionRequest && <ExtensionInteractionBoundary
+      {displayedInteraction && currentRun && <ExtensionInteractionBoundary
         key={interactionViewKey}
-        request={currentRun.extensionRequest}
-        waitingCount={0}
+        request={displayedInteraction}
+        waitingCount={Math.max(0, interactions.length - 1)}
         locale={locale}
         restoreFocusRef={textareaRef}
-        canRestoreFocus={() => interactionViewRef.current === interactionViewKey}
-        canFocusInitially={() => interactionViewRef.current === interactionViewKey && interactionFocusAdmission.current.allowed}
+        canRestoreFocus={() => Boolean(interactionMount.current) && interactionViewRef.current === interactionViewKey}
+        canFocusInitially={() => Boolean(interactionMount.current) && interactionViewRef.current === interactionViewKey && interactionFocusAdmission.current.allowed}
         renderOutput={content => <AnsiOutput content={content} />}
         onResolve={async (result, signal) => {
-          const response = await respondToExtensionInteraction(currentSession.id, currentRun.extensionRequest!.id, result, signal);
+          const epoch = interactionEpoch;
+          const mount = interactionMount.current;
+          const before = useSessionStore.getState();
+          const guard = captureInteractionReplyGuard(before, currentSession.id, displayedInteraction.id);
+          const response = await respondToExtensionInteraction(currentSession.id, displayedInteraction.id, result, signal);
+          const live = getStoredRun(useSessionStore.getState().runs, currentSession.id);
           if (signal.aborted) return;
-          if (response.success && response.data) setRun(currentSession.id, response.data);
-          else setNotice(response.error || t('chat.extensionInteractionFailed'));
+          if (!mount || interactionMount.current !== mount || interactionEpochRef.current !== epoch || live?.id !== currentRun.id
+            || useSessionStore.getState().runEpoch !== guard.epoch
+            || getRunAuthority(useSessionStore.getState().runAuthorities, currentSession.id) !== guard.authority) return;
+          if (response.success && response.data) {
+            if (response.data.id === live.id) acceptInteractionSnapshot({ sessionId: currentSession.id, lastSequence: response.data.lastSequence, run: response.data }, guard);
+          } else if (!ledgerFor(live.id).closed.has(displayedInteraction.id)
+            && orderedExtensionRequests(live)[0]?.id === displayedInteraction.id) {
+            setNotice(response.error || t('chat.extensionInteractionFailed'));
+          }
         }} t={t} />}
 
       {!currentSession.draft && (
@@ -1842,7 +2036,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             </section>
           ))}
           <button className="clear-queues" onClick={() => void clearAgentQueue(currentRun.id).then(result => {
-            if (result.success && result.data) setRun(currentSession.id, result.data);
+            if (result.success && result.data && interactionEpochRef.current === interactionEpoch) acceptInteractionSnapshot({ sessionId: currentSession.id, lastSequence: result.data.lastSequence, run: result.data });
           })}>{t('chat.clearQueues')}</button>
         </div>
       )}
@@ -1942,7 +2136,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           }}
           placeholder={t('chat.inputPlaceholder', { provider: activeProviderType })}
           aria-label={t('chat.inputLabel')}
-          autoFocus
+          autoFocus={!displayedInteraction}
           rows={1}
           disabled={starting || busyCompacting}
         />

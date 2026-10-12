@@ -202,6 +202,7 @@ export const enLocale: LocalePlugin = {
     'chat.extensionCommandFailed': 'The extension command failed.',
     'chat.extensionInteractionFailed': 'The extension interaction could not be completed.',
     'chat.extensionInteraction.fields': 'Extension fields',
+    'chat.extensionInteraction.waiting': '{count} waiting',
     'chat.thinking': 'Thinking level',
     'chat.tools': 'Tools',
     'chat.toolsPreset': 'Tool preset',

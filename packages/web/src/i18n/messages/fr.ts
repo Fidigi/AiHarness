@@ -202,6 +202,7 @@ export const frLocale: LocalePlugin = {
     'chat.extensionCommandFailed': 'La commande d’extension a échoué.',
     'chat.extensionInteractionFailed': 'L’interaction de l’extension n’a pas pu aboutir.',
     'chat.extensionInteraction.fields': 'Champs de l’extension',
+    'chat.extensionInteraction.waiting': '{count} en attente',
     'chat.thinking': 'Niveau de réflexion',
     'chat.tools': 'Outils',
     'chat.toolsPreset': 'Préréglage des outils',

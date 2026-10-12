@@ -7,6 +7,7 @@ import type {
   AgentEvent,
   AgentRunSnapshot,
   AgentStateSnapshot,
+  ExtensionInteractionSnapshot,
   CustomModelDefinition,
   CustomProviderDefinition,
   EffectiveConfiguration,
@@ -420,6 +421,87 @@ export async function runExtensionCommand(
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Extension command failed' };
   }
+}
+
+/** Validate partial transport payloads before any declarative controls consume them. */
+function isInteraction(value: unknown): value is ExtensionInteractionSnapshot {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const request = value as Record<string, unknown>;
+  const optionsValid = (options: unknown) => options === undefined || (Array.isArray(options)
+    && options.every(option => option && typeof option === 'object'
+      && typeof option.value === 'string' && typeof option.label === 'string'));
+  return typeof request.id === 'string' && request.id.length > 0 && typeof request.title === 'string'
+    && typeof request.createdAt === 'string' && ['confirm', 'input', 'select', 'editor', 'custom'].includes(String(request.kind))
+    && ['message', 'placeholder', 'output'].every(key => request[key] === undefined || typeof request[key] === 'string')
+    && optionsValid(request.options) && (request.fields === undefined || (Array.isArray(request.fields)
+      && request.fields.every(field => field && typeof field === 'object' && typeof field.name === 'string'
+        && typeof field.label === 'string' && ['text', 'textarea', 'select', 'checkbox'].includes(field.type)
+        && (field.required === undefined || typeof field.required === 'boolean')
+        && (field.placeholder === undefined || typeof field.placeholder === 'string') && optionsValid(field.options))));
+}
+
+/** Explicit plural (including []) wins; only absent plural uses the legacy primary. */
+export function orderedExtensionRequests(run?: AgentRunSnapshot): ExtensionInteractionSnapshot[] {
+  if (!run || ['completed', 'failed', 'stopped'].includes(run.phase)) return [];
+  const requests = run.extensionRequests === undefined ? (run.extensionRequest ? [run.extensionRequest] : []) : run.extensionRequests;
+  if (!Array.isArray(requests)) return [];
+  const ordered = new Map<string, ExtensionInteractionSnapshot>();
+  for (const request of requests.slice(0, 16)) if (isInteraction(request)) ordered.set(request.id, request);
+  return [...ordered.values()];
+}
+
+export function reconcileInteractionSnapshot(run?: AgentRunSnapshot, closed: ReadonlySet<string> = new Set()): AgentRunSnapshot | undefined {
+  if (!run) return undefined;
+  const extensionRequests = orderedExtensionRequests(run).filter(request => !closed.has(request.id));
+  return { ...run, extensionRequests, extensionRequest: extensionRequests[0] };
+}
+
+/** Compare session-wide sequences, not just IDs: old runs and missing-run snapshots can be stale too. */
+export function isFreshInteractionSnapshot(snapshot: AgentStateSnapshot, current: AgentRunSnapshot | undefined, watermark: number): boolean {
+  return !(current && snapshot.run?.id === current.id && snapshot.run.lastSequence === current.lastSequence
+    && !['completed', 'failed', 'stopped'].includes(snapshot.run.phase)
+    && JSON.stringify(orderedExtensionRequests(snapshot.run).map(request => request.id)) !== JSON.stringify(orderedExtensionRequests(current).map(request => request.id)))
+    && Number.isSafeInteger(snapshot.lastSequence) && snapshot.lastSequence >= Math.max(watermark, current?.lastSequence ?? 0)
+    && (!snapshot.run || (snapshot.run.sessionId === snapshot.sessionId
+      && Number.isSafeInteger(snapshot.run.lastSequence) && snapshot.run.lastSequence >= 0 && snapshot.run.lastSequence <= snapshot.lastSequence
+      && (snapshot.run.id !== current?.id || snapshot.run.lastSequence >= current.lastSequence)))
+    && !(current && snapshot.run && current.id !== snapshot.run.id && snapshot.lastSequence <= current.lastSequence)
+    && !(current && ['completed', 'failed', 'stopped'].includes(current.phase)
+      && snapshot.run?.id === current.id && !['completed', 'failed', 'stopped'].includes(snapshot.run.phase));
+}
+
+export function extensionInteractionChanges(run: AgentRunSnapshot, data: unknown, closed: ReadonlySet<string> = new Set()): Partial<AgentRunSnapshot> {
+  const event = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+  let requests = orderedExtensionRequests(run);
+  if (event.action === 'request' && isInteraction(event.request) && !closed.has(event.request.id)
+    && !['completed', 'failed', 'stopped'].includes(run.phase)) {
+    const request = event.request;
+    const index = requests.findIndex(entry => entry.id === request.id);
+    requests = index < 0 ? [...requests, request].slice(0, 16)
+      : requests.map((entry, position) => position === index ? request : entry);
+  } else if (event.action === 'resolved' && typeof event.requestId === 'string') {
+    requests = requests.filter(request => request.id !== event.requestId);
+  }
+  return { extensionRequests: requests, extensionRequest: requests[0] };
+}
+
+/** Same-ID replacements retain only values compatible with both the old and new schema. */
+export function interactionDraft(request: ExtensionInteractionSnapshot, previous?: ExtensionInteractionSnapshot, value?: unknown): unknown {
+  const same = request.id === previous?.id && request.kind === previous.kind;
+  if (request.kind === 'custom') {
+    const values = same && value && typeof value === 'object' ? value as Record<string, unknown> : {};
+    return Object.fromEntries((request.fields ?? []).map(field => {
+      const old = previous?.fields?.find(entry => entry.name === field.name);
+      const compatible = same && old?.type === field.type;
+      const draft = compatible ? values[field.name] : undefined;
+      return [field.name, field.type === 'checkbox' ? draft === true
+        : field.type === 'select' ? field.options?.some(option => option.value === draft) ? draft
+          : field.required ? field.options?.[0]?.value ?? '' : ''
+          : typeof draft === 'string' ? draft : ''];
+    }));
+  }
+  if (request.kind === 'select') return same && request.options?.some(option => option.value === value) ? value : request.options?.[0]?.value ?? '';
+  return same && typeof value === 'string' ? value : '';
 }
 
 export async function respondToExtensionInteraction(

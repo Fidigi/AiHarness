@@ -11,7 +11,7 @@ import {
   uploadFiles,
 } from '../services/api';
 import { useI18n } from '../hooks/useI18n';
-import { useSessionStore } from '../store/session-store';
+import { getSessionRecord, useSessionStore } from '../store/session-store';
 import MarkdownContent from './MarkdownContent';
 import { linkedDirectoryMessages } from './linked-directory-messages';
 import LinkedDirectoryBoundary from './LinkedDirectoryBoundary';
@@ -75,7 +75,7 @@ function FileNode({ entry, cwd, depth, onOpen, onMention, onLinkedDirectory, sho
 function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; onRequestClose?: () => void }) {
   const workspace = useSessionStore(state => state.workspace);
   const activeSessionId = useSessionStore(state => state.activeSessionId);
-  const draft = useSessionStore(state => activeSessionId ? state.drafts[activeSessionId] ?? '' : '');
+  const draft = useSessionStore(state => activeSessionId ? getSessionRecord(state.drafts, activeSessionId) ?? '' : '');
   const setDraft = useSessionStore(state => state.setDraft);
   const { t, locale } = useI18n();
   const location = useLocation();

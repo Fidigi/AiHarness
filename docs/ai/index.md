@@ -16,7 +16,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~320 lines |
 | QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
 | Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~210 lines |
-| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~180 lines |
+| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~190 lines |
 | Static Demonstration | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
 | Linked-Directory Consent | [topics/linked-directories.md](./topics/linked-directories.md) | ~66 lines |
 | Security & Trust | [`topics/security.md`](./topics/security.md) | ~200 lines |

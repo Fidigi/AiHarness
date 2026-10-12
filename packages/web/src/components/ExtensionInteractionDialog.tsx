@@ -64,7 +64,7 @@ export default function ExtensionInteractionDialog({ request, waitingCount, onRe
     setSubmitting(true);
     try { await onResolve(response); } finally { if (mounted.current && activeRequest.current === key) { pendingSubmit.current = false; setSubmitting(false); } }
   };
-  useFocusTrap(true, dialogRef, () => { void resolve({ cancelled: true }); }, restoreFocusRef, avoidKeyboard, canRestoreFocus, canFocusInitially);
+  useFocusTrap(true, dialogRef, () => { void resolve({ cancelled: true }); }, restoreFocusRef, avoidKeyboard, canRestoreFocus, canFocusInitially, JSON.stringify([request.id, request.kind]));
   return <div className="modal-overlay extension-interaction-overlay" onMouseDown={event => {
     if (!submitting && event.target === event.currentTarget) void resolve({ cancelled: true });
   }}>
@@ -162,6 +162,7 @@ function useFocusTrap(
   avoidKeyboard = false,
   canRestoreFocus?: () => boolean,
   canFocusInitially?: () => boolean,
+  headIdentity?: string,
 ): void {
   const escapeHandler = useRef(onEscape);
   escapeHandler.current = onEscape;
@@ -170,6 +171,9 @@ function useFocusTrap(
   const initialAllowed = useRef(canFocusInitially);
   initialAllowed.current = canFocusInitially;
   const cancelReturn = useRef<(() => void) | undefined>(undefined);
+  const editableIntent = useRef(false);
+  const editableHead = useRef(headIdentity);
+  if (editableHead.current !== headIdentity) { editableHead.current = headIdentity; editableIntent.current = false; }
   useLayoutEffect(() => {
     if (!active) return;
     cancelReturn.current?.();
@@ -177,11 +181,11 @@ function useFocusTrap(
     const fallback = restoreFocus?.current;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
     let newerFocus = false;
-    let editableIntent = false;
+    editableIntent.current = false;
     const rememberEditing = (event: FocusEvent) => {
       if (!(event.target instanceof HTMLElement)) return;
-      if (!dialog?.contains(event.target)) editableIntent = false;
-      else if (event.target.matches('textarea, input:not([type="checkbox"]):not([type="radio"]), [contenteditable="true"]')) editableIntent = true;
+      if (!dialog?.contains(event.target)) editableIntent.current = false;
+      else if (event.target.matches('textarea, input:not([type="checkbox"]):not([type="radio"]), [contenteditable="true"]')) editableIntent.current = true;
     };
     // Coarse pointers suppress unsolicited keyboard focus, not restoration of manual editing.
     document.addEventListener('focusin', rememberEditing, true);
@@ -236,7 +240,7 @@ function useFocusTrap(
           && !element.matches(':disabled') && !element.closest('[inert], [aria-hidden="true"]') && element.getClientRects().length > 0);
         const wasComposerSend = previousFocus?.matches('.composer-controls button[type="submit"]');
         const target = available(previousFocus) && !wasComposerSend ? previousFocus : fallback;
-        if (!available(target) || (avoidKeyboard && !editableIntent && target?.matches('input, textarea, [contenteditable="true"]'))) return;
+        if (!available(target) || (avoidKeyboard && !editableIntent.current && target?.matches('input, textarea, [contenteditable="true"]'))) return;
         const otherModal = [...document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"], [role="alertdialog"]')]
           .some(modal => modal.isConnected && modal.getClientRects().length > 0 && !modal.contains(target ?? null));
         if (!otherModal) target?.focus({ preventScroll: true });
