@@ -1,4 +1,10 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
+
+// Relative conversation ages must not move every day in visual baselines.
+// Freeze Date only: browser timers, animations and network ordering stay real.
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-01T12:00:00.000Z'));
+});
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { mcpImportPreviewFixture, mcpStateInventory } from './fixtures/mcp';
 
@@ -533,6 +539,13 @@ test.describe('Régression visuelle des historiques paginés', () => {
         : page.locator('.chat-toolbar-actions');
       await actions.getByRole('button', { name: 'Conversation map' }).click();
       await expect(page.getByLabel('Conversation map')).toContainText('160 of 180 loaded');
+      // Role prefixes remain accessible, not extra grid cells that displace previews.
+      expect(await page.locator('.minimap-entry').evaluateAll(entries => entries.every(entry => {
+        const preview = entry.querySelector('small');
+        const prefix = entry.querySelector('.sr-only');
+        return preview && prefix && getComputedStyle(prefix).position === 'absolute'
+          && preview.getBoundingClientRect().width > entry.getBoundingClientRect().width / 2;
+      }))).toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.evaluate(() => document.fonts.ready);
       await expect(page).toHaveScreenshot(`history-minimap-${scenario.name}.png`, {
@@ -576,16 +589,9 @@ test.describe('Régression visuelle des métadonnées de message', () => {
       const imageWarning = page.getByRole('alert').filter({ hasText: 'may not support images' });
       await imageWarning.getByRole('button', { name: 'Close' }).click();
       await expect(imageWarning).toBeHidden();
-      await page.locator('.message.assistant .message-content p').first().evaluate(element => {
-        const range = document.createRange();
-        range.selectNodeContents(element);
-        const selection = window.getSelection();
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-        element.closest('.messages-container')?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-      });
-      await expect(page.getByRole('toolbar', { name: 'Selected text actions' })).toBeVisible();
-      await expect(page.getByRole('img', { name: 'visual-attachment.svg' })).toBeVisible();
+      const attachment = page.getByRole('img', { name: 'visual-attachment.svg' });
+      await expect(attachment).toBeVisible();
+      await attachment.evaluate(element => (element as HTMLImageElement).decode());
       const metadata = page.locator('.message.assistant .message-meta');
       await expect(metadata).toContainText('mock-rich-model');
       await expect(metadata).toContainText('$0.0123');
@@ -593,6 +599,23 @@ test.describe('Régression visuelle des métadonnées de message', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);
+      // Selection coordinates must be measured after image/font/composer layout,
+      // not before an attachment-triggered scroll moves the selected paragraph.
+      const paragraph = page.locator('.message.assistant .message-content p').first();
+      await paragraph.scrollIntoViewIfNeeded();
+      await paragraph.evaluate(element => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        element.closest('.messages-container')?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      });
+      const selectionToolbar = page.getByRole('toolbar', { name: 'Selected text actions' });
+      await expect(selectionToolbar).toBeVisible();
+      const selectedTop = await page.evaluate(() => window.getSelection()!.getRangeAt(0).getBoundingClientRect().top);
+      const toolbarBox = (await selectionToolbar.boundingBox())!;
+      expect(toolbarBox.y + toolbarBox.height).toBeLessThanOrEqual(selectedTop);
       await expect(page).toHaveScreenshot(`message-metadata-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });

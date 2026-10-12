@@ -1,6 +1,6 @@
 import { mkdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
 
 test('real extension runtime validates declarative responses and resumes or cancels through the lazy form', async ({ page }) => {
   await page.goto('/');

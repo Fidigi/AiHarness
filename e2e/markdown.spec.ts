@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 
 const userText = '## Typed lines\n\nFirst line\nSecond line\n\n1. Question\nA. Option one\nB. Option two\n2. Next question\n\n**Membership $20/mo**\nWaives the $6 fee. Formula: $2 + 2 = 4$.\n\nhttps://example.com/docs，后面 5~7U';

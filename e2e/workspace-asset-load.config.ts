@@ -6,6 +6,7 @@ export default defineConfig({
   ...base,
   testDir: '.',
   testMatch: 'workspace-asset-load.spec.ts',
+  testIgnore: [],
   // Network fault tests must not be hidden by a PWA controller/cache reload.
   use: { ...base.use, serviceWorkers: 'block' },
   webServer: [servers[0], {

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 
 test.describe('Explorer, Git et viewer', () => {

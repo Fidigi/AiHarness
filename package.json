@@ -20,7 +20,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:parity": "vitest run tests/functional-parity",
-    "test:e2e": "playwright test",
+    "test:e2e": "node .docker/e2e-suites.mjs",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write \"**/*.{ts,tsx,json,yml}\"",

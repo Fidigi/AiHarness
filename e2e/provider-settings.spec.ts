@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures/test-budget';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { installMockApi } from './fixtures/mock-api';

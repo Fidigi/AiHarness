@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 
 function providerSection(page: Page) {
@@ -265,6 +265,11 @@ test.describe('Conversation detached agent', () => {
     await page.getByRole('button', { name: 'Send' }).click();
     const notice = page.getByRole('alert').filter({ hasText: 'Provider unavailable' });
     await expect(notice).toBeVisible();
+    const failedState = await page.evaluate(async () => {
+      const response = await fetch('/api/agent/sessions/error-session/state?messageLimit=80');
+      return await response.json() as { run: { phase: string; error?: string } };
+    });
+    expect(failedState.run).toMatchObject({ phase: 'failed', error: 'Provider unavailable' });
     await page.getByRole('button', { name: 'Settings' }).click();
     await expect(notice).toBeVisible();
     await notice.hover();

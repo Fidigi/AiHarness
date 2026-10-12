@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
 
 // Actual Vite -> Express -> Core discovery/publication. No intercepted API.
 test('real filtered skill groups publish Markdown, preserve hidden files and continue after an invalid sibling', async ({ page }) => {

@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { mcpStateInventory } from './fixtures/mcp';
 

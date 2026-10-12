@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './fixtures/test-budget';
 import type { AgentEvent, AgentRunSnapshot, AgentStateSnapshot, ExtensionInteractionSnapshot } from '@ai-harness/core';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 
@@ -341,6 +341,28 @@ test('exact queue: duplicate snapshot preserves draft and pending submission gua
 });
 
 // Append-only: rejected event IDs cannot poison the watermark or write transcript state.
+test('foreign lifecycle discovery cannot admit its run or poison the current queue watermark', async ({ page }) => {
+  await preferences(page);
+  const api = await queueFixture(page, initialRun([interaction('first')]));
+  let sent = false;
+  await page.route(`**/api/agent/sessions/${sessionId}/events*`, async route => {
+    let body = `event: connection.ready\ndata: ${JSON.stringify({ snapshot: api.snapshot(), reset: true })}\n\n`;
+    if (!sent) {
+      sent = true;
+      const events: AgentEvent[] = [{ protocolVersion: 1, id: `${sessionId}:200`, sessionId,
+        runId: 'foreign-run', sequence: 200, timestamp: date, type: 'run.started', data: { cwd: '/workspace', provider: 'mock' } },
+      { protocolVersion: 1, id: `${sessionId}:2`, sessionId,
+        runId: 'queue-run', sequence: 2, timestamp: date, type: 'extension.ui',
+        data: { action: 'request', request: interaction('second') } }];
+      for (const event of events) body += `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+    }
+    await route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+  });
+  await page.goto(`/chat/${sessionId}?cwd=%2Fworkspace`);
+  await expect(page.getByRole('dialog')).toHaveAccessibleName('Request first');
+  await expect(page.getByRole('dialog').getByRole('status')).toHaveText('1 waiting');
+});
+
 test('exact queue: foreign future event is inert before watermark and transcript admission', async ({ page }) => {
   await preferences(page);
   const api = await queueFixture(page, initialRun([interaction('first')]));

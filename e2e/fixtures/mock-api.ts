@@ -1982,6 +1982,9 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
         if (options.holdAgentRun) {
           records = ready;
         } else if (streamError) {
+          // Core stores the redacted error before publishing failure; canonical
+          // recovery must not replace the live reason with an empty snapshot.
+          run.error = streamError;
           run.phase = 'failed';
           run.lastSequence = 2;
           records = ready + `id: ${sessionId}:2\nevent: run.failed\ndata: ${JSON.stringify({ protocolVersion: 1, id: `${sessionId}:2`, sequence: 2, sessionId, runId: run.id, type: 'run.failed', timestamp: DEFAULT_DATE, data: { message: streamError } })}\n\n`;

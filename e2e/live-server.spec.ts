@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/test-budget';
 
 async function trustActiveWorkspace(page: Page): Promise<void> {
   const trustWarning = page.getByRole('button', { name: /Project not trusted/i });
@@ -17,7 +17,7 @@ test.describe('Intégration navigateur avec le vrai serveur', () => {
     await expect(page.locator('.workspace-button small')).not.toBeEmpty();
     await trustActiveWorkspace(page);
 
-    await page.getByRole('button', { name: 'New chat' }).click();
+    await page.getByRole('complementary', { name: 'Main navigation' }).getByRole('button', { name: 'New chat', exact: true }).click();
     await page.getByPlaceholder(/Type your message/).fill('real server persistence check');
     await page.getByRole('button', { name: 'Send' }).click();
 
@@ -33,6 +33,7 @@ test.describe('Intégration navigateur avec le vrai serveur', () => {
 
   test('utilise un vrai PTY et refuse une traversée de fichiers', async ({ page }) => {
     await page.goto('/');
+    await expect(page.locator('.workspace-button small')).not.toBeEmpty();
     await trustActiveWorkspace(page);
     const workspace = await page.request.get('/api/workspaces/default').then(response => response.json()) as { cwd: string };
     const traversal = await page.request.get(`/api/files?cwd=${encodeURIComponent(workspace.cwd)}&path=${encodeURIComponent('../../etc')}`);
@@ -48,10 +49,10 @@ test.describe('Intégration navigateur avec le vrai serveur', () => {
     });
     expect(uploaded.status()).toBe(201);
     await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
-    await expect(page.getByRole('complementary', { name: 'Workspace explorer' })).toBeVisible();
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent('aih-open-file', {
-      detail: { path: 'aih-live-upload.txt', tab: 'source' },
-    })));
+    const explorer = page.getByRole('complementary', { name: 'Workspace explorer' });
+    await expect(explorer).toBeVisible();
+    // Exercise the mounted file row, not a window event racing lazy hydration.
+    await explorer.getByRole('button', { name: /^📄 aih-live-upload\.txt(?:\s|$)/ }).click();
     await expect(page.locator('.file-viewer')).toContainText('LIVE_FILE_OK');
 
     await page.getByRole('button', { name: 'Open workspace terminal' }).click();

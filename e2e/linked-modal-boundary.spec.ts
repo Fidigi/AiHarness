@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './fixtures/test-budget';
 import AxeBuilder from '@axe-core/playwright';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 // Real emitted Web and compiled launcher. API control is ONLY for asset lifetime;

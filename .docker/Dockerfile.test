@@ -1,9 +1,9 @@
 # =============================================================================
 # Dockerfile de test - AiHarness
-# Exécute la suite avec Node.js 26 et npm 12.1 par défaut.
+# Exécute la suite avec Node.js 24 LTS figé et npm 12.1 par défaut.
 # =============================================================================
 
-ARG NODE_VERSION=26
+ARG NODE_VERSION=24.15.0
 ARG NPM_VERSION=12.1.0
 FROM node:${NODE_VERSION}-bookworm-slim AS base
 ARG NPM_VERSION

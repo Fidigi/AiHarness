@@ -8,6 +8,7 @@ export default defineConfig({
   ...base,
   testDir: '.',
   testMatch: 'interaction-single-asset-load.spec.ts',
+  testIgnore: [],
   // Isolate chunk network failures from the PWA's first-install controller reload.
   use: { ...base.use, serviceWorkers: 'block' },
   webServer: [servers[0], {

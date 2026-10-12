@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 
 for (const initialTitle of ['', 'Previously listed title']) {
@@ -11,7 +11,7 @@ for (const initialTitle of ['', 'Previously listed title']) {
       steerQueue: [], followUpQueue: [], lastSequence: 0 };
     const snapshot = { sessionId: id, run, lastSequence: 0 };
     let first = true;
-    await page.route(`**/api/agent/sessions/${id}/state`, route => route.fulfill({
+    await page.route(`**/api/agent/sessions/${id}/state?*`, route => route.fulfill({
       contentType: 'application/json', body: JSON.stringify({ ...snapshot, session: refreshed }),
     }));
     await page.route(`**/api/agent/sessions/${id}/events*`, async route => {

@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './fixtures/test-budget';
 import type { AgentRunSnapshot, ExtensionInteractionSnapshot } from '@ai-harness/core';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 

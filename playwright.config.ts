@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import os from 'node:os';
 import path from 'node:path';
+import { dedicatedSpecs } from './.docker/e2e-suites.mjs';
 
 const liveDataDir = path.join(os.tmpdir(), `aiharness-playwright-${process.pid}`);
 
@@ -16,6 +17,8 @@ const liveDataDir = path.join(os.tmpdir(), `aiharness-playwright-${process.pid}`
  */
 export default defineConfig({
   testDir: './e2e',
+  // npm test:e2e runs these files in their owning preview/static configurations.
+  testIgnore: dedicatedSpecs.map(file => `**/${file}`),
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */

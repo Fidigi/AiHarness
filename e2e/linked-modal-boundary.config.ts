@@ -3,7 +3,7 @@ import base from '../playwright.config';
 import os from 'node:os';
 import path from 'node:path';
 export default defineConfig({
-  ...base, testDir: '.', testMatch: ['linked-modal-boundary.spec.ts', 'linked-directories.spec.ts'],
+  ...base, testDir: '.', testMatch: ['linked-modal-boundary.spec.ts', 'linked-directories.spec.ts'], testIgnore: [],
   use: { ...base.use, serviceWorkers: 'block' },
   webServer: {
     command: 'node packages/server/dist/web-cli.js --port 3080 --no-open', cwd: process.cwd(),

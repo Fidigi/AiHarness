@@ -46,8 +46,9 @@ async function invoke(
       reject(new Error('CLI invocation timed out.'));
     }, 15_000);
     child.once('error', reject);
-    child.once('close', value => {
+    child.once('close', (value, signal) => {
       clearTimeout(timeout);
+      if (signal) console.error('CLI_SIGNAL_EXIT', JSON.stringify({ signal, node: process.version, argumentCount: args.length }));
       resolve(value);
     });
   });

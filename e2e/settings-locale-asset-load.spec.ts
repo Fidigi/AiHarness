@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 
 const asset = /\/assets\/settings-locale-[^/]+\.js$/;

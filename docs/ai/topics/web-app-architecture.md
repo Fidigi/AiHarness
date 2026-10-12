@@ -52,6 +52,8 @@ local draft -> effective configuration -> POST /api/agent/runs
 
 `ChatView` may render one temporary streamed assistant message. Terminal events must replace it with canonical history without duplicates. Reconnection restores run queues, retries, partial text, pending extension interaction, and sequence position.
 
+Durable transcript publication is separate from run/queue setter admission. `canSyncCanonicalSession` requires a private session-bound canonical witness, current collection generation/epoch/workspace/active-session identity and a nonstale sequence. Same-run SSE advancement may retire the setter without invalidating that transcript; known terminal recovery never reopens an absent run. Readiness resets/gaps trigger a fresh guarded GET because readiness contains no messages. A foreign `run.started` is only a discovery hint: its payload/version is not consumed, and fresh canonical state must independently name that exact run. Only the matching terminal settlement can pass an already-terminal event fence. Failed admitted state publishes the same stable error-notice ID as live failure, including when failure precedes subscription.
+
 Session title metadata is presentation data, not SSE lifetime identity: a canonical title refresh must not restart ChatView’s subscription or discard a valid notice. The three existing attention/completion/failure Notification sites read the latest canonical title already in the store for the subscribed session at dispatch, with `AiHarness` for an absent/empty title. Existing session/cwd replacement and unmount still withdraw owned transport; this is not a new full-address SSE epoch.
 
 ## History Edits and Live Settings
@@ -136,12 +138,15 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 - E2E snapshots comprise 206 PNGs: 178 earlier accepted baselines, twelve mobile keyboard, eight linked-directory, four provider-rename and four interaction-queue additions. This includes the MCP state/import-preview matrix in Light/Dark desktop/mobile layouts; optional form extraction adds no PNGs and the independent static demo has separate captures.
 - Performance tests protect cache bounds, virtualization, and lazy loading.
 
-## Experimental Generic Progress Checkpoint — Not Qualified
+## Generic Progress Regression Scope — Audit Remains Partial
 
-`components/{ToolProgressBoundary,ToolProgressCard}.tsx` and `tool-progress-{state,messages,card.css}` retain a WIP browser adapter: bounded inert host-issued v1 progress, optional JS/CSS, distinct code-mode rendering and no nested usage/store authority. Docker typing/lint/build, 190 files/1,917 units and five Node tests pass. Whole `e2e/tool-progress.spec.ts` fails: development 13 failed/one passed; built preview 14 failed, explicit `node --no-maglev`, one worker/zero retries. Terminal/reload, readiness catch-up, lazy assets and captures are unresolved; these outcomes are not a passing union or crash diagnosis. Its 24 PNGs are provisional expectations, not accepted product baselines. Preserve the original tests and evidence; no audit closure or completed-feature claim.
+`components/{ToolProgressBoundary,ToolProgressCard}.tsx` and `tool-progress-{state,messages,card.css}` retain bounded inert host-issued v1 progress, optional JS/CSS, distinct code-mode rendering and no nested usage/store authority. The whole 14-case `e2e/tool-progress.spec.ts` protects genuine live phases, durable terminal/reload and readiness recovery, legacy/code-mode separation and lazy-asset faults; its owning config blocks service workers so faults cannot be hidden by PWA caching/reloads. Historical development 13-fail/one-pass and built-preview 14-fail checkpoints remain retained failures, not a passing union. Two mobile-light expectations were reviewed against genuine captures; no mask, assertion, timeout or tolerance was relaxed. Green regression execution does not close the wider audit or certify physical devices/live providers. Explicit browser `node --no-maglev` is not a diagnosis of historical default-engine crashes.
 
 ## Associated Tests
 
+- `packages/web/src/store/canonical-session-sync.test.ts` — private session binding, fresh same-run/known-terminal transcript publication without setter authority, stale/foreign/deleted/generation and identity-ABA rejection
+- `.docker/e2e-suites.test.mjs`, `tests/e2e-budget.test.ts` — exhaustive owning-host dispatch, retained sibling failures/artifacts, selected demo base rebuild ordering and real quota-window scheduling; see the canonical workflow in `project-map.md`
+- `e2e/visual.spec.ts` checks that accessible minimap role prefixes are out of grid flow and previews retain their wide cell; missing previews are fixed in CSS, not approved as new screenshots.
 - `packages/web/src/hooks/useMobileKeyboard.test.ts` and `packages/web/src/hooks/mobileKeyboardStyles.test.ts` — geometry, tuple identity, listener/frame ownership and bounded stylesheet lifecycle
 - `e2e/mobile-keyboard.spec.ts` — actual ChatView/MCP, touch/viewport emulation, native interaction fields through the optional renderer, retired sessions, asset failure/retry and compact IME/attachment/Stop; no physical-keyboard proof
 - `packages/web/src/components/extension-interaction-dialog.test.ts` — declarative fields/output, CSS allocation, abort/cached-reload contract and compatible draft projection
@@ -164,13 +169,13 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 - `packages/web/src/components/workspace-panel-boundary.test.ts` — local loading, retained failure/reload warning, bounded bilingual copy, keyed call site, urgent root router declaration, fallback-key address retirement and scoped styles
 - `packages/web/src/components/workspace-file-intent.test.ts` — show-before-dispatch order and unchanged reference, address-change and disconnected-origin suppression for the delayed Markdown link producer
 - `e2e/workspace-asset-load.spec.ts` with its production-preview config — actual pane JS/CSS delay/refusal, Close/Cancel/reload, retained/latest/commit-phase file intent and retired navigation; controlled API fixtures, not live file-authority proof
-- `e2e/live-server.spec.ts` — unchanged real browser-to-server file/viewer, traversal refusal, PTY and persisted mock-provider smoke paths
+- `e2e/live-server.spec.ts` — real browser-to-server file/viewer, traversal refusal, PTY and persisted mock-provider smoke paths; workspace readiness and the actual uploaded-file row replace timing-sensitive synthetic file-open dispatch
 
 ## Common Changes
 
 ### Change chat or session state
 
-Update API parsing, store hydration/windows, `ChatView`, detached protocol fixtures, reconnection/duplicate tests, and long-history behavior together. Preserve urgent router updates alongside external-store identity and the unchanged real-file/PTY guard; metadata or timing changes must not retire a valid intent behind an already canonical URL.
+Update API parsing, store hydration/windows, `ChatView`, detached protocol fixtures, reconnection/duplicate tests, and long-history behavior together. Preserve urgent router updates alongside external-store identity and the real-file/PTY assertions and security guard; metadata or timing changes must not retire a valid intent behind an already canonical URL.
 
 ### Change a visible surface
 

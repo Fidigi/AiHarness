@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/test-budget';
 import type { CodemodeCall, ToolSettings } from '@ai-harness/core';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 

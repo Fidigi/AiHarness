@@ -6,6 +6,7 @@ export default defineConfig({
   ...base,
   testDir: '.',
   testMatch: 'settings-locale-asset-load.spec.ts',
+  testIgnore: [],
   // Isolate real production asset faults from service-worker cache/reloads.
   use: { ...base.use, serviceWorkers: 'block' },
   webServer: [servers[0], {
