@@ -519,6 +519,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       providerName: startup.providerName,
       model: startupModel,
       systemPrompt: instructions.systemPrompt,
+      agentSettings: () => settingsResolution.settings,
       tools: toChatToolDefinitions(selectedTools),
       prepareDynamicTools: async (sessionId, signal) => {
         try {

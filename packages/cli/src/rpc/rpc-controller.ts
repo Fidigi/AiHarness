@@ -15,11 +15,13 @@ import {
   getPublishedModelMetadata,
   getSupportedThinkingLevels,
   normalizeProviderUsage,
+  resolveAgentCompactionSettings,
   resolveModelScope as resolveSharedModelScope,
   toProtocolModelDescriptor,
   truncateToolTail,
 } from '@ai-harness/core';
 import type {
+  AgentSettings,
   AiProvider,
   ChatToolDefinition,
   CredentialRedactionStream,
@@ -72,6 +74,8 @@ export interface RpcControllerContext {
   providerName: string;
   model?: string;
   systemPrompt?: string;
+  /** Trusted settings snapshot used when the active model changes. */
+  agentSettings?: () => AgentSettings;
   tools?: ChatToolDefinition[];
   /** Resolve session-scoped tools (for example persistent MCP tools) before each prompt. */
   prepareDynamicTools?(sessionId: string, signal: AbortSignal): Promise<RpcDynamicTools>;
@@ -395,6 +399,7 @@ export class RpcController {
       );
     }
 
+    this.refreshCompactionSettings();
     this.context.sessionManager.setAutoCompactionCallback(async (_sessionId, toCompact, _keptEntries, signal) => {
       const messages = toCompact.flatMap(entry => {
         const message = entryMessage(entry);
@@ -802,6 +807,7 @@ export class RpcController {
           }
           this.model = session.model ?? this.model;
           if (this.model) this.context.provider.setConfiguredModel(this.model);
+          this.refreshCompactionSettings();
           this.thinking = clampThinkingLevel(
             rpcThinkingLevel(session.thinking ?? this.thinking),
             this.availableThinkingLevels(),
@@ -1605,6 +1611,7 @@ export class RpcController {
     this.context.toolContext.provider = provider;
     this.context.toolContext.providerName = providerName;
     this.model = modelId;
+    this.refreshCompactionSettings();
     const previousThinking = this.thinking;
     this.thinking = clampThinkingLevel(
       this.thinking,
@@ -1618,6 +1625,15 @@ export class RpcController {
     if (this.thinking !== previousThinking) {
       await this.emit({ type: 'thinking_level_changed', level: this.thinking });
     }
+  }
+
+  private refreshCompactionSettings(): void {
+    if (!this.context.agentSettings) return;
+    this.context.sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
+      this.context.agentSettings(),
+      this.context.providerName,
+      this.model,
+    ));
   }
 
   private state(): Record<string, unknown> {

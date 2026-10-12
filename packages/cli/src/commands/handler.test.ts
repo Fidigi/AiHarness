@@ -12,6 +12,8 @@ import {
   EncryptedCredentialStore,
   ExtensionRegistry,
   JsonlSessionStore,
+  MockProvider,
+  type AgentSettings,
   ProviderCredentialService,
   SessionManager,
 } from '@ai-harness/core';
@@ -521,6 +523,55 @@ describe('/export command', () => {
   // ===================================================================
 
   describe('/model command', () => {
+    it('re-resolves exact model compaction overrides, resets defaults and preserves policy on invalid selection', async () => {
+      const ctx = handler.getContext();
+      ctx.agentSettings = () => ({ compaction: {
+        reserveTokens: 100, keepRecentTokens: 1_000,
+        modelOverrides: { 'mock/mock-model-v1': { reserveTokens: 200, keepRecentTokens: 10 } },
+      } });
+      await handler.execute('/model mock/mock-model-v1');
+      expect(manager.getCompactionSettings()).toEqual({ enabled: true, reserveTokens: 200, keepRecentTokens: 10 });
+      await handler.execute('/model missing/model');
+      expect(ctx.provider?.getConfiguredModel()).toBe('mock-model-v1');
+      expect(manager.getCompactionSettings().keepRecentTokens).toBe(10);
+      ctx.modelPatterns = ['mock/mock-model-v1', 'mock/mock-model'];
+      await handler.execute('/model cycle');
+      expect(ctx.provider?.getConfiguredModel()).toBe('mock-model');
+      expect(manager.getCompactionSettings()).toEqual({ enabled: true, reserveTokens: 100, keepRecentTokens: 1_000 });
+      const other = new MockProvider({ type: 'mock' as never, model: 'mock-model-v1' });
+      vi.spyOn(other, 'getProviderType').mockReturnValue('other');
+      ctx.providers.set('other', other);
+      await handler.execute('/provider other');
+      expect(ctx.provider?.getProviderType()).toBe('other');
+      expect(manager.getCompactionSettings().keepRecentTokens).toBe(1_000);
+    });
+
+    it('uses the latest settings snapshot for manual compaction targets without losing disabled thresholds', async () => {
+      let settings: AgentSettings = { compaction: { enabled: false, reserveTokens: 123, keepRecentTokens: 1_000 } };
+      const ctx = handler.getContext();
+      ctx.agentSettings = () => settings;
+      await handler.execute('/model mock-model-v1');
+      expect(manager.getCompactionSettings()).toEqual({ enabled: false, reserveTokens: 123, keepRecentTokens: 1_000 });
+      const session = await manager.create();
+      for (let index = 0; index < 4; index++) {
+        await manager.addMessage(session.id, { role: 'user', content: 'x'.repeat(80) }, { skipAutoCompaction: true });
+      }
+      expect(manager.requestCompaction(session.id)).toBeNull();
+      settings = { compaction: { keepRecentTokens: 30 } };
+      await handler.execute('/settings');
+      expect(manager.getCompactionSettings()).toEqual({ enabled: true, reserveTokens: 16_384, keepRecentTokens: 30 });
+      expect(manager.requestCompaction(session.id)?.keptEntries).toHaveLength(1);
+      settings = { compaction: { keepRecentTokens: 60 } };
+      await handler.execute('/settings');
+      expect(manager.requestCompaction(session.id)?.keptEntries).toHaveLength(2);
+    });
+
+    it('leaves explicitly configured manager policy untouched when no agent settings are supplied', async () => {
+      manager.setCompactionSettings({ enabled: false, reserveTokens: 3, keepRecentTokens: 7 });
+      await handler.execute('/model mock-model-v1');
+      expect(manager.getCompactionSettings()).toEqual({ enabled: false, reserveTokens: 3, keepRecentTokens: 7 });
+    });
+
     it('should list models for the active provider without error', async () => {
       await handler.execute('/model');
       expect(handler.isExiting()).toBe(false);

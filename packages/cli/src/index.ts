@@ -941,6 +941,7 @@ async function main(): Promise<void> {
       enabledToolNames: () => selectedTools().map(tool => tool.name),
       modelPatterns: effectiveModelSettings.modelPatterns,
       settingsInfo: () => formatAgentSettingsSummary(settingsResolution),
+      agentSettings: () => settingsResolution.settings,
       providers: configuredProviders,
       credentialService: providerRuntime.credentials,
       providerCredentialValues: providerRuntime.values,

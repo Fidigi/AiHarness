@@ -61,6 +61,80 @@ afterEach(async () => {
 });
 
 describe('CLI invocation contract', () => {
+  it('wires saved model compaction overrides through sequential real RPC commands', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-compaction-'));
+    const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-compaction-agent-'));
+    temporaryDirectories.push(cwd, agentDir);
+    const marker = path.join(cwd, 'policy.jsonl');
+    const extension = path.join(cwd, 'policy.mjs');
+    await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({ compaction: {
+      reserveTokens: 100, keepRecentTokens: 1_000,
+      modelOverrides: { 'mock/mock-model-v1': { reserveTokens: 200, keepRecentTokens: 30 } },
+    } }));
+    await writeFile(extension, `
+      import { appendFileSync } from 'node:fs';
+      export default api => api.registerCommand('policy', { description: 'Inspect test policy', handler: (_args, ctx) => {
+        appendFileSync(${JSON.stringify(marker)}, JSON.stringify(ctx.sessionManager.getCompactionSettings()) + '\\n');
+      } });
+    `);
+    const builtEntry = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
+    const child = spawn(process.execPath, [builtEntry,
+      '--approve', '--extension', extension, '--mode', 'rpc', '--no-session', '--model', 'mock/mock-model',
+      '--models', 'mock/mock-model,mock/mock-model-v1'], {
+      cwd, env: { ...process.env, HOME: path.join(cwd, 'home'), AI_HARNESS_AGENT_DIR: agentDir, NO_COLOR: '1' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stderr = '';
+    let pending = '';
+    let response: ((record: Record<string, unknown>) => void) | undefined;
+    child.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk; });
+    child.stdout.setEncoding('utf8').on('data', chunk => {
+      pending += chunk;
+      let newline: number;
+      while ((newline = pending.indexOf('\n')) >= 0) {
+        const record = JSON.parse(pending.slice(0, newline));
+        pending = pending.slice(newline + 1);
+        if (record.type === 'response') response?.(record);
+      }
+    });
+    const closed = new Promise<number | null>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        child.kill('SIGKILL');
+        reject(new Error(`RPC shutdown timeout: ${stderr}`));
+      }, 40_000);
+      child.once('error', error => { clearTimeout(timeout); reject(error); });
+      child.once('close', code => { clearTimeout(timeout); resolve(code); });
+    });
+    let sequence = 0;
+    const send = async (command: Record<string, unknown>): Promise<void> => {
+      const id = `policy-${++sequence}`;
+      const result = new Promise<Record<string, unknown>>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`RPC response timeout: ${stderr}`)), 10_000);
+        response = record => { clearTimeout(timer); resolve(record); };
+      });
+      child.stdin.write(JSON.stringify({ ...command, id }) + '\n');
+      expect(await result, stderr).toMatchObject({ id, success: true });
+    };
+    try {
+      await send({ type: 'prompt', message: '/policy' });
+      await send({ type: 'set_model', provider: 'mock', modelId: 'mock-model-v1' });
+      await send({ type: 'prompt', message: '/policy' });
+      await send({ type: 'cycle_model' });
+      await send({ type: 'prompt', message: '/policy' });
+      child.stdin.end();
+      expect(await closed, stderr).toBe(0);
+      expect(pending).toBe('');
+      expect((await readFile(marker, 'utf8')).trimEnd().split('\n').map(line => JSON.parse(line))).toEqual([
+        { enabled: true, reserveTokens: 100, keepRecentTokens: 1_000 },
+        { enabled: true, reserveTokens: 200, keepRecentTokens: 30 },
+        { enabled: true, reserveTokens: 100, keepRecentTokens: 1_000 },
+      ]);
+    } finally {
+      child.kill('SIGKILL');
+      await closed;
+    }
+  }, 45_000);
+
   it('prints help/version and rejects unknown options before startup', async () => {
     await expect(invoke(['--version'])).resolves.toMatchObject({ code: 0, stdout: '0.1.0\n', stderr: '' });
     const help = await invoke(['--help']);

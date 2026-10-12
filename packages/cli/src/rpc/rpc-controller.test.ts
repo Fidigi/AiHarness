@@ -104,6 +104,72 @@ function createController(responses = ['RPC response']): {
 }
 
 describe('RPC command controller', () => {
+  it('refreshes compaction policy on model selection, scoped cycling and saved-session switching', async () => {
+    const { controller, context } = createController();
+    context.agentSettings = () => ({ compaction: {
+      reserveTokens: 100, keepRecentTokens: 1_000,
+      modelOverrides: { 'mock/mock-model-v1': { reserveTokens: 200, keepRecentTokens: 10 } },
+    } });
+    context.scopedModels = [
+      { provider: 'mock', id: 'mock-model-v1' }, { provider: 'mock', id: 'mock-model' },
+    ];
+    const manager = context.sessionManager;
+    await controller.initialize();
+    expect(manager.getCompactionSettings()).toEqual({ enabled: true, reserveTokens: 100, keepRecentTokens: 1_000 });
+    await expect(controller.handle({ type: 'set_model', provider: 'mock', modelId: 'mock-model-v1' }))
+      .resolves.toMatchObject({ success: true });
+    expect(manager.getCompactionSettings()).toEqual({ enabled: true, reserveTokens: 200, keepRecentTokens: 10 });
+    await expect(controller.handle({ type: 'set_model', provider: 'mock', modelId: 'missing' }))
+      .resolves.toMatchObject({ success: false });
+    expect(manager.getCompactionSettings().keepRecentTokens).toBe(10);
+    await expect(controller.handle({ type: 'cycle_model' })).resolves.toMatchObject({ success: true });
+    expect(manager.getCompactionSettings()).toEqual({ enabled: true, reserveTokens: 100, keepRecentTokens: 1_000 });
+    const other = new MockProvider({ type: 'mock' as never, model: 'mock-model-v1' });
+    vi.spyOn(other, 'getProviderType').mockReturnValue('other');
+    context.providers = new Map([['mock', context.provider], ['other', other]]);
+    const saved = await manager.create({ model: 'mock-model-v1', providerConfig: { type: 'mock' as never } });
+    await expect(controller.handle({ type: 'switch_session', sessionPath: `${saved.id}.jsonl` }))
+      .resolves.toMatchObject({ success: true });
+    expect(manager.getCompactionSettings().keepRecentTokens).toBe(10);
+    const otherSession = await manager.create({ model: 'mock-model-v1', providerConfig: { type: 'other' as never } });
+    await expect(controller.handle({ type: 'switch_session', sessionPath: `${otherSession.id}.jsonl` }))
+      .resolves.toMatchObject({ success: true });
+    expect(manager.getCompactionSettings().keepRecentTokens).toBe(1_000);
+  });
+
+  it('applies the newly selected keep threshold to journal-backed automatic compaction, preserving session opt-out', async () => {
+    const { controller, context } = createController();
+    context.agentSettings = () => ({ compaction: {
+      keepRecentTokens: 1_000, modelOverrides: { 'mock/mock-model-v1': { keepRecentTokens: 30 } },
+    } });
+    await controller.initialize();
+    const manager = context.sessionManager;
+    const id = context.sessionId;
+    for (let index = 0; index < 4; index++) {
+      await manager.addMessage(id, { role: 'user', content: 'x'.repeat(80) }, { skipAutoCompaction: true });
+    }
+    const chat = vi.spyOn(context.provider, 'chat').mockResolvedValue({ content: 'Summary', model: 'mock-model-v1' });
+    expect(await manager.checkAndTriggerCompaction(id)).toBe(false);
+    await controller.handle({ type: 'set_model', provider: 'mock', modelId: 'mock-model-v1' });
+    await manager.update(id, { autoCompaction: false });
+    expect(await manager.checkAndTriggerCompaction(id)).toBe(false);
+    expect(chat).not.toHaveBeenCalled();
+    await manager.update(id, { autoCompaction: true });
+    expect(await manager.checkAndTriggerCompaction(id)).toBe(true);
+    expect(chat).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ model: 'mock-model-v1' }));
+    const compacted = (await manager.getRawEntries(id)).find(entry => entry.type === 'compaction');
+    expect(compacted).toMatchObject({ type: 'compaction', summary: 'Summary', provider: 'mock', model: 'mock-model-v1' });
+    expect(manager.getEffectiveContext(id)).toHaveLength(2); // Summary plus one retained message.
+  });
+
+  it('preserves host-configured compaction policy when the optional settings reader is absent', async () => {
+    const { controller, context } = createController();
+    context.sessionManager.setCompactionSettings({ enabled: false, reserveTokens: 3, keepRecentTokens: 7 });
+    await controller.initialize();
+    await controller.handle({ type: 'set_model', provider: 'mock', modelId: 'mock-model-v1' });
+    expect(context.sessionManager.getCompactionSettings()).toEqual({ enabled: false, reserveTokens: 3, keepRecentTokens: 7 });
+  });
+
   it('scavenges expired private bash output directories without following symlinks', async () => {
     const stale = await mkdtemp(path.join(os.tmpdir(), 'ai-harness-bash-'));
     const target = await mkdtemp(path.join(os.tmpdir(), 'aih-rpc-retention-target-'));

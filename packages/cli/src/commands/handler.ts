@@ -13,6 +13,7 @@ import {
   flattenModelCatalog,
   getSupportedThinkingLevels,
   isValidSessionId,
+  resolveAgentCompactionSettings,
   resolveModelReference,
   resolveModelScope,
   ProviderFactory,
@@ -21,6 +22,7 @@ import {
 } from '@ai-harness/core';
 import type {
   AgentProviderNetworkSettings,
+  AgentSettings,
   ExtensionRegistry,
   ExtensionRuntimeContext,
   McpConfigInventory,
@@ -128,6 +130,8 @@ export interface CommandContext {
   enabledToolNames?: () => readonly string[];
   modelPatterns?: readonly string[];
   settingsInfo?: () => string;
+  /** Read the current trusted settings snapshot, including after interactive reload. */
+  agentSettings?: () => AgentSettings;
   credentialService?: ProviderCredentialService;
   providerCredentialValues?: ReadonlyMap<string, string>;
   allowCredentialReveal?: boolean;
@@ -159,6 +163,7 @@ export interface CommandWorkspaceContext {
   enabledToolNames?: () => readonly string[];
   modelPatterns?: readonly string[];
   settingsInfo?: () => string;
+  agentSettings?: () => AgentSettings;
   providers?: Map<string, AiProvider>;
   credentialService?: ProviderCredentialService;
   providerCredentialValues?: ReadonlyMap<string, string>;
@@ -1490,6 +1495,7 @@ export class CommandHandler {
       enabledToolNames: workspace.enabledToolNames,
       modelPatterns: workspace.modelPatterns,
       settingsInfo: workspace.settingsInfo,
+      agentSettings: workspace.agentSettings,
       credentialService: workspace.credentialService,
       providerCredentialValues: workspace.providerCredentialValues,
       allowCredentialReveal: workspace.allowCredentialReveal,
@@ -1563,7 +1569,9 @@ export class CommandHandler {
       const commandContext = selectedCommand.name === 'credential' && commandName !== 'credential'
         ? { ...this.ctx, allowCredentialReveal: false }
         : this.ctx;
+      this.refreshCompactionSettings();
       const output = await selectedCommand.handler(args, commandContext);
+      this.refreshCompactionSettings();
       if (typeof output === 'string') {
         if (output) this.writeOutput(output);
       } else if (output.text) {
@@ -1574,6 +1582,15 @@ export class CommandHandler {
     } catch {
       this.ctx.terminal.showError('Command failed.');
     }
+  }
+
+  private refreshCompactionSettings(): void {
+    if (!this.ctx.agentSettings) return;
+    this.ctx.sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
+      this.ctx.agentSettings(),
+      this.ctx.provider?.getProviderType(),
+      this.ctx.provider?.getConfiguredModel(),
+    ));
   }
 
   private writeOutput(output: string, sensitive = false): void {
