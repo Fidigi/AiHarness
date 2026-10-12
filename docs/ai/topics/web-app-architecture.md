@@ -136,6 +136,10 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 - E2E snapshots comprise 206 PNGs: 178 earlier accepted baselines, twelve mobile keyboard, eight linked-directory, four provider-rename and four interaction-queue additions. This includes the MCP state/import-preview matrix in Light/Dark desktop/mobile layouts; optional form extraction adds no PNGs and the independent static demo has separate captures.
 - Performance tests protect cache bounds, virtualization, and lazy loading.
 
+## Experimental Generic Progress Checkpoint — Not Qualified
+
+`components/{ToolProgressBoundary,ToolProgressCard}.tsx` and `tool-progress-{state,messages,card.css}` retain a WIP browser adapter: bounded inert host-issued v1 progress, optional JS/CSS, distinct code-mode rendering and no nested usage/store authority. Docker typing/lint/build, 190 files/1,917 units and five Node tests pass. Whole `e2e/tool-progress.spec.ts` fails: development 13 failed/one passed; built preview 14 failed, explicit `node --no-maglev`, one worker/zero retries. Terminal/reload, readiness catch-up, lazy assets and captures are unresolved; these outcomes are not a passing union or crash diagnosis. Its 24 PNGs are provisional expectations, not accepted product baselines. Preserve the original tests and evidence; no audit closure or completed-feature claim.
+
 ## Associated Tests
 
 - `packages/web/src/hooks/useMobileKeyboard.test.ts` and `packages/web/src/hooks/mobileKeyboardStyles.test.ts` — geometry, tuple identity, listener/frame ownership and bounded stylesheet lifecycle

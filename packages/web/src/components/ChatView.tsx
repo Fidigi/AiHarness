@@ -14,6 +14,8 @@ import { usePreferences } from '../store/preferences';
 import MarkdownContent from './MarkdownContent';
 import { SubagentPanel } from './SubagentPanel';
 import { applyCodemodeProgress, codemodeDetails } from './codemode-state';
+import { applyToolProgress } from './tool-progress-state';
+import ToolProgressBoundary from './ToolProgressBoundary';
 import { composerKeySubmits } from './composer-submit';
 import { clipboardTextToMarkdown } from './markdown-paste';
 import { getMarkdownListContinuation } from './markdown-list-continuation';
@@ -776,7 +778,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       }
       if (event.type === 'tool.progress') {
         const tool = getStoredRun(useSessionStore.getState().runs, id)?.activeTool;
-        const next = applyCodemodeProgress(tool, event.data);
+        const next = applyToolProgress(applyCodemodeProgress(tool, event.data), event.data);
         if (next !== tool) patchRun({ activeTool: next });
       }
       if (event.type === 'tool.completed' || event.type === 'tool.failed') {
@@ -2041,6 +2043,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         </div>
       )}
 
+      {currentRun?.activeTool && currentRun.activeTool.name !== 'codemode' && <ToolProgressBoundary
+        key={`${currentRun.id}:${currentRun.activeTool.id}`}
+        value={currentRun.activeTool.progress} toolCallId={currentRun.activeTool.id} toolName={currentRun.activeTool.name} />}
       {currentRun?.activeTool?.name === 'codemode' && <Suspense fallback={null}><CodemodeCard running
         code={typeof (currentRun.activeTool.input as { code?: unknown })?.code === 'string'
           ? (currentRun.activeTool.input as { code: string }).code : undefined}
@@ -2273,6 +2278,9 @@ function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationF
             error={block.type === 'tool_result' && block.isError} t={t} />;
         })}
       </section>}
+      {message.role === 'tool' && message.name && message.name !== 'codemode' && message.toolCallId && <ToolProgressBoundary
+        key={`${message.id}:${message.toolCallId}`} terminal value={message.metadata?.toolProgress}
+        toolCallId={message.toolCallId} toolName={message.name} />}
       {((!codeDetails && message.content) || images.length > 0) && <section className="message-output" aria-label={message.role === 'assistant' ? t('chat.response') : undefined}>
         {message.content && renderMessageContent(message.content, message.role === 'user')}
         {images.map((block, index) => block.type === 'image' && (

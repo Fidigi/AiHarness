@@ -87,7 +87,7 @@ Le focus initial est admis avant la fin de l’import puis revérifié à la pre
 
 ### Contrat de la file du runtime détaché
 
-Le runtime détaché Core/Server prend désormais en charge plusieurs demandes en attente. Le client Web actuel conserve encore un état d’interaction unique, notamment le snapshot de compatibilité du premier élément ; les contrôles focus/durée de vie validés du formulaire unique ne prouvent pas la livraison de la file complète côté navigateur, du compteur ou des notifications.
+Le runtime détaché Core/Server prend en charge plusieurs demandes en attente. Le client Web présente la tête ordonnée et le compteur, avec notifications tenant compte de la restauration et gardes locales contre les réponses/découvertes périmées. Le formulaire avance sans restitution intermédiaire du focus. Ces gardes ne prouvent pas le règlement de Stop côté backend, les transactions générales de fork retardé ni le comportement sur appareils physiques.
 
 - `requestInteraction(request)` renvoie une Promise que l’on peut attendre. Le runtime détaché fournit aussi un `id` en lecture seule et les contrôles `update(replacement)` et `close()` ; les autres adaptateurs peuvent les omettre. Conservez le handle retourné : connaître un ID ne confère aucun droit de modification ou de fermeture.
 - `update` remplace entièrement l’affichage et le schéma sans changer l’ID, l’ordre d’admission, la date de création, l’AbortSignal ou l’échéance initiale. Les champs d’affichage omis disparaissent. La réponse suivante est validée contre le dernier schéma.
@@ -98,6 +98,12 @@ Le runtime détaché Core/Server prend désormais en charge plusieurs demandes e
 - Stop, fin du run, engagement réussi d’une génération exécutable/d’outils et nettoyage de sécurité après échec d’un changement de workspace annulent les demandes et révoquent les anciens callbacks. Lectures passives et candidates échouées dans le même workspace conservent la génération. Server capture les callbacks des commandes avant les attentes session/trust.
 
 Ces demandes sont en mémoire, sans durabilité après crash ni parité UI concurrente CLI/RPC. Le registre existant des runs terminés n’est pas nouvellement borné. L’accusé de réception de Stop ne vaut pas règlement durable : la comptabilité des outils interrompus est encore persistée avant le rejeu terminal.
+
+## Progression générique des outils expérimentale — WIP
+
+`ToolProgressBoundary`, `ToolProgressCard` et `tool-progress-state.ts` conservent un adaptateur navigateur en cours de développement pour la progression v1 émise par le runtime. Texte/détails restent inertes et bornés ; la progression personnalisée ne remplace pas la carte spécialisée code-mode et n’acquiert aucune autorité sur l’invocation, l’usage ou le store.
+
+Cette livraison **n’est pas qualifiée côté navigateur**. Compilation/build/lint Docker et les 1 917 tests unitaires plus cinq tests Node passent. Le fichier complet `e2e/tool-progress.spec.ts`, avec une vraie extension, compte 13 échecs/un succès en développement et 14 échecs en preview compilée, avec `node --no-maglev` explicite, un worker et aucun retry. Affichage terminal/rechargement, rattrapage après readiness, assets différés et captures proposées restent à résoudre. Les 24 PNG de progression sont des attentes de test provisoires, pas des références produit validées. Aucun snapshot ni assertion n’a été assoupli ; ce checkpoint WIP ne clôt aucun critère d’audit.
 
 ## Sécurité et limites du chargeur
 

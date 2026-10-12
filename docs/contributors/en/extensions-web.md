@@ -87,7 +87,7 @@ Initial focus is admitted before import completion and checked again on the rend
 
 ### Detached Host Queue Contract
 
-The detached Core/Server host now supports concurrent pending requests. The current Web client still has singular interaction state, including the first-entry compatibility snapshot; complete browser queue, waiting-count and attention delivery is not implied by the singular form's validated focus/lifetime controls.
+The detached Core/Server host supports concurrent pending requests. The Web client presents the ordered head and waiting count, with restoration-aware attention and browser-local stale-reply/discovery guards. The form advances without an intermediate focus return. These guards do not prove backend Stop settlement, general delayed fork transactions or physical-device behavior.
 
 - `requestInteraction(request)` returns an awaitable Promise. Detached hosts additionally issue readonly `id`, `update(replacement)` and `close()` controls; other adapters may omit them. Retain the returned handle: knowing an ID alone gives no update/close authority.
 - `update` fully replaces display/schema without changing ID, admission order, creation time, original AbortSignal or deadline. Omitted display fields are removed. The next response is checked against the latest schema.
@@ -98,6 +98,12 @@ The detached Core/Server host now supports concurrent pending requests. The curr
 - Stop, settlement, successful executable/tool-generation commits and failed-workspace safety clearing cancel requests and revoke old requesters. Passive reads and failed same-workspace candidates preserve the current generation. Server binds command requesters before session/trust awaits.
 
 These are in-memory requests, not crash-durable dialogs or concurrent CLI/RPC UI parity. The inherited completed-run registry is not newly bounded. Stop acknowledgement is not durable settlement: interrupted-tool accounting still persists before terminal replay.
+
+## Experimental Generic Tool Progress — WIP
+
+`ToolProgressBoundary`, `ToolProgressCard` and `tool-progress-state.ts` preserve a work-in-progress browser adapter for host-issued v1 progress. Text/details are inert and bounded; custom progress does not replace the specialized code-mode card or acquire invocation, usage or store authority.
+
+This delivery is **not browser-qualified**. Docker compilation/build/lint and all 1,917 unit plus five Node tests pass. The complete real-extension `e2e/tool-progress.spec.ts` has 13 failures/one pass in development and 14 failures against built preview, using explicit `node --no-maglev`, one worker and zero retries. Terminal display/reload, readiness catch-up, lazy assets and proposed captures remain unresolved. The 24 progress PNGs are provisional test expectations, not validated product baselines. No snapshots or assertions were weakened; no audit criterion is closed by this WIP checkpoint.
 
 ## Security and Loader Limits
 
