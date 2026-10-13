@@ -11,6 +11,7 @@ interface Stack {
   release: () => void;
 }
 const stacks = new WeakMap<Document, Stack>();
+const MODAL_SELECTOR = '[role="dialog"][aria-modal="true"], [role="alertdialog"]';
 function visible(layer: EscapeLayer): boolean {
   if (!layer.element) return true;
   const element = layer.element();
@@ -57,6 +58,10 @@ export function registerEscapeLayer(layer: EscapeLayer): () => void {
       // Shortcut recording is an explicit local key owner, not a navigation chord.
       if ((event.target as Element | null)?.closest?.('[data-shortcut-capture]')) return;
       const eligible = owned.layers.filter(visible);
+      const focusedModal = doc.activeElement?.closest<HTMLElement>(MODAL_SELECTOR);
+      // A newer host-owned modal may use its own listener rather than this registry.
+      // Yield its event; never cancel the registered dialog underneath or stop a run.
+      if (focusedModal && !eligible.some(owner => owner.kind === 'modal' && focusedModal.contains(owner.element?.() ?? null))) return;
       const modal = deepest(eligible.filter(candidate => candidate.kind === 'modal'));
       const menus = eligible.filter(candidate => candidate.kind === 'menu'
         && (!modal || modal.element?.()?.contains(candidate.element?.() ?? null)));
@@ -65,7 +70,7 @@ export function registerEscapeLayer(layer: EscapeLayer): () => void {
       if (event.repeat) { if (eligible.length) consume(); return; }
       if (local) { consume(); local.close(); return; }
       // A just-committed modal whose layout/effect has not registered yet blocks fallback.
-      if (doc.querySelector?.('[role="dialog"][aria-modal="true"], [role="alertdialog"]')) { consume(); return; }
+      if (doc.querySelector?.(MODAL_SELECTOR)) { consume(); return; }
       for (const kind of ['navigation', 'agent'] as const) {
         for (const candidate of [...eligible].reverse().filter(item => item.kind === kind)) {
           if (candidate.close() !== false) { consume(); return; }

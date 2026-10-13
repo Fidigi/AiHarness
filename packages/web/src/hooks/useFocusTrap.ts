@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react';
+import { useLayoutEffect, useRef, type RefObject } from 'react';
 import { currentEscapeModal, registerEscapeLayer } from '../services/escape-stack';
 
 const FOCUSABLE = [
@@ -28,7 +28,7 @@ export function useFocusTrap(
   const invocation = useRef<{ dialog: HTMLElement | null; target: HTMLElement | undefined } | null>(null);
   const cancelRestore = useRef<(() => void) | undefined>(undefined);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!active) return;
     // A new modal lifetime (including StrictMode replay) retires the old return.
     cancelRestore.current?.();

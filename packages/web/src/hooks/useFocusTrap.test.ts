@@ -5,6 +5,7 @@ const hooks = vi.hoisted(() => ({ effect: undefined as (() => void | (() => void
   refs: [] as { current: unknown }[], index: 0 }));
 vi.mock('react', () => ({
   useEffect: (effect: () => void | (() => void)) => { hooks.effect = effect; },
+  useLayoutEffect: (effect: () => void | (() => void)) => { hooks.effect = effect; },
   useRef: (value: unknown) => hooks.refs[hooks.index++] ?? (hooks.refs[hooks.index - 1] = { current: value }),
 }));
 

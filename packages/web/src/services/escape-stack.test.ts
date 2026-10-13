@@ -5,12 +5,14 @@ class ElementStub {
   isConnected = true;
   hidden = false;
   children: ElementStub[] = [];
+  modal?: ElementStub;
   contains(target: unknown): boolean { return target === this || this.children.some(child => child.contains(target)); }
   getClientRects() { return this.hidden ? [] : [{}]; }
-  closest() { return null; }
+  closest(selector: string) { return selector.includes('inert') ? null : this.modal ?? null; }
 }
 class DocumentStub extends EventTarget {
   defaultView = null;
+  activeElement?: ElementStub;
   pendingModal = false;
   capture = false;
   closest() { return this.capture ? {} : null; }
@@ -81,6 +83,25 @@ describe('capture Escape ownership', () => {
   it('blocks fallback while a committed modal has not registered its handler yet', () => {
     const doc = new DocumentStub(); doc.pendingModal = true; const agent = layer(doc, 'agent');
     expect(escape(doc).defaultPrevented).toBe(true); expect(agent.close).not.toHaveBeenCalled();
+  });
+  it('yields Escape to a focused newer unregistered host modal, without touching the dialog or agent beneath it', () => {
+    const doc = new DocumentStub(); const registered = new ElementStub();
+    const dialog = layer(doc, 'modal', registered); const agent = layer(doc, 'agent');
+    const foreign = new ElementStub(); foreign.modal = foreign; doc.activeElement = foreign;
+    const host = vi.fn(); doc.addEventListener('keydown', host);
+    expect(escape(doc).defaultPrevented).toBe(false); expect(host).toHaveBeenCalledTimes(1);
+    expect(dialog.close).not.toHaveBeenCalled(); expect(agent.close).not.toHaveBeenCalled();
+    // Focus on a registered older sibling must NOT veto the new registered owner.
+    doc.activeElement = registered; registered.modal = registered;
+    const top = layer(doc, 'modal', new ElementStub()); escape(doc);
+    expect(top.close).toHaveBeenCalledTimes(1); expect(dialog.close).not.toHaveBeenCalled();
+  });
+  it('does not mistake a focused suspended parent for a newer host modal while its registered child opens', () => {
+    const doc = new DocumentStub(); const parent = new ElementStub(); const child = new ElementStub();
+    parent.modal = parent; parent.children = [child]; doc.activeElement = parent;
+    const dialog = layer(doc, 'modal', child); const agent = layer(doc, 'agent');
+    expect(escape(doc).defaultPrevented).toBe(true); expect(dialog.close).toHaveBeenCalledTimes(1);
+    expect(agent.close).not.toHaveBeenCalled();
   });
   it('leaves explicit shortcut recording local, without navigating or stopping', () => {
     const doc = new DocumentStub(); doc.capture = true; const navigation = layer(doc, 'navigation'); const agent = layer(doc, 'agent');
