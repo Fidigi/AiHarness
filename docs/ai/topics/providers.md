@@ -23,6 +23,7 @@ CLI/Web runtime -> streamChat -> normalized response and usage
 | File | Responsibility |
 |---|---|
 | `packages/core/src/providers/index.ts` | `AiProvider`, factory, built-ins, bounded payloads/streams, OpenAI Responses SSE/WebSocket transport, discovery, retry and usage normalization |
+| `packages/core/src/providers/anthropic-thinking.ts` | Per-call numeric/adaptive request policy for the explicitly qualified published Anthropic profile |
 | `packages/core/src/providers/thinking-budgets.ts` | Public readonly budget type, inert per-turn copies and conservative numeric-dialect bounds |
 | `packages/core/src/providers/provider-endpoints.ts` | Strict based-path discovery endpoint normalization |
 | `packages/core/src/providers/provider-network.ts` | Shared HTTP proxy, request/idle/connect deadlines, bounded retry and cached WebSocket leases |
@@ -64,7 +65,19 @@ Core exports readonly `ThinkingBudgets` for `ChatOptions` and `StreamProviderTur
 
 Anthropic chat/stream use the selected override, clamped to 1,024–32,768, omit temperature with enabled thinking and preserve the existing `max_tokens >= budget + 1024` expansion. The old invalid 512-token minimal default consequently becomes 1,024. Gemini/Vertex share one body builder: 2.5-Pro budgets clamp to 128–32,768, 2.5-Flash to 0–24,576, and other model names to 0–8,192. These are conservative existing-dialect ceilings, not complete model capability discovery. Missing overrides retain defaults; direct Core `xhigh`/`max` keep their distinct legacy defaults, while CLI capability clamping may instead select `high`. Absent/off thinking is not enabled by a budget. Effort-only APIs do not consume numeric overrides.
 
-This does not implement adaptive Anthropic/Gemini dialects, complete per-model maps/defaults, total-token spending limits, or a new Web/server settings path. Owning proofs: Core `providers/thinking-budgets.test.ts` captures real loopback HTTP chat/stream payloads and negative admission; CLI `cli/thinking-budgets-process.test.ts` covers emitted print/JSON/RPC hooks and HTTP, trust merge, genuine PTY reload and a strict outside-checkout public-declaration consumer. No live vendor credentials are used.
+This numeric setting does not implement complete per-model maps/defaults, total-token spending limits, or a new Web/server settings path. The separately qualified adaptive profile below does not consume numeric overrides. Owning proofs: Core `providers/thinking-budgets.test.ts` captures real loopback HTTP chat/stream payloads and negative admission; CLI `cli/thinking-budgets-process.test.ts` covers emitted print/JSON/RPC hooks and HTTP, trust merge, genuine PTY reload and a strict outside-checkout public-declaration consumer. No live vendor credentials are used.
+
+## Published Anthropic adaptive profile
+
+The exact published `claude-sonnet-4-6` ID now uses one Core policy in both chat and streaming requests. Enabled reasoning sends `thinking: { type: "adaptive" }` and `output_config.effort`, not `budget_tokens`. Capability clamping uses the existing shared metadata: minimal maps to low, low/medium/high remain themselves, max sends native max, and unsupported xhigh clamps upward to max. Explicit off sends `thinking: { type: "disabled" }`; an absent option stays absent. Temperature remains omitted while thinking is enabled.
+
+Numeric `thinkingBudgets` does not apply to this profile. Explicit `ChatOptions.maxTokens` remains exact. Without it, preserve the previous per-requested-level output ceilings: minimal/low 2,048; medium 5,120; high 9,216; xhigh 17,408; max 33,792. CLI/RPC already clamp xhigh to max before the provider call, so that path uses 33,792. This avoids silently reducing enabled adaptive calls to the constructor's 1,024-token default. Off/unspecified calls retain that default. These are AiHarness legacy output limits, not claimed vendor maxima.
+
+Model selection is reevaluated from the actual request model on every call, including configured-model changes and per-call overrides. Only this exact qualified ID selects the new dialect; classic and unqualified/lookalike IDs retain their numeric behavior. Invalid non-undefined thinking values fail before provider HTTP. No new metadata or public API version is invented.
+
+Core `providers/anthropic-thinking.test.ts` captures chat/stream payloads, defaults, overrides, visible reasoning and negative admission. CLI `cli/anthropic-thinking-process.test.ts` runs the actual emitted built-in provider in print/JSON/RPC, plus a five-prompt RPC effort/model/off sequence. Its preload changes only the approved transport origin to a loopback fixture; it does not replace provider construction, metadata, selection or body generation, and refuses other network destinations.
+
+This is a request-dialect qualification, not live vendor certification or full Anthropic support. Other model profiles, adaptive Gemini, complete defaults/capability maps and signed thinking-block preservation across tool continuations remain open. Existing text/reasoning projections are not an opaque provider-transcript round-trip.
 
 ## Critical Flows
 

@@ -8,6 +8,7 @@ import type { Message, ProviderConfig, ToolCall, TokenUsage } from '../types/ind
 import { ProviderType } from '../types/index.js';
 import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
+import { applyAnthropicThinking } from './anthropic-thinking.js';
 export type { ThinkingBudgets } from './thinking-budgets.js';
 import {
   validateClassificationRequest, validateImageGenerationRequest, validateGeneratedImages,
@@ -2335,14 +2336,7 @@ export class AnthropicProvider extends AiProvider {
 
     if (systemPrompt) body.system = systemPrompt;
     if (options?.temperature !== undefined && (!options.thinking || options.thinking === 'off')) body.temperature = options.temperature;
-    if (options?.thinking && options.thinking !== 'off') {
-      const budgets = {
-        minimal: 512, low: 1024, medium: 4096, high: 8192, xhigh: 16384, max: 32768,
-      } as const;
-      const budget = resolveThinkingBudget(options.thinking, options.thinkingBudgets, budgets[options.thinking], 1024, 32768);
-      body.thinking = { type: 'enabled', budget_tokens: budget };
-      body.max_tokens = Math.max(Number(body.max_tokens), budget + 1024);
-    }
+    applyAnthropicThinking(body, options);
     if (options?.tools?.length) {
       body.tools = options.tools.map(tool => ({
         name: tool.name,
@@ -2439,14 +2433,7 @@ export class AnthropicProvider extends AiProvider {
 
     if (systemPrompt) body.system = systemPrompt;
     if (options?.temperature !== undefined && (!options.thinking || options.thinking === 'off')) body.temperature = options.temperature;
-    if (options?.thinking && options.thinking !== 'off') {
-      const budgets = {
-        minimal: 512, low: 1024, medium: 4096, high: 8192, xhigh: 16384, max: 32768,
-      } as const;
-      const budget = resolveThinkingBudget(options.thinking, options.thinkingBudgets, budgets[options.thinking], 1024, 32768);
-      body.thinking = { type: 'enabled', budget_tokens: budget };
-      body.max_tokens = Math.max(Number(body.max_tokens), budget + 1024);
-    }
+    applyAnthropicThinking(body, options);
     if (options?.tools?.length) {
       body.tools = options.tools.map(tool => ({
         name: tool.name,
