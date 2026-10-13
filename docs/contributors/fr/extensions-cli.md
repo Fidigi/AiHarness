@@ -69,7 +69,21 @@ Chargez ce fichier avec `ai-harness -e ./review.ts`, ou utilisez la découverte 
 
 Il n’y a ni vérification statique des types, ni chargement implicite des alias `tsconfig`. Le graphe de dépendances transformées est privé à chaque entrée et renouvelé au reload ; les dépendances natives conservent le cache Node. Les caches disque/globaux du transpileur sont désactivés. Une évaluation invalide produit un diagnostic fixe sans recopier le code ; les enregistrements précédents du même workspace survivent. Dépendances et effets Node admis ne sont **ni sandboxés ni annulés**.
 
-Priorité des index enfants : `.mjs`, `.js`, `.cjs`, puis `.ts`, `.mts`, `.cts`, `.tsx`. Évitez de découvrir simultanément source et version compilée d’une même extension : des chemins distincts restent des candidats distincts. Les manifestes des packages installés passent par le service de packages. Les manifestes de dossiers non installés et la résolution plus large des modules/alias hôte JavaScript restent incomplets.
+Priorité des index enfants : `.mjs`, `.js`, `.cjs`, puis `.ts`, `.mts`, `.cts`, `.tsx`. Évitez de découvrir simultanément source et version compilée d’une même extension : des chemins distincts restent des candidats distincts. Les manifestes des packages installés passent par le service de packages. Les manifestes de dossiers non installés suivent désormais les règles littérales ci-dessous. La résolution plus large des modules/alias hôte JavaScript reste incomplète.
+
+## Manifestes de dossiers
+
+Un sous-dossier découvert ou un dossier explicite/réglages/environnement peut sélectionner ses entrées sans installation de package :
+
+```json
+{ "aiHarness": { "extensions": ["src/review.ts", "src/other.mjs"] } }
+```
+
+Le champ historique `pi.extensions` est également lu ; les champs natifs remplacent individuellement les champs historiques. Sans champ extensions, la découverte ordinaire reste active ; une liste vide désactive les entrées du dossier. Une liste déclarée remplace la découverte automatique des index/fichiers voisins. Les sélecteurs des réglages s’appliquent ensuite.
+
+Il s’agit de **chemins relatifs exacts**, pas de globs ni d’opérateurs de sélection ; crochets et autres métacaractères restent littéraux, et les séparateurs antislash sont normalisés. Une entrée de dossier résout seulement son index pris en charge, sans manifestes récursifs ni `main`/`exports` arbitraires. La priorité historique JavaScript demeure. Les déclarations/fichiers réguliers non exécutables sont ignorés ; entrée absente, liée, trop grande ou sans index : la génération échoue, sans repli vers les fichiers voisins. Les globs de ressources des packages installés conservent leur sémantique distincte.
+
+Les métadonnées passent par des descripteurs stables après admission de confiance : 256 Kio et 100 chemins par manifeste, 32 Kio par chaîne ; limites partagées par découverte : 200 lectures de manifestes, 4 Mio et 1 000 visites de chemins déclarés, travail répété inclus. Chemins absolus/hors dossier/autoréférents, UTF-8/JSON invalides ou changement d’identité produisent un diagnostic sans code source. `/reload` renouvelle la sélection ; des métadonnées invalides conservent les enregistrements précédents du même workspace. Ces contrôles d’entrée ne sandboxent pas les imports privilégiés et n’annulent pas leurs effets.
 
 ## Commutateurs intégrés facultatifs
 

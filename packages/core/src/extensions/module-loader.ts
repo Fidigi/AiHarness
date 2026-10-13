@@ -12,6 +12,7 @@ import type { ExtensionRegistry } from './extension-registry.js';
 import { isExtensionPathWithin, selectExtensionFiles, type ExtensionModuleSelector } from './extension-selectors.js';
 import { isExtensionModulePath, isTypeScriptExtensionPath } from './module-format.js';
 import { evaluateTypeScriptExtension } from './typescript-module.js';
+import { ExtensionManifestError, readExtensionManifest, type ExtensionManifestBudget } from './module-manifest.js';
 export type { ExtensionModuleSelector } from './extension-selectors.js';
 
 const RUNNING_UNDER_VITEST = Reflect.has(globalThis, '__vitest_worker__');
@@ -259,6 +260,7 @@ export class ExtensionModuleLoader {
     ];
     const projectTrusted = await this.isProjectTrusted();
     const files = new Set<string>();
+    const manifestBudget: ExtensionManifestBudget = { manifests: 0, bytes: 0, entries: 0 };
 
     const allowed = (resolved: string): boolean => projectTrusted
       || !(isExtensionPathWithin(resolved, this.cwd) || isExtensionPathWithin(this.cwd, resolved));
@@ -266,16 +268,16 @@ export class ExtensionModuleLoader {
     for (const candidate of candidates) {
       const resolved = path.resolve(this.cwd, candidate.path);
       if ((!projectTrusted && candidate.project) || !allowed(resolved)) continue;
-      for (const file of await this.discoverPath(resolved)) files.add(file);
+      for (const file of await this.discoverPath(resolved, manifestBudget)) files.add(file);
     }
     const selectors = typeof this.configuredSelectors === 'function'
       ? await this.configuredSelectors() : this.configuredSelectors ?? [];
     return selectExtensionFiles([...files], selectors, {
-      cwd: this.cwd, allowed, discover: candidate => this.discoverPath(candidate),
+      cwd: this.cwd, allowed, discover: candidate => this.discoverPath(candidate, manifestBudget),
     });
   }
 
-  private async discoverPath(resolved: string): Promise<string[]> {
+  private async discoverPath(resolved: string, manifestBudget: ExtensionManifestBudget): Promise<string[]> {
     const files = new Set<string>();
     try {
       if (await pathContainsSymbolicLink(resolved)) return [];
@@ -284,6 +286,8 @@ export class ExtensionModuleLoader {
       if (info.isFile() && info.nlink === 1 && info.size <= 5 * 1024 * 1024
         && this.isExtensionFile(resolved)) files.add(resolved);
       if (info.isDirectory()) {
+        const declared = await this.discoverManifest(resolved, manifestBudget);
+        if (declared !== undefined) return declared;
         const index = await this.findIndex(resolved);
         if (index) files.add(index);
         const listing = await readStableDirectoryEntries(resolved, 1_000);
@@ -298,15 +302,43 @@ export class ExtensionModuleLoader {
             } catch { /* Entry changed during discovery. */ }
           }
           if (entry.isDirectory()) {
-            const childIndex = await this.findIndex(entryPath);
-            if (childIndex) files.add(childIndex);
+            const childEntries = await this.discoverManifest(entryPath, manifestBudget);
+            if (childEntries !== undefined) {
+              for (const file of childEntries) files.add(file);
+            } else {
+              const childIndex = await this.findIndex(entryPath);
+              if (childIndex) files.add(childIndex);
+            }
           }
         }
       }
     } catch (error) {
-      if (error instanceof ExtensionDiscoveryLimitError) throw error;
+      if (error instanceof ExtensionDiscoveryLimitError || error instanceof ExtensionManifestError) throw error;
       // Missing optional discovery locations are expected.
     }
+    return [...files];
+  }
+
+  private async discoverManifest(directory: string, budget: ExtensionManifestBudget): Promise<string[] | undefined> {
+    const entries = await readExtensionManifest(directory, budget);
+    if (entries === undefined) return undefined;
+    const files = new Set<string>();
+    try {
+      for (const entry of entries) {
+        if (await pathContainsSymbolicLink(entry)) throw new ExtensionManifestError();
+        const info = await lstat(entry);
+        if (info.isDirectory()) {
+          // Manifest entries may name an index directory, but never recursively
+          // interpret another manifest (cycles cannot create import authority).
+          const index = await this.findIndex(entry);
+          if (!index) throw new ExtensionManifestError();
+          files.add(index);
+        } else {
+          if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > 5 * 1024 * 1024) throw new ExtensionManifestError();
+          if (this.isExtensionFile(entry)) files.add(entry);
+        }
+      }
+    } catch { throw new ExtensionManifestError(); }
     return [...files];
   }
 

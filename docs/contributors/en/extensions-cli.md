@@ -69,7 +69,21 @@ Load it with `ai-harness -e ./review.ts`, or use ordinary user/project/settings/
 
 No static type check or implicit `tsconfig` path aliases are performed. Each entry's transformed dependency graph is private and refreshed on reload; native dependencies retain Node caching. Transpiler filesystem/global module caches are disabled. Invalid evaluation reports a fixed diagnostic without source/code frames; previous same-workspace registrations survive. Dependencies and admitted Node effects are **not sandboxed or rolled back**.
 
-Child index priority is `.mjs`, `.js`, `.cjs`, then `.ts`, `.mts`, `.cts`, `.tsx`. Avoid autoloading both compiled and source copies of one extension; different paths remain different candidates. Installed package manifests are honored through the package service. Uninstalled directory manifests and broader module/JavaScript host-alias resolution remain incomplete.
+Child index priority is `.mjs`, `.js`, `.cjs`, then `.ts`, `.mts`, `.cts`, `.tsx`. Avoid autoloading both compiled and source copies of one extension; different paths remain different candidates. Installed package manifests are honored through the package service. Uninstalled directory manifests now use the literal rules below. Broader module/JavaScript host-alias resolution remains incomplete.
+
+## Directory manifests
+
+A discovered child folder or an explicit/settings/environment directory can select its entries without package installation:
+
+```json
+{ "aiHarness": { "extensions": ["src/review.ts", "src/other.mjs"] } }
+```
+
+Legacy `pi.extensions` is also read; native fields override legacy fields individually. No extensions field preserves ordinary discovery; an empty list disables that directory's entries. A declared list replaces sibling/index autodiscovery. Outer settings selectors still apply afterward.
+
+These are **exact relative paths**, not globs or selector operators; brackets and other filename metacharacters remain literal, and backslash separators are normalized. A directory entry resolves only its supported index, without recursive manifests or arbitrary `main`/`exports`. Existing JavaScript index priority remains. Declarations/non-executable regular files are ignored; missing, linked, oversized or index-less declared entries fail the generation, with no sibling fallback. Installed package resource globs retain their separate existing semantics.
+
+Metadata is read through stable descriptors after trust admission: 256 KiB and 100 paths per manifest, 32 KiB per string; shared per-discovery limits are 200 manifest reads, 4 MiB and 1,000 declared-path visits (including repeated work). Absolute/escaping/self paths, invalid UTF-8/JSON and identity changes fail with a source-free diagnostic. `/reload` reselects entries; invalid metadata preserves the previous same-workspace registrations. These entry checks do not sandbox privileged imports or roll back their effects.
 
 ## Optional built-in switches
 
