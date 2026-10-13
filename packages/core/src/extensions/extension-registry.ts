@@ -64,6 +64,21 @@ export interface ExtensionInteractionControls {
 export type ExtensionInteractionPromise = Promise<ExtensionInteractionResponse> & Partial<ExtensionInteractionControls>;
 export type ExtensionInteractionHandle = Promise<ExtensionInteractionResponse> & ExtensionInteractionControls;
 
+/** Optional adapter-owned plain-text UI; absence means these methods are unavailable. */
+export interface ExtensionRuntimeUI {
+  readonly mode: 'rpc';
+  readonly capabilities: {
+    readonly dialogs: readonly ['select', 'confirm', 'input', 'editor'];
+    readonly presentation: readonly ['setStatus', 'setWidget', 'setTitle', 'setEditorText'];
+    readonly custom: false;
+    readonly terminal: false;
+  };
+  setStatus(key: string, text?: string): void;
+  setWidget(key: string, lines?: readonly string[]): void;
+  setTitle(text?: string): void;
+  setEditorText(text?: string): void;
+}
+
 export interface ExtensionRuntimeContext {
   sessionManager: SessionManager;
   currentSessionId?: string;
@@ -88,6 +103,8 @@ export interface ExtensionRuntimeContext {
   /** Host-owned path where the same complete subprocess stream is retained. */
   processOutputPath?: string;
   requestInteraction?(request: ExtensionInteractionRequest): ExtensionInteractionPromise;
+  /** RPC presentation intents only; never terminal control sequences or input execution. */
+  ui?: ExtensionRuntimeUI;
 }
 
 export interface ExtensionCommand {

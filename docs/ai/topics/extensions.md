@@ -58,6 +58,10 @@ Core owns at most 16 pending requests per run, 128,000 UTF-8 JSON bytes per norm
 
 Session-scoped extension-command `notify` uses `AgentRuntime.publishSessionEvent`: notices omit `runId` when the current session run is `completed`, `failed` or `stopped`, while nonterminal correlation is retained. Run-bound tool-context `notify` callbacks retain their original run ID after termination. This changes event correlation only, not interaction admission or browser queue/notice acceptance; see [the session event contract](./server-api.md#current-event-contract).
 
+### RPC UI adapter
+
+RPC additionally supplies optional `context.ui` with immutable mode/capabilities and plain-text status/widget/title/editor intents. The bounded adapter issues same-ID request update/close capabilities, validates current-schema replies, preserves the original host signal/deadline and exposes explicit `get_extension_ui` replay without repeating notifications. Abort/session replacement and EOF/signals retire dialogs before command waits; closed bridges reject later admission. This is process-local state, not a custom-component/terminal renderer or cross-process durability. See [EN](../../contributors/en/rpc-extension-ui.md) / [FR](../../contributors/fr/rpc-extension-ui.md) for wire records and limits. This RPC delivery does not close broader interactive or Web extension UI behavior.
+
 ## Critical Flows
 
 ### Load or reload JavaScript

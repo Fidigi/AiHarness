@@ -8,6 +8,7 @@
 | [server-architecture.md](./server-architecture.md) | Detailed server API architecture |
 | [web-architecture.md](./web-architecture.md) | React Web application architecture |
 | [extensions-cli.md](./extensions-cli.md) | CLI extension development guide |
+| [rpc-extension-ui.md](./rpc-extension-ui.md) | RPC extension UI capabilities, replay and lifecycle |
 | [extensions-web.md](./extensions-web.md) | Web UI bridge and declarative interactions |
 | [public-contract-policy.md](./public-contract-policy.md) | Public compatibility policy and functional-parity harness |
 | [i18n.md](./i18n.md) | Web interface internationalization guide |
@@ -22,6 +23,7 @@ The following documents are also available in French:
 | [server-architecture.md](../fr/server-architecture.md) (FR) | Detailed server API architecture |
 | [web-architecture.md](../fr/web-architecture.md) (FR) | React Web application architecture |
 | [extensions-cli.md](../fr/extensions-cli.md) (FR) | CLI extension development guide |
+| [rpc-extension-ui.md](../fr/rpc-extension-ui.md) (FR) | RPC extension UI capabilities, replay and lifecycle |
 | [extensions-web.md](../fr/extensions-web.md) (FR) | Web UI bridge and declarative interactions |
 | [public-contract-policy.md](../fr/public-contract-policy.md) (FR) | Public compatibility policy and functional-parity harness |
 | [i18n.md](../fr/i18n.md) (FR) | Web interface internationalization guide |

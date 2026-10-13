@@ -266,6 +266,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
   let controller: RpcController | undefined;
   let mcpHost: McpSessionHost | undefined;
   const stopForSignal = (): void => {
+    extensionUi.close();
     if (controller) void controller.close().catch(() => undefined);
     input.destroy();
   };
@@ -607,6 +608,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
         projectTrusted,
         notify: (message, level = 'info') => extensionUi.notify(message, level),
         requestInteraction: request => extensionUi.request(request),
+        ui: extensionUi.ui,
       },
     }, output);
     await controller.initialize();
@@ -624,7 +626,21 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       if (extensionUi.handleResponse(parsed)) return;
 
       if (isRpcCommandRequest(parsed)) {
+        if (parsed.type === 'get_extension_ui') {
+          const valid = (parsed.id === undefined || typeof parsed.id === 'string')
+            && Object.keys(parsed).every(key => key === 'type' || key === 'id');
+          await output({
+            ...(typeof parsed.id === 'string' ? { id: parsed.id } : {}),
+            type: 'response', command: parsed.type, success: valid,
+            ...(valid ? { data: extensionUi.snapshot() } : { error: 'get_extension_ui accepts only type and an optional string id.' }),
+          });
+          return;
+        }
+        if (parsed.type === 'abort') extensionUi.cancelPending();
         const response = await controller!.handle(parsed);
+        if (response?.success && ['new_session', 'switch_session', 'fork'].includes(parsed.type)) {
+          extensionUi.cancelPending('session-changed');
+        }
         if (response) await output(response as unknown as Record<string, unknown>);
         return;
       }
@@ -662,6 +678,8 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
         },
       );
     }
+    // No further replies can arrive after EOF. Cancel dialogs before joining commands.
+    extensionUi.close();
     await Promise.allSettled([...pending]);
     if (taskFailure) throw taskFailure;
     await controller.drain();

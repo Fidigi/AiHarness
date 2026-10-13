@@ -32,6 +32,7 @@ export type {
   ExtensionOptionValue,
   ExtensionProvider,
   ExtensionRuntimeContext,
+  ExtensionRuntimeUI,
   ExtensionTool,
   ExtensionToolResult,
   ExtensionUIComponent,
