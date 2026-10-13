@@ -2,7 +2,7 @@ import { constants as fsConstants } from 'node:fs';
 import { lstat, open } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { ThinkingLevel } from '../providers/index.js';
+import type { ThinkingBudgets, ThinkingLevel } from '../providers/index.js';
 import {
   resolveAgentDirectory,
   resolvePreTrustAgentDirectory,
@@ -66,7 +66,7 @@ export interface AgentSettings {
   defaultModel?: string;
   defaultThinkingLevel?: ThinkingLevel;
   modelThinkingLevels?: Record<string, ThinkingLevel>;
-  thinkingBudgets?: Partial<Record<'minimal' | 'low' | 'medium' | 'high', number>>;
+  thinkingBudgets?: Partial<Record<keyof ThinkingBudgets, number>>;
   enabledModels?: string[];
   hideThinkingBlock?: boolean;
   showCacheMissNotices?: boolean;

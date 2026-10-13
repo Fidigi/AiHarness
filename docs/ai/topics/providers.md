@@ -23,6 +23,7 @@ CLI/Web runtime -> streamChat -> normalized response and usage
 | File | Responsibility |
 |---|---|
 | `packages/core/src/providers/index.ts` | `AiProvider`, factory, built-ins, bounded payloads/streams, OpenAI Responses SSE/WebSocket transport, discovery, retry and usage normalization |
+| `packages/core/src/providers/thinking-budgets.ts` | Public readonly budget type, inert per-turn copies and conservative numeric-dialect bounds |
 | `packages/core/src/providers/provider-endpoints.ts` | Strict based-path discovery endpoint normalization |
 | `packages/core/src/providers/provider-network.ts` | Shared HTTP proxy, request/idle/connect deadlines, bounded retry and cached WebSocket leases |
 | `packages/core/src/providers/credentials.ts` | Process-local credentials, OAuth refresh, command/environment resolution and recursive/streaming redaction |
@@ -56,6 +57,14 @@ Published non-secret metadata lives in Core so CLI and Web use the same descript
 CLI and RPC layer explicit flags over agent settings `defaultProvider`, `defaultModel`, `enabledModels`, `defaultThinkingLevel`, and exact `modelThinkingLevels["provider/model"]`. A saved default inside the enabled scope is preferred; scope suffixes and explicit flags remain stronger, and the final level is capability-clamped. Agent-level retry settings configure shared turn retries. Core applies `transport`, `httpProxy`, `httpIdleTimeoutMs`, `websocketConnectTimeoutMs`, and bounded `retry.provider` timeouts/retries to built-in and extension/custom provider adapters. Network errors are stable and never include the request URL, remote body/headers, or proxy credentials.
 
 Credential resolution order is environment, trusted `providerApiKeyCommands`, process memory, then encrypted storage. Command output is bounded, cached only in the process, and immediately registered with the shared redactor. OAuth endpoints and responses are bounded and HTTPS-only; refreshed access/refresh tokens replace the encrypted record without crossing descriptor boundaries. The redactor covers raw, URI, base64/base64url, hex and JSON-escaped variants, recursively bounds JSON traversal, and supplies independent stateful streams for chunked channels.
+
+## Numeric reasoning budgets
+
+Core exports readonly `ThinkingBudgets` for `ChatOptions` and `StreamProviderTurnOptions`; existing `AgentSettings` budget maps remain mutable and structurally compatible. Its four optional fields are `minimal`, `low`, `medium` and `high`. Settings merge global then trusted-project fields; CLI interactive/print/JSON and RPC read that snapshot at each model call. Interactive `/reload` refreshes it; RPC file changes still require restart. Shared provider-turn admission copies inert own fields before `before:provider`, so hook mutation cannot mutate the source settings. Undefined fields are omitted; inherited fields are ignored. Arrays, unknown keys, accessors and unsafe/negative/fractional/nonfinite values fail with a fixed value-free error. Enabled numeric requests revalidate after hooks.
+
+Anthropic chat/stream use the selected override, clamped to 1,024–32,768, omit temperature with enabled thinking and preserve the existing `max_tokens >= budget + 1024` expansion. The old invalid 512-token minimal default consequently becomes 1,024. Gemini/Vertex share one body builder: 2.5-Pro budgets clamp to 128–32,768, 2.5-Flash to 0–24,576, and other model names to 0–8,192. These are conservative existing-dialect ceilings, not complete model capability discovery. Missing overrides retain defaults; direct Core `xhigh`/`max` keep their distinct legacy defaults, while CLI capability clamping may instead select `high`. Absent/off thinking is not enabled by a budget. Effort-only APIs do not consume numeric overrides.
+
+This does not implement adaptive Anthropic/Gemini dialects, complete per-model maps/defaults, total-token spending limits, or a new Web/server settings path. Owning proofs: Core `providers/thinking-budgets.test.ts` captures real loopback HTTP chat/stream payloads and negative admission; CLI `cli/thinking-budgets-process.test.ts` covers emitted print/JSON/RPC hooks and HTTP, trust merge, genuine PTY reload and a strict outside-checkout public-declaration consumer. No live vendor credentials are used.
 
 ## Critical Flows
 

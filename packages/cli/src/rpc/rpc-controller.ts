@@ -1108,6 +1108,7 @@ export class RpcController {
                   tools,
                   systemPrompt: this.context.systemPrompt,
                   thinking: coreThinkingLevel(this.thinking),
+                  thinkingBudgets: this.context.agentSettings?.().thinkingBudgets,
                   signal,
                   retrySignal: retryController.signal,
                   extensionRegistry: this.context.extensionRegistry,

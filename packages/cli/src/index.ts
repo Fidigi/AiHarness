@@ -1561,6 +1561,7 @@ async function main(): Promise<void> {
           tools,
           systemPrompt: instructionSystemPrompt,
           thinking: ctx.thinkingLevel,
+          thinkingBudgets: settingsResolution.settings.thinkingBudgets,
           signal: operationController.signal,
           extensionRegistry,
           maxRetries: settingsResolution.settings.retry?.enabled === false

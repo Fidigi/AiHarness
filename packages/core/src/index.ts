@@ -73,6 +73,7 @@ export type {
   ChatOptions,
   ChatToolDefinition,
   ThinkingLevel,
+  ThinkingBudgets,
 } from './providers/index.js';
 export {
   PUBLISHED_MODEL_METADATA_VERSION,

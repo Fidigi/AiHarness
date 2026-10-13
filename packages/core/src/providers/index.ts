@@ -7,6 +7,8 @@
 import type { Message, ProviderConfig, ToolCall, TokenUsage } from '../types/index.js';
 import { ProviderType } from '../types/index.js';
 import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
+import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
+export type { ThinkingBudgets } from './thinking-budgets.js';
 import {
   validateClassificationRequest, validateImageGenerationRequest, validateGeneratedImages,
   type SpecializedModel, type ClassificationRequest, type ClassificationResult,
@@ -381,6 +383,8 @@ export interface ChatOptions {
   tools?: ChatToolDefinition[];
   maxRetries?: number;
   thinking?: ThinkingLevel;
+  /** Optional token budgets for numeric reasoning dialects, not effort-only APIs. */
+  thinkingBudgets?: ThinkingBudgets;
   /** Cancels the active provider request. */
   signal?: AbortSignal;
   /** Stable process-local conversation identity used only by compatible cached transports. */
@@ -1892,7 +1896,10 @@ export class GeminiProvider extends AiProvider {
         ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
         ...(options?.maxTokens !== undefined ? { maxOutputTokens: options.maxTokens } : {}),
         ...(options?.thinking
-          ? { thinkingConfig: { thinkingBudget: options.thinking === 'off' ? 0 : thinkingBudgets[options.thinking] } }
+          ? { thinkingConfig: { thinkingBudget: options.thinking === 'off' ? 0 : resolveThinkingBudget(
+            options.thinking, options.thinkingBudgets, thinkingBudgets[options.thinking],
+            thinkingModel.includes('2.5-pro') ? 128 : 0, highBudget,
+          ) } }
           : {}),
       },
     };
@@ -2332,8 +2339,9 @@ export class AnthropicProvider extends AiProvider {
       const budgets = {
         minimal: 512, low: 1024, medium: 4096, high: 8192, xhigh: 16384, max: 32768,
       } as const;
-      body.thinking = { type: 'enabled', budget_tokens: budgets[options.thinking] };
-      body.max_tokens = Math.max(Number(body.max_tokens), budgets[options.thinking] + 1024);
+      const budget = resolveThinkingBudget(options.thinking, options.thinkingBudgets, budgets[options.thinking], 1024, 32768);
+      body.thinking = { type: 'enabled', budget_tokens: budget };
+      body.max_tokens = Math.max(Number(body.max_tokens), budget + 1024);
     }
     if (options?.tools?.length) {
       body.tools = options.tools.map(tool => ({
@@ -2435,8 +2443,9 @@ export class AnthropicProvider extends AiProvider {
       const budgets = {
         minimal: 512, low: 1024, medium: 4096, high: 8192, xhigh: 16384, max: 32768,
       } as const;
-      body.thinking = { type: 'enabled', budget_tokens: budgets[options.thinking] };
-      body.max_tokens = Math.max(Number(body.max_tokens), budgets[options.thinking] + 1024);
+      const budget = resolveThinkingBudget(options.thinking, options.thinkingBudgets, budgets[options.thinking], 1024, 32768);
+      body.thinking = { type: 'enabled', budget_tokens: budget };
+      body.max_tokens = Math.max(Number(body.max_tokens), budget + 1024);
     }
     if (options?.tools?.length) {
       body.tools = options.tools.map(tool => ({

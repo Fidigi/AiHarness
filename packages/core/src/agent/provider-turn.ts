@@ -5,11 +5,13 @@ import {
   type ChatToolDefinition,
   type StreamEvent,
   type ThinkingLevel,
+  type ThinkingBudgets,
 } from '../providers/index.js';
 import type { ExtensionRegistry } from '../extensions/extension-registry.js';
 import type { Message } from '../types/index.js';
 import { calculatePublishedModelCost } from '../providers/model-metadata.js';
 import type { CredentialRedactionStream } from '../providers/credentials.js';
+import { copyThinkingBudgets } from '../providers/thinking-budgets.js';
 
 export interface StreamProviderTurnOptions {
   provider: AiProvider;
@@ -21,6 +23,7 @@ export interface StreamProviderTurnOptions {
   tools: ChatToolDefinition[];
   systemPrompt?: string;
   thinking?: ThinkingLevel;
+  thinkingBudgets?: ThinkingBudgets;
   signal?: AbortSignal;
   /** Cancels only an in-progress retry delay, without aborting the provider run. */
   retrySignal?: AbortSignal;
@@ -104,6 +107,7 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
       systemPrompt: options.systemPrompt ? safeText(options.systemPrompt) : undefined,
       tools: options.tools,
       thinking: options.thinking,
+      ...(options.thinkingBudgets !== undefined ? { thinkingBudgets: copyThinkingBudgets(options.thinkingBudgets) } : {}),
       signal: options.signal,
     },
   });
