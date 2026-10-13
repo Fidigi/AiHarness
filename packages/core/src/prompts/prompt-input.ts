@@ -1,5 +1,7 @@
-import { open } from 'node:fs/promises';
+import { constants as fsConstants, type BigIntStats } from 'node:fs';
+import { lstat, open, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
+import { openStableDirectoryHandle } from '../security/stable-directory.js';
 import type { WorkspaceManager } from '../security/workspace-manager.js';
 import type { MessageContentBlock } from '../types/index.js';
 
@@ -48,12 +50,37 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new Error('Operation aborted.');
 }
 
+function samePromptFile(left: BigIntStats, right: BigIntStats): boolean {
+  return left.isFile() && right.isFile() && left.nlink === 1n && right.nlink === 1n
+    && left.dev === right.dev && left.ino === right.ino && left.size === right.size
+    && left.mtimeNs === right.mtimeNs && left.ctimeNs === right.ctimeNs && left.mode === right.mode;
+}
+
 async function readBoundedFile(filePath: string, maxBytes: number, signal?: AbortSignal): Promise<Buffer> {
-  const handle = await open(filePath, 'r');
+  const parentPath = path.dirname(filePath);
+  let parent: FileHandle | undefined;
+  let handle: FileHandle | undefined;
   try {
-    const info = await handle.stat();
-    if (!info.isFile()) throw new Error('Prompt input must be a regular file.');
-    if (info.size > maxBytes) throw new Error(`Prompt file exceeds the ${maxBytes} byte input limit.`);
+    throwIfAborted(signal);
+    parent = await openStableDirectoryHandle(parentPath);
+    const parentOpened = await parent.stat({ bigint: true });
+    const validateParent = (current: BigIntStats): boolean => current.isDirectory() && !current.isSymbolicLink()
+      && current.dev === parentOpened.dev && current.ino === parentOpened.ino;
+    if (!parentOpened.isDirectory() || !validateParent(await lstat(parentPath, { bigint: true }))) {
+      throw new Error('Prompt directory changed while it was being opened.');
+    }
+    const anchoredPath = process.platform === 'linux'
+      ? path.join(`/proc/self/fd/${parent.fd}`, path.basename(filePath)) : filePath;
+    const before = await lstat(anchoredPath, { bigint: true });
+    if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1n) {
+      throw new Error('Prompt input must be a nonlinked regular file.');
+    }
+    if (before.size > BigInt(maxBytes)) throw new Error(`Prompt file exceeds the ${maxBytes} byte input limit.`);
+    throwIfAborted(signal);
+    handle = await open(anchoredPath,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0));
+    const opened = await handle.stat({ bigint: true });
+    if (!samePromptFile(before, opened)) throw new Error('Prompt file changed while it was being opened.');
     const chunks: Buffer[] = [];
     let total = 0;
     while (true) {
@@ -65,9 +92,19 @@ async function readBoundedFile(filePath: string, maxBytes: number, signal?: Abor
       if (total > maxBytes) throw new Error(`Prompt file exceeds the ${maxBytes} byte input limit.`);
       chunks.push(buffer.subarray(0, bytesRead));
     }
+    const [after, targetAfter, parentAfter, parentPathAfter] = await Promise.all([
+      handle.stat({ bigint: true }), lstat(anchoredPath, { bigint: true }),
+      parent.stat({ bigint: true }), lstat(parentPath, { bigint: true }),
+    ]);
+    throwIfAborted(signal);
+    if (BigInt(total) !== opened.size || !samePromptFile(opened, after) || !samePromptFile(after, targetAfter)
+      || !validateParent(parentAfter) || !validateParent(parentPathAfter)) {
+      throw new Error('Prompt input changed while it was being read.');
+    }
     return Buffer.concat(chunks, total);
   } finally {
-    await handle.close();
+    await handle?.close().catch(() => undefined);
+    await parent?.close().catch(() => undefined);
   }
 }
 
