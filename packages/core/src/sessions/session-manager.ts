@@ -1507,7 +1507,16 @@ export class SessionManager {
 
   /** Create a new session and optionally persist imported rich data. */
   async create(options: CreateSessionOptions = {}): Promise<Session> {
+    return this.createWithBranchSummaries(options);
+  }
+
+  /** Internal clone entries join the create-only write, never a later append. */
+  private async createWithBranchSummaries(
+    options: CreateSessionOptions,
+    branchSummaries: BranchSummaryEntry[] = [],
+  ): Promise<Session> {
     options = this.redactJson(options);
+    branchSummaries = this.redactJson(structuredClone(branchSummaries));
     if (!options || typeof options !== 'object' || Array.isArray(options)
       || (options.messages !== undefined && !Array.isArray(options.messages))
       || (options.commands !== undefined && !Array.isArray(options.commands))) {
@@ -1517,10 +1526,14 @@ export class SessionManager {
     if (!isValidSessionId(sessionId)) {
       throw new Error('Invalid session ID.');
     }
-    return this.withSessionMutation(sessionId, () => this.createUnlocked(options, sessionId));
+    return this.withSessionMutation(sessionId, () => this.createUnlocked(options, sessionId, branchSummaries));
   }
 
-  private async createUnlocked(options: CreateSessionOptions, sessionId: string): Promise<Session> {
+  private async createUnlocked(
+    options: CreateSessionOptions,
+    sessionId: string,
+    branchSummaries: BranchSummaryEntry[],
+  ): Promise<Session> {
     if (this.sessions.has(sessionId)) throw new Error('Session already exists.');
     if (this.sessions.size >= MAX_SESSION_FILES) throw new Error('Session inventory limit reached.');
     if (this.store) {
@@ -1626,14 +1639,29 @@ export class SessionManager {
       boundedSessionJson(command, MAX_SESSION_COMMAND_BYTES, 'Session command exceeds its size limit.');
     }
 
+    // Preserve the store's existing additional-entry bound and validate before any publication.
+    if (!Array.isArray(branchSummaries) || branchSummaries.length > 1_024) {
+      throw new Error('Session entries are invalid.');
+    }
+    for (const entry of branchSummaries) {
+      if (!isSessionEntry(entry) || entry.type !== 'branch_summary' || !isValidEntryId(entry.id)
+        || entryIds.has(entry.id) || !isValidDate(new Date(entry.timestamp))
+        || (entry.parentEntryId !== undefined && !isValidEntryId(entry.parentEntryId))
+        || !isBoundedSessionString(entry.branchName, 4_096) || !entry.summary.trim()
+        || Buffer.byteLength(entry.summary) > 1024 * 1024) {
+        throw new Error('Session entries are invalid.');
+      }
+      entryIds.add(entry.id);
+    }
+
     let encodedSession: string;
-    try { encodedSession = JSON.stringify(session); }
+    try { encodedSession = JSON.stringify(branchSummaries.length ? [session, ...branchSummaries] : session); }
     catch { throw new Error('Session data is invalid.'); }
     if (Buffer.byteLength(encodedSession) > MAX_SESSION_FILE_BYTES) {
       throw new Error('Session file exceeds its size limit.');
     }
 
-    const initialEntries: Array<MessageEntry | CommandEntry> = [
+    const initialEntries: SessionEntry[] = [
       ...session.messages.map(messageToEntry),
       ...(session.commands ?? []).map(command => ({
         ...command,
@@ -1641,9 +1669,10 @@ export class SessionManager {
         version: SESSION_SCHEMA_VERSION,
         timestamp: command.timestamp.getTime(),
       })),
+      ...branchSummaries,
     ].sort((left, right) => left.timestamp - right.timestamp);
     if (!session.activeLeafId) session.activeLeafId = initialEntries.at(-1)?.id;
-    await this.persistSession(session, [], { requireAbsent: true });
+    await this.persistSession(session, branchSummaries, { requireAbsent: true });
     this.sessions.set(session.id, session);
     this.volatileEntries.set(session.id, initialEntries);
     this.onSessionUpdate?.(session.id);
@@ -2513,11 +2542,12 @@ export class SessionManager {
   /** Clone a session as an independent root, optionally through one message. */
   async cloneSession(sessionId: string, newTitle?: string, throughMessageIndex?: number | string): Promise<Session | null> {
     newTitle = newTitle === undefined ? undefined : this.redactText(newTitle);
-    const original = await this.withSessionMutation(sessionId, async () => {
+    const snapshot = await this.withSessionMutation(sessionId, async () => {
       const current = this.sessions.get(sessionId);
-      return current ? structuredClone(current) : null;
+      return current ? { original: structuredClone(current), rawEntries: await this.getRawEntries(sessionId) } : null;
     });
-    if (!original) return null;
+    if (!snapshot) return null;
+    const { original, rawEntries } = snapshot;
     if (typeof throughMessageIndex === 'string') throughMessageIndex = original.messages.findIndex(message => message.id === throughMessageIndex);
     if (throughMessageIndex !== undefined && (!Number.isSafeInteger(throughMessageIndex)
       || throughMessageIndex < 0 || throughMessageIndex >= original.messages.length)) return null;
@@ -2531,20 +2561,25 @@ export class SessionManager {
 
     // Deep clone entries and identifiers so edits cannot mutate or branch the source.
     let sourceCommands = original.commands ?? [];
-    if (throughMessageIndex !== undefined) {
-      // Copy only commands required by the retained messages' parent chains.
-      // Clock skew must neither sever those chains nor include later descendants.
-      const parents = new Map<string, string | undefined>();
-      for (const message of sourceMessages) parents.set(message.id, message.parentMessageId);
-      for (const command of sourceCommands) parents.set(command.id, command.parentEntryId);
-      const ancestors = new Set<string>();
-      for (const message of sourceMessages) {
-        let cursor: string | undefined = message.id;
-        while (cursor && !ancestors.has(cursor)) {
-          ancestors.add(cursor);
-          cursor = parents.get(cursor);
-        }
+    const sourceSummaries = rawEntries.filter((entry): entry is BranchSummaryEntry => entry.type === 'branch_summary');
+    const parents = new Map<string, string | undefined>();
+    for (const summary of sourceSummaries) parents.set(summary.id, summary.parentEntryId);
+    for (const message of sourceMessages) parents.set(message.id, message.parentMessageId);
+    for (const command of sourceCommands) parents.set(command.id, command.parentEntryId);
+    const ancestors = new Set<string>();
+    const starts = [...sourceMessages.map(message => message.id), ...(throughMessageIndex === undefined
+      ? [...sourceCommands.map(command => command.id), ...(original.activeLeafId ? [original.activeLeafId] : [])] : [])];
+    for (const start of starts) {
+      let cursor: string | undefined = start;
+      while (cursor && !ancestors.has(cursor)) {
+        ancestors.add(cursor);
+        cursor = parents.get(cursor);
       }
+    }
+    const retainedSummaries = sourceSummaries.filter(summary => ancestors.has(summary.id));
+    if (retainedSummaries.length > 1_024) return null;
+    if (throughMessageIndex !== undefined) {
+      // Copy required ancestors even across summary nodes, never by wall-clock order.
       sourceCommands = sourceCommands.filter(command => ancestors.has(command.id));
       // Retain the conservative timestamp gate above, and also refuse a required
       // running ancestor whose timestamp is ahead of the selected message.
@@ -2552,13 +2587,19 @@ export class SessionManager {
     }
     const messageIds = new Map(sourceMessages.map(message => [message.id, crypto.randomUUID()]));
     const commandIds = new Map(sourceCommands.map(command => [command.id, `command-${crypto.randomUUID()}`]));
+    const summaryIds = new Map(retainedSummaries.map(summary => [summary.id, `branch-summary-${crypto.randomUUID()}`]));
+    const remapParent = (id: string): string | undefined => messageIds.get(id) ?? commandIds.get(id) ?? summaryIds.get(id);
+    const clonedSummaries = structuredClone(retainedSummaries).map(summary => ({
+      ...summary,
+      id: summaryIds.get(summary.id)!,
+      ...(summary.parentEntryId ? { parentEntryId: remapParent(summary.parentEntryId) } : {}),
+    }));
     const clonedMessages = structuredClone(sourceMessages).map(message => ({
       ...message,
       id: messageIds.get(message.id)!,
       timestamp: new Date(message.timestamp),
       ...(message.parentMessageId ? {
-        parentMessageId: messageIds.get(message.parentMessageId)
-          ?? commandIds.get(message.parentMessageId),
+        parentMessageId: remapParent(message.parentMessageId),
       } : {}),
     }));
     const clonedCommands = structuredClone(sourceCommands).map(command => ({
@@ -2566,15 +2607,19 @@ export class SessionManager {
       id: commandIds.get(command.id)!,
       timestamp: new Date(command.timestamp),
       ...(command.parentEntryId ? {
-        parentEntryId: messageIds.get(command.parentEntryId)
-          ?? commandIds.get(command.parentEntryId),
+        parentEntryId: remapParent(command.parentEntryId),
       } : {}),
     }));
-    const clonedActiveLeafId = original.activeLeafId
-      ? messageIds.get(original.activeLeafId) ?? commandIds.get(original.activeLeafId)
-      : undefined;
+    const clonedActiveLeafId = original.activeLeafId ? remapParent(original.activeLeafId) : undefined;
+    const metadata: Record<string, unknown> = {
+      ...(original.metadata ? structuredClone(original.metadata) : {}), clonedFromSessionId: sessionId,
+    };
+    if (sourceSummaries.length > 0) {
+      if (clonedSummaries.length > 0) Object.assign(metadata, { branchSummaries: clonedSummaries });
+      else delete metadata.branchSummaries;
+    }
 
-    return this.create({
+    const options: CreateSessionOptions = {
       title: newTitle || `${original.title || 'Clone'} (clone)`,
       messages: clonedMessages,
       commands: clonedCommands.length ? clonedCommands : undefined,
@@ -2587,12 +2632,10 @@ export class SessionManager {
       toolPreset: original.toolPreset,
       autoCompaction: original.autoCompaction,
       providerConfig: sanitizeProviderConfig(original.providerConfig),
-      metadata: {
-        ...(original.metadata ? structuredClone(original.metadata) : {}),
-        clonedFromSessionId: sessionId,
-      },
+      metadata,
       usage: throughMessageIndex === undefined && original.usage ? { ...original.usage } : undefined,
-    });
+    };
+    return clonedSummaries.length > 0 ? this.createWithBranchSummaries(options, clonedSummaries) : this.create(options);
   }
 
   /** Get the session tree structure for a given branch */
