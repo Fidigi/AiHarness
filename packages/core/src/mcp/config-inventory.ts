@@ -1358,8 +1358,22 @@ async function acquireMcpConfigLock(filePath: string): Promise<() => Promise<voi
       if (errorCode(error) !== 'EEXIST') {
         throw mutationError('lock-timeout', 'The MCP configuration lock cannot be acquired.');
       }
-      const existing = await lstat(lockPath).catch(() => undefined);
-      if (!existing || existing.isSymbolicLink() || !existing.isFile()) {
+      let existing;
+      try {
+        existing = await lstat(lockPath);
+      } catch (error) {
+        // The owner may release between our exclusive open and this read.
+        // Only disappearance permits another exclusive-open attempt; unreadable
+        // paths, symlinks and non-files remain fail-closed.
+        if (errorCode(error) === 'ENOENT') {
+          if (Date.now() >= deadline) {
+            throw mutationError('lock-timeout', 'The MCP configuration is busy.');
+          }
+          continue;
+        }
+        throw mutationError('unsafe-path', 'The MCP configuration lock path is not safe.');
+      }
+      if (existing.isSymbolicLink() || !existing.isFile()) {
         throw mutationError('unsafe-path', 'The MCP configuration lock path is not safe.');
       }
       if (Date.now() - existing.mtimeMs > MCP_CONFIG_LOCK_STALE_MS) {
