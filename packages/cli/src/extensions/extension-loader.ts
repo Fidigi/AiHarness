@@ -1,5 +1,9 @@
+import os from 'node:os';
+import path from 'node:path';
 import {
   ExtensionModuleLoader,
+  type ExtensionModuleSelector,
+  type ResolvedAgentSettings,
   type ExtensionModuleLoaderOptions,
   type ExtensionModuleLoadResult,
   type ExtensionRegistry,
@@ -13,6 +17,25 @@ export class ExtensionLoader extends ExtensionModuleLoader {
   constructor(registry: ExtensionRegistry, options: ExtensionLoaderOptions = {}) {
     super(registry, options);
   }
+}
+
+/** Keep selectors ordered until Core has discovered actual files. Built-in
+ * capability switches are not executable paths and remain host-owned. */
+export function configuredExtensionSelectors(settings: ResolvedAgentSettings): ExtensionModuleSelector[] {
+  const layer = (entries: readonly string[] | undefined, baseDir: string): ExtensionModuleSelector[] => (
+    (entries ?? []).filter(entry => !/^[+!-]?builtin:/u.test(entry)).map(entry => {
+      const marker = /^[+!-]/u.test(entry) ? entry[0]! : '';
+      const value = marker ? entry.slice(1) : entry;
+      if (value === '~' || value.startsWith('~/') || value.startsWith('~\\')) {
+        return { pattern: `${marker}${value === '~' ? '.' : value.slice(2)}`, baseDir: os.homedir() };
+      }
+      return { pattern: entry, baseDir };
+    })
+  );
+  return [
+    ...layer(settings.globalSettings.extensions, settings.agentDir),
+    ...(settings.projectTrusted ? layer(settings.projectSettings.extensions, path.dirname(settings.paths.project)) : []),
+  ];
 }
 
 /** Parse repeatable `--extension <path>` and `--extension=<path>` arguments. */

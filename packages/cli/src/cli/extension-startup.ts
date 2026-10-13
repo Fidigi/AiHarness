@@ -1,9 +1,9 @@
 import path from 'node:path';
 import {
-  ExtensionRegistry, loadAgentSettings, PluginService, resolveAgentResourcePaths,
-  resolvePreTrustAgentDirectory, selectAgentResourcePaths, WorkspaceManager,
+  ExtensionRegistry, loadAgentSettings, PluginService,
+  resolvePreTrustAgentDirectory, WorkspaceManager,
 } from '@ai-harness/core';
-import { ExtensionLoader } from '../extensions/extension-loader.js';
+import { configuredExtensionSelectors, ExtensionLoader } from '../extensions/extension-loader.js';
 import { ProjectTrustManager, resolveProjectTrust } from '../security/project-trust.js';
 import { CliArgumentError, parseCliArguments, type CliArguments } from './args.js';
 
@@ -12,7 +12,7 @@ export async function prepareExtensionStartup(raw: readonly string[], bootstrap:
   arguments: CliArguments;
   registry: ExtensionRegistry;
   loader: ExtensionLoader;
-  setDiscovery(paths: () => Promise<string[]>, trusted: () => boolean): void;
+  setDiscovery(paths: () => Promise<string[]>, trusted: () => boolean, selectors: () => ReturnType<typeof configuredExtensionSelectors>): void;
 }> {
   const cwd = process.cwd();
   const trustManager = new ProjectTrustManager(path.join(resolvePreTrustAgentDirectory(cwd), 'trust.json'));
@@ -38,13 +38,14 @@ export async function prepareExtensionStartup(raw: readonly string[], bootstrap:
   let currentPaths: () => Promise<string[]> = async () => [
     ...(settings.agentDirTrusted ? [path.join(settings.agentDir, 'extensions')] : []),
     ...bootstrap.extensions,
-    ...selectAgentResourcePaths(resolveAgentResourcePaths(settings, 'extensions')).filter(item => !item.includes('builtin:')),
     ...packagePaths,
   ];
+  let currentSelectors = () => configuredExtensionSelectors(settings);
   const loader = new ExtensionLoader(registry, {
     cwd,
     includeGlobalLocation: false,
     paths: () => currentPaths(),
+    selectors: () => currentSelectors(),
     isProjectTrusted: () => currentTrusted(),
   });
   // Factories are executable code. Keep their incidental output off protocol/print stdout.
@@ -55,9 +56,10 @@ export async function prepareExtensionStartup(raw: readonly string[], bootstrap:
     if (!loaded.committed) throw new CliArgumentError('Extension startup registration failed. Check trusted extension metadata.');
     const parsed = parseCliArguments(raw, registry.getOptions());
     registry.setOptionValues(parsed.extensionOptions);
-    return { arguments: parsed, registry, loader, setDiscovery: (paths, trusted) => {
+    return { arguments: parsed, registry, loader, setDiscovery: (paths, trusted, selectors) => {
       currentPaths = paths;
       currentTrusted = trusted;
+      currentSelectors = selectors;
     } };
   } catch (error) {
     await registry.unloadAll();

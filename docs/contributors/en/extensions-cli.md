@@ -3,6 +3,7 @@
 ## Table of Contents
 
 - [Locations](#locations)
+- [Configured selectors](#configured-selectors)
 - [Example](#example)
 - [Available API](#available-api)
   - [Transforming and cancellable hooks](#transforming-and-cancellable-hooks)
@@ -15,9 +16,9 @@
 
 The CLI automatically discovers:
 
-- `~/.ai-harness/extensions/*.js|*.mjs`
-- `<project>/.ai-harness/extensions/*.js|*.mjs`
-- subdirectories containing `index.js` or `index.mjs`
+- `<agent-directory>/extensions/*.js|*.mjs|*.cjs` (default `~/.ai-harness`)
+- `<project>/.ai-harness/extensions/*.js|*.mjs|*.cjs`, after project trust
+- subdirectories containing `index.js`, `index.mjs` or `index.cjs`
 
 A module can also be loaded explicitly:
 
@@ -28,6 +29,32 @@ ai-harness --extension ./extensions/example.mjs
 Multiple paths can be provided with multiple `--extension` options, or with `AI_HARNESS_EXTENSIONS` separated by the system path separator.
 
 TypeScript extensions must currently be compiled to JavaScript before loading. An installed package can additionally declare extensions, skills, prompts, and JSON themes through `aiHarness` (the legacy `pi` manifest key is also accepted). Enabled extensions, skills, and prompts join CLI and RPC startup through the same Core catalogue used by the Web server; a selected package theme joins interactive CLI startup.
+
+## Configured Selectors
+
+The `extensions` array in global and trusted-project `settings.json` is applied to actual discovered files **before imports**. Global selectors run first, then project selectors; relative paths use the declaring settings directory, not the shell cwd. That directory is literal filesystem identity, including any brackets or other glob characters in its name. Automatic, explicit and enabled-package entry candidates are subject to these selectors:
+
+```json
+{
+  "extensions": [
+    "extra/**/*.mjs",
+    "!extensions/**/disabled.mjs",
+    "!extra/**/experimental*.mjs",
+    "+extra/stable/experimental-approved.mjs",
+    "-extra/retired"
+  ]
+}
+```
+
+- An unmarked path adds a file or ordinary shallow entry directory; an unmarked glob expands matching `.js`, `.mjs` and `.cjs` files using Node path-glob semantics.
+- `+path` adds an exact file/directory, treating glob characters literally.
+- `-path` removes that exact file or discovered files under that directory; `!glob` removes matching files.
+- Order matters: a later add can restore an earlier removal. Files are deduplicated and imported in sorted absolute-path order. `--extension`, environment paths and Core `paths` remain literal, not shell/glob expressions.
+- Project selectors and project files remain trust-gated, including an exact `+` and patterns whose root contains the untrusted cwd. Selectors do not grant trust or bypass stable-file checks. Built-in `builtin:` switches are not implemented by this executable-file selector.
+
+A generation admits at most 200 ordinary discovery paths and 200 selectors (32 KiB UTF-8 per string, or combined pattern/base for a scoped entry). With nonempty selectors, the candidate set cannot exceed 1,000 files at any step, even if later exclusions would reduce it. A glob scan permits 1,000 entries per directory, 10,000 aggregate entry visits, 256 directory visits and eight descendant levels; repeated patterns consume the same aggregate budget. Nonrecursive globs do not descend unrelated subtrees. Overflow refuses the whole candidate generation rather than importing a truncated prefix. Missing optional paths are skipped. Linked/hard-linked or oversized modules remain inadmissible (5 MiB maximum); `.ts` still requires compilation.
+
+Core exports additive `ExtensionModuleLoaderOptions.selectors`: a readonly `ExtensionModuleSelector` array or sync/async callback returning one, reevaluated on discovery/reload. An entry is a string relative to the loader cwd, or `{ pattern, baseDir }` with an absolute literal base directory. Only the pattern is glob syntax; CLI layers and home expansion retain this distinction. Hosts still own trust and discovery context through `isProjectTrusted` and `cwd`. CLI startup, print/JSON/RPC and interactive reload pass the ordered layer-resolved settings to this shared implementation; Server configuration is not changed by this CLI settings feature. A discovery failure preserves the previous managed registrations; successful replacement leaves unrelated owners intact. Executed Node side effects and dependency imports are **not** sandboxed or rolled back: an admitted module can itself import an excluded entry as a dependency.
 
 ## Example
 
@@ -145,7 +172,7 @@ Web Project/Global **Enable all** and **Disable all** controls delegate one boun
 /extensions   Lists extensions and their capabilities
 /tools        Lists registered tools
 /tool         Manually executes a tool
-/reload       Unloads then reloads all modules
+/reload       Stages and atomically replaces the CLI-owned module generation
 ```
 
 Unloading automatically removes commands, tools, providers, UI panels and listeners belonging to the extension. A cleanup function returned by the factory is also called.

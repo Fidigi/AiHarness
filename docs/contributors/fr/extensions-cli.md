@@ -3,6 +3,7 @@
 ## Sommaire
 
 - [Emplacements](#emplacements)
+- [Sélecteurs configurés](#sélecteurs-configurés)
 - [Exemple](#exemple)
 - [API disponible](#api-disponible)
   - [Hooks transformants et annulables](#hooks-transformants-et-annulables)
@@ -15,9 +16,9 @@
 
 Le CLI découvre automatiquement :
 
-- `~/.ai-harness/extensions/*.js|*.mjs`
-- `<projet>/.ai-harness/extensions/*.js|*.mjs`
-- les sous-dossiers contenant `index.js` ou `index.mjs`
+- `<répertoire-agent>/extensions/*.js|*.mjs|*.cjs` (`~/.ai-harness` par défaut)
+- `<projet>/.ai-harness/extensions/*.js|*.mjs|*.cjs`, après approbation du projet
+- les sous-dossiers contenant `index.js`, `index.mjs` ou `index.cjs`
 
 Un module peut aussi être chargé explicitement :
 
@@ -28,6 +29,32 @@ ai-harness --extension ./extensions/example.mjs
 Plusieurs chemins peuvent être fournis avec plusieurs options `--extension`, ou avec `AI_HARNESS_EXTENSIONS` séparé par le séparateur de chemins du système.
 
 Les extensions TypeScript doivent actuellement être compilées en JavaScript avant leur chargement. Un package installé peut aussi déclarer des extensions, skills, prompts et thèmes JSON via `aiHarness` (la clé historique `pi` du manifeste est également acceptée). Les extensions, skills et prompts actifs rejoignent le démarrage CLI et RPC depuis le même catalogue Core que le serveur Web ; un thème de package sélectionné rejoint le démarrage CLI interactif.
+
+## Sélecteurs configurés
+
+Le tableau `extensions` des `settings.json` global et projet approuvé s’applique aux fichiers réellement découverts **avant les imports**. Les sélecteurs globaux précèdent ceux du projet ; les chemins relatifs partent du dossier du fichier de réglages, pas du cwd du shell. Ce dossier reste une identité littérale, même si son nom contient des crochets ou d’autres caractères de glob. Les candidats automatiques, explicites et issus des packages actifs sont tous soumis à ces sélecteurs :
+
+```json
+{
+  "extensions": [
+    "extra/**/*.mjs",
+    "!extensions/**/disabled.mjs",
+    "!extra/**/experimental*.mjs",
+    "+extra/stable/experimental-approved.mjs",
+    "-extra/retired"
+  ]
+}
+```
+
+- Un chemin sans préfixe ajoute un fichier ou les entrées ordinaires d’un dossier peu profond ; un glob sans préfixe développe les fichiers `.js`, `.mjs` et `.cjs` correspondants selon les motifs de chemins Node.
+- `+chemin` ajoute un fichier/dossier exact ; les caractères de glob restent littéraux.
+- `-chemin` retire le fichier exact ou les fichiers découverts sous ce dossier ; `!glob` retire les correspondances.
+- L’ordre compte : un ajout ultérieur peut rétablir un retrait. Les fichiers sont dédupliqués et importés par ordre de chemin absolu. `--extension`, les chemins d’environnement et `paths` de Core restent littéraux, sans interprétation shell/glob.
+- La confiance reste obligatoire pour les sélecteurs et fichiers projet, y compris un `+` exact et un motif dont la racine contient le cwd non approuvé. Aucun sélecteur ne contourne les contrôles de fichiers stables ni n’accorde la confiance. Les commutateurs intégrés `builtin:` ne sont pas implémentés par ce sélecteur de fichiers exécutables.
+
+Une génération admet au plus 200 chemins de découverte ordinaires et 200 sélecteurs (32 Kio UTF-8 par chaîne, ou pour le motif et sa base cumulés dans une entrée à portée explicite). Avec des sélecteurs non vides, les candidats ne peuvent dépasser 1 000 fichiers à aucune étape, même si des exclusions ultérieures réduiraient ce nombre. Un scan glob autorise 1 000 entrées par dossier, 10 000 visites d’entrées cumulées, 256 visites de dossiers et huit niveaux descendants ; les motifs répétés consomment le même budget global. Un glob non récursif ne descend pas dans les sous-arbres sans rapport. Un dépassement refuse toute la génération candidate plutôt que d’importer un préfixe tronqué. Les chemins facultatifs absents sont ignorés. Les modules liés, à liens physiques multiples ou trop volumineux restent refusés (5 Mio maximum) ; les `.ts` exigent toujours une compilation.
+
+Core exporte l’option additive `ExtensionModuleLoaderOptions.selectors` : tableau readonly de `ExtensionModuleSelector` ou callback synchrone/asynchrone qui le fournit, réévalué à chaque découverte/reload. Une entrée est une chaîne relative au cwd du chargeur, ou `{ pattern, baseDir }` avec un dossier de base absolu et littéral. Seul le motif est interprété comme glob ; les couches CLI et l’expansion du dossier personnel conservent cette distinction. L’hôte conserve la responsabilité de la confiance et du contexte via `isProjectTrusted` et `cwd`. Le démarrage CLI, print/JSON/RPC et le reload interactif transmettent les réglages ordonnés et résolus par couche à cette implémentation commune ; cette fonctionnalité CLI ne change pas la configuration du Server. Un échec de découverte conserve les enregistrements gérés précédents ; un remplacement réussi préserve les propriétaires indépendants. Les effets Node et imports de dépendances exécutés ne sont **ni sandboxés ni annulés** : un module admis peut importer lui-même une entrée exclue comme dépendance.
 
 ## Exemple
 
@@ -145,7 +172,7 @@ Dans le Web, les contrôles **Enable all** et **Disable all** des groupes Projec
 /extensions   Liste les extensions et leurs capacités
 /tools        Liste les outils enregistrés
 /tool         Exécute manuellement un outil
-/reload       Décharge puis recharge tous les modules
+/reload       Prépare et remplace atomiquement la génération gérée par le CLI
 ```
 
 Le déchargement retire automatiquement les commandes, outils, providers, panneaux UI et listeners appartenant à l'extension. Une fonction de cleanup retournée par la factory est également appelée.

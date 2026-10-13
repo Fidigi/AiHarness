@@ -2,6 +2,7 @@ export { ExtensionRegistry } from './extension-registry.js';
 export { ExtensionModuleLoader } from './module-loader.js';
 export type {
   ExtensionModuleLoaderOptions,
+  ExtensionModuleSelector,
   ExtensionModuleLoadError,
   ExtensionModuleLoadResult,
 } from './module-loader.js';

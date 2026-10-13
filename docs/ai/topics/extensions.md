@@ -22,7 +22,7 @@ Core PluginService -> install/locked state/filtered inventory/bounded batch stat
 | File | Responsibility |
 |---|---|
 | `packages/core/src/extensions/extension-registry.ts` | Owned registrations, hooks, execution, cleanup and rollback |
-| `packages/core/src/extensions/module-loader.ts` | Bounded discovery/import and atomic managed generations |
+| `packages/core/src/extensions/{module-loader,extension-selectors}.ts` | Bounded metadata-only glob/exact selection before import and atomic managed generations |
 | `packages/cli/src/extensions/extension-loader.ts` | Explicit, configured and package extension paths plus loader orchestration |
 | `packages/cli/src/resources/resource-manager.ts` | Local/package Markdown prompts and model-invocable resource discovery |
 | `packages/cli/src/cli/package-command.ts` | Top-level package lifecycle, scope and resource-filter adapter |
@@ -67,13 +67,13 @@ RPC additionally supplies optional `context.ui` with immutable mode/capabilities
 ### Load or reload JavaScript
 
 1. Discover explicit/global files and trusted project files without following symlinks.
-2. Bound candidates to 200 paths, 1,000 directory entries, and 5 MiB per module.
-3. Import every candidate for the next generation.
+2. Refuse ordinary path/directory overflow (200 paths, 1,000 entries per directory); retain stable nonlinked, single-link, at-most-5-MiB modules. Apply ordered global/trusted-project CLI settings via additive Core `selectors`: unmarked glob expansion, exact `+path`, exact/subtree `-path`, and `!glob` filtering of actual discovered files. Core `paths` stays literal; containment includes filesystem roots. `ExtensionModuleSelector` retains literal declaring directories through `{ pattern, baseDir }` (absolute base), so directory metacharacters never become wildcard authority; string entries use the loader cwd. Nonempty selection is bounded to 200 selectors/32 KiB each (combined pattern/base for scoped entries) and 1,000 candidates at any step; glob scans share 10,000 entry visits, 256 directory visits and eight descendant levels. Overflow fails the generation, never imports an arbitrary prefix. Nonrecursive patterns avoid deeper traversal.
+3. Import every selected candidate for the next generation; excluded entry bodies are not imported by discovery. Selected Node code may still import them as dependencies; this is not a sandbox.
 4. Atomically replace loader-owned registrations.
 5. On any discovery/import/registration error, keep or restore the previous generation.
 6. On workspace change, clear old handlers if the new candidate cannot commit.
 
-CLI startup loads one trusted generation before strict contributed-option parsing and reuses it in interactive, print, JSON and RPC modes. Built-in help/version never import extensions; `--extension-help` and `--completion` are explicit trust-gated operations. Reload gives ESM and CommonJS entries a fresh identity after successful or failed attempts, without replacing preexisting CommonJS cache entries. Dependencies retain ordinary caches; executable side effects are not transactional. See the [EN startup-option contract](../../contributors/en/extension-startup-options.md) and [FR contract](../../contributors/fr/extension-startup-options.md).
+CLI startup loads one trusted generation before strict contributed-option parsing and reuses it in interactive, print, JSON and RPC modes. Ordinary startup and reload retain the independently eligible configured agent-directory location rather than reverting to the home default; callbacks reread ordered selectors on reload. Built-in help/version never import extensions; `--extension-help` and `--completion` are explicit trust-gated operations. Reload gives ESM and CommonJS entries a fresh identity after successful or failed attempts, without replacing preexisting CommonJS cache entries. Dependencies retain ordinary caches; executable side effects are not transactional. See the [EN startup-option contract](../../contributors/en/extension-startup-options.md) and [FR contract](../../contributors/fr/extension-startup-options.md).
 
 ### Administer a plugin package
 
@@ -131,6 +131,8 @@ Initial focus is admitted before the renderer exists and checked again at its fi
 - `packages/server/src/api/{interaction-queue-http,queue-reconciliation-http,queue-generation-http,queue-generation-process}.test.ts` — latest-schema HTTP validation, stop accounting before terminal replay, same-cwd preservation and revocation while the run remains active
 - `packages/core/src/tools/{tool-search,codemode}.test.ts` — deferred/script-only exposure, BM25 ranking, activation/store provenance, bounded QuickJS, policy revalidation and branch restoration
 - `packages/cli/src/extensions/extension-loader.test.ts` — explicit path parsing and loader behavior
+- `packages/core/src/extensions/extension-selectors.test.ts` — actual-file glob/exact selection, trust, literal paths/bases and scoped-input validation, stable files, operation/file/depth bounds and managed-generation preservation
+- `packages/cli/src/cli/extension-selectors-process.test.ts` — emitted print/JSON/RPC global/project selection and refusal, single startup import and provider hooks, genuine Linux PTY selector reload/agent-directory conservation and public declaration/emitted Core reload outside the checkout
 - `packages/core/src/plugins/plugin-service.test.ts` — source validation, filters, trust, bounded one-write group activation, partial outcomes, concurrency, inventory and transactional package state
 - `packages/cli/src/cli/{package-command,invocation}.test.ts` — strict command parsing and real package resource startup
 - `packages/server/src/web-server.test.ts` — plugin/reload HTTP, trust and runtime integration

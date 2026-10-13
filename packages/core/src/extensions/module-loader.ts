@@ -9,13 +9,20 @@ import { compileFunction } from 'node:vm';
 import { openStableDirectoryHandle, readStableDirectoryEntries } from '../security/stable-directory.js';
 import type { ExtensionFactory } from './extension-registry.js';
 import type { ExtensionRegistry } from './extension-registry.js';
+import { isExtensionPathWithin, selectExtensionFiles, type ExtensionModuleSelector } from './extension-selectors.js';
+export type { ExtensionModuleSelector } from './extension-selectors.js';
 
 const RUNNING_UNDER_VITEST = Reflect.has(globalThis, '__vitest_worker__');
+
+class ExtensionDiscoveryLimitError extends Error {}
 
 export interface ExtensionModuleLoaderOptions {
   cwd?: string;
   homeDir?: string;
   paths?: string[] | (() => string[] | Promise<string[]>);
+  /** Ordered metadata-only selectors applied after ordinary discovery. Plain
+   * patterns expand; +path is exact; -path removes a file/subtree; !glob removes matches. */
+  selectors?: readonly ExtensionModuleSelector[] | (() => readonly ExtensionModuleSelector[] | Promise<readonly ExtensionModuleSelector[]>);
   isProjectTrusted?: () => boolean | Promise<boolean>;
   includeGlobalLocation?: boolean;
   includeProjectLocation?: boolean;
@@ -185,6 +192,7 @@ export class ExtensionModuleLoader {
   private readonly cwd: string;
   private readonly homeDir: string;
   private readonly configuredPaths: ExtensionModuleLoaderOptions['paths'];
+  private readonly configuredSelectors: ExtensionModuleLoaderOptions['selectors'];
   private readonly isProjectTrusted: NonNullable<ExtensionModuleLoaderOptions['isProjectTrusted']>;
   private readonly includeGlobalLocation: boolean;
   private readonly includeProjectLocation: boolean;
@@ -202,6 +210,7 @@ export class ExtensionModuleLoader {
     this.cwd = options.cwd ?? process.cwd();
     this.homeDir = options.homeDir ?? os.homedir();
     this.configuredPaths = options.paths ?? [];
+    this.configuredSelectors = options.selectors ?? [];
     this.isProjectTrusted = options.isProjectTrusted ?? (() => true);
     this.includeGlobalLocation = options.includeGlobalLocation !== false;
     this.includeProjectLocation = options.includeProjectLocation !== false;
@@ -243,42 +252,54 @@ export class ExtensionModuleLoader {
     const projectTrusted = await this.isProjectTrusted();
     const files = new Set<string>();
 
-    for (const candidate of candidates.slice(0, 200)) {
+    const allowed = (resolved: string): boolean => projectTrusted
+      || !(isExtensionPathWithin(resolved, this.cwd) || isExtensionPathWithin(this.cwd, resolved));
+    if (candidates.length > 200) throw new ExtensionDiscoveryLimitError('Extension discovery exceeds its path limit.');
+    for (const candidate of candidates) {
       const resolved = path.resolve(this.cwd, candidate.path);
-      const relative = path.relative(this.cwd, resolved);
-      const withinProject = relative === ''
-        || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
-      const projectWithinCandidate = resolved === this.cwd || this.cwd.startsWith(`${resolved}${path.sep}`);
-      if (!projectTrusted && (candidate.project || withinProject || projectWithinCandidate)) continue;
-      try {
-        if (await pathContainsSymbolicLink(resolved)) continue;
-        const info = await lstat(resolved);
-        if (info.isSymbolicLink()) continue;
-        if (info.isFile() && info.nlink === 1 && info.size <= 5 * 1024 * 1024
-          && this.isExtensionFile(resolved)) files.add(resolved);
-        if (info.isDirectory()) {
-          const index = await this.findIndex(resolved);
-          if (index) files.add(index);
-          for (const entry of (await readStableDirectoryEntries(resolved, 1_000)).entries) {
-            const entryPath = path.join(resolved, entry.name);
-            if (entry.isFile() && this.isExtensionFile(entryPath)) {
-              try {
-                const entryInfo = await lstat(entryPath);
-                if (entryInfo.isFile() && !entryInfo.isSymbolicLink() && entryInfo.nlink === 1
-                  && entryInfo.size <= 5 * 1024 * 1024) files.add(entryPath);
-              } catch { /* Entry changed during discovery. */ }
-            }
-            if (entry.isDirectory()) {
-              const childIndex = await this.findIndex(entryPath);
-              if (childIndex) files.add(childIndex);
-            }
+      if ((!projectTrusted && candidate.project) || !allowed(resolved)) continue;
+      for (const file of await this.discoverPath(resolved)) files.add(file);
+    }
+    const selectors = typeof this.configuredSelectors === 'function'
+      ? await this.configuredSelectors() : this.configuredSelectors ?? [];
+    return selectExtensionFiles([...files], selectors, {
+      cwd: this.cwd, allowed, discover: candidate => this.discoverPath(candidate),
+    });
+  }
+
+  private async discoverPath(resolved: string): Promise<string[]> {
+    const files = new Set<string>();
+    try {
+      if (await pathContainsSymbolicLink(resolved)) return [];
+      const info = await lstat(resolved);
+      if (info.isSymbolicLink()) return [];
+      if (info.isFile() && info.nlink === 1 && info.size <= 5 * 1024 * 1024
+        && this.isExtensionFile(resolved)) files.add(resolved);
+      if (info.isDirectory()) {
+        const index = await this.findIndex(resolved);
+        if (index) files.add(index);
+        const listing = await readStableDirectoryEntries(resolved, 1_000);
+        if (listing.truncated) throw new ExtensionDiscoveryLimitError('Extension directory exceeds its entry limit.');
+        for (const entry of listing.entries) {
+          const entryPath = path.join(resolved, entry.name);
+          if (entry.isFile() && this.isExtensionFile(entryPath)) {
+            try {
+              const entryInfo = await lstat(entryPath);
+              if (entryInfo.isFile() && !entryInfo.isSymbolicLink() && entryInfo.nlink === 1
+                && entryInfo.size <= 5 * 1024 * 1024) files.add(entryPath);
+            } catch { /* Entry changed during discovery. */ }
+          }
+          if (entry.isDirectory()) {
+            const childIndex = await this.findIndex(entryPath);
+            if (childIndex) files.add(childIndex);
           }
         }
-      } catch {
-        // Missing optional discovery locations are expected.
       }
+    } catch (error) {
+      if (error instanceof ExtensionDiscoveryLimitError) throw error;
+      // Missing optional discovery locations are expected.
     }
-    return [...files].sort();
+    return [...files];
   }
 
   private async performReload(): Promise<ExtensionModuleLoadResult> {
@@ -286,7 +307,14 @@ export class ExtensionModuleLoader {
     const importAttempt = ++this.importAttempt;
     const errors: ExtensionModuleLoadError[] = [];
     const candidates: Array<{ id: string; factory: ExtensionFactory }> = [];
-    for (const filePath of await this.discover()) {
+    let files: string[];
+    try { files = await this.discover(); }
+    catch (error) {
+      return { loaded: [...this.managedIds], errors: [{ path: '<discovery>',
+        error: error instanceof Error ? error : new Error('Extension discovery failed.') }],
+      generation: this.generation, committed: false };
+    }
+    for (const filePath of files) {
       try {
         candidates.push({ id: filePath, factory: await importExtensionFactory(filePath, `${this.importIdentity}-${importAttempt}`) });
       } catch (error) {

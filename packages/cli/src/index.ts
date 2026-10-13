@@ -30,7 +30,6 @@ import {
   resolveAgentDefaultTools,
   resolveAgentResourcePaths,
   resolveAgentThinkingLevel,
-  selectAgentResourcePaths,
   readMcpServerTestTarget,
   registerWorkspaceTools,
   selectRegisteredTools,
@@ -67,7 +66,7 @@ import {
 } from './tui/terminal-escape.js';
 import { resolveTerminalMode } from './tui/mode.js';
 import { KeyBindingManager } from './utils/keybinding-manager.js';
-import { ExtensionLoader } from './extensions/extension-loader.js';
+import { configuredExtensionSelectors, ExtensionLoader } from './extensions/extension-loader.js';
 import { runToolLoop } from './agent/tool-loop.js';
 import { streamProviderTurn } from './agent/provider-turn.js';
 import { parseResourceCommandLine, ResourceManager } from './resources/resource-manager.js';
@@ -162,15 +161,6 @@ function reportAgentSettingsDiagnostics(settings: ResolvedAgentSettings): void {
     const message = `Warning: Settings ignored (${diagnostic.path})${field}: ${diagnostic.message}`;
     process.stderr.write(`${outputCredentialRedactor.redact(message)}\n`);
   }
-}
-
-function configuredExtensionPaths(
-  cliPaths: readonly string[],
-  settings: ResolvedAgentSettings,
-): string[] {
-  const configured = selectAgentResourcePaths(resolveAgentResourcePaths(settings, 'extensions'))
-    .filter(entry => !entry.includes('builtin:'));
-  return [...cliPaths, ...configured];
 }
 
 function formatAgentSettingsSummary(resolved: ResolvedAgentSettings): string {
@@ -736,7 +726,8 @@ async function main(): Promise<void> {
     return;
   }
   const runtimeExtensionPaths = async (): Promise<string[]> => [
-      ...configuredExtensionPaths(cliArguments.extensions, settingsResolution),
+      ...(settingsResolution.agentDirTrusted ? [path.join(settingsResolution.agentDir, 'extensions')] : []),
+      ...cliArguments.extensions,
       ...(settingsResolution.agentDirTrusted ? await pluginService.getEnabledExtensionFiles({
         cwd: workspaceCwd,
         projectId: workspaceDescriptor.id,
@@ -748,9 +739,13 @@ async function main(): Promise<void> {
         return [];
       }) : []),
     ];
-  extensionStartup?.setDiscovery(runtimeExtensionPaths, mayLoadProjectResources);
+  const runtimeExtensionSelectors = () => configuredExtensionSelectors(settingsResolution);
+  extensionStartup?.setDiscovery(runtimeExtensionPaths, mayLoadProjectResources, runtimeExtensionSelectors);
   const extensionLoader = extensionStartup?.loader ?? new ExtensionLoader(extensionRegistry, {
+    cwd: workspaceCwd,
+    includeGlobalLocation: false,
     paths: runtimeExtensionPaths,
+    selectors: runtimeExtensionSelectors,
     isProjectTrusted: mayLoadProjectResources,
   });
   const registerSkillTool = async (): Promise<void> => {

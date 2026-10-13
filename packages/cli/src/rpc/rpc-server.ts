@@ -29,7 +29,6 @@ import {
   resolveAgentDefaultTools,
   resolveAgentResourcePaths,
   resolveAgentThinkingLevel,
-  selectAgentResourcePaths,
   selectRegisteredTools,
   isDeclaredToolExposure,
   toChatToolDefinitions,
@@ -42,7 +41,7 @@ import {
   type ThinkingLevel,
 } from '@ai-harness/core';
 import { reserveProcessStdoutForJsonLines } from '../cli/json-output.js';
-import { ExtensionLoader } from '../extensions/extension-loader.js';
+import { configuredExtensionSelectors, ExtensionLoader } from '../extensions/extension-loader.js';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -215,14 +214,6 @@ function reportSettingsDiagnostics(
     const field = diagnostic.setting ? ` [${diagnostic.setting}]` : '';
     process.stderr.write(`${redact(`Warning: Settings ignored (${diagnostic.path})${field}: ${diagnostic.message}`)}\n`);
   }
-}
-
-function rpcExtensionPaths(paths: readonly string[], settings: ResolvedAgentSettings): string[] {
-  return [
-    ...paths,
-    ...selectAgentResourcePaths(resolveAgentResourcePaths(settings, 'extensions'))
-      .filter(entry => !entry.includes('builtin:')),
-  ];
 }
 
 /**
@@ -424,7 +415,13 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     // Startup parsing already imported and ran these factories, with final owned values.
     // Reusing that generation is essential: a second load would reset values to defaults.
     const extensionLoader = options.extensionLoader ?? new ExtensionLoader(extensionRegistry, {
-      paths: [...rpcExtensionPaths(options.extensions ?? [], settingsResolution), ...packageExtensions],
+      cwd,
+      includeGlobalLocation: false,
+      paths: [
+        ...(settingsResolution.agentDirTrusted ? [path.join(settingsResolution.agentDir, 'extensions')] : []),
+        ...(options.extensions ?? []), ...packageExtensions,
+      ],
+      selectors: () => configuredExtensionSelectors(settingsResolution),
       isProjectTrusted: () => projectResourcesTrusted,
     });
     if (!options.extensionLoader) {
