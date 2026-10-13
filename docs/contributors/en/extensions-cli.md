@@ -69,7 +69,15 @@ Load it with `ai-harness -e ./review.ts`, or use ordinary user/project/settings/
 
 No static type check or implicit `tsconfig` path aliases are performed. Each entry's transformed dependency graph is private and refreshed on reload; native dependencies retain Node caching. Transpiler filesystem/global module caches are disabled. Invalid evaluation reports a fixed diagnostic without source/code frames; previous same-workspace registrations survive. Dependencies and admitted Node effects are **not sandboxed or rolled back**.
 
-Child index priority is `.mjs`, `.js`, `.cjs`, then `.ts`, `.mts`, `.cts`, `.tsx`. Avoid autoloading both compiled and source copies of one extension; different paths remain different candidates. Installed package manifests are honored through the package service. Uninstalled directory manifests now use the literal rules below. Broader module/JavaScript host-alias resolution remains incomplete.
+Child index priority is `.mjs`, `.js`, `.cjs`, then `.ts`, `.mts`, `.cts`, `.tsx`. Avoid autoloading both compiled and source copies of one extension; different paths remain different candidates. Installed package manifests are honored through the package service. Uninstalled directory manifests now use the literal rules below. Native JavaScript now receives the same exact public Core root identity; directory `main` and extensionless/JavaScript-to-TypeScript entry fallback remain incomplete.
+
+## Native JavaScript Core imports
+
+Native `.js`, `.mjs` and `.cjs` modules may also import/require the exact `@ai-harness/core` root outside the installation. Static, late, dependency and awaited cleanup calls use the host's actual namespace, not another Core copy. Private subpaths and CLI/Server/UI-library aliases are not added. JavaScript retains Node format detection and dependency caches; changing a helper on disk does not refresh an already cached native dependency during `/reload`.
+
+Core owns a contextual Node resolve hook plus an owned-caller `Module.prototype.require` adapter: CommonJS can otherwise bypass resolver hooks through its same-directory cache. No native cache entry is deleted/replaced. Ordinary unrelated imports retain their own installation; preexisting virtual require adapters and newer foreign wrappers are conserved. Import leases survive until candidate registration/refusal; active factory leases survive through user cleanup and are restored on rollback. Shared native modules retain their existing exports/effects. Alias context is **not** a sandbox or revocation mechanism.
+
+Bounds are explicit: 1,000 URLs per graph, 32 KiB per URL, 10,000 active contexts and 20,000 ownership associations. URL-only metadata retained for Node's cached dependencies is limited to 10,000 parents, 20,000 edges and 16 MiB per process; cached CommonJS traversal allows 1,000 nodes/children per node. Overflow reports `Extension module resolution exceeds its limits.`; a process restart clears retained metadata. The final owner removes its hook/adapter without overwriting a newer library's wrapper.
 
 ## Directory manifests
 

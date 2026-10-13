@@ -13,6 +13,7 @@ import { isExtensionPathWithin, selectExtensionFiles, type ExtensionModuleSelect
 import { isExtensionModulePath, isTypeScriptExtensionPath } from './module-format.js';
 import { evaluateTypeScriptExtension } from './typescript-module.js';
 import { ExtensionManifestError, readExtensionManifest, type ExtensionManifestBudget } from './module-manifest.js';
+import { acquireNativeModuleAlias } from './native-module-alias.js';
 export type { ExtensionModuleSelector } from './extension-selectors.js';
 
 const RUNNING_UNDER_VITEST = Reflect.has(globalThis, '__vitest_worker__');
@@ -78,12 +79,14 @@ function sameExtensionIdentity(
 async function importExtensionFactory(
   filePath: string,
   importAttempt: string,
-): Promise<ExtensionFactory> {
+): Promise<{ factory: ExtensionFactory; release(): void }> {
   const parentPath = path.dirname(filePath);
   const parentHandle = await openStableDirectoryHandle(parentPath).catch(() => {
     throw new Error('Extension module parent must be a stable regular directory');
   });
   let fileHandle: Awaited<ReturnType<typeof open>> | undefined;
+  let alias: Awaited<ReturnType<typeof acquireNativeModuleAlias>> | undefined;
+  let retained = false;
   try {
     const parentOpened = await parentHandle.stat();
     const parentBefore = await lstat(parentPath);
@@ -115,6 +118,7 @@ async function importExtensionFactory(
     // Vitest's VM loader uses the pathname with the same before/open/after checks.
     const moduleUrl = `${pathToFileURL(filePath).href}?aiharness=${importAttempt}`;
     const typescript = isTypeScriptExtensionPath(filePath);
+    if (!typescript && !RUNNING_UNDER_VITEST) alias = await acquireNativeModuleAlias(pathToFileURL(filePath).href, moduleUrl);
     const hooks = !typescript && !RUNNING_UNDER_VITEST ? registerHooks({
       resolve(specifier, context, nextResolve) {
         const resolved = nextResolve(specifier, context);
@@ -187,8 +191,10 @@ async function importExtensionFactory(
     if (typeof loaded.default !== 'function') {
       throw new Error('Extension module must export a default factory function');
     }
-    return loaded.default;
+    retained = true;
+    return { factory: alias ? alias.wrap(loaded.default) : loaded.default, release: alias?.release ?? (() => {}) };
   } finally {
+    if (!retained) alias?.release();
     await fileHandle?.close().catch(() => undefined);
     await parentHandle.close().catch(() => undefined);
   }
@@ -354,26 +360,35 @@ export class ExtensionModuleLoader {
         error: error instanceof Error ? error : new Error('Extension discovery failed.') }],
       generation: this.generation, committed: false };
     }
-    for (const filePath of files) {
-      try {
-        candidates.push({ id: filePath, factory: await importExtensionFactory(filePath, `${this.importIdentity}-${importAttempt}`) });
-      } catch (error) {
-        errors.push({ path: filePath, error: error instanceof Error ? error : new Error(String(error)) });
-      }
-    }
-    if (errors.length) {
-      return { loaded: [...this.managedIds], errors, generation: this.generation, committed: false };
-    }
-
+    const releases: Array<() => void> = [];
     try {
-      await this.registry.replaceManaged(this.managedIds, candidates);
-    } catch (error) {
-      errors.push({ path: '<generation>', error: error instanceof Error ? error : new Error(String(error)) });
-      return { loaded: [...this.managedIds], errors, generation: this.generation, committed: false };
+      for (const filePath of files) {
+        try {
+          const imported = await importExtensionFactory(filePath, `${this.importIdentity}-${importAttempt}`);
+          releases.push(imported.release);
+          candidates.push({ id: filePath, factory: imported.factory });
+        } catch (error) {
+          errors.push({ path: filePath, error: error instanceof Error ? error : new Error(String(error)) });
+        }
+      }
+      if (errors.length) {
+        return { loaded: [...this.managedIds], errors, generation: this.generation, committed: false };
+      }
+
+      try {
+        await this.registry.replaceManaged(this.managedIds, candidates);
+      } catch (error) {
+        errors.push({ path: '<generation>', error: error instanceof Error ? error : new Error(String(error)) });
+        return { loaded: [...this.managedIds], errors, generation: this.generation, committed: false };
+      }
+      this.managedIds = new Set(candidates.map(candidate => candidate.id));
+      this.generation = nextGeneration;
+      return { loaded: [...this.managedIds], errors: [], generation: this.generation, committed: true };
+    } finally {
+      // Registry factories own active/rollback leases. Pending imports own only
+      // temporary leases, including candidates never reached after a failure.
+      for (const release of releases) release();
     }
-    this.managedIds = new Set(candidates.map(candidate => candidate.id));
-    this.generation = nextGeneration;
-    return { loaded: [...this.managedIds], errors: [], generation: this.generation, committed: true };
   }
 
   private async findIndex(directory: string): Promise<string | undefined> {
