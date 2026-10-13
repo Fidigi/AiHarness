@@ -170,9 +170,12 @@ Administrator `PATCH /api/skills/enabled/batch` accepts exactly `{changes: [{key
 5. Require explicit recursive-cascade confirmation for sessions with descendants.
 6. Treat IDs, cursors, cwd, upload names, and route bodies as untrusted.
 
+Session detail and list projections, including zero-message pages, use Core's recursive bounded provider-metadata filter; credential-like fields, getters and executable `toJSON` cannot enter those responses. This remains field-based filtering, not arbitrary secret/URL recognition. The first ordinary protected API request additionally initializes credentials and reloads/rewrites durable sessions for legacy scrubbing; `start()` awaits service composition, not that lazy ingress. A previously borrowed in-memory Session can therefore be replaced by its durable projection. Use awaited manager mutations for persistence, and complete this real initialization before borrowing host objects in boundary probes. Passive exact `GET /api/mcp` remains exempt.
+
 ## Associated Tests
 
 - `packages/server/src/api/{workspace-default,workspace-default-process}.test.ts`, `e2e/workspace-default-server.mjs` and `e2e/workspace-defaults.spec.ts` — real HTTP permissions/errors plus plain-Node public Core/built Server defaults, bootstrap disappearance, canonical display, explicit reload and ungranted trust; production Web recovery has no intercepted API
+- `packages/server/src/api/session-provider-redaction-process.test.ts` and its `.process.mjs` probe — plain Node/public emitted entries outside the checkout: causal cold-request durable reload, initialized list/detail/zero-message provider filtering, getter/toJSON passivity, safe history/profile preservation and no trust/run/source-byte changes
 - `packages/server/src/api/session-notice-process.test.ts` — real public Core/built Server process checks across completed/failed/stopped: active correlation, terminal session-command notices without `runId`, and captured tool notices retaining the original ID over session SSE
 - `packages/server/src/api/{interaction-queue-http,queue-reconciliation-http,queue-generation-http,queue-generation-process}.test.ts` — concurrent IDs, current-schema validation, durable stop replay and active-run generation revocation/preservation
 - `packages/server/src/start-readiness.test.ts` and `packages/server/src/application-lifecycle.test.ts` — gated startup publication, initialization rejection, stop-during-bootstrap/late cleanup and existing application-generation retirement
