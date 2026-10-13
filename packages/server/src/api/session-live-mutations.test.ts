@@ -76,6 +76,33 @@ describe('live session snapshots', () => {
     }
   });
 
+  it('clones a persisted message prefix without severing its interleaved command ancestry', async () => {
+    const source = await services.sessionManager.create({ cwd: root, title: 'Interleaved source' });
+    await services.sessionManager.addMessage(source.id, { role: 'user', content: 'Inspect prefix' });
+    const command = await services.sessionManager.addCommand(source.id, {
+      command: 'pwd', cwd: root, status: 'completed', output: root,
+    });
+    await services.sessionManager.addMessage(source.id, { role: 'assistant', content: 'Prefix result' });
+    const targetId = source.activeLeafId!;
+    await services.sessionManager.addMessage(source.id, { role: 'user', content: 'Keep source only' });
+    const sourceBefore = structuredClone(source);
+    const response = await request(`/api/sessions/${source.id}/clone`, 'POST', { messageId: targetId });
+    expect(response.status).toBe(201);
+    const copy = await response.json() as { id: string; activeLeafId: string;
+      messages: Array<{ id: string; content: string; parentMessageId?: string }>;
+      commands: Array<{ id: string; parentEntryId?: string }> };
+    expect(copy.messages.map(message => message.content)).toEqual(['Inspect prefix', 'Prefix result']);
+    expect(copy.commands).toHaveLength(1);
+    expect(copy.commands[0]!.id).not.toBe(command!.id);
+    expect(copy.commands[0]!.parentEntryId).toBe(copy.messages[0]!.id);
+    expect(copy.messages[1]!.parentMessageId).toBe(copy.commands[0]!.id);
+    expect(copy.activeLeafId).toBe(copy.messages[1]!.id);
+    const reloaded = await services.sessionStore.loadSession(copy.id);
+    expect(reloaded?.messages.map(message => message.content)).toEqual(['Inspect prefix', 'Prefix result']);
+    expect(reloaded?.commands?.[0]?.id).toBe(copy.commands[0]!.id);
+    expect(source).toEqual(sourceBefore);
+  });
+
   it('refuses a target removed between HTTP validation and the serialized copy snapshot', async () => {
     const source = await services.sessionManager.create({ cwd: root });
     await services.sessionManager.addMessage(source.id, { role: 'user', content: 'Target to abandon' });

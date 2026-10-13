@@ -2583,8 +2583,27 @@ export class SessionManager {
       && (throughMessageIndex === undefined || cutoff === undefined || command.timestamp.getTime() <= cutoff))) return null;
 
     // Deep clone entries and identifiers so edits cannot mutate or branch the source.
+    let sourceCommands = original.commands ?? [];
+    if (throughMessageIndex !== undefined) {
+      // Copy only commands required by the retained messages' parent chains.
+      // Clock skew must neither sever those chains nor include later descendants.
+      const parents = new Map<string, string | undefined>();
+      for (const message of sourceMessages) parents.set(message.id, message.parentMessageId);
+      for (const command of sourceCommands) parents.set(command.id, command.parentEntryId);
+      const ancestors = new Set<string>();
+      for (const message of sourceMessages) {
+        let cursor: string | undefined = message.id;
+        while (cursor && !ancestors.has(cursor)) {
+          ancestors.add(cursor);
+          cursor = parents.get(cursor);
+        }
+      }
+      sourceCommands = sourceCommands.filter(command => ancestors.has(command.id));
+      // Retain the conservative timestamp gate above, and also refuse a required
+      // running ancestor whose timestamp is ahead of the selected message.
+      if (sourceCommands.some(command => command.status === 'running')) return null;
+    }
     const messageIds = new Map(sourceMessages.map(message => [message.id, crypto.randomUUID()]));
-    const sourceCommands = throughMessageIndex === undefined ? original.commands ?? [] : [];
     const commandIds = new Map(sourceCommands.map(command => [command.id, `command-${crypto.randomUUID()}`]));
     const clonedMessages = structuredClone(sourceMessages).map(message => ({
       ...message,

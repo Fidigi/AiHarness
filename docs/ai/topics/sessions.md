@@ -85,6 +85,8 @@ This is not a cross-process compare-and-swap, an inherited-policy watcher or a t
 
 Web can fork or clone an explicitly targeted persisted message while its source agent continues; the copy uses a serialized snapshot and does not move or stop the source. Core `forkSession`/`cloneSession` accept stable message IDs alongside legacy numeric positions and resolve IDs against that same serialized snapshot, so a concurrent compaction cannot silently change the selected message. A removed target fails without creating a copy; HTTP returns `409 MESSAGE_TARGET_CHANGED`. Full-source copies during a run require an explicit target; unwritten stream IDs and prefixes containing running commands are refused. `PATCH activeLeafId` remains locked until the source run is idle. Web history edits are staged locally: only Send creates a related session via `POST /api/sessions/:id/fork` with `{messageId, before: true}`. Core's `forkSessionAtEntry(..., {before: true})` copies ancestors but omits that user message, including the empty-prefix case. Cancel, navigation and reload cannot create or move a branch. No persisted schema changes are needed.
 
+A message-targeted clone retains the command ancestors needed by every copied message and remaps their internal parents before persistence. Command inclusion follows parent IDs, not wall-clock order: a future-dated ancestor stays included, while a backdated descendant or unlinked command is not copied into the prefix. Excluded-from-context flags survive. Required running ancestors are refused before creation, including those dated after the target; the existing conservative timestamp-based running-command refusal also remains. Full clones retain their existing command-copy policy. This does not add compaction/branch-summary/custom-entry clone remapping.
+
 Raw RPC entries/tree include all retained branches; normal messages, fork candidates, and effective context follow only the active parent chain. Branch summaries and compactions also advance that chain. The format is still v2, so labels and clone handling for every custom entry remain incomplete.
 
 ### Web windows
@@ -103,6 +105,7 @@ Lists return metadata rather than full histories. Session state starts with a bo
 ## Associated Tests
 
 - `packages/core/src/sessions/session-manager.test.ts` — JSONL, IDs, 64 MiB/inventory/path bounds, stable reads, atomic rewrites, concurrent independent-store append/save locking, redaction, branches, clones and context
+- `packages/core/src/sessions/session-clone-prefix.test.ts` — durable/volatile prefix command ancestry, stable/numeric targets, clock skew, ID remapping, source-byte conservation and unchanged full-clone/running-command refusals
 - `packages/core/src/sessions/serialization.test.ts` — dates, rich data, redaction and legacy files
 - `packages/core/src/sessions/compaction.test.ts` — estimates, policy and compaction targets
 - `packages/core/src/sessions/session-compaction-admission.test.ts` — real JSONL cancellation, policy/branch/identity replacement, queued admission, reentrant deduplication and the started-persistence boundary
