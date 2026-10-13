@@ -41,7 +41,7 @@ import {
   type ThinkingLevel,
 } from '@ai-harness/core';
 import { reserveProcessStdoutForJsonLines } from '../cli/json-output.js';
-import { configuredExtensionSelectors, ExtensionLoader } from '../extensions/extension-loader.js';
+import { configuredBuiltinExtensions, configuredExtensionSelectors, explicitExtensionFiles, ExtensionLoader } from '../extensions/extension-loader.js';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -95,6 +95,7 @@ export interface RpcStartupOptions {
   fork?: string;
   name?: string;
   extensions?: string[];
+  noExtensions?: boolean;
   /** Internal, already-loaded startup generation. Supply registry and loader together. */
   extensionRegistry?: ExtensionRegistry;
   extensionLoader?: ExtensionLoader;
@@ -295,6 +296,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       cwd: canonicalCwd,
       projectTrusted: projectResourcesTrusted,
     });
+    const builtinExtensions = configuredBuiltinExtensions(settingsResolution, options);
     const mcpOAuth = process.env.AI_HARNESS_MASTER_KEY && settingsResolution.agentDirTrusted
       ? new McpOAuthCredentialManager(
         new EncryptedCredentialStore(
@@ -329,6 +331,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
         }),
       } : {}),
     });
+    await mcpHost.setEnabled(builtinExtensions.mcp);
     reportSettingsDiagnostics(settingsResolution, value => redactor.redact(value));
     const workspaceDescriptor = await workspaceManager.describe(canonicalCwd, projectTrusted);
     const pluginService = new PluginService(
@@ -351,7 +354,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
         [packageSkills, packagePrompts, packageExtensions] = await Promise.all([
           pluginService.getEnabledResourceLocations('skill', packageContext),
           pluginService.getEnabledResourceLocations('prompt', packageContext),
-          pluginService.getEnabledExtensionFiles(packageContext),
+          options.noExtensions ? Promise.resolve([]) : pluginService.getEnabledExtensionFiles(packageContext),
         ]);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -417,11 +420,13 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     const extensionLoader = options.extensionLoader ?? new ExtensionLoader(extensionRegistry, {
       cwd,
       includeGlobalLocation: false,
+      includeProjectLocation: !options.noExtensions,
+      includeEnvironmentPaths: !options.noExtensions,
       paths: [
-        ...(settingsResolution.agentDirTrusted ? [path.join(settingsResolution.agentDir, 'extensions')] : []),
-        ...(options.extensions ?? []), ...packageExtensions,
+        ...(settingsResolution.agentDirTrusted && !options.noExtensions ? [path.join(settingsResolution.agentDir, 'extensions')] : []),
+        ...explicitExtensionFiles(options.extensions), ...packageExtensions,
       ],
-      selectors: () => configuredExtensionSelectors(settingsResolution),
+      selectors: () => configuredExtensionSelectors(settingsResolution, options.noExtensions),
       isProjectTrusted: () => projectResourcesTrusted,
     });
     if (!options.extensionLoader) {
@@ -535,7 +540,8 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
           const loadout = createAgentToolLoadout({
             staticTools: registeredTools,
             currentStaticTools: () => extensionRegistry.getTools(),
-            codemode: settingsResolution.settings.codemode,
+            codemode: builtinExtensions.codemode ? settingsResolution.settings.codemode : { enabled: false },
+            toolSearchEnabled: builtinExtensions['tool-search'],
             redactText: value => redactor.redact(value),
             dynamicSource: {
               directTools: prepared.tools,

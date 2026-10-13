@@ -2,6 +2,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   ExtensionModuleLoader,
+  resolveBuiltinExtensionPolicy,
+  type BuiltinExtensionPolicy,
   type ExtensionModuleSelector,
   type ResolvedAgentSettings,
   type ExtensionModuleLoaderOptions,
@@ -21,7 +23,24 @@ export class ExtensionLoader extends ExtensionModuleLoader {
 
 /** Keep selectors ordered until Core has discovered actual files. Built-in
  * capability switches are not executable paths and remain host-owned. */
-export function configuredExtensionSelectors(settings: ResolvedAgentSettings): ExtensionModuleSelector[] {
+export function configuredBuiltinExtensions(settings: ResolvedAgentSettings, options: {
+  extensions?: readonly string[]; noExtensions?: boolean;
+}): BuiltinExtensionPolicy {
+  return resolveBuiltinExtensionPolicy({
+    global: settings.globalSettings.extensions,
+    project: settings.projectSettings.extensions,
+    projectTrusted: settings.projectTrusted,
+    noExtensions: options.noExtensions,
+    explicit: options.extensions,
+  });
+}
+
+export function explicitExtensionFiles(entries: readonly string[] = []): string[] {
+  return entries.filter(entry => !entry.startsWith('builtin:'));
+}
+
+export function configuredExtensionSelectors(settings: ResolvedAgentSettings, noExtensions = false): ExtensionModuleSelector[] {
+  if (noExtensions) return [];
   const layer = (entries: readonly string[] | undefined, baseDir: string): ExtensionModuleSelector[] => (
     (entries ?? []).filter(entry => !/^[+!-]?builtin:/u.test(entry)).map(entry => {
       const marker = /^[+!-]/u.test(entry) ? entry[0]! : '';

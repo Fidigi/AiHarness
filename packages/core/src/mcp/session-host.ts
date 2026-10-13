@@ -458,6 +458,7 @@ export class McpSessionHost {
   private readonly statuses = new Map<string, McpServerRuntimeStatus>();
   private commandTail: Promise<void> = Promise.resolve();
   private closed = false;
+  private enabled = true;
 
   constructor(options: McpSessionHostOptions) {
     this.agentDir = options.agentDir;
@@ -480,9 +481,19 @@ export class McpSessionHost {
     this.oauthProviderFactory = factory;
   }
 
+  /** Disable automatic hosting without closing the reusable host. Retirement is
+   * synchronous before awaiting transport cleanup; reenablement never connects. */
+  async setEnabled(enabled: boolean): Promise<void> {
+    if (typeof enabled !== 'boolean') throw new Error('MCP host enablement must be boolean.');
+    if (this.closed) throw new Error('The MCP session host is closed.');
+    this.enabled = enabled;
+    if (!enabled) await this.releaseAllSessions();
+  }
+
   async prepareForPrompt(options: PrepareMcpSessionOptions): Promise<PreparedMcpTools> {
     if (this.closed) throw new Error('The MCP session host is closed.');
     throwIfAborted(options.signal);
+    if (!this.enabled) return this.buildPreparedTools(undefined, options.preset);
     let session = this.sessions.get(options.sessionId);
     if (!session || session.released) {
       session = { cwd: options.cwd, records: new Map(), tail: Promise.resolve(), released: false };
@@ -495,7 +506,7 @@ export class McpSessionHost {
   }
 
   getPreparedTools(sessionId: string, preset?: Session['toolPreset']): PreparedMcpTools {
-    const session = this.sessions.get(sessionId);
+    const session = this.enabled ? this.sessions.get(sessionId) : undefined;
     return this.buildPreparedTools(session, preset);
   }
 
@@ -563,6 +574,10 @@ export class McpSessionHost {
   async shutdown(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    await this.releaseAllSessions();
+  }
+
+  private async releaseAllSessions(): Promise<void> {
     const sessions = [...this.sessions.values()];
     this.sessions.clear();
     for (const session of sessions) {
@@ -574,7 +589,7 @@ export class McpSessionHost {
 
   private assertSessionActive(session: HostedSession, signal?: AbortSignal): void {
     throwIfAborted(signal);
-    if (this.closed || session.released) throw abortError('The MCP session was released.');
+    if (this.closed || !this.enabled || session.released) throw abortError('The MCP session was released.');
   }
 
   private async syncSession(
@@ -876,6 +891,7 @@ export class McpSessionHost {
     signal?: AbortSignal,
   ): Promise<ExtensionToolResult> {
     throwIfAborted(signal);
+    if (this.closed || !this.enabled) throw new Error('MCP hosting is disabled.');
     const binding = bindings.get(name);
     if (!binding) throw new Error(`Unknown or disabled MCP tool: ${name}`);
     const { record, remote } = binding;

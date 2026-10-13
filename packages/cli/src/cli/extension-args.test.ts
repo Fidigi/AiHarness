@@ -8,6 +8,20 @@ const options: ExtensionOptionDescriptor[] = [
 ];
 
 describe('extension CLI option parsing/help/completion', () => {
+  it('parses both no-extensions spellings without swallowing explicit paths or prompt text', () => {
+    for (const flag of ['--no-extensions', '-ne']) {
+      expect(parseCliArguments([flag, '-e', 'builtin:mcp', '-e', 'file.mjs'])).toMatchObject({ noExtensions: true, extensions: ['builtin:mcp', 'file.mjs'] });
+      expect(parseCliArguments(['Hello', flag])).toMatchObject({ noExtensions: false, messages: ['Hello', flag] });
+    }
+    expect(() => parseCliArguments(['--no-extensions=false'])).toThrow(/does not accept/);
+    expect(completeCliOptions('--no-ext', [])).toEqual(['--no-extensions']);
+  });
+  it('requires no-extensions before contributed-option discovery in bootstrap parsing', () => {
+    for (const flag of ['--no-extensions', '-ne']) {
+      expect(() => parseCliArguments(['--review-check', flag], [], true)).toThrow(/must precede/);
+      expect(parseCliArguments([flag, '--review-check'], [], true)).toMatchObject({ noExtensions: true, deferredOptions: ['--review-check'] });
+    }
+  });
   it('parses explicit booleans and strings, keeping prompt/attachment boundaries', () => {
     expect(parseCliArguments(['--review-check=false', '--review-style=full', '@notes', 'hello', '--review-check'], options))
       .toMatchObject({ extensionOptions: { 'review-check': false, 'review-style': 'full' }, fileArgs: ['notes'], messages: ['hello', '--review-check'] });

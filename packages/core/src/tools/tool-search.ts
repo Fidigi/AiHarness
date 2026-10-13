@@ -146,6 +146,8 @@ export interface CreateAgentToolLoadoutOptions<
   selection?: ToolSelectionOptions;
   initialLoadedTools?: Iterable<string>;
   codemode?: CodemodeSettings;
+  /** Admission of the synthetic model-facing tool, independent of prior activation or codemode search. */
+  toolSearchEnabled?: boolean;
   redactText?: (value: string) => string;
   currentStaticTools?: () => readonly TStatic[];
 }
@@ -475,7 +477,7 @@ export function createAgentToolLoadout<
   const loadout = createToolSearchLoadout<TStatic | TDynamic>(
     [...selectedStatic, ...selectedDynamic, ...currentSearchable()],
     {
-      enabled: searchToolEnabled(selection),
+      enabled: options.toolSearchEnabled !== false && searchToolEnabled(selection),
       potentialSearchableTools: selectedStatic.some(tool => isSearchableToolExposure(agentToolExposure(tool)))
         || Boolean(options.dynamicSource?.hasPotentialSearchableTools),
       initialLoadedTools: options.initialLoadedTools,

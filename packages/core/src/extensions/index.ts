@@ -1,3 +1,5 @@
+export { BUILTIN_EXTENSION_NAMES, resolveBuiltinExtensionPolicy } from './builtin-extensions.js';
+export type { BuiltinExtensionName, BuiltinExtensionPolicy } from './builtin-extensions.js';
 export { ExtensionRegistry } from './extension-registry.js';
 export { ExtensionModuleLoader } from './module-loader.js';
 export type {

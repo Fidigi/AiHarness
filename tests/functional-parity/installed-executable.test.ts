@@ -51,7 +51,8 @@ Options:
   --fullscreen                   Legacy fullscreen alias
   --regular, --no-fullscreen     Legacy regular-mode aliases
   --theme <name|file>            Select dark, light, or a custom theme file
-  -e, --extension <path>         Load an extension file or directory (repeatable)
+  -e, --extension <path|builtin:name> Load an explicit extension (repeatable)
+  -ne, --no-extensions           Disable discovery and optional built-ins; explicit -e still works
   --skill <path>                 Add a trusted skill file/directory selector (repeatable)
   --prompt-template <path>       Add a trusted prompt file/directory selector (repeatable)
   -ns, --no-skills               Disable skill discovery for this run

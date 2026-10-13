@@ -26,6 +26,7 @@ export interface ExtensionModuleLoaderOptions {
   isProjectTrusted?: () => boolean | Promise<boolean>;
   includeGlobalLocation?: boolean;
   includeProjectLocation?: boolean;
+  includeEnvironmentPaths?: boolean;
 }
 
 export interface ExtensionModuleLoadError {
@@ -196,6 +197,7 @@ export class ExtensionModuleLoader {
   private readonly isProjectTrusted: NonNullable<ExtensionModuleLoaderOptions['isProjectTrusted']>;
   private readonly includeGlobalLocation: boolean;
   private readonly includeProjectLocation: boolean;
+  private readonly includeEnvironmentPaths: boolean;
   private managedIds = new Set<string>();
   private generation = 0;
   // Failed candidates are still cached by ESM. Never reuse an attempted import URL.
@@ -214,6 +216,7 @@ export class ExtensionModuleLoader {
     this.isProjectTrusted = options.isProjectTrusted ?? (() => true);
     this.includeGlobalLocation = options.includeGlobalLocation !== false;
     this.includeProjectLocation = options.includeProjectLocation !== false;
+    this.includeEnvironmentPaths = options.includeEnvironmentPaths !== false;
   }
 
   loadAll(): Promise<ExtensionModuleLoadResult> {
@@ -246,7 +249,7 @@ export class ExtensionModuleLoader {
     const candidates = [
       ...(this.includeGlobalLocation ? [{ path: path.join(this.homeDir, '.ai-harness', 'extensions'), project: false }] : []),
       ...(this.includeProjectLocation ? [{ path: path.join(this.cwd, '.ai-harness', 'extensions'), project: true }] : []),
-      ...environment.map(candidate => ({ path: candidate, project: false })),
+      ...(this.includeEnvironmentPaths ? environment.map(candidate => ({ path: candidate, project: false })) : []),
       ...explicit.map(candidate => ({ path: candidate, project: false })),
     ];
     const projectTrusted = await this.isProjectTrusted();

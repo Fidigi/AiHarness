@@ -3,7 +3,7 @@ import {
   ExtensionRegistry, loadAgentSettings, PluginService,
   resolvePreTrustAgentDirectory, WorkspaceManager,
 } from '@ai-harness/core';
-import { configuredExtensionSelectors, ExtensionLoader } from '../extensions/extension-loader.js';
+import { configuredBuiltinExtensions, configuredExtensionSelectors, explicitExtensionFiles, ExtensionLoader } from '../extensions/extension-loader.js';
 import { ProjectTrustManager, resolveProjectTrust } from '../security/project-trust.js';
 import { CliArgumentError, parseCliArguments, type CliArguments } from './args.js';
 
@@ -24,26 +24,29 @@ export async function prepareExtensionStartup(raw: readonly string[], bootstrap:
     includeContextFiles: !bootstrap.noContextFiles,
   });
   const settings = await loadAgentSettings({ cwd, projectTrusted: trust.resourceTrusted });
+  configuredBuiltinExtensions(settings, bootstrap);
   const workspaceManager = new WorkspaceManager({ allowedRoots: [cwd], defaultCwd: cwd });
   await workspaceManager.initialize();
   const descriptor = await workspaceManager.describe(cwd, trust.trusted);
   const plugins = new PluginService(workspaceManager, trustManager, path.join(settings.agentDir, 'plugins.json'), settings.agentDir);
   let packagePaths: string[] = [];
-  if (settings.agentDirTrusted) {
+  if (settings.agentDirTrusted && !bootstrap.noExtensions) {
     await plugins.load();
     packagePaths = await plugins.getEnabledExtensionFiles({ cwd, projectId: descriptor.id, projectTrusted: trust.resourceTrusted });
   }
   const registry = new ExtensionRegistry();
   let currentTrusted: () => boolean = () => trust.resourceTrusted;
   let currentPaths: () => Promise<string[]> = async () => [
-    ...(settings.agentDirTrusted ? [path.join(settings.agentDir, 'extensions')] : []),
-    ...bootstrap.extensions,
+    ...(settings.agentDirTrusted && !bootstrap.noExtensions ? [path.join(settings.agentDir, 'extensions')] : []),
+    ...explicitExtensionFiles(bootstrap.extensions),
     ...packagePaths,
   ];
-  let currentSelectors = () => configuredExtensionSelectors(settings);
+  let currentSelectors = () => configuredExtensionSelectors(settings, bootstrap.noExtensions);
   const loader = new ExtensionLoader(registry, {
     cwd,
     includeGlobalLocation: false,
+    includeProjectLocation: !bootstrap.noExtensions,
+    includeEnvironmentPaths: !bootstrap.noExtensions,
     paths: () => currentPaths(),
     selectors: () => currentSelectors(),
     isProjectTrusted: () => currentTrusted(),

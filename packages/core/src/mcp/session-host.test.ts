@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ExtensionRuntimeContext } from '../extensions/extension-registry.js';
 import { ProjectTrustManager } from '../security/project-trust.js';
+import { SessionManager } from '../sessions/session-manager.js';
 import { inspectMcpConfig } from './config-inventory.js';
 import { McpSessionHost, type McpHostConnect } from './session-host.js';
 import { createAgentToolLoadout } from '../tools/tool-search.js';
@@ -31,13 +32,66 @@ async function writeConfig(agentDir: string, servers: Record<string, unknown>): 
   await writeFile(path.join(agentDir, 'mcp.json'), JSON.stringify({ version: 1, mcpServers: servers }));
 }
 
-const context = {} as ExtensionRuntimeContext;
+const context: ExtensionRuntimeContext = { sessionManager: new SessionManager(), notify: () => undefined };
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
 
 describe('McpSessionHost', () => {
+  it('disables automatic hosting before config/connection work and does not reopen a shut down host', async () => {
+    const { agentDir, project } = await workspace();
+    await writeFile(path.join(agentDir, 'mcp.json'), 'not a valid inventory');
+    const connect = vi.fn<McpHostConnect>();
+    const host = new McpSessionHost({ agentDir, connect });
+    await host.setEnabled(false);
+    expect((await host.prepareForPrompt({ sessionId: 'disabled', cwd: project })).tools).toEqual([]);
+    expect(host.getPreparedTools('disabled').tools).toEqual([]); expect(connect).not.toHaveBeenCalled();
+    const abort = new AbortController(); abort.abort();
+    await expect(host.prepareForPrompt({ sessionId: 'disabled', cwd: project, signal: abort.signal })).rejects.toMatchObject({ name: 'AbortError' });
+    await host.shutdown(); await expect(host.setEnabled(true)).rejects.toThrow('closed');
+  });
+
+  it('retires every session synchronously before asynchronous close, then permits fresh lazy enablement', async () => {
+    const { agentDir, project } = await workspace();
+    await writeConfig(agentDir, { fixture: { command: 'node' } });
+    let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+    const close = vi.fn(() => gate); const call = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'ok' }] }));
+    const connect = vi.fn<McpHostConnect>(async () => ({
+      tools: [{ name: 'read', remoteName: 'read', description: 'Read', parameters: {}, readOnly: true }],
+      redact: value => value, close, callTool: call,
+    }));
+    const host = new McpSessionHost({ agentDir, connect });
+    try {
+      const first = await host.prepareForPrompt({ sessionId: 'one', cwd: project });
+      await host.prepareForPrompt({ sessionId: 'two', cwd: project });
+      expect(connect).toHaveBeenCalledTimes(2);
+      const closing = host.setEnabled(false);
+      await expect(first.execute('mcp__fixture__read', {}, context)).rejects.toThrow('disabled');
+      expect(close).toHaveBeenCalledTimes(2); expect(call).not.toHaveBeenCalled();
+      expect(host.getPreparedTools('two').tools).toEqual([]);
+      release(); await closing; await host.setEnabled(true); expect(connect).toHaveBeenCalledTimes(2);
+      await expect(first.execute('mcp__fixture__read', {}, context)).rejects.toThrow('not connected');
+      const fresh = await host.prepareForPrompt({ sessionId: 'one', cwd: project });
+      await fresh.execute('mcp__fixture__read', {}, context);
+      expect(connect).toHaveBeenCalledTimes(3); expect(call).toHaveBeenCalledTimes(1);
+    } finally { release(); await host.shutdown(); }
+  });
+
+  it('cannot start retired discovery after disable and immediate reenable', async () => {
+    const { agentDir, project, trust } = await workspace();
+    await writeConfig(agentDir, { fixture: { command: 'node', cwd: '.' } });
+    let release!: () => void; let reached!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; }); const started = new Promise<void>(resolve => { reached = resolve; });
+    const connect = vi.fn<McpHostConnect>(async () => ({ tools: [], redact: value => value, callTool: async () => ({ content: [] }), close: async () => undefined }));
+    const host = new McpSessionHost({ agentDir, trustManager: trust, connect, resolveWorkingDirectory: async () => { reached(); await gate; return project; } });
+    try {
+      const preparing = host.prepareForPrompt({ sessionId: 'retired', cwd: project }).catch(error => error as Error);
+      await started; await host.setEnabled(false); await host.setEnabled(true); release();
+      expect(await preparing).toMatchObject({ name: 'AbortError' }); expect(connect).not.toHaveBeenCalled();
+    } finally { release(); await host.shutdown(); }
+  });
+
   it('keeps a stdio connection across prompts, enforces read-only exposure, invokes tools, and redacts output', async () => {
     const { agentDir, project, trust } = await workspace();
     await writeConfig(agentDir, {
@@ -143,18 +197,19 @@ describe('McpSessionHost', () => {
     try {
       const prepared = await host.prepareForPrompt({ sessionId: 'nested', cwd: project, preset: 'read-only' });
       expect(prepared.tools).toEqual([]);
-      const dynamicSource = { directTools: prepared.tools, hasPotentialSearchableTools: prepared.hasPotentialDiscoverableTools,
-        currentSearchableTools: prepared.currentDiscoverableTools, waitForSearchableTools: prepared.waitForDiscoverableTools,
+      const dynamicSource = { directTools: prepared.tools, hasPotentialSearchableTools: prepared.hasPotentialDiscoverableTools ?? false,
+        currentSearchableTools: () => prepared.currentDiscoverableTools?.() ?? [],
+        waitForSearchableTools: (signal?: AbortSignal) => prepared.waitForDiscoverableTools?.(signal) ?? Promise.resolve([]),
         has: (name: string) => name.startsWith('mcp__') };
       const loadout = createAgentToolLoadout({ staticTools: [], dynamicSource, selection: { preset: 'read-only' },
         codemode: { enabled: true } });
       const result = await loadout.executeCodemode({ code: 'text(await tools.mcp__docs__lookup({ topic: "safe" })); text(typeof tools.mcp__docs__mutate)' },
-        { notify: () => undefined } as ExtensionRuntimeContext, (name, input, ctx, signal) => prepared.execute(name, input, ctx, signal));
+        context, (name, input, ctx, signal) => prepared.execute(name, input, ctx, signal));
       expect(result.isError).toBeFalsy(); expect(result.content).toContain('lookup:');
       expect(result.content).toContain('undefined'); expect(result.content).not.toContain('nested-private');
       const denied = createAgentToolLoadout({ staticTools: [], dynamicSource,
         selection: { preset: 'read-only', allowedTools: ['codemode', 'mcp__docs__mutate'] } });
-      expect(await denied.executeCodemode({ code: 'await tools.mcp__docs__mutate({})' }, { notify: () => undefined } as ExtensionRuntimeContext,
+      expect(await denied.executeCodemode({ code: 'await tools.mcp__docs__mutate({})' }, context,
         (name, input, ctx, signal) => prepared.execute(name, input, ctx, signal))).toMatchObject({ isError: true });
       await expect(prepared.execute('mcp__docs__mutate', {}, context)).rejects.toThrow('Unknown or disabled');
     } finally { await host.shutdown(); }

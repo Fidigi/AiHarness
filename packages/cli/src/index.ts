@@ -66,7 +66,7 @@ import {
 } from './tui/terminal-escape.js';
 import { resolveTerminalMode } from './tui/mode.js';
 import { KeyBindingManager } from './utils/keybinding-manager.js';
-import { configuredExtensionSelectors, ExtensionLoader } from './extensions/extension-loader.js';
+import { configuredBuiltinExtensions, configuredExtensionSelectors, explicitExtensionFiles, ExtensionLoader } from './extensions/extension-loader.js';
 import { runToolLoop } from './agent/tool-loop.js';
 import { streamProviderTurn } from './agent/provider-turn.js';
 import { parseResourceCommandLine, ResourceManager } from './resources/resource-manager.js';
@@ -355,6 +355,7 @@ async function main(): Promise<void> {
       fork: cliArguments.fork,
       name: cliArguments.name,
       extensions: cliArguments.extensions,
+      noExtensions: cliArguments.noExtensions,
       extensionRegistry: extensionStartup?.registry,
       extensionLoader: extensionStartup?.loader,
       skills: cliArguments.skills,
@@ -425,9 +426,13 @@ async function main(): Promise<void> {
     return resolved;
   };
   let settingsResolution = await resolveSettingsForTrust(true);
+  let builtinExtensions = configuredBuiltinExtensions(settingsResolution, cliArguments);
   let providerRuntime: Awaited<ReturnType<typeof createCliProviderRuntime>>;
   const reloadAgentSettings = async (): Promise<void> => {
-    settingsResolution = await resolveSettingsForTrust();
+    const candidate = await resolveSettingsForTrust();
+    const candidateBuiltins = configuredBuiltinExtensions(candidate, cliArguments);
+    settingsResolution = candidate;
+    builtinExtensions = candidateBuiltins;
   };
   const currentProjectTrust = (fallback: boolean): boolean => {
     if (cliArguments.projectTrust !== undefined) return cliArguments.projectTrust;
@@ -669,6 +674,7 @@ async function main(): Promise<void> {
       }),
     } : {}),
   });
+  await mcpHost.setEnabled(builtinExtensions.mcp);
   let earlyCleanupPromise: Promise<void> | undefined;
   const cleanupEarlyExit = (
     additional: readonly (() => void | Promise<void>)[] = [],
@@ -726,9 +732,9 @@ async function main(): Promise<void> {
     return;
   }
   const runtimeExtensionPaths = async (): Promise<string[]> => [
-      ...(settingsResolution.agentDirTrusted ? [path.join(settingsResolution.agentDir, 'extensions')] : []),
-      ...cliArguments.extensions,
-      ...(settingsResolution.agentDirTrusted ? await pluginService.getEnabledExtensionFiles({
+      ...(settingsResolution.agentDirTrusted && !cliArguments.noExtensions ? [path.join(settingsResolution.agentDir, 'extensions')] : []),
+      ...explicitExtensionFiles(cliArguments.extensions),
+      ...(settingsResolution.agentDirTrusted && !cliArguments.noExtensions ? await pluginService.getEnabledExtensionFiles({
         cwd: workspaceCwd,
         projectId: workspaceDescriptor.id,
         projectTrusted: mayLoadProjectResources(),
@@ -739,11 +745,13 @@ async function main(): Promise<void> {
         return [];
       }) : []),
     ];
-  const runtimeExtensionSelectors = () => configuredExtensionSelectors(settingsResolution);
+  const runtimeExtensionSelectors = () => configuredExtensionSelectors(settingsResolution, cliArguments.noExtensions);
   extensionStartup?.setDiscovery(runtimeExtensionPaths, mayLoadProjectResources, runtimeExtensionSelectors);
   const extensionLoader = extensionStartup?.loader ?? new ExtensionLoader(extensionRegistry, {
     cwd: workspaceCwd,
     includeGlobalLocation: false,
+    includeProjectLocation: !cliArguments.noExtensions,
+    includeEnvironmentPaths: !cliArguments.noExtensions,
     paths: runtimeExtensionPaths,
     selectors: runtimeExtensionSelectors,
     isProjectTrusted: mayLoadProjectResources,
@@ -774,6 +782,7 @@ async function main(): Promise<void> {
 
   extensionRegistry.setReloadHandler(async () => {
     await reloadAgentSettings();
+    await mcpHost.setEnabled(builtinExtensions.mcp);
     await refreshPluginService();
     const refreshedStoreId = `${settingsResolution.agentDirTrusted ? 'persistent' : 'memory'}:${path.resolve(settingsResolution.agentDir)}`;
     const refreshedRuntime = await createCliProviderRuntime(
@@ -1472,7 +1481,8 @@ async function main(): Promise<void> {
         const toolLoadout = createAgentToolLoadout({
           staticTools: extensionRegistry.getTools(),
           currentStaticTools: () => extensionRegistry.getTools(),
-          codemode: settingsResolution.settings.codemode,
+          codemode: builtinExtensions.codemode ? settingsResolution.settings.codemode : { enabled: false },
+          toolSearchEnabled: builtinExtensions['tool-search'],
           redactText: value => outputCredentialRedactor.redact(value),
           dynamicSource: {
             directTools: mcpPrepared.tools,
