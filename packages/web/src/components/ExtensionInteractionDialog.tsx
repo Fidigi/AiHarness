@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 import type { ExtensionInteractionSnapshot } from '@ai-harness/core';
 import type { ExtensionInteractionDialogProps } from './ExtensionInteractionBoundary';
 import './extension-interaction-dialog.css';
+import { currentEscapeModal, registerEscapeLayer } from '../services/escape-stack';
 
 export default function ExtensionInteractionDialog({ request, waitingCount, onResolve, restoreFocusRef, canRestoreFocus, canFocusInitially, renderOutput, t }: ExtensionInteractionDialogProps) {
   const [value, setValue] = useState<unknown>(() => interactionDraft(request));
@@ -178,6 +179,9 @@ function useFocusTrap(
     if (!active) return;
     cancelReturn.current?.();
     const dialog = container.current;
+    const releaseEscape = registerEscapeLayer({ document, kind: 'modal',
+      element: () => container.current === dialog ? dialog : null,
+      close: () => escapeHandler.current() });
     const fallback = restoreFocus?.current;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
     let newerFocus = false;
@@ -193,7 +197,8 @@ function useFocusTrap(
     document.addEventListener('focusin', rememberFocus, true);
     const focusInitial = () => {
       document.removeEventListener('focusin', rememberFocus, true);
-      if (newerFocus || initialAllowed.current?.() === false || !dialog?.isConnected || dialog !== container.current) return;
+      if (newerFocus || initialAllowed.current?.() === false || !dialog?.isConnected || dialog !== container.current
+        || currentEscapeModal(document) !== dialog) return;
       const focusedModal = document.activeElement?.closest('[role="dialog"][aria-modal="true"], [role="alertdialog"]');
       if (focusedModal && focusedModal !== dialog) return;
       const preferred = dialog.querySelector<HTMLElement>('[data-autofocus]');
@@ -204,10 +209,7 @@ function useFocusTrap(
       if (!dialog?.isConnected || dialog !== container.current) return;
       const focusedModal = document.activeElement?.closest('[role="dialog"][aria-modal="true"], [role="alertdialog"]');
       if (focusedModal && focusedModal !== dialog) return;
-      if (event.key === 'Escape') {
-        event.preventDefault(); event.stopPropagation(); escapeHandler.current(); return;
-      }
-      if (event.key !== 'Tab') return;
+      if (event.defaultPrevented || event.key !== 'Tab') return;
       const focusable = focusableElements(dialog);
       if (!focusable.length) { event.preventDefault(); dialog.focus(); return; }
       const first = focusable[0]!;
@@ -220,6 +222,7 @@ function useFocusTrap(
     };
     document.addEventListener('keydown', handleKeyDown, true);
     return () => {
+      releaseEscape();
       window.cancelAnimationFrame(frame);
       document.removeEventListener('keydown', handleKeyDown, true);
       document.removeEventListener('focusin', rememberEditing, true);
@@ -243,7 +246,8 @@ function useFocusTrap(
         if (!available(target) || (avoidKeyboard && !editableIntent.current && target?.matches('input, textarea, [contenteditable="true"]'))) return;
         const otherModal = [...document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"], [role="alertdialog"]')]
           .some(modal => modal.isConnected && modal.getClientRects().length > 0 && !modal.contains(target ?? null));
-        if (!otherModal) target?.focus({ preventScroll: true });
+        const topModal = currentEscapeModal(document);
+        if (!otherModal && (!topModal || topModal.contains(target ?? null))) target?.focus({ preventScroll: true });
       });
       cancelReturn.current = cancel;
       document.addEventListener('focusin', cancel, true);

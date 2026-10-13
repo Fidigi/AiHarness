@@ -1,4 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEscapeLayer } from '../hooks/useEscapeLayer';
 import type { CSSProperties, FormEvent, KeyboardEvent, ReactNode } from 'react';
 import { parseShellCommandInput } from '@ai-harness/core/shell-input';
 import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, Message, ModelCatalog, ProviderType, Session, TokenUsage } from '@ai-harness/core';
@@ -255,6 +256,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const [commandRun, setCommandRun] = useState<CommandSnapshot>();
   const [palette, setPalette] = useState<PaletteItem[]>([]);
   const [paletteIndex, setPaletteIndex] = useState(0);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<string>();
+  useEffect(() => { setDismissedSuggestions(undefined); }, [input, currentSession?.id]);
   const [fileIndex, setFileIndex] = useState<{ items: FileSuggestion[]; truncated: boolean }>({ items: [], truncated: false });
   const [remoteFileSuggestions, setRemoteFileSuggestions] = useState<FileSuggestion[]>([]);
   const [nearBottom, setNearBottom] = useState(true);
@@ -1049,15 +1052,17 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   };
   const toolPresetScope = settingScope('toolPreset', currentSession?.toolPreset !== undefined);
   const autoCompactionScope = settingScope('autoCompaction', currentSession?.autoCompaction !== undefined);
-  const slashQuery = input.startsWith('/') && !input.includes(' ') ? input.slice(1).toLocaleLowerCase() : undefined;
+  const slashQuery = dismissedSuggestions !== input && input.startsWith('/') && !input.includes(' ')
+    ? input.slice(1).toLocaleLowerCase() : undefined;
   const paletteResults = slashQuery === undefined ? [] : palette
     .filter(item => item.name.toLocaleLowerCase().includes(slashQuery))
     .slice(0, 10);
-  const fileResults = mentionQuery === undefined ? [] : rankFileSuggestions(
+  const fileResults = mentionQuery === undefined || dismissedSuggestions === input ? [] : rankFileSuggestions(
     [...new Map([...fileIndex.items, ...remoteFileSuggestions].map(item => [item.path, item])).values()],
     mentionQuery,
   ).slice(0, 10);
   const suggestionCount = paletteResults.length || fileResults.length;
+  useEscapeLayer(suggestionCount > 0, 'menu', () => { setDismissedSuggestions(input); }, textareaRef);
   const busyCompacting = compacting || automaticCompacting;
   const workspaceOperationTrusted = Boolean(workspace
     && (workspace.operationTrusted ?? workspace.trusted));
@@ -1647,6 +1652,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     else if (result.data?.id === currentRun.id) acceptInteractionSnapshot({ sessionId: currentSession.id, lastSequence: result.data.lastSequence, run: result.data }, guard);
   };
 
+  useEscapeLayer(active || compacting, 'agent', () => { void stop(); });
+
   const loadHistoryBefore = async (beforeMessageId?: string) => {
     if (!id || id.startsWith('draft:') || loadingHistory || !beforeMessageId) return;
     const container = messagesContainerRef.current;
@@ -2194,7 +2201,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           }}
           placeholder={t('chat.inputPlaceholder', { provider: activeProviderType })}
           aria-label={t('chat.inputLabel')}
-          autoFocus={!displayedInteraction}
+          autoFocus={!displayedInteraction && !window.matchMedia?.('(pointer: coarse)').matches}
           rows={1}
           disabled={starting || busyCompacting}
         />

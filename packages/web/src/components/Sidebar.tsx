@@ -20,6 +20,7 @@ import {
 } from '../services/api';
 import { useI18n } from '../hooks/useI18n';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useEscapeLayer } from '../hooks/useEscapeLayer';
 import { useSessionStore } from '../store/session-store';
 import LanguageSelector from './LanguageSelector';
 import { linkedDirectoryMessages } from './linked-directory-messages';
@@ -119,6 +120,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
 
   const query = useMemo(() => workspace ? `?cwd=${encodeURIComponent(workspace.cwd)}` : '', [workspace]);
   const selectedSessionId = sessionIdFromPathname(location.pathname) ?? activeSessionId;
+  useEscapeLayer(Boolean(renaming), 'menu', () => { setRenaming(undefined); }, sidebarRef);
   useFocusTrap(modal && !pendingWorkspace && !pickerOpen && !linkedDirectoryOpen, sidebarRef, () => onRequestClose?.());
   useFocusTrap(Boolean(pendingWorkspace), trustDialogRef, () => setPendingWorkspace(undefined));
   useFocusTrap(pickerOpen && !createFolderOpen && !linkedDirectoryOpen, pickerDialogRef, () => setPickerOpen(false));
@@ -471,7 +473,6 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
                       value={renameValue}
                       aria-label={t('session.rename')}
                       onChange={event => setRenameValue(event.target.value)}
-                      onKeyDown={event => { if (event.key === 'Escape') setRenaming(undefined); }}
                     />
                     <button type="submit" aria-label={t('common.save')}>✓</button>
                   </form>

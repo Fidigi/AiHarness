@@ -16,6 +16,8 @@ import { getAgentRun, getWebAuthStatus, listRunningAgentRuns } from './services/
 import { captureCanonicalRunGuard, useSessionStore } from './store/session-store';
 import { readPreferences, usePreferences } from './store/preferences';
 import { matchesShortcut } from './services/keyboard';
+import { keyboardComposing } from './services/escape-stack';
+import { useEscapeLayer } from './hooks/useEscapeLayer';
 import { InteractionViewLifetime } from './services/interaction-scope';
 
 const SettingsView = lazy(() => import('./components/SettingsView'));
@@ -43,6 +45,35 @@ function App() {
   const setRun = useSessionStore(state => state.setRun);
   const { t } = useI18n();
   const [preferences, setPreferences] = usePreferences();
+  const lastChatAddress = useRef('/');
+  const settingsInvoker = useRef<HTMLElement | null>(null);
+  const previousSettings = useRef(false);
+  useLayoutEffect(() => {
+    const settings = location.pathname.startsWith('/settings');
+    if (settings && !previousSettings.current) {
+      settingsInvoker.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
+    const leaving = previousSettings.current && !settings;
+    previousSettings.current = settings;
+    if (!settings) lastChatAddress.current = `${location.pathname}${location.search}${location.hash}`;
+    if (!leaving) return;
+    const invoker = settingsInvoker.current;
+    let newer = false;
+    const retire = () => { newer = true; };
+    document.addEventListener('focusin', retire, true);
+    const frame = requestAnimationFrame(() => {
+      document.removeEventListener('focusin', retire, true);
+      if (newer || document.activeElement !== document.body
+        || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      const coarse = window.matchMedia?.('(pointer: coarse)').matches;
+      const available = invoker?.isConnected && invoker.getClientRects().length > 0
+        && !invoker.closest('[inert], [aria-hidden="true"]') && !invoker.matches(':disabled')
+        && !(coarse && invoker.matches('input, textarea, [contenteditable="true"]'));
+      const target = available ? invoker : document.querySelector<HTMLElement>('main.main-content');
+      target?.focus({ preventScroll: true });
+    });
+    return () => { cancelAnimationFrame(frame); document.removeEventListener('focusin', retire, true); };
+  }, [location.pathname, location.search, location.hash]);
 
   useEffect(() => {
     const media = window.matchMedia?.('(max-width: 959px)');
@@ -159,7 +190,8 @@ function App() {
       setPreferences({ filesOpen: !filesOpen });
     };
     const shortcuts = (event: KeyboardEvent) => {
-      if (event.target instanceof Element && event.target.closest('[data-shortcut-capture]')) return;
+      if (event.key === 'Escape' || keyboardComposing(event, document)
+        || event.target instanceof Element && event.target.closest('[data-shortcut-capture]')) return;
       const binding = preferences.keybindings;
       let handled = true;
       if (matchesShortcut(event, binding.newSession)) {
@@ -201,15 +233,13 @@ function App() {
     setPaletteOpen(false);
   }, [location.pathname]);
 
-  useEffect(() => {
-    const closeOverlays = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || paletteOpen) return;
-      if (sidebarOpen) setSidebarOpen(false);
-      else if (filesOpen && window.matchMedia?.('(max-width: 959px)').matches) setFilesOpen(false);
-    };
-    window.addEventListener('keydown', closeOverlays);
-    return () => window.removeEventListener('keydown', closeOverlays);
-  }, [filesOpen, paletteOpen, sidebarOpen]);
+  useEscapeLayer(true, 'navigation', () => {
+    if (sidebarOpen) setSidebarOpen(false);
+    else if (filesOpen && isNarrow) setFilesOpen(false);
+    else if (location.pathname.startsWith('/settings')) navigate(lastChatAddress.current);
+    else return false;
+    return true;
+  });
 
   if (authenticated === null) return <div className="app-loading" role="status">{t('common.loading')}…</div>;
   if (!authenticated) return <LoginView onLogin={() => setAuthenticated(true)} />;
@@ -227,7 +257,7 @@ function App() {
       {sidebarOpen && <button className="mobile-backdrop" aria-label={t('common.close')} onClick={() => setSidebarOpen(false)} />}
       {(isNarrow || sidebarVisible) && <Sidebar isOpen={sidebarOpen} modal={isNarrow && sidebarOpen}
         inactive={isNarrow && !sidebarOpen} onRequestClose={() => setSidebarOpen(false)} />}
-      <main className="main-content">
+      <main className="main-content" tabIndex={-1}>
         <Routes>
           <Route path="/" element={<ChatView />} />
           <Route path="/chat/:id" element={<ChatView />} />

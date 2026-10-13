@@ -122,3 +122,23 @@ it('a retired picker cannot supersede a different newly active modal before its 
   expect(old.invoker.focus).not.toHaveBeenCalled();
   detach(next); closeNext?.(); paint();
 });
+
+it('preserves the original invoker across a still-visible parent trap suspension', () => {
+  const parent = modal(); const pause = setup(parent.dialogRef); paint();
+  const childOpener = new ElementStub(); parent.dialog.children.push(childOpener); childOpener.focus(); pause?.();
+  // Child owns focus, then leaves before the parent resumes its trap.
+  dom.activeElement = dom.body;
+  const close = setup(parent.dialogRef); paint(); expect(dom.activeElement).toBe(parent.input);
+  detach(parent.dialog); parent.dialogRef.current = null; close?.(); paint();
+  expect(dom.activeElement).toBe(parent.invoker);
+});
+
+it('a still-live older modal cannot steal initial focus from a newly committed sibling', () => {
+  const older = modal(); const closeOlder = setup(older.dialogRef);
+  // Its initial frame is pending when a distinct hook instance registers above it.
+  hooks.refs = [];
+  const newer = new ElementStub(); const input = new ElementStub(); newer.children = [input];
+  const closeNewer = setup(ref(newer)); paint();
+  expect(dom.activeElement).toBe(input); expect(older.input.focus).not.toHaveBeenCalled();
+  detach(newer); closeNewer?.(); detach(older.dialog); closeOlder?.(); paint();
+});

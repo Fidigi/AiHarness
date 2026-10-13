@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import type { SubagentConfiguration, SubagentProfile } from '@ai-harness/core';
 import { useI18n } from '../hooks/useI18n';
 import {
@@ -62,6 +63,8 @@ export function SubagentSettings() {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
   const [editor, setEditor] = useState<EditorValue>();
+  const editorRef = useRef<HTMLFormElement>(null);
+  useFocusTrap(Boolean(editor), editorRef, () => setEditor(undefined));
   const [targetScope, setTargetScope] = useState<'global' | 'project'>('project');
   const scope = [
     workspace?.cwd,
@@ -164,7 +167,7 @@ export function SubagentSettings() {
       {error && <p role="alert" className="status-warning">{error}</p>}
 
       {editor && (
-        <form className="subagent-profile-editor" role="dialog" aria-labelledby="subagent-editor-title"
+        <form ref={editorRef} tabIndex={-1} className="subagent-profile-editor" role="dialog" aria-labelledby="subagent-editor-title"
           onSubmit={event => void saveEditor(event)}>
           <h4 id="subagent-editor-title">{editor.id ? t('subagents.edit') : t('subagents.create')}</h4>
           <div className="subagent-editor-grid">

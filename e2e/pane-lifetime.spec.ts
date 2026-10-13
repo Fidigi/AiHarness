@@ -89,3 +89,123 @@ test('picker retirement does not cancel the nested folder modal initial focus', 
   await expect(picker).toBeVisible();
   expect(await picker.evaluate(element => element.contains(document.activeElement))).toBe(true);
 });
+
+// WEB-CHAT-10: real production App/controls, with only backend responses isolated.
+async function escapeProduct(page: Page) {
+  await page.addInitScript(() => localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({
+    version: 4, theme: 'light', locale: 'en', filesOpen: false, sidebarVisible: true, sound: false,
+  })));
+  const api = await installMockApi(page, { sessions: [mockSession('escape-stack', 'Escape stack')], holdAgentRun: true,
+    indexedFiles: ['README.md'], paletteItems: [{ name: 'echo', description: 'Echo', source: 'builtin' }] });
+  await page.goto('/chat/escape-stack?cwd=%2Fworkspace');
+  await expect(page.getByRole('textbox', { name: 'Message composer', exact: true })).toBeVisible();
+  return api;
+}
+const stops = (api: Awaited<ReturnType<typeof escapeProduct>>) => api.requests.filter(request => request.method === 'POST' && /\/api\/agent\/runs\/[^/]+\/stop$/.test(request.path));
+async function composingEscape(page: Page, selector: string) {
+  return page.locator(selector).evaluate(element => {
+    element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    element.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+}
+
+for (const coarse of [false, true]) {
+  test.describe(coarse ? 'coarse Escape stack' : 'desktop Escape stack', () => {
+    if (coarse) test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+    test('IME then nearest composer menu then agent Stop, without draft loss or repeat fan-out', async ({ page }) => {
+      const api = await escapeProduct(page);
+      const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
+      await composer.fill('Keep busy'); await composer.press('Enter');
+      await expect(page.locator('.stop-button')).toBeVisible();
+      await composer.fill('/echo'); await expect(page.locator('.input-container .command-palette')).toBeVisible();
+      expect(await composingEscape(page, '.input-container textarea')).toBe(false);
+      await expect(page.locator('.input-container .command-palette')).toBeVisible(); expect(stops(api)).toHaveLength(0);
+      await composer.evaluate(element => element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
+      for (const extra of [{ isComposing: true }, { keyCode: 229 }, { repeat: true }]) {
+        await composer.evaluate((element, extra) => element.dispatchEvent(new KeyboardEvent('keydown',
+          { key: 'Escape', bubbles: true, cancelable: true, ...extra })), extra);
+        await expect(page.locator('.input-container .command-palette')).toBeVisible(); expect(stops(api)).toHaveLength(0);
+      }
+      await composer.press('Escape'); await expect(page.locator('.input-container .command-palette')).toHaveCount(0);
+      await expect(composer).toHaveValue('/echo'); expect(stops(api)).toHaveLength(0);
+      await composer.fill('@README'); await expect(page.locator('.file-palette')).toBeVisible();
+      await composer.press('Escape'); await expect(page.locator('.file-palette')).toHaveCount(0);
+      await expect(composer).toHaveValue('@README'); expect(stops(api)).toHaveLength(0);
+      await composer.press('Escape'); await expect.poll(() => stops(api).length).toBe(1);
+      await expect(page.locator('.stop-button')).toHaveCount(0);
+      await composer.press('Escape'); expect(stops(api)).toHaveLength(1);
+    });
+
+    test('nested folder and picker consume separate Escapes and return focus without an unsolicited mobile editor', async ({ page }) => {
+      await escapeProduct(page);
+      if (coarse) await page.getByRole('button', { name: 'Toggle navigation' }).click();
+      const opener = page.locator('.workspace-button'); await opener.click();
+      const picker = page.locator('.directory-picker'); await expect(picker).toBeVisible();
+      if (coarse) await expect(picker).toBeFocused(); else await expect(picker.getByLabel('Workspace path')).toBeFocused();
+      expect(await composingEscape(page, '.directory-picker input')).toBe(false);
+      await expect(picker).toBeVisible();
+      await picker.locator('input').evaluate(element => element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
+      await picker.getByRole('button', { name: 'New folder', exact: true }).click();
+      const folder = page.getByRole('dialog', { name: 'Create a folder' }); await expect(folder).toBeVisible();
+      if (coarse) await expect(folder).toBeFocused(); else await expect(folder.getByLabel('Folder name')).toBeFocused();
+      await page.keyboard.press('Escape'); await expect(folder).toHaveCount(0); await expect(picker).toBeVisible();
+      await page.keyboard.press('Escape'); await expect(picker).toHaveCount(0); await expect(opener).toBeFocused();
+    });
+
+    test('dialog before Settings before chat, with IME protection and exact route return', async ({ page }) => {
+      await escapeProduct(page);
+      if (coarse) await page.getByRole('button', { name: 'Toggle navigation' }).click();
+      await page.locator('.sidebar-footer').getByRole('button', { name: /Settings/ }).click();
+      await expect(page).toHaveURL(/\/settings/); await expect(page.locator('.settings-view')).toBeVisible();
+      const field = page.locator('.settings-view input').first();
+      expect(await field.evaluate(element => {
+        element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+        const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }); element.dispatchEvent(event);
+        return event.defaultPrevented;
+      })).toBe(false);
+      await expect(page).toHaveURL(/\/settings/);
+      await field.evaluate(element => element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
+      if (coarse) await page.getByRole('button', { name: 'Toggle navigation' }).click();
+      await page.locator('.workspace-button').click(); await expect(page.locator('.directory-picker')).toBeVisible();
+      await page.keyboard.press('Escape'); await expect(page.locator('.directory-picker')).toHaveCount(0); await expect(page).toHaveURL(/\/settings/);
+      if (coarse) { await page.keyboard.press('Escape'); await expect(page.locator('.sidebar')).not.toHaveClass(/open/); }
+      await page.keyboard.press('Escape'); await expect(page).toHaveURL(/\/chat\/escape-stack\?cwd=%2Fworkspace$/);
+      await expect(page.getByRole('textbox', { name: 'Message composer', exact: true })).toBeVisible();
+      expect(await page.evaluate(() => !(matchMedia('(pointer: coarse)').matches && document.activeElement?.matches('input, textarea')))).toBe(true);
+    });
+
+    test('the inline profile dialog owns Escape before Settings and restores its create button', async ({ page }) => {
+      const api = await escapeProduct(page);
+      if (coarse) await page.getByRole('button', { name: 'Toggle navigation' }).click();
+      await page.locator('.sidebar-footer').getByRole('button', { name: /Settings/ }).click();
+      const create = page.getByRole('button', { name: 'Create profile', exact: true }); await create.click();
+      const editor = page.getByRole('dialog', { name: 'Create profile', exact: true }); await expect(editor).toBeVisible();
+      if (coarse) await expect(editor).toBeFocused(); else await expect(editor.locator('input').first()).toBeFocused();
+      expect(await editor.locator('input').first().evaluate(element => {
+        element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+        const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }); element.dispatchEvent(event);
+        return event.defaultPrevented;
+      })).toBe(false);
+      await expect(editor).toBeVisible();
+      await editor.locator('input').first().evaluate(element => element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
+      await page.keyboard.press('Escape'); await expect(editor).toHaveCount(0); await expect(create).toBeFocused();
+      await expect(page).toHaveURL(/\/settings/);
+      expect(api.requests.filter(request => request.method === 'POST' && request.path === '/api/subagents/profiles')).toHaveLength(0);
+      await page.keyboard.press('Escape'); await expect(page).toHaveURL(/\/chat\/escape-stack\?cwd=%2Fworkspace$/);
+    });
+
+    test('a global palette takes priority over an already open picker and returns ownership to it', async ({ page }) => {
+      await escapeProduct(page);
+      if (coarse) await page.getByRole('button', { name: 'Toggle navigation' }).click();
+      await page.locator('.workspace-button').click(); await expect(page.locator('.directory-picker')).toBeVisible();
+      await page.keyboard.press('Control+k'); await expect(page.locator('.global-command-palette')).toBeVisible();
+      if (coarse) await expect(page.locator('.global-command-palette')).toBeFocused();
+      await page.keyboard.press('Escape'); await expect(page.locator('.global-command-palette')).toHaveCount(0);
+      await expect(page.locator('.directory-picker')).toBeVisible();
+      await page.keyboard.press('Escape'); await expect(page.locator('.directory-picker')).toHaveCount(0);
+    });
+  });
+}

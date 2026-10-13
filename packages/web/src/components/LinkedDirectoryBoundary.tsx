@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../hooks/useI18n';
+import { useEscapeLayer } from '../hooks/useEscapeLayer';
 import { linkedDirectoryMessages } from './linked-directory-messages';
 import { linkedDirectoryBoundaryMessages } from './linked-directory-boundary-messages';
 import type LinkedDirectoryModal from './LinkedDirectoryModal';
@@ -57,18 +58,7 @@ export default function LinkedDirectoryBoundary({ cwd, initialDirectory, onClose
       if (currentOwner === owner) currentOwner = undefined;
     };
   }, []);
-  useEffect(() => {
-    if (Modal) return;
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !event.defaultPrevented && !event.isComposing && event.keyCode !== 229) {
-        event.preventDefault();
-        event.stopPropagation();
-        closeLoading();
-      }
-    };
-    document.addEventListener('keydown', escape);
-    return () => document.removeEventListener('keydown', escape);
-  }, [Modal, onClose]);
+  useEscapeLayer(!Modal, 'menu', closeLoading, boundaryRef);
   if (Modal) return <Modal cwd={cwd} initialDirectory={initialDirectory} onClose={onClose} />;
   // Do not focus/restore during the handoff. The real modal owns its only trap.
   return <section ref={boundaryRef} className="linked-directory-boundary" aria-label={m.title}>
