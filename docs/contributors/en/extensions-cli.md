@@ -16,9 +16,9 @@
 
 The CLI automatically discovers:
 
-- `<agent-directory>/extensions/*.js|*.mjs|*.cjs` (default `~/.ai-harness`)
-- `<project>/.ai-harness/extensions/*.js|*.mjs|*.cjs`, after project trust
-- subdirectories containing `index.js`, `index.mjs` or `index.cjs`
+- `<agent-directory>/extensions/*` (default `~/.ai-harness`), with supported JavaScript/TypeScript suffixes
+- `<project>/.ai-harness/extensions/*`, after project trust
+- subdirectories containing a supported index entry (priority below)
 
 A module can also be loaded explicitly:
 
@@ -28,7 +28,7 @@ ai-harness --extension ./extensions/example.mjs
 
 Multiple paths can be provided with multiple `--extension` options, or with `AI_HARNESS_EXTENSIONS` separated by the system path separator.
 
-TypeScript extensions must currently be compiled to JavaScript before loading. An installed package can additionally declare extensions, skills, prompts, and JSON themes through `aiHarness` (the legacy `pi` manifest key is also accepted). Enabled extensions, skills, and prompts join CLI and RPC startup through the same Core catalogue used by the Web server; a selected package theme joins interactive CLI startup.
+TypeScript entries (`.ts`, `.mts`, `.cts`, `.tsx`) now run directly through Core's transpile-only loader; declarations (`.d.ts`, `.d.mts`, `.d.cts`) never execute. An installed package can additionally declare extensions, skills, prompts, and JSON themes through `aiHarness` (the legacy `pi` manifest key is also accepted). Enabled extensions, skills, and prompts join CLI and RPC startup through the same Core catalogue used by the Web server; a selected package theme joins interactive CLI startup.
 
 ## Configured Selectors
 
@@ -46,15 +46,30 @@ The `extensions` array in global and trusted-project `settings.json` is applied 
 }
 ```
 
-- An unmarked path adds a file or ordinary shallow entry directory; an unmarked glob expands matching `.js`, `.mjs` and `.cjs` files using Node path-glob semantics.
+- An unmarked path adds a file or ordinary shallow entry directory; an unmarked glob expands matching supported JavaScript/TypeScript entries using Node path-glob semantics.
 - `+path` adds an exact file/directory, treating glob characters literally.
 - `-path` removes that exact file or discovered files under that directory; `!glob` removes matching files.
 - Order matters: a later add can restore an earlier removal. Files are deduplicated and imported in sorted absolute-path order. `--extension`, environment paths and Core `paths` remain literal, not shell/glob expressions.
 - Project selectors and project files remain trust-gated, including an exact `+` and patterns whose root contains the untrusted cwd. Selectors do not grant trust or bypass stable-file checks. Virtual `builtin:` switches use a separate hosted-capability policy below, not filesystem matching.
 
-A generation admits at most 200 ordinary discovery paths and 200 selectors (32 KiB UTF-8 per string, or combined pattern/base for a scoped entry). With nonempty selectors, the candidate set cannot exceed 1,000 files at any step, even if later exclusions would reduce it. A glob scan permits 1,000 entries per directory, 10,000 aggregate entry visits, 256 directory visits and eight descendant levels; repeated patterns consume the same aggregate budget. Nonrecursive globs do not descend unrelated subtrees. Overflow refuses the whole candidate generation rather than importing a truncated prefix. Missing optional paths are skipped. Linked/hard-linked or oversized modules remain inadmissible (5 MiB maximum); `.ts` still requires compilation.
+A generation admits at most 200 ordinary discovery paths and 200 selectors (32 KiB UTF-8 per string, or combined pattern/base for a scoped entry). With nonempty selectors, the candidate set cannot exceed 1,000 files at any step, even if later exclusions would reduce it. A glob scan permits 1,000 entries per directory, 10,000 aggregate entry visits, 256 directory visits and eight descendant levels; repeated patterns consume the same aggregate budget. Nonrecursive globs do not descend unrelated subtrees. Overflow refuses the whole candidate generation rather than importing a truncated prefix. Missing optional paths are skipped. Linked/hard-linked or oversized modules remain inadmissible (5 MiB maximum); Declaration files remain excluded.
 
 Core exports additive `ExtensionModuleLoaderOptions.selectors`: a readonly `ExtensionModuleSelector` array or sync/async callback returning one, reevaluated on discovery/reload. An entry is a string relative to the loader cwd, or `{ pattern, baseDir }` with an absolute literal base directory. Only the pattern is glob syntax; CLI layers and home expansion retain this distinction. Hosts still own trust and discovery context through `isProjectTrusted` and `cwd`. CLI startup, print/JSON/RPC and interactive reload pass the ordered layer-resolved settings to this shared implementation; Server configuration is not changed by this CLI settings feature. A discovery failure preserves the previous managed registrations; successful replacement leaves unrelated owners intact. Executed Node side effects and dependency imports are **not** sandboxed or rolled back: an admitted module can itself import an excluded entry as a dependency.
+
+## TypeScript execution
+
+```ts
+import type { ExtensionAPI } from '@ai-harness/core';
+export default function review(api: ExtensionAPI) {
+  api.registerCommand('review', { description: 'Review', handler: () => 'Ready' });
+}
+```
+
+Load it with `ai-harness -e ./review.ts`, or use ordinary user/project/settings/environment/package discovery. Core evaluates already admitted descriptor bytes with pinned `jiti`, preserving entry size/link/trust checks and transactional registrations. The exact `@ai-harness/core` root uses the host's real public namespace, including in late imports outside an installation. Relative/extensionless imports, enums, parameter properties, CommonJS exports and classic JSX work; JSX still requires the author's factory/library and does not add a React or browser rendering surface.
+
+No static type check or implicit `tsconfig` path aliases are performed. Each entry's transformed dependency graph is private and refreshed on reload; native dependencies retain Node caching. Transpiler filesystem/global module caches are disabled. Invalid evaluation reports a fixed diagnostic without source/code frames; previous same-workspace registrations survive. Dependencies and admitted Node effects are **not sandboxed or rolled back**.
+
+Child index priority is `.mjs`, `.js`, `.cjs`, then `.ts`, `.mts`, `.cts`, `.tsx`. Avoid autoloading both compiled and source copies of one extension; different paths remain different candidates. Installed package manifests are honored through the package service. Uninstalled directory manifests and broader module/JavaScript host-alias resolution remain incomplete.
 
 ## Optional built-in switches
 
@@ -64,7 +79,7 @@ The optional CLI/RPC IDs are `builtin:mcp`, `builtin:codemode` and `builtin:tool
 
 Workspace tools, skills/prompts/themes, providers and explicit MCP administration are independent. This is not an offline/no-tools/sandbox switch. Codemode still needs its ordinary activation/selection settings; disabling hosted `tool_search` does not erase earlier eligible activations or disable a third-party replacement. `/reload` refreshes interactive policy and closes disabled MCP connections before continuing; reenablement connects only on a later prompt. RPC requires restart. File-generation rollback does not roll back the separate refreshed settings policy; already admitted external effects cannot be undone.
 
-Core exposes `resolveBuiltinExtensionPolicy`, frozen `BUILTIN_EXTENSION_NAMES`, readonly `BuiltinExtensionPolicy`, additive `ExtensionModuleLoaderOptions.includeEnvironmentPaths`, `CreateAgentToolLoadoutOptions.toolSearchEnabled` and reusable `McpSessionHost.setEnabled(boolean)`. The policy itself imports nothing and grants no trust. Server/Web settings composition and TypeScript loading are unchanged.
+Core exposes `resolveBuiltinExtensionPolicy`, frozen `BUILTIN_EXTENSION_NAMES`, readonly `BuiltinExtensionPolicy`, additive `ExtensionModuleLoaderOptions.includeEnvironmentPaths`, `CreateAgentToolLoadoutOptions.toolSearchEnabled` and reusable `McpSessionHost.setEnabled(boolean)`. The policy itself imports nothing and grants no trust. Server/Web settings composition is unchanged.
 
 ## Example
 

@@ -25,7 +25,7 @@ describe('bounded executable extension selectors', () => {
     const keep = await test.file('global/nested/keep.mjs');
     const restored = await test.file('global/nested/restore.mjs');
     await test.file('global/nested/excluded.mjs', 'throw new Error("Excluded code must never be imported");');
-    await test.file('global/notes.ts', 'throw new Error("Not a supported entry");');
+    await test.file('global/notes.ts', 'throw new Error("TypeScript outside the selected glob executed");');
     const loader = new ExtensionModuleLoader(test.registry, { cwd: test.cwd,
       includeGlobalLocation: false, includeProjectLocation: false,
       selectors: [path.join(test.global, '**/*.mjs'), `!${test.global}/**/{excluded,restore}.mjs`, `+${restored}`] });
@@ -39,13 +39,14 @@ describe('bounded executable extension selectors', () => {
     const js = await test.file('global/nested/plain.js');
     const cjs = await test.file('global/nested/common.cjs', 'module.exports = () => {};');
     await test.file('global/nested/excluded.mjs', 'throw new Error("Excluded entry executed");');
-    await test.file('global/nested/source.ts', 'throw new Error("Unsupported TypeScript entry executed");');
+    const ts = await test.file('global/nested/source.ts', 'export default (_api: unknown) => {};');
+    await test.file('global/nested/source.d.ts', 'declare const api: unknown;');
     const patterns = ['**/*', '!**/excluded.*'];
     const loader = new ExtensionModuleLoader(test.registry, {
       cwd: mode === 'cwd' ? test.global : test.cwd, includeGlobalLocation: false, includeProjectLocation: false,
       selectors: mode === 'cwd' ? patterns : patterns.map(pattern => ({ pattern, baseDir: test.global })),
     });
-    expect(await loader.loadAll()).toMatchObject({ committed: true, loaded: [keep, js, cjs].sort(), errors: [] });
+    expect(await loader.loadAll()).toMatchObject({ committed: true, loaded: [keep, js, cjs, ts].sort(), errors: [] });
   });
 
   it.each([

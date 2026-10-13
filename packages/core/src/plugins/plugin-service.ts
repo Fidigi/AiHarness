@@ -10,6 +10,7 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import { readStableDirectoryEntries } from '../security/stable-directory.js';
+import { isExtensionModulePath } from '../extensions/module-format.js';
 import { releaseStableLockPath } from '../security/stable-lock.js';
 import type { ResolvedAgentSettings } from '../config/agent-settings.js';
 import type {
@@ -60,7 +61,6 @@ const CHECK_TIMEOUT_MS = 20_000;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 const UNSAFE_METADATA_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/;
 const PLUGIN_KEY_PATTERN = /^(?:global|project):[a-zA-Z0-9._:-]{1,200}:[a-f0-9]{20}$/;
-const EXTENSION_SUFFIXES = new Set(['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.tsx']);
 const EMPTY_COUNTS: PluginResourceCounts = { extensions: 0, skills: 0, prompts: 0, themes: 0 };
 
 interface PluginStateFile {
@@ -459,7 +459,7 @@ async function scanFiles(root: string): Promise<{ files: ScannedFile[]; truncate
 function candidateForKind(file: ScannedFile, kind: PluginResourceKind): { relativePath: string; absolutePath: string } | undefined {
   const lower = file.relativePath.toLowerCase();
   const extension = path.extname(lower);
-  if (kind === 'extension' && EXTENSION_SUFFIXES.has(extension)) return file;
+  if (kind === 'extension' && isExtensionModulePath(file.relativePath)) return file;
   if (kind === 'prompt' && extension === '.md') return file;
   if (kind === 'theme' && extension === '.json') return file;
   if (kind === 'skill' && path.posix.basename(lower) === 'skill.md') {
@@ -635,7 +635,7 @@ async function standaloneExtensions(
   return entries
     .filter(entry => entry.isFile() && !entry.isSymbolicLink()
       && !UNSAFE_METADATA_CHARACTERS.test(entry.name)
-      && EXTENSION_SUFFIXES.has(path.extname(entry.name).toLowerCase()))
+      && isExtensionModulePath(entry.name))
     .slice(0, 200)
     .map(entry => ({
       kind: 'extension' as const,
@@ -1255,7 +1255,7 @@ export class PluginService {
         const { root, standaloneFile, displayRoot } = await this.resolveInstalled(record);
         const inventory = await inventoryPackage(root, displayRoot, standaloneFile, record.resourceFilters);
         for (const resource of inventory.resources.filter(item => item.kind === kind)) {
-          if (kind === 'extension' && !['.js', '.mjs'].includes(path.extname(resource.absolutePath).toLowerCase())) continue;
+          if (kind === 'extension' && !isExtensionModulePath(resource.absolutePath)) continue;
           locations.push({
             kind,
             path: resource.absolutePath,
@@ -1327,7 +1327,7 @@ export class PluginService {
       if (!canonicalInfo.isDirectory() && !standaloneFile) {
         throw httpError('Le chemin de plugin doit désigner un dossier ou une extension.', 400, 'INVALID_PLUGIN_SOURCE');
       }
-      if (standaloneFile && !EXTENSION_SUFFIXES.has(path.extname(standaloneFile).toLowerCase())) {
+      if (standaloneFile && !isExtensionModulePath(standaloneFile)) {
         throw httpError('Le fichier local ne correspond pas à une extension prise en charge.', 400, 'INVALID_PLUGIN_SOURCE');
       }
       const root = standaloneFile ? path.dirname(standaloneFile) : canonical;

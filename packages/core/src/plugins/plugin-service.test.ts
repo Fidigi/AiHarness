@@ -12,7 +12,8 @@ import {
 } from './plugin-service.js';
 import { createPluginCommandRunner, resolvePluginNpmCommand } from './package-command.js';
 import { loadAgentSettings } from '../config/agent-settings.js';
-import { PluginService as PublicPluginService, resolvePluginNpmCommand as publicNpmOptions } from '@ai-harness/core';
+import { PluginService as PublicPluginService, ProjectTrustManager as PublicProjectTrustManager,
+  WorkspaceManager as PublicWorkspaceManager, resolvePluginNpmCommand as publicNpmOptions } from '@ai-harness/core';
 
 const temporaryDirectories: string[] = [];
 
@@ -62,6 +63,14 @@ async function setup(root: string, runner?: PluginCommandRunner, npmOptions?: Pl
   const service = new PluginService(workspaces, trust, path.join(data, 'plugins.json'), data, runner, npmOptions);
   await service.load();
   return { project, data, trust, workspaces, service };
+}
+
+async function setupPublic(root: string) {
+  const project = path.join(root, 'project'); const data = path.join(root, 'data');
+  await mkdir(project, { recursive: true }); await mkdir(data, { recursive: true });
+  const workspaces = new PublicWorkspaceManager({ allowedRoots: [root], defaultCwd: project }); await workspaces.initialize();
+  const trust = new PublicProjectTrustManager(path.join(data, 'trust.json')); await trust.load();
+  return { project, data, trust, workspaces };
 }
 
 afterEach(async () => {
@@ -115,6 +124,21 @@ describe('PluginService', () => {
     ]);
     expect(await readFile(path.join(data, 'plugins.json'), 'utf8')).toBe(originalState);
     expect(runner.run).not.toHaveBeenCalled();
+  });
+
+  it('activates executable JavaScript/TypeScript formats without counting declarations as extensions', async () => {
+    const root = await temporaryDirectory(); const source = path.join(root, 'typed-package');
+    await mkdir(path.join(source, 'src'), { recursive: true });
+    await writeFile(path.join(source, 'package.json'), JSON.stringify({ name: '@fixture/typed', version: '1.0.0', aiHarness: { extensions: ['src/*'] } }));
+    const suffixes = ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts', 'tsx'];
+    for (const suffix of [...suffixes, 'd.ts', 'd.mts', 'd.cts']) await writeFile(path.join(source, `src/entry.${suffix}`), 'export default () => {};');
+    const { project, service } = await setup(root);
+    const installed = await service.install({ cwd: project, scope: 'global', source });
+    expect(installed.packages[0]?.counts.extensions).toBe(suffixes.length);
+    expect((await service.getEnabledExtensionFiles({ cwd: project })).sort()).toEqual(suffixes.map(suffix => path.join(source, `src/entry.${suffix}`)).sort());
+    await service.configure({ cwd: project, scope: 'global', key: installed.packages[0]!.key, resourceFilters: { extensions: ['+src/entry.ts'] } });
+    expect(await service.getEnabledExtensionFiles({ cwd: project })).toEqual([path.join(source, 'src/entry.ts')]);
+    await expect(service.install({ cwd: project, scope: 'global', source: path.join(source, 'src/entry.d.ts') })).rejects.toThrow();
   });
 
   it('inventories package resources without contents or symlink traversal and gates project changes on trust', async () => {
@@ -575,7 +599,7 @@ require('node:fs').appendFileSync(process.argv[2], JSON.stringify({ args: proces
 
   it('public Core admitted project command refuses global install/check/update with saved revocation, including after a lock wait', async () => {
     const root = await temporaryDirectory();
-    const { project, data, trust, workspaces } = await setup(root);
+    const { project, data, trust, workspaces } = await setupPublic(root);
     const local = path.join(project, '.ai-harness'); await mkdir(local);
     const log = path.join(root, 'executed'); const executable = path.join(local, 'npm.cjs');
     await writeFile(executable, `#!/usr/bin/env node
@@ -631,7 +655,7 @@ fs.mkdirSync(dest, { recursive: true }); fs.writeFileSync(path.join(dest, 'packa
 
   it('rechecks captured project source trust after a genuine delayed Git clone before npm dependency execution', async () => {
     const root = await temporaryDirectory();
-    const { project, data, trust, workspaces } = await setup(root);
+    const { project, data, trust, workspaces } = await setupPublic(root);
     const local = path.join(project, '.ai-harness'); const bin = path.join(root, 'bin');
     await mkdir(local); await mkdir(bin);
     const marker = path.join(root, 'clone-started'); const release = path.join(root, 'clone-release');

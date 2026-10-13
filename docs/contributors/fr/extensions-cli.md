@@ -16,9 +16,9 @@
 
 Le CLI découvre automatiquement :
 
-- `<répertoire-agent>/extensions/*.js|*.mjs|*.cjs` (`~/.ai-harness` par défaut)
-- `<projet>/.ai-harness/extensions/*.js|*.mjs|*.cjs`, après approbation du projet
-- les sous-dossiers contenant `index.js`, `index.mjs` ou `index.cjs`
+- `<répertoire-agent>/extensions/*` (`~/.ai-harness` par défaut), avec les suffixes JavaScript/TypeScript pris en charge
+- `<projet>/.ai-harness/extensions/*`, après approbation du projet
+- les sous-dossiers contenant un index pris en charge (priorité ci-dessous)
 
 Un module peut aussi être chargé explicitement :
 
@@ -28,7 +28,7 @@ ai-harness --extension ./extensions/example.mjs
 
 Plusieurs chemins peuvent être fournis avec plusieurs options `--extension`, ou avec `AI_HARNESS_EXTENSIONS` séparé par le séparateur de chemins du système.
 
-Les extensions TypeScript doivent actuellement être compilées en JavaScript avant leur chargement. Un package installé peut aussi déclarer des extensions, skills, prompts et thèmes JSON via `aiHarness` (la clé historique `pi` du manifeste est également acceptée). Les extensions, skills et prompts actifs rejoignent le démarrage CLI et RPC depuis le même catalogue Core que le serveur Web ; un thème de package sélectionné rejoint le démarrage CLI interactif.
+Les entrées TypeScript (`.ts`, `.mts`, `.cts`, `.tsx`) sont désormais exécutées directement par le transpileur Core ; les déclarations (`.d.ts`, `.d.mts`, `.d.cts`) ne sont jamais exécutées. Un package installé peut aussi déclarer des extensions, skills, prompts et thèmes JSON via `aiHarness` (la clé historique `pi` du manifeste est également acceptée). Les extensions, skills et prompts actifs rejoignent le démarrage CLI et RPC depuis le même catalogue Core que le serveur Web ; un thème de package sélectionné rejoint le démarrage CLI interactif.
 
 ## Sélecteurs configurés
 
@@ -46,15 +46,30 @@ Le tableau `extensions` des `settings.json` global et projet approuvé s’appli
 }
 ```
 
-- Un chemin sans préfixe ajoute un fichier ou les entrées ordinaires d’un dossier peu profond ; un glob sans préfixe développe les fichiers `.js`, `.mjs` et `.cjs` correspondants selon les motifs de chemins Node.
+- Un chemin sans préfixe ajoute un fichier ou les entrées ordinaires d’un dossier peu profond ; un glob sans préfixe développe les entrées JavaScript/TypeScript prises en charge selon les motifs de chemins Node.
 - `+chemin` ajoute un fichier/dossier exact ; les caractères de glob restent littéraux.
 - `-chemin` retire le fichier exact ou les fichiers découverts sous ce dossier ; `!glob` retire les correspondances.
 - L’ordre compte : un ajout ultérieur peut rétablir un retrait. Les fichiers sont dédupliqués et importés par ordre de chemin absolu. `--extension`, les chemins d’environnement et `paths` de Core restent littéraux, sans interprétation shell/glob.
 - La confiance reste obligatoire pour les sélecteurs et fichiers projet, y compris un `+` exact et un motif dont la racine contient le cwd non approuvé. Aucun sélecteur ne contourne les contrôles de fichiers stables ni n’accorde la confiance. Les commutateurs virtuels `builtin:` utilisent la politique de capacités ci-dessous, distincte des chemins de fichiers.
 
-Une génération admet au plus 200 chemins de découverte ordinaires et 200 sélecteurs (32 Kio UTF-8 par chaîne, ou pour le motif et sa base cumulés dans une entrée à portée explicite). Avec des sélecteurs non vides, les candidats ne peuvent dépasser 1 000 fichiers à aucune étape, même si des exclusions ultérieures réduiraient ce nombre. Un scan glob autorise 1 000 entrées par dossier, 10 000 visites d’entrées cumulées, 256 visites de dossiers et huit niveaux descendants ; les motifs répétés consomment le même budget global. Un glob non récursif ne descend pas dans les sous-arbres sans rapport. Un dépassement refuse toute la génération candidate plutôt que d’importer un préfixe tronqué. Les chemins facultatifs absents sont ignorés. Les modules liés, à liens physiques multiples ou trop volumineux restent refusés (5 Mio maximum) ; les `.ts` exigent toujours une compilation.
+Une génération admet au plus 200 chemins de découverte ordinaires et 200 sélecteurs (32 Kio UTF-8 par chaîne, ou pour le motif et sa base cumulés dans une entrée à portée explicite). Avec des sélecteurs non vides, les candidats ne peuvent dépasser 1 000 fichiers à aucune étape, même si des exclusions ultérieures réduiraient ce nombre. Un scan glob autorise 1 000 entrées par dossier, 10 000 visites d’entrées cumulées, 256 visites de dossiers et huit niveaux descendants ; les motifs répétés consomment le même budget global. Un glob non récursif ne descend pas dans les sous-arbres sans rapport. Un dépassement refuse toute la génération candidate plutôt que d’importer un préfixe tronqué. Les chemins facultatifs absents sont ignorés. Les modules liés, à liens physiques multiples ou trop volumineux restent refusés (5 Mio maximum) ; les fichiers de déclarations restent exclus.
 
 Core exporte l’option additive `ExtensionModuleLoaderOptions.selectors` : tableau readonly de `ExtensionModuleSelector` ou callback synchrone/asynchrone qui le fournit, réévalué à chaque découverte/reload. Une entrée est une chaîne relative au cwd du chargeur, ou `{ pattern, baseDir }` avec un dossier de base absolu et littéral. Seul le motif est interprété comme glob ; les couches CLI et l’expansion du dossier personnel conservent cette distinction. L’hôte conserve la responsabilité de la confiance et du contexte via `isProjectTrusted` et `cwd`. Le démarrage CLI, print/JSON/RPC et le reload interactif transmettent les réglages ordonnés et résolus par couche à cette implémentation commune ; cette fonctionnalité CLI ne change pas la configuration du Server. Un échec de découverte conserve les enregistrements gérés précédents ; un remplacement réussi préserve les propriétaires indépendants. Les effets Node et imports de dépendances exécutés ne sont **ni sandboxés ni annulés** : un module admis peut importer lui-même une entrée exclue comme dépendance.
+
+## Exécution TypeScript
+
+```ts
+import type { ExtensionAPI } from '@ai-harness/core';
+export default function review(api: ExtensionAPI) {
+  api.registerCommand('review', { description: 'Revue', handler: () => 'Prêt' });
+}
+```
+
+Chargez ce fichier avec `ai-harness -e ./review.ts`, ou utilisez la découverte utilisateur/projet/réglages/environnement/packages. Core évalue les octets du descripteur déjà admis via `jiti` épinglé, en conservant limites, contrôles de liens/confiance et enregistrements transactionnels. La racine exacte `@ai-harness/core` désigne le véritable espace public de l’hôte, y compris lors d’imports tardifs hors installation. Imports relatifs/sans suffixe, enums, propriétés de paramètres, exports CommonJS et JSX classique sont pris en charge ; JSX exige toujours la fabrique/bibliothèque de l’auteur et n’ajoute aucune surface React ou navigateur.
+
+Il n’y a ni vérification statique des types, ni chargement implicite des alias `tsconfig`. Le graphe de dépendances transformées est privé à chaque entrée et renouvelé au reload ; les dépendances natives conservent le cache Node. Les caches disque/globaux du transpileur sont désactivés. Une évaluation invalide produit un diagnostic fixe sans recopier le code ; les enregistrements précédents du même workspace survivent. Dépendances et effets Node admis ne sont **ni sandboxés ni annulés**.
+
+Priorité des index enfants : `.mjs`, `.js`, `.cjs`, puis `.ts`, `.mts`, `.cts`, `.tsx`. Évitez de découvrir simultanément source et version compilée d’une même extension : des chemins distincts restent des candidats distincts. Les manifestes des packages installés passent par le service de packages. Les manifestes de dossiers non installés et la résolution plus large des modules/alias hôte JavaScript restent incomplets.
 
 ## Commutateurs intégrés facultatifs
 
@@ -64,7 +79,7 @@ Les identifiants CLI/RPC facultatifs sont `builtin:mcp`, `builtin:codemode` et `
 
 Les outils workspace, skills/prompts/thèmes, providers et opérations MCP explicites restent indépendants. Ce n’est ni un mode hors ligne, ni une suppression de tous les outils, ni une sandbox. Codemode conserve ses réglages d’activation/sélection ; désactiver le `tool_search` hébergé n’efface pas les activations antérieures encore autorisées et ne désactive pas un remplacement tiers. `/reload` actualise la politique interactive et ferme les connexions MCP désactivées avant de poursuivre ; la réactivation attend un prochain prompt pour connecter. RPC exige un redémarrage. Le rollback des modules ne rétablit pas la politique de réglages séparée ; les effets externes déjà admis ne sont pas annulables.
 
-Core expose `resolveBuiltinExtensionPolicy`, `BUILTIN_EXTENSION_NAMES` gelé, `BuiltinExtensionPolicy` readonly, les options additives `ExtensionModuleLoaderOptions.includeEnvironmentPaths` et `CreateAgentToolLoadoutOptions.toolSearchEnabled`, ainsi que `McpSessionHost.setEnabled(boolean)` réutilisable. La politique n’importe aucun module et n’accorde aucune confiance. La composition des réglages Server/Web et le chargement TypeScript ne changent pas.
+Core expose `resolveBuiltinExtensionPolicy`, `BUILTIN_EXTENSION_NAMES` gelé, `BuiltinExtensionPolicy` readonly, les options additives `ExtensionModuleLoaderOptions.includeEnvironmentPaths` et `CreateAgentToolLoadoutOptions.toolSearchEnabled`, ainsi que `McpSessionHost.setEnabled(boolean)` réutilisable. La politique n’importe aucun module et n’accorde aucune confiance. La composition des réglages Server/Web ne change pas.
 
 ## Exemple
 

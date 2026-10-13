@@ -10,6 +10,8 @@ import { openStableDirectoryHandle, readStableDirectoryEntries } from '../securi
 import type { ExtensionFactory } from './extension-registry.js';
 import type { ExtensionRegistry } from './extension-registry.js';
 import { isExtensionPathWithin, selectExtensionFiles, type ExtensionModuleSelector } from './extension-selectors.js';
+import { isExtensionModulePath, isTypeScriptExtensionPath } from './module-format.js';
+import { evaluateTypeScriptExtension } from './typescript-module.js';
 export type { ExtensionModuleSelector } from './extension-selectors.js';
 
 const RUNNING_UNDER_VITEST = Reflect.has(globalThis, '__vitest_worker__');
@@ -111,7 +113,8 @@ async function importExtensionFactory(
     // Node caches its realpath even after N is closed and reused for another module.
     // Vitest's VM loader uses the pathname with the same before/open/after checks.
     const moduleUrl = `${pathToFileURL(filePath).href}?aiharness=${importAttempt}`;
-    const hooks = !RUNNING_UNDER_VITEST ? registerHooks({
+    const typescript = isTypeScriptExtensionPath(filePath);
+    const hooks = !typescript && !RUNNING_UNDER_VITEST ? registerHooks({
       resolve(specifier, context, nextResolve) {
         const resolved = nextResolve(specifier, context);
         return specifier === moduleUrl ? { ...resolved, url: moduleUrl, shortCircuit: true } : resolved;
@@ -162,7 +165,9 @@ async function importExtensionFactory(
     }) : undefined;
     let loaded: { default?: ExtensionFactory };
     try {
-      loaded = await import(moduleUrl) as { default?: ExtensionFactory };
+      loaded = typescript
+        ? { default: await evaluateTypeScriptExtension(readFileSync(fileHandle.fd, 'utf8'), filePath, moduleUrl) }
+        : await import(moduleUrl) as { default?: ExtensionFactory };
     } finally {
       hooks?.deregister();
     }
@@ -188,7 +193,7 @@ async function importExtensionFactory(
   }
 }
 
-/** Discovers trusted JavaScript modules and swaps their registrations transactionally. */
+/** Discovers trusted JavaScript/TypeScript modules and swaps registrations transactionally. */
 export class ExtensionModuleLoader {
   private readonly cwd: string;
   private readonly homeDir: string;
@@ -340,7 +345,7 @@ export class ExtensionModuleLoader {
   }
 
   private async findIndex(directory: string): Promise<string | undefined> {
-    for (const name of ['index.mjs', 'index.js', 'index.cjs']) {
+    for (const name of ['index.mjs', 'index.js', 'index.cjs', 'index.ts', 'index.mts', 'index.cts', 'index.tsx']) {
       const candidate = path.join(directory, name);
       try {
         const info = await lstat(candidate);
@@ -354,6 +359,6 @@ export class ExtensionModuleLoader {
   }
 
   private isExtensionFile(filePath: string): boolean {
-    return filePath.endsWith('.js') || filePath.endsWith('.mjs') || filePath.endsWith('.cjs');
+    return isExtensionModulePath(filePath);
   }
 }

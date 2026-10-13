@@ -4,7 +4,7 @@
 
 ## Overview
 
-JavaScript extensions register commands, tools, providers, plain-text terminal UI components, lifecycle listeners, and cancellable `before:*` hooks. CLI and Server share the bounded Core loader but own discovery context, trust checks, and runtime composition.
+JavaScript and TypeScript extensions register commands, tools, providers, plain-text terminal UI components, lifecycle listeners, and cancellable `before:*` hooks. CLI and Server share the bounded Core loader but own discovery context, trust checks, and runtime composition.
 
 Package administration is also Core-owned. CLI commands and the Server/Web routes use the same `PluginService`, `plugins.json`, source validation, resource filters, locking, inventory and update behavior. Enabled package extensions, skills, prompts and themes feed each runtime through interface-specific composition; see [`security.md`](./security.md) for trust and executable-code boundaries.
 
@@ -23,7 +23,7 @@ Core PluginService -> install/locked state/filtered inventory/bounded batch stat
 |---|---|
 | `packages/core/src/extensions/extension-registry.ts` | Owned registrations, hooks, execution, cleanup and rollback |
 | `packages/core/src/extensions/builtin-extensions.ts` | Bounded immutable optional-capability policy for CLI/RPC; no imports or trust grants |
-| `packages/core/src/extensions/{module-loader,extension-selectors}.ts` | Bounded metadata-only glob/exact selection before import and atomic managed generations |
+| `packages/core/src/extensions/{module-loader,extension-selectors,module-format,typescript-module}.ts` | Shared executable formats, bounded pre-import selection, descriptor-admitted TypeScript evaluation and atomic managed generations |
 | `packages/cli/src/extensions/extension-loader.ts` | Explicit, configured and package extension paths plus loader orchestration |
 | `packages/cli/src/resources/resource-manager.ts` | Local/package Markdown prompts and model-invocable resource discovery |
 | `packages/cli/src/cli/package-command.ts` | Top-level package lifecycle, scope and resource-filter adapter |
@@ -65,7 +65,7 @@ RPC additionally supplies optional `context.ui` with immutable mode/capabilities
 
 ## Critical Flows
 
-### Load or reload JavaScript
+### Load or reload executable modules
 
 1. Discover explicit/global files and trusted project files without following symlinks.
 2. Refuse ordinary path/directory overflow (200 paths, 1,000 entries per directory); retain stable nonlinked, single-link, at-most-5-MiB modules. Apply ordered global/trusted-project CLI settings via additive Core `selectors`: unmarked glob expansion, exact `+path`, exact/subtree `-path`, and `!glob` filtering of actual discovered files. Core `paths` stays literal; containment includes filesystem roots. `ExtensionModuleSelector` retains literal declaring directories through `{ pattern, baseDir }` (absolute base), so directory metacharacters never become wildcard authority; string entries use the loader cwd. Nonempty selection is bounded to 200 selectors/32 KiB each (combined pattern/base for scoped entries) and 1,000 candidates at any step; glob scans share 10,000 entry visits, 256 directory visits and eight descendant levels. Overflow fails the generation, never imports an arbitrary prefix. Nonrecursive patterns avoid deeper traversal.
@@ -74,7 +74,15 @@ RPC additionally supplies optional `context.ui` with immutable mode/capabilities
 5. On any discovery/import/registration error, keep or restore the previous generation.
 6. On workspace change, clear old handlers if the new candidate cannot commit.
 
-CLI startup loads one trusted generation before strict contributed-option parsing and reuses it in interactive, print, JSON and RPC modes. Ordinary startup and reload retain the independently eligible configured agent-directory location rather than reverting to the home default; callbacks reread ordered selectors on reload. Built-in help/version never import extensions; `--help-extensions` and `--completion` are explicit trust-gated operations. Reload gives ESM and CommonJS entries a fresh identity after successful or failed attempts, without replacing preexisting CommonJS cache entries. Dependencies retain ordinary caches; executable side effects are not transactional. See the [EN startup-option contract](../../contributors/en/extension-startup-options.md) and [FR contract](../../contributors/fr/extension-startup-options.md).
+CLI startup loads one trusted generation before strict contributed-option parsing and reuses it in interactive, print, JSON and RPC modes. Ordinary startup and reload retain the independently eligible configured agent-directory location rather than reverting to the home default; callbacks reread ordered selectors on reload. Built-in help/version never import extensions; `--help-extensions` and `--completion` are explicit trust-gated operations. Reload gives ESM and CommonJS entries a fresh identity after successful or failed attempts, without replacing preexisting CommonJS cache entries. Native JavaScript dependencies retain ordinary caches; executable side effects are not transactional. Transformed TypeScript dependencies use the separate private evaluation graph described below. See the [EN startup-option contract](../../contributors/en/extension-startup-options.md) and [FR contract](../../contributors/fr/extension-startup-options.md).
+
+### TypeScript entry evaluation
+
+Core admits `.js`, `.mjs`, `.cjs`, `.ts`, `.mts`, `.cts` and `.tsx` entries; `.d.ts`, `.d.mts` and `.d.cts` are declarations, never factories. Package inventory, standalone listing and enabled-file selection share this format predicate. Child index lookup preserves existing JavaScript priority (`index.mjs`, `.js`, `.cjs`) before `.ts`, `.mts`, `.cts`, `.tsx`. Distinct source/compiled entry paths remain distinct: select one explicitly rather than autoloading duplicate implementations.
+
+Pinned lazy runtime `jiti` evaluates the **already opened descriptor's source**, not a reopened entry pathname, with native entry loading and filesystem/global module caches disabled. Existing before/open/after identity, size, link, trust and generation checks remain. Each typed entry has a private transformed dependency cache; reload creates a new graph, including after failed attempts. Ordinary native dependencies keep Node caching. Relative/extensionless and late imports work; the exact `@ai-harness/core` root resolves to the host's actual public namespace without another package instance. CommonJS exports, enums, parameter properties and classic JSX are supported; JSX is syntax support, not React/Web UI hosting.
+
+This is transpile-only, not type checking. No implicit `tsconfig` path aliases are loaded, and entry checks do not sandbox dependency imports or Node effects. Parser/evaluation failures return `TypeScript extension evaluation failed.` without source/code frames. CLI ordinary/contributed startup, all headless modes and PTY reload use this path; actual emitted Server HTTP reload/tool execution conserves trust, same-cwd failure retention and failed-workspace retirement. Uninstalled directory manifests and broader module/JavaScript host-alias resolution remain separate missing capabilities.
 
 ### Optional built-in capabilities
 
@@ -142,6 +150,7 @@ Initial focus is admitted before the renderer exists and checked again at its fi
 - `packages/server/src/api/{interaction-queue-http,queue-reconciliation-http,queue-generation-http,queue-generation-process}.test.ts` — latest-schema HTTP validation, stop accounting before terminal replay, same-cwd preservation and revocation while the run remains active
 - `packages/core/src/tools/{tool-search,codemode}.test.ts` — deferred/script-only exposure, BM25 ranking, activation/store provenance, bounded QuickJS, policy revalidation and branch restoration
 - `packages/cli/src/extensions/extension-loader.test.ts` — explicit path parsing and loader behavior
+- Core `extensions/typescript-modules.test.ts`, CLI `cli/typescript-extensions-process.test.ts` and Server `api/typescript-extensions-process.test.ts` — typed formats/alias/dependency execution, all source/mode/startup combinations, declarations/trust/suppression, genuine PTY and descriptor-replacement proof, public emitted Core and real Server HTTP/tool generations
 - `packages/core/src/extensions/builtin-extensions.test.ts`, Core `mcp/session-host.test.ts` and CLI `cli/builtin-extensions-process.test.ts` — policy precedence/bounds/trust, synchronous retirement, real stdio hosting, all three emitted modes, suppressed global/project/settings/environment/package imports, explicit preservation, genuine PTY reload and strict external public consumers
 - `packages/core/src/extensions/extension-selectors.test.ts` — actual-file glob/exact selection, trust, literal paths/bases and scoped-input validation, stable files, operation/file/depth bounds and managed-generation preservation
 - `packages/cli/src/cli/extension-selectors-process.test.ts` — emitted print/JSON/RPC global/project selection and refusal, single startup import and provider hooks, genuine Linux PTY selector reload/agent-directory conservation and public declaration/emitted Core reload outside the checkout

@@ -5,7 +5,7 @@ import os from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ExtensionRegistry } from '@ai-harness/core';
-import { ExtensionLoader, getExtensionPaths } from './extension-loader';
+import { ExtensionLoader, getExtensionPaths } from './extension-loader.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -28,7 +28,8 @@ describe('ExtensionLoader', () => {
     await writeFile(path.join(directory, 'cjs-package', 'index.cjs'), 'module.exports = () => {};');
     await mkdir(path.join(directory, 'package'));
     await writeFile(path.join(directory, 'package', 'index.js'), 'export default () => {};');
-    await writeFile(path.join(directory, 'ignored.ts'), 'export default () => {};');
+    await writeFile(path.join(directory, 'typed.ts'), 'export default (_api: unknown) => {};');
+    await writeFile(path.join(directory, 'ignored.d.ts'), 'declare const api: unknown;');
     const loader = new ExtensionLoader(new ExtensionRegistry(), {
       cwd: directory,
       homeDir: path.join(directory, 'home'),
@@ -42,6 +43,7 @@ describe('ExtensionLoader', () => {
       path.join(directory, 'common.cjs'),
       path.join(directory, 'hello.mjs'),
       path.join(directory, 'package', 'index.js'),
+      path.join(directory, 'typed.ts'),
     ]);
   });
 
