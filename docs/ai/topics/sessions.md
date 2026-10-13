@@ -42,7 +42,7 @@ Each line is one entry with a Unix-millisecond `timestamp`; v2 entries also carr
 | `compaction` | Parent, summary, first retained entry, token estimate, provider/model and summary-generation usage |
 | `branch_summary` | Named summary with a durable parent in the entry tree |
 
-Legacy unversioned message-only JSONL remains readable. Runtime dates are `Date`; API/import-export dates are ISO strings; persisted entry dates are numbers. `serializeSession()` does not write JSONL—it converts a whole session for JSON transport. This remains an AiHarness v2 format; RPC tree responses are transport projections rather than the persisted representation.
+Legacy unversioned message-only JSONL remains readable. Runtime dates are `Date`; API/import-export dates are ISO strings; persisted entry dates are numbers. `serializeSession()` does not write JSONL—it converts a whole session for JSON transport. Its public `redactProviderConfig` helper also backs JSON hydration and JSONL persistence: nested credential-like fields are omitted, safe data descriptors are copied with depth/node/collection/key limits, and getters, executable `toJSON`, cycles and unsupported values cannot become persisted provider metadata. This is field-based filtering; registered credential-value redaction and caller ownership remain separate. This remains an AiHarness v2 format; RPC tree responses are transport projections rather than the persisted representation.
 
 ## Critical Flows
 
@@ -106,6 +106,7 @@ Lists return metadata rather than full histories. Session state starts with a bo
 
 - `packages/core/src/sessions/session-manager.test.ts` — JSONL, IDs, 64 MiB/inventory/path bounds, stable reads, atomic rewrites, concurrent independent-store append/save locking, redaction, branches, clones and context
 - `packages/core/src/sessions/session-clone-prefix.test.ts` — durable/volatile prefix command ancestry, stable/numeric targets, clock skew, ID remapping, source-byte conservation and unchanged full-clone/running-command refusals
+- `packages/core/src/sessions/provider-config-redaction.test.ts` — shared JSON/JSONL credential field policy, nested descriptor isolation, getter/callback refusal, cycles, opaque inputs and unchanged bounds
 - `packages/core/src/sessions/serialization.test.ts` — dates, rich data, redaction and legacy files
 - `packages/core/src/sessions/compaction.test.ts` — estimates, policy and compaction targets
 - `packages/core/src/sessions/session-compaction-admission.test.ts` — real JSONL cancellation, policy/branch/identity replacement, queued admission, reentrant deduplication and the started-persistence boundary

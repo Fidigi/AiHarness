@@ -6,7 +6,6 @@
 import {
   SESSION_SCHEMA_VERSION,
   type Message,
-  type ProviderConfig,
   type Session,
   type ShellCommandRecord,
 } from '../types/index.js';
@@ -18,6 +17,7 @@ import type { EventHandler, EventMap } from '../utils/event-emitter.js';
 import { EventEmitter } from '../utils/event-emitter.js';
 import { readStableDirectoryEntries } from '../security/stable-directory.js';
 import { releaseStableLockPath } from '../security/stable-lock.js';
+import { redactProviderConfig as sanitizeProviderConfig } from './serialization.js';
 
 // ===================================================================
 // JSONL Entry types for session persistence
@@ -162,59 +162,6 @@ function isSessionEntry(value: unknown): value is SessionEntry {
     default:
       return false;
   }
-}
-
-const SECRET_CONFIG_KEYS = /(?:api[-_]?key|secret|private[-_]?key|(?:access|refresh|session|auth|bearer)[-_]?token|authorization|password|cookie|credential|^token$)/i;
-
-/** Provider identity may be stored with a session, credentials never are. */
-function sanitizeProviderConfig(config: ProviderConfig | undefined): ProviderConfig | undefined {
-  if (!config || typeof config !== 'object') return undefined;
-  try { if (Array.isArray(config)) return undefined; }
-  catch { return undefined; }
-  const seen = new WeakSet<object>();
-  let nodes = 0;
-  const sanitize = (value: unknown, depth = 0): unknown => {
-    if (++nodes > 10_000 || depth > 32) return undefined;
-    if (!value || typeof value !== 'object') return value;
-    if (seen.has(value)) return undefined;
-    seen.add(value);
-    try {
-      if (Array.isArray(value)) {
-        if (value.length > 1_024) return undefined;
-        const result: unknown[] = [];
-        for (let index = 0; index < value.length; index++) {
-          let descriptor: PropertyDescriptor | undefined;
-          try { descriptor = Object.getOwnPropertyDescriptor(value, String(index)); }
-          catch { return undefined; }
-          if (!descriptor || !('value' in descriptor)) return undefined;
-          const item = sanitize(descriptor.value, depth + 1);
-          if (item !== undefined) result.push(item);
-        }
-        return result;
-      }
-      let keys: string[];
-      try { keys = Object.keys(value); }
-      catch { return undefined; }
-      if (keys.length > 256) return undefined;
-      const result: Record<string, unknown> = {};
-      for (const key of keys) {
-        if (SECRET_CONFIG_KEYS.test(key) || Buffer.byteLength(key) > 256) continue;
-        let descriptor: PropertyDescriptor | undefined;
-        try { descriptor = Object.getOwnPropertyDescriptor(value, key); }
-        catch { continue; }
-        if (!descriptor || !('value' in descriptor)) continue;
-        const item = sanitize(descriptor.value, depth + 1);
-        if (item === undefined) continue;
-        Object.defineProperty(result, key, {
-          value: item, enumerable: true, configurable: true, writable: true,
-        });
-      }
-      return result;
-    } finally {
-      seen.delete(value);
-    }
-  };
-  return sanitize(config) as ProviderConfig;
 }
 
 function messageFromEntry(entry: MessageEntry): Message | undefined {
