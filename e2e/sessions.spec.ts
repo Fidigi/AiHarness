@@ -245,6 +245,8 @@ test.describe('Sessions', () => {
     const anchorBefore = await page.locator('#long-history-message-321').evaluate(element => element.getBoundingClientRect().top);
     await gapButton.click();
     await expect(minimap).toContainText('240 of 400 loaded');
+    // Filling an older window is not live unread output.
+    await expect(page.getByRole('button', { name: /Back to bottom \(\d+\)/ })).toHaveCount(0);
     expect(await page.locator('.message').count()).toBeLessThan(45);
     await expect.poll(async () => Math.abs(
       await page.locator('#long-history-message-321').evaluate(element => element.getBoundingClientRect().top) - anchorBefore,

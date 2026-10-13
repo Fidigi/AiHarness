@@ -99,7 +99,7 @@ Secondary chat chrome collapses without replacing the composer, images, Queue or
 
 - Memoized `MarkdownContentRenderer` shares currency/math, CJK autolink, raw-text and initial frontmatter parsing across messages, file previews and noninteractive minimap/accessibility projections. Only user messages preserve soft breaks. Raw HTML remains non-executable.
 - Composer paste treats plaintext as authoritative. An inert template provides bounded optional link metadata (65,536 code units, 1,024 nodes, 32 links); every failure/overflow preserves complete plaintext. List continuation obeys newline/send-mode/IME rules and restores the caret only on the same connected textarea.
-- Tool turns render Process/Response blocks with bounded preview and explicit full-output retrieval.
+- Tool turns use loaded-order Process ownership and stable native disclosures with optional actions/ANSI/file discovery. Durable length/error notes and authoritative compaction phase survive reload; see [detached stream reconstruction](./detached-streams.md).
 - Extension widgets remain plain text; interactions are schema-driven dialogs, never extension React/DOM/HTML.
 - App registers global shortcuts in a layout effect before bootstrap observers; matching/view eligibility stay in App. Escape is structural rather than a command chord; explicit shortcut recording remains local. Preference setters publish their own state before broadcasting, preserving early writes.
 - `escape-stack.ts` owns one capture listener per document; modal/menu leases register in the commit layout phase. Only the nearest contained menu/top nested or latest sibling dialog closes; a composer suggestion cannot dismiss a modal above it. Sidebar rename, linked loading, modal traps and the inline profile editor participate. A focused newer unregistered host modal retains its own handler; the stack neither cancels the registered dialog beneath nor stops its run. Otherwise navigation overlays close, Settings returns to the last non-Settings address, then the current ChatView invokes its existing guarded Stop. One key cannot fan out and auto-repeat cannot walk through layers. Composition start/end tracking, native `isComposing` and legacy 229 preserve the IME default without dismissal/Stop; ordinary shortcuts also refuse composition.
@@ -143,9 +143,9 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 - The versioned E2E inventory contains 234 PNGs: 178 earlier baselines, twelve mobile keyboard, eight linked-directory, four provider-rename, four interaction-queue, 24 generic-progress and four workspace-default selector crops. Inventory is not a claim that every current comparison passes. This includes the MCP state/import-preview matrix in Light/Dark desktop/mobile layouts; optional form extraction adds no PNGs and the independent static demo has separate captures.
 - Performance tests protect cache bounds, virtualization, and lazy loading.
 
-## Generic Progress Regression Scope — Audit Remains Partial
+## Detached Progress and Reconstruction
 
-`components/{ToolProgressBoundary,ToolProgressCard}.tsx` and `tool-progress-{state,messages,card.css}` retain bounded inert host-issued v1 progress, optional JS/CSS, distinct code-mode rendering and no nested usage/store authority. The whole 14-case `e2e/tool-progress.spec.ts` protects genuine live phases, durable terminal/reload and readiness recovery, legacy/code-mode separation and lazy-asset faults; its owning config blocks service workers so faults cannot be hidden by PWA caching/reloads. Historical development 13-fail/one-pass and built-preview 14-fail checkpoints remain retained failures, not a passing union. Two mobile-light expectations were reviewed against genuine captures; no mask, assertion, timeout or tolerance was relaxed. Green regression execution does not close the wider audit or certify physical devices/live providers. Explicit browser `node --no-maglev` is not a diagnosis of historical default-engine crashes.
+`components/{ToolProgressBoundary,ToolProgressCard}.tsx` retains bounded inert host-issued v1 progress, optional JS/CSS and distinct parented code-mode rendering without usage/store authority. `e2e/tool-progress.spec.ts` now also traverses real concurrent approvals, schema replacement/individual close, sound/reconnect/Stop/rebuild, durable length/error notes, process ownership, delayed/failed controls and actual automatic-summary cancellation. Its production config blocks service workers; only the upstream model is deterministic. The [owning stream topic](./detached-streams.md) defines selective queued replacement, DTO copying, stable disclosures and retired restoration. Historical failed checkpoints stay failed evidence, not a passing union; no existing capture/mask/assertion/timeout/tolerance is relaxed. Physical devices, external provider credentials and a global release are not inferred from scoped success.
 
 ## Associated Tests
 
@@ -193,6 +193,7 @@ Version and validate the schema, add migration/fallback tests, preserve bounds a
 
 ## Related Domains
 
+- [`detached-streams.md`](./detached-streams.md) — reconstruction, reply evidence and optional process controls
 - [`server-api.md`](./server-api.md) — HTTP, SSE and authentication contracts
 - [`sessions.md`](./sessions.md) — canonical history, pagination and dates
 - [`extensions.md`](./extensions.md) — declarative widgets and interactions

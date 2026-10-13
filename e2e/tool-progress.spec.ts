@@ -20,6 +20,20 @@ export default function(api) {
       const report = update => context.toolCallId === undefined ? Promise.resolve() : context.onProgress(update);
       const wait = async name => { while (!signal?.aborted) { try { await access(file(name)); return; } catch {} await new Promise(r => setTimeout(r, 25)); } };
       if (input.mode === 'legacy') return { content: 'Legacy custom result without progress' };
+      if (input.mode.startsWith('dialogs')) {
+        const first = context.requestInteraction({ kind: 'input', title: 'Live first approval', signal });
+        const second = context.requestInteraction({ kind: 'custom', title: 'Live custom approval', signal,
+          output: '<img src=x onerror="window.__dialogExecuted=1"> is plain text',
+          fields: [{ name: 'note', label: 'Approval note', type: 'textarea', required: true },
+            { name: 'approved', label: 'Approved', type: 'checkbox' }] });
+        const third = context.requestInteraction({ kind: 'confirm', title: 'Live third approval', signal });
+        await wait('replace');
+        const changed = first.update({ kind: 'select', title: 'Updated live first approval',
+          options: [{ value: 'yes', label: 'Approve current schema' }] });
+        third.close();
+        await writeFile(file('updated'), JSON.stringify({ changed, ids: [first.id, second.id, third.id] }));
+        return { content: JSON.stringify(await Promise.all([first, second, third])) };
+      }
       await report({ version: 2, content: 'UNKNOWN VERSION MUST NOT APPEAR' });
       await report({ version: 1, content: 'Preparing custom work', details: { phase: 'prepare' } });
       await wait('latest');
@@ -60,10 +74,28 @@ test.beforeAll(async ({ request }) => {
     if (req.url?.endsWith('/models')) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ data: [{ id: 'progress-model' }] })); return; }
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(Buffer.from(chunk));
-    const body = JSON.parse(Buffer.concat(chunks).toString()) as { messages: Array<{ role: string; content?: string }> };
+    const body = JSON.parse(Buffer.concat(chunks).toString()) as { stream?: boolean; messages: Array<{ role: string; content?: string }> };
+    if (body.stream === false) {
+      // A real Core automatic summary stays pending until product Stop cancels
+      // its HTTP request. No fabricated compaction event or browser snapshot.
+      while (!res.destroyed) {
+        try { await readFile(path.join(root, 'phase-summary-finish')); break; } catch { /* Still held by the real upstream gate. */ }
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      if (!res.destroyed) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ choices: [{ message: { content: 'Actual summary' } }] })); }
+      return;
+    }
     const prompt = body.messages.filter(message => message.role === 'user').at(-1)?.content ?? '';
     const [mode, token] = prompt.split(':');
     const toolCount = body.messages.filter(message => message.role === 'tool').length;
+    if (mode === 'length' || mode === 'emptylength' || mode === 'provider-error') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      const content = mode === 'emptylength' ? '' : mode === 'length' ? 'Partial length answer.'
+        : 'Partial visible output. disposable-generic-progress-test-key ' + 'safe tail '.repeat(20);
+      res.end(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content }, finish_reason: mode === 'provider-error' ? null : 'length' }] })}\n\n`
+        + (mode === 'provider-error' ? 'data: INVALID_PROVIDER_JSON\n\n' : 'data: [DONE]\n\n'));
+      return;
+    }
     const calls = mode === 'siblings' ? ['host-first', 'host-sibling'] : ['host-outer'];
     const delta = toolCount > 0 ? { content: 'Real progress probe complete' } : { tool_calls: calls.map((id, index) => ({
       index, id, type: 'function', function: mode === 'codemode'
@@ -118,7 +150,7 @@ async function begin(page: Page, mode: string) {
 }
 async function state(request: APIRequestContext, sessionId: string) {
   return await (await request.get(`/api/agent/sessions/${sessionId}/state`)).json() as {
-    run: AgentRunSnapshot; session: { messages: Message[] }; lastSequence: number;
+    run: AgentRunSnapshot; session: { messages: Message[]; messagePage?: { total: number } }; lastSequence: number;
   };
 }
 async function accessible(page: Page, card: Locator, width: number) {
@@ -442,4 +474,241 @@ test('ready watermark gap: actual running GET then completed readiness restores 
     release();
     await page.unroute(events);
   }
+});
+
+for (const width of [1440, 390]) test(`real concurrent approvals at ${width}px: ordered replacement, individual close, sound and cold replay`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 1000 });
+  await page.addInitScript(() => {
+    localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, sound: true,
+      soundEvents: { completion: false, attention: true }, sidebarVisible: false, filesOpen: false }));
+    let count = 0;
+    Object.defineProperty(window, '__realAttentionCount', { get: () => count });
+    const Original = window.AudioContext;
+    window.AudioContext = class extends Original { constructor() { super(); count++; } };
+  });
+  const sounds = () => page.evaluate(() => (window as unknown as { __realAttentionCount: number }).__realAttentionCount);
+  const probe = await begin(page, 'dialogs');
+  const first = page.getByRole('dialog', { name: 'Live first approval', exact: true });
+  await expect(first).toBeVisible();
+  await expect(first.getByRole('status')).toContainText('2');
+  await expect.poll(sounds).toBe(1);
+  const before = (await state(page.request, probe.sessionId)).run.extensionRequests!;
+  expect(before.map(request => request.kind)).toEqual(['input', 'custom', 'confirm']);
+  await first.getByRole('textbox').fill('old schema draft');
+  await probe.gate('replace');
+  const updated = page.getByRole('dialog', { name: 'Updated live first approval', exact: true });
+  await expect(updated).toBeVisible();
+  await expect(updated.getByRole('status')).toContainText('1');
+  const replacing = (await state(page.request, probe.sessionId)).run.extensionRequests!;
+  expect(replacing.map(request => request.id)).toEqual(before.slice(0, 2).map(request => request.id));
+  expect(replacing[0]!.kind).toBe('select');
+  expect(await sounds()).toBe(1);
+  const stale = await page.request.post(`/api/agent/sessions/${probe.sessionId}/interactions/${before[0]!.id}`, { data: { cancelled: false, value: 'old schema draft' } });
+  expect(stale.status()).toBe(400);
+  expect((await state(page.request, probe.sessionId)).run.extensionRequests).toHaveLength(2);
+  await updated.getByRole('combobox').selectOption('yes');
+  await updated.getByRole('button', { name: 'Submit', exact: true }).click();
+  const custom = page.getByRole('dialog', { name: 'Live custom approval', exact: true });
+  await expect(custom).toBeVisible();
+  await expect.poll(sounds).toBe(2);
+  await expect(custom.locator('img, script, iframe')).toHaveCount(0);
+  await expect(custom).toContainText('<img src=x');
+  const violations = await new AxeBuilder({ page }).include('.extension-interaction').withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(violations.violations).toEqual([]);
+  await page.reload();
+  await expect(custom).toBeVisible(); expect(await sounds()).toBe(0);
+  expect((await state(page.request, probe.sessionId)).run.extensionRequests!.map(request => request.id)).toEqual([before[1]!.id]);
+  await custom.getByRole('textbox', { name: 'Approval note', exact: true }).fill('approved through real renderer');
+  await custom.getByRole('checkbox', { name: 'Approved', exact: true }).check();
+  await custom.getByRole('button', { name: 'Submit', exact: true }).click();
+  await expect.poll(async () => (await state(page.request, probe.sessionId)).run.phase).toBe('completed');
+  const final = await state(page.request, probe.sessionId);
+  expect(final.run.extensionRequests).toEqual([]);
+  const result = final.session.messages.find(message => message.role === 'tool')!;
+  expect(JSON.parse(result.content)).toEqual([{ cancelled: false, value: 'yes' },
+    { cancelled: false, value: { note: 'approved through real renderer', approved: true } }, { cancelled: true }]);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.reload(); await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as { __dialogExecuted?: number }).__dialogExecuted)).toBeUndefined();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+});
+
+test('real Stop and executable rebuild revoke every pending approval and old handles cannot republish', async ({ page }) => {
+  const stopped = await begin(page, 'dialogs-stop');
+  await expect(page.getByRole('dialog', { name: 'Live first approval', exact: true })).toBeVisible();
+  const ids = (await state(page.request, stopped.sessionId)).run.extensionRequests!.map(request => request.id);
+  expect((await page.request.post(`/api/agent/runs/${stopped.runId}/stop`, { data: {} })).ok()).toBe(true);
+  await expect.poll(async () => (await state(page.request, stopped.sessionId)).run.phase).toBe('stopped');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.reload(); await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect((await page.request.post(`/api/agent/sessions/${stopped.sessionId}/interactions/${ids[0]}`, { data: { cancelled: true } })).status()).toBe(404);
+  const rebuilt = await begin(page, 'dialogs-rebuild');
+  await expect(page.getByRole('dialog', { name: 'Live first approval', exact: true })).toBeVisible();
+  const before = (await state(page.request, rebuilt.sessionId)).run.extensionRequests!;
+  const reload = await page.request.post('/api/agent/reload', { data: { cwd: root } });
+  expect(reload.ok()).toBe(true); expect((await reload.json()).errors).toEqual([]);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect((await state(page.request, rebuilt.sessionId)).run.extensionRequests).toEqual([]);
+  await rebuilt.gate('replace');
+  await expect.poll(async () => {
+    try { return JSON.parse(await readFile(path.join(root, `${rebuilt.token}-updated`), 'utf8')).changed; }
+    catch { return 'not yet written'; }
+  }).toBe(false);
+  await expect.poll(async () => (await state(page.request, rebuilt.sessionId)).run.phase).toBe('completed');
+  expect((await page.request.post(`/api/agent/sessions/${rebuilt.sessionId}/interactions/${before[0]!.id}`, { data: { cancelled: false, value: 'late' } })).status()).toBe(404);
+  await page.reload(); await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+for (const mode of ['length', 'emptylength']) test(`real ${mode}: durable follow-up notice and reachable explicit compaction action`, async ({ page }) => {
+  const probe = await begin(page, mode);
+  await expect.poll(async () => (await state(page.request, probe.sessionId)).run.phase).toBe('completed');
+  const actual = await state(page.request, probe.sessionId);
+  const reply = actual.session.messages.at(-1)!;
+  expect(reply.role).toBe('assistant'); expect(reply.metadata!.stopReason).toBe('length');
+  expect(reply.content).toBe(mode === 'length' ? 'Partial length answer.' : '');
+  await page.reload();
+  const notice = page.locator('.message.assistant [role="note"]');
+  await expect(notice).toContainText('Output limit reached');
+  await expect(notice.getByRole('button', { name: 'Compact context', exact: true })).toBeEnabled();
+  // The action invokes the existing real API; it may truthfully report that a
+  // two-message conversation is too short. No synthetic success is substituted.
+  const compact = page.waitForResponse(response => response.url().includes(`/api/agent/sessions/${probe.sessionId}/compact`) && response.request().method() === 'POST');
+  await notice.getByRole('button', { name: 'Compact context', exact: true }).click();
+  await compact;
+  const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
+  await expect(composer).toBeEnabled(); await composer.fill('Please continue the previous answer.');
+  const sent = page.waitForResponse(response => response.url().endsWith('/api/agent/runs') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  const next = await (await sent).json() as { run: AgentRunSnapshot };
+  await expect.poll(async () => { const snapshot = await state(page.request, probe.sessionId); return snapshot.run.id === next.run.id && snapshot.run.phase === 'completed'; }).toBe(true);
+  await expect(notice).toContainText('Output limit reached');
+  await expect(page.getByRole('button', { name: 'Compact context', exact: true })).toHaveCount(0);
+  await page.reload(); await expect(notice).toContainText('Output limit reached');
+});
+
+test('real provider failure retains scrubbed partial output and its adjacent error through terminal resync/reload', async ({ page }) => {
+  const probe = await begin(page, 'provider-error');
+  await expect.poll(async () => (await state(page.request, probe.sessionId)).run.phase).toBe('failed');
+  const actual = await state(page.request, probe.sessionId);
+  expect(actual.session.messages).toHaveLength(2);
+  expect(actual.session.messages[1]!.metadata!.outputError).toBe('The provider streaming response was invalid.');
+  expect(JSON.stringify(actual)).not.toContain('disposable-generic-progress-test-key');
+  await page.reload();
+  const reply = page.locator('.message.assistant');
+  await expect(reply).toContainText('Partial visible output.');
+  await expect(reply.getByRole('note')).toContainText('provider streaming response was invalid');
+  await expect(reply).not.toContainText('disposable-generic-progress-test-key');
+  await expect(reply.locator('img, script, iframe')).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Message composer', exact: true })).toBeEnabled();
+});
+
+test('real loaded turns share process ownership and one live/terminal tool presentation', async ({ page }) => {
+  const probe = await begin(page, 'success');
+  const card = page.getByRole('region', { name: 'Tool progress: arbitrary_custom', exact: true });
+  await expect(card).toContainText('Preparing custom work');
+  await expect(card).toHaveCount(1);
+  await probe.gate('latest'); await probe.gate('finish');
+  await expect.poll(async () => (await state(page.request, probe.sessionId)).run.phase).toBe('completed');
+  await page.reload();
+  const actual = await state(page.request, probe.sessionId);
+  const call = actual.session.messages.find(message => message.toolCalls?.length)!;
+  const result = actual.session.messages.find(message => message.role === 'tool')!;
+  await expect(page.locator(`[id="${call.id}"]`)).toHaveAttribute('data-process-turn', call.id);
+  await expect(page.locator(`[id="${result.id}"]`)).toHaveAttribute('data-process-turn', call.id);
+  await expect(page.locator('.agent-process > header:visible')).toHaveCount(1);
+  await expect(page.locator('.agent-process > header:visible')).toContainText('2');
+  await expect(card).toHaveCount(1); await expect(card).toHaveAttribute('data-status', 'completed');
+});
+
+const processScript = /\/assets\/ProcessBlock-[^/]+\.js(?:\?.*)?$/u;
+test('optional process controls are unloaded for plain replies; delayed genuine controls retain native text and focus', async ({ page }) => {
+  const assets: string[] = [];
+  page.on('request', request => { if (processScript.test(request.url())) assets.push(request.url()); });
+  const plain = await begin(page, 'length');
+  await expect.poll(async () => (await state(page.request, plain.sessionId)).run.phase).toBe('completed');
+  await expect(page.getByText('Partial length answer.', { exact: true })).toBeVisible();
+  expect(assets).toEqual([]);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route(processScript, async route => { await gate; await route.continue(); });
+  const probe = await begin(page, 'success');
+  await expect(page.getByRole('region', { name: 'Tool progress: arbitrary_custom', exact: true })).toContainText('Preparing custom work');
+  // Cold authoritative history includes the already persisted assistant call.
+  await page.reload();
+  const block = page.locator('.tool-block');
+  await expect(block.locator('summary')).toContainText('arbitrary_custom');
+  await block.locator('summary').click();
+  await expect(block.locator('pre[aria-busy="true"]')).toContainText(probe.token);
+  const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
+  await composer.focus(); release();
+  await expect(page.getByRole('toolbar', { name: 'Process block actions', exact: true })).toHaveCount(1);
+  await expect(block).toHaveAttribute('open', '');
+  await expect(block.locator('pre')).toContainText(probe.token);
+  await expect(composer).toBeFocused();
+  await probe.gate('latest'); await probe.gate('finish');
+  await expect.poll(async () => (await state(page.request, probe.sessionId)).run.phase).toBe('completed');
+});
+
+test('cached-failed genuine process controls retain native output and never disable product Stop', async ({ page }) => {
+  await page.route(processScript, route => route.abort('failed'));
+  const probe = await begin(page, 'stop');
+  await expect(page.getByRole('region', { name: 'Tool progress: arbitrary_custom', exact: true })).toContainText('Preparing custom work');
+  await page.reload();
+  const block = page.locator('.tool-block');
+  await expect(block.locator('[role="status"]')).toContainText('Progress display could not load');
+  await block.locator('summary').click();
+  await expect(block.locator('pre')).toContainText(probe.token);
+  await page.getByRole('button', { name: 'Stop tool', exact: true }).click();
+  await expect.poll(async () => (await state(page.request, probe.sessionId)).run.phase).toBe('stopped');
+  await expect(page.getByRole('textbox', { name: 'Message composer', exact: true })).toBeEnabled();
+});
+
+test('real automatic compaction snapshot keeps policy/cancel reachable and blocks Send after reload', async ({ page }) => {
+  const created = await page.request.post('/api/sessions', { data: { cwd: root, title: 'Actual pending automatic compaction' } });
+  expect(created.status()).toBe(201); const session = await created.json() as { id: string }; probes.set(page, session.id);
+  for (let index = 0; index < 4; index++) {
+    const added = await page.request.post(`/api/sessions/${session.id}/messages`, { data: {
+      role: index % 2 === 0 ? 'user' : 'assistant', content: `prior context ${index} ` + 'context detail '.repeat(6_000),
+    } });
+    expect(added.ok(), await added.text()).toBe(true);
+  }
+  // The default provider may already compact the seeded prefix. Capture the
+  // real retained context; do not pretend its projection is the full JSONL tree.
+  const seeded = await state(page.request, session.id);
+  const seededTotal = seeded.session.messagePage!.total;
+  expect(seededTotal).toBeGreaterThan(0);
+  expect(seeded.session.messages.at(-1)?.content).toContain('prior context 3');
+  await page.goto(`/chat/${session.id}?cwd=${encodeURIComponent(root)}`);
+  const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
+  await expect(composer).toBeVisible(); await composer.fill('Preserve this unsent draft');
+  const started = await page.request.post('/api/agent/runs', { data: { sessionId: session.id, cwd: root,
+    provider, model: 'progress-model', input: 'auto-phase:actual', autoCompaction: true, maxRetries: 0 } });
+  expect(started.status(), await started.text()).toBe(202);
+  const run = (await started.json() as { run: AgentRunSnapshot }).run;
+  // The shared loop checks automatic compaction after a completed tool result.
+  await expect.poll(async () => (await state(page.request, session.id)).run.phase).toBe('tool');
+  await writeFile(path.join(root, 'actual-latest'), 'go');
+  await writeFile(path.join(root, 'actual-finish'), 'go');
+  await expect.poll(async () => (await state(page.request, session.id)).run.phase).toBe('compacting');
+  const pending = await state(page.request, session.id);
+  expect(pending.session.messagePage!.total).toBe(seededTotal + 3);
+  expect(pending.session.messages.at(-1)).toMatchObject({ role: 'tool', content: 'Custom tool finished' });
+  expect(pending.session.messages.at(-2)?.toolCalls?.[0]?.id).toBe('host-outer');
+  await expect(composer).toHaveValue('Preserve this unsent draft');
+  // Remote-session unsent drafts are view-local; cold reload qualifies the
+  // authoritative pending phase/controls, not unsupported draft durability.
+  await page.reload();
+  await expect(composer).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Cancel compaction', exact: true })).toBeEnabled();
+  const policy = page.getByRole('combobox', { name: 'Auto-compaction', exact: true });
+  await expect(policy).toBeEnabled(); await policy.selectOption('false');
+  await page.getByRole('button', { name: 'Cancel compaction', exact: true }).click();
+  await expect.poll(async () => (await state(page.request, session.id)).run.phase).toBe('stopped');
+  const actual = await state(page.request, session.id);
+  expect(actual.run.id).toBe(run.id);
+  // Large content is byte-paged; prove the full total and exact loaded tail,
+  // rather than treating the bounded state page as the complete transcript.
+  expect(actual.session.messagePage!.total).toBe(seededTotal + 3);
+  expect(actual.session.messages).toEqual(pending.session.messages);
+  await expect(composer).toBeEnabled();
 });

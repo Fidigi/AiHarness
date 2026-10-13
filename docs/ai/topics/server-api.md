@@ -81,11 +81,11 @@ The run applies/removes only declared session overrides. Provider/tool turns, MC
 
 Core snapshots expose complete bounded admission-order `extensionRequests` plus the existing first-entry `extensionRequest`. `extension.ui` carries only the changed request or closed ID; reconnect state carries the full queue. HTTP response/cancel remains session/request-ID bound, validates the latest schema before settlement, and returns 404 for stale, foreign or already-settled IDs. This does not make an ID update/close authority; only Core-issued handle closures hold those capabilities.
 
-Server captures command requesters before loading sessions or checking trust. Successful executable/tool-generation commits revoke them and cancel pending interactions, even while an old run remains active. Failed same-cwd candidates and passive reads do not revoke; a failed workspace switch performs safety clearing. Stop cancels requests immediately but durable tool accounting still precedes terminal replay. See [Core limits and handle semantics](./extensions.md#extension-contracts). The singular browser adapter is conserved; complete Web queue/attention/reconnect composition remains separately unaccepted.
+Server captures command requesters before loading sessions or checking trust. Successful executable/tool-generation commits revoke them and cancel pending interactions, even while an old run remains active. Failed same-cwd candidates and passive reads do not revoke; a failed workspace switch performs safety clearing. Stop cancels requests immediately but durable tool accounting still precedes terminal replay. See [Core limits and handle semantics](./extensions.md#extension-contracts). The browser presents ordered heads/counts with guarded attention and reconnect; real concurrent approval/rebuild journeys complement the existing controlled queue matrix.
 
 ### Current event contract
 
-Events include `run.started`, `run.phase`, `message.start|delta|completed`, `tool.started|completed`, `queue.updated`, `retry.scheduled`, `compaction.completed`, `subagent.*`, and `extension.ui`; SSE begins with `connection.ready`. Sequence IDs, snapshot reset, partial-message restoration, and no-duplicate replay are one cross-package contract.
+Events include run/message/tool/queue/retry/compaction/subagent and extension lifecycle records; SSE begins with `connection.ready`. Detached agent delivery alone enables bounded draining and selective queued progress/delta replacement. Complete checkpoints and authoritative compaction phase permit cold reconstruction; see [detached streams](./detached-streams.md) for exact limits, evidence and tests. Legacy channels remain fail-closed.
 
 Underscore events such as `message_start`, `text_delta`, and `message_end` belong only to legacy chat compatibility.
 
@@ -208,6 +208,7 @@ Preserve composition-before-listen and bootstrap-generation checks; never substi
 
 ## Related Domains
 
+- [`detached-streams.md`](./detached-streams.md) — selective delivery, checkpoints and phase/evidence reconstruction
 - [`codemode.md`](./codemode.md) — shared sandbox execution and health
 - [`sessions.md`](./sessions.md) — persistence, pagination and compaction
 - [`providers.md`](./providers.md) — proxy, registry, OAuth and usage

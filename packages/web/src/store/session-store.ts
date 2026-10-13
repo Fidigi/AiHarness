@@ -326,9 +326,12 @@ function storedPage(page: SessionMessagePageInfo, ranges?: LoadedMessageRange[])
   };
 }
 
+const cloneDto = structuredClone;
+
 function toStoredSession(session: ApiSession | StoredSession): StoredSession {
   const existingPage = session.messagePage as StoredMessagePage | undefined;
-  return {
+  // Accepted JSON/Date DTOs become store-owned, including unknown metadata.
+  return cloneDto({
     ...session,
     createdAt: asDate(session.createdAt),
     updatedAt: asDate(session.updatedAt),
@@ -337,7 +340,7 @@ function toStoredSession(session: ApiSession | StoredSession): StoredSession {
       commands: session.commands.map(command => ({ ...command, timestamp: asDate(command.timestamp) })),
     } : {}),
     ...(existingPage ? { messagePage: storedPage(existingPage, existingPage.loadedRanges) } : {}),
-  } as StoredSession;
+  }) as StoredSession;
 }
 
 function indexedMessages(session: StoredSession): Map<number, Message> {
@@ -367,7 +370,7 @@ function mergeMessageWindow(
   rawMessages: SessionMessagePage['messages'],
   page: SessionMessagePageInfo,
 ): StoredSession {
-  const hydrated = rawMessages.map(message => ({ ...message, timestamp: asDate(message.timestamp) }));
+  const hydrated = cloneDto(rawMessages).map(message => ({ ...message, timestamp: asDate(message.timestamp) }));
   const reset = !session.messagePage || page.total < session.messagePage.total;
   const indexed = reset ? new Map<number, Message>() : indexedMessages(session);
   const indexById = new Map([...indexed].map(([index, message]) => [message.id, index]));
@@ -1067,7 +1070,7 @@ export const useSessionStore = create<AppState>((set, get) => ({
     admitted = true;
     if (unchangedAuthority && JSON.stringify(previous) === JSON.stringify(acceptedRun)) return state;
     return {
-      runs: { ...state.runs, [sessionId]: acceptedRun },
+      runs: { ...state.runs, [sessionId]: cloneDto(acceptedRun) },
       ...authorityPublication(state, runAuthorities),
       sessions: backgroundCompletion ? state.sessions.map(session => session.id === sessionId ? {
         ...session,

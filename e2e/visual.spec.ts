@@ -531,7 +531,15 @@ test.describe('Régression visuelle des historiques paginés', () => {
 
       await page.goto('/chat/visual-history');
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; scroll-behavior: auto !important; }' });
-      await page.getByRole('button', { name: 'Load earlier messages' }).click();
+      const loadEarlier = page.getByRole('button', { name: 'Load earlier messages' });
+      // Reveal once, then use a real pointer click. Locator.click() performs a
+      // second native reveal which can move this scroller by its 16px padding
+      // before pointerdown; that is not a pagination-restoration displacement.
+      await loadEarlier.scrollIntoViewIfNeeded();
+      const button = await loadEarlier.boundingBox();
+      expect(button).not.toBeNull();
+      const priorAnchor = await page.locator('#visual-history-message-101').evaluate(element => element.getBoundingClientRect().top);
+      await page.mouse.click(button!.x + button!.width / 2, button!.y + button!.height / 2);
       await expect(page.locator('.messages-container[data-virtualized="true"]')).toBeVisible();
       expect(await page.locator('.message').count()).toBeLessThan(45);
       const actions = scenario.width <= 959
@@ -539,6 +547,7 @@ test.describe('Régression visuelle des historiques paginés', () => {
         : page.locator('.chat-toolbar-actions');
       await actions.getByRole('button', { name: 'Conversation map' }).click();
       await expect(page.getByLabel('Conversation map')).toContainText('160 of 180 loaded');
+      await expect(page.getByRole('button', { name: /Back to bottom \(\d+\)/ })).toHaveCount(0);
       // Role prefixes remain accessible, not extra grid cells that displace previews.
       expect(await page.locator('.minimap-entry').evaluateAll(entries => entries.every(entry => {
         const preview = entry.querySelector('small');
@@ -548,6 +557,9 @@ test.describe('Régression visuelle des historiques paginés', () => {
       }))).toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.evaluate(() => document.fonts.ready);
+      await expect.poll(async () => Math.abs(
+        await page.locator('#visual-history-message-101').evaluate(element => element.getBoundingClientRect().top) - priorAnchor,
+      )).toBeLessThan(3);
       await expect(page).toHaveScreenshot(`history-minimap-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });

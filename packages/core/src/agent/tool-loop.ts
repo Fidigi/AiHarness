@@ -139,7 +139,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
     const toolCalls = response.toolCalls ?? [];
 
     if (toolCalls.length === 0) {
-      if (response.content || response.reasoning) {
+      if (response.content || response.reasoning || response.stopReason === 'length') {
         await options.sessionManager.addMessage(options.sessionId, {
           role: 'assistant',
           content: response.content,
@@ -150,6 +150,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
           provider: options.provider,
           model: response.model,
           usage: normalizeUsage(response.usage),
+          ...(response.stopReason === 'length' ? { metadata: { stopReason: 'length' } } : {}),
           durationMs,
         }, { signal: options.signal });
       }
@@ -170,6 +171,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       provider: options.provider,
       model: response.model,
       usage: normalizeUsage(response.usage),
+      ...(response.stopReason === 'length' ? { metadata: { stopReason: 'length' } } : {}),
       durationMs,
     }, { signal: options.signal });
 

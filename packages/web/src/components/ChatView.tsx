@@ -6,6 +6,9 @@ import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, Message, Mod
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { AgentCapabilities, CommandSnapshot, ExtensionWidget, PaletteItem, SessionInfo } from '../services/api';
 import type { DraftAttachment, StoredSession } from '../store/session-store';
+import { restoreWhileOwned } from './scroll-restoration';
+import { unseenMessagesAfter } from './history-reading';
+import { replyMessages } from './reply-messages';
 import type { TranslationFunction } from '../i18n/types';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useI18n } from '../hooks/useI18n';
@@ -17,6 +20,9 @@ import { SubagentPanel } from './SubagentPanel';
 import { applyCodemodeProgress, codemodeDetails } from './codemode-state';
 import { applyToolProgress } from './tool-progress-state';
 import ToolProgressBoundary from './ToolProgressBoundary';
+import ProcessBlock from './ProcessBlockBoundary';
+import AnsiOutput from './AnsiOutput';
+import { processTurns, type ProcessTurn } from './process-turns';
 import { composerKeySubmits } from './composer-submit';
 import { clipboardTextToMarkdown } from './markdown-paste';
 import { getMarkdownListContinuation } from './markdown-list-continuation';
@@ -71,6 +77,7 @@ interface ChatViewProps {
 }
 
 const CodemodeCard = lazy(() => import('./CodemodeCard').then(module => ({ default: module.CodemodeCard })));
+const WrittenFiles = lazy(() => import('./ProcessBlock').then(module => ({ default: module.FilesWritten })).catch(() => ({ default: () => null })));
 
 type QueueMode = 'steer' | 'follow-up';
 const EMPTY_ATTACHMENTS: DraftAttachment[] = [];
@@ -205,6 +212,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const navigate = useNavigate();
   const sessions = useSessionStore(state => state.sessions);
   const currentSession = sessions.find(session => session.id === id);
+  const lastMessageId = currentSession?.messages.at(-1)?.id;
   const workspace = useSessionStore(state => state.workspace);
   const mobileKeyboard = useMobileKeyboard(mobileKeyboardViewKey(workspace?.id, workspace?.cwd, id, location.key));
   const selectedProviderType = useSessionStore(state => state.providers.active);
@@ -388,7 +396,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
   const previousMessageCount = useRef(0);
-  const readingBaselineCount = useRef(0);
+  const readingTail = useRef<string | undefined>(undefined);
   const pendingScrollAnchor = useRef<{
     messageId: string;
     offset: number;
@@ -536,7 +544,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     pendingSessionScroll.current = saved;
     nearBottomRef.current = startsNearBottom;
     previousMessageCount.current = currentSession?.messages.length ?? 0;
-    readingBaselineCount.current = currentSession?.messages.length ?? 0;
+    readingTail.current = lastMessageId;
     pendingScrollAnchor.current = undefined;
     requestedHistoryTarget.current = undefined;
     requestedScrollTarget.current = undefined;
@@ -572,7 +580,11 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     return () => window.removeEventListener('pagehide', save);
   }, [currentSession?.id, workspace?.cwd]);
 
+  const scrollRestoration = useRef<(() => void) | undefined>(undefined);
+  useLayoutEffect(() => () => { scrollRestoration.current?.(); }, [currentSession?.id, workspace?.cwd, targetMessageId]);
+
   useLayoutEffect(() => {
+    let disposeRestoration: (() => void) | undefined;
     const count = currentSession?.messages.length ?? 0;
     const container = messagesContainerRef.current;
     const preserved = pendingScrollAnchor.current;
@@ -600,15 +612,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           const index = currentSession?.messages.findIndex(message => message.id === savedPosition.anchorId) ?? -1;
           if (index >= 0) messageVirtualizer.scrollToIndex(index, { align: 'start' });
         }
-        let attempts = 0;
-        const finishSavedRestoration = () => {
-          restoreSavedAnchor();
-          if (++attempts < 10) window.requestAnimationFrame(finishSavedRestoration);
-        };
-        window.requestAnimationFrame(finishSavedRestoration);
-        window.setTimeout(restoreSavedAnchor, 120);
-        window.setTimeout(restoreSavedAnchor, 300);
-        window.setTimeout(restoreSavedAnchor, 600);
+        disposeRestoration = restoreWhileOwned(container, restoreSavedAnchor);
       }
     } else if (savedPosition) {
       // Keep the position until cached or remote messages have been materialized.
@@ -622,28 +626,21 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         else container.scrollTop = targetScrollTop;
         return true;
       };
-      const finishRestoration = () => {
-        window.requestAnimationFrame(() => window.requestAnimationFrame(restoreAnchor));
-        window.setTimeout(restoreAnchor, 120);
-      };
       if (restoreAnchor()) {
         pendingScrollAnchor.current = undefined;
-        finishRestoration();
+        disposeRestoration = restoreWhileOwned(container, restoreAnchor);
       } else if (virtualized) {
         const index = currentSession?.messages.findIndex(message => message.id === preserved.messageId) ?? -1;
         if (index >= 0) messageVirtualizer.scrollToIndex(index, { align: 'start' });
         let attempts = 0;
-        const restoreMountedAnchor = () => {
+        disposeRestoration = restoreWhileOwned(container, () => {
           if (restoreAnchor()) {
             if (pendingScrollAnchor.current === preserved) pendingScrollAnchor.current = undefined;
-            finishRestoration();
-          } else if (++attempts < 5) window.requestAnimationFrame(restoreMountedAnchor);
-          else {
+          } else if (++attempts === 5) {
             container.scrollTop = preserved.scrollTop + Math.max(0, container.scrollHeight - preserved.scrollHeight);
             if (pendingScrollAnchor.current === preserved) pendingScrollAnchor.current = undefined;
           }
-        };
-        window.requestAnimationFrame(restoreMountedAnchor);
+        });
       } else {
         container.scrollTop = preserved.scrollTop + Math.max(0, container.scrollHeight - preserved.scrollHeight);
         pendingScrollAnchor.current = undefined;
@@ -665,15 +662,19 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             lastScrolledTarget.current = targetKey;
           });
         }
-      } else if (!nearBottom) {
-        setUnseenMessages(Math.max(0, count - readingBaselineCount.current));
       }
     } else if (nearBottomRef.current && nearBottom) {
       container?.scrollTo({ top: container.scrollHeight, behavior: previousMessageCount.current ? 'smooth' : 'auto' });
-    } else if (!nearBottom) {
-      setUnseenMessages(Math.max(0, count - readingBaselineCount.current));
     }
+    // Reading evidence is independent of anchor/target restoration ownership.
+    if (!nearBottom) setUnseenMessages(unseenMessagesAfter(currentSession?.messages ?? [], readingTail.current));
     previousMessageCount.current = count;
+    // Layout/near-bottom rerenders do not retire this same-view settling lease.
+    // A new lease or the identity-scoped effect above does; newer offsets also do.
+    if (disposeRestoration) {
+      scrollRestoration.current?.();
+      scrollRestoration.current = disposeRestoration;
+    }
   }, [currentSession?.messages, messageVirtualizer, nearBottom, targetMessageId, targetMessageLoaded, virtualized]);
 
   useEffect(() => {
@@ -795,6 +796,13 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         const reasoning = `${streamReasoning.current.get(messageId) ?? ''}${chunk}`;
         streamReasoning.current.set(messageId, reasoning);
         upsertAssistantMessage(id, messageId, streamContent.current.get(messageId) ?? '', reasoning);
+      }
+      if (event.type === 'message.completed' && typeof eventData.messageId === 'string' && messageId && typeof eventData.content === 'string') {
+        const complete = event.data as { content: string; reasoning?: unknown };
+        const reasoning = typeof complete.reasoning === 'string' ? complete.reasoning : '';
+        streamContent.current.set(messageId, complete.content);
+        streamReasoning.current.set(messageId, reasoning);
+        upsertAssistantMessage(id, messageId, complete.content, reasoning);
       }
       if (event.type === 'retry.scheduled') {
         const retry = event.data as AgentRunSnapshot['retry'];
@@ -1063,7 +1071,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   ).slice(0, 10);
   const suggestionCount = paletteResults.length || fileResults.length;
   useEscapeLayer(suggestionCount > 0, 'menu', () => { setDismissedSuggestions(input); }, textareaRef);
-  const busyCompacting = compacting || automaticCompacting;
+  const busyCompacting = compacting || automaticCompacting || currentRun?.phase === 'compacting';
   const workspaceOperationTrusted = Boolean(workspace
     && (workspace.operationTrusted ?? workspace.trusted));
   const canSend = Boolean((input.trim() || attachments.length) && currentSession && workspaceOperationTrusted
@@ -1083,7 +1091,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         : active
           ? t(`chat.status.${currentRun?.phase}`)
           : undefined;
-  const stopLabel = compacting
+  const stopLabel = busyCompacting
     ? t('chat.stop.compaction')
     : currentRun?.phase === 'tool'
       ? t('chat.stop.tool')
@@ -1102,6 +1110,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       return;
     }
     try {
+      const { prepareImage } = await import('./prepare-image');
       const prepared = await Promise.all(images.map(prepareImage));
       const totalSize = [...attachments, ...prepared].reduce((sum, image) => sum + image.size, 0);
       if (totalSize > 6 * 1024 * 1024) throw new Error(t('chat.imageTotalLimit'));
@@ -1678,17 +1687,19 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   };
 
   const scrollToMessage = (messageId: string) => {
+    scrollRestoration.current?.();
     lastScrolledTarget.current = undefined;
     navigate(`${location.pathname}${location.search}#${encodeURIComponent(messageId)}`, { replace: true });
     window.setTimeout(() => document.getElementById(messageId)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 0);
   };
 
   const scrollToBottom = () => {
+    scrollRestoration.current?.();
     const container = messagesContainerRef.current;
     if (location.hash) navigate(`${location.pathname}${location.search}`, { replace: true });
     container?.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     nearBottomRef.current = true;
-    readingBaselineCount.current = currentSession?.messages.length ?? 0;
+    readingTail.current = lastMessageId;
     setNearBottom(true);
     setUnseenMessages(0);
   };
@@ -1740,6 +1751,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     (message.toolCalls ?? message.blocks?.flatMap(block => block.type === 'tool_call' ? [block] : []) ?? [])
       .map(call => [call.id, call.input] as const))), [currentSession?.messages]);
   const historyGaps = historyGapMessageIds(currentSession);
+  const processGroups = processTurns(currentSession?.messages ?? [], historyGaps);
   const historyPage = currentSession?.messagePage;
   const sessionIndex = sessions.findIndex(session => session.id === currentSession?.id);
   const previousSession = sessionIndex > 0 ? sessions[sessionIndex - 1] : undefined;
@@ -1768,7 +1780,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     );
   }
 
-  const messageArticle = (message: Message) => <article id={message.id} className={`message ${message.role}`}
+  const messageArticle = (message: Message) => {
+    const process = processGroups.get(message.id);
+    return <article id={message.id} className={`message ${message.role}`}
+    data-process-turn={process?.id}
     aria-label={`${message.role}: ${message.content.slice(0, 80)}`}>
     <div className="message-role">
       {message.role === 'user' ? `👤 ${t('chat.role.user')}`
@@ -1777,7 +1792,13 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             : `🤖 ${t('chat.role.assistant')}`}
     </div>
     <div className="message-content">{renderMessage(message, preferences.reasoningOpen, t,
-      message.toolCallId ? toolInputs.get(message.toolCallId) : undefined)}</div>
+      message.toolCallId ? toolInputs.get(message.toolCallId) : undefined, process)}</div>
+    {message.role === 'assistant' && message.metadata?.stopReason === 'length' && <aside className="notice warning reply-evidence" role="note">
+      <span>{replyMessages(locale).truncated}</span>
+      {message.id === lastMessageId && <button type="button" disabled={active || busyCompacting || !workspaceOperationTrusted}
+        onClick={() => void executeSlashCommand('/compact')}>{replyMessages(locale).compact}</button>}
+    </aside>}
+    {message.role === 'assistant' && typeof message.metadata?.outputError === 'string' && <p className="notice error reply-evidence" role="note">{message.metadata.outputError}</p>}
     <footer className="message-meta">
       <time dateTime={message.timestamp.toISOString()}>{message.timestamp.toLocaleTimeString()}</time>
       {message.model && <span>{message.model}</span>}
@@ -1793,6 +1814,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       )}
     </footer>
   </article>;
+  };
 
   const historyGap = (messageId: string) => historyGaps.has(messageId) && (
     <div className="history-gap" role="separator">
@@ -1997,12 +2019,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           const wasNearBottom = nearBottomRef.current;
           nearBottomRef.current = next;
           setNearBottom(next);
-          if (next) {
-            readingBaselineCount.current = currentSession.messages.length;
-            setUnseenMessages(0);
-          } else if (wasNearBottom) {
-            readingBaselineCount.current = currentSession.messages.length;
-          }
+          if (next || wasNearBottom) readingTail.current = lastMessageId;
+          if (next) setUnseenMessages(0);
           scheduleScrollSave(element);
         }} onMouseUp={() => {
         if (!preferences.selectionActions) return;
@@ -2107,8 +2125,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         key={`${currentRun.id}:${currentRun.activeTool.id}`}
         value={currentRun.activeTool.progress} toolCallId={currentRun.activeTool.id} toolName={currentRun.activeTool.name} />}
       {currentRun?.activeTool?.name === 'codemode' && <Suspense fallback={null}><CodemodeCard running
-        code={typeof (currentRun.activeTool.input as { code?: unknown })?.code === 'string'
-          ? (currentRun.activeTool.input as { code: string }).code : undefined}
+        input={currentRun.activeTool.input}
         calls={currentRun.activeTool.nestedCalls} /></Suspense>}
       <form onSubmit={handleSubmit} className="input-container"
         onDragOver={event => { if ([...event.dataTransfer.items].some(item => item.type.startsWith('image/'))) event.preventDefault(); }}
@@ -2296,21 +2313,20 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   );
 }
 
-function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationFunction, callInput?: unknown): ReactNode {
+function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationFunction, callInput?: unknown, process?: ProcessTurn): ReactNode {
   const codeDetails = message.name === 'codemode' && message.toolCallId
     ? codemodeDetails(message.metadata?.codemode, message.toolCallId) : undefined;
-  const script = callInput && typeof callInput === 'object' && 'code' in callInput && typeof callInput.code === 'string' ? callInput.code : undefined;
   const reasoning = message.blocks?.filter(block => block.type === 'reasoning') ?? [];
   const images = message.blocks?.filter(block => block.type === 'image') ?? [];
   const toolBlocks = message.blocks?.filter(block => block.type === 'tool_call' || block.type === 'tool_result' || block.type === 'command') ?? [];
-  const writtenFiles = findWrittenFiles(toolBlocks);
+  const hasWrittenFiles = toolBlocks.some(block => (block.type === 'tool_call' || block.type === 'tool_result') && /(?:write|edit|patch|create|save)/i.test(block.name ?? ''));
   const processCount = reasoning.length + toolBlocks.length;
   return (
     <>
-      {processCount > 0 && <section className="agent-process" aria-label={t('chat.process')}>
-        <header>
+      {processCount > 0 && <section key={process?.finalAnswerId ?? 'pending'} className="agent-process" aria-label={t('chat.process')}>
+        <header aria-hidden={process?.header === false}>
           <strong>{t('chat.process')}</strong>
-          <span>{t('chat.processSteps', { count: processCount })}</span>
+          <span>{t('chat.processSteps', { count: process?.steps ?? processCount })}</span>
           {message.model && <code>{message.provider ? `${message.provider}/` : ''}{message.model}</code>}
           {message.durationMs !== undefined && <small>{Math.max(0, message.durationMs / 1_000).toFixed(2)}s</small>}
           {message.usage?.totalTokens !== undefined && <small>{message.usage.totalTokens.toLocaleString()} tokens</small>}
@@ -2319,12 +2335,12 @@ function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationF
         {reasoning.map((block, index) => block.type === 'reasoning' && (
           <ProcessBlock className="reasoning-block" key={`reasoning-${index}`}
             summary={t('chat.reasoning')} content={block.text} defaultOpen={reasoningOpen}
-            filename={`reasoning-${message.id}.txt`} t={t} />
+            filename={`reasoning-${message.id}.txt`} t={t} openFile={openWorkspaceFile} />
         ))}
         {toolBlocks.map((block, index) => {
           if (block.type === 'tool_result' && codeDetails) return <Suspense key={`tool-${index}`}
             fallback={<pre className="tool-block-pre">{block.content?.slice(0, 8_000)}</pre>}>
-            <CodemodeCard code={script} output={block.fullContent ?? block.content} calls={codeDetails.nestedCalls} details={codeDetails} />
+            <CodemodeCard input={callInput} output={block.fullContent ?? block.content} calls={codeDetails.nestedCalls} details={codeDetails} />
           </Suspense>;
           const content = block.type === 'tool_call' ? JSON.stringify(block.input, null, 2)
             : (block.type === 'tool_result' ? block.content : block.output) ?? '';
@@ -2335,7 +2351,7 @@ function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationF
           return <ProcessBlock className="tool-block" key={`tool-${index}`} summary={summary}
             content={content} fullContent={fullContent} truncated={block.type === 'tool_result' && block.truncated}
             filename={`${block.type === 'command' ? 'command' : block.type === 'tool_call' ? block.name : block.name || 'tool-result'}-${message.id}.txt`}
-            error={block.type === 'tool_result' && block.isError} t={t} />;
+            error={block.type === 'tool_result' && block.isError} t={t} openFile={openWorkspaceFile} />;
         })}
       </section>}
       {message.role === 'tool' && message.name && message.name !== 'codemode' && message.toolCallId && <ToolProgressBoundary
@@ -2349,104 +2365,9 @@ function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationF
           </a>
         ))}
       </section>}
-      {writtenFiles.length > 0 && <div className="files-written" aria-label={t('chat.filesWritten')}>
-        <strong>{t('chat.filesWritten')}</strong>
-        {writtenFiles.map(file => <button key={file} onClick={() => openWorkspaceFile(file)}>{file}</button>)}
-      </div>}
+      {hasWrittenFiles && <Suspense fallback={null}><WrittenFiles blocks={toolBlocks} t={t} openFile={openWorkspaceFile} /></Suspense>}
     </>
   );
-}
-
-const PROCESS_PREVIEW_LENGTH = 8_000;
-
-function ProcessBlock({ className, summary, content, fullContent, truncated, filename, defaultOpen, error, t }: {
-  className: string;
-  summary: string;
-  content: string;
-  fullContent?: string;
-  truncated?: boolean;
-  filename: string;
-  defaultOpen?: boolean;
-  error?: boolean;
-  t: TranslationFunction;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const complete = fullContent ?? content;
-  const long = truncated === true || complete.length > PROCESS_PREVIEW_LENGTH;
-  const visible = expanded
-    ? complete
-    : content.length > PROCESS_PREVIEW_LENGTH ? `${content.slice(0, PROCESS_PREVIEW_LENGTH)}\n…` : content;
-  const copy = async () => {
-    await navigator.clipboard?.writeText(complete);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1_500);
-  };
-  return <details className={`${className}${error ? ' error' : ''}`} open={defaultOpen}>
-    <summary>{summary}{truncated && <span className="truncated-badge">{t('chat.truncated')}</span>}</summary>
-    <div className="process-block-actions" role="toolbar" aria-label={t('chat.blockActions')}>
-      <button type="button" onClick={() => void copy()}>{copied ? t('chat.copied') : t('common.copy')}</button>
-      {long && <button type="button" onClick={() => setExpanded(value => !value)}>
-        {expanded ? t('chat.collapseOutput') : t('chat.expandOutput')}
-      </button>}
-      {long && <button type="button" onClick={() => downloadText(complete, filename)}>{t('common.download')}</button>}
-    </div>
-    {/\u001b\[[0-9;]*m/.test(visible) ? <AnsiOutput content={visible} /> : <ToolOutput content={visible} />}
-  </details>;
-}
-
-function downloadText(content: string, rawFilename: string): void {
-  const filename = rawFilename.replace(/[^a-z0-9._-]+/gi, '-').slice(0, 160) || 'output.txt';
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
-function AnsiOutput({ content }: { content: string }) {
-  const colors: Record<number, string> = {
-    30: 'black', 31: 'red', 32: 'green', 33: 'yellow', 34: 'blue', 35: 'magenta', 36: 'cyan', 37: 'white',
-    90: 'bright-black', 91: 'bright-red', 92: 'bright-green', 93: 'bright-yellow', 94: 'bright-blue',
-    95: 'bright-magenta', 96: 'bright-cyan', 97: 'bright-white',
-  };
-  let color = '';
-  let bold = false;
-  let cursor = 0;
-  const segments: ReactNode[] = [];
-  for (const match of content.matchAll(/\u001b\[([0-9;]*)m/g)) {
-    if (match.index! > cursor) segments.push(<span key={cursor} className={[color && `ansi-${color}`, bold && 'ansi-bold'].filter(Boolean).join(' ')}>{content.slice(cursor, match.index)}</span>);
-    for (const code of (match[1] || '0').split(';').map(Number)) {
-      if (code === 0) { color = ''; bold = false; }
-      else if (code === 1) bold = true;
-      else if (colors[code]) color = colors[code];
-    }
-    cursor = match.index! + match[0].length;
-  }
-  if (cursor < content.length) segments.push(<span key={cursor} className={[color && `ansi-${color}`, bold && 'ansi-bold'].filter(Boolean).join(' ')}>{content.slice(cursor)}</span>);
-  return <pre className="tool-output ansi-output">{segments}</pre>;
-}
-
-function findWrittenFiles(blocks: NonNullable<Message['blocks']>): string[] {
-  const files = new Set<string>();
-  const add = (value: unknown) => {
-    if (typeof value !== 'string') return;
-    const candidate = value.trim().replace(/(?:[:#]L?\d+)$/i, '');
-    if (/^(?:\.{0,2}\/)?(?:[\w@.+-]+\/)*[\w@.+ -]+\.[a-z0-9]+$/i.test(candidate)) files.add(candidate);
-  };
-  for (const block of blocks) {
-    if (block.type === 'tool_call' && /(?:write|edit|patch|create|save)/i.test(block.name)) {
-      const input = block.input as Record<string, unknown>;
-      for (const [key, value] of Object.entries(input)) {
-        if (/(?:path|file|target|destination)/i.test(key)) add(value);
-      }
-    } else if (block.type === 'tool_result' && /(?:write|edit|patch|create|save)/i.test(block.name ?? '')) {
-      const pattern = /((?:\.{0,2}\/)?(?:[\w@.+-]+\/)*[\w@.+ -]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|mdx|css|scss|html|py|rb|rs|go|java|kt|sh|bash|yml|yaml|toml))(?:[:#]L?(\d+))?/gi;
-      for (const match of block.content.matchAll(pattern)) add(match[1]);
-    }
-  }
-  return [...files];
 }
 
 function openWorkspaceFile(path: string, line?: number): void {
@@ -2454,52 +2375,8 @@ function openWorkspaceFile(path: string, line?: number): void {
   window.setTimeout(() => window.dispatchEvent(new CustomEvent('aih-open-file', { detail: { path, line } })), 0);
 }
 
-function ToolOutput({ content }: { content: string }) {
-  const pathPattern = /((?:\.{0,2}\/)?(?:[\w@.+-]+\/)*[\w@.+ -]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|mdx|css|scss|html|py|rb|rs|go|java|kt|sh|bash|yml|yaml|toml))(?:[:#]L?(\d+))?/gi;
-  return <pre className="tool-output">{content.split(pathPattern).map((part, index, values) => {
-    if (index % 3 !== 1) return index % 3 === 2 ? null : <Fragment key={index}>{part}</Fragment>;
-    const line = values[index + 1] ? Number(values[index + 1]) : undefined;
-    return <button key={index} onClick={() => openWorkspaceFile(part, line)}>{part}{line ? `:${line}` : ''}</button>;
-  })}</pre>;
-}
-
 function renderMessageContent(content: string, keepLineBreaks = false): ReactNode {
   return <MarkdownContent content={content} keepLineBreaks={keepLineBreaks} />;
-}
-
-async function fileDataUrl(file: Blob): Promise<string> {
-  return await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error('Image read failed'));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function prepareImage(file: File): Promise<DraftAttachment> {
-  if (file.size > 10 * 1024 * 1024) throw new Error(`Image too large: ${file.name}`);
-  let blob: Blob = file;
-  if (!['image/gif', 'image/svg+xml'].includes(file.type)) {
-    try {
-      const bitmap = await createImageBitmap(file);
-      const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-      canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      bitmap.close();
-      const compressed = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', .86));
-      if (compressed && compressed.size < file.size) blob = compressed;
-    } catch { /* Keep the original when browser image decoding is unavailable. */ }
-  }
-  if (blob.size > 4 * 1024 * 1024) throw new Error(`Compressed image is still too large: ${file.name}`);
-  return {
-    id: crypto.randomUUID(),
-    name: file.name,
-    mediaType: blob.type || file.type,
-    size: blob.size,
-    url: await fileDataUrl(blob),
-  };
 }
 
 function playCompletionSound(volume = 0.25, attention = false): void {

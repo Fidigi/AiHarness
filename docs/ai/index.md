@@ -8,15 +8,16 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 
 | Domain | File | Context Load |
 |---|---|---|
-| Project overview | [`project-map.md`](./project-map.md) | ~560 lines — load first for global navigation |
+| Project overview | [`project-map.md`](./project-map.md) | ~580 lines — load first for global navigation |
 | AI Providers | [`topics/providers.md`](./topics/providers.md) | ~150 lines |
-| Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~125 lines |
+| Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~140 lines |
 | TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~35 lines |
 | Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~160 lines |
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~320 lines |
 | QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
-| Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~210 lines |
-| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~190 lines |
+| Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~220 lines |
+| Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~200 lines |
+| Detached Stream Reconstruction | [`topics/detached-streams.md`](./topics/detached-streams.md) | ~90 lines |
 | Static Demonstration | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
 | Linked-Directory Consent | [topics/linked-directories.md](./topics/linked-directories.md) | ~66 lines |
 | Security & Trust | [`topics/security.md`](./topics/security.md) | ~200 lines |

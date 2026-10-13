@@ -12,6 +12,7 @@ import { resolveEffectiveConfiguration } from '../config/effective-configuration
 import { serializeSessionPage } from './session-pagination.js';
 import { requireCapability } from '../security/request-security.js';
 import { SseChannel } from './sse-channel.js';
+import { agentEventPolicy } from './agent-event-policy.js';
 import { providerAdministration, providerOperation } from '../runtime/provider-administration.js';
 
 function stringValue(value: unknown, name: string, options: { optional?: boolean; max?: number } = {}): string | undefined {
@@ -778,7 +779,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       response.setHeader('X-Accel-Buffering', 'no');
       response.flushHeaders?.();
 
-      const channel = new SseChannel(response, services.createTextRedactor());
+      const channel = new SseChannel(response, services.createTextRedactor(), true);
       const pending: AgentEvent[] = [];
       let replaying = true;
       let sent = after;
@@ -789,7 +790,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
           return;
         }
         sent = event.sequence;
-        channel.send(event.type, services.redactJson(event), event.id);
+        channel.send(event.type, services.redactJson(event), event.id, agentEventPolicy(event));
       };
       const unsubscribe = services.agentRuntime.journal.subscribe(session.id, emit);
       const replay = services.agentRuntime.journal.replay(session.id, after);
@@ -800,7 +801,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       }));
       for (const event of replay.events) {
         sent = Math.max(sent, event.sequence);
-        channel.send(event.type, services.redactJson(event), event.id);
+        channel.send(event.type, services.redactJson(event), event.id, agentEventPolicy(event));
       }
       replaying = false;
       pending.sort((left, right) => left.sequence - right.sequence).forEach(emit);

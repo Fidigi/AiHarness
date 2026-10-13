@@ -353,9 +353,20 @@ export class AgentRuntime {
   }
 
   publishSessionEvent(sessionId: string, type: AgentEventType, data: unknown): AgentEvent {
-    const run = this.getSessionRun(sessionId);
-    const runId = run && !['completed', 'failed', 'stopped'].includes(run.phase) ? run.id : undefined;
-    return this.journal.publish(sessionId, type, this.redactJson(data), runId);
+    const runId = this.sessionRuns.get(sessionId);
+    const candidate = runId ? this.runs.get(runId) : undefined;
+    const run = candidate && !['completed', 'failed', 'stopped'].includes(candidate.snapshot.phase) ? candidate : undefined;
+    // Trusted SessionManager lifecycle must survive a cold state read, not only
+    // the currently connected client's transient compaction indicator.
+    if (run && !run.controller.signal.aborted) {
+      if (type === 'compaction.started') this.setPhase(run, 'compacting');
+      else if ((type === 'compaction.completed' || type === 'compaction.failed') && run.snapshot.phase === 'compacting') {
+        this.setPhase(run, 'prompting');
+      }
+    }
+    const event = this.journal.publish(sessionId, type, this.redactJson(data), run?.snapshot.id);
+    if (run) run.snapshot.lastSequence = this.journal.lastSequence(sessionId);
+    return event;
   }
 
   requestExtensionInteraction(
@@ -548,6 +559,7 @@ export class AgentRuntime {
     provider: AiProvider,
     preparedTools: PreparedRunTools,
   ): Promise<void> {
+    let latestMessageId: string | undefined;
     await runToolLoop({
       sessionManager: this.sessionManager,
       sessionId: run.snapshot.sessionId,
@@ -607,9 +619,12 @@ export class AgentRuntime {
       },
       onFinalResponse: (content, response) => {
         this.publish(run, 'message.completed', {
+          messageId: latestMessageId,
           content,
+          reasoning: response.reasoning,
           model: response.model,
           usage: response.usage,
+          ...(response.stopReason === 'length' ? { stopReason: 'length' } : {}),
         });
       },
       streamTurn: async (messages, definitions) => {
@@ -622,6 +637,7 @@ export class AgentRuntime {
         let messageId = '';
         let content = '';
         let reasoning = '';
+        let providerModel: string | undefined;
         const response = await streamProviderTurn({
           provider,
           providerName: run.snapshot.provider,
@@ -640,10 +656,12 @@ export class AgentRuntime {
           redactJson: this.redactJson,
           createTextRedactor: this.createTextRedactor,
           onStart: (_provider, model) => {
+            providerModel = model;
             this.setPhase(run, 'streaming');
             run.snapshot.retry = undefined;
             run.snapshot.error = undefined;
             messageId = `stream:${run.snapshot.id}:${crypto.randomUUID()}`;
+            latestMessageId = messageId;
             run.snapshot.partialMessage = { id: messageId, content: '' };
             this.publish(run, 'message.start', { attempt: 1, model, messageId });
           },
@@ -671,9 +689,29 @@ export class AgentRuntime {
             };
             this.publish(run, 'retry.scheduled', run.snapshot.retry);
           },
-          onError: () => {
+          onError: async error => {
+            const partial = run.snapshot.partialMessage;
+            // Failed visible output is durable evidence, not a successful final
+            // response. Never invent usage or publish cancelled/late results.
+            if (!run.controller.signal.aborted && partial && (partial.content || partial.reasoning)) {
+              await this.sessionManager.addMessage(run.snapshot.sessionId, {
+                role: 'assistant', content: partial.content,
+                blocks: [
+                  ...(partial.reasoning ? [{ type: 'reasoning' as const, text: partial.reasoning }] : []),
+                  ...(partial.content ? [{ type: 'text' as const, text: partial.content }] : []),
+                ],
+                provider: run.snapshot.provider, model: providerModel,
+                metadata: { outputError: this.redactText(error instanceof Error ? error.message : String(error)).slice(0, 4_000) },
+              }, { skipAutoCompaction: true });
+            }
             run.snapshot.partialMessage = undefined;
           },
+        });
+        // Complete checkpoints permit slow transports to replace only this
+        // message's queued text/reasoning deltas, including intermediate tool turns.
+        if (response.toolCalls?.length) this.publish(run, 'message.completed', {
+          messageId, content: response.content, reasoning: response.reasoning,
+          model: response.model, usage: response.usage,
         });
         run.snapshot.partialMessage = undefined;
         run.snapshot.retry = undefined;

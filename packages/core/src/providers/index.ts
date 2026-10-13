@@ -185,6 +185,8 @@ async function readProviderJson<T>(response: Response): Promise<T> {
 
 export interface ChatResponse {
   content: string;
+  /** Explicit provider length exhaustion; never inferred from prose or missing output. */
+  stopReason?: 'length';
   /** Provider-supplied visible reasoning summary/process text, when available. */
   reasoning?: string;
   model?: string;
@@ -197,6 +199,11 @@ export interface ChatResponse {
     costUsd?: number;
   };
   toolCalls?: ToolCall[];
+}
+
+function lengthStop(reason: unknown): Pick<ChatResponse, 'stopReason'> {
+  return typeof reason === 'string' && ['length', 'max_tokens', 'max_output_tokens', 'MAX_TOKENS', 'model_context_window_exceeded'].includes(reason)
+    ? { stopReason: 'length' } : {};
 }
 
 /** Normalize provider response accounting for persistence and cross-frontend reporting. */
@@ -647,6 +654,7 @@ export class OpenAiProvider extends AiProvider {
 
     return {
       content: choice.message.content || '',
+      ...lengthStop(choice.finish_reason),
       ...(choice.message.reasoning_content || choice.message.reasoning_summary
         ? { reasoning: choice.message.reasoning_content || choice.message.reasoning_summary } : {}),
       model: data.model,
@@ -709,6 +717,7 @@ export class OpenAiProvider extends AiProvider {
       let fullContent = '';
       let fullReasoning = '';
       let streamModel = model;
+      let stopReason: ChatResponse['stopReason'];
       let usage: ChatResponse['usage'];
       let outputBytes = 0;
       let transportBytes = 0;
@@ -754,6 +763,7 @@ export class OpenAiProvider extends AiProvider {
             for (const call of toolCalls ?? []) await onChunk('', { type: 'tool_call', data: call });
             onComplete?.({
               content: fullContent,
+              ...(stopReason ? { stopReason } : {}),
               ...(fullReasoning ? { reasoning: fullReasoning } : {}),
               model: streamModel,
               usage,
@@ -765,6 +775,7 @@ export class OpenAiProvider extends AiProvider {
           let data: OpenAiStreamChunk;
           try { data = JSON.parse(dataStr) as OpenAiStreamChunk; }
           catch { throw new Error('The provider streaming response was invalid.'); }
+          stopReason = lengthStop(data.choices?.[0]?.finish_reason).stopReason ?? stopReason;
           const delta = data.choices?.[0]?.delta;
           if (typeof delta?.content === 'string' && delta.content) {
             addOutput(delta.content);
@@ -822,6 +833,7 @@ export class OpenAiProvider extends AiProvider {
           content: fullContent,
           ...(fullReasoning ? { reasoning: fullReasoning } : {}),
           model: streamModel,
+          ...(stopReason ? { stopReason } : {}),
           usage,
           toolCalls,
         });
@@ -987,6 +999,7 @@ function providerResponseRecord(value: unknown): ProviderResponseRecord | undefi
 
 type ResponsesAccumulator = {
   content: string;
+  stopReason?: ChatResponse['stopReason'];
   reasoning: string;
   model?: string;
   responseId?: string;
@@ -1217,6 +1230,7 @@ async function applyResponsesEvent(
     state.responseId = typeof response.id === 'string' ? response.id : state.responseId;
     state.model = typeof response.model === 'string' ? response.model : state.model;
     state.usage = responsesUsage(response.usage) ?? state.usage;
+    state.stopReason = lengthStop(providerResponseRecord(response.incomplete_details)?.reason).stopReason;
     for (const [index, item] of (Array.isArray(response.output) ? response.output : []).entries()) {
       const tool = parseResponsesTool(item);
       if (tool) setResponsesTool(state, String(index), tool);
@@ -1242,6 +1256,7 @@ function finalizeResponses(state: ResponsesAccumulator): ChatResponse {
   });
   return {
     content: state.content,
+    ...(state.stopReason ? { stopReason: state.stopReason } : {}),
     ...(state.reasoning ? { reasoning: state.reasoning } : {}),
     ...(state.model ? { model: state.model } : {}),
     ...(state.usage ? { usage: state.usage } : {}),
@@ -1783,7 +1798,7 @@ interface GeminiPart {
 }
 
 interface GeminiResponse {
-  candidates?: Array<{ content?: { parts?: GeminiPart[] } }>;
+  candidates?: Array<{ content?: { parts?: GeminiPart[] }; finishReason?: string }>;
   usageMetadata?: {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
@@ -1912,6 +1927,7 @@ export class GeminiProvider extends AiProvider {
     const usage = response.usageMetadata;
     return {
       content,
+      ...lengthStop(response.candidates?.[0]?.finishReason),
       model: String(this.config.model),
       usage: usage ? (() => {
         const prompt = token(usage.promptTokenCount);
@@ -1973,6 +1989,7 @@ export class GeminiProvider extends AiProvider {
       let streamEvents = 0;
       const toolCalls: ToolCall[] = [];
       let usage: ChatResponse['usage'];
+      let stopReason: ChatResponse['stopReason'];
 
       const consume = async (record: string): Promise<void> => {
         const data = record.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trim()).join('\n');
@@ -1990,6 +2007,7 @@ export class GeminiProvider extends AiProvider {
         try { parsed = JSON.parse(data) as GeminiResponse; }
         catch { throw new Error('The provider streaming response was invalid.'); }
         const normalized = this.normalize(parsed);
+        stopReason = normalized.stopReason ?? stopReason;
         if (normalized.content) {
           content += normalized.content;
           await onChunk(normalized.content, { type: 'text_delta', data: normalized.content });
@@ -2022,7 +2040,7 @@ export class GeminiProvider extends AiProvider {
       }
       if (buffer.trim()) await consume(buffer);
       for (const call of toolCalls) await onChunk('', { type: 'tool_call', data: call });
-        onComplete?.({ content, model: String(this.config.model), usage, toolCalls: toolCalls.length ? toolCalls : undefined });
+        onComplete?.({ content, ...(stopReason ? { stopReason } : {}), model: String(this.config.model), usage, toolCalls: toolCalls.length ? toolCalls : undefined });
       } finally {
         void reader.cancel('provider-stream-finished').catch(() => undefined);
         try { reader.releaseLock(); } catch { /* A hostile pending read may retain the lock. */ }
@@ -2061,6 +2079,7 @@ export class VertexGeminiProvider extends GeminiProvider {
 }
 
 interface BedrockResponse {
+  stopReason?: string;
   output?: { message?: { content?: Array<{
     text?: string;
     toolUse?: { toolUseId: string; name: string; input: unknown };
@@ -2173,6 +2192,7 @@ export class BedrockProvider extends AiProvider {
     }] : []);
     return {
       content,
+      ...lengthStop(data.stopReason),
       model: String(this.config.model),
       usage: data.usage ? (() => {
         const prompt = token(data.usage?.inputTokens);
@@ -2360,6 +2380,7 @@ export class AnthropicProvider extends AiProvider {
 
     return {
       content: contentBlock?.text || '',
+      ...lengthStop(data.stop_reason),
       ...(reasoning ? { reasoning } : {}),
       model: data.model,
       usage: data.usage ? (() => {
@@ -2442,6 +2463,7 @@ export class AnthropicProvider extends AiProvider {
 
       let fullContent = '';
       let fullReasoning = '';
+      let stopReason: ChatResponse['stopReason'];
       let inputTokens = 0;
       let outputTokens = 0;
       let cacheReadTokens = 0;
@@ -2542,6 +2564,7 @@ export class AnthropicProvider extends AiProvider {
               break;
             }
             case 'message_delta': {
+              stopReason = lengthStop(eventData.delta?.stop_reason ?? eventData.stop_reason).stopReason ?? stopReason;
               if (eventData.usage) outputTokens = token(eventData.usage.output_tokens);
               break;
             }
@@ -2567,6 +2590,7 @@ export class AnthropicProvider extends AiProvider {
           content: fullContent,
           ...(fullReasoning ? { reasoning: fullReasoning } : {}),
           model,
+          ...(stopReason ? { stopReason } : {}),
           usage: inputTokens > 0 || outputTokens > 0 ? {
             promptTokens: inputTokens,
             completionTokens: outputTokens,
@@ -2660,6 +2684,7 @@ interface AnthropicContentDelta {
 
 interface AnthropicMessageDelta {
   type: 'message_delta';
+  delta?: { stop_reason?: string | null };
   usage?: { output_tokens?: number };
   stop_reason?: string | null;
 }

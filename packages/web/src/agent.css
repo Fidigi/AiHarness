@@ -144,6 +144,11 @@ html[data-theme="light"] .subagent-run.stopped > header span { color: #9b243a; }
 .session-info a { color: #ff8da1; }
 .notice { display: flex; justify-content: space-between; gap: 1rem; margin: .5rem 1.5rem 0; padding: .65rem .8rem; border: 1px solid #a54859; border-radius: 6px; background: #4b2430; }
 .notice button { border: 0; background: none; color: #fff; cursor: pointer; }
+.message .reply-evidence { display: block; margin: .5rem 0; color: #eef2fa; text-align: left; overflow-wrap: anywhere; }
+.reply-evidence > span { display: block; }
+.reply-evidence button { min-height: 44px; margin-top: .3rem; padding: .4rem .6rem; border: 1px solid currentColor; border-radius: 4px; color: inherit; }
+html[data-theme="light"] .reply-evidence { color: #593914; border-color: #96733f; background: #fff5e7; }
+html[data-theme="light"] .reply-evidence.error { color: #87253a; border-color: #c77a89; background: #fff2f4; }
 .status-center { position: fixed; z-index: 85; top: 6rem; right: 1rem; width: min(420px, calc(100vw - 2rem)); display: grid; gap: .55rem; pointer-events: none; }
 .status-notice { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; overflow: hidden; padding: .7rem .75rem; border: 1px solid #52668f; border-radius: 7px; color: #eef2fa; background: #223154; box-shadow: 0 10px 28px #0008; pointer-events: auto; }
 .status-notice.success { border-color: #3d8c69; background: #173f33; }
@@ -168,6 +173,9 @@ html[data-theme="light"] .subagent-run.stopped > header span { color: #9b243a; }
 .modal-overlay { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 1rem; background: #050914b8; backdrop-filter: blur(3px); }
 .agent-process { margin: 0 0 .75rem; padding: .5rem; border-left: 3px solid #536b9e; border-radius: 5px; background: color-mix(in srgb, #10182f 88%, transparent); text-align: left; }
 .agent-process > header { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; padding: 0 .15rem .45rem; color: #aab5cb; font-size: .78rem; }
+/* Retain row geometry while presenting one group heading; this also avoids
+   reflowing measured history anchors when ownership changes. */
+.agent-process > header[aria-hidden="true"] { visibility: hidden; }
 .agent-process > header strong { margin-right: auto; }
 .agent-process > header span { color: #7f8da8; }
 .message-output { min-width: 0; }
