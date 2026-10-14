@@ -60,6 +60,7 @@ import { TerminalUI } from './tui/terminal-ui.js';
 import { FullscreenUI } from './tui/fullscreen-ui.js';
 import { FullscreenInput } from './tui/fullscreen-input.js';
 import { ThemeFilteredInput } from './tui/theme-input-filter.js';
+import { configuredThemeSelection, configuredThemeSources } from './cli/theme-sources.js';
 import {
   TerminalEscapeSequence,
   TERMINAL_ESCAPE_CODE_TIMEOUT_MS,
@@ -525,20 +526,16 @@ async function main(): Promise<void> {
   };
   let packagePaths = await loadPackagePaths();
 
-  let activeThemeSelection = cliArguments.theme ?? settingsResolution.settings.theme ?? 'auto';
+  let activeThemeSelection = configuredThemeSelection(settingsResolution, cliArguments);
   let themeSelectedInteractively = false;
-  const packageThemeSources = () => [
-    ...packagePaths.theme.global.map(themePath => ({
-      path: themePath, scope: 'user' as const, source: 'package' as const, trusted: true,
-    })),
-    ...packagePaths.theme.project.map(themePath => ({
-      path: themePath, scope: 'project' as const, source: 'package' as const,
-      trusted: mayLoadProjectResources(),
-    })),
-  ];
+  const loadThemeSources = () => configuredThemeSources(settingsResolution, workspaceCwd, packagePaths.theme, cliArguments);
+  let themeSources = await loadThemeSources().catch(error => {
+    console.error(outputCredentialRedactor.redact(`Thèmes ignorés : ${error instanceof Error ? error.message : String(error)}`));
+    return [];
+  });
   let theme = await ThemeManager.load(
     activeThemeSelection,
-    packageThemeSources(),
+    themeSources,
     process.env,
     { cwd: workspaceCwd, projectTrusted: mayLoadProjectResources() },
   ).catch(error => {
@@ -837,12 +834,15 @@ async function main(): Promise<void> {
     await reloadInstructionPrompt();
     packagePaths = await loadPackagePaths();
     if (!themeSelectedInteractively) {
-      activeThemeSelection = cliArguments.theme ?? settingsResolution.settings.theme ?? 'auto';
+      activeThemeSelection = configuredThemeSelection(settingsResolution, cliArguments);
     }
     try {
+      // Never retain an old catalogue across a trust/settings generation failure.
+      themeSources = [];
+      themeSources = await loadThemeSources();
       theme = await ThemeManager.load(
         activeThemeSelection,
-        packageThemeSources(),
+        themeSources,
         process.env,
         { cwd: workspaceCwd, projectTrusted: mayLoadProjectResources() },
       );
@@ -973,15 +973,26 @@ async function main(): Promise<void> {
       redactJson: value => outputCredentialRedactor.redactJson(value),
       themeControl: {
         current: () => theme.name,
-        list: () => ThemeManager.inventory(
-          packageThemeSources(),
-          theme.name,
-          { cwd: workspaceCwd, projectTrusted: mayLoadProjectResources() },
-        ),
+        list: async () => {
+          const active = theme;
+          const inventory = await ThemeManager.inventory(
+            themeSources,
+            active.provenance.path,
+            { cwd: workspaceCwd, projectTrusted: mayLoadProjectResources() },
+          );
+          // Direct --theme paths need not belong to discovery. Report the already
+          // loaded palette without granting it future discovery/read authority.
+          if (!inventory.some(item => item.provenance.path === active.provenance.path)) {
+            inventory.unshift({ name: active.name, mode: active.mode, active: true, valid: true,
+              provenance: { ...active.provenance, trusted: active.provenance.scope === 'project'
+                ? mayLoadProjectResources() : active.provenance.trusted } });
+          }
+          return inventory;
+        },
         select: async selection => {
           const selected = await ThemeManager.load(
             selection,
-            packageThemeSources(),
+            themeSources,
             process.env,
             { cwd: workspaceCwd, projectTrusted: mayLoadProjectResources() },
           );

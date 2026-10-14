@@ -168,6 +168,8 @@ Then type a message and press Enter. The response displays progressively.
 | `--no-session` | keeps conversation in memory only |
 | `--theme dark` / `--theme light` / `--theme system` | selects a built-in theme; `system` probes the terminal palette safely |
 | `--theme <file.json>` | loads a custom theme |
+| `--theme-source <path>` | adds a literal theme file or shallow directory; repeatable |
+| `--no-themes` | skips automatic roots, theme arrays and packages; selection and explicit sources remain |
 | `--extension <file-or-folder>` | loads an explicit JavaScript/TypeScript extension; repeatable option |
 
 Examples:
@@ -501,7 +503,11 @@ A custom theme is a JSON file:
 }
 ```
 
-Load it with `--theme ./my-theme.json`, switch live with `/theme [name]`, or use `--theme system`. The system theme immediately uses a readable fallback, asks a TTY for foreground/background and ANSI colors for at most 100 ms, then accepts valid late palette and light/dark notifications. Probe replies are filtered out before readline/fullscreen key handling. Custom themes may also define bounded `vars`, rich Markdown/tool/syntax tokens, named colors, ANSI indices `0`–`255`, and optional export colors. A theme path inside the workspace is blocked until project trust even when selected explicitly. `AI_HARNESS_THEME=dark|light|auto` and `COLORFGBG` remain fallback inputs.
+Load it with `--theme ./my-theme.json`, switch live with `/theme [name]`, or use `--theme system`. The system theme immediately uses a readable fallback, asks a TTY for foreground/background and ANSI colors for at most 100 ms, then accepts valid late palette and light/dark notifications. Probe replies are filtered out before readline/fullscreen key handling. Custom themes may also define bounded `vars`, rich Markdown/tool/syntax tokens, named colors, ANSI indices `0`–`255`, and optional export colors. A theme path inside the workspace is blocked until project trust even when selected explicitly. Selection follows `--theme`, then nonempty `AI_HARNESS_THEME`, then trusted project/global `theme` settings, then `auto`. `COLORFGBG` remains an automatic appearance input.
+
+Themes are discovered from `<AI_HARNESS_AGENT_DIR>/themes/` (by default `~/.ai-harness/themes/`) and trusted `.ai-harness/themes/`, enabled packages, and each settings file's `themes` array. Settings paths resolve from the declaring directory: plain paths/globs add JSON files, `+path` adds exactly, `-path` removes a path/subtree, and `!glob` excludes matches. Directories are shallow unless a glob explicitly descends. Within a scope, package and settings sources follow the automatic root; trusted project sources override global ones, and explicit `--theme-source` paths come last. Select a discovered file by its filename stem: `--theme ocean` for `ocean.json`.
+
+Use `--no-themes --theme-source ./palettes --theme ocean` to skip automatic sources while retaining an explicit directory. The switch does not disable built-ins, direct file selection (via `--theme` or a saved `theme` value), extensions or tools, and does not grant project trust. `/reload` refreshes discovery and settings-driven selection; a manually selected theme keeps its selection. `/theme` lists provenance and marks the actual active file, including a directly loaded palette. Same-name files do not all appear active. Discovery is metadata-only and rejects overflow (1,000 requests, 512 final custom candidates); selected bodies still undergo the existing 256 KiB stable-file and palette validation. A failed reload reports the error and retains the already rendered palette, without retaining the failed candidate catalogue. These are terminal options, not Web themes or an RPC palette API.
 
 A keybindings file can reassign `app.help` and `terminal.clear` actions:
 

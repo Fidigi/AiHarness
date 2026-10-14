@@ -4,7 +4,9 @@ Date: 2026-10-13. Base: `f16d4b27959a30a5da80357da48f12971678316b`. Decision/evi
 
 ## Scope and requirement reconciliation
 
-**CLI-CFG-09 is complete; the whole audit is not.** Its complete resource requirement is covered by the following composition, not merely by the new flag:
+**Historical closure, superseded 2026-10-14 by DEC-77:** [public Markdown controls](./theme-sources.md) reproduce exact `+path` being treated as a glob on both the accepted base and current images. CLI-CFG-09 is now PARTIAL again. Built-in controls and the following historical evidence remain accepted, but this mapping did not cover that cross-resource boundary. CLI-EXT-01's historical residual below is independently superseded by [DEC-75](./module-entry-resolution.md).
+
+The DEC-71 reconciliation was:
 
 | Requirement | Owning evidence |
 |---|---|

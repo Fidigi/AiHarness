@@ -4,7 +4,9 @@ import { cp, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, symli
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { stripVTControlCharacters } from 'node:util';
+import { spawn as spawnPty } from 'node-pty';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { fixtureRoot, loadManifest, normalizeFixture, readExpected } from './harness.js';
 
 const checkout = fileURLToPath(new URL('../..', import.meta.url));
@@ -51,6 +53,8 @@ Options:
   --fullscreen                   Legacy fullscreen alias
   --regular, --no-fullscreen     Legacy regular-mode aliases
   --theme <name|file>            Select dark, light, or a custom theme file
+  --theme-source <path>          Add a trusted theme file/directory (repeatable)
+  --no-themes                    Disable automatic themes; explicit sources still work
   --verbose                      Show full interactive startup despite quietStartup settings
   -e, --extension <path|builtin:name> Load an explicit extension (repeatable)
   -ne, --no-extensions           Disable discovery and optional built-ins; explicit -e still works
@@ -333,6 +337,55 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     expect(ordinary.stdout).not.toContain('AiHarness CLI');
     expect(await invoke(['--verbose', ...args])).toEqual(ordinary);
   });
+
+  it('discovers themes through installed readonly Core declarations and the actual PATH bin', async () => {
+    const directory = path.join(consumer, 'themes [literal]');
+    await mkdir(directory);
+    await writeFile(path.join(directory, 'ocean.json'), JSON.stringify({ name: 'installed-ocean', appearance: 'dark', colors: { accent: '#123456' } }));
+    await writeFile(path.join(consumer, 'theme-public.ts'), `
+      import { discoverThemeSources, type ThemeSourceSelector, type ThemeSource } from '@ai-harness/core';
+      const sources: readonly ThemeSourceSelector[] = [{ pattern: '*.json', baseDir: ${JSON.stringify(directory)}, scope: 'user', source: 'settings', trusted: true }] as const;
+      const context = { cwd: ${JSON.stringify(workspace)}, projectTrusted: false } as const;
+      const result: Promise<ThemeSource[]> = discoverThemeSources(sources, context); void result;
+    `);
+    const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'theme-public.ts'], consumer, environment);
+    expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+    await writeFile(path.join(consumer, 'theme-public.mjs'), `
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs/promises';
+      import { syncBuiltinESMExports } from 'node:module';
+      import { discoverThemeSources, ThemeManager } from '@ai-harness/core';
+      const original = fs.open; let reads = 0;
+      fs.open = async (...args) => { const handle = await original(...args); const read = handle.read.bind(handle); handle.read = (...values) => { reads++; return read(...values); }; return handle; };
+      syncBuiltinESMExports();
+      try {
+        const sources = await discoverThemeSources(Object.freeze([Object.freeze({ pattern: '*.json', baseDir: ${JSON.stringify(directory)}, scope: 'user', source: 'settings', trusted: true })]), { cwd: ${JSON.stringify(workspace)}, projectTrusted: false });
+        assert.equal(sources.length, 1); assert.equal(reads, 0);
+        const theme = await ThemeManager.load('ocean', sources, {}, { cwd: ${JSON.stringify(workspace)}, projectTrusted: false });
+        assert.equal(theme.name, 'installed-ocean'); assert.equal(theme.colors.accent, '#123456'); assert.ok(reads > 0);
+        assert.equal(theme.provenance.source, 'settings');
+      } finally { fs.open = original; syncBuiltinESMExports(); }
+      console.log('installed passive theme discovery OK');
+    `);
+    expect(await run(process.execPath, ['theme-public.mjs'], consumer, environment))
+      .toEqual({ code: 0, stdout: 'installed passive theme discovery OK\n', stderr: '' });
+    const selected = await invoke(['--no-approve', '--no-extensions', '--no-session', '--model', 'mock/mock-model', '--no-themes', '--theme-source', directory, '--theme', 'ocean', '--print', '/theme']);
+    expect(selected).toEqual({ code: 0, stdout: '[Mock AI Response]\n', stderr: '' });
+    // Print treats /theme as model input. Exercise the actual interactive command
+    // through the installed PATH bin instead of changing headless semantics.
+    const terminal = spawnPty('ai-harness', ['--no-approve', '--no-extensions', '--no-session', '--model', 'mock/mock-model', '--no-themes', '--theme-source', directory, '--theme', 'ocean', '--tui-mode', 'regular', '--name', 'installed-theme'], { cwd: workspace, env: environment, cols: 140, rows: 30 });
+    let output = ''; let exited: { exitCode: number; signal?: number } | undefined;
+    terminal.onData(text => { output += text; }); terminal.onExit(value => { exited = value; });
+    const visible = () => stripVTControlCharacters(output);
+    try {
+      await vi.waitFor(() => expect(visible()).toContain('installed-theme: '), { timeout: 10_000 });
+      output = ''; terminal.write('/theme\r');
+      await vi.waitFor(() => expect(visible()).toContain('● installed-ocean (temporary/cli)'), { timeout: 10_000 });
+      await vi.waitFor(() => expect(visible()).toContain('installed-theme: '), { timeout: 10_000 });
+      terminal.write('/quit\r');
+      await vi.waitFor(() => expect(exited).toMatchObject({ exitCode: 0 }), { timeout: 10_000 });
+    } finally { if (!exited) terminal.kill(); }
+  }, 60_000);
 
   it('runs installed print/JSON/RPC against the unchanged reviewed protocol goldens', async () => {
     const manifest = await loadManifest();

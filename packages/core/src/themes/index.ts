@@ -1,3 +1,6 @@
+export { discoverThemeSources } from './theme-sources.js';
+export type { ThemeSourceSelector } from './theme-sources.js';
+
 export {
   createSystemTerminalTheme,
   startSystemThemeProbe,

@@ -643,8 +643,9 @@ const commands: CommandEntry[] = [
         return chalk.green(`Thème actif : ${name}.`);
       }
       const inventory = await ctx.themeControl.list();
+      const hasActivePath = inventory.some(theme => theme.active);
       return inventory.map(theme => {
-        const marker = theme.active || theme.name === ctx.themeControl?.current() ? '●' : '○';
+        const marker = theme.active || (!hasActivePath && theme.name === ctx.themeControl?.current()) ? '●' : '○';
         const source = `${theme.provenance.scope}/${theme.provenance.source}`;
         return `${marker} ${theme.name} (${source})${theme.valid ? '' : ' [invalide]'}`;
       }).join('\n');

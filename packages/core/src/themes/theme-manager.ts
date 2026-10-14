@@ -358,7 +358,7 @@ function resolvePalette(
 
   const colors: TerminalThemeColors = { ...fallback.colors };
   for (const [name, value] of Object.entries(rawColors)) {
-    if (!ALLOWED_TOKENS.has(name)) throw new Error(`Unknown theme color token: ${name}.`);
+    if (!ALLOWED_TOKENS.has(name)) throw new Error('Unknown theme color token.');
     colors[name] = resolve(colorValue(value));
   }
   // Compatibility aliases and rich tokens always converge on the same final palette.
@@ -725,7 +725,7 @@ export class ThemeManager {
       && relativeToProject !== '..'
       && !relativeToProject.startsWith(`..${path.sep}`)
       && !path.isAbsolute(relativeToProject);
-    const source = packageTheme ?? sourceDescriptor({
+    const source = packageTheme ?? available.find(candidate => path.resolve(candidate.path) === explicitPath) ?? sourceDescriptor({
       path: explicitPath,
       scope: explicitProjectPath ? 'project' : 'temporary',
       source: 'cli',
@@ -758,7 +758,7 @@ export class ThemeManager {
     if (parsed.export !== undefined) {
       exportColors = {};
       for (const [name, raw] of Object.entries(record(parsed.export, 'Theme export colors', EXPORT_TOKENS.size))) {
-        if (!EXPORT_TOKENS.has(name)) throw new Error(`Unknown theme export token: ${name}.`);
+        if (!EXPORT_TOKENS.has(name)) throw new Error('Unknown theme export token.');
         exportColors[name] = literalColor(colorValue(raw));
       }
     }
@@ -777,7 +777,7 @@ export class ThemeManager {
     context?: ThemeLoadContext,
   ): Promise<ThemeInventoryItem[]> {
     const items: ThemeInventoryItem[] = this.builtins().map(theme => ({
-      name: theme.name, mode: theme.mode, active: selected === theme.name,
+      name: theme.name, mode: theme.mode, active: selected === theme.name || selected === theme.provenance.path,
       valid: true, provenance: theme.provenance,
     }));
     for (const rawSource of sources.slice(0, 512)) {
@@ -785,7 +785,8 @@ export class ThemeManager {
       if (source.scope === 'project' && !source.trusted) continue;
       const fallbackName = path.basename(source.path, path.extname(source.path));
       try {
-        const theme = await this.load(fallbackName, [source], process.env, context);
+        // Inspect the actual file, even when its basename is a built-in name.
+        const theme = await this.load(path.resolve(source.path), [source], process.env, context);
         items.push({
           name: theme.name, mode: theme.mode, active: selected === theme.name || selected === source.path,
           valid: true, provenance: theme.provenance,

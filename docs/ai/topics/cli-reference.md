@@ -277,6 +277,7 @@ Reads, searches, and CLI `@path` inputs are canonicalized inside the active work
 - `--extension` and `AI_HARNESS_EXTENSIONS` add explicit loader paths above settings.
 - `/reload` re-resolves settings/resources and replaces the managed extension generation atomically; startup-only values require restart.
 - Themes `dark`, `light`, and `system` are built in. `system` immediately supplies a contrast-safe fallback, then performs a 100 ms bounded OSC 10/11 and ANSI 0–15 probe, accepts valid late/light-dark notification reports, and live-renders the updated palette. Readline/fullscreen receive a filtered input stream so OSC/CSI reports never become keystrokes. Custom themes support bounded variables, named/hex/ANSI-index colors, rich renderer tokens and optional export colors; project-located themes require trust even when selected explicitly. `/theme [name]` applies a live replacement.
+- Core discovers shallow automatic `themes/` roots, ordered global/trusted-project `themes` selectors and eligible package files, then literal repeatable `--theme-source <path>` requests. Later sources win filename collisions; settings support globs, exact `+`/`-` and `!` exclusion. Strict `--no-themes` skips automatic/settings/package admission while retaining built-ins and explicit source/direct-file selection, never bypassing trust. Selection follows CLI → `AI_HARNESS_THEME` → trusted settings → `auto`. Reload refreshes candidates; inventory marks the exact active file and reports a directly loaded palette without giving it discovery authority. See [terminal theme contracts and bounds](./themes.md).
 - Theme/keybinding files are user configuration; malformed input must fail or fall back safely without reflecting file bodies.
 
 ## Associated Tests
@@ -299,6 +300,7 @@ Reads, searches, and CLI `@path` inputs are canonicalized inside the active work
 - `packages/cli/src/resources/resource-manager.test.ts` and `packages/cli/src/security/project-trust.test.ts` — AiHarness roots, CLI trust adapter, ordered resource selectors, precedence and bounded Markdown loading
 - `packages/cli/src/agent/{tool-loop,provider-turn}.test.ts` — CLI re-exports and bounded pre-delta retry
 - `packages/cli/src/extensions/extension-loader.test.ts` — explicit extension paths and reload
+- `packages/core/src/themes/theme-sources.test.ts`, `packages/cli/src/cli/theme-sources{,-process}.test.ts` — passive bounded selection, readonly public input, automatic/settings/package/explicit precedence, trust, real PTY reload and headless conservation
 - `packages/cli/src/tui/mode.test.ts` — flag/environment/capability precedence
 - `packages/core/src/agent/{message-queue,runtime}.test.ts` — common queue modes/bounds plus detached Web scheduling
 - `packages/cli/src/tui/{terminal-ui,fullscreen-ui,fullscreen-input,theme-manager,theme-input-filter}.test.ts` — rendering, concurrent input, queue shortcuts/editor restoration, adaptive themes and OSC/CSI-to-keypress filtering
