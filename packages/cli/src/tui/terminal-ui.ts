@@ -17,6 +17,8 @@ interface TerminalTextRedactor {
 
 export interface TerminalOptions {
   title?: string;
+  /** Hide the initial status snapshot until the first submitted nonempty input. */
+  startupDetails?: boolean;
   theme?: 'dark' | 'light' | TerminalTheme;
   redactText?: (value: string) => string;
   createTextRedactor?: () => TerminalTextRedactor;
@@ -45,7 +47,18 @@ const MAX_TRANSCRIPT_BYTES = 16 * 1024 * 1024;
 
 /** Manages terminal output with scrollable transcript and streaming support */
 export class TerminalUI {
-  private options: { title: string; theme: 'dark' | 'light' | TerminalTheme };
+  private options: { title: string; theme: 'dark' | 'light' | TerminalTheme; startupDetails: boolean };
+  private startup = true;
+
+  protected get title(): string { return this.options.title; }
+  protected get statusVisible(): boolean { return !this.startup || this.options.startupDetails; }
+
+  /** Startup preferences do not hide subsequent live conversation status. */
+  finishStartup(): void {
+    if (!this.startup) return;
+    this.startup = false;
+    this.onStatusChanged();
+  }
   protected theme: TerminalTheme;
   protected isStreaming = false;
   private readonly redact: (value: string) => string;
@@ -67,7 +80,7 @@ export class TerminalUI {
 
   /** Call before restoring readline's prompt, never in the middle of a stream. */
   displayStatus(): void {
-    if (!this.terminalStatus || this.isStreaming) return;
+    if (!this.statusVisible || !this.terminalStatus || this.isStreaming) return;
     const width = Math.max(1, process.stdout.columns ?? 80);
     for (const line of statusLines(this.terminalStatus, this.editorStatus(), width)) {
       console.log(chalk.hex(this.theme.colors.muted)(this.safeText(line)));
@@ -96,6 +109,7 @@ export class TerminalUI {
     this.options = {
       title: options.title || 'AiHarness',
       theme: options.theme || this.theme,
+      startupDetails: options.startupDetails !== false,
     };
   }
 

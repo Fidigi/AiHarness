@@ -51,6 +51,7 @@ Options:
   --fullscreen                   Legacy fullscreen alias
   --regular, --no-fullscreen     Legacy regular-mode aliases
   --theme <name|file>            Select dark, light, or a custom theme file
+  --verbose                      Show full interactive startup despite quietStartup settings
   -e, --extension <path|builtin:name> Load an explicit extension (repeatable)
   -ne, --no-extensions           Disable discovery and optional built-ins; explicit -e still works
   --skill <path>                 Add a trusted skill file/directory selector (repeatable)
@@ -322,6 +323,15 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       const invalid = await invoke(['--contract-option-does-not-exist']);
       expect(invalid).toEqual({ code: 2, stdout: '', stderr: await readExpected('goldens/cli-invalid-option.stderr.txt') });
     } finally { await rm(extension); }
+  });
+
+  it('accepts installed verbose startup without changing headless print output', async () => {
+    const args = ['--no-approve', '--no-extensions', '--no-session', '--model', 'mock/mock-model', '--print', 'Hello.'];
+    const ordinary = await invoke(args);
+    expect(ordinary.code, ordinary.stderr).toBe(0);
+    expect(ordinary.stdout.trim()).not.toBe('');
+    expect(ordinary.stdout).not.toContain('AiHarness CLI');
+    expect(await invoke(['--verbose', ...args])).toEqual(ordinary);
   });
 
   it('runs installed print/JSON/RPC against the unchanged reviewed protocol goldens', async () => {

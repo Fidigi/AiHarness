@@ -52,7 +52,7 @@ export class FullscreenUI extends TerminalUI {
   private panelProvider?: () => string[];
 
   constructor(options: FullscreenOptions = {}) {
-    super(options);
+    super({ ...options, title: options.title ?? 'AiHarness CLI' });
     this.output = options.output ?? process.stdout;
     this.configuredColumns = options.columns;
     this.configuredRows = options.rows;
@@ -305,12 +305,12 @@ export class FullscreenUI extends TerminalUI {
       .flatMap(panel => this.wrap(this.stripAnsi(this.safeText(panel)), width))
       .slice(0, Math.max(0, height - 7));
     const footerBudget = Math.max(0, height - 6 - panels.length);
-    const footer = this.terminalStatus
+    const footer = this.statusVisible && this.terminalStatus
       ? statusLines(this.terminalStatus, this.editorStatus(), width, footerBudget)
         .map(line => chalk.hex(this.theme.colors.muted)(this.safeText(line))) : [];
     const viewportHeight = Math.max(0, height - 4 - panels.length - footer.length);
     const separator = chalk.hex(this.theme.colors.borderMuted)('─'.repeat(width));
-    const title = this.fit(` AiHarness CLI · ${this.safeText(this.status).replace(/\s+/g, ' ')} `, width);
+    const title = this.fit(` ${this.safeText(this.title).replace(/\s+/g, ' ')} · ${this.safeText(this.status).replace(/\s+/g, ' ')} `, width);
     const transcript = this.getRenderedTranscriptLines();
     const streaming = this.streamingContent
       ? this.wrap(`Assistant: ${this.streamingContent}`, innerWidth)

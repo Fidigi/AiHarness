@@ -95,6 +95,7 @@ import {
   resolveCliApplicationMode,
   type CliThinkingLevel,
 } from './cli/args.js';
+import { resolveStartupDisplay } from './cli/startup-display.js';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -554,8 +555,10 @@ async function main(): Promise<void> {
     fullscreenSupported,
     settingsResolution.settings.tuiMode,
   );
+  const startupDisplay = resolveStartupDisplay(settingsResolution.settings.quietStartup, cliArguments.verbose);
   const terminalOptions = {
-    title: 'AiHarness CLI',
+    title: `AiHarness CLI v${cliVersion()}`,
+    startupDetails: startupDisplay.details,
     theme,
     redactText: (value: string) => outputCredentialRedactor.redact(value),
     createTextRedactor: () => outputCredentialRedactor.createStream(),
@@ -1315,6 +1318,7 @@ async function main(): Promise<void> {
       return undefined;
     }
 
+    if (!printMode) terminal.finishStartup();
     if (options.allowCommands !== false && trimmed.startsWith('!')) {
       await shellController.handle(trimmed);
       refreshPrompt();
@@ -1761,6 +1765,7 @@ async function main(): Promise<void> {
   }
 
   async function dispatchLine(input: string, submission: AgentMessageQueueKind = 'steer'): Promise<void> {
+    if (input.trim()) terminal.finishStartup();
     if (conversationRunning) {
       await handleLine(input, submission);
       return;
@@ -1837,7 +1842,9 @@ async function main(): Promise<void> {
       },
     }, filteredTerminalInput);
     inputDriver = fullscreenInput;
-    if (settingsResolution.settings.quietStartup !== true) terminal.welcome();
+    // The operational screen must exist even when the welcome is suppressed.
+    fullscreenTerminal.enter();
+    if (startupDisplay.header) terminal.welcome();
     fullscreenInput.setPrompt(sessionPrompt());
     fullscreenInput.start();
   } else {
@@ -1911,7 +1918,7 @@ async function main(): Promise<void> {
       replaceValue: replaceReadlineValue,
     };
     terminal.setReadline(rl);
-    if (settingsResolution.settings.quietStartup !== true) terminal.welcome();
+    if (startupDisplay.header) terminal.welcome();
 
     rl.on('SIGINT', interrupt);
     rl.on('line', input => {
