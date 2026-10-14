@@ -5,14 +5,14 @@ import { openStableDirectoryHandle } from '../security/stable-directory.js';
 import { isExtensionPathWithin } from './extension-selectors.js';
 
 /** One discovery operation shares these limits across all directory manifests. */
-export interface ExtensionManifestBudget { manifests: number; bytes: number; entries: number }
+export interface ExtensionManifestBudget { manifests: number; bytes: number; entries: number; probes: number }
 export class ExtensionManifestError extends Error {
   constructor() { super('Extension manifest is invalid or exceeds its limits.'); }
 }
 
-/** Metadata only. Undefined preserves ordinary discovery; [] explicitly selects
- * no entries. The declaring directory is literal, and entries never escape it. */
-export async function readExtensionManifest(directory: string, budget: ExtensionManifestBudget): Promise<string[] | undefined> {
+/** Stable metadata only, shared by resource declarations and literal Node main
+ * resolution. No dependency or extension factory is evaluated here. */
+export async function readExtensionPackage(directory: string, budget: ExtensionManifestBudget): Promise<Record<string, unknown> | undefined> {
   let parent: Awaited<ReturnType<typeof open>> | undefined;
   let file: Awaited<ReturnType<typeof open>> | undefined;
   try {
@@ -48,20 +48,7 @@ export async function readExtensionManifest(directory: string, budget: Extension
       || parentAfter.dev !== parentBefore.dev || parentAfter.ino !== parentBefore.ino || bytes.includes(0)) throw new ExtensionManifestError();
     const parsed: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\ufeff/u, ''));
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new ExtensionManifestError();
-    const object = parsed as Record<string, unknown>;
-    const fields = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value)
-      ? value as Record<string, unknown> : {};
-    const declared: unknown = { ...fields(object.pi), ...fields(object.aiHarness) }.extensions;
-    if (declared === undefined) return undefined;
-    if (!Array.isArray(declared) || declared.length > 100 || (budget.entries += declared.length) > 1_000) throw new ExtensionManifestError();
-    return declared.map((entry: unknown) => {
-      if (typeof entry !== 'string' || !entry.length || Buffer.byteLength(entry) > 32_768
-        || /[\u0000-\u001f\u007f]/u.test(entry) || path.isAbsolute(entry) || /^[a-z]:/iu.test(entry)) throw new ExtensionManifestError();
-      // Portable manifest paths; unlike settings selectors these are exact entries.
-      const resolved = path.resolve(directory, entry.replace(/\\/gu, '/'));
-      if (resolved === directory || !isExtensionPathWithin(resolved, directory)) throw new ExtensionManifestError();
-      return resolved;
-    });
+    return parsed as Record<string, unknown>;
   } catch {
     // JSON syntax errors may quote complete operator-owned source or metadata.
     throw new ExtensionManifestError();
@@ -69,4 +56,25 @@ export async function readExtensionManifest(directory: string, budget: Extension
     await file?.close().catch(() => undefined);
     await parent?.close().catch(() => undefined);
   }
+}
+
+/** Literal confined declaration, never a glob or bare package specifier. */
+export function resolveExtensionManifestPath(directory: string, entry: unknown): string {
+  if (typeof entry !== 'string' || !entry.length || Buffer.byteLength(entry) > 32_768
+    || /[\u0000-\u001f\u007f]/u.test(entry) || path.isAbsolute(entry) || /^[a-z]:/iu.test(entry)) throw new ExtensionManifestError();
+  const resolved = path.resolve(directory, entry.replace(/\\/gu, '/'));
+  if (resolved === directory || !isExtensionPathWithin(resolved, directory)) throw new ExtensionManifestError();
+  return resolved;
+}
+
+/** Undefined preserves ordinary discovery; [] explicitly selects no entries. */
+export async function readExtensionManifest(directory: string, budget: ExtensionManifestBudget): Promise<string[] | undefined> {
+  const object = await readExtensionPackage(directory, budget);
+  if (!object) return undefined;
+  const fields = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown> : {};
+  const declared: unknown = { ...fields(object.pi), ...fields(object.aiHarness) }.extensions;
+  if (declared === undefined) return undefined;
+  if (!Array.isArray(declared) || declared.length > 100 || (budget.entries += declared.length) > 1_000) throw new ExtensionManifestError();
+  return declared.map(entry => resolveExtensionManifestPath(directory, entry));
 }

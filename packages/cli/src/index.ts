@@ -732,7 +732,7 @@ async function main(): Promise<void> {
     return;
   }
   const runtimeExtensionPaths = async (): Promise<string[]> => [
-      ...(settingsResolution.agentDirTrusted && !cliArguments.noExtensions ? [path.join(settingsResolution.agentDir, 'extensions')] : []),
+      ...(settingsResolution.agentDirTrusted && !cliArguments.noExtensions ? [path.join(settingsResolution.agentDir, 'extensions') + path.sep] : []),
       ...explicitExtensionFiles(cliArguments.extensions),
       ...(settingsResolution.agentDirTrusted && !cliArguments.noExtensions ? await pluginService.getEnabledExtensionFiles({
         cwd: workspaceCwd,

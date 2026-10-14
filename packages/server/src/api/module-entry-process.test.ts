@@ -1,0 +1,29 @@
+import { execFile } from 'node:child_process';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
+import { expect, it } from 'vitest';
+
+it('emitted Server owns main/suffix selection, trust and rollback without expanding automatic directory authority',async()=>{
+  const server=pathToFileURL(path.resolve('packages/server/dist/index.js')).href;const runtime=pathToFileURL(path.resolve('packages/server/dist/runtime/services.js')).href;
+  const {stdout,stderr}=await promisify(execFile)(process.execPath,['--input-type=module','--eval',`
+    import assert from'node:assert/strict';import{mkdir,mkdtemp,readFile,rm,writeFile}from'node:fs/promises';import path from'node:path';import{start,stop}from ${JSON.stringify(server)};import{createRuntimeServices}from ${JSON.stringify(runtime)};
+    const root=await mkdtemp('/tmp/aih-entry-server-');const cwd=path.join(root,'workspace');const next=path.join(root,'next');const data=path.join(root,'data');const marker=path.join(root,'imports');const forbidden=path.join(root,'forbidden');const pkg=path.join(cwd,'.ai-harness/extensions/package');const directory=path.join(pkg,'module');const manifest=path.join(directory,'package.json');let services;
+    process.env.AI_HARNESS_AUTH_TOKEN='entry-admin';process.env.AI_HARNESS_ADMIN_TOKEN='entry-admin';
+    try{
+      await mkdir(path.join(directory,'src'),{recursive:true});await mkdir(path.join(next,'.ai-harness'),{recursive:true});await mkdir(data);
+      const bait='import{writeFileSync}from"node:fs";writeFileSync('+JSON.stringify(forbidden)+',"bad");throw new Error("Automatic directory became a sibling module");';await writeFile(path.join(data,'extensions.ts'),bait);await writeFile(path.join(next,'.ai-harness/extensions.ts'),bait);
+      await writeFile(path.join(pkg,'package.json'),JSON.stringify({aiHarness:{extensions:['module']}}));await writeFile(path.join(directory,'index.mjs'),'throw new Error("Main must not fall back to index");');
+      for(const value of ['first','second'])await writeFile(path.join(directory,'src',value+'.ts'),'import type{ExtensionAPI}from"@ai-harness/core";import{BUILTIN_EXTENSION_NAMES}from"@ai-harness/core";import{appendFileSync}from"node:fs";appendFileSync('+JSON.stringify(marker)+',"imported");export default(api:ExtensionAPI)=>api.registerTool({name:"main_tool",description:"Main",parameters:{type:"object"},execute:()=>({content:'+JSON.stringify(value)+'+":"+Object.isFrozen(BUILTIN_EXTENSION_NAMES)})});');
+      const select=value=>writeFile(manifest,JSON.stringify({main:'src/'+value+'.js'}));await select('first');
+      const live=await start({port:0,host:'127.0.0.1',dataDir:data,defaultCwd:cwd,allowedRoots:[cwd,next],runtimeServicesFactory:async(proxy,options)=>(services=await createRuntimeServices(proxy,options))});const base='http://127.0.0.1:'+live.port;const headers={Authorization:'Bearer entry-admin','Content-Type':'application/json'};const post=(url,body)=>fetch(base+'/api/'+url,{method:'POST',headers,body:JSON.stringify(body)});
+      assert(!services.extensionRegistry.getTools().some(tool=>tool.name==='main_tool'));assert.equal((await fetch(base+'/api/plugins?cwd='+encodeURIComponent(cwd),{headers})).status,200);assert.equal((await fetch(base+'/api/plugins/reload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cwd})})).status,401);await assert.rejects(readFile(marker),{code:'ENOENT'});await assert.rejects(readFile(forbidden),{code:'ENOENT'});
+      await services.trustManager.trust(cwd);await services.trustManager.trust(next);let response=await post('plugins/reload',{cwd});assert.equal(response.status,200);assert.deepEqual((await response.json()).reload.errors,[]);assert.equal(await readFile(marker,'utf8'),'imported');
+      services.resolveProvider('mock').streamChat=async(messages,_chunk,complete)=>complete(messages.some(message=>message.role==='tool')?{content:'done'}:{content:'',toolCalls:[{id:'main',name:'main_tool',input:{}}]});
+      const ask=async expected=>{const result=await post('agent/runs',{cwd,provider:'mock',input:'Call main.',toolPreset:'full',autoCompaction:false});assert.equal(result.status,202);const{run}=await result.json();assert.equal((await services.agentRuntime.wait(run.id)).phase,'completed');const tools=services.sessionManager.get(run.sessionId).messages.filter(message=>message.role==='tool');assert.equal(tools.length,1);assert.equal(tools[0].content,expected);};
+      await ask('first:true');await select('second');response=await post('plugins/reload',{cwd});assert.deepEqual((await response.json()).reload.errors,[]);await ask('second:true');const previous=services.extensionRegistry.getTools().find(tool=>tool.name==='main_tool');
+      await writeFile(manifest,JSON.stringify({main:'../private-source.ts'}));response=await post('plugins/reload',{cwd});const failed=await response.json();assert(failed.reload.errors.some(error=>error.message==='Extension manifest is invalid or exceeds its limits.'));assert(!JSON.stringify(failed).includes('private-source'));const retained=services.extensionRegistry.getTools().find(tool=>tool.name==='main_tool');assert.deepEqual(retained,previous);assert.equal(retained.execute,previous.execute);await ask('second:true');
+      response=await post('plugins/reload',{cwd:next});assert.equal(response.status,200);assert.deepEqual((await response.json()).reload.errors,[]);await assert.rejects(readFile(forbidden),{code:'ENOENT'});assert(!services.extensionRegistry.getTools().some(tool=>tool.name==='main_tool'));assert(services.extensionRegistry.getTools().some(tool=>tool.name==='read'));console.log('MODULE_ENTRY_SERVER_OK');
+    }finally{await stop();await rm(root,{recursive:true,force:true});}
+  `],{timeout:30_000,maxBuffer:256_000});expect(stderr).toBe('');expect(stdout).toContain('MODULE_ENTRY_SERVER_OK');
+},35_000);

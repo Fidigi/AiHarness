@@ -384,8 +384,8 @@ export async function createRuntimeServices(
       includeProjectLocation: false,
       // Restricted hosts never execute an arbitrary Node generation.
       paths: async () => exclusiveHost || !extensionContext.cwd ? [] : [
-        path.join(dataDir, 'extensions'),
-        ...(extensionContext.trusted ? [path.join(extensionContext.cwd, '.ai-harness', 'extensions')] : []),
+        path.join(dataDir, 'extensions') + path.sep,
+        ...(extensionContext.trusted ? [path.join(extensionContext.cwd, '.ai-harness', 'extensions') + path.sep] : []),
         ...await pluginService.getEnabledExtensionFiles({ cwd: extensionContext.cwd, projectId: extensionContext.projectId }),
       ],
       isProjectTrusted: () => extensionContext.trusted,

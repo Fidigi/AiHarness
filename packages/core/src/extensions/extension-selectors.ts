@@ -30,7 +30,7 @@ export async function selectExtensionFiles(
   options: {
     cwd: string;
     allowed(candidate: string): boolean;
-    discover(candidate: string): Promise<string[]>;
+    discover(candidate: string, directoryOnly?: boolean): Promise<string[]>;
   },
 ): Promise<string[]> {
   if (!Array.isArray(selectors) || selectors.length > 200) throw new Error('Extension selectors exceed their count limit.');
@@ -85,7 +85,7 @@ export async function selectExtensionFiles(
     // + is deliberately exact, so brackets and other glob characters in a
     // literal filename remain addressable. Existing options.paths is exact too.
     if (marker !== '!' && (marker === '+' || !MAGIC.test(value))) {
-      if (options.allowed(absolute)) add(await options.discover(absolute));
+      if (options.allowed(absolute)) add(await options.discover(absolute, value.endsWith(path.sep)));
       continue;
     }
     const prefix = MAGIC.test(value) ? value.slice(0, value.search(MAGIC)) : value;

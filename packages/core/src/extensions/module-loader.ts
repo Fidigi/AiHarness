@@ -10,9 +10,9 @@ import { openStableDirectoryHandle, readStableDirectoryEntries } from '../securi
 import type { ExtensionFactory } from './extension-registry.js';
 import type { ExtensionRegistry } from './extension-registry.js';
 import { isExtensionPathWithin, selectExtensionFiles, type ExtensionModuleSelector } from './extension-selectors.js';
-import { isExtensionModulePath, isTypeScriptExtensionPath } from './module-format.js';
+import { EXTENSION_MODULE_SUFFIXES, isExtensionModulePath, isTypeScriptExtensionPath } from './module-format.js';
 import { evaluateTypeScriptExtension } from './typescript-module.js';
-import { ExtensionManifestError, readExtensionManifest, type ExtensionManifestBudget } from './module-manifest.js';
+import { ExtensionManifestError, readExtensionManifest, readExtensionPackage, resolveExtensionManifestPath, type ExtensionManifestBudget } from './module-manifest.js';
 import { acquireNativeModuleAlias } from './native-module-alias.js';
 export type { ExtensionModuleSelector } from './extension-selectors.js';
 
@@ -259,14 +259,14 @@ export class ExtensionModuleLoader {
       ? await this.configuredPaths()
       : this.configuredPaths ?? [];
     const candidates = [
-      ...(this.includeGlobalLocation ? [{ path: path.join(this.homeDir, '.ai-harness', 'extensions'), project: false }] : []),
-      ...(this.includeProjectLocation ? [{ path: path.join(this.cwd, '.ai-harness', 'extensions'), project: true }] : []),
-      ...(this.includeEnvironmentPaths ? environment.map(candidate => ({ path: candidate, project: false })) : []),
-      ...explicit.map(candidate => ({ path: candidate, project: false })),
+      ...(this.includeGlobalLocation ? [{ path: path.join(this.homeDir, '.ai-harness', 'extensions'), project: false, module: false }] : []),
+      ...(this.includeProjectLocation ? [{ path: path.join(this.cwd, '.ai-harness', 'extensions'), project: true, module: false }] : []),
+      ...(this.includeEnvironmentPaths ? environment.map(candidate => ({ path: candidate, project: false, module: !candidate.endsWith(path.sep) && !candidate.endsWith('/') })) : []),
+      ...explicit.map(candidate => ({ path: candidate, project: false, module: !candidate.endsWith(path.sep) && !candidate.endsWith('/') })),
     ];
     const projectTrusted = await this.isProjectTrusted();
     const files = new Set<string>();
-    const manifestBudget: ExtensionManifestBudget = { manifests: 0, bytes: 0, entries: 0 };
+    const manifestBudget: ExtensionManifestBudget = { manifests: 0, bytes: 0, entries: 0, probes: 0 };
 
     const allowed = (resolved: string): boolean => projectTrusted
       || !(isExtensionPathWithin(resolved, this.cwd) || isExtensionPathWithin(this.cwd, resolved));
@@ -274,21 +274,29 @@ export class ExtensionModuleLoader {
     for (const candidate of candidates) {
       const resolved = path.resolve(this.cwd, candidate.path);
       if ((!projectTrusted && candidate.project) || !allowed(resolved)) continue;
-      for (const file of await this.discoverPath(resolved, manifestBudget)) files.add(file);
+      for (const file of await this.discoverPath(resolved, manifestBudget, candidate.module)) if (allowed(file)) files.add(file);
     }
     const selectors = typeof this.configuredSelectors === 'function'
       ? await this.configuredSelectors() : this.configuredSelectors ?? [];
     return selectExtensionFiles([...files], selectors, {
-      cwd: this.cwd, allowed, discover: candidate => this.discoverPath(candidate, manifestBudget),
+      cwd: this.cwd, allowed, discover: async (candidate, directoryOnly) => (await this.discoverPath(candidate, manifestBudget, !directoryOnly)).filter(allowed),
     });
   }
 
-  private async discoverPath(resolved: string, manifestBudget: ExtensionManifestBudget): Promise<string[]> {
+  private async discoverPath(resolved: string, manifestBudget: ExtensionManifestBudget, allowFileFallback: boolean): Promise<string[]> {
     const files = new Set<string>();
     try {
       if (await pathContainsSymbolicLink(resolved)) return [];
-      const info = await lstat(resolved);
-      if (info.isSymbolicLink()) return [];
+      const info = await lstat(resolved).catch(error => {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+        throw error;
+      });
+      if (!info) {
+        if (!allowFileFallback) return [];
+        const file = await this.resolveFileEntry(resolved, manifestBudget, false);
+        return file ? [file] : [];
+      }
+      if (info.isSymbolicLink() || (info.isFile() && !allowFileFallback)) return [];
       if (info.isFile() && info.nlink === 1 && info.size <= 5 * 1024 * 1024
         && this.isExtensionFile(resolved)) files.add(resolved);
       if (info.isDirectory()) {
@@ -331,18 +339,8 @@ export class ExtensionModuleLoader {
     const files = new Set<string>();
     try {
       for (const entry of entries) {
-        if (await pathContainsSymbolicLink(entry)) throw new ExtensionManifestError();
-        const info = await lstat(entry);
-        if (info.isDirectory()) {
-          // Manifest entries may name an index directory, but never recursively
-          // interpret another manifest (cycles cannot create import authority).
-          const index = await this.findIndex(entry);
-          if (!index) throw new ExtensionManifestError();
-          files.add(index);
-        } else {
-          if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > 5 * 1024 * 1024) throw new ExtensionManifestError();
-          if (this.isExtensionFile(entry)) files.add(entry);
-        }
+        const file = await this.resolveManifestEntry(entry, budget);
+        if (file) files.add(file);
       }
     } catch { throw new ExtensionManifestError(); }
     return [...files];
@@ -391,9 +389,53 @@ export class ExtensionModuleLoader {
     }
   }
 
-  private async findIndex(directory: string): Promise<string | undefined> {
-    for (const name of ['index.mjs', 'index.js', 'index.cjs', 'index.ts', 'index.mts', 'index.cts', 'index.tsx']) {
-      const candidate = path.join(directory, name);
+  private async probeEntry(entry: string, budget: ExtensionManifestBudget): Promise<Awaited<ReturnType<typeof lstat>> | undefined> {
+    if (++budget.probes > 10_000 || Buffer.byteLength(entry) > 32_768 || await pathContainsSymbolicLink(entry)) throw new ExtensionManifestError();
+    return lstat(entry).catch(error => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw new ExtensionManifestError();
+    });
+  }
+
+  private async resolveFileEntry(entry: string, budget: ExtensionManifestBudget, required: boolean): Promise<string | undefined> {
+    const suffix = path.extname(entry);
+    const sourceSuffix = ({ '.js': '.ts', '.mjs': '.mts', '.cjs': '.cts', '.jsx': '.tsx' } as Record<string, string>)[suffix];
+    const alternatives = !suffix ? EXTENSION_MODULE_SUFFIXES.map(extension => entry + extension)
+      : sourceSuffix ? [entry.slice(0, -suffix.length) + sourceSuffix] : [];
+    for (const candidate of [entry, ...alternatives]) {
+      const info = await this.probeEntry(candidate, budget);
+      if (!info) continue;
+      if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > 5 * 1024 * 1024) throw new ExtensionManifestError();
+      // An existing safe nonexecutable entry is ignored, never used as authority
+      // to select another sibling (notably .d.ts/.d.mts/.d.cts declarations).
+      return this.isExtensionFile(candidate) ? candidate : undefined;
+    }
+    if (required) throw new ExtensionManifestError();
+    return undefined;
+  }
+
+  private async resolveManifestEntry(entry: string, budget: ExtensionManifestBudget, depth = 0): Promise<string | undefined> {
+    if (depth > 8) throw new ExtensionManifestError();
+    const info = await this.probeEntry(entry, budget);
+    if (!info?.isDirectory()) return this.resolveFileEntry(entry, budget, true);
+    // A declared directory is a module target, not another resource-discovery
+    // root. Read only Node main, never recursively interpret extension arrays.
+    const metadata = await readExtensionPackage(entry, budget);
+    if (metadata && Object.hasOwn(metadata, 'main')) {
+      const main = resolveExtensionManifestPath(entry, metadata.main);
+      const file = await this.resolveManifestEntry(main, budget, depth + 1);
+      if (!file) throw new ExtensionManifestError();
+      return file;
+    }
+    const index = await this.findIndex(entry, budget);
+    if (!index) throw new ExtensionManifestError();
+    return index;
+  }
+
+  private async findIndex(directory: string, budget?: ExtensionManifestBudget): Promise<string | undefined> {
+    for (const suffix of EXTENSION_MODULE_SUFFIXES) {
+      if (budget && ++budget.probes > 10_000) throw new ExtensionManifestError();
+      const candidate = path.join(directory, 'index' + suffix);
       try {
         const info = await lstat(candidate);
         if (info.isFile() && !info.isSymbolicLink() && info.nlink === 1

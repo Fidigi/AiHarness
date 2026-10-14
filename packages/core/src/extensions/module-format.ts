@@ -1,3 +1,5 @@
+export const EXTENSION_MODULE_SUFFIXES = Object.freeze(['.mjs', '.js', '.cjs', '.ts', '.mts', '.cts', '.tsx']);
+
 /** Executable entry formats shared by module discovery and package activation.
  * Declaration files are metadata, never extension factories. */
 export function isExtensionModulePath(file: string): boolean {

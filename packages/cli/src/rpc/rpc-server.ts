@@ -423,7 +423,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       includeProjectLocation: !options.noExtensions,
       includeEnvironmentPaths: !options.noExtensions,
       paths: [
-        ...(settingsResolution.agentDirTrusted && !options.noExtensions ? [path.join(settingsResolution.agentDir, 'extensions')] : []),
+        ...(settingsResolution.agentDirTrusted && !options.noExtensions ? [path.join(settingsResolution.agentDir, 'extensions') + path.sep] : []),
         ...explicitExtensionFiles(options.extensions), ...packageExtensions,
       ],
       selectors: () => configuredExtensionSelectors(settingsResolution, options.noExtensions),

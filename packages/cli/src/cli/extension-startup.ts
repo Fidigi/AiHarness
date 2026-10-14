@@ -37,7 +37,7 @@ export async function prepareExtensionStartup(raw: readonly string[], bootstrap:
   const registry = new ExtensionRegistry();
   let currentTrusted: () => boolean = () => trust.resourceTrusted;
   let currentPaths: () => Promise<string[]> = async () => [
-    ...(settings.agentDirTrusted && !bootstrap.noExtensions ? [path.join(settings.agentDir, 'extensions')] : []),
+    ...(settings.agentDirTrusted && !bootstrap.noExtensions ? [path.join(settings.agentDir, 'extensions') + path.sep] : []),
     ...explicitExtensionFiles(bootstrap.extensions),
     ...packagePaths,
   ];

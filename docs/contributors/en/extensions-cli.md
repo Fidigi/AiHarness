@@ -69,7 +69,7 @@ Load it with `ai-harness -e ./review.ts`, or use ordinary user/project/settings/
 
 No static type check or implicit `tsconfig` path aliases are performed. Each entry's transformed dependency graph is private and refreshed on reload; native dependencies retain Node caching. Transpiler filesystem/global module caches are disabled. Invalid evaluation reports a fixed diagnostic without source/code frames; previous same-workspace registrations survive. Dependencies and admitted Node effects are **not sandboxed or rolled back**.
 
-Child index priority is `.mjs`, `.js`, `.cjs`, then `.ts`, `.mts`, `.cts`, `.tsx`. Avoid autoloading both compiled and source copies of one extension; different paths remain different candidates. Installed package manifests are honored through the package service. Uninstalled directory manifests now use the literal rules below. Native JavaScript now receives the same exact public Core root identity; directory `main` and extensionless/JavaScript-to-TypeScript entry fallback remain incomplete.
+Child index priority is `.mjs`, `.js`, `.cjs`, then `.ts`, `.mts`, `.cts`, `.tsx`. Avoid autoloading both compiled and source copies of one extension; different paths remain different candidates. Installed package manifests are honored through the package service. Uninstalled directory manifests now use the literal rules below. Native JavaScript receives the same exact public Core root identity. Literal entry requests also have the bounded main/suffix rules below.
 
 ## Native JavaScript Core imports
 
@@ -89,9 +89,17 @@ A discovered child folder or an explicit/settings/environment directory can sele
 
 Legacy `pi.extensions` is also read; native fields override legacy fields individually. No extensions field preserves ordinary discovery; an empty list disables that directory's entries. A declared list replaces sibling/index autodiscovery. Outer settings selectors still apply afterward.
 
-These are **exact relative paths**, not globs or selector operators; brackets and other filename metacharacters remain literal, and backslash separators are normalized. A directory entry resolves only its supported index, without recursive manifests or arbitrary `main`/`exports`. Existing JavaScript index priority remains. Declarations/non-executable regular files are ignored; missing, linked, oversized or index-less declared entries fail the generation, with no sibling fallback. Installed package resource globs retain their separate existing semantics.
+These are **exact relative paths**, not globs or selector operators; brackets and other filename metacharacters remain literal, and backslash separators are normalized. A declared module directory resolves a confined `package.json` `main` before its supported index; absent `main` preserves JavaScript-first index priority. Nested resource manifests and exports-only directory maps are not reinterpreted. Declarations/non-executable regular files are ignored as direct declarations; unresolved/unsafe declared entries and nonexecutable main targets fail the generation, with no sibling fallback. Installed package resource globs retain their separate existing semantics.
 
 Metadata is read through stable descriptors after trust admission: 256 KiB and 100 paths per manifest, 32 KiB per string; shared per-discovery limits are 200 manifest reads, 4 MiB and 1,000 declared-path visits (including repeated work). Absolute/escaping/self paths, invalid UTF-8/JSON and identity changes fail with a source-free diagnostic. `/reload` reselects entries; invalid metadata preserves the previous same-workspace registrations. These entry checks do not sandbox privileged imports or roll back their effects.
+
+## Literal module requests
+
+For a **missing** explicit/environment/literal-selector or declared file request, no suffix tries `.mjs`, `.js`, `.cjs`, `.ts`, `.mts`, `.cts`, then `.tsx`. Output suffixes map only `.js` → `.ts`, `.mjs` → `.mts`, `.cjs` → `.cts`, `.jsx` → `.tsx`. Existing exact files win; safe nonexecutable/declaration files do not redirect to siblings. Physical `.jsx` files are not executable entries. Example: `ai-harness -e ./review.js` may admit `review.ts` if `review.js` is absent. Exclusions and deduplication act on the **actual admitted file**, not the missing request alias.
+
+A resource declaration `{"aiHarness":{"extensions":["module"]}}` can target `module/package.json` containing `{"main":"src/review.js"}`, backed by `module/src/review.ts`. Main is literal, confined to its declaring directory, descriptor-read under the existing metadata budgets and limited to eight indirections. Invalid, linked, escaping or self-referential main metadata refuses the generation rather than falling back to an index. Nested extension arrays are not resource selectors in this module-target role.
+
+An ordinary discovery directory without resource declarations still uses shallow/index discovery: its main is **not** an automatic resource selector. Automatic CLI/RPC/Server directories retain directory intent, as do explicit trailing separators (`-e ./review.ts/` cannot load a file). Missing `extensions/` never activates adjacent `extensions.ts`. Installed-package resource globs remain separate actual-file filters. Module resolution shares a 10,000-candidate-probe budget per discovery and a 32 KiB resolved-path bound; missing/repeated attempts count. Unsafe/overflowing required resolution uses `Extension manifest is invalid or exceeds its limits.`, with no partial import or loss of the prior generation.
 
 ## Optional built-in switches
 
