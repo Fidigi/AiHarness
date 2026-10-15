@@ -47,8 +47,10 @@ function table(models: readonly ModelCatalogEntry[]): string {
 export async function formatConfiguredModelList(
   providers: ReadonlyMap<string, AiProvider>,
   search?: string,
+  offline = false,
 ): Promise<string> {
   const catalog = await collectProviderModelCatalog(providers, {
+    discover: !offline,
     timeoutMs: 2_000,
     retries: 0,
   });

@@ -148,6 +148,8 @@ These controls reduce exposure; they do not sandbox trusted third-party JavaScri
 
 ## Network Boundary
 
+CLI `--offline` / `AI_HARNESS_OFFLINE=1|true|yes` is a process-local [automatic-startup policy](./cli-reference.md#offline-startup-policy), **not a network prohibition**. It suppresses model discovery and provider credential commands/refresh at startup and interactive reload, keeps due-for-refresh encrypted OAuth bytes unchanged, and retains ordinary trust/redaction/output boundaries. Suppressed winning commands do not expose cached values or silently use lower-priority stored credentials. Explicit prompts, authentication/share/package actions, MCP preparation, tools and privileged extension/provider code may still perform network work. Use a real host/container network boundary when that must be forbidden. Core's new explicit passive policies default to previous behavior; Server/Web and the PWA offline shell are unchanged.
+
 Core routes provider HTTP and WebSocket traffic through one bounded policy: optional HTTP(S) proxy dispatchers, request/idle/connect deadlines, capped provider retry/delay, strict URL handling, abort propagation and stable errors that omit URL, body, headers and proxy credentials. Native JSON requests/responses are capped at 16 MiB with fatal UTF-8 decoding; streaming events, output and tool/content-block counts have separate limits. OpenAI Responses WebSockets use exclusive bounded cached leases, hashed session identities and bounded continuation. SSE fallback is allowed only before the first WebSocket event so an operation is never replayed after remote processing begins.
 
 The launcher binds to `127.0.0.1` by default. A non-loopback bind without authentication is rejected unless the explicit insecure override is set. Public deployment still requires a trusted HTTPS reverse proxy or private network, correct allowed origins, and proxy-level request limits.
@@ -155,6 +157,8 @@ The launcher binds to `127.0.0.1` by default. A non-loopback bind without authen
 Opening a workspace in the host file manager is narrower than ordinary authenticated access: both the Host header and actual socket peer must be loopback, the platform must have an explicit command mapping, and the requested cwd must resolve as an allowed directory. The shared Core launcher never invokes a shell and passes only desktop/session environment keys, not API keys, auth tokens or arbitrary server variables. The availability probe and action are no-store; remote clients receive no action.
 
 ## Associated Tests
+
+- `packages/core/src/providers/offline-policy.test.ts`, `packages/cli/src/cli/offline-mode{,-process}.test.ts` — suppressed command/cache/fallback and OAuth/config-getter/byte-mutation negatives; actual loopback online controls, explicit-network conservation, definitive flag arity and genuine PTY reload snapshots
 
 - `packages/core/src/security/{stable-file,stable-file-receipt}.test.ts` — real bounded publication, opaque lifecycle/disposal, admitted-option mutation, before/after-publication failures, parent/inode/in-place ABA, one-use guards and held/in-flight capacity
 

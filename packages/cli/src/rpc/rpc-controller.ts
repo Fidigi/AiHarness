@@ -82,6 +82,8 @@ export interface RpcControllerContext {
   hooks?: { emit(event: string, data: Record<string, unknown>): Promise<void> };
   thinking?: ThinkingLevel;
   providerModels?: () => unknown[] | Promise<unknown[]>;
+  /** Use published/configured models without discovery or supplied-catalogue callbacks. */
+  offline?: boolean;
   steeringMode?: AgentQueueMode;
   followUpMode?: AgentQueueMode;
   retryEnabled?: boolean;
@@ -1563,7 +1565,7 @@ export class RpcController {
   }
 
   private async discoverAvailableModels(): Promise<Array<Record<string, unknown> & { provider: string; id: string }>> {
-    if (this.context.providerModels) {
+    if (!this.context.offline && this.context.providerModels) {
       const supplied = await this.context.providerModels();
       return supplied.filter((value): value is Record<string, unknown> & { provider: string; id: string } => (
         Boolean(value)
@@ -1578,7 +1580,7 @@ export class RpcController {
       let configured = false;
       try { configured = provider.validateConfig(); } catch { /* Invalid providers remain listed but unavailable. */ }
       let discoveredModels: string[] = [];
-      if (configured) {
+      if (configured && !this.context.offline) {
         try {
           discoveredModels = await discoverProviderModelIds(provider, { retries: 0 });
         } catch { /* A configured provider remains selectable when live discovery is unavailable. */ }

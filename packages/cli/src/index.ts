@@ -97,6 +97,7 @@ import {
   type CliThinkingLevel,
 } from './cli/args.js';
 import { resolveStartupDisplay } from './cli/startup-display.js';
+import { resolveOfflineMode } from './cli/offline-mode.js';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -249,6 +250,9 @@ async function main(): Promise<void> {
     process.exitCode = 2;
     return;
   }
+  // Capture environment policy before trusted extension registration, but resolve
+  // flag arity only from the authoritative second parse (never the bootstrap).
+  const environmentOffline = resolveOfflineMode();
   outputCredentialRedactor.add(cliArguments.apiKey);
   if ((cliArguments.help || cliArguments.version || cliArguments.listModels) && cliArguments.deferredOptions.length) {
     process.stderr.write(`Error: Unknown option: ${cliArguments.deferredOptions[0]}. Use --help for available options.\n`);
@@ -292,6 +296,7 @@ async function main(): Promise<void> {
     // A bootstrap pass is never an authoritative parse, even without custom options.
     cliArguments = parseCliArguments(rawArguments);
   }
+  const offline = cliArguments.offline === true || environmentOffline;
   if (cliArguments.listModels) {
     try {
       const cwd = process.cwd();
@@ -317,13 +322,14 @@ async function main(): Promise<void> {
         resolvedSettings.agentDirTrusted,
         [],
         outputCredentialRedactor,
+        offline,
       );
       const providers = createConfiguredProviders(process.env, {
         credentials: providerRuntime.values,
         network: providerRuntime.network,
       });
       const search = typeof cliArguments.listModels === 'string' ? cliArguments.listModels : undefined;
-      process.stdout.write(`${outputCredentialRedactor.redact(await formatConfiguredModelList(providers, search))}\n`);
+      process.stdout.write(`${outputCredentialRedactor.redact(await formatConfiguredModelList(providers, search, offline))}\n`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       process.stderr.write(`Error: ${outputCredentialRedactor.redact(message)}\n`);
@@ -341,6 +347,7 @@ async function main(): Promise<void> {
   if (applicationMode === 'rpc') {
     try {
       const rpcStartupOptions = {
+      offline,
       noSession: cliArguments.noSession,
       sessionDir: cliArguments.sessionDir,
       provider: cliArguments.provider,
@@ -793,6 +800,7 @@ async function main(): Promise<void> {
       settingsResolution.agentDirTrusted,
       extensionRegistry.getProviderDefinitions().map(item => item.type),
       outputCredentialRedactor,
+      offline,
     );
     const refreshedProviders = createConfiguredProviders(process.env, {
       credentials: refreshedRuntime.values,
@@ -813,7 +821,7 @@ async function main(): Promise<void> {
       models: cliArguments.models,
       apiKey: cliArguments.apiKey,
     }, settingsResolution.settings);
-    const refreshedStartup = await resolveStartupProvider(configuredProviders, refreshedModelSettings.selection);
+    const refreshedStartup = await resolveStartupProvider(configuredProviders, { ...refreshedModelSettings.selection, offline });
     commandContext.provider = refreshedStartup.provider;
     commandContext.modelPatterns = refreshedModelSettings.modelPatterns;
     const refreshedModel = refreshedStartup.model ?? refreshedStartup.provider.getConfiguredModel();
@@ -920,6 +928,7 @@ async function main(): Promise<void> {
       settingsResolution.agentDirTrusted,
       extensionRegistry.getProviderDefinitions().map(item => item.type),
       outputCredentialRedactor,
+      offline,
     );
   } catch (error) {
     reportError(error instanceof Error ? error.message : String(error));
@@ -947,6 +956,7 @@ async function main(): Promise<void> {
       isProjectTrusted,
       enabledToolNames: () => selectedTools().map(tool => tool.name),
       modelPatterns: effectiveModelSettings.modelPatterns,
+      offline,
       settingsInfo: () => formatAgentSettingsSummary(settingsResolution),
       agentSettings: () => settingsResolution.settings,
       providers: configuredProviders,
@@ -1008,7 +1018,7 @@ async function main(): Promise<void> {
   );
   let ctx = commandHandler.getContext();
   try {
-    const startup = await resolveStartupProvider(ctx.providers, effectiveModelSettings.selection);
+    const startup = await resolveStartupProvider(ctx.providers, { ...effectiveModelSettings.selection, offline });
     ctx.provider = startup.provider;
     const startupModel = startup.model ?? startup.provider.getConfiguredModel();
     const requestedThinking = coreThinkingLevel(cliArguments.thinking)

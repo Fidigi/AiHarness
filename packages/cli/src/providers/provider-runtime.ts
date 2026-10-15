@@ -50,6 +50,7 @@ export async function createCliProviderRuntime(
   persistCredentials = true,
   additionalProviders: readonly string[] = [],
   runtimeRedactor?: CredentialRedactor,
+  offline = false,
 ): Promise<CliProviderRuntime> {
   const masterKey = env.AI_HARNESS_MASTER_KEY;
   const redactor = existingCredentials?.redactor ?? runtimeRedactor ?? new CredentialRedactor();
@@ -74,6 +75,8 @@ export async function createCliProviderRuntime(
   for (const provider of providers) {
     const resolved = await credentials.resolve(provider, {
       env: commandEnv,
+      allowCommands: !offline,
+      allowRefresh: !offline,
       cwd: process.cwd(),
       oauth: oauthRefreshConfigFromEnv(provider, env),
     });

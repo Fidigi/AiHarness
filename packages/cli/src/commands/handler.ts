@@ -113,6 +113,7 @@ interface CommandEntry {
 }
 
 export interface CommandContext {
+  offline?: boolean;
   sessionManager: SessionManager;
   jsonlStore: JsonlSessionStore;
   terminal: TerminalUI;
@@ -156,6 +157,7 @@ export interface CommandMcpControl {
 }
 
 export interface CommandWorkspaceContext {
+  offline?: boolean;
   cwd: string;
   workspaceManager?: WorkspaceManager;
   workspaceId?: string;
@@ -317,6 +319,7 @@ function syncExtensionProviders(ctx: CommandContext): void {
 
 async function availableCommandModels(ctx: CommandContext): Promise<ModelCatalogEntry[]> {
   return flattenModelCatalog(await collectProviderModelCatalog(ctx.providers, {
+    discover: ctx.offline !== true,
     timeoutMs: 2_000,
     retries: 0,
   })).filter(model => model.available);
@@ -1495,6 +1498,7 @@ export class CommandHandler {
       workspaceId: workspace.workspaceId,
       enabledToolNames: workspace.enabledToolNames,
       modelPatterns: workspace.modelPatterns,
+      offline: workspace.offline,
       settingsInfo: workspace.settingsInfo,
       agentSettings: workspace.agentSettings,
       credentialService: workspace.credentialService,

@@ -198,6 +198,20 @@ The `AI_HARNESS_TUI_MODE=regular|fullscreen` variable also sets the mode. The co
 
 Regular mode prints startup/prompt-boundary status; fullscreen keeps it beside transcript/editor. Status shows cwd, session/file or unsaved memory, current model/thinking, loaded resources/instruction counts, and estimated effective session context (not the full system/tool wire payload). Unknown model limits remain unknown. Usage separates input/output/cache read/write: active-path accounting includes pre-compaction ancestors, while full history includes abandoned branches. Only committed provider/host usage counts, with nested usage counted once on the outer tool result; unknown costs remain unknown and a known subtotal is not a complete total. Narrow terminals stack fields; physically short fullscreen sizes show compact status or a resize hint. Grapheme widths follow conventional terminal cells, not an exact cross-emulator/font guarantee. Untrusted text cannot emit OSC/CSI side effects; delayed status cannot restore a stale prompt over a newer input/stream.
 
+### Offline CLI Startup
+
+Use `--offline`, or `AI_HARNESS_OFFLINE=1` (`true` and `yes` also work, case-insensitively with surrounding whitespace ignored). The flag takes no value: `--offline=false` is an error, not an online override. This process-only policy is not saved in settings or sessions and remains unchanged through `/reload`; restart to change it.
+
+```bash
+ai-harness --offline --models 'mock/*' --print "Review this text"
+AI_HARNESS_OFFLINE=true ai-harness --list-models
+ai-harness --offline --mode rpc
+```
+
+Startup/scoped selection, `--list-models`, interactive `/model` and RPC model listing use published/configured metadata without live discovery. Automatic credential commands are not run, even from a process cache. OAuth credentials due for refresh (expired or within the 60-second refresh window) remain unchanged and unavailable instead of refreshing. Environment keys, stored API keys and usable OAuth credentials remain eligible; suppressing a selected command does not silently fall back to a lower-priority stored key. Unknown live-only models are not invented, and this is not a complete downloaded offline catalogue.
+
+**This is not a network firewall or a sandbox.** Explicit model turns with usable credentials may still contact their provider; explicit authentication, sharing, package actions, MCP work, tools and trusted extensions retain their normal privileges and trust checks. The environment choice is captured before extension loading, while flags use the definitive contributed-option parse: `--offline` inside prompt text stays text. No startup banner is added to print/JSON/RPC. Use OS/container network isolation when network access must actually be forbidden. The browser PWA's offline shell is a separate feature.
+
 ### Agent Settings
 
 The CLI and RPC use AiHarness's Core settings resolver. Before trust, `AI_HARNESS_AGENT_DIR` is accepted only when its canonical path is symlink-free and outside the workspace; otherwise Core selects an independent home/XDG/UID-temporary directory or stops safely. This prevents a project from supplying its own `trust.json`, settings or credentials. The resolver reads `<agent-directory>/settings.json` and, after project trust resolves, overlays `<workspace>/.ai-harness/settings.json`. No project setting body is read before trust; a project `sessionDir` participates in storage precedence only after trust resolves. Files must be regular, hardlink-free, nonsymlink UTF-8 JSON and are capped at 256 KiB by default; invalid or unknown fields produce a warning without printing their values. Settings are read-only: AiHarness never rewrites them.

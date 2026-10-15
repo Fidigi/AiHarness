@@ -72,6 +72,10 @@ export interface ResolveProviderCredentialOptions {
   signal?: AbortSignal;
   commandTimeoutMs?: number;
   refreshTimeoutMs?: number;
+  /** False refuses the selected command source without executing or falling through. */
+  allowCommands?: boolean;
+  /** False leaves expired OAuth credentials unchanged and resolves them as unavailable. */
+  allowRefresh?: boolean;
   oauth?: ProviderOAuthRefreshConfig;
   fetcher?: typeof fetch;
   now?: number;
@@ -791,6 +795,7 @@ export class ProviderCredentialService {
 
     const configuredCommand = env[commandVariable(id)];
     if (configuredCommand) {
+      if (options.allowCommands === false) return undefined;
       let apiKey = this.commandCache.get(id);
       if (!apiKey) {
         const requestedTimeout = options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
@@ -865,11 +870,12 @@ export class ProviderCredentialService {
     credential: ProviderCredential,
     source: 'memory' | 'encrypted-store',
     options: ResolveProviderCredentialOptions,
-  ): Promise<ResolvedProviderCredential> {
+  ): Promise<ResolvedProviderCredential | undefined> {
     const now = options.now ?? Date.now();
     if (credential.type !== 'oauth' || credential.expiresAt === undefined || credential.expiresAt > now + 60_000) {
       return { credential: structuredClone(credential), descriptor: descriptor(provider, credential, source) };
     }
+    if (options.allowRefresh === false) return undefined;
     if (!credential.refreshToken || !options.oauth) {
       throw new ProviderCredentialError('refresh-unavailable', 'The provider credential has expired and cannot be refreshed.');
     }

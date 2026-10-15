@@ -16,6 +16,7 @@ import {
 } from '@ai-harness/core';
 
 export interface StartupProviderSelection {
+  offline?: boolean;
   provider?: string;
   model?: string;
   models?: string[];
@@ -220,6 +221,7 @@ export async function resolveStartupProvider(
         ])
       : await collectProviderModelCatalog(providers, {
           includePublishedProviders: true,
+          discover: selection.offline !== true,
           timeoutMs: 2_000,
           retries: 0,
         }));

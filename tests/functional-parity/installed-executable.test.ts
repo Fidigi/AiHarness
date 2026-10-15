@@ -56,6 +56,7 @@ Options:
   --theme-source <path>          Add a trusted theme file/directory (repeatable)
   --no-themes                    Disable automatic themes; explicit sources still work
   --verbose                      Show full interactive startup despite quietStartup settings
+  --offline                      Skip automatic model discovery, credential commands and OAuth refresh
   -e, --extension <path|builtin:name> Load an explicit extension (repeatable)
   -ne, --no-extensions           Disable discovery and optional built-ins; explicit -e still works
   --skill <path>                 Add a trusted skill file/directory selector (repeatable)
@@ -85,6 +86,7 @@ Input:
 Configuration:
   User settings load from <AI_HARNESS_AGENT_DIR>/settings.json or ~/.ai-harness/settings.json.
   Trusted project settings load from .ai-harness/settings.json; CLI options take precedence.
+  AI_HARNESS_OFFLINE=1/true/yes enables --offline (not a network sandbox).
   AI_HARNESS_SESSIONS_DIR overrides settings sessionDir. Interactive startup asks only
   when protected project resources need a decision; headless ask mode refuses safely.
   Use /settings for effective sources and /reload after changing settings or trust.
@@ -337,6 +339,44 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     expect(ordinary.stdout).not.toContain('AiHarness CLI');
     expect(await invoke(['--verbose', ...args])).toEqual(ordinary);
   });
+
+  it('retains explicit passive provider policies in installed declarations, Core runtime and the PATH bin', async () => {
+    await writeFile(path.join(consumer, 'offline-public.ts'), `
+      import { collectProviderModelCatalog, ProviderCredentialService, MockProvider } from '@ai-harness/core';
+      const credentials = new ProviderCredentialService();
+      const options: Parameters<ProviderCredentialService['resolve']>[1] = Object.freeze({ allowCommands: false, allowRefresh: false });
+      await credentials.resolve('openai', options);
+      await collectProviderModelCatalog(new Map([['mock', new MockProvider({ type: 'mock' })]]), Object.freeze({ discover: false }));
+      // @ts-expect-error refresh policy is boolean, never a truthy string
+      await credentials.resolve('openai', { allowRefresh: 'false' });
+      // @ts-expect-error discovery policy is boolean, never a truthy string
+      await collectProviderModelCatalog(new Map(), { discover: 'false' });
+    `);
+    const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'offline-public.ts'], consumer, environment);
+    expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+    await writeFile(path.join(consumer, 'offline-public.mjs'), `
+      import assert from 'node:assert/strict';
+      import { collectProviderModelCatalog, ProviderCredentialService, MockProvider } from '@ai-harness/core';
+      const credentials = new ProviderCredentialService();
+      await credentials.setOAuth('openai', { accessToken: 'expired-fixture', refreshToken: 'retained-fixture', expiresAt: 1 }, false);
+      const before = credentials.list();
+      assert.equal(await credentials.resolve('openai', Object.freeze({ env: {}, allowCommands: false, allowRefresh: false })), undefined);
+      assert.deepEqual(credentials.list(), before);
+      const provider = new MockProvider({ type: 'mock' }); let calls = 0;
+      provider.getAvailableModels = async () => { calls++; return ['live-only']; };
+      const providers = new Map([['mock', provider]]);
+      const passive = await collectProviderModelCatalog(providers, Object.freeze({ discover: false }));
+      assert.equal(calls, 0); assert.ok(passive[0].models.some(model => model.id === 'mock-model' && model.available));
+      await collectProviderModelCatalog(providers); assert.equal(calls, 1);
+      console.log('installed passive provider policies OK');
+    `);
+    expect(await run(process.execPath, ['offline-public.mjs'], consumer, environment))
+      .toEqual({ code: 0, stdout: 'installed passive provider policies OK\n', stderr: '' });
+    const env = { ...environment, AI_HARNESS_LOCAL_API_KEY_COMMAND: `${JSON.stringify(process.execPath)} -e ${JSON.stringify('process.exit(91)')}` };
+    const args = ['--no-approve', '--no-extensions', '--no-session', '--models', 'mock/*', '--print', 'Hello.'];
+    expect(await run('ai-harness', ['--offline', ...args], workspace, env)).toEqual({ code: 0, stdout: '[Mock AI Response]\n', stderr: '' });
+    expect(await run('ai-harness', args, workspace, { ...env, AI_HARNESS_OFFLINE: 'true' })).toEqual({ code: 0, stdout: '[Mock AI Response]\n', stderr: '' });
+  }, 60_000);
 
   it('preserves scoped Markdown selectors through installed readonly declarations, runtime and PATH bin', async () => {
     const agent = path.join(consumer, 'resource-agent[literal]');

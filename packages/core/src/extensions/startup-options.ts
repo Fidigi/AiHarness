@@ -8,7 +8,7 @@ export type ExtensionOptionDescriptor = ExtensionOption & { name: string; extens
 
 /** All built-in long names, including aliases and metadata-only operations, are reserved. */
 export const RESERVED_STARTUP_OPTIONS: ReadonlySet<string> = new Set([
-  'help', 'version', 'verbose', 'print', 'rpc', 'mode', 'continue', 'resume', 'session', 'session-id',
+  'help', 'version', 'verbose', 'offline', 'print', 'rpc', 'mode', 'continue', 'resume', 'session', 'session-id',
   'fork', 'session-dir', 'name', 'no-session', 'theme', 'theme-source', 'no-themes', 'extension', 'skill', 'prompt-template',
   'no-extensions', 'no-skills', 'no-prompt-templates', 'tui-mode', 'regular', 'no-fullscreen', 'fullscreen',
   'tools', 'exclude-tools', 'no-tools', 'no-builtin-tools', 'provider', 'model', 'models',

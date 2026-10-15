@@ -59,6 +59,8 @@ export interface ModelDiscoveryOptions {
 }
 
 export interface CollectModelCatalogOptions extends ModelDiscoveryOptions {
+  /** False uses only published/configured metadata, without discovery callbacks. */
+  discover?: boolean;
   includePublishedProviders?: boolean;
 }
 
@@ -230,7 +232,7 @@ export async function collectProviderModelCatalog(
     let configured = false;
     try { configured = provider.validateConfig(); } catch { /* Treat invalid providers as unavailable. */ }
     let discoveredModels: string[] = [];
-    if (provider.canDiscoverModels()) {
+    if (options.discover !== false && provider.canDiscoverModels()) {
       try {
         discoveredModels = await discoverProviderModelIds(provider, options);
       } catch {

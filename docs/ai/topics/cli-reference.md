@@ -35,6 +35,7 @@ packages/cli/src/index.ts
 | `packages/cli/src/index.ts` | Startup, modes, sessions, trust, resources, hooks, streaming and shutdown |
 | `packages/cli/src/cli/args.ts` | Strict option parsing, help/version, redirected-mode resolution and bounded stdin |
 | `packages/cli/src/cli/startup-display.ts` | Validated quiet/header/full startup presentation and process-only verbose precedence |
+| `packages/cli/src/cli/offline-mode.ts` | Process-only offline environment snapshot; authoritative CLI flag composition |
 | `packages/cli/src/cli/json-output.ts` | Versioned session header plus agent/message/tool/retry/compaction JSONL encoding with guarded stdout |
 | `packages/cli/src/cli/shell-controller.ts` | Interactive `!`/`!!` trust, streaming, cancellation and TUI adapter |
 | `packages/cli/src/cli/model-list.ts` | Configured-provider `--list-models` metadata table and fuzzy filtering |
@@ -75,6 +76,14 @@ Regular rendering prints status only at startup/prompt boundaries; fullscreen la
 `quietStartup` defaults to `false`: show the installed CLI version/title, hints and initial status snapshot. `"header"` keeps the title/hints but suppresses the initial snapshot; `true` skips both. Strict boolean `--verbose` overrides either quiet value without mutating settings; `-v` remains version. Core reserves the long name against extension registration. Both renderers keep startup detail suppression across empty input, palette updates and redraws, then restore normal live status on the first nonempty submitted line or initial prompt. Fullscreen still retains its operational frame/editor. Resource loading, trust prompts and warnings are not suppressed. Headless print/JSON/RPC channels do not acquire startup text. Reload updates the saved preference for a future start, not the current startup phase. `startup-display{,-process}.test.ts` covers policy, control-safe configured titles, real PTYs, trusted layer precedence, reload and headless purity.
 
 CLI flags override `AI_HARNESS_TUI_MODE`; terminal capability determines whether fullscreen can actually run. Unknown options and missing values fail before session/provider startup, but contributed-option discovery may execute eligible trusted extensions. `--help` and `--version` remain metadata-only exits. `--approve` (`-a`) and `--no-approve` (`-na`) provide opposing one-process project-trust overrides and never mutate `trust.json`; combining them is rejected.
+
+## Offline Startup Policy
+
+Strict, reserved and idempotent `--offline`, or trimmed case-insensitive `AI_HARNESS_OFFLINE=1|true|yes`, suppress automatic provider model discovery, credential commands and OAuth refresh. Other environment values leave the default online policy. `--offline=<value>` refuses before executable admission. Capture environment policy before trusted extension registration, then compose it with the **authoritative** parsed flag, never the bootstrap's unknown-arity guess. Thus a prompt token after a contributed boolean remains prompt text. The immutable process choice survives interactive reload and extension environment mutation; it is not a saved setting or wire/session field.
+
+Startup scopes, `--list-models`, `/model` and RPC listing/cycling use configured/published metadata without discovery. `createCliProviderRuntime` passes explicit Core command/refresh denials at initial composition and reload; a selected command is unavailable without executing or consuming its cached value, not replaced by a lower-priority key. OAuth inside the existing 60-second refresh window is unavailable without refresh or credential mutation. Environment/static keys and still-usable OAuth retain their ordinary precedence. Unknown live-only models and authoritative dynamic metadata are not invented. Embedded `runRpcMode({ offline })` can explicitly override its environment default; the controller skips both provider discovery and an injected catalogue callback while offline.
+
+This is not a firewall or sandbox: explicit model requests, authentication/share/package administration, pre-prompt MCP work, tools and privileged extension/provider code retain their normal network/execution authority. No automatic CLI version check or package update is introduced. There is no Server/Web global offline switch, persisted catalogue cache or PWA change. Use host/container network policy for an actual prohibition. Print/JSON/RPC output remains free of an offline banner; the installed exact help adds only the new option/environment lines. Core defaults remain online unless a host supplies its new explicit policies; see [provider policies](./providers.md#explicit-passive-provider-policies).
 
 ## Model Catalogue and Selection
 
@@ -281,6 +290,8 @@ Reads, searches, and CLI `@path` inputs are canonicalized inside the active work
 - Theme/keybinding files are user configuration; malformed input must fail or fall back safely without reflecting file bodies.
 
 ## Associated Tests
+
+- `packages/core/src/providers/offline-policy.test.ts`, `packages/cli/src/cli/offline-mode{,-process}.test.ts` — explicit passive Core policies, flag/environment admission, actual loopback discovery/OAuth/command controls, immutable reload, definitive option arity, six genuine PTYs and conserved explicit network/tools; installed declarations/bin coverage remains in the public parity leaf
 
 - `packages/cli/src/cli/{args,json-output,invocation,shell-controller,package-command}.test.ts` — strict options and package parsing, JSON events, package/resource process integration, modes, process exits/stdout purity, real pseudo-terminal steering/follow-up ordering and direct shell trust/stream/abort/persistence
 - `packages/cli/src/cli/{mcp-command,mcp-oauth-command}.test.ts` — strict management/exposure parsing and a real loopback PKCE login, encrypted persistence/logout, invalid storage/timeout, cancellation/expiry and listener closure

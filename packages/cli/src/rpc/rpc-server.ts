@@ -48,6 +48,7 @@ import {
   resolveStartupProvider,
 } from '../providers/configured-providers.js';
 import { createCliProviderRuntime } from '../providers/provider-runtime.js';
+import { resolveOfflineMode } from '../cli/offline-mode.js';
 import { resolveStartupSession, resolveStartupSessionDirectory } from '../sessions/startup-session.js';
 import { ResourceManager } from '../resources/resource-manager.js';
 import { RpcExtensionUiBridge } from './rpc-extension-ui.js';
@@ -79,6 +80,8 @@ export interface RpcContext {
 }
 
 export interface RpcStartupOptions {
+  /** Explicit snapshot overrides the process environment for embedded hosts. */
+  offline?: boolean;
   noSession?: boolean;
   sessionDir?: string;
   provider?: string;
@@ -222,6 +225,7 @@ function reportSettingsDiagnostics(
  * owns framing and startup; RpcController owns stateful command execution.
  */
 export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void> {
+  const offline = options.offline ?? resolveOfflineMode();
   const redactor = options.credentialRedactor ?? new CredentialRedactor();
   redactor.add(options.apiKey);
   redactor.addEnvironment(process.env);
@@ -443,6 +447,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       settingsResolution.agentDirTrusted,
       extensionRegistry.getProviderDefinitions().map(item => item.type),
       redactor,
+      offline,
     );
     if (!options.noSession) await sessionManager.loadAllSessions();
     const providers = createConfiguredProviders(process.env, {
@@ -456,7 +461,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       models: options.models,
       apiKey: options.apiKey,
     }, settingsResolution.settings);
-    const startup = await resolveStartupProvider(providers, effectiveModels.selection);
+    const startup = await resolveStartupProvider(providers, { ...effectiveModels.selection, offline });
     const startupModel = startup.model ?? startup.provider.getConfiguredModel();
     const startupThinking = options.thinking
       ?? startup.thinkingLevel
@@ -511,6 +516,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       emit: response => output(response as Record<string, unknown>),
     };
     controller = new RpcController({
+      offline,
       provider: startup.provider,
       providers,
       sessionManager,
