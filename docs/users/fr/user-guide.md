@@ -456,7 +456,7 @@ Commandes :
 /skill:relecture Texte à relire
 ```
 
-Les prompts Markdown sont recherchés dans `<répertoire-agent>/prompts/` (par défaut : `~/.ai-harness/prompts/`), ainsi que dans les dossiers approuvés `<projet>/.ai-harness/prompts/` et `<projet>/prompts/`. Les chemins `skills`/`prompts` des réglages sont résolus depuis le dossier du fichier déclarant et acceptent des inclusions simples ou `+`, des exclusions exactes `-` et des exclusions glob `!`. Les ressources sont UTF-8, sans lien symbolique et limitées à 1 Mio.
+Les prompts Markdown sont recherchés dans `<répertoire-agent>/prompts/` (par défaut : `~/.ai-harness/prompts/`), ainsi que dans les dossiers approuvés `<projet>/.ai-harness/prompts/` et `<projet>/prompts/`. Les chemins `skills`/`prompts` des réglages sont résolus depuis le dossier du fichier déclarant et acceptent des inclusions simples ou `+`, des exclusions exactes `-` et des exclusions glob `!`. Les ressources sont UTF-8, sans lien symbolique et limitées à 1 Mio. Utilisez un sélecteur `+chemin` entre guillemets pour désigner exactement un fichier/dossier contenant des métacaractères glob, par exemple `--prompt-template '+./review[1].md'`. Cela n’accorde jamais la confiance au projet : un sous-dossier nommé `..private` reste dans le projet. Le traitement littéral des dossiers de base pour les globs Markdown sans préfixe et les racines automatiques/de packages reste incomplet ; la sélection exacte `+` est le contournement pris en charge.
 
 ```markdown
 ---

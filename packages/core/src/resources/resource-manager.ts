@@ -3,6 +3,7 @@ import { lstat, open } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { openStableDirectoryHandle, readStableDirectoryEntries } from '../security/stable-directory.js';
+import { isResourcePathWithin } from './file-selectors.js';
 
 export type ResourceScope = 'user' | 'project' | 'temporary';
 export type ResourceSource = 'auto' | 'settings' | 'package' | 'cli';
@@ -255,15 +256,15 @@ function globSearchRoot(pattern: string): string {
 async function selectorFiles(
   selector: string,
   matcher: (name: string) => boolean,
+  exact: boolean,
 ): Promise<string[]> {
-  if (!GLOB_MAGIC.test(selector)) return findFiles(selector, matcher, 8);
+  if (exact || !GLOB_MAGIC.test(selector)) return findFiles(selector, matcher, 8);
   const candidates = await findFiles(globSearchRoot(selector), matcher, 8);
   return candidates.filter(candidate => matchesGlob(candidate, selector));
 }
 
 function inside(root: string, candidate: string): boolean {
-  const relative = path.relative(root, candidate);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  return isResourcePathWithin(candidate, root);
 }
 
 async function applyResourceSelectors(
@@ -282,7 +283,18 @@ async function applyResourceSelectors(
     const value = marker ? rawSelector.slice(1) : rawSelector;
     if (!value) continue;
     const selector = path.resolve(value);
-    const searchRoot = path.resolve(globSearchRoot(selector));
+    // Exclusions only reduce already admitted candidates; they neither scan an
+    // ancestor nor grant its read authority. Trust gates apply to discovery.
+    if (marker === '-' || marker === '!') {
+      for (const [key, selectedFile] of selected) {
+        const excluded = marker === '!'
+          ? matchesGlob(selectedFile.filePath, selector)
+          : inside(selector, selectedFile.filePath);
+        if (excluded) selected.delete(key);
+      }
+      continue;
+    }
+    const searchRoot = marker === '+' ? selector : path.resolve(globSearchRoot(selector));
     const operatorOwned = trustedGlobalRoot !== undefined && inside(trustedGlobalRoot, searchRoot);
     const effectiveBlockedRoot = operatorOwned ? undefined : blockedProjectRoot;
     const effectiveClassificationRoot = operatorOwned ? undefined : classificationProjectRoot;
@@ -290,17 +302,8 @@ async function applyResourceSelectors(
       && (inside(effectiveBlockedRoot, searchRoot) || inside(searchRoot, effectiveBlockedRoot))) {
       continue;
     }
-    if (marker === '-' || marker === '!') {
-      for (const [key, selectedFile] of selected) {
-        const excluded = marker === '!'
-          ? matchesGlob(selectedFile.filePath, selector)
-          : selectedFile.filePath === selector || selectedFile.filePath.startsWith(`${selector}${path.sep}`);
-        if (excluded) selected.delete(key);
-      }
-      continue;
-    }
     try {
-      for (const filePath of await selectorFiles(selector, matcher)) {
+      for (const filePath of await selectorFiles(selector, matcher, marker === '+')) {
         if (selected.size >= MAX_RESOURCE_FILES) break;
         const absolute = path.resolve(filePath);
         if (effectiveBlockedRoot && inside(effectiveBlockedRoot, absolute)) continue;

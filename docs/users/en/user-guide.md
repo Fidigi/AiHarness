@@ -456,7 +456,7 @@ Commands:
 /skill:review Text to review
 ```
 
-Markdown prompts are searched in `<agent-directory>/prompts/` (default: `~/.ai-harness/prompts/`) and trusted `<project>/.ai-harness/prompts/` and `<project>/prompts/`. Settings `skills`/`prompts` paths resolve from their declaring settings directory and support ordered plain or `+` includes, exact `-` exclusions, and `!` glob exclusions. Resource files are symlink-free, UTF-8, and capped at 1 MiB.
+Markdown prompts are searched in `<agent-directory>/prompts/` (default: `~/.ai-harness/prompts/`) and trusted `<project>/.ai-harness/prompts/` and `<project>/prompts/`. Settings `skills`/`prompts` paths resolve from their declaring settings directory and support ordered plain or `+` includes, exact `-` exclusions, and `!` glob exclusions. Resource files are symlink-free, UTF-8, and capped at 1 MiB. Use a quoted `+path` selector for an exact file/directory containing glob metacharacters, for example `--prompt-template '+./review[1].md'`. This never grants project trust: a child named `..private` is still inside the project. Literal-base handling for unprefixed Markdown globs and automatic/package roots is not yet complete; exact `+` selection is the supported workaround.
 
 ```markdown
 ---
