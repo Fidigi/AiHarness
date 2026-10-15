@@ -408,8 +408,8 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       projectPackagePromptPaths: packagePrompts.filter(item => item.scope === 'project').map(item => item.path),
       skillPaths: options.skills,
       promptPaths: options.promptTemplates,
-      disableSkills: options.noSkills,
-      disablePrompts: options.noPromptTemplates,
+      discoverSkills: !options.noSkills,
+      discoverPrompts: !options.noPromptTemplates,
     });
     const resourceLoadResult = await resourceManager.loadAll();
     for (const failure of resourceLoadResult.errors) {

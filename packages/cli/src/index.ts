@@ -637,8 +637,8 @@ async function main(): Promise<void> {
     projectPackagePromptPaths: packagePaths.prompt.project,
     skillPaths: cliArguments.skills,
     promptPaths: cliArguments.promptTemplates,
-    disableSkills: cliArguments.noSkills,
-    disablePrompts: cliArguments.noPromptTemplates,
+    discoverSkills: !cliArguments.noSkills,
+    discoverPrompts: !cliArguments.noPromptTemplates,
   });
   let resourceManager = createResourceManager();
   const resourceLoadResult = await resourceManager.loadAll();

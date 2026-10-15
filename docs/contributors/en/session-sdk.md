@@ -27,6 +27,8 @@ const loader = createAgentResourceLoader({ globalPromptSelectors: selectors });
 
 `ResourceManager` snapshots scoped arrays/fields at construction without invoking array-entry or selector-field getters; the built-in loader constructs it on explicit `load`. Limits are 512 requests per combined legacy/scoped layer and 32KiB per pattern/base pair. Legacy mutable `*Paths: string[]` options and `resolveAgentResourcePaths` retain their string ABI. They cannot recover a literal directory already flattened into an absolute glob: use scoped records or exact `+` paths in that case. If both forms are supplied, legacy paths precede scoped selectors in the same layer. No implicit settings, executable loading or trust is added to the SDK.
 
+`discoverSkills: false` / `discoverPrompts: false` on `ResourceManager` or `createAgentResourceLoader` skip automatic roots and the corresponding supplied settings/package selector layers, retaining explicit `skillPaths` / `promptPaths`. Both default to true. Legacy `disableSkills` / `disablePrompts` still disable **all** loading, including explicit paths; they were not repurposed. These are host options, not saved agent settings, and never override project trust or stable-file checks. The SDK factory remains passive.
+
 ## Validation
 
 Build Core and run its SDK tests/typechecks **inside Docker**, with one worker. `public-consumer.test.ts` uses a real external temporary installation of the manifest and emitted dist; Node imports only `@ai-harness/core`, and real TypeScript NodeNext compiles positive/negative calls against emitted declarations. Do not replace the public entry with source aliases or a private SDK module to manufacture proof.

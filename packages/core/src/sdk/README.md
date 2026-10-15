@@ -67,6 +67,11 @@ A saved refusal must remain a refusal; the SDK never grants or persists trust.
   Markdown discovery and trust gates to `ResourceManager`; host loaders are
   trusted host code responsible for equivalent policy. Expansion returns text;
   call `prompt(text)` yourself. It never registers skills as model tools.
+  On `createAgentResourceLoader` / `ResourceManager`, `discoverSkills: false` and
+  `discoverPrompts: false` skip automatic roots and supplied settings/package
+  selectors, retaining explicit `skillPaths` / `promptPaths`. Both default true;
+  legacy `disableSkills` / `disablePrompts` still disable all loading, including
+  explicit paths. These host options never grant project trust.
 - **runDefaults**: existing typed runtime prompt options. Factory-bound provider,
   session, cwd and settings-persistence flags cannot be overridden per prompt.
   Session model/thinking/tool-preset settings supply subsequent requests. Core's
@@ -236,7 +241,13 @@ la découverte Markdown bornée et protégée de Core. `reloadResources`,
 `expandPrompt` et `invokeSkill` sont explicites, avec confiance fraîche. Les
 expansions retournent du texte à envoyer vous-même ; les skills ne deviennent
 pas automatiquement des outils. Un loader personnalisé est du code hôte fiable,
-responsable de ses propres limites et protections.
+responsable de ses propres limites et protections. Sur `createAgentResourceLoader`
+/ `ResourceManager`, `discoverSkills: false` et `discoverPrompts: false` ignorent
+les racines automatiques et les sélecteurs réglages/packages fournis, pas les
+chemins explicites `skillPaths` / `promptPaths`. Les deux valent true par défaut ;
+les anciennes options `disableSkills` / `disablePrompts` désactivent toujours tout
+chargement, chemins explicites compris. Ces options hôte n’accordent aucune
+confiance au projet.
 
 `capabilities` et `ownership` décrivent les limites réelles. `dispose` est
 idempotent, annule/attend et détache les abonnements ; il ne supprime aucune

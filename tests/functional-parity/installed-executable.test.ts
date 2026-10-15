@@ -378,6 +378,66 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     expect(await run('ai-harness', args, workspace, { ...env, AI_HARNESS_OFFLINE: 'true' })).toEqual({ code: 0, stdout: '[Mock AI Response]\n', stderr: '' });
   }, 60_000);
 
+  it('separates discovery suppression from explicit loading in installed Core, SDK and PATH bin', async () => {
+    await writeFile(path.join(consumer, 'resource-discovery-public.ts'), `
+      import { ResourceManager, createAgentResourceLoader, type ResourceManagerOptions } from '@ai-harness/core';
+      const options: ResourceManagerOptions = Object.freeze({ discoverSkills: false, discoverPrompts: false });
+      await new ResourceManager(options).loadAll();
+      await createAgentResourceLoader(options).load({ cwd: '/tmp', projectTrusted: false });
+      // @ts-expect-error discovery is an explicit boolean, not a string
+      new ResourceManager({ discoverSkills: 'false' });
+      // @ts-expect-error prompt discovery is an explicit boolean, not a number
+      createAgentResourceLoader({ discoverPrompts: 0 });
+      const legacy: ResourceManagerOptions = { skillPaths: [], promptPaths: [], disableSkills: true, disablePrompts: true };
+      legacy.skillPaths?.push('still-mutable'); legacy.promptPaths?.push('still-mutable');
+    `);
+    const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'resource-discovery-public.ts'], consumer, environment);
+    expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+    await writeFile(path.join(consumer, 'resource-discovery-public.mjs'), `
+      import assert from 'node:assert/strict';
+      import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
+      import { tmpdir } from 'node:os';
+      import path from 'node:path';
+      import { ResourceManager, createAgentResourceLoader } from '@ai-harness/core';
+      const root = await mkdtemp(path.join(tmpdir(), 'aih-installed-discovery-'));
+      try {
+        const cwd = path.join(root, 'work'), agentDir = path.join(root, 'agent'), homeDir = path.join(root, 'home');
+        await mkdir(cwd);
+        const file = async (relative, name, text) => { const target = path.join(root, relative); await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, '---\\nname: '+name+'\\ndescription: Installed policy\\n---\\n'+text); return target; };
+        await file('agent/skills/automatic/SKILL.md', 'automatic', 'AUTOMATIC SKILL');
+        await file('agent/prompts/automatic.md', 'automatic', 'AUTOMATIC PROMPT');
+        const skill = await file('selected/picked/SKILL.md', 'picked', 'EXPLICIT SKILL');
+        const prompt = await file('selected/picked.md', 'picked', 'EXPLICIT PROMPT $1');
+        const options = { cwd, agentDir, homeDir, strictSkills: true, skillPaths: [skill], promptPaths: [prompt], discoverSkills: false, discoverPrompts: false };
+        const manager = new ResourceManager(Object.freeze(options));
+        assert.deepEqual(await manager.loadAll(), { skills: 1, prompts: 1, errors: [] });
+        assert.deepEqual(manager.listInventory().map(item => item.provenance.path).sort(), [skill, prompt].sort());
+        const legacy = new ResourceManager({ ...options, disableSkills: true, disablePrompts: true });
+        assert.deepEqual(await legacy.loadAll(), { skills: 0, prompts: 0, errors: [] });
+        const ordinary = new ResourceManager({ ...options, discoverSkills: true, discoverPrompts: true });
+        assert.deepEqual(await ordinary.loadAll(), { skills: 2, prompts: 2, errors: [] });
+        const loaded = await createAgentResourceLoader(options).load({ cwd, projectTrusted: false });
+        assert.equal(loaded.inventory().length, 2); assert.deepEqual(loaded.diagnostics, []);
+        assert.equal(loaded.expandPrompt('picked', ['TASK']), 'EXPLICIT PROMPT TASK');
+        assert.equal(loaded.invokeSkill('picked'), '<skill name="picked">\\n\\nEXPLICIT SKILL\\n\\n</skill>');
+        console.log('installed explicit Markdown policy OK');
+      } finally { await rm(root, { recursive: true, force: true }); }
+    `);
+    expect(await run(process.execPath, ['resource-discovery-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'installed explicit Markdown policy OK\n', stderr: '' });
+    const directory = path.join(consumer, 'selected-markdown');
+    await mkdir(path.join(directory, 'picked'), { recursive: true });
+    await writeFile(path.join(directory, 'picked/SKILL.md'), '---\nname: picked\ndescription: Installed selection\n---\nEXPLICIT SKILL');
+    await writeFile(path.join(directory, 'picked.md'), '---\nname: picked\n---\nEXPLICIT PROMPT $1');
+    const args = ['--offline', '--no-approve', '--no-extensions', '--no-context-files', '--no-session', '--model', 'mock/mock-model', '--no-skills', '--no-prompt-templates', '--skill', path.join(directory, 'picked'), '--prompt-template', path.join(directory, 'picked.md'), '--print'];
+    const observer = path.join(consumer, 'installed-markdown-observer.mjs'), trace = path.join(consumer, 'installed-markdown-reads');
+    await writeFile(observer, `import fs from 'node:fs/promises';import{appendFileSync,readlinkSync}from'node:fs';import{syncBuiltinESMExports}from'node:module';const open=fs.open;fs.open=async(...args)=>{const handle=await open(...args),read=handle.read.bind(handle);handle.read=(...values)=>{const name=readlinkSync('/proc/self/fd/'+handle.fd);if(name.startsWith(${JSON.stringify(directory + path.sep)})&&name.endsWith('.md'))appendFileSync(${JSON.stringify(trace)},JSON.stringify(name)+String.fromCharCode(10));return read(...values);};return handle;};syncBuiltinESMExports();`);
+    for (const prompt of ['/skill:picked TASK', '/picked TASK']) {
+      await rm(trace, { force: true });
+      expect(await run('ai-harness', [...args, prompt], workspace, { ...environment, NODE_OPTIONS: '--import=' + JSON.stringify(observer) })).toEqual({ code: 0, stdout: '[Mock AI Response]\n', stderr: '' });
+      expect((await readFile(trace, 'utf8')).trim().split('\n').map(line => JSON.parse(line)).sort()).toEqual([path.join(directory, 'picked/SKILL.md'), path.join(directory, 'picked.md')].sort());
+    }
+  }, 60_000);
+
   it('preserves scoped Markdown selectors through installed readonly declarations, runtime and PATH bin', async () => {
     const agent = path.join(consumer, 'resource-agent[literal]');
     const directory = path.join(agent, 'configured');

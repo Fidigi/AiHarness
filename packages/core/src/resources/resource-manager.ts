@@ -70,6 +70,11 @@ export interface ResourceManagerOptions {
   projectPackageSkillPaths?: string[];
   globalPackagePromptPaths?: string[];
   projectPackagePromptPaths?: string[];
+  /** False skips automatic/settings/package discovery, retaining explicit skillPaths. */
+  discoverSkills?: boolean;
+  /** False skips automatic/settings/package discovery, retaining explicit promptPaths. */
+  discoverPrompts?: boolean;
+  /** Legacy all-loading suppression, including explicit paths. */
   disableSkills?: boolean;
   disablePrompts?: boolean;
   /** Enforce Agent Skills frontmatter/name/description rules for catalogue APIs. */
@@ -431,6 +436,8 @@ export class ResourceManager {
   private readonly projectPackageSkillPaths: ResourceFileSelector[];
   private readonly globalPackagePromptPaths: ResourceFileSelector[];
   private readonly projectPackagePromptPaths: ResourceFileSelector[];
+  private readonly discoverSkills: boolean;
+  private readonly discoverPrompts: boolean;
   private readonly disableSkills: boolean;
   private readonly disablePrompts: boolean;
   private readonly strictSkills: boolean;
@@ -446,6 +453,8 @@ export class ResourceManager {
     this.agentDir = path.resolve(options.agentDir ?? path.join(this.homeDir, '.ai-harness'));
     this.agentDirTrusted = options.agentDirTrusted === true;
     this.projectTrusted = options.projectTrusted === true;
+    this.discoverSkills = options.discoverSkills !== false;
+    this.discoverPrompts = options.discoverPrompts !== false;
     const resolve = (entries: readonly string[]): ResourceFileSelector[] => entries.map(pattern => ({ pattern, baseDir: this.cwd }));
     const literal = (entries: readonly string[]): ResourceFileSelector[] => entries.map(value => ({ pattern: '+' + value, baseDir: this.cwd }));
     const scoped = (entries: readonly ResourceFileSelector[] | undefined): ResourceFileSelector[] => {
@@ -476,14 +485,14 @@ export class ResourceManager {
     };
     this.extraSkillPaths = resolve(options.skillPaths ?? []);
     this.extraPromptPaths = resolve(options.promptPaths ?? []);
-    this.globalSkillPaths = combine(options.globalSkillPaths, options.globalSkillSelectors);
-    this.projectSkillPaths = this.projectTrusted ? combine(options.projectSkillPaths, options.projectSkillSelectors) : [];
-    this.globalPromptPaths = combine(options.globalPromptPaths, options.globalPromptSelectors);
-    this.projectPromptPaths = this.projectTrusted ? combine(options.projectPromptPaths, options.projectPromptSelectors) : [];
-    this.globalPackageSkillPaths = literal(options.globalPackageSkillPaths ?? []);
-    this.projectPackageSkillPaths = literal(options.projectPackageSkillPaths ?? []);
-    this.globalPackagePromptPaths = literal(options.globalPackagePromptPaths ?? []);
-    this.projectPackagePromptPaths = literal(options.projectPackagePromptPaths ?? []);
+    this.globalSkillPaths = this.discoverSkills ? combine(options.globalSkillPaths, options.globalSkillSelectors) : [];
+    this.projectSkillPaths = this.discoverSkills && this.projectTrusted ? combine(options.projectSkillPaths, options.projectSkillSelectors) : [];
+    this.globalPromptPaths = this.discoverPrompts ? combine(options.globalPromptPaths, options.globalPromptSelectors) : [];
+    this.projectPromptPaths = this.discoverPrompts && this.projectTrusted ? combine(options.projectPromptPaths, options.projectPromptSelectors) : [];
+    this.globalPackageSkillPaths = this.discoverSkills ? literal(options.globalPackageSkillPaths ?? []) : [];
+    this.projectPackageSkillPaths = this.discoverSkills ? literal(options.projectPackageSkillPaths ?? []) : [];
+    this.globalPackagePromptPaths = this.discoverPrompts ? literal(options.globalPackagePromptPaths ?? []) : [];
+    this.projectPackagePromptPaths = this.discoverPrompts ? literal(options.projectPackagePromptPaths ?? []) : [];
     this.disableSkills = options.disableSkills === true;
     this.disablePrompts = options.disablePrompts === true;
     this.strictSkills = options.strictSkills === true;
@@ -509,6 +518,7 @@ export class ResourceManager {
     const skillMatcher = (name: string): boolean => name.toLowerCase() === 'skill.md';
     const skillFiles = new Map<string, SelectedResourceFile>();
     if (!this.disableSkills) {
+    if (this.discoverSkills) {
     await applyResourceSelectors(skillFiles, [
       { pattern: '+' + path.join(this.homeDir, '.agents', 'skills') + path.sep, baseDir: this.cwd },
       { pattern: '+' + path.join(this.agentDir, 'skills') + path.sep, baseDir: this.cwd },
@@ -533,6 +543,7 @@ export class ResourceManager {
         skillFiles, this.projectSkillPaths, skillMatcher, errors, projectSettings, undefined, this.cwd,
       );
     }
+    }
     await applyResourceSelectors(
       skillFiles, this.extraSkillPaths, skillMatcher, errors,
       explicit, blockedExplicitProject, this.cwd, trustedGlobalRoot,
@@ -554,6 +565,7 @@ export class ResourceManager {
     const promptMatcher = (name: string): boolean => name.toLowerCase().endsWith('.md');
     const promptFiles = new Map<string, SelectedResourceFile>();
     if (!this.disablePrompts) {
+    if (this.discoverPrompts) {
     await applyResourceSelectors(promptFiles, [
       { pattern: '+' + path.join(this.agentDir, 'prompts') + path.sep, baseDir: this.cwd },
     ], promptMatcher, errors, userAuto, blockedExplicitProject, this.cwd, trustedGlobalRoot);
@@ -576,6 +588,7 @@ export class ResourceManager {
       await applyResourceSelectors(
         promptFiles, this.projectPromptPaths, promptMatcher, errors, projectSettings, undefined, this.cwd,
       );
+    }
     }
     await applyResourceSelectors(
       promptFiles, this.extraPromptPaths, promptMatcher, errors,

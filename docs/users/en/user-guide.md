@@ -472,6 +472,8 @@ Commands:
 
 Markdown prompts are searched in `<agent-directory>/prompts/` (default: `~/.ai-harness/prompts/`) and trusted `<project>/.ai-harness/prompts/` and `<project>/prompts/`. Settings `skills`/`prompts` paths resolve from their declaring settings directory and support ordered plain or `+` includes, exact `-` exclusions, and `!` glob exclusions. Resource files are symlink-free, UTF-8, and capped at 1 MiB. Use a quoted `+path` selector for an exact file/directory containing glob metacharacters, for example `--prompt-template '+./review[1].md'`. This never grants project trust: a child named `..private` is still inside the project. The declaring settings directory stays literal even if its name contains brackets or other glob metacharacters; only the configured pattern is glob syntax. Automatic roots, enabled package paths, and the cwd anchoring a relative CLI selector are literal too. `/reload` refreshes interactive settings; RPC needs a restart. A caller using Core's legacy flattened absolute-glob strings should use the new scoped selector API or exact `+` to retain a literal base.
 
+`--no-skills` (`-ns`) and `--no-prompt-templates` (`-np`) skip automatic, settings and package discovery of that resource kind, **not** repeatable explicit `--skill` / `--prompt-template` paths. Explicit paths still require ordinary project trust and safe-file checks. Interactive `/reload` keeps this process-local choice and refreshes explicit contents; changing settings cannot reenable suppressed discovery. These flags do not disable instructions, tools, themes, warnings or trust checks. Print/JSON still send positional slash text literally; resource-command expansion belongs to interactive and RPC input.
+
 ```markdown
 ---
 name: code-review
