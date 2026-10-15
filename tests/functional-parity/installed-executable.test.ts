@@ -380,6 +380,70 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     });
   });
 
+  it('publishes strict installed journal accounting and additive summary provenance declarations', async () => {
+    await writeFile(path.join(consumer, 'session-accounting-public.ts'), `
+      import { getSessionAccounting, JsonlSessionStore, SessionManager,
+        type SessionEntry, type SessionAccounting, type BranchSummaryAccounting } from '@ai-harness/core';
+      const entries: readonly SessionEntry[] = [];
+      const result: SessionAccounting = getSessionAccounting(entries, 'leaf'); void result;
+      const details: BranchSummaryAccounting = { provider: 'mock', model: 'mock-model', usage: { costUsd: 0 } };
+      const manager = new SessionManager();
+      void manager.addBranchSummary('session', 'Summary', 'Branch', details);
+      void manager.addBranchSummary('session', 'Legacy summary');
+      const store = new JsonlSessionStore();
+      const file: string | undefined = store.getSessionFilePath('session'); void file;
+      void store.appendBranchSummary('session', 'Branch', 'Summary', undefined, details);
+      // @ts-expect-error counters are numeric, never credential-like strings
+      const invalid: BranchSummaryAccounting = { usage: { costUsd: 'bad' } }; void invalid;
+      // @ts-expect-error journal selection is by entry ID, never an object
+      getSessionAccounting(entries, {});
+    `);
+    const result = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'session-accounting-public.ts'], consumer, environment);
+    expect(result.stdout).toBe(''); expect(result.stderr).toBe('');
+  });
+
+  it('uses installed Core journal accounting and the actual PATH-bin RPC statistics without changing legacy framing', async () => {
+    const root = await mkdtemp(path.join(consumer, 'session-accounting-'));
+    try {
+      await writeFile(path.join(consumer, 'session-accounting-public.mjs'), `
+        import assert from 'node:assert/strict';
+        import { getSessionAccounting, JsonlSessionStore, SessionManager } from '@ai-harness/core';
+        const store = new JsonlSessionStore(${JSON.stringify(root)});
+        const manager = new SessionManager({ store });
+        const session = await manager.create({ cwd: ${JSON.stringify(workspace)}, title: 'Installed statistics' });
+        const measured = costUsd => ({ inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, totalTokens: 2, costUsd });
+        await manager.addMessage(session.id, { role: 'assistant', content: 'Root', usage: measured(0.125) });
+        const rootId = session.activeLeafId;
+        await manager.addMessage(session.id, { role: 'assistant', content: 'Abandoned', usage: measured(1) });
+        await manager.update(session.id, { activeLeafId: rootId });
+        await manager.addBranchSummary(session.id, 'Measured summary', 'Named', { provider: 'mock', model: 'mock-model', usage: measured(0.25) });
+        await manager.addMessage(session.id, { role: 'tool', name: 'codemode', content: 'Nested', usage: measured(0.5), metadata: { codemode: { costComplete: false, nestedCalls: [{ usage: measured(999) }] } } });
+        await manager.addMessage(session.id, { role: 'user', content: 'Ignored user accounting', usage: measured(999) });
+        const accounting = getSessionAccounting(await manager.getRawEntries(session.id), session.activeLeafId);
+        assert.equal(accounting.activePathComplete, true);
+        assert.equal(accounting.active.knownCostUsd, 0.875);
+        assert.equal(accounting.history.knownCostUsd, 1.875);
+        assert.equal(accounting.active.cost, 'partial');
+        console.log(JSON.stringify({ id: session.id, accounting }));
+      `);
+      const seeded = await succeed(process.execPath, ['session-accounting-public.mjs'], consumer, environment);
+      expect(seeded.stderr).toBe('');
+      const seed = JSON.parse(seeded.stdout) as { id: string; accounting: unknown };
+      const result = await invoke(['--offline', '--no-approve', '--no-extensions', '--no-context-files', '--model', 'mock/mock-model', '--session-dir', root, '--session-id', seed.id, '--rpc'],
+        JSON.stringify({ type: 'get_session_stats', id: 'full', includeAccounting: true }) + '\n'
+        + JSON.stringify({ type: 'get_session_stats', id: 'legacy' }) + '\n');
+      expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe('');
+      const records = result.stdout.trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
+      expect(records.find(record => record.id === 'full')).toMatchObject({ success: true, data: {
+        sessionId: seed.id, sessionFile: path.join(root, `${seed.id}.jsonl`), cost: null,
+        accounting: seed.accounting, tokens: { input: 4, output: 4, cacheRead: 0, cacheWrite: 0, total: 8 },
+      } });
+      const legacy = records.find(record => record.id === 'legacy');
+      expect(legacy).toMatchObject({ success: true, data: { cost: null } });
+      expect(legacy?.data).not.toHaveProperty('accounting');
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   it('accepts installed verbose startup without changing headless print output', async () => {
     const args = ['--no-approve', '--no-extensions', '--no-session', '--model', 'mock/mock-model', '--print', 'Hello.'];
     const ordinary = await invoke(args);

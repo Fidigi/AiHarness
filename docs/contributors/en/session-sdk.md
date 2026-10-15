@@ -29,6 +29,10 @@ const loader = createAgentResourceLoader({ globalPromptSelectors: selectors });
 
 `discoverSkills: false` / `discoverPrompts: false` on `ResourceManager` or `createAgentResourceLoader` skip automatic roots and the corresponding supplied settings/package selector layers, retaining explicit `skillPaths` / `promptPaths`. Both default to true. Legacy `disableSkills` / `disablePrompts` still disable **all** loading, including explicit paths; they were not repurposed. These are host options, not saved agent settings, and never override project trust or stable-file checks. The SDK factory remains passive.
 
+## Journal accounting
+
+Use the public Core `getSessionAccounting(readonlyEntries, activeLeafId?)` for active ancestors versus full history. On an idle SDK handle, supply `await session.history()` and `session.snapshot().activeLeafId`; context size is a separate estimate. Persisted cost wins; published pricing requires the entry's own provider/model. Unknown/partial costs and authenticated outer nested usage must survive projection, without summing progress or nested detail payloads. `requests` counts accountable entries, not internal network calls. Optional copied `BranchSummaryAccounting` on the lower-level manager/store summary methods survives v2 reload/clone; it is neither automatic generation nor a new facade method. See the complete reference for bounds and unknown-measurement behavior.
+
 ## Validation
 
 Build Core and run its SDK tests/typechecks **inside Docker**, with one worker. `public-consumer.test.ts` uses a real external temporary installation of the manifest and emitted dist; Node imports only `@ai-harness/core`, and real TypeScript NodeNext compiles positive/negative calls against emitted declarations. Do not replace the public entry with source aliases or a private SDK module to manufacture proof.

@@ -322,12 +322,14 @@ Pour exécuter directement une commande dans le workspace approuvé, préfixez-l
 | `/list [recherche]` | liste ou filtre les conversations |
 | `/switch <id-ou-numéro>` | active une conversation |
 | `/name <titre>` ou `/rename <titre>` | renomme la conversation active |
-| `/delete <id>` | supprime une conversation |
+| `/delete <id>` | supprime une conversation inactive ; utilisez d’abord `/new` ou `/switch` |
 | `/clear` | efface les messages de la conversation courante |
-| `/session [-a|--all]` | affiche les statistiques et l’estimation de tokens |
+| `/session [-a|--all]` | affiche l’identité/fichier, les usages/coûts actifs et historiques, et l’estimation de contexte séparée |
 | `/search <texte>` | recherche dans le transcript affiché |
 | `/copy` | copie la dernière réponse dans le presse-papiers |
 | `/quit` ou `/exit` | quitte AiHarness |
+
+`/session` distingue l’ascendance active (travail pré-compaction compris) de l’historique complet (branches abandonnées comprises). Les usages des résumés et des appels imbriqués authentifiés sur le résultat externe comptent une seule fois ; une mesure ou un tarif absent reste inconnu ou un sous-total connu, jamais un appel gratuit. L’estimation de contexte n’est aucun de ces totaux comptables. `--no-session` indique le stockage en mémoire uniquement. L’automatisation RPC peut obtenir ces portées avec `{"type":"get_session_stats","includeAccounting":true}` ; sans ce booléen, le cadrage historique est conservé. `/switch` accepte un ID exact ou un index numérique positif complet, pas un préfixe numérique malformé.
 
 ### Provider, modèle et raisonnement
 

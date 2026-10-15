@@ -157,6 +157,7 @@ export type {
   CommandEntry,
   CompactionEntry,
   BranchSummaryEntry,
+  BranchSummaryAccounting,
   SessionMetadataEntry,
   CreateSessionOptions,
   MutableSessionFields,
@@ -165,6 +166,8 @@ export type {
   AutoCompactionResult,
   AutoCompactionPolicy,
 } from './sessions/session-manager.js';
+export { getSessionAccounting } from './sessions/session-accounting.js';
+export type { SessionAccounting, SessionUsageAccounting } from './sessions/session-accounting.js';
 export {
   serializeSession,
   deserializeSession,

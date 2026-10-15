@@ -29,6 +29,10 @@ const loader = createAgentResourceLoader({ globalPromptSelectors: selectors });
 
 `discoverSkills: false` / `discoverPrompts: false` sur `ResourceManager` ou `createAgentResourceLoader` ignorent les racines automatiques et les couches de sélecteurs réglages/packages fournies pour le type concerné, mais conservent les chemins explicites `skillPaths` / `promptPaths`. Les deux valent true par défaut. Les anciennes options `disableSkills` / `disablePrompts` désactivent toujours **tout** chargement, chemins explicites compris ; leur sens n’a pas été modifié. Ce sont des options hôte, pas des réglages agent enregistrés ; elles ne contournent ni confiance du projet ni contrôles de fichier stable. La fabrique SDK reste passive.
 
+## Comptabilité du journal
+
+Utilisez l’utilitaire public Core `getSessionAccounting(readonlyEntries, activeLeafId?)` pour distinguer ascendance active et historique complet. Sur un handle SDK au repos, fournissez `await session.history()` et `session.snapshot().activeLeafId` ; la taille du contexte est une estimation séparée. Le coût persisté prévaut ; un calcul tarifaire exige le provider/modèle de l’entrée. Les coûts inconnus/partiels et l’usage imbriqué authentifié sur le résultat externe doivent survivre à la projection, sans sommer les détails de progression/appels imbriqués. `requests` compte les entrées comptabilisables, pas les appels réseau internes. La provenance optionnelle copiée `BranchSummaryAccounting` des primitives gestionnaire/stockage survit à la relecture v2 et au clonage ; aucune génération automatique ni méthode de façade n’est ajoutée. La référence complète précise limites et mesures inconnues.
+
 ## Validation
 
 Compilez Core et exécutez tests/typechecks SDK **dans Docker**, avec un worker. `public-consumer.test.ts` installe manifest et dist réellement émis dans un consommateur temporaire externe ; Node importe seulement `@ai-harness/core` et TypeScript NodeNext compile les appels valides/invalides contre les déclarations émises. Aucun alias source ni module SDK privé ne remplace la preuve publique.

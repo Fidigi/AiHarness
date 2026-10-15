@@ -120,6 +120,21 @@ uses existing `serializeSession`; use `deserializeSession` for runtime Date
 hydration before creating a new session with its Date-based options. These
 conversions are not validators of arbitrary untrusted imported JSON.
 
+The root `getSessionAccounting(entries, activeLeafId?)` helper accepts readonly
+raw entries and returns independent `active`/`history` projections. For an idle
+handle, pass `await session.history()` and `session.snapshot().activeLeafId`.
+Active totals include pre-compaction ancestors; history includes abandoned
+branches. Context size is separate. Persisted costs win; published calculations
+require the entry's own provider/model, never today's selected model. Missing
+measurements remain unknown/partial, and authenticated outer nested usage counts
+once, not progress/details. `requests` counts accountable journal entries,
+including unmeasured summaries, not individual nested network calls. Token sums
+saturate at the safe-integer limit and mark partial; unrepresentable costs are
+excluded from the known subtotal. Lower-level `addBranchSummary` and
+`appendBranchSummary` optionally accept copied `BranchSummaryAccounting`
+(provider/model/normalized usage); v2 legacy summaries remain readable/unpriced.
+This adds neither automatic summary generation nor a facade mutation method.
+
 `rename`, `setModel`, `setThinking`, `branchBefore(userEntryId)` and
 `applyCompaction(summary, firstKeptMessageId, details)` await Core persistence.
 `compactionTarget()` uses Core selection. Manual compaction requires a caller
@@ -226,6 +241,23 @@ expurgées : messages actifs, contexte effectif, journal brut conservant les
 branches abandonnées et l'historique pré-compaction. `exportSession` utilise la
 conversion ISO Core ; `deserializeSession` hydrate les dates sans valider un JSON
 arbitraire non fiable.
+
+L'utilitaire racine `getSessionAccounting(entries, activeLeafId?)` accepte un
+journal readonly et rend des projections indépendantes `active`/`history`.
+Sur un handle au repos, fournissez `await session.history()` et
+`session.snapshot().activeLeafId`. L'ascendance active conserve le travail
+pré-compaction ; l'historique inclut les branches abandonnées, sans confondre
+ces totaux avec le contexte. Le coût persisté prévaut ; un calcul tarifaire
+publié exige le provider/modèle de l'entrée, jamais le modèle courant.
+L'absence de mesure reste inconnue/partielle ; l'usage imbriqué authentifié sur
+le résultat externe compte une seule fois, pas les détails de progression.
+`requests` compte des entrées comptabilisables, résumés non mesurés compris,
+pas les appels réseau internes. Les totaux de tokens saturent à la limite des
+entiers sûrs et deviennent partiels ; les coûts non représentables sont exclus
+du sous-total connu. Les primitives `addBranchSummary`/`appendBranchSummary`
+acceptent une provenance optionnelle copiée `BranchSummaryAccounting` ; les
+anciens résumés v2 restent lisibles, sans prix inventé. Aucun résumé automatique
+ni nouvelle mutation de la façade n'est ajouté.
 
 `rename`, `setModel`, `setThinking`, `branchBefore` et `applyCompaction` attendent
 la persistance Core. La compaction manuelle exige un résumé fourni et une borne

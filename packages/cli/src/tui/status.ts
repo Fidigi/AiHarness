@@ -1,5 +1,5 @@
-import { getPublishedModelMetadata } from '@ai-harness/core';
-import type { SessionEntry, SessionManager, TokenUsage } from '@ai-harness/core';
+import { getPublishedModelMetadata, getSessionAccounting } from '@ai-harness/core';
+import type { SessionManager, SessionUsageAccounting } from '@ai-harness/core';
 import { terminalText, wrapTerminalText } from './terminal-text.js';
 
 export interface TerminalResources {
@@ -9,13 +9,7 @@ export interface TerminalResources {
   instructions: number;
   diagnostics: number;
 }
-export interface TerminalAccounting {
-  requests: number;
-  usage: Omit<TokenUsage, 'costUsd'>;
-  partial: boolean;
-  cost: 'none' | 'known' | 'partial' | 'unknown';
-  knownCostUsd?: number;
-}
+export type TerminalAccounting = SessionUsageAccounting;
 export interface TerminalStatus {
   cwd: string;
   sessionId?: string;
@@ -42,44 +36,8 @@ export interface TerminalStatusSource {
   thinking?: string;
   resources: TerminalResources;
 }
-const counters = ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens'] as const;
 function valid(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
-}
-function aggregate(entries: readonly SessionEntry[]): TerminalAccounting {
-  const result: TerminalAccounting = { requests: 0, usage: {}, partial: false, cost: 'none' };
-  let known = 0;
-  let priced = 0;
-  let unpriced = 0;
-  for (const entry of entries) {
-    // User/command/progress/metadata accounting is never authoritative. Core puts
-    // authenticated nested aggregate usage ON the outer tool message exactly once.
-    const incompleteNested = entry.type === 'message' && entry.role === 'tool'
-      && entry.name === 'codemode'
-      && (entry.metadata?.codemode as { costComplete?: unknown } | undefined)?.costComplete === false;
-    if (entry.type !== 'compaction' && !(entry.type === 'message'
-      && (entry.role === 'assistant' || (entry.role === 'tool' && (entry.usage || incompleteNested))))) continue;
-    result.requests++;
-    const usage = entry.usage;
-    for (const key of counters) {
-      if (valid(usage?.[key])) result.usage[key] = Math.min(Number.MAX_SAFE_INTEGER,
-        (result.usage[key] ?? 0) + usage![key]!);
-      else result.partial = true;
-    }
-    // Do not use current-model prices for past models or treat missing counters as
-    // zero. Persisted costs are provider/host accounting, never progress.details.
-    const cost = valid(usage?.costUsd) ? usage!.costUsd : undefined;
-    const total = valid(usage?.totalTokens) ? usage!.totalTokens
-      : counters.every(key => valid(usage?.[key]))
-        ? counters.reduce((sum, key) => sum + usage![key]!, 0) : undefined;
-    if (total !== undefined) result.usage.totalTokens = Math.min(Number.MAX_SAFE_INTEGER,
-      (result.usage.totalTokens ?? 0) + total);
-    if (cost !== undefined) { known += cost; priced++; }
-    if (cost === undefined || incompleteNested) unpriced++;
-  }
-  result.cost = !result.requests ? 'none' : unpriced ? (priced ? 'partial' : 'unknown') : 'known';
-  if (priced) result.knownCostUsd = Math.min(Number.MAX_SAFE_INTEGER, known);
-  return result;
 }
 
 /** Active accounting is the durable ancestor path INCLUDING pre-compaction work;
@@ -88,25 +46,15 @@ function aggregate(entries: readonly SessionEntry[]): TerminalAccounting {
 export async function createTerminalStatus(source: TerminalStatusSource): Promise<TerminalStatus> {
   const session = source.sessionManager.get(source.sessionId);
   const entries = await source.sessionManager.getRawEntries(source.sessionId);
-  const byId = new Map(entries.filter(entry => entry.type !== 'metadata').map(entry => [entry.id, entry]));
-  const ids = new Set<string>();
-  let cursor = session?.activeLeafId;
-  let complete = Boolean(session);
-  if (!cursor && byId.size) complete = false; // Legacy/unparented journal: don't invent an active path.
-  while (cursor) {
-    const entry = byId.get(cursor);
-    if (!entry || ids.has(cursor)) { complete = false; break; }
-    ids.add(cursor);
-    cursor = entry.type === 'message' ? entry.parentMessageId : entry.parentEntryId;
+  const accounting = getSessionAccounting(entries, session?.activeLeafId);
+  if (!session) {
+    accounting.activePathComplete = false;
+    accounting.active.partial = true;
+    accounting.active.cost = accounting.active.knownCostUsd === undefined ? 'unknown' : 'partial';
   }
   const metadata = source.provider && source.model
     ? getPublishedModelMetadata(source.provider, source.model) : undefined;
   const estimate = session ? source.sessionManager.estimateContextTokens(source.sessionId) : undefined;
-  const active = aggregate(entries.filter(entry => ids.has(entry.id)));
-  if (!complete) {
-    active.partial = true;
-    active.cost = active.knownCostUsd === undefined ? 'unknown' : 'partial';
-  }
   return {
     cwd: source.cwd,
     sessionId: session?.id,
@@ -119,9 +67,7 @@ export async function createTerminalStatus(source: TerminalStatusSource): Promis
     contextTokens: valid(estimate) ? estimate : undefined,
     contextWindow: metadata?.contextWindow,
     resources: { ...source.resources },
-    active,
-    history: aggregate(entries),
-    activePathComplete: complete,
+    ...accounting,
   };
 }
 
@@ -130,7 +76,7 @@ function costText(accounting: TerminalAccounting): string {
   if (accounting.cost === 'unknown') return 'cost unknown';
   return `cost $${accounting.knownCostUsd!.toFixed(6)}${accounting.cost === 'partial' ? ' known subtotal; total unknown' : ''}`;
 }
-function usageText(accounting: TerminalAccounting): string {
+export function usageText(accounting: TerminalAccounting): string {
   const usage = accounting.usage;
   return `tokens ${usage.totalTokens ?? '?'} · in ${usage.inputTokens ?? '?'} out ${usage.outputTokens ?? '?'} cache R/W ${usage.cacheReadTokens ?? '?'}/${usage.cacheWriteTokens ?? '?'}${accounting.partial ? ' (partial)' : ''} · ${costText(accounting)}`;
 }

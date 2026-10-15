@@ -81,8 +81,47 @@ export interface CompactionEntry extends SessionEntryBase {
   usage?: Message['usage'];
 }
 
+/** Host-supplied summary-call provenance; absence remains unpriced. */
+export interface BranchSummaryAccounting {
+  provider?: string;
+  model?: string;
+  usage?: Message['usage'];
+}
+
+function copyBranchSummaryAccounting(value: BranchSummaryAccounting): BranchSummaryAccounting {
+  const fail = (): never => { throw new Error('Branch summary accounting is invalid.'); };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return fail();
+  const result: BranchSummaryAccounting = {};
+  for (const key of Reflect.ownKeys(value)) {
+    if (key !== 'provider' && key !== 'model' && key !== 'usage') return fail();
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !('value' in descriptor)) return fail();
+    const item: unknown = descriptor.value;
+    if (item === undefined) continue;
+    if (key !== 'usage') {
+      if (typeof item !== 'string' || !isBoundedSessionString(item, 4_096) || !item) return fail();
+      result[key] = item;
+    } else {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return fail();
+      const usage: NonNullable<Message['usage']> = {};
+      for (const field of Reflect.ownKeys(item)) {
+        if (field !== 'inputTokens' && field !== 'outputTokens' && field !== 'cacheReadTokens'
+          && field !== 'cacheWriteTokens' && field !== 'totalTokens' && field !== 'costUsd') return fail();
+        const property = Object.getOwnPropertyDescriptor(item, field);
+        if (!property || !('value' in property)) return fail();
+        const counter: unknown = property.value;
+        if (counter === undefined) continue;
+        if (typeof counter !== 'number' || !Number.isFinite(counter) || counter < 0) return fail();
+        usage[field] = counter;
+      }
+      result.usage = usage;
+    }
+  }
+  return result;
+}
+
 /** Branch summary entry (when navigating tree) */
-export interface BranchSummaryEntry extends SessionEntryBase {
+export interface BranchSummaryEntry extends SessionEntryBase, BranchSummaryAccounting {
   type: 'branch_summary';
   parentEntryId?: string;
   branchName: string;
@@ -154,6 +193,9 @@ function isSessionEntry(value: unknown): value is SessionEntry {
         && typeof entry.summary === 'string' && typeof entry.firstKeptEntryId === 'string';
     case 'branch_summary':
       return (entry.parentEntryId === undefined || typeof entry.parentEntryId === 'string')
+        && (entry.provider === undefined || typeof entry.provider === 'string')
+        && (entry.model === undefined || typeof entry.model === 'string')
+        && (entry.usage === undefined || isPersistedUsage(entry.usage))
         && typeof entry.branchName === 'string' && typeof entry.summary === 'string';
     case 'metadata':
       return typeof entry.createdAt === 'number' && Number.isFinite(entry.createdAt)
@@ -1116,7 +1158,9 @@ export class JsonlSessionStore {
     branchName: string,
     summary: string,
     parentEntryId?: string,
+    accounting: BranchSummaryAccounting = {},
   ): Promise<BranchSummaryEntry> {
+    const provenance = copyBranchSummaryAccounting(accounting);
     const entry: BranchSummaryEntry = {
       id: `branch-summary-${crypto.randomUUID()}`,
       type: 'branch_summary',
@@ -1124,6 +1168,7 @@ export class JsonlSessionStore {
       ...(parentEntryId ? { parentEntryId } : {}),
       branchName,
       summary,
+      ...provenance,
       timestamp: Date.now(),
     };
     if (this.enabled) {
@@ -1131,6 +1176,11 @@ export class JsonlSessionStore {
       await this.appendSessionFile(this.getFilePath(sessionId), `${JSON.stringify(entry)}\n`);
     }
     return entry;
+  }
+
+  /** Informational path only; disabled persistence has no session file. */
+  getSessionFilePath(sessionId: string): string | undefined {
+    return this.enabled ? this.getFilePath(sessionId) : undefined;
   }
 
   /** Delete a session file */
@@ -2161,7 +2211,9 @@ export class SessionManager {
   }
 
   /** Persist a summary for a branch without altering its messages. */
-  async addBranchSummary(sessionId: string, summary: string, branchName?: string): Promise<BranchSummaryEntry | null> {
+  async addBranchSummary(sessionId: string, summary: string, branchName?: string,
+    accounting: BranchSummaryAccounting = {}): Promise<BranchSummaryEntry | null> {
+    const provenance = this.redactJson(copyBranchSummaryAccounting(accounting));
     summary = this.redactText(summary);
     branchName = branchName === undefined ? undefined : this.redactText(branchName);
     if (!summary.trim() || Buffer.byteLength(summary) > 1024 * 1024
@@ -2181,6 +2233,7 @@ export class SessionManager {
         ...(session.activeLeafId ? { parentEntryId: session.activeLeafId } : {}),
         branchName: resolvedBranchName,
         summary: summary.trim(),
+        ...provenance,
         timestamp: Date.now(),
       };
       const next: Session = {
@@ -2225,6 +2278,9 @@ export class SessionManager {
       ...(entry.parentEntryId ? { parentEntryId: entry.parentEntryId } : {}),
       branchName: entry.branchName,
       summary: entry.summary,
+      ...(entry.provider !== undefined ? { provider: entry.provider } : {}),
+      ...(entry.model !== undefined ? { model: entry.model } : {}),
+      ...(entry.usage !== undefined ? { usage: structuredClone(entry.usage) } : {}),
       timestamp: entry.timestamp ?? session.updatedAt.getTime(),
     }));
     return [...messages, ...commands, ...branchSummaries]
@@ -2246,6 +2302,9 @@ export class SessionManager {
         ...(entry.parentEntryId ? { parentEntryId: entry.parentEntryId } : {}),
         branchName: entry.branchName,
         summary: entry.summary,
+        ...(entry.provider !== undefined ? { provider: entry.provider } : {}),
+        ...(entry.model !== undefined ? { model: entry.model } : {}),
+        ...(entry.usage !== undefined ? { usage: structuredClone(entry.usage) } : {}),
         timestamp: entry.timestamp ?? session?.updatedAt.getTime() ?? Date.now(),
       }));
   }

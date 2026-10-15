@@ -7,6 +7,7 @@ import {
   type AgentQueueMode,
   buildProviderModelCatalog,
   calculatePublishedModelCost,
+  getSessionAccounting,
   clampPublishedThinkingLevel,
   cleanupExpiredProcessOutputs,
   createProtocolModelDescriptor,
@@ -109,6 +110,8 @@ export interface RpcControllerContext {
 export interface RpcCommandRequest {
   type: string;
   id?: string;
+  /** get_session_stats: opt into active/history accounting without changing legacy framing. */
+  includeAccounting?: boolean;
   [key: string]: unknown;
 }
 
@@ -783,7 +786,10 @@ export class RpcController {
           return success(id, command);
         }
         case 'get_session_stats':
-          return success(id, command, await this.sessionStats());
+          if (request.includeAccounting !== undefined && typeof request.includeAccounting !== 'boolean') {
+            throw new Error('includeAccounting must be a boolean.');
+          }
+          return success(id, command, await this.sessionStats(request.includeAccounting === true));
         case 'export_html': {
           const exportedPath = await this.exportHtml(
             typeof request.outputPath === 'string' ? request.outputPath : undefined,
@@ -1513,6 +1519,9 @@ export class RpcController {
           timestamp: new Date(item.timestamp).toISOString(),
           summary: item.summary,
           branchName: item.branchName,
+          ...(item.provider ? { provider: item.provider } : {}),
+          ...(item.model ? { model: item.model } : {}),
+          ...(item.usage ? { usage: protocolUsage(item.provider ?? '', item.model, item.usage) } : {}),
         };
       }
       parentId = item.id;
@@ -1657,71 +1666,37 @@ export class RpcController {
     };
   }
 
-  private async sessionStats(): Promise<Record<string, unknown>> {
+  private async sessionStats(includeAccounting = false): Promise<Record<string, unknown>> {
     const session = this.session();
     const rawEntries = await this.context.sessionManager.getRawEntries(session.id);
-    const messages = rawEntries.flatMap(entry => {
-      const message = entryMessage(entry);
-      return message ? [message] : [];
-    });
-    const commands = rawEntries.filter(entry => entry.type === 'command');
-    const assistant = messages.filter(message => message.role === 'assistant');
-    const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
-    let hasUnpricedUsage = false;
-    for (const entry of rawEntries) {
-      const message = entryMessage(entry);
-      const entryUsage = message?.usage ?? (entry.type === 'compaction' ? entry.usage : undefined);
-      if (!entryUsage) continue;
-      const provider = message?.provider ?? (entry.type === 'compaction' ? entry.provider : undefined)
-        ?? this.context.providerName;
-      const model = message?.model ?? (entry.type === 'compaction' ? entry.model : undefined) ?? this.model;
-      usage.input += entryUsage.inputTokens ?? 0;
-      usage.output += entryUsage.outputTokens ?? 0;
-      usage.cacheRead += entryUsage.cacheReadTokens ?? 0;
-      usage.cacheWrite += entryUsage.cacheWriteTokens ?? 0;
-      const entryCost = entryUsage.costUsd
-        ?? (model ? calculatePublishedModelCost(provider, model, {
-          inputTokens: entryUsage.inputTokens,
-          outputTokens: entryUsage.outputTokens,
-          cacheReadTokens: entryUsage.cacheReadTokens,
-          cacheWriteTokens: entryUsage.cacheWriteTokens,
-        }) : undefined);
-      if (entryCost === undefined) {
-        if ((entryUsage.totalTokens
-          ?? ((entryUsage.inputTokens ?? 0) + (entryUsage.outputTokens ?? 0)
-            + (entryUsage.cacheReadTokens ?? 0) + (entryUsage.cacheWriteTokens ?? 0))) > 0) {
-          hasUnpricedUsage = true;
-        }
-      } else {
-        usage.cost += entryCost;
-      }
-    }
+    const accounting = getSessionAccounting(rawEntries, session.activeLeafId);
+    const history = accounting.history;
+    const usage = history.usage;
     const metadata = this.model ? getPublishedModelMetadata(this.context.providerName, this.model) : undefined;
     const contextWindow = metadata?.contextWindow;
     const contextTokens = this.context.sessionManager.estimateContextTokens(session.id);
     return {
       sessionFile: this.context.sessionDir ? path.join(this.context.sessionDir, `${session.id}.jsonl`) : undefined,
       sessionId: session.id,
-      userMessages: messages.filter(message => message.role === 'user').length,
-      assistantMessages: assistant.length,
-      toolCalls: assistant.reduce((total, message) => total + (message.toolCalls?.length ?? 0), 0),
-      toolResults: messages.filter(message => message.role === 'tool').length,
-      totalMessages: messages.length + commands.length,
+      userMessages: history.userMessages,
+      assistantMessages: history.assistantMessages,
+      toolCalls: history.toolCalls,
+      toolResults: history.toolResults,
+      totalMessages: history.totalMessages,
       tokens: {
-        input: usage.input,
-        output: usage.output,
-        cacheRead: usage.cacheRead,
-        cacheWrite: usage.cacheWrite,
-        total: usage.input + usage.output + usage.cacheRead + usage.cacheWrite,
+        input: usage.inputTokens ?? 0,
+        output: usage.outputTokens ?? 0,
+        cacheRead: usage.cacheReadTokens ?? 0,
+        cacheWrite: usage.cacheWriteTokens ?? 0,
+        total: usage.totalTokens ?? 0,
       },
-      cost: hasUnpricedUsage ? null : usage.cost,
-      ...(contextWindow ? {
-        contextUsage: {
-          tokens: contextTokens,
-          contextWindow,
-          percent: contextTokens === null ? null : Math.round((contextTokens / contextWindow) * 10_000) / 100,
-        },
-      } : {}),
+      cost: history.cost === 'none' ? 0 : history.cost === 'known' ? history.knownCostUsd : null,
+      ...(includeAccounting ? { accounting } : {}),
+      ...(contextWindow || includeAccounting ? { contextUsage: {
+        tokens: contextTokens,
+        contextWindow: contextWindow ?? null,
+        percent: contextTokens === null || !contextWindow ? null : Math.round((contextTokens / contextWindow) * 10_000) / 100,
+      } } : {}),
       autoRetryEnabled: this.autoRetryEnabled,
     };
   }

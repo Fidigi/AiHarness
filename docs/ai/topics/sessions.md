@@ -40,7 +40,7 @@ Each line is one entry with a Unix-millisecond `timestamp`; v2 entries also carr
 | `message` | User/assistant/system/tool content, rich blocks, tool calls/results, parent and normalized usage |
 | `command` | Shell command, parent, output, exit state and context policy |
 | `compaction` | Parent, summary, first retained entry, token estimate, provider/model and summary-generation usage |
-| `branch_summary` | Named summary with a durable parent in the entry tree |
+| `branch_summary` | Named summary with a durable parent and optional summary-call provider/model/normalized usage |
 
 Legacy unversioned message-only JSONL remains readable. Runtime dates are `Date`; API/import-export dates are ISO strings; persisted entry dates are numbers. `serializeSession()` does not write JSONL—it converts a whole session for JSON transport. Its public `redactProviderConfig` helper also backs JSON hydration and JSONL persistence: nested credential-like fields are omitted, safe data descriptors are copied with depth/node/collection/key limits, and getters, executable `toJSON`, cycles and unsupported values cannot become persisted provider metadata. This is field-based filtering; registered credential-value redaction and caller ownership remain separate. This remains an AiHarness v2 format; RPC tree responses are transport projections rather than the persisted representation.
 
@@ -89,6 +89,14 @@ A message-targeted clone retains the command ancestors needed by every copied me
 
 Raw RPC entries/tree include all retained branches; normal messages, fork candidates, and effective context follow only the active parent chain. Branch summaries and compactions also advance that chain. The format is still v2, so labels and clone handling for every custom entry remain incomplete.
 
+### Journal statistics
+
+Core `sessions/session-accounting.ts` owns `getSessionAccounting(rawEntries, activeLeafId?)`, reused by CLI `/session`, regular/fullscreen status and RPC statistics. Active means durable ancestors including pre-compaction work; history means every retained branch. Counts distinguish messages/commands from summaries. `requests` counts accountable entries, not each nested network call. Missing/cyclic/duplicate active ancestry is explicitly incomplete. Repeated logical IDs retain the last append-order projection once, not a second billable entry, and mark history partial as well. Actual model-visible context remains `estimateContextTokens`, never an accounting-token sum.
+
+Only assistant/summary entries and outer tool usage participate in accounting; user/system/metadata/progress/nested detail usage cannot manufacture billing. Persisted cost wins; a published calculation needs the historical entry's explicit provider/model and input/output counters. Unattributed/custom models remain unpriced. Incomplete codemode costs remain unknown/partial despite a known outer subtotal. Missing counters are not authoritative zero; legacy RPC numeric fields remain compatible while opt-in accounting exposes missing/partial measurements. Token sums saturate at the safe-integer bound and mark partial; unrepresentable cost records are excluded from the known subtotal.
+
+`BranchSummaryAccounting` adds optional copied provider/model/usage arguments to `SessionManager.addBranchSummary` and `JsonlSessionStore.appendBranchSummary`; own accessors/invalid counters are refused before mutation. Existing v2 summaries load without migration and remain unpriced when measurements are absent. Reload, memory projections and clones retain the additive fields. This is accounting support, not automatic generation during navigation.
+
 ### Web windows
 
 Lists return metadata rather than full histories. Session state starts with a bounded tail; older or target messages use stable `before`/`around` cursors. Export is generated server-side from the full session. See [`server-api.md`](./server-api.md) for the HTTP surfaces.
@@ -105,6 +113,8 @@ Lists return metadata rather than full histories. Session state starts with a bo
 ## Associated Tests
 
 - `packages/core/src/sessions/session-manager.test.ts` — JSONL, IDs, 64 MiB/inventory/path bounds, stable reads, atomic rewrites, concurrent independent-store append/save locking, redaction, branches, clones and context
+- `packages/core/src/sessions/session-accounting.test.ts` — journal/active scopes, unknown/zero/partial costs, nested authority, historic pricing, path failures, summary admission/snapshot/reload/clone and bounded totals
+- `packages/cli/src/{commands/session-management,rpc/session-statistics,cli/session-statistics-process}.test.ts` — actual management/statistics adapters, correlated opt-in versus legacy RPC, and both actual terminal renderers
 - `packages/core/src/sessions/session-clone-prefix.test.ts` — durable/volatile prefix command ancestry, stable/numeric targets, clock skew, ID remapping, source-byte conservation and unchanged full-clone/running-command refusals
 - `packages/core/src/sessions/session-clone-summaries.test.ts` — 14 durable/volatile full/prefix summary-parent remapping, fresh summary leaves, direct message parents, reload/source conservation, ancestor-running refusal, create-only publication/failure and unchanged 1,024-entry cap controls
 - `packages/core/src/sessions/provider-config-redaction.test.ts` — shared JSON/JSONL credential field policy, nested descriptor isolation, getter/callback refusal, cycles, opaque inputs and unchanged bounds

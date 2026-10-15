@@ -12,6 +12,7 @@ import {
   collectProviderModelCatalog,
   flattenModelCatalog,
   getSupportedThinkingLevels,
+  getSessionAccounting,
   isValidSessionId,
   resolveAgentCompactionSettings,
   resolveModelReference,
@@ -38,6 +39,7 @@ import type {
   Message,
   Session} from '@ai-harness/core';
 import type { TerminalUI } from '../tui/terminal-ui.js';
+import { usageText } from '../tui/status.js';
 import { renderSessionHtml, sanitizeFilename } from '../utils/session-export.js';
 import { copyToClipboard } from '../utils/system-integration.js';
 import type { ProjectTrustManager } from '../security/project-trust.js';
@@ -470,7 +472,7 @@ const commands: CommandEntry[] = [
 
       if (!session) session = await ctx.sessionManager.loadFromStore(target);
 
-      const numericIndex = Number.parseInt(target, 10);
+      const numericIndex = /^[1-9]\d*$/u.test(target) && Number.isSafeInteger(Number(target)) ? Number(target) : 0;
       if (!session && numericIndex > 0) {
         session = ctx.sessionManager.list()[numericIndex - 1];
       }
@@ -495,6 +497,9 @@ const commands: CommandEntry[] = [
     usage: '/delete <id>',
     handler: async (args, ctx) => {
       if (!args[0]) return chalk.red('Usage: /delete <id>');
+      if (args[0] === ctx.currentSessionId) {
+        return chalk.red('Cannot delete the active session. Use /new or /switch first.');
+      }
 
       const deleted = await ctx.sessionManager.delete(args[0]);
       return deleted ? `Deleted session ${chalk.yellow(args[0])}` : chalk.red(`Session not found: ${chalk.yellow(args[0])}`);
@@ -1104,14 +1109,18 @@ const commands: CommandEntry[] = [
       const targetSessions = showAll ? sessions : [currentSession];
 
       for (const session of targetSessions) {
-        const tokenCount = ctx.sessionManager.getTokenCount(session.id);
-        const userMsgs = session.messages.filter(m => m.role === 'user').length;
-        const assistantMsgs = session.messages.filter(m => m.role === 'assistant').length;
-
+        const accounting = getSessionAccounting(await ctx.sessionManager.getRawEntries(session.id), session.activeLeafId);
+        const contextTokens = ctx.sessionManager.estimateContextTokens(session.id);
+        const counts = (scope: typeof accounting.active): string =>
+          `${scope.userMessages} (you) + ${scope.assistantMessages} (AI), ${scope.toolResults} tool results = ${scope.totalMessages} message/command entries`;
         output += `${chalk.bold('📊 Session:')} ${chalk.cyan(session.title || 'Untitled')}\n`;
-        output += `   ID: ${chalk.dim(session.id.slice(0, 8))}\n`;
-        output += `   Messages: ${userMsgs} (you) + ${assistantMsgs} (AI) = ${session.messages.length} total\n`;
-        output += `   Tokens (est.): ~${tokenCount.toLocaleString()} tokens\n`;
+        output += `   ID: ${chalk.dim(session.id)}\n`;
+        output += `   File: ${ctx.jsonlStore.getSessionFilePath(session.id) ?? 'memory (not saved)'}\n`;
+        output += `   Active path${accounting.activePathComplete ? '' : ' (incomplete)'}: ${counts(accounting.active)}\n`;
+        output += `   Active accounting: ${usageText(accounting.active)}\n`;
+        output += `   Full history (all branches): ${counts(accounting.history)}\n`;
+        output += `   History accounting: ${usageText(accounting.history)}\n`;
+        output += `   Context (est.): ${contextTokens === null ? 'unknown' : `~${contextTokens.toLocaleString()} tokens`} (effective model context, not accounting totals)\n`;
         output += `   Created: ${new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
         output += `   Updated: ${chalk.dim(new Date(session.updatedAt).toLocaleString('fr-FR'))}\n\n`;
       }

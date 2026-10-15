@@ -322,12 +322,14 @@ Prefix input with `!` to run a command directly in the trusted workspace. Its pr
 | `/list [search]` | lists or filters conversations |
 | `/switch <id-or-number>` | activates a conversation |
 | `/name <title>` or `/rename <title>` | renames the active conversation |
-| `/delete <id>` | deletes a conversation |
+| `/delete <id>` | deletes an inactive conversation; use `/new` or `/switch` first |
 | `/clear` | clears messages from current conversation |
-| `/session [-a|--all]` | displays statistics and token estimate |
+| `/session [-a|--all]` | displays full identity/file, active/history usage and costs, and a separate context estimate |
 | `/search <text>` | searches in displayed transcript |
 | `/copy` | copies last response to clipboard |
 | `/quit` or `/exit` | quits AiHarness |
+
+`/session` separates active ancestors (including pre-compaction work) from full history (including abandoned branches). Summary and authenticated outer nested usage count once; missing measurements/prices remain unknown or a known subtotal, never a free request. The context estimate is not either accounting total. `--no-session` reports memory-only state. RPC automation can request the same scope details with `{"type":"get_session_stats","includeAccounting":true}`; omitting this boolean retains legacy framing. `/switch` accepts exact IDs or complete positive numeric indexes, not malformed numeric prefixes.
 
 ### Provider, Model and Thinking
 
