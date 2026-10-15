@@ -49,6 +49,15 @@ describe('extension CLI option parsing/help/completion', () => {
     expect(() => parseCliArguments(['-unknown'], [], true)).toThrow(/Unknown/);
   });
 
+  it('definitive arity alone distinguishes real API keys from later literal prompt tokens', () => {
+    for (const actual of [false, true]) {
+      const args = ['--model', 'mock/mock-model', ...(actual ? ['--api-key', 'genuine-key'] : []), '--review-check', 'hello', '--api-key', 'ordinary-prompt'];
+      expect(parseCliArguments(args, [], true).apiKey).toBe('ordinary-prompt');
+      expect(parseCliArguments(args, options)).toMatchObject({ messages: ['hello', '--api-key', 'ordinary-prompt'], extensionOptions: { 'review-check': true } });
+      expect(parseCliArguments(args, options).apiKey).toBe(actual ? 'genuine-key' : undefined);
+    }
+  });
+
   it('generates metadata-only option and literal value candidates', () => {
     expect(formatCliHelp(options)).toContain('--review-style <value>  Review style');
     expect(formatCliHelp(options)).toContain('--review-check[=true|false]');

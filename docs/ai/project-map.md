@@ -110,7 +110,7 @@ Session files are versioned JSONL (current schema: v2). Entry types include `met
 
 | Area | Files | Responsibility |
 |---|---|---|
-| Composition root | `src/index.ts` | Strict startup arguments, interactive/print/JSON/RPC modes, session loading, resources, trust, extensions, input dispatch, hooks, streaming, shutdown |
+| Composition root | `src/index.ts` | Strict two-phase startup arguments, diagnostic-only bootstrap credential guesses versus definitive runtime redaction authority, interactive/print/JSON/RPC modes, session loading, resources, trust, extensions, input dispatch, hooks, streaming, shutdown |
 | Command router | `src/commands/handler.ts` | Built-in slash commands, provider initialization, model/session operations with current-model compaction overrides, import/export/share/login |
 | Startup sessions | `src/sessions/startup-session.ts` | New/continue/resume/open/fork/exact-ID/name selection and storage-directory precedence |
 | Agent execution adapters | `src/agent/{tool-loop,provider-turn}.ts` | Thin re-exports of Core execution primitives; startup registers Core's workspace coding tools for the current cwd |

@@ -331,6 +331,55 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     } finally { await rm(extension); }
   });
 
+  describe('installed PATH-bin definitive credential authority', () => {
+    const literal = 'ordinary-installed-arity', secret = 'genuine-installed-arity: +/字';
+    const secretVariants = [...new Set([secret, Buffer.from(secret).toString('base64'), Buffer.from(secret).toString('base64url'), Buffer.from(secret).toString('hex'), encodeURIComponent(secret)])];
+    async function credentialFixture() {
+      const root = await mkdtemp(path.join(consumer, 'installed-credential-arity-')), capture = path.join(root, 'capture'), extension = path.join(root, 'owner.mjs');
+      await writeFile(extension, `import{appendFileSync}from'node:fs';export default api=>{api.registerOption('owned-boolean',{type:'boolean',description:'Installed arity'});api.before('before:provider',data=>{appendFileSync(${JSON.stringify(capture)},JSON.stringify(data.messages.filter(message=>message.role==='user').map(message=>message.content))+'\\n');});};`);
+      const args = ['--offline', '--no-approve', '--no-extensions', '-e', extension, '--no-context-files', '--no-session', '--model', 'mock/mock-model'];
+      const observed = async (): Promise<string[]> => (await readFile(capture, 'utf8')).trim().split('\n').map(line => (JSON.parse(line) as string[]).at(-1)!);
+      return { root, capture, args, observed };
+    }
+    // One installed child per default-five-second case, not eleven serial children
+    // under one deadline. Preserve all assertions and the existing child deadline.
+    for (const mode of ['print', 'json'] as const) for (const kind of ['literal', 'genuine', 'mixed'] as const) {
+      it(`${mode}/${kind}: preserves literal bytes without displacing real credentials`, async () => {
+        const test = await credentialFixture();
+        try {
+          const tail = kind === 'genuine' ? ['--api-key', secret, '--owned-boolean', '--', 'hello', ...secretVariants]
+            : [...(kind === 'mixed' ? ['--api-key', secret] : []), '--owned-boolean', 'hello', '--api-key', literal, ...(kind === 'mixed' ? secretVariants : [])];
+          const expected = kind === 'genuine' ? ['hello', ...secretVariants.map(() => '[REDACTED]')]
+            : ['hello', '--api-key', literal, ...(kind === 'mixed' ? secretVariants.map(() => '[REDACTED]') : [])];
+          const result = await invoke([...test.args, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...tail]);
+          expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe(''); expect(await test.observed()).toEqual(expected);
+          if (mode === 'print') expect(result.stdout).toBe('[Mock AI Response]\n');
+          else {
+            const records = result.stdout.trim().split('\n').map(line => JSON.parse(line)) as Array<{ type: string; message?: { role: string; content: string } }>;
+            expect(records.filter(record => record.type === 'message_end' && record.message?.role === 'user').map(record => record.message!.content)).toEqual(expected);
+          }
+          for (const value of secretVariants) expect(result.stdout + result.stderr + await readFile(test.capture, 'utf8')).not.toContain(value);
+        } finally { await rm(test.root, { recursive: true, force: true }); }
+      });
+    }
+    for (const mode of ['print', 'json', 'rpc'] as const) it(`${mode}: masks genuine keys in early diagnostics`, async () => {
+      const test = await credentialFixture();
+      try { expect(await invoke([...test.args, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), '--api-key=--owned-boolean', '--owned-boolean=bad']))
+        .toEqual({ code: 2, stdout: '', stderr: 'Error: [REDACTED] accepts only true or false.\n' }); }
+      finally { await rm(test.root, { recursive: true, force: true }); }
+    });
+    for (const position of ['before', 'after'] as const) it(`rpc/key-${position}: preserves correlated framing and real-key masking`, async () => {
+      const test = await credentialFixture();
+      try {
+        const tail = position === 'before' ? ['--api-key', secret, '--owned-boolean'] : ['--owned-boolean', '--api-key', secret];
+        const result = await invoke([...test.args, '--mode', 'rpc', ...tail], JSON.stringify({ type: 'prompt', id: 'credential', message: secretVariants.join(' | ') }) + '\n');
+        expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe(''); expect(await test.observed()).toEqual([secretVariants.map(() => '[REDACTED]').join(' | ')]);
+        expect(result.stdout.trim().split('\n').map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ type: 'response', id: 'credential', success: true }));
+        for (const value of secretVariants) expect(result.stdout + result.stderr).not.toContain(value);
+      } finally { await rm(test.root, { recursive: true, force: true }); }
+    });
+  });
+
   it('accepts installed verbose startup without changing headless print output', async () => {
     const args = ['--no-approve', '--no-extensions', '--no-session', '--model', 'mock/mock-model', '--print', 'Hello.'];
     const ordinary = await invoke(args);

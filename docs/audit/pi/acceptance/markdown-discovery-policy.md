@@ -5,6 +5,8 @@ Decision/evidence: DEC-81 / E-AH-MARKDOWN-DISCOVERY-01 in [AUDIT-2](../AUDIT-2.m
 
 **Qualified bounded capability, not whole-audit completion.** Final-image workspace/strict types, six-code-owner zero-warning lint,344 focused,247 files/2,995 units,37 parity and production Core/SDK/CLI/PTY/HTTP pass. Seven source/context inputs and14 emitted artifacts are pinned. The initial full-run null-code failure/2,994 passes remains undetermined; documentary image drift is separately reconciled, not called a runtime fix. No criterion closes:89 DONE/63 PARTIAL/152 remain.
 
+Subsequent checkpoint: [DEC-82 startup reconciliation](./startup-credential-authority.md) repairs the separately recorded bootstrap credential defect and maps all CLI-RUN-07 clauses. That later closure does not alter this image's original failures/counts,or the still-open CLI-CFG-09 legacy-flat control.
+
 ## Scope and preserved contracts
 
 Three product owners separate a discovery choice from a preexisting all-loading denial:

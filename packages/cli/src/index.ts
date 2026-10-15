@@ -253,7 +253,11 @@ async function main(): Promise<void> {
   // Capture environment policy before trusted extension registration, but resolve
   // flag arity only from the authoritative second parse (never the bootstrap).
   const environmentOffline = resolveOfflineMode();
-  outputCredentialRedactor.add(cliArguments.apiKey);
+  // Bootstrap guesses may conservatively mask startup errors, but cannot grant
+  // permanent redaction authority over definitively parsed prompt input.
+  const bootstrapCredentialRedactor = new CredentialRedactor();
+  bootstrapCredentialRedactor.addEnvironment(process.env);
+  bootstrapCredentialRedactor.add(cliArguments.apiKey);
   if ((cliArguments.help || cliArguments.version || cliArguments.listModels) && cliArguments.deferredOptions.length) {
     process.stderr.write(`Error: Unknown option: ${cliArguments.deferredOptions[0]}. Use --help for available options.\n`);
     process.exitCode = 2;
@@ -275,7 +279,7 @@ async function main(): Promise<void> {
       cliArguments = extensionStartup.arguments;
     } catch (error) {
       const message = error instanceof CliArgumentError ? error.message : 'Extension startup failed.';
-      process.stderr.write(`Error: ${outputCredentialRedactor.redact(message)}\n`);
+      process.stderr.write(`Error: ${bootstrapCredentialRedactor.redact(message)}\n`);
       process.exitCode = 2;
       return;
     }
@@ -296,6 +300,7 @@ async function main(): Promise<void> {
     // A bootstrap pass is never an authoritative parse, even without custom options.
     cliArguments = parseCliArguments(rawArguments);
   }
+  outputCredentialRedactor.add(cliArguments.apiKey);
   const offline = cliArguments.offline === true || environmentOffline;
   if (cliArguments.listModels) {
     try {

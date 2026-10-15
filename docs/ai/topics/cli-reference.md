@@ -77,6 +77,10 @@ Regular rendering prints status only at startup/prompt boundaries; fullscreen la
 
 CLI flags override `AI_HARNESS_TUI_MODE`; terminal capability determines whether fullscreen can actually run. Unknown options and missing values fail before session/provider startup, but contributed-option discovery may execute eligible trusted extensions. `--help` and `--version` remain metadata-only exits. `--approve` (`-a`) and `--no-approve` (`-na`) provide opposing one-process project-trust overrides and never mutate `trust.json`; combining them is rejected.
 
+## Credential Authority During Startup
+
+Trusted contributed options require a bootstrap pass followed by definitive arity parsing. A bootstrap `apiKey` candidate is diagnostic-only: a separate environment/candidate redactor conservatively masks an extension-startup parse error, without adding guessed prompt bytes to the long-lived output/provider redactor. Only the definitive `--api-key` value joins runtime credential authority. Thus a literal `--api-key value` after the first positional prompt stays data; it cannot expurgate that value or replace an earlier genuine key. Environment/resolved credentials and their encoded variants retain normal redaction through print/JSON/RPC, interactive turns and reload. No parser syntax, public option, session or wire schema changes.
+
 ## Offline Startup Policy
 
 Strict, reserved and idempotent `--offline`, or trimmed case-insensitive `AI_HARNESS_OFFLINE=1|true|yes`, suppress automatic provider model discovery, credential commands and OAuth refresh. Other environment values leave the default online policy. `--offline=<value>` refuses before executable admission. Capture environment policy before trusted extension registration, then compose it with the **authoritative** parsed flag, never the bootstrap's unknown-arity guess. Thus a prompt token after a contributed boolean remains prompt text. The immutable process choice survives interactive reload and extension environment mutation; it is not a saved setting or wire/session field.
@@ -296,6 +300,8 @@ Reads, searches, and CLI `@path` inputs are canonicalized inside the active work
 - Theme/keybinding files are user configuration; malformed input must fail or fall back safely without reflecting file bodies.
 
 ## Associated Tests
+
+- `packages/cli/src/cli/startup-credential-arity-process.test.ts`, `extension-args.test.ts` and the installed parity leaf — actual contributed boolean/string arity, exact provider-bound prompt bytes/encoded variants, genuine CLI/env masking, early-error secrecy, RPC framing and four genuine PTY reloads
 
 - `packages/core/src/resources/resource-discovery-policy.test.ts`, `packages/cli/src/cli/resource-discovery-process.test.ts` — independent discovery/all-loading policies, suppressed option fields, exact/zero real body opens, all headless adapters, four genuine PTYs/reloads/fresh invocation and installed Core/SDK/PATH-bin declarations/body admission
 - `packages/core/src/providers/offline-policy.test.ts`, `packages/cli/src/cli/offline-mode{,-process}.test.ts` — explicit passive Core policies, flag/environment admission, actual loopback discovery/OAuth/command controls, immutable reload, definitive option arity, six genuine PTYs and conserved explicit network/tools; installed declarations/bin coverage remains in the public parity leaf
