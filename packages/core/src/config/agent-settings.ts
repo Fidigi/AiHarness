@@ -3,6 +3,7 @@ import { lstat, open } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { ThinkingBudgets, ThinkingLevel } from '../providers/index.js';
+import type { ResourceFileSelector } from '../resources/resource-manager.js';
 import {
   resolveAgentDirectory,
   resolvePreTrustAgentDirectory,
@@ -856,6 +857,27 @@ export function selectAgentResourcePaths(entries: readonly string[]): string[] {
     }
   }
   return selected;
+}
+
+/** Preserve literal declaring directories separately from Markdown selector syntax.
+ * Legacy resolveAgentResourcePaths stays available with its unchanged string ABI. */
+export function resolveAgentResourceSelectors(
+  resolved: ResolvedAgentSettings,
+  field: 'skills' | 'prompts',
+  homeDir = os.homedir(),
+  scope: AgentSettingsScope | 'all' = 'all',
+): ResourceFileSelector[] {
+  const entries = (values: readonly string[] | undefined, baseDir: string): ResourceFileSelector[] => (values ?? []).map(raw => {
+    const marker = /^[+!-]/u.test(raw) ? raw[0]! : '';
+    const value = marker ? raw.slice(1) : raw;
+    const home = value === '~' || value.startsWith('~/') || value.startsWith('~\\');
+    const pattern = home ? (value === '~' ? '.' : value.slice(2)) : value;
+    return { pattern: `${marker}${pattern}`, baseDir: path.resolve(home ? homeDir : baseDir) };
+  });
+  return [
+    ...(scope !== 'project' && resolved.agentDirTrusted ? entries(resolved.globalSettings[field], resolved.agentDir) : []),
+    ...(scope !== 'global' && resolved.projectTrusted ? entries(resolved.projectSettings[field], path.dirname(resolved.paths.project)) : []),
+  ];
 }
 
 /** Resolve resource paths from their layer-specific base directories without crossing trust. */

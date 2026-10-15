@@ -3,7 +3,10 @@ import { lstat, open } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { openStableDirectoryHandle, readStableDirectoryEntries } from '../security/stable-directory.js';
-import { isResourcePathWithin } from './file-selectors.js';
+import { isResourcePathWithin, type ScopedFileSelector } from './file-selectors.js';
+
+/** Literal declaring directory kept separate from selector/glob syntax. */
+export type ResourceFileSelector = Exclude<ScopedFileSelector, string>;
 
 export type ResourceScope = 'user' | 'project' | 'temporary';
 export type ResourceSource = 'auto' | 'settings' | 'package' | 'cli';
@@ -58,6 +61,11 @@ export interface ResourceManagerOptions {
   projectSkillPaths?: string[];
   globalPromptPaths?: string[];
   projectPromptPaths?: string[];
+  /** Additive scoped selectors, applied after legacy Paths in the same layer. */
+  globalSkillSelectors?: readonly ResourceFileSelector[];
+  projectSkillSelectors?: readonly ResourceFileSelector[];
+  globalPromptSelectors?: readonly ResourceFileSelector[];
+  projectPromptSelectors?: readonly ResourceFileSelector[];
   globalPackageSkillPaths?: string[];
   projectPackageSkillPaths?: string[];
   globalPackagePromptPaths?: string[];
@@ -205,13 +213,13 @@ async function pathContainsSymbolicLink(candidate: string): Promise<boolean> {
   return false;
 }
 
-async function findFiles(root: string, matcher: (name: string) => boolean, maxDepth = 3): Promise<string[]> {
+async function findFiles(root: string, matcher: (name: string) => boolean, maxDepth = 3, directoryOnly = false): Promise<string[]> {
   if (await pathContainsSymbolicLink(root)) return [];
   let rootInfo;
   try { rootInfo = await lstat(root); }
   catch { return []; }
   if (rootInfo.isSymbolicLink()) return [];
-  if (rootInfo.isFile()) return matcher(path.basename(root)) ? [root] : [];
+  if (rootInfo.isFile()) return !directoryOnly && matcher(path.basename(root)) ? [root] : [];
   if (!rootInfo.isDirectory()) return [];
   const found: string[] = [];
   let scannedEntries = 0;
@@ -253,14 +261,25 @@ function globSearchRoot(pattern: string): string {
   return separator < 0 ? path.parse(pattern).root || '.' : pattern.slice(0, separator) || path.parse(pattern).root;
 }
 
+function selectorPattern(baseDir: string, value: string): { root: string; pattern: string } {
+  const root = path.resolve(baseDir, globSearchRoot(value));
+  return { root, pattern: path.relative(root, path.resolve(baseDir, value)) };
+}
+
+function matchesSelector(file: string, baseDir: string, value: string): boolean {
+  const { root, pattern } = selectorPattern(baseDir, value);
+  return isResourcePathWithin(file, root) && matchesGlob(path.relative(root, file), pattern);
+}
+
 async function selectorFiles(
-  selector: string,
+  baseDir: string,
+  value: string,
   matcher: (name: string) => boolean,
   exact: boolean,
 ): Promise<string[]> {
-  if (exact || !GLOB_MAGIC.test(selector)) return findFiles(selector, matcher, 8);
-  const candidates = await findFiles(globSearchRoot(selector), matcher, 8);
-  return candidates.filter(candidate => matchesGlob(candidate, selector));
+  if (exact || !GLOB_MAGIC.test(value)) return findFiles(path.resolve(baseDir, value), matcher, 8, value.endsWith(path.sep));
+  const candidates = await findFiles(selectorPattern(baseDir, value).root, matcher, 8);
+  return candidates.filter(candidate => matchesSelector(candidate, baseDir, value));
 }
 
 function inside(root: string, candidate: string): boolean {
@@ -269,7 +288,7 @@ function inside(root: string, candidate: string): boolean {
 
 async function applyResourceSelectors(
   selected: Map<string, SelectedResourceFile>,
-  selectors: readonly string[],
+  selectors: readonly ResourceFileSelector[],
   matcher: (name: string) => boolean,
   errors: Error[],
   origin: SelectorOrigin,
@@ -277,24 +296,24 @@ async function applyResourceSelectors(
   classificationProjectRoot?: string,
   trustedGlobalRoot?: string,
 ): Promise<void> {
-  for (const rawSelector of selectors.slice(0, 512)) {
-    const marker = rawSelector[0] === '+' || rawSelector[0] === '-' || rawSelector[0] === '!'
-      ? rawSelector[0] : '';
-    const value = marker ? rawSelector.slice(1) : rawSelector;
+  for (const { pattern: raw, baseDir } of selectors.slice(0, 512)) {
+    const marker = raw[0] === '+' || raw[0] === '-' || raw[0] === '!' ? raw[0] : '';
+    const value = marker ? raw.slice(1) : raw;
     if (!value) continue;
-    const selector = path.resolve(value);
+    const selector = path.resolve(baseDir, value);
+    const rawSelector = `${marker}${selector}`;
     // Exclusions only reduce already admitted candidates; they neither scan an
     // ancestor nor grant its read authority. Trust gates apply to discovery.
     if (marker === '-' || marker === '!') {
       for (const [key, selectedFile] of selected) {
         const excluded = marker === '!'
-          ? matchesGlob(selectedFile.filePath, selector)
+          ? matchesSelector(selectedFile.filePath, baseDir, value)
           : inside(selector, selectedFile.filePath);
         if (excluded) selected.delete(key);
       }
       continue;
     }
-    const searchRoot = marker === '+' ? selector : path.resolve(globSearchRoot(selector));
+    const searchRoot = marker === '+' ? selector : selectorPattern(baseDir, value).root;
     const operatorOwned = trustedGlobalRoot !== undefined && inside(trustedGlobalRoot, searchRoot);
     const effectiveBlockedRoot = operatorOwned ? undefined : blockedProjectRoot;
     const effectiveClassificationRoot = operatorOwned ? undefined : classificationProjectRoot;
@@ -303,7 +322,7 @@ async function applyResourceSelectors(
       continue;
     }
     try {
-      for (const filePath of await selectorFiles(selector, matcher, marker === '+')) {
+      for (const filePath of await selectorFiles(baseDir, value, matcher, marker === '+')) {
         if (selected.size >= MAX_RESOURCE_FILES) break;
         const absolute = path.resolve(filePath);
         if (effectiveBlockedRoot && inside(effectiveBlockedRoot, absolute)) continue;
@@ -402,16 +421,16 @@ export class ResourceManager {
   private readonly agentDir: string;
   private readonly agentDirTrusted: boolean;
   private readonly projectTrusted: boolean;
-  private readonly extraSkillPaths: string[];
-  private readonly extraPromptPaths: string[];
-  private readonly globalSkillPaths: string[];
-  private readonly projectSkillPaths: string[];
-  private readonly globalPromptPaths: string[];
-  private readonly projectPromptPaths: string[];
-  private readonly globalPackageSkillPaths: string[];
-  private readonly projectPackageSkillPaths: string[];
-  private readonly globalPackagePromptPaths: string[];
-  private readonly projectPackagePromptPaths: string[];
+  private readonly extraSkillPaths: ResourceFileSelector[];
+  private readonly extraPromptPaths: ResourceFileSelector[];
+  private readonly globalSkillPaths: ResourceFileSelector[];
+  private readonly projectSkillPaths: ResourceFileSelector[];
+  private readonly globalPromptPaths: ResourceFileSelector[];
+  private readonly projectPromptPaths: ResourceFileSelector[];
+  private readonly globalPackageSkillPaths: ResourceFileSelector[];
+  private readonly projectPackageSkillPaths: ResourceFileSelector[];
+  private readonly globalPackagePromptPaths: ResourceFileSelector[];
+  private readonly projectPackagePromptPaths: ResourceFileSelector[];
   private readonly disableSkills: boolean;
   private readonly disablePrompts: boolean;
   private readonly strictSkills: boolean;
@@ -422,26 +441,49 @@ export class ResourceManager {
   private loadedResourceBytes = 0;
 
   constructor(options: ResourceManagerOptions = {}) {
-    this.cwd = options.cwd ?? process.cwd();
+    this.cwd = path.resolve(options.cwd ?? process.cwd());
     this.homeDir = options.homeDir ?? os.homedir();
     this.agentDir = path.resolve(options.agentDir ?? path.join(this.homeDir, '.ai-harness'));
     this.agentDirTrusted = options.agentDirTrusted === true;
     this.projectTrusted = options.projectTrusted === true;
-    const resolve = (entries: readonly string[]): string[] => entries.map(entry => {
-      const marker = entry[0] === '+' || entry[0] === '-' || entry[0] === '!' ? entry[0] : '';
-      const value = marker ? entry.slice(1) : entry;
-      return `${marker}${path.resolve(this.cwd, value)}`;
-    });
+    const resolve = (entries: readonly string[]): ResourceFileSelector[] => entries.map(pattern => ({ pattern, baseDir: this.cwd }));
+    const literal = (entries: readonly string[]): ResourceFileSelector[] => entries.map(value => ({ pattern: '+' + value, baseDir: this.cwd }));
+    const scoped = (entries: readonly ResourceFileSelector[] | undefined): ResourceFileSelector[] => {
+      if (entries === undefined) return [];
+      try {
+        if (!Array.isArray(entries) || entries.length > 512) throw new Error();
+        const copied: ResourceFileSelector[] = [];
+        for (let index = 0; index < entries.length; index++) {
+          const item = Object.getOwnPropertyDescriptor(entries, String(index));
+          if (!item || !('value' in item)) throw new Error();
+          const entry: unknown = item.value;
+          if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error();
+          const pattern = Object.getOwnPropertyDescriptor(entry, 'pattern');
+          const base = Object.getOwnPropertyDescriptor(entry, 'baseDir');
+          if (!pattern || !('value' in pattern) || !base || !('value' in base)
+            || typeof pattern.value !== 'string' || !pattern.value.length || pattern.value.includes('\0')
+            || typeof base.value !== 'string' || !path.isAbsolute(base.value) || base.value.includes('\0')
+            || Buffer.byteLength(pattern.value) + Buffer.byteLength(base.value) > 32_768) throw new Error();
+          copied.push({ pattern: pattern.value, baseDir: path.resolve(base.value) });
+        }
+        return copied;
+      } catch { throw new Error('Resource selectors are invalid or exceed their limits.'); }
+    };
+    const combine = (paths: string[] | undefined, selectors: readonly ResourceFileSelector[] | undefined): ResourceFileSelector[] => {
+      const result = [...resolve(paths ?? []), ...scoped(selectors)];
+      if (selectors !== undefined && result.length > 512) throw new Error('Resource selectors are invalid or exceed their limits.');
+      return result;
+    };
     this.extraSkillPaths = resolve(options.skillPaths ?? []);
     this.extraPromptPaths = resolve(options.promptPaths ?? []);
-    this.globalSkillPaths = resolve(options.globalSkillPaths ?? []);
-    this.projectSkillPaths = resolve(options.projectSkillPaths ?? []);
-    this.globalPromptPaths = resolve(options.globalPromptPaths ?? []);
-    this.projectPromptPaths = resolve(options.projectPromptPaths ?? []);
-    this.globalPackageSkillPaths = resolve(options.globalPackageSkillPaths ?? []);
-    this.projectPackageSkillPaths = resolve(options.projectPackageSkillPaths ?? []);
-    this.globalPackagePromptPaths = resolve(options.globalPackagePromptPaths ?? []);
-    this.projectPackagePromptPaths = resolve(options.projectPackagePromptPaths ?? []);
+    this.globalSkillPaths = combine(options.globalSkillPaths, options.globalSkillSelectors);
+    this.projectSkillPaths = this.projectTrusted ? combine(options.projectSkillPaths, options.projectSkillSelectors) : [];
+    this.globalPromptPaths = combine(options.globalPromptPaths, options.globalPromptSelectors);
+    this.projectPromptPaths = this.projectTrusted ? combine(options.projectPromptPaths, options.projectPromptSelectors) : [];
+    this.globalPackageSkillPaths = literal(options.globalPackageSkillPaths ?? []);
+    this.projectPackageSkillPaths = literal(options.projectPackageSkillPaths ?? []);
+    this.globalPackagePromptPaths = literal(options.globalPackagePromptPaths ?? []);
+    this.projectPackagePromptPaths = literal(options.projectPackagePromptPaths ?? []);
     this.disableSkills = options.disableSkills === true;
     this.disablePrompts = options.disablePrompts === true;
     this.strictSkills = options.strictSkills === true;
@@ -468,8 +510,8 @@ export class ResourceManager {
     const skillFiles = new Map<string, SelectedResourceFile>();
     if (!this.disableSkills) {
     await applyResourceSelectors(skillFiles, [
-      path.join(this.homeDir, '.agents', 'skills'),
-      path.join(this.agentDir, 'skills'),
+      { pattern: '+' + path.join(this.homeDir, '.agents', 'skills') + path.sep, baseDir: this.cwd },
+      { pattern: '+' + path.join(this.agentDir, 'skills') + path.sep, baseDir: this.cwd },
     ], skillMatcher, errors, userAuto, blockedExplicitProject, this.cwd, trustedGlobalRoot);
     await applyResourceSelectors(
       skillFiles, this.globalPackageSkillPaths, skillMatcher, errors,
@@ -484,8 +526,8 @@ export class ResourceManager {
         skillFiles, this.projectPackageSkillPaths, skillMatcher, errors, projectPackage, undefined, this.cwd,
       );
       await applyResourceSelectors(skillFiles, [
-        path.join(this.cwd, '.agents', 'skills'),
-        path.join(this.cwd, '.ai-harness', 'skills'),
+        { pattern: '+' + path.join(this.cwd, '.agents', 'skills') + path.sep, baseDir: this.cwd },
+        { pattern: '+' + path.join(this.cwd, '.ai-harness', 'skills') + path.sep, baseDir: this.cwd },
       ], skillMatcher, errors, projectAuto, undefined, this.cwd);
       await applyResourceSelectors(
         skillFiles, this.projectSkillPaths, skillMatcher, errors, projectSettings, undefined, this.cwd,
@@ -513,7 +555,7 @@ export class ResourceManager {
     const promptFiles = new Map<string, SelectedResourceFile>();
     if (!this.disablePrompts) {
     await applyResourceSelectors(promptFiles, [
-      path.join(this.agentDir, 'prompts'),
+      { pattern: '+' + path.join(this.agentDir, 'prompts') + path.sep, baseDir: this.cwd },
     ], promptMatcher, errors, userAuto, blockedExplicitProject, this.cwd, trustedGlobalRoot);
     await applyResourceSelectors(
       promptFiles, this.globalPackagePromptPaths, promptMatcher, errors,
@@ -528,8 +570,8 @@ export class ResourceManager {
         promptFiles, this.projectPackagePromptPaths, promptMatcher, errors, projectPackage, undefined, this.cwd,
       );
       await applyResourceSelectors(promptFiles, [
-        path.join(this.cwd, '.ai-harness', 'prompts'),
-        path.join(this.cwd, 'prompts'),
+        { pattern: '+' + path.join(this.cwd, '.ai-harness', 'prompts') + path.sep, baseDir: this.cwd },
+        { pattern: '+' + path.join(this.cwd, 'prompts') + path.sep, baseDir: this.cwd },
       ], promptMatcher, errors, projectAuto, undefined, this.cwd);
       await applyResourceSelectors(
         promptFiles, this.projectPromptPaths, promptMatcher, errors, projectSettings, undefined, this.cwd,

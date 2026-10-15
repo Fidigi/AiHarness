@@ -338,6 +338,43 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     expect(await invoke(['--verbose', ...args])).toEqual(ordinary);
   });
 
+  it('preserves scoped Markdown selectors through installed readonly declarations, runtime and PATH bin', async () => {
+    const agent = path.join(consumer, 'resource-agent[literal]');
+    const directory = path.join(agent, 'configured');
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, 'review.md'), '---\nname: review\n---\nINSTALLED EXACT BODY');
+    await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ prompts: ['configured/*.md'] }));
+    await writeFile(path.join(consumer, 'resource-public.ts'), `
+      import { ResourceManager, resolveAgentResourcePaths, resolveAgentResourceSelectors, loadAgentSettings, type ResourceFileSelector, type ResourceManagerOptions } from '@ai-harness/core';
+      const selectors: readonly ResourceFileSelector[] = Object.freeze([Object.freeze({ pattern: '*.md', baseDir: ${JSON.stringify(directory)} })]);
+      const options: ResourceManagerOptions = { cwd: ${JSON.stringify(workspace)}, globalPromptSelectors: selectors };
+      options.promptPaths = []; options.promptPaths.push('./legacy.md');
+      // @ts-expect-error selector fields are readonly
+      selectors[0].pattern = 'changed';
+      const settings = await loadAgentSettings({ cwd: ${JSON.stringify(workspace)}, agentDir: ${JSON.stringify(agent)}, projectTrusted: false });
+      const legacy: string[] = resolveAgentResourcePaths(settings, 'prompts'); legacy.push('./legacy.md');
+      const manager = new ResourceManager({ ...options, globalPromptSelectors: resolveAgentResourceSelectors(settings, 'prompts') }); void manager;
+    `);
+    const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'resource-public.ts'], consumer, environment);
+    expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+    await writeFile(path.join(consumer, 'resource-public.mjs'), `
+      import assert from 'node:assert/strict';
+      import { ResourceManager, createAgentResourceLoader } from '@ai-harness/core';
+      const sources = Object.freeze([Object.freeze({ pattern: '*.md', baseDir: ${JSON.stringify(directory)} })]);
+      const manager = new ResourceManager({ cwd: ${JSON.stringify(workspace)}, agentDir: ${JSON.stringify(agent)}, globalPromptSelectors: sources });
+      assert.equal((await manager.loadAll()).errors.length, 0);
+      assert.equal(manager.expandPrompt('review', []), 'INSTALLED EXACT BODY');
+      const loader = createAgentResourceLoader({ agentDir: ${JSON.stringify(agent)}, globalPromptSelectors: sources });
+      const resources = await loader.load({ cwd: ${JSON.stringify(workspace)}, projectTrusted: false });
+      assert.equal(resources.expandPrompt('review', []), 'INSTALLED EXACT BODY'); assert.deepEqual(resources.diagnostics, []);
+      console.log('installed scoped resources OK');
+    `);
+    expect(await run(process.execPath, ['resource-public.mjs'], consumer, environment))
+      .toEqual({ code: 0, stdout: 'installed scoped resources OK\n', stderr: '' });
+    expect(await run('ai-harness', ['--no-approve', '--no-extensions', '--no-session', '--model', 'mock/mock-model', '--print', 'Hello.'], workspace, { ...environment, AI_HARNESS_AGENT_DIR: agent }))
+      .toEqual({ code: 0, stdout: '[Mock AI Response]\n', stderr: '' });
+  }, 60_000);
+
   it('discovers themes through installed readonly Core declarations and the actual PATH bin', async () => {
     const directory = path.join(consumer, 'themes [literal]');
     await mkdir(directory);

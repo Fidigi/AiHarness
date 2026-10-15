@@ -98,6 +98,7 @@ export {
   resolveAgentDefaultTools,
   resolveAgentProviderNetworkSettings,
   resolveAgentResourcePaths,
+  resolveAgentResourceSelectors,
   resolveAgentSettingsPath,
   selectAgentResourcePaths,
   resolveAgentThinkingLevel,

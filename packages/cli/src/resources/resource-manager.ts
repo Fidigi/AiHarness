@@ -3,6 +3,7 @@ export { parseResourceCommandLine, ResourceManager } from '@ai-harness/core';
 export type {
   PromptDefinition,
   ResourceInventoryItem,
+  ResourceFileSelector,
   ResourceManagerOptions,
   ResourceProvenance,
   ResourceScope,

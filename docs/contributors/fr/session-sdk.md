@@ -12,6 +12,21 @@ Capturez options et identités prêtées avant le premier await, les arguments �
 
 Consultez `capabilities`/`ownership` ; disposez chaque fork/clone. Seul le dernier handle ferme les scopes/registre possédés, jamais les stockages/fournisseurs/registres prêtés ou transports globaux. Les intégrations hôte non coopératives peuvent retarder le règlement et ne sont pas sandboxées. OAuth/découverte, instructions/settings implicites, chargement exécutable/MCP, changement de fournisseur, shell/export HTML, admission interprocessus et entrées personnalisées complètes ne sont pas implicites.
 
+## Ressources Markdown contextualisées
+
+`ResourceManager` et `createAgentResourceLoader` acceptent les options additives `globalSkillSelectors`, `projectSkillSelectors`, `globalPromptSelectors` et `projectPromptSelectors`. Chaque `ResourceFileSelector` readonly sépare `{ pattern, baseDir }` : `baseDir` doit être absolu et reste littéral ; `pattern` accepte les opérations ordonnées simple/glob, exacte `+`, retrait de sous-arbre `-` et exclusion `!glob`. Pour des réglages déjà chargés, utilisez `resolveAgentResourceSelectors(settings, 'prompts', homeDir, 'global')` (ou `'skills'`/`'project'`). Les sélecteurs projet restent soumis à la confiance.
+
+```ts
+import { createAgentResourceLoader, type ResourceFileSelector } from '@ai-harness/core';
+const selectors: readonly ResourceFileSelector[] = Object.freeze([
+  Object.freeze({ pattern: '*.md', baseDir: '/srv/operator/prompts[literal]' }),
+]);
+const loader = createAgentResourceLoader({ globalPromptSelectors: selectors });
+// Toujours passif : seul loader.load(context) découvre les ressources.
+```
+
+`ResourceManager` copie les tableaux/champs contextualisés à sa construction sans invoquer les getters d’entrée de tableau ou de champ de sélecteur ; le chargeur intégré le construit lors du `load` explicite. Limites : 512 requêtes par couche combinant anciennes/nouvelles options et 32Kio par paire motif/base. Les anciennes options mutables `*Paths: string[]` et `resolveAgentResourcePaths` conservent leur ABI à chaînes. Elles ne peuvent pas retrouver un dossier littéral déjà aplati dans un glob absolu : utilisez les objets contextualisés ou un chemin exact `+` dans ce cas. Si les deux formes sont fournies, les anciennes précèdent les nouvelles dans la même couche. Aucun chargement implicite de réglages/exécutables ni confiance supplémentaire n’est ajouté au SDK.
+
 ## Validation
 
 Compilez Core et exécutez tests/typechecks SDK **dans Docker**, avec un worker. `public-consumer.test.ts` installe manifest et dist réellement émis dans un consommateur temporaire externe ; Node importe seulement `@ai-harness/core` et TypeScript NodeNext compile les appels valides/invalides contre les déclarations émises. Aucun alias source ni module SDK privé ne remplace la preuve publique.

@@ -17,6 +17,8 @@ Existing Markdown traversal, file/count/depth/aggregate/body limits, stable no-f
 
 ## Criteria and residual
 
+Subsequent qualification: [DEC-79 scoped selectors](./markdown-scoped-selectors.md) now repair actual CLI/RPC literal declaring/cwd/home roots and automatic/package paths through an additive API. The control below still fails when explicitly using the unchanged legacy flattened-string helper; it is not reported as repaired. This receipt remains evidence for its exact DEC-78 inputs and gates,not the later source image. CLI-CFG-09 remains PARTIAL.
+
 CLI-CFG-09 stays **PARTIAL**. A separate public-Core control demonstrates a remaining literal-declaring-directory bug: settings under `agent[literal]` with `prompts: ['templates/*.md']` resolve to an absolute glob, then discover `agentl/templates/review.md` rather than the literal declaring directory. `/tmp/aih-markdown-scoped-base-control.mjs` uses real `loadAgentSettings`, `resolveAgentResourcePaths`, and `ResourceManager`; exit1/OOMfalse, Node24.15.0, no load errors. The identical script also fails on the final production image under Node26.12.0 (`aih-markdown-scoped-base-production-control`), returning the same unrequested sibling. Current unprefixed/automatic/package Markdown path semantics still need complete reconciliation; exact `+` is the supported literal workaround. This failure is retained, not an accepted exception or a reason to invent closure.
 
 The two-dot refusal correction maintains CLI-SEC-02's project-body boundary. Existing CLI-RES-01/02 behavior remains qualified only within its covered scope. **89 DONE / 63 PARTIAL / 152 (58.6%)**, no criterion closes here.

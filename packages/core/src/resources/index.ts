@@ -7,6 +7,7 @@ export {
 export type {
   PromptDefinition,
   ResourceInventoryItem,
+  ResourceFileSelector,
   ResourceManagerOptions,
   ResourceMarkdownDocument,
   ResourceProvenance,
