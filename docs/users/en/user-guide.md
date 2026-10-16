@@ -414,10 +414,15 @@ File reads, searches, listings, and command output are bounded so they cannot ex
 | `/compact [instructions]` | summarizes a long conversation with the active provider |
 | `/summarize-branch [session-id] [instructions]` | saves a summary without deleting messages |
 | `/fork <session-id> [message-index] [title]` | creates a branch from a message |
-| `/clone <session-id> [title]` | copies an entire conversation |
+| `/clone <session-id> [title]` | copies the active branch with fresh identities and required context |
 | `/tree [branch-id]` | displays the tree and branch summaries |
+| `/navigate [entry-id] [--summarize\|--no-summary] [--instructions "focus"]` | lists entries or moves within the current journal, optionally summarizing the abandoned branch |
 
 Compaction requires a configured provider and at least three messages.
+
+For navigation, run `/navigate`, copy an entry ID, then choose `/navigate <id> --no-summary` or `--summarize`. No flag leaves the position unchanged and asks you to repeat with a choice. `branchSummary.skipPrompt: true` in settings defaults to **no summary**; it never authorizes an automatic provider request. `branchSummary.reserveTokens` sets the requested summary reserve (default 16,384). `--instructions "focus"` requires `--summarize` and adds your focus to the summary instructions.
+
+Summaries use the current configured provider without tools and preserve the abandoned journal. The destination receives the summary as its new child; subsequent conversation uses that path, appropriate compaction/custom context and complete tool groups, not the abandoned branch. No-summary navigation needs no provider. Esc/Ctrl-C cancels unpublished generation; an already admitted disk write cannot be undone. If concurrent work changes the source, navigation reports it as stale rather than overwriting that work. RPC uses explicit `navigate_tree` with `entryId`, optional strict boolean `summarize` and optional `customInstructions`/`replaceInstructions`; abort/EOF also cancel pending admission.
 
 Automatic compaction rechecks cancellation, the active branch and local policy before publishing a summary, including after waiting for a non-cooperative summarizer or a queued session mutation. Rejected late output cannot replace context or report success. Cancellation does not undo a persistence operation that has already started; a non-cooperative callback/store can delay settlement.
 

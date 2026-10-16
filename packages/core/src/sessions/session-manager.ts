@@ -10,7 +10,7 @@ import {
   type ShellCommandRecord,
 } from '../types/index.js';
 import { constants as fsConstants } from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { EventHandler, EventMap } from '../utils/event-emitter.js';
@@ -18,6 +18,16 @@ import { EventEmitter } from '../utils/event-emitter.js';
 import { readStableDirectoryEntries } from '../security/stable-directory.js';
 import { releaseStableLockPath } from '../security/stable-lock.js';
 import { redactProviderConfig as sanitizeProviderConfig } from './serialization.js';
+import {
+  captureLegacyCompactionPrefix, completeContextToolGroups, legacyCompactionPrefixApplies,
+  legacyContextEntries, legacyRootBoundary, projectSessionContext, readLegacyCompactionPrefix,
+  sessionEntryParent, sessionEntryPath,
+} from './session-context.js';
+import {
+  collectAbandonedEntries, copyBranchNavigationOptions, prepareBranchSummary,
+} from './branch-summarization.js';
+import type { BranchNavigationOptions, BranchNavigationResult } from './branch-summarization.js';
+import { copySessionCustomValue } from './session-custom-data.js';
 
 // ===================================================================
 // JSONL Entry types for session persistence
@@ -26,7 +36,7 @@ import { redactProviderConfig as sanitizeProviderConfig } from './serialization.
 /** Base entry stored in the JSONL file */
 export interface SessionEntryBase {
   id: string;
-  type: 'message' | 'command' | 'compaction' | 'branch_summary' | 'metadata';
+  type: 'message' | 'command' | 'compaction' | 'branch_summary' | 'custom' | 'custom_message' | 'metadata';
   timestamp: number; // Unix timestamp (ms)
   /** Missing on legacy entries. */
   version?: typeof SESSION_SCHEMA_VERSION;
@@ -124,8 +134,27 @@ function copyBranchSummaryAccounting(value: BranchSummaryAccounting): BranchSumm
 export interface BranchSummaryEntry extends SessionEntryBase, BranchSummaryAccounting {
   type: 'branch_summary';
   parentEntryId?: string;
+  /** Abandoned source leaf; provenance only, never a context parent. */
+  fromEntryId?: string;
   branchName: string;
   summary: string;
+}
+
+/** Privileged extension state. Neither this data nor custom-message details enter model context. */
+export interface CustomSessionEntry extends SessionEntryBase {
+  type: 'custom';
+  parentEntryId?: string;
+  customType: string;
+  data?: unknown;
+}
+
+export interface CustomMessageEntry extends SessionEntryBase {
+  type: 'custom_message';
+  parentEntryId?: string;
+  customType: string;
+  content: string;
+  display: boolean;
+  details?: unknown;
 }
 
 export interface SessionMetadataEntry extends SessionEntryBase {
@@ -151,7 +180,26 @@ export interface SessionMetadataEntry extends SessionEntryBase {
   metadata?: Record<string, unknown>;
 }
 
-export type SessionEntry = MessageEntry | CommandEntry | CompactionEntry | BranchSummaryEntry | SessionMetadataEntry;
+export type SessionEntry = MessageEntry | CommandEntry | CompactionEntry | BranchSummaryEntry
+  | CustomSessionEntry | CustomMessageEntry | SessionMetadataEntry;
+type RestorableSessionEntry = BranchSummaryEntry | CompactionEntry | CustomSessionEntry | CustomMessageEntry;
+
+// Associate an exact, admitted load/write with its owned journal without reopening
+// a path after commit, changing public store return types or persisting a cache.
+const committedSessionEntries = new WeakMap<Session, SessionEntry[]>();
+// A borrowed structural store can have no filesystem path and still own a full
+// persistent journal. Only the concrete built-in disabled store is memory-only.
+const sessionStoreKinds = new WeakMap<JsonlSessionStore, 'native' | 'memory'>();
+
+function parseSessionEntries(content: string): SessionEntry[] {
+  return content.split('\n').flatMap(line => {
+    if (!line.trim()) return [];
+    try {
+      const entry: unknown = JSON.parse(line);
+      return isSessionEntry(entry) ? [entry] : [];
+    } catch { return []; }
+  });
+}
 
 function isPersistedUsage(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -191,8 +239,15 @@ function isSessionEntry(value: unknown): value is SessionEntry {
         && (entry.model === undefined || typeof entry.model === 'string')
         && (entry.usage === undefined || isPersistedUsage(entry.usage))
         && typeof entry.summary === 'string' && typeof entry.firstKeptEntryId === 'string';
+    case 'custom':
+    case 'custom_message':
+      return (entry.parentEntryId === undefined || typeof entry.parentEntryId === 'string')
+        && typeof entry.customType === 'string' && isBoundedSessionString(entry.customType, 256)
+        && Boolean(entry.customType)
+        && (entry.type === 'custom' || (typeof entry.content === 'string' && typeof entry.display === 'boolean'));
     case 'branch_summary':
       return (entry.parentEntryId === undefined || typeof entry.parentEntryId === 'string')
+        && (entry.fromEntryId === undefined || typeof entry.fromEntryId === 'string')
         && (entry.provider === undefined || typeof entry.provider === 'string')
         && (entry.model === undefined || typeof entry.model === 'string')
         && (entry.usage === undefined || isPersistedUsage(entry.usage))
@@ -436,6 +491,7 @@ export class JsonlSessionStore {
 
   constructor(sessionsDir?: string, private readonly enabled = true) {
     this.sessionsDir = path.resolve(sessionsDir || path.join(process.env.HOME || '.', '.ai-harness', 'sessions'));
+    if (new.target === JsonlSessionStore) sessionStoreKinds.set(this, enabled ? 'native' : 'memory');
   }
 
   /** Install a process-local scrubber without granting the store access to secret values. */
@@ -659,7 +715,7 @@ export class JsonlSessionStore {
     filePath: string,
     content: string,
     directoryHandle?: Awaited<ReturnType<typeof fs.open>>,
-  ): Promise<void> {
+  ): Promise<SessionEntry[]> {
     await this.verifySessionPath(filePath, true);
     const expected = await fs.lstat(filePath).catch(error => {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
@@ -669,6 +725,7 @@ export class JsonlSessionStore {
     if (Buffer.byteLength(safeContent) > MAX_SESSION_FILE_BYTES) {
       throw new Error('Session file exceeds its size limit.');
     }
+    const snapshot = parseSessionEntries(safeContent);
     const temporary = path.join(
       path.dirname(filePath),
       `.${path.basename(filePath)}.${process.pid}.${randomBytes(8).toString('hex')}.tmp`,
@@ -711,6 +768,7 @@ export class JsonlSessionStore {
         await directory?.sync().catch(() => undefined);
         await directory?.close().catch(() => undefined);
       }
+      return snapshot;
     } finally {
       await handle?.close().catch(() => undefined);
       await fs.rm(temporary, { force: true }).catch(() => undefined);
@@ -867,7 +925,9 @@ export class JsonlSessionStore {
       includeTimestamp(entry.timestamp);
     }
 
-    const treeEntries = entries.filter(entry => entry.type !== 'metadata');
+    const legacyBoundary = typeof metadata?.legacyRootBoundaryId === 'string' ? metadata.legacyRootBoundaryId
+      : metadata?.hasBranchedHistory !== true ? legacyRootBoundary(entries) : undefined;
+    const treeEntries = legacyContextEntries(entries, legacyBoundary).filter(entry => entry.type !== 'metadata');
     const entriesById = new Map(treeEntries.map(entry => [entry.id, entry]));
     const activePathIds = new Set<string>();
     let cursor = activeLeafId;
@@ -875,10 +935,7 @@ export class JsonlSessionStore {
       const entry = entriesById.get(cursor);
       if (!entry) break;
       activePathIds.add(cursor);
-      cursor = entry.type === 'message' ? entry.parentMessageId
-        : entry.type === 'command' || entry.type === 'compaction' || entry.type === 'branch_summary'
-          ? entry.parentEntryId
-          : undefined;
+      cursor = sessionEntryParent(entry);
     }
     const activeLeafReset = metadata?.activeLeafReset === true && !activeLeafId;
     const hasUsableTree = Boolean(activeLeafId) && (
@@ -1066,7 +1123,8 @@ export class JsonlSessionStore {
         .map(entry => JSON.stringify(entry));
         const lines = [JSON.stringify(metadataEntry), ...durableLines, ...newEntries];
 
-        await this.rewriteSessionFile(anchoredPath, `${lines.join('\n')}\n`, directoryHandle);
+        const snapshot = await this.rewriteSessionFile(anchoredPath, `${lines.join('\n')}\n`, directoryHandle);
+        committedSessionEntries.set(session, snapshot);
       } finally {
         try { await releaseInventory?.(); }
         finally { await release(); }
@@ -1346,6 +1404,7 @@ export class SessionManager {
   private sessions: Map<string, Session> = new Map();
   /** Append-only journal used when persistence is disabled. */
   private volatileEntries: Map<string, SessionEntry[]> = new Map();
+  private committedEntries: Map<string, SessionEntry[]> = new Map();
   private onSessionUpdate?: (sessionId: string) => void;
   private store: JsonlSessionStore | null = null;
   private compactionSettings: CompactionSettings = DEFAULT_COMPACTION_SETTINGS;
@@ -1557,16 +1616,16 @@ export class SessionManager {
 
   /** Create a new session and optionally persist imported rich data. */
   async create(options: CreateSessionOptions = {}): Promise<Session> {
-    return this.createWithBranchSummaries(options);
+    return this.createWithEntries(options);
   }
 
   /** Internal clone entries join the create-only write, never a later append. */
-  private async createWithBranchSummaries(
+  private async createWithEntries(
     options: CreateSessionOptions,
-    branchSummaries: BranchSummaryEntry[] = [],
+    entries: RestorableSessionEntry[] = [],
   ): Promise<Session> {
     options = this.redactJson(options);
-    branchSummaries = this.redactJson(structuredClone(branchSummaries));
+    entries = this.redactJson(structuredClone(entries));
     if (!options || typeof options !== 'object' || Array.isArray(options)
       || (options.messages !== undefined && !Array.isArray(options.messages))
       || (options.commands !== undefined && !Array.isArray(options.commands))) {
@@ -1576,13 +1635,13 @@ export class SessionManager {
     if (!isValidSessionId(sessionId)) {
       throw new Error('Invalid session ID.');
     }
-    return this.withSessionMutation(sessionId, () => this.createUnlocked(options, sessionId, branchSummaries));
+    return this.withSessionMutation(sessionId, () => this.createUnlocked(options, sessionId, entries));
   }
 
   private async createUnlocked(
     options: CreateSessionOptions,
     sessionId: string,
-    branchSummaries: BranchSummaryEntry[],
+    entries: RestorableSessionEntry[],
   ): Promise<Session> {
     if (this.sessions.has(sessionId)) throw new Error('Session already exists.');
     if (this.sessions.size >= MAX_SESSION_FILES) throw new Error('Session inventory limit reached.');
@@ -1690,22 +1749,29 @@ export class SessionManager {
     }
 
     // Preserve the store's existing additional-entry bound and validate before any publication.
-    if (!Array.isArray(branchSummaries) || branchSummaries.length > 1_024) {
-      throw new Error('Session entries are invalid.');
-    }
-    for (const entry of branchSummaries) {
-      if (!isSessionEntry(entry) || entry.type !== 'branch_summary' || !isValidEntryId(entry.id)
+    if (!Array.isArray(entries) || entries.length > 1_024) throw new Error('Session entries are invalid.');
+    for (const entry of entries) {
+      if (!isSessionEntry(entry) || !isValidEntryId(entry.id)
         || entryIds.has(entry.id) || !isValidDate(new Date(entry.timestamp))
-        || (entry.parentEntryId !== undefined && !isValidEntryId(entry.parentEntryId))
-        || !isBoundedSessionString(entry.branchName, 4_096) || !entry.summary.trim()
-        || Buffer.byteLength(entry.summary) > 1024 * 1024) {
+        || (entry.parentEntryId !== undefined && !isValidEntryId(entry.parentEntryId))) {
         throw new Error('Session entries are invalid.');
+      }
+      if (entry.type === 'branch_summary' || entry.type === 'compaction') {
+        if (!entry.summary.trim() || Buffer.byteLength(entry.summary) > 1024 * 1024
+          || (entry.type === 'branch_summary' && !isBoundedSessionString(entry.branchName, 4_096))
+          || (entry.type === 'compaction' && !isValidEntryId(entry.firstKeptEntryId))) {
+          throw new Error('Session entries are invalid.');
+        }
+      } else {
+        if (entry.type === 'custom') copySessionCustomValue(entry.data);
+        else copySessionCustomValue(entry.details);
+        boundedSessionJson(entry, 2 * 1024 * 1024, 'Custom session entry exceeds its size limit.');
       }
       entryIds.add(entry.id);
     }
 
     let encodedSession: string;
-    try { encodedSession = JSON.stringify(branchSummaries.length ? [session, ...branchSummaries] : session); }
+    try { encodedSession = JSON.stringify(entries.length ? [session, ...entries] : session); }
     catch { throw new Error('Session data is invalid.'); }
     if (Buffer.byteLength(encodedSession) > MAX_SESSION_FILE_BYTES) {
       throw new Error('Session file exceeds its size limit.');
@@ -1719,10 +1785,10 @@ export class SessionManager {
         version: SESSION_SCHEMA_VERSION,
         timestamp: command.timestamp.getTime(),
       })),
-      ...branchSummaries,
+      ...entries,
     ].sort((left, right) => left.timestamp - right.timestamp);
     if (!session.activeLeafId) session.activeLeafId = initialEntries.at(-1)?.id;
-    await this.persistSession(session, branchSummaries, { requireAbsent: true });
+    await this.persistSession(session, entries, { requireAbsent: true });
     this.sessions.set(session.id, session);
     this.volatileEntries.set(session.id, initialEntries);
     this.onSessionUpdate?.(session.id);
@@ -1822,7 +1888,7 @@ export class SessionManager {
 
       await this.persistSession(next);
       Object.assign(current, next);
-      if (!this.store) this.volatileEntries.get(sessionId)?.push(messageToEntry(fullMessage));
+      if (!this.usesSessionStore()) this.volatileEntries.get(sessionId)?.push(messageToEntry(fullMessage));
       return current;
     });
     if (!session) return null;
@@ -1897,7 +1963,7 @@ export class SessionManager {
       }
       await this.persistSession(next);
       Object.assign(session, next);
-      if (!this.store) {
+      if (!this.usesSessionStore()) {
         this.volatileEntries.get(sessionId)?.push({
           ...nextRecord,
           type: 'command',
@@ -1984,6 +2050,7 @@ export class SessionManager {
       await this.persistDelete(id);
       this.sessions.delete(id);
       this.volatileEntries.delete(id);
+      this.committedEntries.delete(id);
       return true;
     });
     if (!deleted) return false;
@@ -2003,6 +2070,7 @@ export class SessionManager {
       }
       this.sessions.clear();
       this.volatileEntries.clear();
+      this.committedEntries.clear();
     })();
     this.clearInProgress = operation;
     try { await operation; }
@@ -2039,7 +2107,15 @@ export class SessionManager {
     const session = this.sessions.get(sessionId);
     if (!session) return [];
 
-    const entries = orderContextEntries([
+    const journal = this.usesSessionStore()
+      ? this.committedEntries.get(sessionId) : this.volatileEntries.get(sessionId);
+    let entries: MessageEntry[];
+    if (journal && (session.metadata?.hasBranchedHistory === true || readLegacyCompactionPrefix(session.metadata) !== undefined
+      || journal.some(entry => entry.type === 'branch_summary' || entry.type === 'custom' || entry.type === 'custom_message'))) {
+      entries = structuredClone(projectSessionContext(journal, session.activeLeafId,
+        session.metadata?.hasBranchedHistory === true, session.metadata?.activeLeafReset === true,
+        typeof session.metadata?.legacyRootBoundaryId === 'string' ? session.metadata.legacyRootBoundaryId : undefined));
+    } else entries = completeContextToolGroups(orderContextEntries([
       ...session.messages.map(messageToEntry),
       ...(session.commands ?? [])
         .filter(command => !command.excludedFromContext && command.status !== 'queued' && command.status !== 'running')
@@ -2064,7 +2140,15 @@ export class SessionManager {
           }],
           metadata: { sourceCommandId: command.id },
         })),
-    ]);
+    ]) as MessageEntry[]);
+    const compactionIds = new Set(journal?.filter(entry => entry.type === 'compaction').map(entry => entry.id));
+    if (entries.some(entry => entry.role === 'system' && compactionIds.has(entry.id))) return entries;
+    const legacyPrefix = readLegacyCompactionPrefix(session.metadata);
+    if (legacyPrefix) {
+      if (!legacyCompactionPrefixApplies(legacyPrefix, session, journal ?? [])) return entries;
+      return [{ id: `legacy-compaction-${session.id}`, type: 'message', role: 'system',
+        content: `[Context Summary] ${legacyPrefix.summary}`, timestamp: legacyPrefix.timestamp }, ...entries];
+    }
     const summary = session.metadata?.compactionSummary;
     if (typeof summary !== 'string' || !summary) return entries;
 
@@ -2157,6 +2241,12 @@ export class SessionManager {
       // Refuse an invalid boundary rather than silently dropping almost all history.
       const firstKeptIndex = session.messages.findIndex(message => message.id === firstKeptEntryId);
       if (firstKeptIndex < 0) return false;
+      let legacyPrefix = readLegacyCompactionPrefix(session.metadata);
+      if (!legacyPrefix && typeof Object.getOwnPropertyDescriptor(session.metadata ?? {}, 'compactionSummary')?.value === 'string') {
+        legacyPrefix = captureLegacyCompactionPrefix(session, await this.getRawEntries(sessionId));
+        // The extra legacy read is still before write admission, never a cancellation gap.
+        validateAdmission?.();
+      }
 
       const updatedAt = new Date();
       const messages = session.messages.slice(firstKeptIndex);
@@ -2178,6 +2268,7 @@ export class SessionManager {
         updatedAt,
         metadata: {
           ...session.metadata,
+          ...(legacyPrefix ? { aiHarnessLegacyCompactionPrefix: legacyPrefix } : {}),
           lastCompacted: updatedAt.toISOString(),
           compactionSummary: summary.trim(),
           compactionStats: details,
@@ -2186,7 +2277,7 @@ export class SessionManager {
       };
       await this.persistSession(next, [compactionEntry]);
       Object.assign(session, next);
-      if (!this.store) this.volatileEntries.get(sessionId)?.push(compactionEntry);
+      if (!this.usesSessionStore()) this.volatileEntries.get(sessionId)?.push(compactionEntry);
       return true;
     });
     if (compacted) this.onSessionUpdate?.(sessionId);
@@ -2247,16 +2338,199 @@ export class SessionManager {
       };
       await this.persistSession(next, [nextEntry]);
       Object.assign(session, next);
-      if (!this.store) this.volatileEntries.get(sessionId)?.push(nextEntry);
+      if (!this.usesSessionStore()) this.volatileEntries.get(sessionId)?.push(nextEntry);
       return nextEntry;
     });
     if (entry) this.onSessionUpdate?.(sessionId);
     return entry;
   }
 
+  /** Append private, parented extension state without making it a model message. */
+  async appendCustomEntry(sessionId: string, customType: string, data?: unknown): Promise<CustomSessionEntry | null> {
+    if (typeof customType !== 'string' || !customType || !isBoundedSessionString(customType, 256)) {
+      throw new Error('Custom session type is invalid.');
+    }
+    const copied = this.redactJson(copySessionCustomValue(data));
+    return this.appendCustomSessionEntry(sessionId, {
+      id: `custom-${crypto.randomUUID()}`, type: 'custom', version: SESSION_SCHEMA_VERSION,
+      timestamp: Date.now(), customType: this.redactText(customType), ...(copied !== undefined ? { data: copied } : {}),
+    });
+  }
+
+  /** Display is a UI preference only; every custom_message contributes its content to context. */
+  async appendCustomMessage(sessionId: string, customType: string, content: string,
+    options: { display?: boolean; details?: unknown } = {}): Promise<CustomMessageEntry | null> {
+    if (typeof customType !== 'string' || !customType || !isBoundedSessionString(customType, 256)) {
+      throw new Error('Custom session type is invalid.');
+    }
+    if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('Custom session message is invalid.');
+    const copiedOptions: { display?: boolean; details?: unknown } = {};
+    for (const key of Reflect.ownKeys(options)) {
+      if (key !== 'display' && key !== 'details') throw new Error('Custom session message is invalid.');
+      const property = Object.getOwnPropertyDescriptor(options, key);
+      if (!property || !('value' in property)) throw new Error('Custom session message is invalid.');
+      if (property.value === undefined) continue;
+      if (key === 'display') {
+        if (typeof property.value !== 'boolean') throw new Error('Custom session message is invalid.');
+        copiedOptions.display = property.value;
+      } else copiedOptions.details = copySessionCustomValue(property.value);
+    }
+    if (typeof content !== 'string') throw new Error('Custom session message is invalid.');
+    const safeContent = this.redactText(content);
+    if (Buffer.byteLength(safeContent) > 1024 * 1024) throw new Error('Custom session message exceeds its size limit.');
+    return this.appendCustomSessionEntry(sessionId, {
+      id: `custom-message-${crypto.randomUUID()}`, type: 'custom_message', version: SESSION_SCHEMA_VERSION,
+      timestamp: Date.now(), customType: this.redactText(customType), content: safeContent,
+      display: copiedOptions.display !== false,
+      ...(copiedOptions.details !== undefined ? { details: this.redactJson(copiedOptions.details) } : {}),
+    });
+  }
+
+  private async appendCustomSessionEntry<T extends CustomSessionEntry | CustomMessageEntry>(
+    sessionId: string, value: T,
+  ): Promise<T | null> {
+    if (typeof value.customType !== 'string' || !value.customType || !isBoundedSessionString(value.customType, 256)) {
+      throw new Error('Custom session type is invalid.');
+    }
+    boundedSessionJson(value, 2 * 1024 * 1024, 'Custom session entry exceeds its size limit.');
+    const result = await this.withSessionMutation(sessionId, async () => {
+      const current = this.sessions.get(sessionId);
+      if (!current) return null;
+      const entry = { ...value, ...(current.activeLeafId ? { parentEntryId: current.activeLeafId } : {}) };
+      if (!this.usesSessionStore()) {
+        const journal = this.volatileEntries.get(sessionId) ?? [];
+        if (journal.filter(item => item.type === 'custom' || item.type === 'custom_message').length >= MAX_SESSION_MESSAGES) {
+          throw new Error('Session entry limit reached.');
+        }
+        boundedSessionJson([...journal, entry], MAX_SESSION_FILE_BYTES, 'Session file exceeds its size limit.');
+      }
+      const next: Session = { ...current, activeLeafId: entry.id, updatedAt: new Date() };
+      await this.persistSession(next, [entry]);
+      Object.assign(current, next);
+      if (!this.usesSessionStore()) this.volatileEntries.get(sessionId)?.push(entry);
+      return structuredClone(entry);
+    });
+    if (result) this.onSessionUpdate?.(sessionId);
+    return result;
+  }
+
+  /**
+   * Select an exact durable entry. Summary generation is opt-in and occurs outside
+   * the mutation queue. Signal, identity and the complete source snapshot are
+   * revalidated before a single durable publication; admitted writes are not rollback.
+   */
+  async navigateTree(sessionId: string, entryId: string,
+    options: BranchNavigationOptions = {}): Promise<BranchNavigationResult> {
+    const settings = copyBranchNavigationOptions(options);
+    if (settings.signal?.aborted) return { status: 'cancelled' };
+    if (!isValidSessionId(sessionId) || !isValidEntryId(entryId)) return { status: 'not-found' };
+    const stamp = (session: Session, entries: readonly SessionEntry[]): string => createHash('sha256')
+      .update(JSON.stringify(session)).update('\n').update(JSON.stringify(entries)).digest('hex');
+    const snapshot = await this.withSessionMutation(sessionId, async () => {
+      if (settings.signal?.aborted) return null;
+      const current = this.sessions.get(sessionId);
+      if (!current) return null;
+      if (current.commands?.some(command => command.status === 'running' || command.status === 'queued')) {
+        throw new Error('Cannot navigate while a session command is pending.');
+      }
+      readLegacyCompactionPrefix(current.metadata);
+      const original = await this.getRawEntries(sessionId);
+      const legacyBoundary = typeof current.metadata?.legacyRootBoundaryId === 'string' ? current.metadata.legacyRootBoundaryId
+        : current.metadata?.hasBranchedHistory !== true ? legacyRootBoundary(original) : undefined;
+      const raw = legacyContextEntries(original, legacyBoundary);
+      const target = new Map(raw.filter(entry => entry.type !== 'metadata').map(entry => [entry.id, entry])).get(entryId);
+      if (!target) return null;
+      if (!sessionEntryPath(raw, entryId).complete) throw new Error('Session ancestry is incomplete.');
+      const legacyPrefix = captureLegacyCompactionPrefix(current, original);
+      return { current, raw: structuredClone(raw), from: current.activeLeafId, legacyBoundary, legacyPrefix,
+        stamp: stamp(current, original) };
+    });
+    if (settings.signal?.aborted) return { status: 'cancelled' };
+    if (!snapshot) return { status: 'not-found' };
+    const abandoned = collectAbandonedEntries(snapshot.raw, snapshot.from, entryId);
+    const request = settings.summarize && snapshot.from && abandoned.length
+      ? prepareBranchSummary(abandoned, snapshot.from, entryId, settings) : undefined;
+    let generated: { summary: string } & BranchSummaryAccounting | undefined;
+    if (request) {
+      let output: unknown;
+      try { output = await settings.summarizer!(request); }
+      catch (error) {
+        if (settings.signal?.aborted) return { status: 'cancelled' };
+        throw error;
+      }
+      if (settings.signal?.aborted) return { status: 'cancelled' };
+      if (!output || typeof output !== 'object' || Array.isArray(output)) throw new Error('Branch summary result is invalid.');
+      const maxOutputBytes = Math.min(1024 * 1024, settings.reserveTokens ?? 16_384, request.maxOutputTokens * 4);
+      let summary: string | undefined;
+      const accounting: Record<string, unknown> = {};
+      for (const key of Reflect.ownKeys(output)) {
+        if (key !== 'summary' && key !== 'provider' && key !== 'model' && key !== 'usage') {
+          throw new Error('Branch summary result is invalid.');
+        }
+        const property = Object.getOwnPropertyDescriptor(output, key);
+        if (!property || !('value' in property)) throw new Error('Branch summary result is invalid.');
+        if (key === 'summary') {
+          if (typeof property.value !== 'string' || Buffer.byteLength(property.value) > maxOutputBytes) {
+            throw new Error('Branch summary result is invalid.');
+          }
+          summary = this.redactText(property.value).trim();
+        } else accounting[key] = property.value;
+      }
+      if (!summary || Buffer.byteLength(summary) > maxOutputBytes) throw new Error('Branch summary result is invalid.');
+      generated = { summary, ...this.redactJson(copyBranchSummaryAccounting(accounting)) };
+    }
+    const result = await this.withSessionMutation(sessionId, async (): Promise<BranchNavigationResult> => {
+      if (settings.signal?.aborted) return { status: 'cancelled' };
+      const current = this.sessions.get(sessionId);
+      if (current !== snapshot.current) return { status: 'stale' };
+      const raw = await this.getRawEntries(sessionId);
+      if (settings.signal?.aborted) return { status: 'cancelled' };
+      if (stamp(current, raw) !== snapshot.stamp) return { status: 'stale' };
+      const path = sessionEntryPath(legacyContextEntries(raw, snapshot.legacyBoundary), entryId).entries;
+      const metadata: Record<string, unknown> = { ...current.metadata, hasBranchedHistory: true, activeLeafReset: false,
+        ...(snapshot.legacyBoundary ? { legacyRootBoundaryId: snapshot.legacyBoundary } : {}),
+        ...(snapshot.legacyPrefix ? { aiHarnessLegacyCompactionPrefix: snapshot.legacyPrefix } : {}) };
+      delete metadata.lastCompacted;
+      delete metadata.compactionSummary;
+      delete metadata.compactionEntryId;
+      delete metadata.compactionStats;
+      let messages = path.flatMap(entry => entry.type === 'message' ? [messageFromEntry(entry)!] : []);
+      const compaction = path.filter((entry): entry is CompactionEntry => entry.type === 'compaction').at(-1);
+      if (compaction) {
+        const firstKept = messages.findIndex(message => message.id === compaction.firstKeptEntryId);
+        messages = firstKept >= 0 ? messages.slice(firstKept) : messages.filter(message => {
+          const position = path.findIndex(entry => entry.id === message.id);
+          return position > path.indexOf(compaction);
+        });
+        Object.assign(metadata, { compactionSummary: compaction.summary, compactionEntryId: compaction.id,
+          lastCompacted: new Date(compaction.timestamp).toISOString() });
+      }
+      const commands = path.flatMap(entry => entry.type === 'command' ? [{ ...entry, timestamp: new Date(entry.timestamp) }] : []);
+      const summary: BranchSummaryEntry | undefined = generated ? {
+        id: `branch-summary-${crypto.randomUUID()}`, type: 'branch_summary', version: SESSION_SCHEMA_VERSION,
+        parentEntryId: entryId, fromEntryId: snapshot.from, branchName: current.title || current.id,
+        timestamp: Date.now(), ...generated,
+      } : undefined;
+      if (summary) {
+        const previous = raw.filter((entry): entry is BranchSummaryEntry => entry.type === 'branch_summary');
+        if (previous.length >= 10_000) throw new Error('Session branch summary limit reached.');
+        Object.assign(metadata, { branchSummaries: [...previous, summary] });
+      }
+      const next: Session = { ...current, activeLeafId: summary?.id ?? entryId, metadata,
+        messages, commands: commands.length ? commands : undefined, updatedAt: new Date() };
+      boundedSessionJson(next, MAX_SESSION_FILE_BYTES, 'Session file exceeds its size limit.');
+      await this.persistSession(next, summary ? [summary] : []);
+      Object.assign(current, next);
+      if (!this.usesSessionStore() && summary) this.volatileEntries.get(sessionId)?.push(summary);
+      return { status: 'navigated', entryId: next.activeLeafId, ...(summary ? { summary: structuredClone(summary) } : {}) };
+    });
+    if (result.status === 'navigated') this.onSessionUpdate?.(sessionId);
+    return result;
+  }
+
   /** Return append-order entries, including pre-compaction history when a persistent store is attached. */
   async getRawEntries(sessionId: string): Promise<SessionEntry[]> {
-    if (this.store) return this.store.getRawEntries(sessionId);
+    if (this.store && this.usesSessionStore()) return this.store.getRawEntries(sessionId);
     const journal = this.volatileEntries.get(sessionId);
     if (journal) return structuredClone(journal);
     const session = this.sessions.get(sessionId);
@@ -2276,6 +2550,7 @@ export class SessionManager {
       type: 'branch_summary',
       version: SESSION_SCHEMA_VERSION,
       ...(entry.parentEntryId ? { parentEntryId: entry.parentEntryId } : {}),
+      ...(entry.fromEntryId ? { fromEntryId: entry.fromEntryId } : {}),
       branchName: entry.branchName,
       summary: entry.summary,
       ...(entry.provider !== undefined ? { provider: entry.provider } : {}),
@@ -2288,7 +2563,7 @@ export class SessionManager {
   }
 
   async getBranchSummaries(sessionId: string): Promise<BranchSummaryEntry[]> {
-    if (this.store) {
+    if (this.store && this.usesSessionStore()) {
       return (await this.store.getRawEntries(sessionId)).filter(
         (entry): entry is BranchSummaryEntry => entry.type === 'branch_summary',
       );
@@ -2300,6 +2575,7 @@ export class SessionManager {
         id: entry.id ?? `branch-summary-memory-${index}`,
         type: 'branch_summary' as const,
         ...(entry.parentEntryId ? { parentEntryId: entry.parentEntryId } : {}),
+        ...(entry.fromEntryId ? { fromEntryId: entry.fromEntryId } : {}),
         branchName: entry.branchName,
         summary: entry.summary,
         ...(entry.provider !== undefined ? { provider: entry.provider } : {}),
@@ -2342,10 +2618,7 @@ export class SessionManager {
       const entry = entriesById.get(cursor);
       if (!entry) break;
       ancestorIds.add(cursor);
-      cursor = entry.type === 'message' ? entry.parentMessageId
-        : entry.type === 'command' || entry.type === 'compaction' || entry.type === 'branch_summary'
-          ? entry.parentEntryId
-          : undefined;
+      cursor = sessionEntryParent(entry);
     }
     const prefix = ancestorIds.size > 1 || selectedIndex === 0
       ? rawEntries.filter(entry => entry.type !== 'metadata' && ancestorIds.has(entry.id))
@@ -2502,7 +2775,10 @@ export class SessionManager {
       commands: current.commands ? [...current.commands] : undefined,
       metadata: current.metadata ? structuredClone(current.metadata) : undefined,
     };
-    const rawEntries = await this.getRawEntries(sessionId);
+    const originalEntries = await this.getRawEntries(sessionId);
+    const legacyBoundary = typeof session.metadata?.legacyRootBoundaryId === 'string' ? session.metadata.legacyRootBoundaryId
+      : session.metadata?.hasBranchedHistory !== true ? legacyRootBoundary(originalEntries) : undefined;
+    const rawEntries = legacyContextEntries(originalEntries, legacyBoundary);
     const target = rawEntries.find(
       (entry): entry is MessageEntry => entry.type === 'message' && entry.id === entryId && entry.role === 'user',
     );
@@ -2516,6 +2792,7 @@ export class SessionManager {
     session.metadata = {
       ...session.metadata,
       hasBranchedHistory: true,
+      ...(legacyBoundary ? { legacyRootBoundaryId: legacyBoundary } : {}),
       ...(session.activeLeafId ? { activeLeafReset: false } : { activeLeafReset: true }),
     };
     const ancestors = new Set<string>();
@@ -2525,10 +2802,7 @@ export class SessionManager {
       const entry = entriesById.get(cursor);
       if (!entry) break;
       ancestors.add(cursor);
-      cursor = entry.type === 'message' ? entry.parentMessageId
-        : entry.type === 'command' || entry.type === 'compaction' || entry.type === 'branch_summary'
-          ? entry.parentEntryId
-          : undefined;
+      cursor = sessionEntryParent(entry);
     }
     if (rawEntries.length > 0) {
       session.messages = rawEntries.flatMap(entry => {
@@ -2620,11 +2894,14 @@ export class SessionManager {
 
     // Deep clone entries and identifiers so edits cannot mutate or branch the source.
     let sourceCommands = original.commands ?? [];
-    const sourceSummaries = rawEntries.filter((entry): entry is BranchSummaryEntry => entry.type === 'branch_summary');
-    const parents = new Map<string, string | undefined>();
-    for (const summary of sourceSummaries) parents.set(summary.id, summary.parentEntryId);
-    for (const message of sourceMessages) parents.set(message.id, message.parentMessageId);
-    for (const command of sourceCommands) parents.set(command.id, command.parentEntryId);
+    const graph = legacyContextEntries(rawEntries, typeof original.metadata?.legacyRootBoundaryId === 'string'
+      ? original.metadata.legacyRootBoundaryId : original.metadata?.hasBranchedHistory !== true ? legacyRootBoundary(rawEntries) : undefined);
+    const sourceEntries = graph.filter((entry): entry is RestorableSessionEntry => entry.type === 'branch_summary'
+      || entry.type === 'compaction' || entry.type === 'custom' || entry.type === 'custom_message');
+    const sourceSummaries = sourceEntries.filter((entry): entry is BranchSummaryEntry => entry.type === 'branch_summary');
+    const parents = new Map(graph.filter(entry => entry.type !== 'metadata').map(entry => [entry.id, sessionEntryParent(entry)]));
+    for (const message of sourceMessages) parents.set(message.id, message.parentMessageId ?? parents.get(message.id));
+    for (const command of sourceCommands) parents.set(command.id, command.parentEntryId ?? parents.get(command.id));
     const ancestors = new Set<string>();
     const starts = [...sourceMessages.map(message => message.id), ...(throughMessageIndex === undefined
       ? [...sourceCommands.map(command => command.id), ...(original.activeLeafId ? [original.activeLeafId] : [])] : [])];
@@ -2635,8 +2912,8 @@ export class SessionManager {
         cursor = parents.get(cursor);
       }
     }
-    const retainedSummaries = sourceSummaries.filter(summary => ancestors.has(summary.id));
-    if (retainedSummaries.length > 1_024) return null;
+    const retainedEntries = sourceEntries.filter(entry => ancestors.has(entry.id));
+    if (retainedEntries.length > 1_024) return null;
     if (throughMessageIndex !== undefined) {
       // Copy required ancestors even across summary nodes, never by wall-clock order.
       sourceCommands = sourceCommands.filter(command => ancestors.has(command.id));
@@ -2646,13 +2923,29 @@ export class SessionManager {
     }
     const messageIds = new Map(sourceMessages.map(message => [message.id, crypto.randomUUID()]));
     const commandIds = new Map(sourceCommands.map(command => [command.id, `command-${crypto.randomUUID()}`]));
-    const summaryIds = new Map(retainedSummaries.map(summary => [summary.id, `branch-summary-${crypto.randomUUID()}`]));
-    const remapParent = (id: string): string | undefined => messageIds.get(id) ?? commandIds.get(id) ?? summaryIds.get(id);
-    const clonedSummaries = structuredClone(retainedSummaries).map(summary => ({
-      ...summary,
-      id: summaryIds.get(summary.id)!,
-      ...(summary.parentEntryId ? { parentEntryId: remapParent(summary.parentEntryId) } : {}),
-    }));
+    const extraIds = new Map(retainedEntries.map(entry => [entry.id,
+      `${entry.type === 'branch_summary' ? 'branch-summary' : entry.type === 'custom_message' ? 'custom-message' : entry.type}-${crypto.randomUUID()}`]));
+    const copiedId = (id: string): string | undefined => messageIds.get(id) ?? commandIds.get(id) ?? extraIds.get(id);
+    const remapParent = (id: string): string | undefined => {
+      const seen = new Set<string>();
+      let cursor: string | undefined = id;
+      while (cursor && !seen.has(cursor)) {
+        const copied = copiedId(cursor);
+        if (copied) return copied;
+        seen.add(cursor);
+        cursor = parents.get(cursor);
+      }
+      return undefined;
+    };
+    const clonedEntries: RestorableSessionEntry[] = structuredClone(retainedEntries).map(entry => {
+      const base = { id: extraIds.get(entry.id)!, parentEntryId: entry.parentEntryId ? remapParent(entry.parentEntryId) : undefined };
+      if (entry.type === 'compaction') return { ...entry, ...base,
+        firstKeptEntryId: messageIds.get(entry.firstKeptEntryId) ?? messageIds.get(sourceMessages[0]?.id) ?? base.id };
+      if (entry.type === 'branch_summary') return { ...entry, ...base,
+        ...(entry.fromEntryId ? { fromEntryId: copiedId(entry.fromEntryId) ?? entry.fromEntryId } : {}) };
+      return { ...entry, ...base };
+    });
+    const clonedSummaries = clonedEntries.filter((entry): entry is BranchSummaryEntry => entry.type === 'branch_summary');
     const clonedMessages = structuredClone(sourceMessages).map(message => ({
       ...message,
       id: messageIds.get(message.id)!,
@@ -2673,9 +2966,19 @@ export class SessionManager {
     const metadata: Record<string, unknown> = {
       ...(original.metadata ? structuredClone(original.metadata) : {}), clonedFromSessionId: sessionId,
     };
+    const legacyPrefix = captureLegacyCompactionPrefix(original, rawEntries);
+    const legacyAnchor = legacyPrefix ? copiedId(legacyPrefix.anchorEntryId) : undefined;
+    if (legacyPrefix && legacyAnchor) metadata.aiHarnessLegacyCompactionPrefix = { ...legacyPrefix, anchorEntryId: legacyAnchor };
+    else delete metadata.aiHarnessLegacyCompactionPrefix;
     if (sourceSummaries.length > 0) {
       if (clonedSummaries.length > 0) Object.assign(metadata, { branchSummaries: clonedSummaries });
       else delete metadata.branchSummaries;
+    }
+    for (const field of ['legacyRootBoundaryId', 'compactionEntryId']) {
+      if (typeof metadata[field] !== 'string') continue;
+      const replacement = copiedId(metadata[field]);
+      if (replacement) metadata[field] = replacement;
+      else if (field === 'legacyRootBoundaryId') delete metadata[field];
     }
 
     const options: CreateSessionOptions = {
@@ -2694,7 +2997,7 @@ export class SessionManager {
       metadata,
       usage: throughMessageIndex === undefined && original.usage ? { ...original.usage } : undefined,
     };
-    return clonedSummaries.length > 0 ? this.createWithBranchSummaries(options, clonedSummaries) : this.create(options);
+    return clonedEntries.length > 0 ? this.createWithEntries(options, clonedEntries) : this.create(options);
   }
 
   /** Get the session tree structure for a given branch */
@@ -2793,14 +3096,38 @@ export class SessionManager {
   }
 
   // Private persistence helpers
+  private usesSessionStore(): boolean { return Boolean(this.store && sessionStoreKinds.get(this.store) !== 'memory'); }
+
   private async persistSession(
     session: Session,
     additionalEntries: SessionEntry[] = [],
     options: { requireAbsent?: boolean } = {},
   ): Promise<void> {
-    if (!this.store) return;
+    if (!this.store || !this.usesSessionStore()) return;
     try {
+      let fallback: SessionEntry[] | undefined;
+      if (sessionStoreKinds.get(this.store) !== 'native') {
+        // Structural stores promise the same journal-preserving save semantics.
+        // Prepare the owned context projection BEFORE the write; a failed later
+        // read must never turn an accepted durable write into a reported failure.
+        const previous = await this.store.getRawEntries(session.id);
+        const currentEntries: SessionEntry[] = [
+          ...session.messages.map(messageToEntry),
+          ...(session.commands ?? []).map(command => ({ ...command, type: 'command' as const,
+            version: SESSION_SCHEMA_VERSION, timestamp: command.timestamp.getTime() })),
+          ...additionalEntries,
+        ];
+        const currentById = new Map(currentEntries.map(entry => [entry.id, entry]));
+        const existing = new Set(previous.map(entry => entry.id));
+        fallback = this.redactJson(structuredClone([
+          ...previous.filter(entry => entry.type !== 'metadata').map(entry => currentById.get(entry.id) ?? entry),
+          ...currentEntries.filter(entry => !existing.has(entry.id)).sort((left, right) => left.timestamp - right.timestamp),
+        ]));
+        boundedSessionJson(fallback, MAX_SESSION_FILE_BYTES, 'Session file exceeds its size limit.');
+      }
       await this.store.saveSession(session, additionalEntries, options);
+      const snapshot = committedSessionEntries.get(session) ?? fallback;
+      if (snapshot) this.committedEntries.set(session.id, snapshot);
     } catch {
       console.error('[SessionManager] Failed to save session.');
       throw new Error('Session persistence failed.');

@@ -10,6 +10,7 @@ import {
   clampPublishedThinkingLevel,
   closeProviderNetworkDispatchers,
   collectProviderModelCatalog,
+  createProviderBranchSummarizer,
   flattenModelCatalog,
   getSupportedThinkingLevels,
   getSessionAccounting,
@@ -116,6 +117,8 @@ interface CommandEntry {
 
 export interface CommandContext {
   offline?: boolean;
+  /** Foreground command lifetime supplied by the interactive input owner. */
+  signal?: AbortSignal;
   sessionManager: SessionManager;
   jsonlStore: JsonlSessionStore;
   terminal: TerminalUI;
@@ -833,6 +836,51 @@ const commands: CommandEntry[] = [
       if (!result.content.trim()) return chalk.red('Le provider n’a produit aucun résumé.');
       await ctx.sessionManager.addBranchSummary(session.id, result.content, session.title);
       return chalk.green(`Résumé de branche enregistré pour ${session.title || session.id}.`);
+    },
+  },
+  {
+    name: 'navigate',
+    description: 'Navigate to a session entry, optionally summarizing the abandoned branch',
+    usage: '/navigate [entry-id] [--summarize|--no-summary] [--instructions "focus"]',
+    handler: async (args, ctx) => {
+      const session = ctx.currentSessionId ? ctx.sessionManager.get(ctx.currentSessionId) : undefined;
+      if (!session) return chalk.red('No active session.');
+      if (!args.length) {
+        const entries = (await ctx.sessionManager.getRawEntries(session.id)).filter(entry => entry.type !== 'metadata');
+        const listed = entries.slice(-128).map(entry => {
+          const safeId = entry.id.slice(0, 256).replace(/[^\x20-\x7e]/gu,
+            char => `\\u{${char.codePointAt(0)!.toString(16)}}`);
+          return `${entry.id === session.activeLeafId ? '●' : '○'} ${safeId} [${entry.type}]`;
+        });
+        return ['Session entries (latest 128):', ...listed,
+          'Use /navigate <entry-id> --summarize or --no-summary.'].join('\n');
+      }
+      let summarize: boolean | undefined;
+      let customInstructions: string | undefined;
+      for (let index = 1; index < args.length; index++) {
+        const option = args[index];
+        if ((option === '--summarize' || option === '--no-summary') && summarize === undefined) {
+          summarize = option === '--summarize';
+        } else if (option === '--instructions' && customInstructions === undefined && args[index + 1] !== undefined) {
+          customInstructions = args[++index];
+        } else return chalk.red('Usage: /navigate <entry-id> [--summarize|--no-summary] [--instructions "focus"]');
+      }
+      const settings = ctx.agentSettings?.().branchSummary;
+      if (summarize === undefined && settings?.skipPrompt !== true) {
+        return chalk.yellow('Summarize the branch? Repeat with --summarize or --no-summary. No navigation performed.');
+      }
+      summarize ??= false;
+      if (customInstructions !== undefined && !summarize) return chalk.red('--instructions requires --summarize.');
+      if (summarize && !ctx.provider) return chalk.red('No configured provider for branch summarization.');
+      const summaryProvider = summarize ? createProviderBranchSummarizer(ctx.provider!) : undefined;
+      const result = await ctx.sessionManager.navigateTree(session.id, args[0], {
+        summarize, ...summaryProvider, ...(summarize ? { reserveTokens: settings?.reserveTokens } : {}),
+        customInstructions, signal: ctx.signal,
+      });
+      if (result.status === 'cancelled') return chalk.yellow('Navigation cancelled.');
+      if (result.status === 'stale') return chalk.yellow('Session changed during summarization. No navigation performed.');
+      if (result.status === 'not-found') return chalk.red('Session entry not found.');
+      return chalk.green(`Navigated to ${result.entryId}.${result.summary ? ' Branch summary saved.' : ''}`);
     },
   },
   {

@@ -158,6 +158,8 @@ export type {
   CompactionEntry,
   BranchSummaryEntry,
   BranchSummaryAccounting,
+  CustomSessionEntry,
+  CustomMessageEntry,
   SessionMetadataEntry,
   CreateSessionOptions,
   MutableSessionFields,
@@ -166,6 +168,10 @@ export type {
   AutoCompactionResult,
   AutoCompactionPolicy,
 } from './sessions/session-manager.js';
+export { createProviderBranchSummarizer } from './sessions/provider-branch-summarizer.js';
+export type {
+  BranchNavigationOptions, BranchNavigationResult, BranchSummaryRequest, BranchSummaryOutput, BranchSummarizer,
+} from './sessions/branch-summarization.js';
 export { getSessionAccounting } from './sessions/session-accounting.js';
 export type { SessionAccounting, SessionUsageAccounting } from './sessions/session-accounting.js';
 export {

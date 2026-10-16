@@ -380,6 +380,49 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     });
   });
 
+  it('publishes strict installed optional navigation and custom-entry declarations without changing Core API 1', async () => {
+    await writeFile(path.join(consumer, 'session-navigation-public.ts'), `
+      import { SessionManager, createProviderBranchSummarizer, AI_HARNESS_CORE_API_VERSION,
+        type BranchNavigationOptions, type BranchNavigationResult, type BranchSummaryOutput,
+        type CustomSessionEntry, type CustomMessageEntry } from '@ai-harness/core';
+      const manager = new SessionManager();
+      const options: BranchNavigationOptions = { summarize: true, reserveTokens: 8192,
+        summarizer: async request => {
+          const text: string = request.messages[0].content; void text;
+          // @ts-expect-error request message arrays are readonly owned snapshots
+          request.messages.push({});
+          return { summary: 'Owned summary', provider: 'mock', model: 'mock-model', usage: { costUsd: 0 } };
+        } };
+      const result: Promise<BranchNavigationResult> = manager.navigateTree('session', 'entry', options); void result;
+      const state: Promise<CustomSessionEntry | null> = manager.appendCustomEntry('session', 'state', { value: 1 }); void state;
+      const message: Promise<CustomMessageEntry | null> = manager.appendCustomMessage('session', 'notice', 'text', { display: false }); void message;
+      const version: 1 = AI_HARNESS_CORE_API_VERSION; void version; void createProviderBranchSummarizer;
+      // @ts-expect-error generation authority is a boolean, never a truthy string
+      const bad: BranchNavigationOptions = { summarize: 'yes' }; void bad;
+      // @ts-expect-error usage is numeric when present
+      const invalid: BranchSummaryOutput = { summary: 'text', usage: { costUsd: 'bad' } }; void invalid;
+      // @ts-expect-error display is a boolean, not a command or string
+      manager.appendCustomMessage('session', 'notice', 'text', { display: 'true' });
+    `);
+    const result = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'session-navigation-public.ts'], consumer, environment);
+    expect(result.stdout).toBe(''); expect(result.stderr).toBe('');
+  });
+
+  it.each(['summary', 'eof'])('uses installed Core and the actual PATH-bin navigation protocol (%s)', async scenario => {
+    const worker = path.join(consumer, `session-navigation-${scenario}.mjs`);
+    await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', 'session-navigation-probe.mjs'), worker);
+    const result = await run(process.execPath, [worker, scenario], consumer,
+      { ...environment, AIH_NAVIGATION_COMMAND: 'ai-harness' });
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stderr).toBe('');
+    const records = result.stdout.trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
+    expect(records).toEqual([
+      { scenario, requests: 1, cancelled: scenario === 'eof', summaries: scenario === 'summary' ? 1 : 0,
+        heldClosed: scenario === 'eof' ? 1 : 0, exit: 0 },
+      { result: 'SESSION_NAVIGATION_PROCESS_OK', node: process.versions.node, cases: 1 },
+    ]);
+  });
+
   it('publishes strict installed journal accounting and additive summary provenance declarations', async () => {
     await writeFile(path.join(consumer, 'session-accounting-public.ts'), `
       import { getSessionAccounting, JsonlSessionStore, SessionManager,

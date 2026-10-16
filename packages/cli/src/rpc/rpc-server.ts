@@ -647,7 +647,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
         }
         if (parsed.type === 'abort') extensionUi.cancelPending();
         const response = await controller!.handle(parsed);
-        if (response?.success && ['new_session', 'switch_session', 'fork'].includes(parsed.type)) {
+        if (response?.success && ['new_session', 'switch_session', 'fork', 'navigate_tree'].includes(parsed.type)) {
           extensionUi.cancelPending('session-changed');
         }
         if (response) await output(response as unknown as Record<string, unknown>);
@@ -687,8 +687,10 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
         },
       );
     }
-    // No further replies can arrive after EOF. Cancel dialogs before joining commands.
+    // No further replies can arrive after EOF. Cancel dialogs and optional branch
+    // generation before joining handlers, so their provider work cannot hold EOF open.
     extensionUi.close();
+    controller?.abortNavigation();
     await Promise.allSettled([...pending]);
     if (taskFailure) throw taskFailure;
     await controller.drain();

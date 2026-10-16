@@ -138,7 +138,27 @@ saturate at the safe-integer limit and mark partial; unrepresentable costs are
 excluded from the known subtotal. Lower-level `addBranchSummary` and
 `appendBranchSummary` optionally accept copied `BranchSummaryAccounting`
 (provider/model/normalized usage); v2 legacy summaries remain readable/unpriced.
-This adds neither automatic summary generation nor a facade mutation method.
+Those accounting parameters do not generate summaries or add a facade mutation.
+
+Lower-level `SessionManager.navigateTree(sessionId, entryId, options?)` preserves
+abandoned journal entries. Only explicit `summarize: true` authorizes the supplied
+`BranchSummarizer`; `createProviderBranchSummarizer(provider, model?)` adapts an
+already configured provider without tools/discovery. Generation runs outside the
+mutation queue with bounded transcript/output budgets, then publishes only if the
+source still matches. Results are `navigated`, `not-found`, `cancelled` or `stale`.
+Cancellation withdraws an unpublished navigation, not an already admitted durable
+write. Hosts must own foreground admission and cooperative callback cancellation.
+The high-level facade does not expose this mutation.
+
+`appendCustomEntry` persists bounded own JSON state outside model context;
+`appendCustomMessage` contributes content even with `display: false`, but never
+its `details`. These are persistence/context distinctions, not a secret vault or
+extension sandbox. Effective context follows actual parents, active compaction
+and destination summaries, and removes incomplete tool groups. Summary
+`fromEntryId` is provenance only, never a context parent. A bounded own metadata
+prefix retains legacy metadata-only compaction background on its original
+ancestry through navigation, reload, later compaction and cloned anchors; it
+cannot lend that background to a later independent root.
 
 `rename`, `setModel`, `setThinking`, `branchBefore(userEntryId)` and
 `applyCompaction(summary, firstKeptMessageId, details)` await Core persistence.
@@ -146,9 +166,11 @@ This adds neither automatic summary generation nor a facade mutation method.
 summary and valid active message boundary; it never invokes a model implicitly.
 `fork(userEntryId,{before?,title?})` returns a related handle copied from durable
 user-entry ancestry, including an empty prefix. `clone(title?)` returns an
-independent-root handle with remapped active message/command IDs. Both operate
-only while idle; unsupported labels/full custom-entry remapping/summary hooks
-are not claimed. Related handles share one runtime/manager/provider group.
+independent-root handle with remapped active message/command/custom/summary and
+compaction ancestry, including private custom state and model-visible custom
+content. External provenance and arbitrary IDs inside custom data are not
+rewritten. Both operate only while idle; labels, fork custom-entry completeness
+and extension summary hooks are not claimed. Related handles share one runtime/manager/provider group.
 
 ### Ownership, persistence and limitations
 
@@ -174,7 +196,7 @@ independent SDK groups so late-discovered historical credentials remain covered.
 Not delivered by this facade: executable/module loading, MCP connection hosting,
 OAuth/login/discovery, settings/instruction auto-loading, provider switching,
 publications, HTML export, direct-shell methods, cross-process run coordination,
-full custom-entry cloning, or a new persistence schema. Existing primitive
+all-history cloning/arbitrary custom-data reference remapping, or a new persistence schema. Existing primitive
 capabilities do not become facade methods merely because their names are similar.
 
 ## English — contributor notes
@@ -261,15 +283,38 @@ pas les appels réseau internes. Les totaux de tokens saturent à la limite des
 entiers sûrs et deviennent partiels ; les coûts non représentables sont exclus
 du sous-total connu. Les primitives `addBranchSummary`/`appendBranchSummary`
 acceptent une provenance optionnelle copiée `BranchSummaryAccounting` ; les
-anciens résumés v2 restent lisibles, sans prix inventé. Aucun résumé automatique
-ni nouvelle mutation de la façade n'est ajouté.
+anciens résumés v2 restent lisibles, sans prix inventé. Ces paramètres de
+comptabilisation ne génèrent aucun résumé et n'ajoutent pas de mutation à la façade.
+
+La primitive `SessionManager.navigateTree(sessionId, entryId, options?)` conserve
+le journal abandonné. Seul `summarize: true` autorise le `BranchSummarizer` fourni ;
+`createProviderBranchSummarizer(provider, model?)` adapte un fournisseur déjà
+configuré, sans outils ni découverte. La génération bornée ne bloque pas la file
+des mutations ; sa publication exige une source encore identique. Les résultats
+sont `navigated`, `not-found`, `cancelled` ou `stale`. L'annulation retire une
+navigation non publiée, pas une écriture durable déjà admise. L'hôte reste
+responsable de l'admission au premier plan et de la coopération du callback.
+La façade de haut niveau n'expose pas cette mutation.
+
+`appendCustomEntry` conserve un état JSON propre borné hors contexte modèle ;
+`appendCustomMessage` y contribue même avec `display: false`, jamais ses `details`.
+Ce n'est ni un coffre à secrets ni un bac à sable. Le contexte suit les parents,
+la compaction active et les résumés de destination ; les groupes outils incomplets
+sont retirés. `fromEntryId` décrit uniquement la provenance, pas un parent. Un
+préfixe de métadonnées propre borné conserve l'ancien fond de compaction sur son
+ascendance, après navigation/rechargement/compaction et remappage du clone, jamais
+sur une nouvelle racine indépendante.
 
 `rename`, `setModel`, `setThinking`, `branchBefore` et `applyCompaction` attendent
 la persistance Core. La compaction manuelle exige un résumé fourni et une borne
 active valide : aucun appel modèle implicite. `compactionTarget` réutilise Core.
 `fork` copie l'ascendance d'une entrée utilisateur durable, éventuellement avant
-cette entrée ; `clone` crée une racine indépendante et remappe les IDs actifs.
-Ces méthodes exigent une session au repos et retournent des handles partageant
+cette entrée ; `clone` crée une racine indépendante et remappe l'ascendance active
+messages/commandes/état et messages personnalisés/résumés/compaction. Les références
+arbitraires dans les données et la provenance externe ne sont pas réécrites.
+Les labels, l'exhaustivité des entrées personnalisées de `fork` et les hooks de
+résumé d'extension ne sont pas revendiqués. Ces méthodes exigent une session au
+repos et retournent des handles partageant
 le groupe runtime/gestionnaire/fournisseur.
 
 `resourceLoader` et `extensionRegistry` sont prêtés. La fabrique/les lectures ne
@@ -296,8 +341,9 @@ terminal artificiel ni nouveau timeout de boucle n'est ajouté.
 
 Limites explicites : pas de chargement exécutable/MCP, login OAuth, découverte de
 modèles, auto-chargement de settings/instructions, changement de fournisseur,
-export HTML/shell direct, coordination de runs entre processus, clonage complet
-d'entrées personnalisées ou nouveau format de persistance.
+export HTML/shell direct, coordination de runs entre processus, clonage de tout
+l'historique/remappage des références arbitraires personnalisées ou nouveau format
+de persistance.
 
 ## Français — notes contributeur
 

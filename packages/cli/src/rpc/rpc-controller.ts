@@ -11,6 +11,7 @@ import {
   clampPublishedThinkingLevel,
   cleanupExpiredProcessOutputs,
   createProtocolModelDescriptor,
+  createProviderBranchSummarizer,
   createTemporaryProcessOutput,
   discoverProviderModelIds,
   getPublishedModelMetadata,
@@ -350,6 +351,8 @@ export class RpcController {
   private retryAbortController?: AbortController;
   private summarizationAbortController?: AbortController;
   private compacting = false;
+  private activeNavigation?: ActiveRun;
+  private navigationRetired = false;
   private activeRun?: ActiveRun;
   private activeBash?: ActiveBash;
   private modelCache?: {
@@ -491,7 +494,15 @@ export class RpcController {
     }
   }
 
+  /** EOF retires even requests whose awaited admission has not resumed yet. */
+  abortNavigation(): void {
+    this.navigationRetired = true;
+    this.activeNavigation?.controller.abort();
+  }
+
   async close(): Promise<void> {
+    const navigation = this.activeNavigation;
+    this.abortNavigation();
     this.retryAbortController?.abort();
     this.summarizationAbortController?.abort();
     const activeBash = this.activeBash;
@@ -501,6 +512,7 @@ export class RpcController {
       this.activeRun.controller.abort();
       await this.activeRun.done;
     }
+    if (navigation) await navigation.done;
     await this.eventTail;
     if (this.eventFailure) throw this.eventFailure;
   }
@@ -510,6 +522,11 @@ export class RpcController {
     const command = request.type;
     try {
       if (this.eventFailure) throw this.eventFailure;
+      if (this.activeNavigation && ![
+        'abort', 'abort_retry', 'get_state', 'get_session_stats', 'get_entries', 'get_tree',
+        'get_messages', 'get_fork_messages', 'get_last_assistant_text', 'get_commands',
+        'get_available_thinking_levels',
+      ].includes(command)) throw new Error(`${command} is not available while navigating the session tree.`);
       switch (command) {
         case 'prompt': {
           const rawMessage = requiredString(request.message, 'message');
@@ -518,6 +535,7 @@ export class RpcController {
             return success(id, command, { disposition: 'handled' });
           }
           const prompt = await this.preparePrompt(message, request.images);
+          if (this.activeNavigation) throw new Error('prompt is not available while navigating the session tree.');
           if (this.activeRun) {
             if (request.streamingBehavior === 'steer') this.messageQueue.enqueue('steer', prompt);
             else if (request.streamingBehavior === 'followUp') this.messageQueue.enqueue('follow-up', prompt);
@@ -545,11 +563,14 @@ export class RpcController {
           return success(id, command, { disposition: 'queued' });
         }
         case 'abort': {
+          const navigation = this.activeNavigation;
+          navigation?.controller.abort();
           const active = this.activeRun;
           if (active) {
             active.controller.abort();
             await active.done;
           }
+          if (navigation) await navigation.done;
           return success(id, command);
         }
         case 'clear_queue': {
@@ -824,6 +845,53 @@ export class RpcController {
           await this.emit({ type: 'session_info_changed', name: session.title });
           await this.emit({ type: 'thinking_level_changed', level: this.thinking });
           return success(id, command, { cancelled: false });
+        }
+        case 'navigate_tree': {
+          await this.ensureIdle(command);
+          if (this.activeNavigation || this.activeRun || this.activeBash || this.compacting) {
+            throw new Error('navigate_tree is not available while a foreground operation is processing.');
+          }
+          const entryId = requiredString(request.entryId, 'entryId');
+          if (request.summarize !== undefined && typeof request.summarize !== 'boolean') {
+            throw new Error('summarize must be a boolean.');
+          }
+          if (request.customInstructions !== undefined && typeof request.customInstructions !== 'string') {
+            throw new Error('customInstructions must be a string.');
+          }
+          if (request.replaceInstructions !== undefined && typeof request.replaceInstructions !== 'boolean') {
+            throw new Error('replaceInstructions must be a boolean.');
+          }
+          if (request.summarize !== true && (request.customInstructions !== undefined || request.replaceInstructions === true)) {
+            throw new Error('Summary instructions require summarize: true.');
+          }
+          if (this.navigationRetired) return success(id, command, { cancelled: true, stale: false,
+            leafId: this.context.sessionManager.get(this.currentSessionId)?.activeLeafId ?? null });
+          const controller = new AbortController();
+          let finish!: () => void;
+          const navigation: ActiveRun = { controller, done: new Promise<void>(resolve => { finish = resolve; }) };
+          this.activeNavigation = navigation;
+          try {
+            const summaryProvider = request.summarize === true
+              ? createProviderBranchSummarizer(this.context.provider, this.model) : undefined;
+            const result = await this.context.sessionManager.navigateTree(this.currentSessionId, entryId, {
+              summarize: request.summarize === true, ...summaryProvider,
+              ...(request.summarize === true
+                ? { reserveTokens: this.context.agentSettings?.().branchSummary?.reserveTokens } : {}),
+              customInstructions: request.customInstructions as string | undefined,
+              replaceInstructions: request.replaceInstructions as boolean | undefined,
+              signal: controller.signal,
+            });
+            if (result.status === 'not-found') throw new Error(`Entry not found: ${entryId}`);
+            if (result.status === 'navigated') this.resetQueues();
+            return success(id, command, {
+              cancelled: result.status === 'cancelled', stale: result.status === 'stale',
+              leafId: this.session().activeLeafId ?? null,
+              ...(result.summary ? { summaryEntryId: result.summary.id } : {}),
+            });
+          } finally {
+            if (this.activeNavigation === navigation) this.activeNavigation = undefined;
+            finish();
+          }
         }
         case 'fork': {
           await this.ensureIdle(command);
@@ -1414,6 +1482,7 @@ export class RpcController {
   }
 
   private async ensureIdle(command: string): Promise<void> {
+    if (this.activeNavigation) throw new Error(`${command} is not available while navigating the session tree.`);
     if (this.activeRun) throw new Error(`${command} is not available while the agent is processing.`);
   }
 
@@ -1462,10 +1531,7 @@ export class RpcController {
       const entry = byId.get(cursor);
       if (!entry) break;
       pathIds.add(cursor);
-      cursor = entry.type === 'message' ? entry.parentMessageId
-        : entry.type === 'command' || entry.type === 'compaction' || entry.type === 'branch_summary'
-          ? entry.parentEntryId
-          : undefined;
+      cursor = entry.type === 'message' ? entry.parentMessageId : entry.parentEntryId;
     }
     if (pathIds.size <= 1 && source.length > 1 && session.metadata?.hasBranchedHistory !== true) return source;
     return source.filter(entry => pathIds.has(entry.id));
@@ -1511,7 +1577,7 @@ export class RpcController {
             usage: protocolUsage(item.provider ?? this.context.providerName, item.model, item.usage),
           } : {}),
         };
-      } else {
+      } else if (item.type === 'branch_summary') {
         entry = {
           type: 'branch_summary',
           id: item.id,
@@ -1519,10 +1585,20 @@ export class RpcController {
           timestamp: new Date(item.timestamp).toISOString(),
           summary: item.summary,
           branchName: item.branchName,
+          ...(item.fromEntryId ? { fromId: item.fromEntryId } : {}),
           ...(item.provider ? { provider: item.provider } : {}),
           ...(item.model ? { model: item.model } : {}),
           ...(item.usage ? { usage: protocolUsage(item.provider ?? '', item.model, item.usage) } : {}),
         };
+      } else {
+        entry = {
+          type: item.type, id: item.id, parentId: item.parentEntryId ?? parentId,
+          timestamp: new Date(item.timestamp).toISOString(), customType: item.customType,
+          ...(item.type === 'custom_message' ? { content: item.content, display: item.display } : {}),
+        };
+      }
+      if (this.session().metadata?.hasBranchedHistory === true) {
+        entry.parentId = item.type === 'message' ? item.parentMessageId ?? null : item.parentEntryId ?? null;
       }
       parentId = item.id;
       return entry;
@@ -1531,6 +1607,7 @@ export class RpcController {
 
   private leafId(entries: Array<Record<string, unknown> & { id: string }>): string | null {
     const active = this.session().activeLeafId;
+    if (!active && this.session().metadata?.activeLeafReset === true) return null;
     return active && entries.some(entry => entry.id === active) ? active : entries.at(-1)?.id ?? null;
   }
 

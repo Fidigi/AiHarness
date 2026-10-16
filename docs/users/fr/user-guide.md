@@ -414,10 +414,15 @@ Les sorties de lecture, recherche, listing et commande sont limitées afin de ne
 | `/compact [instructions]` | résume une conversation suffisamment longue avec le provider actif |
 | `/summarize-branch [session-id] [instructions]` | enregistre un résumé sans supprimer les messages |
 | `/fork <session-id> [index-message] [titre]` | crée une branche à partir d’un message |
-| `/clone <session-id> [titre]` | copie toute une conversation |
+| `/clone <session-id> [titre]` | copie la branche active avec de nouveaux IDs et le contexte nécessaire |
 | `/tree [branch-id]` | affiche l’arbre et les résumés de branches |
+| `/navigate [entry-id] [--summarize\|--no-summary] [--instructions "focus"]` | liste les entrées ou change de position dans le journal courant, avec résumé facultatif de la branche abandonnée |
 
 La compaction nécessite un provider configuré et au moins trois messages.
+
+Pour naviguer, lancez `/navigate`, copiez un ID puis choisissez `/navigate <id> --no-summary` ou `--summarize`. Sans drapeau, la position reste inchangée et la commande demande de répéter avec un choix. `branchSummary.skipPrompt: true` dans les réglages choisit **aucun résumé**, jamais un appel provider automatique. `branchSummary.reserveTokens` règle la réserve demandée (16 384 par défaut). `--instructions "focus"` exige `--summarize` et ajoute votre consigne au résumé.
+
+Le provider courant produit le résumé sans outils ; le journal abandonné reste conservé. Le résumé devient un enfant de la destination ; la suite utilise cette ascendance, la compaction/le contexte personnalisé pertinents et les groupes outils complets, pas la branche abandonnée. Aucun provider n’est nécessaire sans résumé. Esc/Ctrl+C annule une génération non publiée, pas une écriture disque déjà admise. Une source modifiée pendant la génération rend la navigation obsolète plutôt que d’écraser le travail concurrent. RPC utilise `navigate_tree` avec `entryId`, le booléen strict optionnel `summarize` et `customInstructions`/`replaceInstructions` optionnels ; abort/EOF annulent aussi l’admission en attente.
 
 La compaction automatique revérifie l’annulation, la branche active et la politique locale avant de publier un résumé, y compris après l’attente d’un résumeur non coopératif ou d’une mutation de session en file. Une sortie tardive refusée ne remplace pas le contexte et ne signale pas de succès. L’annulation n’annule pas une persistance déjà démarrée ; un callback/stockage non coopératif peut retarder le règlement.
 

@@ -1403,7 +1403,17 @@ async function main(): Promise<void> {
           trimmed = resourceManager.expandPrompt(resourceCommand, resourceArgs);
         } else {
           if (trimmed === '/help') terminal.showHelp();
-          else await commandHandler.execute(trimmed);
+          else if (resourceCommand === 'navigate') {
+            const controller = new AbortController();
+            const commandContext = commandHandler.getContext();
+            activeAbortController = controller;
+            commandContext.signal = controller.signal;
+            try { await commandHandler.execute(trimmed); }
+            finally {
+              if (commandContext.signal === controller.signal) delete commandContext.signal;
+              if (activeAbortController === controller) activeAbortController = null;
+            }
+          } else await commandHandler.execute(trimmed);
 
           ctx = commandHandler.getContext();
           currentSessionId = ctx.currentSessionId ?? currentSessionId;
