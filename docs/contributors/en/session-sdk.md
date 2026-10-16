@@ -29,6 +29,10 @@ const loader = createAgentResourceLoader({ globalPromptSelectors: selectors });
 
 `discoverSkills: false` / `discoverPrompts: false` on `ResourceManager` or `createAgentResourceLoader` skip automatic roots and the corresponding supplied settings/package selector layers, retaining explicit `skillPaths` / `promptPaths`. Both default to true. Legacy `disableSkills` / `disablePrompts` still disable **all** loading, including explicit paths; they were not repurposed. These are host options, not saved agent settings, and never override project trust or stable-file checks. The SDK factory remains passive.
 
+## Lower-level compaction limits
+
+`SessionManager.setCompactionContextWindow(tokens?)` accepts a positive safe integer or `undefined`; its getter returns a manager-scoped, non-persisted host limit. With a limit, automatic admission requires `estimateContextTokens(id) > window - reserveTokens`, then the existing keep/cut checks; the window is rechecked across asynchronous admission. Clearing it preserves the legacy trigger. The passive root `resolveAgentCompactionContextWindow(provider?, model?)` uses published metadata or a 128,000-token non-mock fallback; missing/mock identities preserve legacy policy. This is not exact system/tool wire tokenization or authoritative metadata for unknown models. Manual targets and the high-level facade do not acquire a window setter or implicit model discovery.
+
 ## Lower-level navigation and custom context
 
 The root also exports `SessionManager.navigateTree(sessionId, entryId, options?)`, `BranchNavigationOptions`/`BranchNavigationResult` and `createProviderBranchSummarizer(provider, model?)`. Only explicit `summarize: true` authorizes generation; a callback alone does not. Results distinguish `navigated`, `not-found`, `cancelled` and `stale`. Generation is bounded and outside the mutation queue; publication rechecks the exact source. A cancellation cannot roll back an admitted write. These methods do not become methods of the high-level session facade; its host still owns foreground admission and callback cooperation.

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import os from 'node:os';
 import { StringDecoder } from 'node:string_decoder';
 import type { Readable } from 'node:stream';
 import {
@@ -225,6 +226,9 @@ function reportSettingsDiagnostics(
  * owns framing and startup; RpcController owns stateful command execution.
  */
 export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void> {
+  const contextReloadTrustOverride = options.projectTrust;
+  const contextReloadIncludeContextFiles = !options.noContextFiles;
+  const contextReloadHomeDir = os.homedir();
   const offline = options.offline ?? resolveOfflineMode();
   const redactor = options.credentialRedactor ?? new CredentialRedactor();
   redactor.add(options.apiKey);
@@ -282,9 +286,8 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     const workspaceManager = new WorkspaceManager({ allowedRoots: [cwd], defaultCwd: cwd });
     await workspaceManager.initialize();
     const canonicalCwd = await workspaceManager.getDefaultCwd();
-    const trustManager = new ProjectTrustManager(
-      path.join(resolvePreTrustAgentDirectory(canonicalCwd), 'trust.json'),
-    );
+    const trustFilePath = path.join(resolvePreTrustAgentDirectory(canonicalCwd), 'trust.json');
+    const trustManager = new ProjectTrustManager(trustFilePath);
     await trustManager.load();
     const bootstrapSettings = await loadAgentSettings({ cwd: canonicalCwd, projectTrusted: false });
     const projectTrust = await resolveProjectTrust({
@@ -300,6 +303,11 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       cwd: canonicalCwd,
       projectTrusted: projectResourcesTrusted,
     });
+    let contextSettings = settingsResolution.settings;
+    const contextSettingsSources = {
+      cwd: canonicalCwd, agentDir: settingsResolution.agentDir, homeDir: contextReloadHomeDir,
+      projectSettingsPath: settingsResolution.paths.project,
+    };
     const builtinExtensions = configuredBuiltinExtensions(settingsResolution, options);
     const mcpOAuth = process.env.AI_HARNESS_MASTER_KEY && settingsResolution.agentDirTrusted
       ? new McpOAuthCredentialManager(
@@ -528,7 +536,29 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       providerName: startup.providerName,
       model: startupModel,
       systemPrompt: instructions.systemPrompt,
-      agentSettings: () => settingsResolution.settings,
+      agentSettings: () => contextSettings,
+      prepareContextSettingsReload: async signal => {
+        const ensureActive = (): void => {
+          if (signal.aborted) throw new DOMException('Context settings reload cancelled.', 'AbortError');
+        };
+        ensureActive();
+        const freshTrustManager = new ProjectTrustManager(trustFilePath);
+        await freshTrustManager.load(); ensureActive();
+        const bootstrap = await loadAgentSettings({ ...contextSettingsSources, projectTrusted: false });
+        ensureActive();
+        if (bootstrap.diagnostics.length) throw new Error('Context settings could not be reloaded.');
+        const trust = await resolveProjectTrust({
+          cwd: canonicalCwd, trustManager: freshTrustManager, override: contextReloadTrustOverride,
+          defaultProjectTrust: bootstrap.settings.defaultProjectTrust,
+          includeContextFiles: contextReloadIncludeContextFiles,
+        });
+        ensureActive();
+        const fresh = await loadAgentSettings({ ...contextSettingsSources, projectTrusted: trust.resourceTrusted });
+        ensureActive();
+        if (fresh.diagnostics.length) throw new Error('Context settings could not be reloaded.');
+        const next = { ...contextSettings, compaction: fresh.settings.compaction, branchSummary: fresh.settings.branchSummary };
+        return () => { contextSettings = next; };
+      },
       tools: toChatToolDefinitions(selectedTools),
       prepareDynamicTools: async (sessionId, signal) => {
         try {
@@ -687,8 +717,8 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
         },
       );
     }
-    // No further replies can arrive after EOF. Cancel dialogs and optional branch
-    // generation before joining handlers, so their provider work cannot hold EOF open.
+    // No further replies can arrive after EOF. Retire dialogs, unpublished context
+    // reloads and optional branch generation before joining their handlers.
     extensionUi.close();
     controller?.abortNavigation();
     await Promise.allSettled([...pending]);

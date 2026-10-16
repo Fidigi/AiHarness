@@ -26,6 +26,7 @@ import {
   PluginService,
   resolveInstructionPrompt,
   resolvePreTrustAgentDirectory,
+  resolveAgentCompactionContextWindow,
   resolveAgentCompactionSettings,
   resolveAgentDefaultTools,
   resolveAgentResourceSelectors,
@@ -842,6 +843,9 @@ async function main(): Promise<void> {
       refreshedStartup.providerName,
       refreshedModel,
     ));
+    sessionManager.setCompactionContextWindow(resolveAgentCompactionContextWindow(
+      refreshedStartup.providerName, refreshedModel,
+    ));
     interactiveQueue.setMode('steer', settingsResolution.settings.steeringMode ?? 'one-at-a-time');
     interactiveQueue.setMode('follow-up', settingsResolution.settings.followUpMode ?? 'one-at-a-time');
     await reloadInstructionPrompt();
@@ -1039,6 +1043,7 @@ async function main(): Promise<void> {
       startup.providerName,
       startupModel,
     ));
+    sessionManager.setCompactionContextWindow(resolveAgentCompactionContextWindow(startup.providerName, startupModel));
   } catch (error) {
     reportError(error instanceof Error ? error.message : String(error));
     process.exitCode = 2;

@@ -380,6 +380,41 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     });
   });
 
+  it('publishes installed host-supplied compaction windows without adding a facade mutation or changing API 1', async () => {
+    await writeFile(path.join(consumer, 'compaction-window-public.ts'), `
+      import { SessionManager, resolveAgentCompactionContextWindow, AI_HARNESS_CORE_API_VERSION,
+        type AgentSession } from '@ai-harness/core';
+      const manager = new SessionManager();
+      const window: number | undefined = resolveAgentCompactionContextWindow('openai', 'gpt-4o');
+      manager.setCompactionContextWindow(window); manager.setCompactionContextWindow(undefined);
+      const current: number | undefined = manager.getCompactionContextWindow(); void current;
+      const version: 1 = AI_HARNESS_CORE_API_VERSION; void version;
+      // @ts-expect-error token windows are numeric, not strings
+      manager.setCompactionContextWindow('128000');
+      // @ts-expect-error model identities are strings, not coercible objects
+      resolveAgentCompactionContextWindow({}, 'model');
+      declare const facade: AgentSession;
+      // @ts-expect-error this remains a lower-level host policy, not a facade mutation
+      facade.setCompactionContextWindow(128000);
+    `);
+    const result = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'compaction-window-public.ts'], consumer, environment);
+    expect(result.stdout).toBe(''); expect(result.stderr).toBe('');
+  });
+
+  it.each(['thresholds', 'eof'])('uses installed Core and the actual PATH-bin context-settings protocol (%s)', async scenario => {
+    const worker = path.join(consumer, `context-settings-${scenario}.mjs`);
+    await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', 'context-settings-probe.mjs'), worker);
+    const result = await run(process.execPath, [worker, scenario], consumer,
+      { ...environment, AIH_CONTEXT_COMMAND: 'ai-harness' });
+    expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe('');
+    const records = result.stdout.trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
+    expect(records).toEqual([
+      { scenario, requests: scenario === 'thresholds' ? 4 : 0, compactions: scenario === 'thresholds' ? 1 : 0,
+        summaries: scenario === 'thresholds' ? 1 : 0, exit: 0 },
+      { result: 'CONTEXT_SETTINGS_PROCESS_OK', node: process.versions.node, cases: 1 },
+    ]);
+  });
+
   it('publishes strict installed optional navigation and custom-entry declarations without changing Core API 1', async () => {
     await writeFile(path.join(consumer, 'session-navigation-public.ts'), `
       import { SessionManager, createProviderBranchSummarizer, AI_HARNESS_CORE_API_VERSION,

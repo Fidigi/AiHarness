@@ -98,6 +98,21 @@ A saved refusal must remain a refusal; the SDK never grants or persists trust.
   signal remains live. Value options and borrowed identities are captured before
   factory initialization, and mutable method arguments at call admission.
 
+Outside the facade, `SessionManager.setCompactionContextWindow(tokens?)` accepts
+only positive safe integers or `undefined`; `getCompactionContextWindow()` reads
+that manager-scoped, non-persisted host policy. With a limit, automatic compaction
+requires `estimateContextTokens(id) > window - reserveTokens`; `keepRecentTokens`
+still chooses the cut. Changing the admitted window withdraws unpublished stale
+output at the existing policy/start/summary/queue boundaries. Clearing it retains
+the legacy host trigger. Manual target selection is unchanged. The facade neither
+infers this limit nor gains a setter.
+
+The passive root helper `resolveAgentCompactionContextWindow(provider?, model?)`
+uses published limits, or a 128,000-token fallback for other non-mock providers;
+mock/unspecified hosts retain legacy policy. CLI/RPC apply it after model changes.
+The fallback is not authoritative vendor metadata; estimates omit system/tool
+wire overhead and are not exact tokenization or overflow recovery.
+
 ### Session lifecycle
 
 `prompt` starts a detached Core run; `promptAndWait` returns its exact settled
@@ -251,6 +266,19 @@ l'initialisation et les arguments mutables des méthodes lors de leur appel. Auc
 inventé. La priorité Core du thinking enregistré est conservée : utilisez
 `setThinking` au repos. Les prompts système littéraux sont éphémères ; aucun
 fichier AGENTS/settings/system n'est découvert automatiquement.
+
+Hors façade, `SessionManager.setCompactionContextWindow(tokens?)` accepte un entier
+sûr strictement positif ou `undefined` ; `getCompactionContextWindow()` lit cette
+politique hôte propre au gestionnaire, non persistée. Avec une limite, l’automatique
+exige `estimateContextTokens(id) > fenêtre - reserveTokens`, puis `keepRecentTokens`
+choisit la coupe. La fenêtre est revérifiée après politique/observateurs/résumé/file ;
+une sortie devenue inéligible n’est pas publiée. Effacer la limite conserve le
+seuil historique ; les cibles manuelles et la façade restent inchangées.
+L’utilitaire passif `resolveAgentCompactionContextWindow(provider?, model?)` utilise
+la limite publiée ou un repli de 128 000 tokens hors mock ; sans provider ou pour
+mock, l’ancienne politique est conservée. CLI/RPC l’appliquent après changement de
+modèle. Ce repli n’est pas une métadonnée fournisseur certifiée ; l’estimation
+n’inclut pas tout le payload système/outils et n’est pas une récupération d’overflow.
 
 `prompt` démarre le run détaché, `promptAndWait` attend exactement ce run.
 `stop` accuse réception de l'annulation : **attendez `wait()`** avant de considérer

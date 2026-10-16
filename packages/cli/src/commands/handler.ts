@@ -15,6 +15,7 @@ import {
   getSupportedThinkingLevels,
   getSessionAccounting,
   isValidSessionId,
+  resolveAgentCompactionContextWindow,
   resolveAgentCompactionSettings,
   resolveModelReference,
   resolveModelScope,
@@ -1648,11 +1649,12 @@ export class CommandHandler {
 
   private refreshCompactionSettings(): void {
     if (!this.ctx.agentSettings) return;
+    const provider = this.ctx.provider?.getProviderType();
+    const model = this.ctx.provider?.getConfiguredModel();
     this.ctx.sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
-      this.ctx.agentSettings(),
-      this.ctx.provider?.getProviderType(),
-      this.ctx.provider?.getConfiguredModel(),
+      this.ctx.agentSettings(), provider, model,
     ));
+    this.ctx.sessionManager.setCompactionContextWindow(resolveAgentCompactionContextWindow(provider, model));
   }
 
   private writeOutput(output: string, sensitive = false): void {

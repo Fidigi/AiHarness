@@ -1408,6 +1408,7 @@ export class SessionManager {
   private onSessionUpdate?: (sessionId: string) => void;
   private store: JsonlSessionStore | null = null;
   private compactionSettings: CompactionSettings = DEFAULT_COMPACTION_SETTINGS;
+  private compactionContextWindow?: number;
   private autoCompactionCallback?: AutoCompactionCallback;
   private autoCompactionPolicy?: AutoCompactionPolicy;
   private readonly redactText: (value: string) => string;
@@ -1469,6 +1470,16 @@ export class SessionManager {
     return this.compactionSettings;
   }
 
+  /** Supply the active model's token limit; undefined preserves legacy host policy. */
+  setCompactionContextWindow(contextWindow?: number): void {
+    if (contextWindow !== undefined && (!Number.isSafeInteger(contextWindow) || contextWindow <= 0)) {
+      throw new Error('Compaction context window is invalid.');
+    }
+    this.compactionContextWindow = contextWindow;
+  }
+
+  getCompactionContextWindow(): number | undefined { return this.compactionContextWindow; }
+
   /** Set the callback function for auto-compaction summarization */
   setAutoCompactionCallback(callback: AutoCompactionCallback): void {
     this.autoCompactionCallback = callback;
@@ -1495,6 +1506,7 @@ export class SessionManager {
   private async checkAndTriggerCompactionUnlocked(sessionId: string, signal?: AbortSignal): Promise<boolean> {
     const session = this.sessions.get(sessionId);
     const settings = { ...this.compactionSettings };
+    const contextWindow = this.compactionContextWindow;
     const summarize = this.autoCompactionCallback;
     const policy = this.autoCompactionPolicy;
     if (!session || !settings.enabled || !summarize || signal?.aborted) return false;
@@ -1506,10 +1518,13 @@ export class SessionManager {
       && this.compactionSettings.enabled
       && this.compactionSettings.reserveTokens === settings.reserveTokens
       && this.compactionSettings.keepRecentTokens === settings.keepRecentTokens
+      && this.compactionContextWindow === contextWindow
       && this.autoCompactionCallback === summarize
       && this.autoCompactionPolicy === policy;
     if (policy && !await policy(session)) return false;
     if (signal?.aborted || !isCurrent()) return false;
+    if (contextWindow !== undefined
+      && this.estimateContextTokens(sessionId) <= contextWindow - settings.reserveTokens) return false;
 
     const result = this.requestCompaction(sessionId);
     if (!result) return false;

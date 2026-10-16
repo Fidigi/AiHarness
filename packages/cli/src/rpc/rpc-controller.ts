@@ -17,6 +17,7 @@ import {
   getPublishedModelMetadata,
   getSupportedThinkingLevels,
   normalizeProviderUsage,
+  resolveAgentCompactionContextWindow,
   resolveAgentCompactionSettings,
   resolveModelScope as resolveSharedModelScope,
   toProtocolModelDescriptor,
@@ -78,6 +79,8 @@ export interface RpcControllerContext {
   systemPrompt?: string;
   /** Trusted settings snapshot used when the active model changes. */
   agentSettings?: () => AgentSettings;
+  /** Passive preparation; the returned privileged host callback publishes synchronously. */
+  prepareContextSettingsReload?(signal: AbortSignal): Promise<() => void>;
   tools?: ChatToolDefinition[];
   /** Resolve session-scoped tools (for example persistent MCP tools) before each prompt. */
   prepareDynamicTools?(sessionId: string, signal: AbortSignal): Promise<RpcDynamicTools>;
@@ -352,6 +355,7 @@ export class RpcController {
   private summarizationAbortController?: AbortController;
   private compacting = false;
   private activeNavigation?: ActiveRun;
+  private activeContextReload?: ActiveRun;
   private navigationRetired = false;
   private activeRun?: ActiveRun;
   private activeBash?: ActiveBash;
@@ -498,10 +502,12 @@ export class RpcController {
   abortNavigation(): void {
     this.navigationRetired = true;
     this.activeNavigation?.controller.abort();
+    this.activeContextReload?.controller.abort();
   }
 
   async close(): Promise<void> {
     const navigation = this.activeNavigation;
+    const contextReload = this.activeContextReload;
     this.abortNavigation();
     this.retryAbortController?.abort();
     this.summarizationAbortController?.abort();
@@ -513,6 +519,7 @@ export class RpcController {
       await this.activeRun.done;
     }
     if (navigation) await navigation.done;
+    if (contextReload) await contextReload.done;
     await this.eventTail;
     if (this.eventFailure) throw this.eventFailure;
   }
@@ -522,11 +529,15 @@ export class RpcController {
     const command = request.type;
     try {
       if (this.eventFailure) throw this.eventFailure;
-      if (this.activeNavigation && ![
+      const foregroundSafe = [
         'abort', 'abort_retry', 'get_state', 'get_session_stats', 'get_entries', 'get_tree',
         'get_messages', 'get_fork_messages', 'get_last_assistant_text', 'get_commands',
         'get_available_thinking_levels',
-      ].includes(command)) throw new Error(`${command} is not available while navigating the session tree.`);
+      ].includes(command);
+      if (!foregroundSafe) {
+        if (this.activeNavigation) throw new Error(`${command} is not available while navigating the session tree.`);
+        this.assertNoContextReload(command);
+      }
       switch (command) {
         case 'prompt': {
           const rawMessage = requiredString(request.message, 'message');
@@ -535,6 +546,7 @@ export class RpcController {
             return success(id, command, { disposition: 'handled' });
           }
           const prompt = await this.preparePrompt(message, request.images);
+          this.assertNoContextReload(command);
           if (this.activeNavigation) throw new Error('prompt is not available while navigating the session tree.');
           if (this.activeRun) {
             if (request.streamingBehavior === 'steer') this.messageQueue.enqueue('steer', prompt);
@@ -550,6 +562,7 @@ export class RpcController {
           const message = requiredString(request.message, 'message');
           if (this.isExtensionCommand(message)) throw new Error('Extension commands are not allowed in steer; use prompt instead.');
           const prompt = await this.preparePrompt(message, request.images);
+          this.assertNoContextReload(command);
           this.messageQueue.enqueue('steer', prompt);
           await this.emitQueueUpdate();
           return success(id, command, { disposition: 'queued' });
@@ -558,19 +571,23 @@ export class RpcController {
           const message = requiredString(request.message, 'message');
           if (this.isExtensionCommand(message)) throw new Error('Extension commands are not allowed in follow_up; use prompt instead.');
           const prompt = await this.preparePrompt(message, request.images);
+          this.assertNoContextReload(command);
           this.messageQueue.enqueue('follow-up', prompt);
           await this.emitQueueUpdate();
           return success(id, command, { disposition: 'queued' });
         }
         case 'abort': {
           const navigation = this.activeNavigation;
+          const contextReload = this.activeContextReload;
           navigation?.controller.abort();
+          contextReload?.controller.abort();
           const active = this.activeRun;
           if (active) {
             active.controller.abort();
             await active.done;
           }
           if (navigation) await navigation.done;
+          if (contextReload) await contextReload.done;
           return success(id, command);
         }
         case 'clear_queue': {
@@ -597,6 +614,46 @@ export class RpcController {
         }
         case 'get_state':
           return success(id, command, this.state());
+        case 'reload_context_settings': {
+          if (Reflect.ownKeys(request).some(key => key !== 'type' && key !== 'id')) {
+            throw new Error('reload_context_settings accepts only type and id.');
+          }
+          if (this.navigationRetired) return success(id, command, { cancelled: true, reloaded: [] });
+          if (this.activeRun || this.activeBash || this.compacting) {
+            throw new Error('reload_context_settings is not available while a foreground operation is processing.');
+          }
+          const descriptor = Object.getOwnPropertyDescriptor(this.context, 'prepareContextSettingsReload');
+          if (!descriptor) throw new Error('Context settings reload is unavailable.');
+          if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+            throw new Error('Context settings reload is invalid.');
+          }
+          const prepare = descriptor.value as NonNullable<RpcControllerContext['prepareContextSettingsReload']>;
+          const controller = new AbortController();
+          let finish!: () => void;
+          const reload: ActiveRun = { controller, done: new Promise<void>(resolve => { finish = resolve; }) };
+          this.activeContextReload = reload;
+          try {
+            let publish: () => void;
+            try { publish = await prepare.call(this.context, controller.signal); }
+            catch (error) {
+              if (controller.signal.aborted || this.navigationRetired) {
+                return success(id, command, { cancelled: true, reloaded: [] });
+              }
+              throw error;
+            }
+            if (controller.signal.aborted || this.navigationRetired
+              || Object.getOwnPropertyDescriptor(this.context, 'prepareContextSettingsReload')?.value !== prepare) {
+              return success(id, command, { cancelled: true, reloaded: [] });
+            }
+            if (typeof publish !== 'function') throw new Error('Prepared context settings reload is invalid.');
+            publish();
+            this.refreshCompactionSettings();
+            return success(id, command, { cancelled: false, reloaded: ['compaction', 'branchSummary'] });
+          } finally {
+            if (this.activeContextReload === reload) this.activeContextReload = undefined;
+            finish();
+          }
+        }
         case 'set_model': {
           const provider = requiredString(request.provider, 'provider');
           const modelId = requiredString(request.modelId, 'modelId');
@@ -848,7 +905,7 @@ export class RpcController {
         }
         case 'navigate_tree': {
           await this.ensureIdle(command);
-          if (this.activeNavigation || this.activeRun || this.activeBash || this.compacting) {
+          if (this.activeNavigation || this.activeContextReload || this.activeRun || this.activeBash || this.compacting) {
             throw new Error('navigate_tree is not available while a foreground operation is processing.');
           }
           const entryId = requiredString(request.entryId, 'entryId');
@@ -1481,7 +1538,12 @@ export class RpcController {
     };
   }
 
+  private assertNoContextReload(command: string): void {
+    if (this.activeContextReload) throw new Error(`${command} is not available while reloading context settings.`);
+  }
+
   private async ensureIdle(command: string): Promise<void> {
+    this.assertNoContextReload(command);
     if (this.activeNavigation) throw new Error(`${command} is not available while navigating the session tree.`);
     if (this.activeRun) throw new Error(`${command} is not available while the agent is processing.`);
   }
@@ -1723,6 +1785,9 @@ export class RpcController {
       this.context.providerName,
       this.model,
     ));
+    this.context.sessionManager.setCompactionContextWindow(resolveAgentCompactionContextWindow(
+      this.context.providerName, this.model,
+    ));
   }
 
   private state(): Record<string, unknown> {
@@ -1737,7 +1802,7 @@ export class RpcController {
       sessionFile: this.context.sessionDir ? path.join(this.context.sessionDir, `${session.id}.jsonl`) : undefined,
       sessionId: session.id,
       sessionName: session.title,
-      autoCompactionEnabled: session.autoCompaction !== false,
+      autoCompactionEnabled: session.autoCompaction !== false && this.context.sessionManager.getCompactionSettings().enabled,
       messageCount: session.messages.length,
       pendingMessageCount: this.messageQueue.size(),
     };

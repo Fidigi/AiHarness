@@ -3,6 +3,7 @@ import { lstat, open } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { ThinkingBudgets, ThinkingLevel } from '../providers/index.js';
+import { getPublishedModelMetadata } from '../providers/model-metadata.js';
 import type { ResourceFileSelector } from '../resources/resource-manager.js';
 import {
   resolveAgentDirectory,
@@ -789,6 +790,15 @@ export function resolveAgentCompactionSettings(
     reserveTokens: override?.reserveTokens ?? settings.compaction?.reserveTokens ?? 16_384,
     keepRecentTokens: override?.keepRecentTokens ?? settings.compaction?.keepRecentTokens ?? 20_000,
   };
+}
+
+/** Resolve passive model limits; the synthetic mock retains its legacy host policy. */
+export function resolveAgentCompactionContextWindow(provider?: string, model?: string): number | undefined {
+  if (provider !== undefined && typeof provider !== 'string' || model !== undefined && typeof model !== 'string') {
+    throw new Error('Compaction model identity is invalid.');
+  }
+  if (!provider || provider === 'mock') return undefined;
+  return (model ? getPublishedModelMetadata(provider, model)?.contextWindow : undefined) ?? 128_000;
 }
 
 export function resolveAgentThinkingLevel(

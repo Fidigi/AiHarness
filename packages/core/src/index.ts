@@ -94,6 +94,7 @@ export type {
 export {
   loadAgentSettings,
   mergeAgentSettings,
+  resolveAgentCompactionContextWindow,
   resolveAgentCompactionSettings,
   resolveAgentDefaultTools,
   resolveAgentProviderNetworkSettings,
