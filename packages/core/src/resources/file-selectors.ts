@@ -16,6 +16,14 @@ export function isResourcePathWithin(candidate: string, parent: string): boolean
   return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
+/** Absolute selectors under an already literal base must not reinterpret that
+ * base as pattern syntax. Outside-base patterns retain their explicit syntax. */
+export function relativeResourceSelector(baseDir: string, value: string): string {
+  if (!path.isAbsolute(value) || !isResourcePathWithin(value, baseDir)) return value;
+  const relative = path.relative(baseDir, value) || '.';
+  return path.normalize(value).endsWith(path.sep) ? relative + path.sep : relative;
+}
+
 function matches(file: string, root: string, pattern: string): boolean {
   if (!isResourcePathWithin(file, root)) return false;
   try { return path.matchesGlob(path.relative(root, file), pattern); } catch { return false; }
@@ -83,7 +91,7 @@ export async function selectResourceFiles<T extends ScopedFileSelector>(
     const marker = ['+', '-', '!'].includes(raw[0]!) ? raw[0] : '';
     const input = marker ? raw.slice(1) : raw;
     if (!input) throw new Error('Extension selector is invalid.');
-    const value = path.normalize(input);
+    const value = path.normalize(relativeResourceSelector(base, input));
     const absolute = path.resolve(base, value);
     if (marker === '-') {
       for (const file of selected) if (isResourcePathWithin(file, absolute)) selected.delete(file);

@@ -3,7 +3,7 @@ import { lstat, open } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { openStableDirectoryHandle, readStableDirectoryEntries } from '../security/stable-directory.js';
-import { isResourcePathWithin, type ScopedFileSelector } from './file-selectors.js';
+import { isResourcePathWithin, relativeResourceSelector, type ScopedFileSelector } from './file-selectors.js';
 
 /** Literal declaring directory kept separate from selector/glob syntax. */
 export type ResourceFileSelector = Exclude<ScopedFileSelector, string>;
@@ -267,7 +267,7 @@ function globSearchRoot(pattern: string): string {
 }
 
 function selectorPattern(baseDir: string, value: string): { root: string; pattern: string } {
-  const root = path.resolve(baseDir, globSearchRoot(value));
+  const root = path.resolve(baseDir, globSearchRoot(relativeResourceSelector(baseDir, value)));
   return { root, pattern: path.relative(root, path.resolve(baseDir, value)) };
 }
 
@@ -282,7 +282,7 @@ async function selectorFiles(
   matcher: (name: string) => boolean,
   exact: boolean,
 ): Promise<string[]> {
-  if (exact || !GLOB_MAGIC.test(value)) return findFiles(path.resolve(baseDir, value), matcher, 8, value.endsWith(path.sep));
+  if (exact || !GLOB_MAGIC.test(relativeResourceSelector(baseDir, value))) return findFiles(path.resolve(baseDir, value), matcher, 8, value.endsWith(path.sep));
   const candidates = await findFiles(selectorPattern(baseDir, value).root, matcher, 8);
   return candidates.filter(candidate => matchesSelector(candidate, baseDir, value));
 }
@@ -455,7 +455,15 @@ export class ResourceManager {
     this.projectTrusted = options.projectTrusted === true;
     this.discoverSkills = options.discoverSkills !== false;
     this.discoverPrompts = options.discoverPrompts !== false;
-    const resolve = (entries: readonly string[]): ResourceFileSelector[] => entries.map(pattern => ({ pattern, baseDir: this.cwd }));
+    // Legacy strings carry no declaring-directory field. Only already known
+    // literal roots can be recovered; never infer roots by probing glob paths.
+    const knownRoots = [this.cwd, this.agentDir, this.homeDir].sort((a, b) => b.length - a.length);
+    const resolve = (entries: readonly string[]): ResourceFileSelector[] => entries.map(pattern => {
+      const value = typeof pattern === 'string' && /^[+!-]/u.test(pattern) ? pattern.slice(1) : pattern;
+      const baseDir = typeof value === 'string' && path.isAbsolute(value)
+        ? knownRoots.find(root => inside(root, value)) ?? this.cwd : this.cwd;
+      return { pattern, baseDir };
+    });
     const literal = (entries: readonly string[]): ResourceFileSelector[] => entries.map(value => ({ pattern: '+' + value, baseDir: this.cwd }));
     const scoped = (entries: readonly ResourceFileSelector[] | undefined): ResourceFileSelector[] => {
       if (entries === undefined) return [];

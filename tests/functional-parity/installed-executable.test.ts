@@ -588,6 +588,43 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       .toEqual({ code: 0, stdout: '[Mock AI Response]\n', stderr: '' });
   }, 60_000);
 
+  it('preserves literal absolute resource bases through installed legacy Core, SDK and PATH-bin reads', async () => {
+    const agentDir = path.join(consumer, 'absolute-agent[literal]');
+    const target = path.join(agentDir, 'configured/review.md');
+    const bait = target.replace('[literal]', 'l');
+    for (const [file, text] of [[target, 'INSTALLED ABSOLUTE LITERAL'], [bait, 'UNREQUESTED INSTALLED BODY']] as const) {
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, '---\nname: review\n---\n' + text);
+    }
+    await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({ prompts: [path.join(agentDir, 'configured/*.md')] }));
+    await writeFile(path.join(consumer, 'absolute-resource-public.mjs'), `
+      import assert from 'node:assert/strict';
+      import { ResourceManager, createAgentResourceLoader, loadAgentSettings, resolveAgentResourcePaths } from '@ai-harness/core';
+      const cwd = ${JSON.stringify(workspace)}, agentDir = ${JSON.stringify(agentDir)};
+      const settings = await loadAgentSettings({ cwd, agentDir, projectTrusted: false });
+      const paths = resolveAgentResourcePaths(settings, 'prompts', undefined, 'global');
+      assert.deepEqual(paths, [${JSON.stringify(path.join(agentDir, 'configured/*.md'))}]);
+      const options = { cwd, agentDir, globalPromptPaths: paths };
+      const manager = new ResourceManager(options);
+      assert.equal((await manager.loadAll()).errors.length, 0);
+      assert.deepEqual(manager.listInventory().map(item => item.provenance.path), [${JSON.stringify(target)}]);
+      assert.equal(manager.expandPrompt('review', []), 'INSTALLED ABSOLUTE LITERAL');
+      const resources = await createAgentResourceLoader(options).load({ cwd, projectTrusted: false });
+      assert.deepEqual(resources.diagnostics, []);
+      assert.equal(resources.expandPrompt('review', []), 'INSTALLED ABSOLUTE LITERAL');
+      console.log('installed absolute legacy resources OK');
+    `);
+    expect(await run(process.execPath, ['absolute-resource-public.mjs'], consumer, environment))
+      .toEqual({ code: 0, stdout: 'installed absolute legacy resources OK\n', stderr: '' });
+    const observer = path.join(consumer, 'absolute-resource-observer.mjs');
+    const trace = path.join(consumer, 'absolute-resource-reads');
+    await writeFile(observer, `import fs from 'node:fs/promises';import{appendFileSync,readlinkSync}from'node:fs';import{syncBuiltinESMExports}from'node:module';const open=fs.open;fs.open=async(...args)=>{const handle=await open(...args),read=handle.read.bind(handle);handle.read=(...values)=>{const name=readlinkSync('/proc/self/fd/'+handle.fd);if(name.startsWith(${JSON.stringify(path.join(consumer, 'absolute-agent'))})&&name.endsWith('.md'))appendFileSync(${JSON.stringify(trace)},JSON.stringify(name)+String.fromCharCode(10));return read(...values);};return handle;};syncBuiltinESMExports();`);
+    expect(await run('ai-harness', ['--no-approve', '--no-extensions', '--no-session', '--model', 'mock/mock-model', '--print', 'Hello.'], workspace,
+      { ...environment, AI_HARNESS_AGENT_DIR: agentDir, NODE_OPTIONS: '--import=' + JSON.stringify(observer) }))
+      .toEqual({ code: 0, stdout: '[Mock AI Response]\n', stderr: '' });
+    expect((await readFile(trace, 'utf8')).trim().split('\n').map(line => JSON.parse(line))).toEqual([target]);
+  }, 60_000);
+
   it('discovers themes through installed readonly Core declarations and the actual PATH bin', async () => {
     const directory = path.join(consumer, 'themes [literal]');
     await mkdir(directory);

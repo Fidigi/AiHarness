@@ -71,7 +71,12 @@ A saved refusal must remain a refusal; the SDK never grants or persists trust.
   `discoverPrompts: false` skip automatic roots and supplied settings/package
   selectors, retaining explicit `skillPaths` / `promptPaths`. Both default true;
   legacy `disableSkills` / `disablePrompts` still disable all loading, including
-  explicit paths. These host options never grant project trust.
+  explicit paths. These host options never grant project trust. Absolute Markdown
+  selectors under the configured cwd, agent directory or home preserve that
+  known literal root, including legacy string paths. Scoped absolute selectors
+  preserve their own declaring base as well; outside-base and nested patterns
+  retain glob syntax. `resolveAgentResourcePaths` still returns unchanged strings in a
+  mutable array; no filesystem probing guesses an arbitrary literal root.
 - **runDefaults**: existing typed runtime prompt options. Factory-bound provider,
   session, cwd and settings-persistence flags cannot be overridden per prompt.
   Session model/thinking/tool-preset settings supply subsequent requests. Core's
