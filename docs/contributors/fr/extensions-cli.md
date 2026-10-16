@@ -187,6 +187,33 @@ Chaque factory reçoit `api.version`. La version `1` est aussi exportée sous le
 
 Les événements actuels couvrent les sessions, messages, compactage, appels agent/provider/tool, `system:ready` et `system:shutdown`.
 
+### État de session, contexte et générations
+
+Les commandes et outils reçoivent le véritable `context.sessionManager` et l’identifiant courant. Capturez cet identifiant avant tout `await`. Utilisez les opérations existantes pour les messages, la navigation, le compactage et les copies ; l’hôte conserve l’admission au premier plan. N’ajoutez pas un autre moteur de conversation et ne naviguez pas pendant une opération provider/outil active.
+
+- `appendCustomEntry(id, customType, data?)` ajoute du JSON propre privé (durable si la persistance est activée), jamais fourni au modèle. Le nom exact du type est une convention, pas une propriété ou une isolation d’extension. Le JSON refuse accesseurs, objets exotiques, cycles et tableaux creux ; limites : profondeur 32, 65 536 nœuds et 1 MiB, type de 256 octets UTF-8 maximum.
+- `appendCustomMessage(id, customType, content, {display?,details?})` ajoute son contenu au contexte modèle même avec `display:false` ; les détails en restent exclus. Ce n’est ni un coffre à secrets, ni un renderer UI arbitraire.
+- `await getActiveBranchEntries(id)` rend un chemin parent-d’abord copié, avec l’état privé antérieur au compactage. Filtrez votre type exact et prenez sa dernière entrée pour restaurer l’état. La lecture exclut les branches abandonnées, ignore la provenance source des résumés, retient la dernière projection ajoutée par identifiant et refuse une ascendance incomplète. L’historique brut inclut les branches abandonnées ; le contexte modèle exclut volontairement les données privées : aucun ne remplace ce chemin.
+- Les forks liés conservent l’ascendance personnalisée sélectionnée et ses identifiants ; les clones indépendants remappent les identifiants internes. Les deux réutilisent la copie bornée Core (1 024 entrées custom/résumé/compactage supplémentaires maximum), conservent l’état privé requis et refusent les commandes ancêtres encore actives. Les identifiants arbitraires dans les payloads ne sont pas réécrits.
+
+```js
+api.registerCommand('remember', {
+  description: 'Enregistrer une note privée',
+  handler: async (text, context) => {
+    const id = context.currentSessionId;
+    if (!id) return 'Aucune session active.';
+    await context.sessionManager.appendCustomEntry(id, 'example:note', { text });
+    const path = await context.sessionManager.getActiveBranchEntries(id);
+    const latest = path.filter(e => e.type === 'custom' && e.customType === 'example:note').at(-1);
+    return latest ? 'Note privée enregistrée.' : 'Aucune note sur cette branche.';
+  },
+});
+```
+
+Attendez la fin des écritures avant d’annoncer leur succès. Les lectures se sérialisent avec les mutations du manager et refusent un remplacement de store/feuille pendant l’attente ; elles ne constituent ni une transaction CAS interprocessus, ni une opération lecture-modification-écriture atomique. Le schéma reste JSONL v2, les API Core/extension restent en version majeure1. La façade haut niveau n’ajoute aucune mutation personnalisée ni méthode de chemin actif ; voir le [SDK de session](./session-sdk.md).
+
+L’état durable survit aux redémarrages et générations exécutables ; celui de `--no-session` non. `/reload` remplace les factories interactives et leurs variables locales, pas le journal : relisez le chemin sélectionné plutôt que de confondre fermeture et persistance. Un candidat invalide dans le même workspace conserve/restaure la factory précédente, pas les effets Node arbitraires. Les générations exécutables RPC restent celles du démarrage : une édition disque ou `reload_context_settings` ne les recharge pas ; redémarrez explicitement. Hooks de cycle de vie, disposers complets, renderers personnalisés et sandbox restent des contrats distincts.
+
 ### Hooks transformants et annulables
 
 Trois hooks sont disponibles :

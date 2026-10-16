@@ -10,7 +10,9 @@ Compose an explicit built-in config or borrowed `AiProvider`, canonical workspac
 
 Capture options and borrowed identities before the first await, method arguments at admission, and detach/redact callbacks/store/public data. Mutating usage/policy observers must not change durable tokens/history. Supply explicit secrets or a shared Core redactor, especially for shared backends. Custom stores must validate/bound their backend, preserve v2 raw parent graphs and Date projections, enforce atomic requireAbsent/locking, and await durability.
 
-Inspect `capabilities` and `ownership`; dispose every fork/clone handle. Last-handle cleanup closes only owned scopes/registry, never caller stores/providers/registries or global transports. Non-cooperative host integrations can delay settlement and are not sandboxed. OAuth/discovery, implicit instructions/settings, executable/MCP loading, provider switching, shell/HTML export, shared-process admission, exhaustive fork custom semantics and arbitrary custom-data reference rewriting are not implied.
+Inspect `capabilities` and `ownership`; dispose every fork/clone handle. Last-handle cleanup closes only owned scopes/registry, never caller stores/providers/registries or global transports. Non-cooperative host integrations can delay settlement and are not sandboxed. OAuth/discovery, implicit instructions/settings, executable/MCP loading, provider switching, shell/HTML export, shared-process admission, exhaustive fork lifecycle hooks and arbitrary custom-data reference rewriting are not implied.
+
+Lower-level `SessionManager.getActiveBranchEntries(id)` supplies an owned parent-first private-state path, distinct from raw history/model context, with last append projections and incomplete/stale-read refusal. Related forks now preserve selected stable IDs and custom/private ancestry through Core's bounded copy path; independent clones remap internal IDs. This adds no facade read/mutation method, cross-process CAS or arbitrary custom-payload ID rewriting. See the [extension state contract](./extensions-cli.md#session-state-context-and-generations).
 
 ## Scoped Markdown resources
 

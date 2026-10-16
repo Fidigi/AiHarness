@@ -20,7 +20,7 @@ import {
 // Test helpers
 // ===================================================================
 
-function createTempDir(): string {
+function createTempDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'ai-harness-test-'));
 }
 
@@ -1336,7 +1336,7 @@ describe('Auto-Compaction', () => {
   describe('setAutoCompactionCallback()', () => {
     it('should set the callback for auto-compaction', async () => {
       let callbackCalled = false;
-      manager.setAutoCompactionCallback(async (sessionId, toCompact, _keptEntries) => {
+      manager.setAutoCompactionCallback(async (_sessionId, toCompact, _keptEntries) => {
         callbackCalled = true;
         return `Summary of ${toCompact.length} compacted messages`;
       });
@@ -1507,7 +1507,7 @@ describe('Auto-Compaction', () => {
     it('should trigger compaction when threshold exceeded and callback is set', async () => {
       let summaryGenerated = '';
       
-      manager.setAutoCompactionCallback(async (sessionId, toCompact, _keptEntries) => {
+      manager.setAutoCompactionCallback(async (_sessionId, toCompact, _keptEntries) => {
         summaryGenerated = `Auto-summary: ${toCompact.length} messages compacted`;
         return summaryGenerated;
       });
@@ -1568,7 +1568,7 @@ describe('Auto-Compaction', () => {
     it('should automatically compact when threshold is exceeded', async () => {
       let summaryText = '';
       
-      manager.setAutoCompactionCallback(async (sessionId, toCompact, _keptEntries) => {
+      manager.setAutoCompactionCallback(async (_sessionId, toCompact, _keptEntries) => {
         summaryText = `Summary of ${toCompact.length} messages`;
         return summaryText;
       });

@@ -380,6 +380,41 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     });
   });
 
+  it('publishes installed active-branch state and related-copy declarations without adding a facade method', async () => {
+    await writeFile(path.join(consumer, 'extension-state-public.ts'), `
+      import { SessionManager, AI_HARNESS_CORE_API_VERSION, SESSION_SCHEMA_VERSION,
+        type SessionEntry, type ExtensionRuntimeContext, type AgentSession } from '@ai-harness/core';
+      const manager = new SessionManager();
+      const entries: Promise<SessionEntry[]> = manager.getActiveBranchEntries('session');
+      declare const context: ExtensionRuntimeContext;
+      const extensionEntries: Promise<SessionEntry[]> = context.sessionManager.getActiveBranchEntries(context.currentSessionId ?? '');
+      void entries; void extensionEntries;
+      const api: 1 = AI_HARNESS_CORE_API_VERSION; const schema: 2 = SESSION_SCHEMA_VERSION; void api; void schema;
+      manager.forkSessionAtEntry('session', 'entry', undefined, { before: true });
+      // @ts-expect-error identities are primitive strings, never option/accessor objects
+      manager.getActiveBranchEntries({ id: 'session' });
+      // @ts-expect-error fork-before stays a boolean
+      manager.forkSessionAtEntry('session', 'entry', undefined, { before: 'yes' });
+      declare const facade: AgentSession;
+      // @ts-expect-error the manager path is not a new high-level facade method
+      facade.getActiveBranchEntries('session');
+    `);
+    const result = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'extension-state-public.ts'], consumer, environment);
+    expect(result.stdout).toBe(''); expect(result.stderr).toBe('');
+  });
+
+  it.each([
+    { fixture: 'rpc', scenario: 'durable', marker: 'EXTENSION_SESSION_CLI_OK' },
+    { fixture: 'headless', scenario: 'print-memory', marker: 'EXTENSION_SESSION_HEADLESS_OK' },
+  ])('uses the actual installed PATH-bin for extension state ($fixture/$scenario)', async ({ fixture, scenario, marker }) => {
+    const worker = path.join(consumer, `extension-state-${fixture}.mjs`);
+    await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', `extension-state-${fixture}.mjs`), worker);
+    const result = await run(process.execPath, [worker, scenario], consumer, { ...environment, AIH_STATE_COMMAND: 'ai-harness' });
+    expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe('');
+    const records = result.stdout.trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
+    expect(records.at(-1)?.result).toBe(marker);
+  });
+
   it('publishes installed host-supplied compaction windows without adding a facade mutation or changing API 1', async () => {
     await writeFile(path.join(consumer, 'compaction-window-public.ts'), `
       import { SessionManager, resolveAgentCompactionContextWindow, AI_HARNESS_CORE_API_VERSION,

@@ -187,6 +187,33 @@ Every factory receives `api.version`. Version `1` is also exported as `AI_HARNES
 
 Current events cover sessions, messages, compaction, agent/provider/tool calls, `system:ready` and `system:shutdown`.
 
+### Session state, context and generations
+
+Commands and tools receive the actual `context.sessionManager` plus the current session ID. Capture that ID before awaiting. Use existing manager operations for messages, navigation, compaction and copies; hosts still own foreground admission. Do not introduce another conversation engine or navigate concurrently with a running provider/tool operation.
+
+- `appendCustomEntry(id, customType, data?)` appends owned private JSON (durably when persistence is enabled); it never becomes model input. Type names are exact conventions, not extension ownership or isolation. Custom JSON rejects accessors/exotics/cycles/sparse arrays and is bounded to depth 32, 65,536 nodes and 1 MiB; custom types are at most 256 UTF-8 bytes.
+- `appendCustomMessage(id, customType, content, {display?,details?})` contributes its content to model context even when `display:false`; details remain outside model input. These are not secrets storage or arbitrary custom UI renderers.
+- `await getActiveBranchEntries(id)` returns an owned parent-first path, including private state before compaction. Reduce by your exact type and take the last matching entry to restore your state. It excludes abandoned branches, follows no summary-source provenance, uses the last append projection per ID and refuses incomplete ancestry. Raw history includes abandoned work; effective model context deliberately excludes private data, so neither is a substitute.
+- Related forks preserve selected custom ancestry/stable IDs; independent clones remap internal IDs. Both reuse Core's bounded copy path (at most 1,024 extra custom/summary/compaction entries), preserve required private state and refuse live command ancestors. Arbitrary IDs inside custom payloads are not rewritten.
+
+```js
+api.registerCommand('remember', {
+  description: 'Save a private extension note',
+  handler: async (text, context) => {
+    const id = context.currentSessionId;
+    if (!id) return 'No active session.';
+    await context.sessionManager.appendCustomEntry(id, 'example:note', { text });
+    const path = await context.sessionManager.getActiveBranchEntries(id);
+    const latest = path.filter(e => e.type === 'custom' && e.customType === 'example:note').at(-1);
+    return latest ? 'Private note saved.' : 'No note on this branch.';
+  },
+});
+```
+
+Writes must settle before success. Reads serialize with manager mutations and refuse a host store/leaf replacement while awaiting; they are not a cross-process CAS transaction or an atomic read-modify-write helper. Schema remains JSONL v2 and Core/extension API major1. The high-level session facade adds no custom mutation or active-path method; see the [session SDK](./session-sdk.md).
+
+Durable state survives process restart and executable generations; `--no-session` state does not. `/reload` replaces interactive factories and their module-local variables, not the session journal; read the selected path again rather than treating closure state as persistence. Failed same-workspace candidates retain/restore the preceding factory, not arbitrary Node side effects. RPC executable generations remain startup-scoped: disk edits and `reload_context_settings` do not reload them; restart explicitly. Lifecycle hooks, disposer completeness, custom renderers and sandboxing are separate contracts.
+
 ### Transforming and Cancellable Hooks
 
 Three hooks are available:

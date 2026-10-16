@@ -175,6 +175,17 @@ prefix retains legacy metadata-only compaction background on its original
 ancestry through navigation, reload, later compaction and cloned anchors; it
 cannot lend that background to a later independent root.
 
+Lower-level `SessionManager.getActiveBranchEntries(sessionId)` returns an awaited,
+owned parent-first journal path, including private state before compaction. Unlike
+`getRawEntries`, it excludes abandoned branches; unlike effective model context,
+it retains private custom data and details. It follows parent links, never summary
+source provenance or timestamps, retains the last append projection per entry ID,
+and refuses incomplete ancestry rather than returning a partial state. It serializes with manager mutations and refuses a host
+store/leaf replacement during its read; this is not a cross-process CAS snapshot
+or a new high-level facade method. Persisted data remains bounded by the store
+contract. Extensions can reduce this path by their exact custom type; that name
+is a convention, not ownership isolation or a secret-storage boundary.
+
 `rename`, `setModel`, `setThinking`, `branchBefore(userEntryId)` and
 `applyCompaction(summary, firstKeptMessageId, details)` await Core persistence.
 `compactionTarget()` uses Core selection. Manual compaction requires a caller
@@ -184,8 +195,14 @@ user-entry ancestry, including an empty prefix. `clone(title?)` returns an
 independent-root handle with remapped active message/command/custom/summary and
 compaction ancestry, including private custom state and model-visible custom
 content. External provenance and arbitrary IDs inside custom data are not
-rewritten. Both operate only while idle; labels, fork custom-entry completeness
-and extension summary hooks are not claimed. Related handles share one runtime/manager/provider group.
+rewritten. Related forks preserve stable message/command/custom/summary IDs and
+selected private/custom ancestry, including state outside compacted model context;
+independent clones remap those internal IDs. Both use the same bounded Core copy
+path (at most 1,024 additional custom/summary/compaction entries) and refuse live
+command ancestors. Durable-user forks can select pre-compaction journal history;
+indexed forks still select the current message projection. Both operate only while
+idle; labels, exhaustive fork lifecycle hooks and extension summary hooks are not
+claimed. Related handles share one runtime/manager/provider group.
 
 ### Ownership, persistence and limitations
 

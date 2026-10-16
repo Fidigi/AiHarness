@@ -20,7 +20,7 @@ import { releaseStableLockPath } from '../security/stable-lock.js';
 import { redactProviderConfig as sanitizeProviderConfig } from './serialization.js';
 import {
   captureLegacyCompactionPrefix, completeContextToolGroups, legacyCompactionPrefixApplies,
-  legacyContextEntries, legacyRootBoundary, projectSessionContext, readLegacyCompactionPrefix,
+  legacyContextEntries, legacyRootBoundary, projectContextPath, projectSessionContext, readLegacyCompactionPrefix,
   sessionEntryParent, sessionEntryPath,
 } from './session-context.js';
 import {
@@ -2543,6 +2543,31 @@ export class SessionManager {
     return result;
   }
 
+  /** Owned active ancestry, including private state before compaction; never summary-source history. */
+  async getActiveBranchEntries(sessionId: string): Promise<SessionEntry[]> {
+    if (!isValidSessionId(sessionId)) return [];
+    return this.withSessionMutation(sessionId, async () => {
+      const current = this.sessions.get(sessionId);
+      if (!current) return [];
+      const store = this.store;
+      const leafId = current.activeLeafId;
+      const metadata = current.metadata;
+      const boundaryId = metadata?.legacyRootBoundaryId;
+      const branched = metadata?.hasBranchedHistory;
+      const entries = await this.getRawEntries(sessionId);
+      if (this.store !== store || this.sessions.get(sessionId) !== current || current.activeLeafId !== leafId
+        || current.metadata !== metadata || metadata?.legacyRootBoundaryId !== boundaryId
+        || metadata?.hasBranchedHistory !== branched) {
+        throw new Error('Session changed while reading its active branch.');
+      }
+      const boundary = typeof boundaryId === 'string' ? boundaryId : branched !== true ? legacyRootBoundary(entries) : undefined;
+      const selected = sessionEntryPath(legacyContextEntries(entries, boundary), leafId);
+      if (!selected.complete) throw new Error('Session ancestry is incomplete.');
+      boundedSessionJson(selected.entries, MAX_SESSION_FILE_BYTES, 'Session branch exceeds its size limit.');
+      return structuredClone(selected.entries);
+    });
+  }
+
   /** Return append-order entries, including pre-compaction history when a persistent store is attached. */
   async getRawEntries(sessionId: string): Promise<SessionEntry[]> {
     if (this.store && this.usesSessionStore()) return this.store.getRawEntries(sessionId);
@@ -2611,81 +2636,46 @@ export class SessionManager {
     newTitle?: string,
     options: { before?: boolean } = {},
   ): Promise<Session | null> {
+    if (!isValidSessionId(sessionId) || !isValidEntryId(entryId)) return null;
+    if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('Session fork options are invalid.');
+    let before = false;
+    for (const key of Reflect.ownKeys(options)) {
+      const property = Object.getOwnPropertyDescriptor(options, key);
+      if (key !== 'before' || !property || !('value' in property)
+        || property.value !== undefined && typeof property.value !== 'boolean') throw new Error('Session fork options are invalid.');
+      before = property.value === true;
+    }
     newTitle = newTitle === undefined ? undefined : this.redactText(newTitle);
-    const snapshot = await this.withSessionMutation(sessionId, async () => {
-      const current = this.sessions.get(sessionId);
-      if (!current) return null;
-      return {
-        original: structuredClone(current),
-        rawEntries: await this.getRawEntries(sessionId),
-      };
-    });
+    const snapshot = await this.captureSessionCopySource(sessionId);
     if (!snapshot) return null;
     const { original, rawEntries } = snapshot;
-    const selectedIndex = rawEntries.findIndex(entry => entry.id === entryId);
-    const selected = rawEntries[selectedIndex];
-    if (selectedIndex < 0 || selected?.type !== 'message' || selected.role !== 'user') return null;
-
-    const entriesById = new Map(rawEntries.filter(entry => entry.type !== 'metadata').map(entry => [entry.id, entry]));
-    const ancestorIds = new Set<string>();
-    let cursor: string | undefined = selected.id;
-    while (cursor && !ancestorIds.has(cursor)) {
-      const entry = entriesById.get(cursor);
-      if (!entry) break;
-      ancestorIds.add(cursor);
-      cursor = sessionEntryParent(entry);
-    }
-    const prefix = ancestorIds.size > 1 || selectedIndex === 0
-      ? rawEntries.filter(entry => entry.type !== 'metadata' && ancestorIds.has(entry.id))
-      : rawEntries.slice(0, selectedIndex + 1);
-    const copiedEntries = prefix.filter(
-      (entry): entry is MessageEntry | CommandEntry => (entry.type === 'message' || entry.type === 'command')
-        && !(options.before && entry.id === entryId),
-    );
-    if (copiedEntries.some(entry => entry.type === 'command' && entry.status === 'running')) return null;
-    const normalizedParents = new Map<string, string | undefined>();
-    copiedEntries.forEach((entry, index) => normalizedParents.set(entry.id, copiedEntries[index - 1]?.id));
-    const messages: Message[] = copiedEntries.flatMap(entry => entry.type === 'message' ? [{
-      id: entry.id,
-      role: entry.role,
-      content: entry.content,
-      timestamp: new Date(entry.timestamp),
-      blocks: entry.blocks,
-      toolCalls: entry.toolCalls,
-      toolCallId: entry.toolCallId,
-      name: entry.name,
-      isError: entry.isError,
-      provider: entry.provider,
-      model: entry.model,
-      usage: entry.usage,
-      durationMs: entry.durationMs,
-      parentMessageId: normalizedParents.get(entry.id),
-      agentId: entry.agentId,
-      metadata: entry.metadata,
+    const graph = legacyContextEntries(rawEntries, typeof original.metadata?.legacyRootBoundaryId === 'string'
+      ? original.metadata.legacyRootBoundaryId : original.metadata?.hasBranchedHistory !== true ? legacyRootBoundary(rawEntries) : undefined);
+    const selected = graph.filter(entry => entry.id === entryId).at(-1);
+    if (selected?.type !== 'message' || selected.role !== 'user') return null;
+    const path = sessionEntryPath(graph, entryId);
+    if (!path.complete) return null;
+    const prefix = before ? path.entries.slice(0, -1) : path.entries;
+    if (prefix.some(entry => entry.type === 'command' && entry.status === 'running')) return null;
+    const compacted = prefix.some(entry => entry.type === 'compaction');
+    const effectiveIds = compacted ? new Set(projectContextPath(prefix).map(entry => entry.id)) : undefined;
+    const messages = prefix.flatMap(entry => {
+      if (entry.type !== 'message' || effectiveIds && !effectiveIds.has(entry.id)) return [];
+      const message = messageFromEntry(entry);
+      return message ? [message] : [];
+    });
+    const commands: ShellCommandRecord[] = prefix.flatMap(entry => entry.type === 'command' ? [{
+      ...entry, timestamp: new Date(entry.timestamp),
     }] : []);
-    const commands: ShellCommandRecord[] = copiedEntries.flatMap(entry => entry.type === 'command' ? [{
-      id: entry.id,
-      command: entry.command,
-      cwd: entry.cwd,
-      timestamp: new Date(entry.timestamp),
-      status: entry.status,
-      parentEntryId: normalizedParents.get(entry.id),
-      output: entry.output,
-      exitCode: entry.exitCode,
-      durationMs: entry.durationMs,
-      excludedFromContext: entry.excludedFromContext,
-      truncated: entry.truncated,
-      downloadPath: entry.downloadPath,
-    }] : []);
-    const metadata = original.metadata ? structuredClone(original.metadata) : undefined;
-    if (metadata) {
-      for (const key of [
-        'lastCompacted', 'compactionSummary', 'compactionEntryId', 'compactionStats',
-        'activeLeafReset', 'hasBranchedHistory', 'branchSummaries',
-      ]) {
-        delete metadata[key];
-      }
-    }
+    const metadata = { ...(original.metadata ? structuredClone(original.metadata) : {}) };
+    const legacyPrefix = captureLegacyCompactionPrefix(original, rawEntries);
+    for (const key of ['lastCompacted', 'compactionSummary', 'compactionEntryId', 'compactionStats',
+      'activeLeafReset', 'legacyRootBoundaryId', 'branchSummaries', 'aiHarnessLegacyCompactionPrefix']) delete metadata[key];
+    metadata.hasBranchedHistory = true;
+    if (legacyPrefix && prefix.some(entry => entry.id === legacyPrefix.anchorEntryId)) metadata.aiHarnessLegacyCompactionPrefix = legacyPrefix;
+    const lastCompaction = prefix.filter((entry): entry is CompactionEntry => entry.type === 'compaction').at(-1);
+    if (lastCompaction) Object.assign(metadata, { lastCompacted: new Date(lastCompaction.timestamp).toISOString(),
+      compactionSummary: lastCompaction.summary, compactionEntryId: lastCompaction.id });
     const usageEntries = messages.flatMap(message => message.usage ? [message.usage] : []);
     const usage = usageEntries.length ? usageEntries.reduce((total, current) => ({
       inputTokens: (total.inputTokens ?? 0) + (current.inputTokens ?? 0),
@@ -2696,79 +2686,27 @@ export class SessionManager {
         ?? (current.inputTokens ?? 0) + (current.outputTokens ?? 0)),
       costUsd: (total.costUsd ?? 0) + (current.costUsd ?? 0),
     }), {} as NonNullable<Session['usage']>) : undefined;
-
-    return this.create({
-      title: newTitle || `${original.title || 'Fork'} (fork)`,
-      messages,
-      commands: commands.length ? commands : undefined,
-      parentId: sessionId,
-      branchId: original.branchId || sessionId,
-      activeLeafId: copiedEntries.at(-1)?.id,
-      cwd: original.cwd,
-      workspaceId: original.workspaceId,
-      gitBranch: original.gitBranch,
-      model: original.model,
-      thinking: original.thinking,
-      toolPreset: original.toolPreset,
-      autoCompaction: original.autoCompaction,
-      providerConfig: sanitizeProviderConfig(original.providerConfig),
-      metadata,
-      usage,
-    });
+    return this.copySessionSnapshot({ original: { ...original, messages, commands,
+      activeLeafId: prefix.at(-1)?.id, metadata, usage }, rawEntries }, newTitle, undefined, 'fork');
   }
 
-  /** Fork a session from a specific message index */
-  async forkSession(
-    sessionId: string,
-    fromMessageIndex?: number | string,
-    newTitle?: string,
-  ): Promise<Session | null> {
+  /** Fork a session from the current model projection or one of its stable message IDs. */
+  async forkSession(sessionId: string, fromMessageIndex?: number | string, newTitle?: string): Promise<Session | null> {
     newTitle = newTitle === undefined ? undefined : this.redactText(newTitle);
-    const original = await this.withSessionMutation(sessionId, async () => {
+    const snapshot = await this.captureSessionCopySource(sessionId);
+    return snapshot ? this.copySessionSnapshot(snapshot, newTitle, fromMessageIndex, 'fork') : null;
+  }
+
+  private async captureSessionCopySource(sessionId: string): Promise<{ original: Session; rawEntries: SessionEntry[] } | null> {
+    if (!isValidSessionId(sessionId)) return null;
+    return this.withSessionMutation(sessionId, async () => {
       const current = this.sessions.get(sessionId);
-      return current ? structuredClone(current) : null;
-    });
-    if (!original) return null;
-    // Resolve stable IDs against the same serialized snapshot, not a transport's
-    // earlier window which compaction or branch navigation may have replaced.
-    if (typeof fromMessageIndex === 'string') fromMessageIndex = original.messages.findIndex(message => message.id === fromMessageIndex);
-    if (fromMessageIndex !== undefined && (!Number.isSafeInteger(fromMessageIndex)
-      || fromMessageIndex < 0 || fromMessageIndex >= original.messages.length)) return null;
-
-    const sourceMessages = fromMessageIndex !== undefined
-      ? original.messages.slice(0, fromMessageIndex + 1)
-      : original.messages;
-    const messagesToCopy = structuredClone(sourceMessages).map(message => ({
-      ...message,
-      timestamp: new Date(message.timestamp),
-    }));
-    const cutoff = sourceMessages.at(-1)?.timestamp.getTime();
-    const sourceCommands = fromMessageIndex === undefined
-      ? original.commands ?? []
-      : (original.commands ?? []).filter(command => cutoff === undefined || command.timestamp.getTime() <= cutoff);
-    if (sourceCommands.some(command => command.status === 'running')) return null;
-    const commandsToCopy = structuredClone(sourceCommands)
-      .map(command => ({ ...command, timestamp: new Date(command.timestamp) }));
-
-    return this.create({
-      title: newTitle || `${original.title || 'Fork'} (fork)`,
-      messages: messagesToCopy,
-      commands: commandsToCopy.length ? commandsToCopy : undefined,
-      parentId: sessionId,
-      branchId: original.branchId || sessionId, // Group forks under the same branch
-      activeLeafId: fromMessageIndex === undefined
-        ? original.activeLeafId ?? messagesToCopy.at(-1)?.id ?? commandsToCopy.at(-1)?.id
-        : messagesToCopy.at(-1)?.id ?? commandsToCopy.at(-1)?.id,
-      cwd: original.cwd,
-      workspaceId: original.workspaceId,
-      gitBranch: original.gitBranch,
-      model: original.model,
-      thinking: original.thinking,
-      toolPreset: original.toolPreset,
-      autoCompaction: original.autoCompaction,
-      providerConfig: sanitizeProviderConfig(original.providerConfig),
-      metadata: original.metadata ? structuredClone(original.metadata) : undefined,
-      usage: fromMessageIndex === undefined && original.usage ? { ...original.usage } : undefined,
+      if (!current) return null;
+      const store = this.store;
+      const original = structuredClone(current);
+      const rawEntries = await this.getRawEntries(sessionId);
+      if (this.store !== store) throw new Error('Session changed while copying its branch.');
+      return { original, rawEntries };
     });
   }
 
@@ -2890,12 +2828,14 @@ export class SessionManager {
   /** Clone a session as an independent root, optionally through one message. */
   async cloneSession(sessionId: string, newTitle?: string, throughMessageIndex?: number | string): Promise<Session | null> {
     newTitle = newTitle === undefined ? undefined : this.redactText(newTitle);
-    const snapshot = await this.withSessionMutation(sessionId, async () => {
-      const current = this.sessions.get(sessionId);
-      return current ? { original: structuredClone(current), rawEntries: await this.getRawEntries(sessionId) } : null;
-    });
-    if (!snapshot) return null;
+    const snapshot = await this.captureSessionCopySource(sessionId);
+    return snapshot ? this.copySessionSnapshot(snapshot, newTitle, throughMessageIndex, 'clone') : null;
+  }
+
+  private async copySessionSnapshot(snapshot: { original: Session; rawEntries: SessionEntry[] },
+    newTitle: string | undefined, throughMessageIndex: number | string | undefined, kind: 'clone' | 'fork'): Promise<Session | null> {
     const { original, rawEntries } = snapshot;
+    const sessionId = original.id;
     if (typeof throughMessageIndex === 'string') throughMessageIndex = original.messages.findIndex(message => message.id === throughMessageIndex);
     if (throughMessageIndex !== undefined && (!Number.isSafeInteger(throughMessageIndex)
       || throughMessageIndex < 0 || throughMessageIndex >= original.messages.length)) return null;
@@ -2907,12 +2847,14 @@ export class SessionManager {
     if (original.commands?.some(command => command.status === 'running'
       && (throughMessageIndex === undefined || cutoff === undefined || command.timestamp.getTime() <= cutoff))) return null;
 
-    // Deep clone entries and identifiers so edits cannot mutate or branch the source.
+    // Share rich ancestry copying; only independent clones remap identifiers.
     let sourceCommands = original.commands ?? [];
     const graph = legacyContextEntries(rawEntries, typeof original.metadata?.legacyRootBoundaryId === 'string'
       ? original.metadata.legacyRootBoundaryId : original.metadata?.hasBranchedHistory !== true ? legacyRootBoundary(rawEntries) : undefined);
-    const sourceEntries = graph.filter((entry): entry is RestorableSessionEntry => entry.type === 'branch_summary'
-      || entry.type === 'compaction' || entry.type === 'custom' || entry.type === 'custom_message');
+    const selectedLeaf = throughMessageIndex === undefined ? original.activeLeafId : sourceMessages.at(-1)?.id;
+    if (!sessionEntryPath(graph, selectedLeaf).complete) return null;
+    const sourceEntries = [...new Map(graph.filter((entry): entry is RestorableSessionEntry => entry.type === 'branch_summary'
+      || entry.type === 'compaction' || entry.type === 'custom' || entry.type === 'custom_message').map(entry => [entry.id, entry])).values()];
     const sourceSummaries = sourceEntries.filter((entry): entry is BranchSummaryEntry => entry.type === 'branch_summary');
     const parents = new Map(graph.filter(entry => entry.type !== 'metadata').map(entry => [entry.id, sessionEntryParent(entry)]));
     for (const message of sourceMessages) parents.set(message.id, message.parentMessageId ?? parents.get(message.id));
@@ -2936,10 +2878,10 @@ export class SessionManager {
       // running ancestor whose timestamp is ahead of the selected message.
       if (sourceCommands.some(command => command.status === 'running')) return null;
     }
-    const messageIds = new Map(sourceMessages.map(message => [message.id, crypto.randomUUID()]));
-    const commandIds = new Map(sourceCommands.map(command => [command.id, `command-${crypto.randomUUID()}`]));
-    const extraIds = new Map(retainedEntries.map(entry => [entry.id,
-      `${entry.type === 'branch_summary' ? 'branch-summary' : entry.type === 'custom_message' ? 'custom-message' : entry.type}-${crypto.randomUUID()}`]));
+    const messageIds = new Map(sourceMessages.map(message => [message.id, kind === 'fork' ? message.id : crypto.randomUUID()]));
+    const commandIds = new Map(sourceCommands.map(command => [command.id, kind === 'fork' ? command.id : `command-${crypto.randomUUID()}`]));
+    const extraIds = new Map(retainedEntries.map(entry => [entry.id, kind === 'fork' ? entry.id
+      : `${entry.type === 'branch_summary' ? 'branch-summary' : entry.type === 'custom_message' ? 'custom-message' : entry.type}-${crypto.randomUUID()}`]));
     const copiedId = (id: string): string | undefined => messageIds.get(id) ?? commandIds.get(id) ?? extraIds.get(id);
     const remapParent = (id: string): string | undefined => {
       const seen = new Set<string>();
@@ -2979,7 +2921,7 @@ export class SessionManager {
     }));
     const clonedActiveLeafId = original.activeLeafId ? remapParent(original.activeLeafId) : undefined;
     const metadata: Record<string, unknown> = {
-      ...(original.metadata ? structuredClone(original.metadata) : {}), clonedFromSessionId: sessionId,
+      ...(original.metadata ? structuredClone(original.metadata) : {}), ...(kind === 'clone' ? { clonedFromSessionId: sessionId } : {}),
     };
     const legacyPrefix = captureLegacyCompactionPrefix(original, rawEntries);
     const legacyAnchor = legacyPrefix ? copiedId(legacyPrefix.anchorEntryId) : undefined;
@@ -2997,7 +2939,8 @@ export class SessionManager {
     }
 
     const options: CreateSessionOptions = {
-      title: newTitle || `${original.title || 'Clone'} (clone)`,
+      title: newTitle || `${original.title || (kind === 'clone' ? 'Clone' : 'Fork')} (${kind})`,
+      ...(kind === 'fork' ? { parentId: sessionId, branchId: original.branchId || sessionId } : {}),
       messages: clonedMessages,
       commands: clonedCommands.length ? clonedCommands : undefined,
       activeLeafId: clonedActiveLeafId ?? clonedMessages.at(-1)?.id ?? clonedCommands.at(-1)?.id,
