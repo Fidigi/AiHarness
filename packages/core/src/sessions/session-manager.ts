@@ -1410,6 +1410,7 @@ export class SessionManager {
   private committedEntries: Map<string, SessionEntry[]> = new Map();
   private onSessionUpdate?: (sessionId: string) => void;
   private store: JsonlSessionStore | null = null;
+  private storeGeneration = 0;
   private compactionSettings: CompactionSettings = DEFAULT_COMPACTION_SETTINGS;
   private compactionContextWindow?: number;
   private autoCompactionCallback?: AutoCompactionCallback;
@@ -1462,7 +1463,10 @@ export class SessionManager {
 
   /** Set the JSONL persistence store */
   setStore(store: JsonlSessionStore): void {
-    if (this.store !== store) this.branchAdmissions.retire(undefined, new Error('Session changed while copying its branch.'), true);
+    if (this.store !== store) {
+      this.storeGeneration++;
+      this.branchAdmissions.retire(undefined, new Error('Session changed while copying its branch.'), true);
+    }
     this.store = store;
     store.setRedaction(this.redactText, this.redactJson);
   }
@@ -1513,12 +1517,15 @@ export class SessionManager {
     const session = this.sessions.get(sessionId);
     const settings = { ...this.compactionSettings };
     const contextWindow = this.compactionContextWindow;
+    const store = this.store;
+    const storeGeneration = this.storeGeneration;
     const summarize = this.autoCompactionCallback;
     const policy = this.autoCompactionPolicy;
     if (!session || !settings.enabled || !summarize || signal?.aborted) return false;
     if (session.autoCompaction === false) return false;
     const activeLeafId = session.activeLeafId;
     const isCurrent = (): boolean => this.sessions.get(sessionId) === session
+      && this.store === store && this.storeGeneration === storeGeneration
       && session.activeLeafId === activeLeafId
       && session.autoCompaction !== false
       && this.compactionSettings.enabled
@@ -2349,7 +2356,9 @@ export class SessionManager {
           compactionEntryId: compactionEntry.id,
         },
       };
-      await this.persistSession(next, [compactionEntry]);
+      // Structural-store preparation may await after the mutation-queue check.
+      // Revalidate immediately before its captured save, not after an admitted write.
+      await this.persistSession(next, [compactionEntry], {}, validateAdmission);
       Object.assign(session, next);
       if (!this.usesSessionStore()) this.volatileEntries.get(sessionId)?.push(compactionEntry);
       return true;
