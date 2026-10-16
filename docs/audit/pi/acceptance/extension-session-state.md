@@ -1,8 +1,10 @@
 # Extension session/context state — CLI-EXT-05
 
-Date: 2026-10-16. Decision: **DEC-88 / E-AH-EXT-STATE-01**.
+Date: 2026-10-16. Initial decision: **DEC-88 / E-AH-EXT-STATE-01**.
 
-Close only **CLI-EXT-05** after the complete named-clause reconciliation below. The matrix retains all152 IDs: **96 DONE /56 PARTIAL (63.2%)**, CLI45/42 and Web51/14. The overall user goal remains **not complete**.
+**ADMISSION WITHDRAWN — DEC-89:** the [startup-fork RED receipt](./startup-fork-state.md) proves that the separate CLI startup `--fork` path bypasses Core rich copies,drops private entries and retains dangling message parents. CLI-EXT-05 is **PARTIAL** pending repair and complete owning-flow requalification. Current matrix: **95 DONE /57 PARTIAL (62.5%)**,CLI44/43,Web51/14;all152 IDs retained.
+
+The following is the conserved initial qualification record for commit `8dced0fe7306705b22f8227874a5b738f2aebb8e`,not current whole-criterion acceptance. Its initial96/56 result and complete-clause claim were invalidated by the missing startup-copy flow,despite passing whole gates and correct exact-source/index/commit admission. No initial gate,source,commit or failure is erased. The overall goal remains **not complete**.
 
 ## Complete requirement-to-evidence map
 
@@ -82,4 +84,4 @@ First complete chain passes original-v2/v3 memory/durable controls, conserved me
 
 Container: `2026-10-16T12:56:32.118730553Z`→`12:56:41.382166734Z`,exit0/OOMfalse/error empty. Literal watchdog: **unhealthy/FailingStreak1/one empty-output exit1 check**. HTTP200/clean exit prove bounded serving and settlement, not health/uptime, remote CI, deployment, physical-device or live-vendor certification.
 
-The admission binds exactly20 reviewed paths (nine included inputs,eight root AI/EN/FR documents,this receipt/audit/completion review), source/index/parent hashes, ordinary/staged documentation checks and the unchanged152-ID matrix. The commit/postcommit receipt verifies the exact committed tree/paths/hashes and clean working tree. Overall goal: **not complete;56 named criteria remain**.
+The admission binds exactly20 reviewed paths (nine included inputs,eight root AI/EN/FR documents,this receipt/audit/completion review), source/index/parent hashes, ordinary/staged documentation checks and the unchanged152-ID matrix. The commit/postcommit receipt verifies the exact committed tree/paths/hashes and clean working tree. That initial qualification is superseded by DEC-89's startup-flow RED. Current overall goal: **not complete;57 named criteria remain**.
