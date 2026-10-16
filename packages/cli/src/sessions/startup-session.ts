@@ -1,8 +1,7 @@
 import { lstat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type {
-  SessionManager} from '@ai-harness/core';
+import type { SessionManager } from '@ai-harness/core';
 import {
   JsonlSessionStore,
   type Session,
@@ -95,18 +94,21 @@ async function sessionFromSelector(
   return manager.get(id);
 }
 
+interface StartupForkSource { id: string; store?: JsonlSessionStore }
+
 async function externalForkSource(
   manager: SessionManager,
   selector: string,
   cwd: string,
   homeDir?: string,
-): Promise<Session | undefined> {
-  if (!isPathSelector(selector)) return sessionForId(manager, selector);
+): Promise<StartupForkSource | undefined> {
+  if (!isPathSelector(selector)) {
+    const source = sessionForId(manager, selector);
+    return source ? { id: source.id } : undefined;
+  }
   const filePath = selectorPath(selector, cwd, homeDir);
   await assertRegularSessionFile(filePath);
-  const id = path.basename(filePath).replace(/\.jsonl$/i, '');
-  const sourceStore = new JsonlSessionStore(path.dirname(filePath));
-  return await sourceStore.loadSession(id) ?? undefined;
+  return { id: path.basename(filePath).replace(/\.jsonl$/i, ''), store: new JsonlSessionStore(path.dirname(filePath)) };
 }
 
 function currentWorkspaceSession(session: Session, cwd: string): boolean {
@@ -116,56 +118,38 @@ function currentWorkspaceSession(session: Session, cwd: string): boolean {
 
 async function forkSession(
   manager: SessionManager,
-  source: Session,
-  options: Pick<ResolveStartupSessionOptions, 'args' | 'cwd' | 'workspaceId'>,
+  source: StartupForkSource,
+  options: Pick<ResolveStartupSessionOptions, 'cwd' | 'workspaceId'> & Pick<StartupSessionArguments, 'sessionId' | 'name'>,
 ): Promise<Session> {
-  if (options.args.sessionId && manager.get(options.args.sessionId)) {
-    throw new Error(`Session already exists with ID: ${options.args.sessionId}`);
+  if (options.sessionId && manager.get(options.sessionId)) {
+    throw new Error(`Session already exists with ID: ${options.sessionId}`);
   }
-  const messages = structuredClone(source.messages).map(message => ({
-    ...message,
-    timestamp: new Date(message.timestamp),
-  }));
-  return manager.create({
-    ...(options.args.sessionId ? { id: options.args.sessionId } : {}),
-    title: options.args.name ?? `${source.title || 'Fork'} (fork)`,
-    messages,
-    commands: source.commands ? structuredClone(source.commands).map(command => ({
-      ...command,
-      timestamp: new Date(command.timestamp),
-    })) : undefined,
-    parentId: source.id,
-    branchId: source.branchId || source.id,
-    activeLeafId: messages.at(-1)?.id,
-    cwd: options.cwd,
-    workspaceId: options.workspaceId,
-    gitBranch: source.gitBranch,
-    model: source.model,
-    thinking: source.thinking,
-    toolPreset: source.toolPreset,
-    autoCompaction: source.autoCompaction,
-    usage: source.usage ? { ...source.usage } : undefined,
-    providerConfig: source.providerConfig,
-    metadata: source.metadata ? structuredClone(source.metadata) : undefined,
+  const fork = await manager.forkSession(source.id, undefined, options.name, {
+    sourceStore: source.store, id: options.sessionId, cwd: options.cwd, workspaceId: options.workspaceId,
   });
+  if (!fork) throw new Error(`Session could not be forked: ${source.id}`);
+  return fork;
 }
 
 /** Apply CLI startup selectors to AiHarness's shared session manager. */
 export async function resolveStartupSession(options: ResolveStartupSessionOptions): Promise<Session> {
   const { sessionManager: manager, args, cwd, workspaceId } = options;
+  const startupName = args.name;
   let selected: Session | undefined;
 
   if (args.noSession) {
     selected = await manager.create({
       ...(args.sessionId ? { id: args.sessionId } : {}),
-      title: args.name ?? 'Nouvelle conversation',
+      title: startupName ?? 'Nouvelle conversation',
       cwd,
       workspaceId,
     });
   } else if (args.fork) {
-    const source = await externalForkSource(manager, args.fork, cwd, options.homeDir);
-    if (!source) throw new Error(`No session found matching: ${args.fork}`);
-    selected = await forkSession(manager, source, options);
+    const selector = args.fork;
+    const destination = { sessionId: args.sessionId, name: startupName, cwd, workspaceId };
+    const source = await externalForkSource(manager, selector, cwd, options.homeDir);
+    if (!source) throw new Error(`No session found matching: ${selector}`);
+    selected = await forkSession(manager, source, destination);
   } else if (args.session) {
     selected = await sessionFromSelector(manager, args.session, cwd, options.homeDir);
     if (!selected) throw new Error(`No session found matching: ${args.session}`);
@@ -177,16 +161,16 @@ export async function resolveStartupSession(options: ResolveStartupSessionOption
     if (!selected) throw new StartupSessionSelectionCancelledError();
   } else if (args.continueSession) {
     selected = manager.list().find(session => currentWorkspaceSession(session, cwd));
-    selected ??= await manager.create({ title: args.name ?? 'Nouvelle conversation', cwd, workspaceId });
+    selected ??= await manager.create({ title: startupName ?? 'Nouvelle conversation', cwd, workspaceId });
   } else if (args.sessionId) {
     selected = manager.get(args.sessionId);
-    selected ??= await manager.create({ id: args.sessionId, title: args.name ?? 'Nouvelle conversation', cwd, workspaceId });
+    selected ??= await manager.create({ id: args.sessionId, title: startupName ?? 'Nouvelle conversation', cwd, workspaceId });
   } else {
-    selected = await manager.create({ title: args.name ?? 'Nouvelle conversation', cwd, workspaceId });
+    selected = await manager.create({ title: startupName ?? 'Nouvelle conversation', cwd, workspaceId });
   }
 
-  if (args.name && selected.title !== args.name) {
-    selected = await manager.update(selected.id, { title: args.name }) ?? selected;
+  if (startupName && selected.title !== startupName) {
+    selected = await manager.update(selected.id, { title: startupName }) ?? selected;
   }
   return selected;
 }

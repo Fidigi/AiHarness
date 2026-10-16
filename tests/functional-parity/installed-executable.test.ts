@@ -380,6 +380,41 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     });
   });
 
+  it('publishes read-only snapshots and captured startup-fork options without expanding the facade', async () => {
+    await writeFile(path.join(consumer, 'startup-fork-public.ts'), `
+      import { SessionManager, JsonlSessionStore, AI_HARNESS_CORE_API_VERSION, SESSION_SCHEMA_VERSION,
+        type SessionStoreSnapshot, type SessionForkOptions, type Session, type AgentSession } from '@ai-harness/core';
+      const store = new JsonlSessionStore(); const manager = new SessionManager();
+      const snapshot: Promise<SessionStoreSnapshot | null> = store.getSessionSnapshot('source');
+      const options: SessionForkOptions = { sourceStore: store, id: 'destination', cwd: '/new', workspaceId: undefined };
+      const fork: Promise<Session | null> = manager.forkSession('source', undefined, 'Title', options);
+      const api: 1 = AI_HARNESS_CORE_API_VERSION; const schema: 2 = SESSION_SCHEMA_VERSION;
+      void snapshot; void fork; void api; void schema;
+      // @ts-expect-error explicit identities remain primitive strings
+      manager.forkSession('source', undefined, undefined, { id: 1 });
+      // @ts-expect-error an arbitrary object is not a journal-store capability
+      manager.forkSession('source', undefined, undefined, { sourceStore: {} });
+      // @ts-expect-error source import cannot override arbitrary metadata or message payloads
+      manager.forkSession('source', undefined, undefined, { metadata: {} });
+      declare const facade: AgentSession;
+      // @ts-expect-error the high-level facade does not acquire the manager copy API
+      facade.forkSession('source', undefined, undefined, options);
+      // @ts-expect-error the high-level facade has no raw journal snapshot reader
+      facade.getSessionSnapshot('source');
+    `);
+    const result = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'startup-fork-public.ts'], consumer, environment);
+    expect(result.stdout).toBe(''); expect(result.stderr).toBe('');
+  });
+
+  it.each([{ mode: 'rpc', selector: 'file' }, { mode: 'json', selector: 'prefix' }])('preserves startup fork private state through the installed PATH-bin ($mode/$selector)', async ({ mode, selector }) => {
+    const worker = path.join(consumer, `startup-fork-${mode}-${selector}.mjs`);
+    await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', 'startup-fork-state.mjs'), worker);
+    const result = await run(process.execPath, [worker, mode, selector], consumer, { ...environment, AIH_STATE_COMMAND: 'ai-harness' });
+    expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe('');
+    const records = result.stdout.trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
+    expect(records.at(-1)?.result).toBe('STARTUP_FORK_SESSION_STATE_OK');
+  });
+
   it('publishes installed active-branch state and related-copy declarations without adding a facade method', async () => {
     await writeFile(path.join(consumer, 'extension-state-public.ts'), `
       import { SessionManager, AI_HARNESS_CORE_API_VERSION, SESSION_SCHEMA_VERSION,

@@ -186,6 +186,22 @@ or a new high-level facade method. Persisted data remains bounded by the store
 contract. Extensions can reduce this path by their exact custom type; that name
 is a convention, not ownership isolation or a secret-storage boundary.
 
+Lower-level `JsonlSessionStore.getSessionSnapshot(id)` reads one stable bounded
+native journal into an owned `{session,entries}` without rewriting that source.
+Its entries are raw history, not an active extension-state view. The manager's
+`forkSession(id,index?,title?,{sourceStore?,id?,cwd?,workspaceId?})` reuses its rich
+copy engine for an explicit external store or an already loaded ID. Own primitive
+destination options and store identity are captured before awaiting; accessors,
+unknown keys and invalid values are refused. Explicit `workspaceId:undefined`
+clears inherited workspace identity. Destination-store replacement withdraws an
+unpublished copy; admitted durable writes are not rolled back. External sources
+are not inserted into the destination manager; copies are written only through
+its persistence store, not by persisting a fork through a distinct source store. CLI startup ID/prefix/file forks use this engine, preserving private,
+custom, summary and compaction ancestry rather than copying projected messages
+alone. Existing no-session startup precedence remains. These additive lower-level
+APIs do not expand the SDK facade, API major1, schema2, retained-file bounds or the
+1,024-extra-entry copy limit; they provide neither lifecycle hooks nor CAS.
+
 `rename`, `setModel`, `setThinking`, `branchBefore(userEntryId)` and
 `applyCompaction(summary, firstKeptMessageId, details)` await Core persistence.
 `compactionTarget()` uses Core selection. Manual compaction requires a caller

@@ -163,6 +163,8 @@ export type {
   CustomMessageEntry,
   SessionMetadataEntry,
   CreateSessionOptions,
+  SessionForkOptions,
+  SessionStoreSnapshot,
   MutableSessionFields,
   MutableSessionChanges,
   AutoCompactionCallback,

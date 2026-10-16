@@ -808,8 +808,13 @@ export class JsonlSessionStore {
     }
   }
 
-  /** Load a session from JSONL file */
+  /** Load a session from JSONL file. */
   async loadSession(sessionId: string): Promise<Session | null> {
+    return (await this.getSessionSnapshot(sessionId))?.session ?? null;
+  }
+
+  /** Read one bounded stable file into an owned session and journal, without writing it. */
+  async getSessionSnapshot(sessionId: string): Promise<SessionStoreSnapshot | null> {
     if (!this.enabled) return null;
     const filePath = this.getFilePath(sessionId);
 
@@ -822,13 +827,13 @@ export class JsonlSessionStore {
       return null;
     }
     if (!content.trim()) {
-      return {
+      return { session: {
         id: sessionId,
         schemaVersion: SESSION_SCHEMA_VERSION,
         messages: [],
         createdAt: new Date(),
         updatedAt: new Date(),
-      };
+      }, entries: [] };
     }
 
     const entries: SessionEntry[] = [];
@@ -975,7 +980,7 @@ export class JsonlSessionStore {
     }
 
     const now = new Date();
-    return {
+    const session: Session = {
       id: sessionId,
       schemaVersion: SESSION_SCHEMA_VERSION,
       title,
@@ -999,6 +1004,7 @@ export class JsonlSessionStore {
       providerConfig,
       metadata,
     };
+    return { session, entries };
   }
 
   private async acquireSessionInventorySlot(
@@ -1305,6 +1311,19 @@ const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
   reserveTokens: 16384,
   keepRecentTokens: 20000,
 };
+
+export interface SessionStoreSnapshot {
+  session: Session;
+  entries: SessionEntry[];
+}
+
+/** Own destination overrides and an optional read-only external journal source. */
+export interface SessionForkOptions {
+  sourceStore?: JsonlSessionStore;
+  id?: string;
+  cwd?: string;
+  workspaceId?: string;
+}
 
 export type CreateSessionOptions = Partial<Pick<Session,
   | 'id'
@@ -1638,6 +1657,7 @@ export class SessionManager {
   private async createWithEntries(
     options: CreateSessionOptions,
     entries: RestorableSessionEntry[] = [],
+    expectedStore?: { store: JsonlSessionStore | null },
   ): Promise<Session> {
     options = this.redactJson(options);
     entries = this.redactJson(structuredClone(entries));
@@ -1650,7 +1670,10 @@ export class SessionManager {
     if (!isValidSessionId(sessionId)) {
       throw new Error('Invalid session ID.');
     }
-    return this.withSessionMutation(sessionId, () => this.createUnlocked(options, sessionId, entries));
+    return this.withSessionMutation(sessionId, () => {
+      if (expectedStore && this.store !== expectedStore.store) throw new Error('Session changed while copying its branch.');
+      return this.createUnlocked(options, sessionId, entries);
+    });
   }
 
   private async createUnlocked(
@@ -2691,10 +2714,34 @@ export class SessionManager {
   }
 
   /** Fork a session from the current model projection or one of its stable message IDs. */
-  async forkSession(sessionId: string, fromMessageIndex?: number | string, newTitle?: string): Promise<Session | null> {
+  async forkSession(sessionId: string, fromMessageIndex?: number | string, newTitle?: string,
+    options: SessionForkOptions = {}): Promise<Session | null> {
+    if (!isValidSessionId(sessionId)) return null;
+    if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('Session fork options are invalid.');
+    const destination: Pick<CreateSessionOptions, 'id' | 'cwd' | 'workspaceId'> = {};
+    let sourceStore: JsonlSessionStore | undefined;
+    for (const key of Reflect.ownKeys(options)) {
+      const property = Object.getOwnPropertyDescriptor(options, key);
+      if (!property || !('value' in property)) throw new Error('Session fork options are invalid.');
+      const value: unknown = property.value;
+      if (key === 'sourceStore') {
+        if (value !== undefined && !(value instanceof JsonlSessionStore)) throw new Error('Session fork options are invalid.');
+        sourceStore = value as JsonlSessionStore | undefined;
+      } else if (key === 'id' || key === 'cwd' || key === 'workspaceId') {
+        if (value !== undefined && (typeof value !== 'string'
+          || (key === 'id' ? !isValidSessionId(value) : !isBoundedSessionString(value, key === 'cwd' ? 4_096 : 256)))) {
+          throw new Error('Session fork options are invalid.');
+        }
+        destination[key] = value as string | undefined;
+      } else throw new Error('Session fork options are invalid.');
+    }
     newTitle = newTitle === undefined ? undefined : this.redactText(newTitle);
-    const snapshot = await this.captureSessionCopySource(sessionId);
-    return snapshot ? this.copySessionSnapshot(snapshot, newTitle, fromMessageIndex, 'fork') : null;
+    const store = this.store;
+    const external = sourceStore ? await sourceStore.getSessionSnapshot(sessionId) : undefined;
+    const snapshot = sourceStore ? external ? { original: external.session, rawEntries: external.entries } : null
+      : await this.captureSessionCopySource(sessionId);
+    if (this.store !== store) throw new Error('Session changed while copying its branch.');
+    return snapshot ? this.copySessionSnapshot(snapshot, newTitle, fromMessageIndex, 'fork', { options: destination, store }) : null;
   }
 
   private async captureSessionCopySource(sessionId: string): Promise<{ original: Session; rawEntries: SessionEntry[] } | null> {
@@ -2833,7 +2880,9 @@ export class SessionManager {
   }
 
   private async copySessionSnapshot(snapshot: { original: Session; rawEntries: SessionEntry[] },
-    newTitle: string | undefined, throughMessageIndex: number | string | undefined, kind: 'clone' | 'fork'): Promise<Session | null> {
+    newTitle: string | undefined, throughMessageIndex: number | string | undefined, kind: 'clone' | 'fork',
+    destination?: { options: Pick<CreateSessionOptions, 'id' | 'cwd' | 'workspaceId'>; store: JsonlSessionStore | null },
+  ): Promise<Session | null> {
     const { original, rawEntries } = snapshot;
     const sessionId = original.id;
     if (typeof throughMessageIndex === 'string') throughMessageIndex = original.messages.findIndex(message => message.id === throughMessageIndex);
@@ -2954,8 +3003,10 @@ export class SessionManager {
       providerConfig: sanitizeProviderConfig(original.providerConfig),
       metadata,
       usage: throughMessageIndex === undefined && original.usage ? { ...original.usage } : undefined,
+      ...destination?.options,
     };
-    return clonedEntries.length > 0 ? this.createWithEntries(options, clonedEntries) : this.create(options);
+    return destination ? this.createWithEntries(options, clonedEntries, destination)
+      : clonedEntries.length > 0 ? this.createWithEntries(options, clonedEntries) : this.create(options);
   }
 
   /** Get the session tree structure for a given branch */

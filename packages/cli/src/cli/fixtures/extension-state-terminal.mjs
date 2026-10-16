@@ -8,6 +8,8 @@ import pty from 'node-pty';
 const scenario = process.argv[2];
 assert.ok(['regular-memory','regular-durable','fullscreen-memory','fullscreen-durable'].includes(scenario));
 const mode = scenario.startsWith('regular') ? 'regular' : 'fullscreen', durable = scenario.endsWith('durable');
+const forkOnRestart = process.env.AIH_STATE_STARTUP_FORK === '1';
+assert.ok(!forkOnRestart || durable);
 const root = await mkdtemp(path.join(os.tmpdir(),'extension-state-terminal-'));
 console.log(JSON.stringify({root,scenario,node:process.versions.node}));
 const cwd=path.join(root,'work'),agent=path.join(root,'agent'),sessions=path.join(root,'sessions'),trace=path.join(root,'trace.jsonl');
@@ -16,7 +18,7 @@ await mkdir(cwd);await mkdir(agent);await writeFile(path.join(agent,'settings.js
 const body=version=>`import assert from 'node:assert/strict';import {appendFile} from 'node:fs/promises';
 import {SessionManager} from '@ai-harness/core';const version=${version};
 export default api=>{assert.equal(api.version,1);api.registerCommand('state-probe',{description:'Read persistent private state',handler:async(operation,context)=>{
-  const manager=context.sessionManager,id=context.currentSessionId;assert.ok(manager instanceof SessionManager);assert.equal(id,'state-terminal-primary');
+  const manager=context.sessionManager,id=context.currentSessionId;assert.ok(manager instanceof SessionManager);assert.ok(${JSON.stringify(forkOnRestart ? ['state-terminal-primary','state-terminal-fork'] : ['state-terminal-primary'])}.includes(id));
   if(operation==='setup'){
     await manager.addMessage(id,{role:'user',content:'Root'});
     await manager.appendCustomEntry(id,'fixture:terminal',{revision:1,private:'PRIVATE_SESSION_STATE'});
@@ -33,12 +35,12 @@ export default api=>{assert.equal(api.version,1);api.registerCommand('state-prob
   assert.deepEqual(revisions,operation==='empty'?[]:[1]);
   const model=JSON.stringify(manager.getEffectiveContext(id));assert.ok(!model.includes('PRIVATE_SESSION_STATE'));assert.ok(!model.includes('PRIVATE_SESSION_DETAILS'));
   if(operation!=='empty'){assert.ok(model.includes('Terminal selected background'));assert.ok(!model.includes('Terminal custom context'));}
-  const result={version,operation,revisions};await appendFile(${JSON.stringify(trace)},JSON.stringify(result)+'\\n');
+  const result={version,operation,revisions,sessionId:id};await appendFile(${JSON.stringify(trace)},JSON.stringify(result)+'\\n');
   return 'STATE_TERMINAL_RESULT '+JSON.stringify(result);
 }});};`;
 await writeFile(entry,body(1));
 const records=async()=>(await readFile(trace,'utf8').catch(()=> '')).split('\n').filter(Boolean).map(line=>JSON.parse(line));
-let terminal,exited,output='';
+let terminal,exited,output='',opened=0;
 const visible=()=>stripVTControlCharacters(output);
 const waitFor=async(predicate,label)=>{
   const end=Date.now()+5_000;
@@ -49,10 +51,11 @@ const waitFor=async(predicate,label)=>{
 };
 async function open(){
   output='';exited=undefined;
+  const isFork=opened++>0&&forkOnRestart;
   const command=process.env.AIH_STATE_COMMAND;
   terminal=pty.spawn(command??process.execPath,[...(command?[]:[process.env.AIH_STATE_CLI??'/app/packages/cli/dist/index.js']),
     '--offline','--approve','--no-context-files','--no-extensions','-e',agent,'--model','mock/mock-model','--verbose',
-    '--session-dir',sessions,'--session-id','state-terminal-primary','--name','state-probe','--tui-mode',mode,'--theme','dark',
+    '--session-dir',sessions,'--session-id',isFork?'state-terminal-fork':'state-terminal-primary',...(isFork?['--fork','state-terminal-primary']:[]),'--name','state-probe','--tui-mode',mode,'--theme','dark',
     ...(!durable?['--no-session']:[])],{cwd,cols:200,rows:40,env:{PATH:process.env.PATH,HOME:path.join(root,'home'),AI_HARNESS_AGENT_DIR:agent,TERM:'xterm-256color',NO_COLOR:'1'}});
   terminal.onData(value=>{output+=value;});terminal.onExit(value=>{exited=value;});
   await waitFor(()=>visible().includes('editor ready · Enter send'),'initial editor');
@@ -61,7 +64,7 @@ async function command(operation,version,expected){
   const count=(await records()).length;
   output='';terminal.write(`/state-probe ${operation}\r`);
   await waitFor(async()=>(await records()).length===count+1,`settled ${operation}`);
-  assert.deepEqual((await records()).at(-1),{version,operation,revisions:expected});
+  assert.deepEqual((await records()).at(-1),{version,operation,revisions:expected,sessionId:opened>1&&forkOnRestart?'state-terminal-fork':'state-terminal-primary'});
   await waitFor(()=>{const text=visible(),start=text.lastIndexOf('STATE_TERMINAL_RESULT');return start>=0&&text.indexOf('editor ready · Enter send',start)>=0;},'editor after command result');
   assert.ok(!visible().includes('PRIVATE_SESSION_STATE'));assert.ok(!visible().includes('PRIVATE_SESSION_DETAILS'));
   assert.ok(!visible().includes('[Mock AI Response]'));
@@ -87,5 +90,5 @@ try{
   await reload(false,4);await command('read',3,[1]);await close();
   await open();await command(durable?'read':'empty',3,durable?[1]:[]);await close();
   await rm(root,{recursive:true,force:true});
-  console.log(JSON.stringify({result:'EXTENSION_SESSION_TERMINAL_OK',scenario,commands:6,generations:[1,2,3],failedGenerationRetained:true,restart:true}));
+  console.log(JSON.stringify({result:forkOnRestart?'STARTUP_FORK_TERMINAL_STATE_OK':'EXTENSION_SESSION_TERMINAL_OK',scenario,commands:6,generations:[1,2,3],failedGenerationRetained:true,restart:true}));
 }finally{if(terminal&&!exited)terminal.kill();}

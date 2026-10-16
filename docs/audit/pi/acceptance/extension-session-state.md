@@ -2,11 +2,11 @@
 
 Date: 2026-10-16. Initial decision: **DEC-88 / E-AH-EXT-STATE-01**.
 
-**ADMISSION WITHDRAWN — DEC-89:** the [startup-fork RED receipt](./startup-fork-state.md) proves that the separate CLI startup `--fork` path bypasses Core rich copies,drops private entries and retains dangling message parents. CLI-EXT-05 is **PARTIAL** pending repair and complete owning-flow requalification. Current matrix: **95 DONE /57 PARTIAL (62.5%)**,CLI44/43,Web51/14;all152 IDs retained.
+**RE-ADMITTED — DEC-90:** the [startup-fork repair and complete owning-flow reconciliation](./startup-fork-state.md) supersedes the DEC-89 withdrawal after preserving its substantive REDs. ID/prefix/file startup now uses Core rich copies,owned read-only native snapshots,captured destination/name authority and all-mode/installed/PTY proof.41 corrective additions,717 focused,3,433 units,63 parity,544 browsers from nine complete passing configurations and16 equal Node24/26 emitted files qualify the candidate. Current matrix: **96 DONE /56 PARTIAL (63.2%)**,CLI45/42,Web51/14;all152 IDs retained. Failed canonical linked/SIGSEGV and original full-unit/auth/compiler configurations remain failed,not diagnosed by whole independent passes.
 
-The following is the conserved initial qualification record for commit `8dced0fe7306705b22f8227874a5b738f2aebb8e`,not current whole-criterion acceptance. Its initial96/56 result and complete-clause claim were invalidated by the missing startup-copy flow,despite passing whole gates and correct exact-source/index/commit admission. No initial gate,source,commit or failure is erased. The overall goal remains **not complete**.
+**Historical withdrawal — DEC-89:**the separate CLI startup `--fork` path bypassed Core rich copies,dropped private entries and retained dangling parents. CLI-EXT-05 was correctly reopened to PARTIAL,95/57. The following is the conserved initial qualification record for commit `8dced0fe7306705b22f8227874a5b738f2aebb8e`,not standalone current whole-criterion acceptance. Its initial96/56 complete-clause claim omitted that owning flow despite passing whole gates and exact-source/index/commit admission. No initial gate,source,commit,retraction or failure is erased. The current complete owner map and exact22-path admission live in the corrective receipt. The overall goal remains **not complete**.
 
-## Complete requirement-to-evidence map
+## Initial requirement-to-evidence map,completed by DEC-90
 
 | CLI-EXT-05 clause | Owned implementation and direct evidence |
 |---|---|
