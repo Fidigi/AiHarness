@@ -26,8 +26,13 @@ import {
 import {
   collectAbandonedEntries, copyBranchNavigationOptions, prepareBranchSummary,
 } from './branch-summarization.js';
-import type { BranchNavigationOptions, BranchNavigationResult } from './branch-summarization.js';
+import type { BranchNavigationOptions, BranchNavigationResult, BranchSummaryEvent, BranchSummaryHook, BranchSummaryOutput } from './branch-summarization.js';
+import { copyBranchSummaryAccounting, copyBranchSummaryEvent, copyBranchSummaryOutput } from './session-branch-summary.js';
 import { copySessionCustomValue } from './session-custom-data.js';
+import {
+  captureSessionBranchSignal, copySessionBranchOptions, SessionBranchAdmissions, SessionBranchCancelledError,
+} from './session-branch-admission.js';
+import type { SessionBranchHook, SessionBranchOptions, SessionBranchTicket } from './session-branch-admission.js';
 
 // ===================================================================
 // JSONL Entry types for session persistence
@@ -96,38 +101,6 @@ export interface BranchSummaryAccounting {
   provider?: string;
   model?: string;
   usage?: Message['usage'];
-}
-
-function copyBranchSummaryAccounting(value: BranchSummaryAccounting): BranchSummaryAccounting {
-  const fail = (): never => { throw new Error('Branch summary accounting is invalid.'); };
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return fail();
-  const result: BranchSummaryAccounting = {};
-  for (const key of Reflect.ownKeys(value)) {
-    if (key !== 'provider' && key !== 'model' && key !== 'usage') return fail();
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (!descriptor || !('value' in descriptor)) return fail();
-    const item: unknown = descriptor.value;
-    if (item === undefined) continue;
-    if (key !== 'usage') {
-      if (typeof item !== 'string' || !isBoundedSessionString(item, 4_096) || !item) return fail();
-      result[key] = item;
-    } else {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) return fail();
-      const usage: NonNullable<Message['usage']> = {};
-      for (const field of Reflect.ownKeys(item)) {
-        if (field !== 'inputTokens' && field !== 'outputTokens' && field !== 'cacheReadTokens'
-          && field !== 'cacheWriteTokens' && field !== 'totalTokens' && field !== 'costUsd') return fail();
-        const property = Object.getOwnPropertyDescriptor(item, field);
-        if (!property || !('value' in property)) return fail();
-        const counter: unknown = property.value;
-        if (counter === undefined) continue;
-        if (typeof counter !== 'number' || !Number.isFinite(counter) || counter < 0) return fail();
-        usage[field] = counter;
-      }
-      result.usage = usage;
-    }
-  }
-  return result;
 }
 
 /** Branch summary entry (when navigating tree) */
@@ -1318,11 +1291,22 @@ export interface SessionStoreSnapshot {
 }
 
 /** Own destination overrides and an optional read-only external journal source. */
-export interface SessionForkOptions {
+export interface SessionForkOptions extends SessionBranchOptions {
   sourceStore?: JsonlSessionStore;
   id?: string;
   cwd?: string;
   workspaceId?: string;
+}
+
+interface SessionCopySource {
+  original: Session;
+  rawEntries: SessionEntry[];
+  validateSource?: () => void;
+}
+
+interface SessionPublicationAdmission {
+  check(): void;
+  admit(): void;
 }
 
 export type CreateSessionOptions = Partial<Pick<Session,
@@ -1435,6 +1419,8 @@ export class SessionManager {
   
   // Event system for lifecycle hooks and extensions
   private emitter = new EventEmitter<EventMap>();
+  private readonly branchAdmissions = new SessionBranchAdmissions();
+  private readonly branchSummaryHooks = new Map<symbol, BranchSummaryHook>();
   private readonly sessionMutationTails = new Map<string, Promise<void>>();
   private readonly autoCompactionRuns = new Map<string, Promise<boolean>>();
   private activeSessionMutations = 0;
@@ -1476,6 +1462,7 @@ export class SessionManager {
 
   /** Set the JSONL persistence store */
   setStore(store: JsonlSessionStore): void {
+    if (this.store !== store) this.branchAdmissions.retire(undefined, new Error('Session changed while copying its branch.'), true);
     this.store = store;
     store.setRedaction(this.redactText, this.redactJson);
   }
@@ -1609,6 +1596,47 @@ export class SessionManager {
   // Event System - Lifecycle hooks and extension integration
   // ===================================================================
 
+  /** Ordered cancellation admission, separate from concurrent lifecycle observers. */
+  onBeforeBranch(hook: SessionBranchHook): () => void {
+    return this.branchAdmissions.onBefore(hook);
+  }
+
+  /** Explicit summary overrides run in order; the last defined owned output wins. */
+  onBeforeBranchSummary(hook: BranchSummaryHook): () => void {
+    if (typeof hook !== 'function') throw new Error('Branch summary hook is invalid.');
+    if (this.branchSummaryHooks.size >= 128) throw new Error('Branch summary hook limit reached.');
+    const key = Symbol(); this.branchAdmissions.retire();
+    if (this.branchSummaryHooks.size >= 128) throw new Error('Branch summary hook limit reached.');
+    this.branchSummaryHooks.set(key, hook);
+    return () => { if (this.branchSummaryHooks.delete(key)) this.branchAdmissions.retire(); };
+  }
+
+  private async runBranchSummaryHooks(event: BranchSummaryEvent, ticket: SessionBranchTicket): Promise<BranchSummaryOutput | undefined> {
+    const captured = copyBranchSummaryEvent(event);
+    let output: BranchSummaryOutput | undefined;
+    for (const hook of [...this.branchSummaryHooks.values()]) {
+      ticket.check(); let result: unknown;
+      try { result = await ticket.waitFor(Promise.resolve().then(() => hook(captured))); }
+      catch { ticket.check(); throw new Error('Branch summary hook failed.'); }
+      ticket.check();
+      if (result === false) { ticket.cancel(); ticket.check(); }
+      if (result !== undefined) output = copyBranchSummaryOutput(result, captured.maxOutputBytes);
+    }
+    return output;
+  }
+
+  /** Host generation withdrawal; future operations use the current registrations. */
+  retirePendingBranchOperations(): void {
+    this.branchAdmissions.retire();
+  }
+
+  private async withBranchTicket<T>(sourceSessionId: string, signal: AbortSignal | undefined,
+    operation: (ticket: SessionBranchTicket) => Promise<T>): Promise<T> {
+    const ticket = this.branchAdmissions.begin(sourceSessionId, signal);
+    try { return await operation(ticket); }
+    finally { ticket.finish(); }
+  }
+
   /** Register a listener for an event */
   on<K extends keyof EventMap>(event: K, handler: EventHandler<EventMap[K]>): void {
     this.emitter.on(event, handler);
@@ -1658,6 +1686,7 @@ export class SessionManager {
     options: CreateSessionOptions,
     entries: RestorableSessionEntry[] = [],
     expectedStore?: { store: JsonlSessionStore | null },
+    admission?: SessionPublicationAdmission,
   ): Promise<Session> {
     options = this.redactJson(options);
     entries = this.redactJson(structuredClone(entries));
@@ -1671,8 +1700,9 @@ export class SessionManager {
       throw new Error('Invalid session ID.');
     }
     return this.withSessionMutation(sessionId, () => {
+      admission?.check();
       if (expectedStore && this.store !== expectedStore.store) throw new Error('Session changed while copying its branch.');
-      return this.createUnlocked(options, sessionId, entries);
+      return this.createUnlocked(options, sessionId, entries, admission);
     });
   }
 
@@ -1680,6 +1710,7 @@ export class SessionManager {
     options: CreateSessionOptions,
     sessionId: string,
     entries: RestorableSessionEntry[],
+    admission?: SessionPublicationAdmission,
   ): Promise<Session> {
     if (this.sessions.has(sessionId)) throw new Error('Session already exists.');
     if (this.sessions.size >= MAX_SESSION_FILES) throw new Error('Session inventory limit reached.');
@@ -1826,7 +1857,10 @@ export class SessionManager {
       ...entries,
     ].sort((left, right) => left.timestamp - right.timestamp);
     if (!session.activeLeafId) session.activeLeafId = initialEntries.at(-1)?.id;
-    await this.persistSession(session, entries, { requireAbsent: true });
+    await this.persistSession(session, entries, { requireAbsent: true }, () => {
+      admission?.check();
+      admission?.admit();
+    });
     this.sessions.set(session.id, session);
     this.volatileEntries.set(session.id, initialEntries);
     this.onSessionUpdate?.(session.id);
@@ -2083,6 +2117,7 @@ export class SessionManager {
 
   /** Delete a session */
   async delete(id: string): Promise<boolean> {
+    this.branchAdmissions.retire(id, undefined, true);
     const deleted = await this.withSessionMutation(id, async () => {
       if (!this.sessions.has(id)) return false;
       await this.persistDelete(id);
@@ -2101,6 +2136,7 @@ export class SessionManager {
 
   /** Clear all process-local sessions after already accepted mutations settle. */
   async clear(): Promise<void> {
+    this.branchAdmissions.retire(undefined, undefined, true);
     if (this.clearInProgress) return this.clearInProgress;
     const operation = (async () => {
       while (this.activeSessionMutations > 0) {
@@ -2459,12 +2495,24 @@ export class SessionManager {
    */
   async navigateTree(sessionId: string, entryId: string,
     options: BranchNavigationOptions = {}): Promise<BranchNavigationResult> {
-    const settings = copyBranchNavigationOptions(options);
+    const settings = copyBranchNavigationOptions(options, this.branchSummaryHooks.size > 0);
     if (settings.signal?.aborted) return { status: 'cancelled' };
     if (!isValidSessionId(sessionId) || !isValidEntryId(entryId)) return { status: 'not-found' };
+    return this.withBranchTicket<BranchNavigationResult>(sessionId, settings.signal, async ticket => {
+      try { return await this.navigateTreeWithAdmission(sessionId, entryId, { ...settings, signal: ticket.signal }, ticket, settings.signal); }
+      catch (error) {
+        if (ticket.authorityWithdrawn) return { status: 'stale' };
+        if (ticket.signal.aborted || error instanceof SessionBranchCancelledError) return { status: 'cancelled' };
+        throw error;
+      }
+    });
+  }
+
+  private async navigateTreeWithAdmission(sessionId: string, entryId: string, settings: BranchNavigationOptions,
+    ticket: SessionBranchTicket, callerSignal?: AbortSignal): Promise<BranchNavigationResult> {
     const stamp = (session: Session, entries: readonly SessionEntry[]): string => createHash('sha256')
       .update(JSON.stringify(session)).update('\n').update(JSON.stringify(entries)).digest('hex');
-    const snapshot = await this.withSessionMutation(sessionId, async () => {
+    const snapshot = await ticket.waitFor(this.withSessionMutation(sessionId, async () => {
       if (settings.signal?.aborted) return null;
       const current = this.sessions.get(sessionId);
       if (!current) return null;
@@ -2482,42 +2530,30 @@ export class SessionManager {
       const legacyPrefix = captureLegacyCompactionPrefix(current, original);
       return { current, raw: structuredClone(raw), from: current.activeLeafId, legacyBoundary, legacyPrefix,
         stamp: stamp(current, original) };
-    });
+    }));
     if (settings.signal?.aborted) return { status: 'cancelled' };
     if (!snapshot) return { status: 'not-found' };
     const abandoned = collectAbandonedEntries(snapshot.raw, snapshot.from, entryId);
     const request = settings.summarize && snapshot.from && abandoned.length
-      ? prepareBranchSummary(abandoned, snapshot.from, entryId, settings) : undefined;
+      ? prepareBranchSummary(abandoned, snapshot.from, entryId, { ...settings, signal: callerSignal }) : undefined;
     let generated: { summary: string } & BranchSummaryAccounting | undefined;
     if (request) {
-      let output: unknown;
-      try { output = await settings.summarizer!(request); }
-      catch (error) {
-        if (settings.signal?.aborted) return { status: 'cancelled' };
-        throw error;
-      }
-      if (settings.signal?.aborted) return { status: 'cancelled' };
-      if (!output || typeof output !== 'object' || Array.isArray(output)) throw new Error('Branch summary result is invalid.');
       const maxOutputBytes = Math.min(1024 * 1024, settings.reserveTokens ?? 16_384, request.maxOutputTokens * 4);
-      let summary: string | undefined;
-      const accounting: Record<string, unknown> = {};
-      for (const key of Reflect.ownKeys(output)) {
-        if (key !== 'summary' && key !== 'provider' && key !== 'model' && key !== 'usage') {
-          throw new Error('Branch summary result is invalid.');
-        }
-        const property = Object.getOwnPropertyDescriptor(output, key);
-        if (!property || !('value' in property)) throw new Error('Branch summary result is invalid.');
-        if (key === 'summary') {
-          if (typeof property.value !== 'string' || Buffer.byteLength(property.value) > maxOutputBytes) {
-            throw new Error('Branch summary result is invalid.');
-          }
-          summary = this.redactText(property.value).trim();
-        } else accounting[key] = property.value;
+      let output: unknown = await this.runBranchSummaryHooks({ sourceSessionId: sessionId,
+        fromEntryId: request.fromEntryId, targetEntryId: request.targetEntryId,
+        transcript: request.messages.map(message => message.content).join('\n'), signal: ticket.signal,
+        tokenBudget: request.tokenBudget, maxOutputTokens: request.maxOutputTokens, maxOutputBytes }, ticket);
+      if (output === undefined) {
+        if (!settings.summarizer) throw new Error('No branch summarizer configured.');
+        output = await ticket.waitFor(Promise.resolve().then(() => settings.summarizer!(request)));
       }
+      ticket.check();
+      const { summary: rawSummary, ...accounting } = copyBranchSummaryOutput(output, maxOutputBytes);
+      const summary = this.redactText(rawSummary).trim();
       if (!summary || Buffer.byteLength(summary) > maxOutputBytes) throw new Error('Branch summary result is invalid.');
       generated = { summary, ...this.redactJson(copyBranchSummaryAccounting(accounting)) };
-    }
-    const result = await this.withSessionMutation(sessionId, async (): Promise<BranchNavigationResult> => {
+    } else if (settings.summarize && !settings.summarizer) throw new Error('No branch summarizer configured.');
+    const result = await ticket.waitFor(this.withSessionMutation(sessionId, async (): Promise<BranchNavigationResult> => {
       if (settings.signal?.aborted) return { status: 'cancelled' };
       const current = this.sessions.get(sessionId);
       if (current !== snapshot.current) return { status: 'stale' };
@@ -2557,11 +2593,11 @@ export class SessionManager {
       const next: Session = { ...current, activeLeafId: summary?.id ?? entryId, metadata,
         messages, commands: commands.length ? commands : undefined, updatedAt: new Date() };
       boundedSessionJson(next, MAX_SESSION_FILE_BYTES, 'Session file exceeds its size limit.');
-      await this.persistSession(next, summary ? [summary] : []);
+      await this.persistSession(next, summary ? [summary] : [], {}, () => { ticket.admit(); });
       Object.assign(current, next);
       if (!this.usesSessionStore() && summary) this.volatileEntries.get(sessionId)?.push(summary);
       return { status: 'navigated', entryId: next.activeLeafId, ...(summary ? { summary: structuredClone(summary) } : {}) };
-    });
+    }));
     if (result.status === 'navigated') this.onSessionUpdate?.(sessionId);
     return result;
   }
@@ -2657,20 +2693,29 @@ export class SessionManager {
     sessionId: string,
     entryId: string,
     newTitle?: string,
-    options: { before?: boolean } = {},
+    options: SessionBranchOptions & { before?: boolean } = {},
   ): Promise<Session | null> {
     if (!isValidSessionId(sessionId) || !isValidEntryId(entryId)) return null;
     if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('Session fork options are invalid.');
-    let before = false;
+    let before = false, signal: AbortSignal | undefined;
     for (const key of Reflect.ownKeys(options)) {
       const property = Object.getOwnPropertyDescriptor(options, key);
-      if (key !== 'before' || !property || !('value' in property)
-        || property.value !== undefined && typeof property.value !== 'boolean') throw new Error('Session fork options are invalid.');
-      before = property.value === true;
+      if (!property || !('value' in property)) throw new Error('Session fork options are invalid.');
+      if (key === 'signal') signal = captureSessionBranchSignal(property.value);
+      else if (key === 'before' && (property.value === undefined || typeof property.value === 'boolean')) before = property.value === true;
+      else throw new Error('Session fork options are invalid.');
     }
     newTitle = newTitle === undefined ? undefined : this.redactText(newTitle);
-    const snapshot = await this.captureSessionCopySource(sessionId);
-    if (!snapshot) return null;
+    const store = this.store;
+    return this.withBranchTicket(sessionId, signal, async ticket => {
+      const snapshot = await ticket.waitFor(this.captureSessionCopySource(sessionId));
+      if (!snapshot) return null;
+      return this.copySessionAtUserEntry(snapshot, entryId, before, newTitle, store, ticket);
+    });
+  }
+
+  private async copySessionAtUserEntry(snapshot: SessionCopySource, entryId: string, before: boolean,
+    newTitle: string | undefined, store: JsonlSessionStore | null, ticket: SessionBranchTicket): Promise<Session | null> {
     const { original, rawEntries } = snapshot;
     const graph = legacyContextEntries(rawEntries, typeof original.metadata?.legacyRootBoundaryId === 'string'
       ? original.metadata.legacyRootBoundaryId : original.metadata?.hasBranchedHistory !== true ? legacyRootBoundary(rawEntries) : undefined);
@@ -2709,8 +2754,9 @@ export class SessionManager {
         ?? (current.inputTokens ?? 0) + (current.outputTokens ?? 0)),
       costUsd: (total.costUsd ?? 0) + (current.costUsd ?? 0),
     }), {} as NonNullable<Session['usage']>) : undefined;
-    return this.copySessionSnapshot({ original: { ...original, messages, commands,
-      activeLeafId: prefix.at(-1)?.id, metadata, usage }, rawEntries }, newTitle, undefined, 'fork');
+    return this.copySessionSnapshot({ ...snapshot, original: { ...original, messages, commands,
+      activeLeafId: prefix.at(-1)?.id, metadata, usage } }, newTitle, undefined, 'fork',
+    { options: {}, store }, { ticket, entryId, before });
   }
 
   /** Fork a session from the current model projection or one of its stable message IDs. */
@@ -2719,12 +2765,13 @@ export class SessionManager {
     if (!isValidSessionId(sessionId)) return null;
     if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('Session fork options are invalid.');
     const destination: Pick<CreateSessionOptions, 'id' | 'cwd' | 'workspaceId'> = {};
-    let sourceStore: JsonlSessionStore | undefined;
+    let sourceStore: JsonlSessionStore | undefined, signal: AbortSignal | undefined;
     for (const key of Reflect.ownKeys(options)) {
       const property = Object.getOwnPropertyDescriptor(options, key);
       if (!property || !('value' in property)) throw new Error('Session fork options are invalid.');
       const value: unknown = property.value;
-      if (key === 'sourceStore') {
+      if (key === 'signal') signal = captureSessionBranchSignal(value);
+      else if (key === 'sourceStore') {
         if (value !== undefined && !(value instanceof JsonlSessionStore)) throw new Error('Session fork options are invalid.');
         sourceStore = value as JsonlSessionStore | undefined;
       } else if (key === 'id' || key === 'cwd' || key === 'workspaceId') {
@@ -2737,14 +2784,18 @@ export class SessionManager {
     }
     newTitle = newTitle === undefined ? undefined : this.redactText(newTitle);
     const store = this.store;
-    const external = sourceStore ? await sourceStore.getSessionSnapshot(sessionId) : undefined;
-    const snapshot = sourceStore ? external ? { original: external.session, rawEntries: external.entries } : null
-      : await this.captureSessionCopySource(sessionId);
-    if (this.store !== store) throw new Error('Session changed while copying its branch.');
-    return snapshot ? this.copySessionSnapshot(snapshot, newTitle, fromMessageIndex, 'fork', { options: destination, store }) : null;
+    return this.withBranchTicket(sessionId, signal, async ticket => {
+      const external = sourceStore ? await ticket.waitFor(sourceStore.getSessionSnapshot(sessionId)) : undefined;
+      const snapshot = sourceStore ? external ? { original: external.session, rawEntries: external.entries } : null
+        : await ticket.waitFor(this.captureSessionCopySource(sessionId));
+      ticket.check();
+      if (this.store !== store) throw new Error('Session changed while copying its branch.');
+      return snapshot ? this.copySessionSnapshot(snapshot, newTitle, fromMessageIndex, 'fork',
+        { options: destination, store }, { ticket, externalSource: Boolean(sourceStore) }) : null;
+    });
   }
 
-  private async captureSessionCopySource(sessionId: string): Promise<{ original: Session; rawEntries: SessionEntry[] } | null> {
+  private async captureSessionCopySource(sessionId: string): Promise<SessionCopySource | null> {
     if (!isValidSessionId(sessionId)) return null;
     return this.withSessionMutation(sessionId, async () => {
       const current = this.sessions.get(sessionId);
@@ -2753,7 +2804,11 @@ export class SessionManager {
       const original = structuredClone(current);
       const rawEntries = await this.getRawEntries(sessionId);
       if (this.store !== store) throw new Error('Session changed while copying its branch.');
-      return { original, rawEntries };
+      return { original, rawEntries, validateSource: () => {
+        if (this.store !== store || this.sessions.get(sessionId) !== current) {
+          throw new Error('Session changed while copying its branch.');
+        }
+      } };
     });
   }
 
@@ -2761,12 +2816,28 @@ export class SessionManager {
    * Move the active leaf to immediately before a durable user entry.
    * Descendants remain in the journal so a later prompt creates a sibling branch.
    */
-  async branchBeforeEntry(sessionId: string, entryId: string): Promise<Message | null> {
-    if (!isValidEntryId(entryId)) return null;
-    return this.withSessionMutation(sessionId, () => this.branchBeforeEntryUnlocked(sessionId, entryId));
+  async branchBeforeEntry(sessionId: string, entryId: string, options: SessionBranchOptions = {}): Promise<Message | null> {
+    const { signal } = copySessionBranchOptions(options);
+    if (!isValidSessionId(sessionId) || !isValidEntryId(entryId)) return null;
+    return this.withBranchTicket(sessionId, signal, async ticket => {
+      const snapshot = await ticket.waitFor(this.captureSessionCopySource(sessionId));
+      if (!snapshot) return null;
+      if (!snapshot.rawEntries.some(entry => entry.type === 'message' && entry.id === entryId && entry.role === 'user')
+        && !snapshot.original.messages.some(message => message.id === entryId && message.role === 'user')) return null;
+      const check = (): void => {
+        ticket.check(); snapshot.validateSource?.();
+        if (JSON.stringify(this.sessions.get(sessionId)) !== JSON.stringify(snapshot.original)) {
+          throw new Error('Session changed while branching its history.');
+        }
+      };
+      await this.branchAdmissions.run(ticket, { operation: 'branch-before', entryId, position: 'before', externalSource: false });
+      return ticket.waitFor(this.withSessionMutation(sessionId, () => this.branchBeforeEntryUnlocked(sessionId, entryId,
+        snapshot, { check, admit: () => { check(); ticket.admit(); } })));
+    });
   }
 
-  private async branchBeforeEntryUnlocked(sessionId: string, entryId: string): Promise<Message | null> {
+  private async branchBeforeEntryUnlocked(sessionId: string, entryId: string,
+    snapshot: SessionCopySource, admission: SessionPublicationAdmission): Promise<Message | null> {
     const current = this.sessions.get(sessionId);
     if (!current) return null;
     const session: Session = {
@@ -2776,6 +2847,8 @@ export class SessionManager {
       metadata: current.metadata ? structuredClone(current.metadata) : undefined,
     };
     const originalEntries = await this.getRawEntries(sessionId);
+    admission.check();
+    if (JSON.stringify(originalEntries) !== JSON.stringify(snapshot.rawEntries)) throw new Error('Session changed while branching its history.');
     const legacyBoundary = typeof session.metadata?.legacyRootBoundaryId === 'string' ? session.metadata.legacyRootBoundaryId
       : session.metadata?.hasBranchedHistory !== true ? legacyRootBoundary(originalEntries) : undefined;
     const rawEntries = legacyContextEntries(originalEntries, legacyBoundary);
@@ -2861,7 +2934,7 @@ export class SessionManager {
       session.metadata = metadata;
     }
     session.updatedAt = new Date();
-    await this.persistSession(session);
+    await this.persistSession(session, [], {}, () => { admission.check(); admission.admit(); });
     Object.assign(current, session);
 
     if (this.store) {
@@ -2873,15 +2946,21 @@ export class SessionManager {
   }
 
   /** Clone a session as an independent root, optionally through one message. */
-  async cloneSession(sessionId: string, newTitle?: string, throughMessageIndex?: number | string): Promise<Session | null> {
+  async cloneSession(sessionId: string, newTitle?: string, throughMessageIndex?: number | string,
+    options: SessionBranchOptions = {}): Promise<Session | null> {
+    const { signal } = copySessionBranchOptions(options), store = this.store;
     newTitle = newTitle === undefined ? undefined : this.redactText(newTitle);
-    const snapshot = await this.captureSessionCopySource(sessionId);
-    return snapshot ? this.copySessionSnapshot(snapshot, newTitle, throughMessageIndex, 'clone') : null;
+    return this.withBranchTicket(sessionId, signal, async ticket => {
+      const snapshot = await ticket.waitFor(this.captureSessionCopySource(sessionId));
+      return snapshot ? this.copySessionSnapshot(snapshot, newTitle, throughMessageIndex, 'clone',
+        { options: {}, store }, { ticket }) : null;
+    });
   }
 
-  private async copySessionSnapshot(snapshot: { original: Session; rawEntries: SessionEntry[] },
+  private async copySessionSnapshot(snapshot: SessionCopySource,
     newTitle: string | undefined, throughMessageIndex: number | string | undefined, kind: 'clone' | 'fork',
-    destination?: { options: Pick<CreateSessionOptions, 'id' | 'cwd' | 'workspaceId'>; store: JsonlSessionStore | null },
+    destination: { options: Pick<CreateSessionOptions, 'id' | 'cwd' | 'workspaceId'>; store: JsonlSessionStore | null },
+    admission: { ticket: SessionBranchTicket; externalSource?: boolean; entryId?: string; before?: boolean },
   ): Promise<Session | null> {
     const { original, rawEntries } = snapshot;
     const sessionId = original.id;
@@ -3005,8 +3084,17 @@ export class SessionManager {
       usage: throughMessageIndex === undefined && original.usage ? { ...original.usage } : undefined,
       ...destination?.options,
     };
-    return destination ? this.createWithEntries(options, clonedEntries, destination)
-      : clonedEntries.length > 0 ? this.createWithEntries(options, clonedEntries) : this.create(options);
+    const { ticket } = admission;
+    const check = (): void => {
+      ticket.check(); snapshot.validateSource?.();
+      if (this.store !== destination.store) throw new Error('Session changed while copying its branch.');
+    };
+    check();
+    await this.branchAdmissions.run(ticket, { operation: kind, entryId: admission.entryId ?? selectedLeaf,
+      position: admission.before ? 'before' : 'at', externalSource: admission.externalSource === true });
+    check();
+    return ticket.waitFor(this.createWithEntries(options, clonedEntries, destination,
+      { check, admit: () => { check(); ticket.admit(); } }));
   }
 
   /** Get the session tree structure for a given branch */
@@ -3111,15 +3199,18 @@ export class SessionManager {
     session: Session,
     additionalEntries: SessionEntry[] = [],
     options: { requireAbsent?: boolean } = {},
+    admit?: () => void,
   ): Promise<void> {
-    if (!this.store || !this.usesSessionStore()) return;
+    if (!this.store || !this.usesSessionStore()) { admit?.(); return; }
+    const store = this.store;
+    let admissionRejected = false;
     try {
       let fallback: SessionEntry[] | undefined;
-      if (sessionStoreKinds.get(this.store) !== 'native') {
+      if (sessionStoreKinds.get(store) !== 'native') {
         // Structural stores promise the same journal-preserving save semantics.
         // Prepare the owned context projection BEFORE the write; a failed later
         // read must never turn an accepted durable write into a reported failure.
-        const previous = await this.store.getRawEntries(session.id);
+        const previous = await store.getRawEntries(session.id);
         const currentEntries: SessionEntry[] = [
           ...session.messages.map(messageToEntry),
           ...(session.commands ?? []).map(command => ({ ...command, type: 'command' as const,
@@ -3134,10 +3225,13 @@ export class SessionManager {
         ]));
         boundedSessionJson(fallback, MAX_SESSION_FILE_BYTES, 'Session file exceeds its size limit.');
       }
-      await this.store.saveSession(session, additionalEntries, options);
+      try { admit?.(); }
+      catch (error) { admissionRejected = true; throw error; }
+      await store.saveSession(session, additionalEntries, options);
       const snapshot = committedSessionEntries.get(session) ?? fallback;
       if (snapshot) this.committedEntries.set(session.id, snapshot);
-    } catch {
+    } catch (error) {
+      if (admissionRejected) throw error;
       console.error('[SessionManager] Failed to save session.');
       throw new Error('Session persistence failed.');
     }

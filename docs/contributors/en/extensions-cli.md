@@ -195,7 +195,7 @@ Commands and tools receive the actual `context.sessionManager` plus the current 
 - `appendCustomMessage(id, customType, content, {display?,details?})` contributes its content to model context even when `display:false`; details remain outside model input. These are not secrets storage or arbitrary custom UI renderers.
 - `await getActiveBranchEntries(id)` returns an owned parent-first path, including private state before compaction. Reduce by your exact type and take the last matching entry to restore your state. It excludes abandoned branches, follows no summary-source provenance, uses the last append projection per ID and refuses incomplete ancestry. Raw history includes abandoned work; effective model context deliberately excludes private data, so neither is a substitute.
 - Related forks preserve selected custom ancestry/stable IDs; independent clones remap internal IDs. Both reuse Core's bounded copy path (at most 1,024 extra custom/summary/compaction entries), preserve required private state and refuse live command ancestors. Arbitrary IDs inside custom payloads are not rewritten.
-- Startup `--fork` ID/prefix/file selection reuses that Core engine; it must not drop private state by copying only model messages. A foreign native source is read through one stable bounded `JsonlSessionStore.getSessionSnapshot(id)` without rewriting it or importing it into the destination manager. Snapshot entries are raw history, not active state. Low-level `forkSession` accepts own captured `{sourceStore?,id?,cwd?,workspaceId?}` as its fourth argument; accessors/unknown keys/invalid values and stale destination-store authority are refused. Explicit undefined workspace clears inheritance. Existing no-session startup precedence remains; no facade method, lifecycle hook or CAS is added.
+- Startup `--fork` ID/prefix/file selection reuses that Core engine; it must not drop private state by copying only model messages. A foreign native source is read through one stable bounded `JsonlSessionStore.getSessionSnapshot(id)` without rewriting it or importing it into the destination manager. Snapshot entries are raw history, not active state. Low-level `forkSession` accepts own captured `{sourceStore?,id?,cwd?,workspaceId?,signal?}` as its fourth argument; accessors/unknown keys/invalid values and stale destination-store authority are refused. Explicit undefined workspace clears inheritance. Existing no-session startup precedence remains; no facade method or CAS is added. Ordered cancellation admission is separate below.
 
 ```js
 api.registerCommand('remember', {
@@ -217,7 +217,7 @@ Durable state survives process restart and executable generations; `--no-session
 
 ### Transforming and Cancellable Hooks
 
-Three hooks are available:
+Transforming hooks include:
 
 - `before:agent` receives `{ sessionId, provider, input }`;
 - `before:provider` receives `{ provider, model, messages, options }`;
@@ -232,6 +232,14 @@ api.before('before:provider', data => ({
   options: { ...data.options, temperature: 0.2 },
 }));
 ```
+
+### Ordered branch and summary hooks
+
+`before:session:branch` is cancel-only: frozen `{sourceSessionId,operation,entryId?,position,externalSource,signal}` describes fork/clone/branch-before without private journal data. Return undefined to continue, false or own `{cancel:true,reason?}` to veto. Unknown keys, accessors, transforms and invalid results fail closed; reasons are bounded to 4,096 UTF-8 bytes/no NUL and manager adapters do not disclose them. Ordinary lifecycle observers remain concurrent/error-isolated.
+
+`before:session:summary` runs only for explicitly requested navigation summaries. Frozen source/from/target IDs, model-visible transcript, token/output budgets and owned signal grant no rewrite authority. Return undefined, cancellation or copied validated `{summary,provider?,model?,usage?}`. The last defined override wins; later veto cancels; fallback runs only without an override. Private data/details stay excluded while `display:false` custom content remains model-visible. Global callbacks use an owned generation signal; legacy per-call summarizers retain the original caller signal.
+
+Registration/removal/unload/rebind/shutdown withdraws unpublished work before awaited cleanup, including ignored callbacks. Limits:128 Core hooks/kind and256 pending admissions; registry128 managers,256 leases/manager and256 callbacks/kind. `attachSessionBranchHooks(manager)` owns an independent lease; SDK borrowing never moves/removes another host's lifecycle binding. Admitted durable writes finish, without rollback/CAS. CLI/RPC keep nondestructive busy refusal, preserve queues/selection on veto and retire dialogs only on publication; Server persisted-target copies remain allowed while the source runs. The SDK adds no facade/store methods. See [session ownership](../../ai/topics/sessions.md#fork-versus-clone).
 
 ### Automatic Tool Invocations
 

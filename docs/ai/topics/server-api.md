@@ -170,6 +170,8 @@ Administrator `PATCH /api/skills/enabled/batch` accepts exactly `{changes: [{key
 5. Require explicit recursive-cascade confirmation for sessions with descendants.
 6. Treat IDs, cursors, cwd, upload names, and route bodies as untrusted.
 
+Fork/fork-before/clone requests own a `sessionCopyRequest` signal from request abort or unfinished response close, not ordinary completed body close. Core ordered hooks can veto with HTTP409 `{error:"Session branch operation cancelled.",code:"SESSION_BRANCH_CANCELLED"}`; never report false201. Disconnect/unload withdraws unpublished work even if a hook ignores abort; listeners detach in finally. Already-admitted durable copies finish after disconnect, without writing to a destroyed response. Existing stable persisted-target copying while the source agent runs remains allowed; this does not stop/move the source or add rollback/CAS. Web still delegates ancestry to Core.
+
 Session detail and list projections, including zero-message pages, use Core's recursive bounded provider-metadata filter; credential-like fields, getters and executable `toJSON` cannot enter those responses. This remains field-based filtering, not arbitrary secret/URL recognition. The first ordinary protected API request additionally initializes credentials and reloads/rewrites durable sessions for legacy scrubbing; `start()` awaits service composition, not that lazy ingress. A previously borrowed in-memory Session can therefore be replaced by its durable projection. Use awaited manager mutations for persistence, and complete this real initialization before borrowing host objects in boundary probes. Passive exact `GET /api/mcp` remains exempt.
 
 ## Associated Tests
@@ -186,6 +188,7 @@ Session detail and list projections, including zero-message pages, use Core's re
 - `packages/server/src/api/model-batches.test.ts`, `packages/server/src/runtime/resource-batches.test.ts`, and `e2e/model-batches.spec.ts` — exact scoped batches, canonical post-error readback, filtered/group/individual requests and retired-view exclusion
 - `packages/server/src/api/resource-batches.test.ts`, `packages/server/src/runtime/skill-markdown.test.ts`, `e2e/resource-batches.spec.ts` and `e2e/skill-batches-live.spec.ts` — independent skill outcomes, real publication/ABA/trust/disposal guards, reviewed group visuals and genuine Vite/Express/Core/disk/reload behavior
 - `packages/server/src/api/npm-settings-http.test.ts` and `packages/server/src/runtime/configured-plugin-service.test.ts` — genuine authenticated HTTP/default-runner argv, fresh admission/revocation, no HTTP authority smuggling, concurrent workspace isolation and no denied-operation residue
+- `packages/server/src/api/session-copy-request.test.ts` and `session-live-mutations.test.ts` — normal-body-close versus disconnect ownership, fork/fork-before/clone veto/unload, ignored callbacks, admitted disconnected writes and nondestructive running-source persisted-target copies
 - `packages/server/src/api/session-pagination.test.ts` — bounded message windows and cursors
 - `packages/server/src/security/request-security.test.ts` — roles, capabilities, origins, limits and WebSocket auth
 - `e2e/settings.spec.ts` — browser Test request minimality plus identity/cwd/capability/tool reporting; import/replacement/local mutation and focus flows

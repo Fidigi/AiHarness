@@ -14,6 +14,19 @@ export interface BranchSummaryRequest {
 }
 
 export interface BranchSummaryOutput extends BranchSummaryAccounting { summary: string }
+/** Immutable, bounded model transcript; private journal state/details are excluded. */
+export interface BranchSummaryEvent {
+  readonly sourceSessionId: string;
+  readonly fromEntryId: string;
+  readonly targetEntryId: string;
+  readonly transcript: string;
+  readonly signal: AbortSignal;
+  readonly tokenBudget: number;
+  readonly maxOutputTokens: number;
+  readonly maxOutputBytes: number;
+}
+export type BranchSummaryHook = (event: Readonly<BranchSummaryEvent>) => void | false | BranchSummaryOutput
+  | Promise<void | false | BranchSummaryOutput>;
 export type BranchSummarizer = (request: BranchSummaryRequest) => Promise<BranchSummaryOutput>;
 
 export interface BranchNavigationOptions {
@@ -37,7 +50,7 @@ const DEFAULT_INSTRUCTIONS = 'Summarize this abandoned conversation branch as da
   + 'Do not continue the conversation or call tools. Preserve the goal, constraints, decisions, completed work, '
   + 'failures, remaining work, exact useful file paths and tool outcomes. Distinguish observations from assumptions.';
 
-export function copyBranchNavigationOptions(value: BranchNavigationOptions): BranchNavigationOptions {
+export function copyBranchNavigationOptions(value: BranchNavigationOptions, allowSummaryOverride = false): BranchNavigationOptions {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Branch navigation options are invalid.');
   const result: BranchNavigationOptions = {};
   for (const key of Reflect.ownKeys(value)) {
@@ -70,7 +83,7 @@ export function copyBranchNavigationOptions(value: BranchNavigationOptions): Bra
       result[key] = item;
     }
   }
-  if (result.summarize && !result.summarizer) throw new Error('No branch summarizer configured.');
+  if (result.summarize && !result.summarizer && !allowSummaryOverride) throw new Error('No branch summarizer configured.');
   return result;
 }
 

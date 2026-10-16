@@ -3,7 +3,11 @@ import type { BeforeSpecializedModel, SpecializedModelType, SpecializedModelRequ
 import { ProviderFactory } from '../providers/index.js';
 import { AI_HARNESS_EXTENSION_API_VERSION } from '../public-api-version.js';
 import type { CodemodeProgress, Message, ProviderConfig, Session } from '../types/index.js';
-import type { SessionManager } from '../sessions/session-manager.js';
+import { SessionManager } from '../sessions/session-manager.js';
+import { copySessionBranchEvent } from '../sessions/session-branch-admission.js';
+import type { SessionBranchEvent } from '../sessions/session-branch-admission.js';
+import type { BranchSummaryEvent, BranchSummaryOutput } from '../sessions/branch-summarization.js';
+import { copyBranchSummaryEvent, copyBranchSummaryOutput } from '../sessions/session-branch-summary.js';
 import type { AgentToolExposure, AgentToolNamespace } from '../tools/tool-selection.js';
 import type { ToolProgressInput } from '../agent/tool-progress.js';
 import { EventEmitter, type EventHandler, type EventMap } from '../utils/event-emitter.js';
@@ -174,6 +178,10 @@ export interface BeforeHookMap {
   'before:agent': BeforeAgentData;
   'before:provider': BeforeProviderData;
   'before:tool': BeforeToolData;
+  /** Ordered cancel-only admission; private journal data and destination rewrites are excluded. */
+  'before:session:branch': SessionBranchEvent;
+  /** Explicit summary work only: cancel or replace output, never rewrite its source/target. */
+  'before:session:summary': BranchSummaryEvent;
   /** Native/virtual SDK requests are not conversational provider turns. */
   'before:model': { type: SpecializedModelType; request: SpecializedModelRequest; context: ExtensionRuntimeContext; signal: AbortSignal };
 }
@@ -183,13 +191,16 @@ export interface HookCancellation {
   reason?: string;
 }
 
-export type BeforeHookResult<T> = void | false | Partial<T> | HookCancellation;
+export type BeforeHookResult<T> = void | false | HookCancellation
+  | (T extends SessionBranchEvent ? never : T extends BranchSummaryEvent ? BranchSummaryOutput : Partial<T>);
 export type BeforeHookHandler<T> = (data: Readonly<T>) => BeforeHookResult<T> | Promise<BeforeHookResult<T>>;
 
 export interface BeforeHookExecution<T> {
   data: T;
   cancelled: boolean;
   reason?: string;
+  /** Present only for before:session:summary; a detached validated override. */
+  summary?: BranchSummaryOutput;
 }
 
 export interface ExtensionInfo {
@@ -259,6 +270,9 @@ export class ExtensionRegistry {
   private readonly lifecycle = new EventEmitter<EventMap>();
   readonly events = new EventEmitter<Record<string, unknown>>();
   private detachSessionEvents?: () => void;
+  private sessionBindingGeneration = Symbol();
+  private shuttingDown = false;
+  private readonly branchManagers = new Map<SessionManager, { references: number; detach: () => void }>();
   private reloadHandler?: () => Promise<void>;
 
   async load(id: string, factory: ExtensionFactory): Promise<void> {
@@ -282,6 +296,7 @@ export class ExtensionRegistry {
   async unload(id: string): Promise<boolean> {
     const extension = this.loaded.get(id);
     if (!extension) return false;
+    this.refreshBranchBindings();
     this.loaded.delete(id);
 
     for (const cleanup of [...extension.cleanups].reverse()) {
@@ -479,6 +494,12 @@ export class ExtensionRegistry {
     event: K,
     data: BeforeHookMap[K],
   ): Promise<BeforeHookExecution<BeforeHookMap[K]>> {
+    if (event === 'before:session:branch') {
+      return this.runBranchBefore(data as SessionBranchEvent) as unknown as Promise<BeforeHookExecution<BeforeHookMap[K]>>;
+    }
+    if (event === 'before:session:summary') {
+      return this.runSummaryBefore(data as BranchSummaryEvent) as unknown as Promise<BeforeHookExecution<BeforeHookMap[K]>>;
+    }
     let transformed = { ...data } as BeforeHookMap[K];
     const signal = event === 'before:model' ? (data as BeforeHookMap['before:model']).signal : undefined;
     for (const entry of this.beforeHooks.get(event) ?? []) {
@@ -501,9 +522,112 @@ export class ExtensionRegistry {
     return { data: transformed, cancelled: false };
   }
 
+  private async runBranchBefore(data: SessionBranchEvent): Promise<BeforeHookExecution<SessionBranchEvent>> {
+    const captured = copySessionBranchEvent(data);
+    for (const entry of [...this.beforeHooks.get('before:session:branch') ?? []]) {
+      if (captured.signal.aborted) return { data: captured, cancelled: true };
+      const handler = entry.value as unknown as BeforeHookHandler<SessionBranchEvent>;
+      const result = await handler(captured);
+      if (captured.signal.aborted || result === false) return { data: captured, cancelled: true };
+      if (result === undefined) continue;
+      return { data: captured, cancelled: true, reason: this.copyBranchCancellation(result) };
+    }
+    return { data: captured, cancelled: false };
+  }
+
+  private copyBranchCancellation(result: unknown): string | undefined {
+    if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Session branch hook result is invalid.');
+    let cancelled = false, reason: string | undefined;
+    for (const key of Reflect.ownKeys(result)) {
+      const property = Object.getOwnPropertyDescriptor(result, key);
+      if (!property || !('value' in property)) throw new Error('Session branch hook result is invalid.');
+      if (key === 'cancel' && property.value === true) cancelled = true;
+      else if (key === 'reason' && (property.value === undefined || typeof property.value === 'string'
+        && Buffer.byteLength(property.value) <= 4_096 && !property.value.includes('\0'))) reason = property.value;
+      else throw new Error('Session branch hook result is invalid.');
+    }
+    if (!cancelled) throw new Error('Session branch hook result is invalid.');
+    return reason;
+  }
+
+  private async runSummaryBefore(data: BranchSummaryEvent): Promise<BeforeHookExecution<BranchSummaryEvent>> {
+    const captured = copyBranchSummaryEvent(data);
+    let summary: BranchSummaryOutput | undefined;
+    for (const entry of [...this.beforeHooks.get('before:session:summary') ?? []]) {
+      if (captured.signal.aborted) return { data: captured, cancelled: true };
+      const handler = entry.value as unknown as BeforeHookHandler<BranchSummaryEvent>;
+      const result = await handler(captured);
+      if (captured.signal.aborted || result === false) return { data: captured, cancelled: true };
+      if (result === undefined) continue;
+      if (result && typeof result === 'object' && Object.hasOwn(result, 'cancel')) {
+        return { data: captured, cancelled: true, reason: this.copyBranchCancellation(result) };
+      }
+      summary = copyBranchSummaryOutput(result, captured.maxOutputBytes);
+    }
+    return { data: captured, cancelled: false, ...(summary ? { summary } : {}) };
+  }
+
+  private connectBranchManager(manager: SessionManager): () => void {
+    const detachBranch = manager.onBeforeBranch(async event => {
+      const result = await this.runBefore('before:session:branch', event);
+      return result.cancelled ? false : undefined;
+    });
+    try {
+      const detachSummary = manager.onBeforeBranchSummary(async event => {
+        const result = await this.runBefore('before:session:summary', event);
+        return result.cancelled ? false : result.summary;
+      });
+      return () => { detachBranch(); detachSummary(); };
+    } catch (error) { detachBranch(); throw error; }
+  }
+
+  private refreshBranchBindings(): void {
+    for (const manager of [...this.branchManagers.keys()]) manager.retirePendingBranchOperations();
+  }
+
+  /** Independent owned lease: SDK borrowing must not steal a host's lifecycle binding. */
+  attachSessionBranchHooks(manager: SessionManager): () => void {
+    if (this.shuttingDown) throw new Error('Extension registry is shutting down.');
+    if (!(manager instanceof SessionManager)) throw new Error('Session branch manager is invalid.');
+    let binding = this.branchManagers.get(manager);
+    if (!binding) {
+      if (this.branchManagers.size >= 128) throw new Error('Session branch manager limit reached.');
+      binding = { references: 1, detach: () => undefined };
+      this.branchManagers.set(manager, binding);
+      try {
+        const detach = this.connectBranchManager(manager);
+        if (this.branchManagers.get(manager) !== binding) {
+          detach(); throw new Error('Session branch binding was retired.');
+        }
+        binding.detach = detach;
+      } catch (error) {
+        if (this.branchManagers.get(manager) === binding) this.branchManagers.delete(manager);
+        throw error;
+      }
+    } else {
+      if (binding.references >= 256) throw new Error('Session branch binding lease limit reached.');
+      binding.references++;
+    }
+    const owned = binding;
+    let attached = true;
+    return () => {
+      if (!attached) return;
+      attached = false;
+      if (this.branchManagers.get(manager) !== owned || --owned.references !== 0) return;
+      this.branchManagers.delete(manager);
+      owned.detach();
+    };
+  }
+
   attachSessionManager(sessionManager: SessionManager): void {
-    this.detachSessionEvents?.();
-    const detach: Array<() => void> = [];
+    const generation = this.sessionBindingGeneration = Symbol();
+    const detachBranch = this.attachSessionBranchHooks(sessionManager);
+    if (generation !== this.sessionBindingGeneration) { detachBranch(); throw new Error('Session branch binding was retired.'); }
+    const previous = this.detachSessionEvents;
+    this.detachSessionEvents = undefined;
+    previous?.();
+    if (generation !== this.sessionBindingGeneration) { detachBranch(); throw new Error('Session branch binding was retired.'); }
+    const detach: Array<() => void> = [detachBranch];
 
     const attach = <K extends SessionEvent>(event: K): void => {
       const handler: EventHandler<EventMap[K]> = data => this.lifecycle.emit(event, data);
@@ -524,11 +648,19 @@ export class ExtensionRegistry {
   }
 
   async shutdown(): Promise<void> {
-    await this.emit('system:shutdown');
-    this.detachSessionEvents?.();
-    this.detachSessionEvents = undefined;
-    await this.unloadAll();
-    this.lifecycle.clear();
+    if (this.shuttingDown) return;
+    this.shuttingDown = true;
+    this.sessionBindingGeneration = Symbol();
+    try {
+      const bindings = [...this.branchManagers.values()];
+      this.branchManagers.clear();
+      for (const binding of bindings) binding.detach();
+      await this.emit('system:shutdown');
+      this.detachSessionEvents?.();
+      this.detachSessionEvents = undefined;
+      await this.unloadAll();
+      this.lifecycle.clear();
+    } finally { this.shuttingDown = false; }
   }
 
   private createApi(extension: LoadedExtension): ExtensionAPI {
@@ -596,17 +728,26 @@ export class ExtensionRegistry {
         return unsubscribe;
       },
       before: (event, handler) => {
+        const sessionEvent = event === 'before:session:branch' || event === 'before:session:summary';
+        if (sessionEvent && this.loaded.get(extension.id) !== extension) {
+          throw new Error('Cannot register branch hooks for an unloaded extension.');
+        }
         const hooks = this.beforeHooks.get(event) ?? [];
+        if (sessionEvent && hooks.length >= 256) throw new Error('Session branch extension hook limit reached.');
         const entry: Owned<StoredBeforeHook> = {
           owner: extension.id,
           value: handler as unknown as StoredBeforeHook,
         };
         hooks.push(entry);
         this.beforeHooks.set(event, hooks);
+        if (sessionEvent) this.refreshBranchBindings();
         const unsubscribe = () => {
-          const current = this.beforeHooks.get(event)?.filter(candidate => candidate !== entry) ?? [];
+          const previous = this.beforeHooks.get(event) ?? [];
+          const current = previous.filter(candidate => candidate !== entry);
+          if (previous.length === current.length) return;
           if (current.length) this.beforeHooks.set(event, current);
           else this.beforeHooks.delete(event);
+          if (sessionEvent) this.refreshBranchBindings();
         };
         extension.cleanups.push(unsubscribe);
         return unsubscribe;

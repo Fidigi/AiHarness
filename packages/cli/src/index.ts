@@ -1114,7 +1114,10 @@ async function main(): Promise<void> {
     });
   } catch (error) {
     if (!(error instanceof StartupSessionSelectionCancelledError)) {
-      reportError(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      // Startup selection precedes fullscreen entry; its buffered renderer is not visible yet.
+      if (fullscreenTerminal && !fullscreenTerminal.isActive()) process.stderr.write(`Error: ${redactOutput(message)}\n`);
+      else reportError(message);
       process.exitCode = 2;
     }
     await cleanupEarlyExit();
@@ -1408,7 +1411,7 @@ async function main(): Promise<void> {
           trimmed = resourceManager.expandPrompt(resourceCommand, resourceArgs);
         } else {
           if (trimmed === '/help') terminal.showHelp();
-          else if (resourceCommand === 'navigate') {
+          else if (resourceCommand === 'navigate' || resourceCommand === 'fork' || resourceCommand === 'clone') {
             const controller = new AbortController();
             const commandContext = commandHandler.getContext();
             activeAbortController = controller;

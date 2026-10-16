@@ -165,6 +165,22 @@ Cancellation withdraws an unpublished navigation, not an already admitted durabl
 write. Hosts must own foreground admission and cooperative callback cancellation.
 The high-level facade does not expose this mutation.
 
+Lower-level `onBeforeBranch` accepts ordered cancel-only `SessionBranchHook`
+callbacks; the registry exposes `before:session:branch` with frozen primitive
+source/operation/entry/position/external-source metadata and an owned signal.
+`onBeforeBranchSummary` / `before:session:summary` run only for explicit summary
+work, with frozen bounded model-visible transcript/IDs/budgets, never private
+state/details. Undefined continues; false cancels; registry hooks also accept
+own `{cancel:true,reason?}`. Summary hooks may instead return validated copied
+`{summary,provider?,model?,usage?}`: last defined override wins, later veto cancels,
+and fallback runs only without an override. Source/target transforms are refused.
+Global hooks receive an owned generation signal; the legacy per-call summarizer
+keeps the original caller signal capability. Registration/removal/unload/rebinding
+withdraws unpublished work even for ignored callbacks; admitted writes finish.
+Limits:128 Core hooks/kind,256 pending admissions; registry128 managers,256 leases
+per manager and256 extension callbacks/kind. These are privileged host contracts,
+not a sandbox, rollback guarantee or new facade/structural-store method.
+
 `appendCustomEntry` persists bounded own JSON state outside model context;
 `appendCustomMessage` contributes content even with `display: false`, but never
 its `details`. These are persistence/context distinctions, not a secret vault or
@@ -189,7 +205,7 @@ is a convention, not ownership isolation or a secret-storage boundary.
 Lower-level `JsonlSessionStore.getSessionSnapshot(id)` reads one stable bounded
 native journal into an owned `{session,entries}` without rewriting that source.
 Its entries are raw history, not an active extension-state view. The manager's
-`forkSession(id,index?,title?,{sourceStore?,id?,cwd?,workspaceId?})` reuses its rich
+`forkSession(id,index?,title?,{sourceStore?,id?,cwd?,workspaceId?,signal?})` reuses its rich
 copy engine for an explicit external store or an already loaded ID. Own primitive
 destination options and store identity are captured before awaiting; accessors,
 unknown keys and invalid values are refused. Explicit `workspaceId:undefined`
@@ -200,7 +216,7 @@ its persistence store, not by persisting a fork through a distinct source store.
 custom, summary and compaction ancestry rather than copying projected messages
 alone. Existing no-session startup precedence remains. These additive lower-level
 APIs do not expand the SDK facade, API major1, schema2, retained-file bounds or the
-1,024-extra-entry copy limit; they provide neither lifecycle hooks nor CAS.
+1,024-extra-entry copy limit; cross-process CAS is not provided.
 
 `rename`, `setModel`, `setThinking`, `branchBefore(userEntryId)` and
 `applyCompaction(summary, firstKeptMessageId, details)` await Core persistence.
@@ -217,8 +233,16 @@ independent clones remap those internal IDs. Both use the same bounded Core copy
 path (at most 1,024 additional custom/summary/compaction entries) and refuse live
 command ancestors. Durable-user forks can select pre-compaction journal history;
 indexed forks still select the current message projection. Both operate only while
-idle; labels, exhaustive fork lifecycle hooks and extension summary hooks are not
-claimed. Related handles share one runtime/manager/provider group.
+idle. They participate in ordered Core branch admission through an independent
+borrowed registry lease; disposal aborts that handle's unpublished branch work
+before waiting its serial tail. Publish the disposal promise before abort dispatch,
+so synchronous reentry returns that promise without releasing live sibling leases.
+An ignored hook cannot publish late or prevent
+this retirement; an already-admitted durable copy finishes and its child handle
+remains live. Last-handle/factory-error cleanup releases only the SDK's lease,
+not another host's lifecycle or summary binding. Labels, arbitrary payload-ID
+rewriting and cross-process coordination remain separate. Related handles share
+one runtime/manager/provider group.
 
 ### Ownership, persistence and limitations
 
@@ -357,6 +381,23 @@ navigation non publiée, pas une écriture durable déjà admise. L'hôte reste
 responsable de l'admission au premier plan et de la coopération du callback.
 La façade de haut niveau n'expose pas cette mutation.
 
+Au niveau inférieur, `onBeforeBranch` accepte des `SessionBranchHook` ordonnés,
+uniquement annulables ; le registre expose `before:session:branch` avec métadonnées
+primitives gelées source/opération/entrée/position/source externe et signal possédé.
+`onBeforeBranchSummary` / `before:session:summary` exigent une demande de résumé
+explicite et reçoivent un transcript modèle borné, IDs/budgets gelés, jamais l’état
+privé ni ses détails. Undefined continue, false annule ; les hooks du registre
+acceptent aussi `{cancel:true,reason?}` propre. Un résumé peut retourner une sortie
+copiée validée `{summary,provider?,model?,usage?}` : dernière sortie définie retenue,
+veto ultérieur prioritaire, callback de secours seulement sans override. Aucun
+remplacement source/cible. Les hooks globaux reçoivent le signal de génération
+possédé ; le callback historique conserve le signal exact fourni par l’appelant.
+Enregistrement/retrait/déchargement/reliaison retire le travail non admis, même
+non coopératif ; les écritures admises finissent. Bornes :128 hooks Core/type,
+256 admissions en attente ; registre128 managers,256 références/manager et256
+callbacks/type. Ces intégrations privilégiées ne sont ni sandbox, ni rollback,
+ni nouvelles méthodes de façade ou exigences du stockage structurel.
+
 `appendCustomEntry` conserve un état JSON propre borné hors contexte modèle ;
 `appendCustomMessage` y contribue même avec `display: false`, jamais ses `details`.
 Ce n'est ni un coffre à secrets ni un bac à sable. Le contexte suit les parents,
@@ -373,10 +414,15 @@ active valide : aucun appel modèle implicite. `compactionTarget` réutilise Cor
 cette entrée ; `clone` crée une racine indépendante et remappe l'ascendance active
 messages/commandes/état et messages personnalisés/résumés/compaction. Les références
 arbitraires dans les données et la provenance externe ne sont pas réécrites.
-Les labels, l'exhaustivité des entrées personnalisées de `fork` et les hooks de
-résumé d'extension ne sont pas revendiqués. Ces méthodes exigent une session au
-repos et retournent des handles partageant
-le groupe runtime/gestionnaire/fournisseur.
+Ces méthodes exigent une session au repos et participent à l’admission ordonnée
+Core via une référence de registre prêtée indépendamment. `dispose` retire les
+branches non admises de ce handle avant d’attendre sa file, même si un hook ignore
+l’annulation. La promesse est publiée avant le dispatch d’abort : une réentrée
+synchrone retourne cette même promesse, sans libérer la référence d’un frère vivant. Une copie durable déjà admise finit et son handle enfant reste vivant.
+Le nettoyage final/échec de fabrique libère seulement la référence SDK, jamais la
+liaison de cycle de vie/résumé d’un autre hôte. Labels, références arbitraires et
+coordination interprocessus restent séparés. Les handles partagent le groupe
+runtime/gestionnaire/fournisseur.
 
 `resourceLoader` et `extensionRegistry` sont prêtés. La fabrique/les lectures ne
 chargent aucun module, package, outil ou MCP. `createAgentResourceLoader` compose

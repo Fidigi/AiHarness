@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { MockProvider } from '@ai-harness/core';
@@ -14,6 +14,17 @@ describe('live session snapshots', () => {
   const request = (route: string, method = 'GET', body?: unknown) => fetch(`${base}${route}`, {
     method, headers: json, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
+
+  const branchFixture = async () => {
+    const source = await services.sessionManager.create({ cwd: root, title: 'Cancellation source' });
+    await services.sessionManager.addMessage(source.id, { role: 'user', content: 'Selected user' });
+    const target = source.activeLeafId!;
+    await services.sessionManager.appendCustomEntry(source.id, 'fixture:http-branch', { revision: 1 });
+    return { source, target, raw: await services.sessionManager.getRawEntries(source.id),
+      inventory: services.sessionManager.list().map(item => item.id).sort(),
+      bytes: await readFile(services.sessionStore.getSessionFilePath(source.id)!) };
+  };
+  const latch = () => { let release!: () => void; return { promise: new Promise<void>(resolve => { release = resolve; }), release: () => release() }; };
 
   beforeAll(async () => {
     root = await mkdtemp(path.join(os.tmpdir(), 'ai-harness-live-sessions-'));
@@ -59,7 +70,7 @@ describe('live session snapshots', () => {
       }
       const edit = await request(`/api/sessions/${source.id}/fork`, 'POST', { messageId: targetId, before: true });
       expect(edit.status).toBe(201);
-      expect((await edit.json()).messages).toEqual([]);
+      expect(await edit.json()).toHaveProperty('messages', []);
       expect((await request(`/api/sessions/${source.id}/fork`, 'POST', { messageId: targetId, before: 'true' })).status).toBe(400);
       expect((await request(`/api/sessions/${source.id}`, 'PATCH', { activeLeafId: targetId })).status).toBe(409);
       expect(source.activeLeafId).toBe(activeLeaf);
@@ -175,5 +186,70 @@ describe('live session snapshots', () => {
     const other = await services.sessionManager.create({ cwd: root });
     await services.sessionManager.addMessage(other.id, { role: 'assistant', content: 'Not editable' });
     expect((await request(`/api/sessions/${other.id}/fork`, 'POST', { messageId: other.activeLeafId, before: true })).status).toBe(400);
+  });
+
+  for (const [action, before] of [['fork', false], ['fork', true], ['clone', false]] as const) {
+    const name = `${action}${before ? '-before' : ''}`;
+    it(`returns an explicit 409 ${name} veto without publishing or touching the source`, async () => {
+      const f = await branchFixture(), plugin = `http-veto-${name}`; let calls = 0;
+      await services.extensionRegistry.load(plugin, api => { api.before('before:session:branch', event => {
+        expect(event.operation).toBe(action); expect(event.position).toBe(before ? 'before' : 'at'); calls++; return { cancel: true };
+      }); });
+      try {
+        const response = await request(`/api/sessions/${f.source.id}/${action}`, 'POST', action === 'fork' ? { messageId: f.target, before } : {});
+        expect(response.status).toBe(409); expect(await response.json()).toEqual({ error: 'Session branch operation cancelled.', code: 'SESSION_BRANCH_CANCELLED' });
+        expect(calls).toBe(1); expect(services.sessionManager.list().map(item => item.id).sort()).toEqual(f.inventory);
+        expect(await services.sessionManager.getRawEntries(f.source.id)).toEqual(f.raw);
+        expect(await readFile(services.sessionStore.getSessionFilePath(f.source.id)!)).toEqual(f.bytes);
+      } finally { await services.extensionRegistry.unload(plugin); }
+    });
+
+    it(`withdraws a disconnected ${name} request even if its hook ignores cancellation`, async () => {
+      const f = await branchFixture(), plugin = `http-disconnect-${name}`, gate = latch(), entered = latch(), controller = new AbortController();
+      let signal!: AbortSignal;
+      await services.extensionRegistry.load(plugin, api => { api.before('before:session:branch', async event => {
+        signal = event.signal; entered.release(); await gate.promise;
+      }); });
+      try {
+        const pending = fetch(`${base}/api/sessions/${f.source.id}/${action}`, { method: 'POST', headers: json,
+          body: JSON.stringify(action === 'fork' ? { messageId: f.target, before } : {}), signal: controller.signal });
+        await entered.promise; controller.abort(); await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        await vi.waitFor(() => expect(signal.aborted).toBe(true)); gate.release();
+        await new Promise<void>(resolve => setImmediate(resolve));
+        expect(services.sessionManager.list().map(item => item.id).sort()).toEqual(f.inventory);
+        expect(await services.sessionManager.getRawEntries(f.source.id)).toEqual(f.raw);
+        expect(await readFile(services.sessionStore.getSessionFilePath(f.source.id)!)).toEqual(f.bytes);
+      } finally { gate.release(); await services.extensionRegistry.unload(plugin); }
+    });
+
+    it(`withdraws ${name} admission on extension unload before the ignored hook completes`, async () => {
+      const f = await branchFixture(), plugin = `http-unload-${name}`, gate = latch(), entered = latch();
+      await services.extensionRegistry.load(plugin, api => { api.before('before:session:branch', async () => { entered.release(); await gate.promise; }); });
+      try {
+        const pending = request(`/api/sessions/${f.source.id}/${action}`, 'POST', action === 'fork' ? { messageId: f.target, before } : {});
+        await entered.promise; await services.extensionRegistry.unload(plugin);
+        const response = await pending; expect(response.status).toBe(409); expect(await response.json()).toMatchObject({ code: 'SESSION_BRANCH_CANCELLED' });
+        gate.release(); expect(services.sessionManager.list().map(item => item.id).sort()).toEqual(f.inventory);
+        expect(await services.sessionManager.getRawEntries(f.source.id)).toEqual(f.raw);
+      } finally { gate.release(); await services.extensionRegistry.unload(plugin); }
+    });
+  }
+
+  it('finishes a durable clone already admitted before request disconnection', async () => {
+    const f = await branchFixture(), gate = latch(), entered = latch(), controller = new AbortController();
+    const save = services.sessionStore.saveSession.bind(services.sessionStore);
+    const intercepted = vi.spyOn(services.sessionStore, 'saveSession').mockImplementation(async (session, entries, options) => {
+      if (session.id !== f.source.id) { entered.release(); await gate.promise; }
+      await save(session, entries, options);
+    });
+    try {
+      const pending = fetch(`${base}/api/sessions/${f.source.id}/clone`, { method: 'POST', headers: json, body: '{}', signal: controller.signal });
+      await entered.promise; controller.abort(); await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      gate.release(); await vi.waitFor(() => expect(services.sessionManager.list()).toHaveLength(f.inventory.length + 1));
+      const copied = services.sessionManager.list().find(item => !f.inventory.includes(item.id))!;
+      expect(copied.metadata?.clonedFromSessionId).toBe(f.source.id);
+      expect(await services.sessionStore.loadSession(copied.id)).toMatchObject({ id: copied.id });
+      expect(await readFile(services.sessionStore.getSessionFilePath(f.source.id)!)).toEqual(f.bytes);
+    } finally { gate.release(); intercepted.mockRestore(); }
   });
 });

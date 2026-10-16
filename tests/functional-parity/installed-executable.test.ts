@@ -415,17 +415,50 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     expect(records.at(-1)?.result).toBe('STARTUP_FORK_SESSION_STATE_OK');
   });
 
+  it.each(['memory', 'durable'])('clones the private-only current position through the installed RPC PATH-bin (%s)', async mode => {
+    const worker = path.join(consumer, `clone-position-${mode}.mjs`);
+    await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', 'session-clone-position.mjs'), worker);
+    const result = await run(process.execPath, [worker, mode], consumer, { ...environment, AIH_STATE_COMMAND: 'ai-harness' });
+    expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe('');
+    expect(result.stdout).toContain('RPC_CURRENT_PRIVATE_POSITION_CLONE_OK');
+  });
+
+  it.each(['regular-memory', 'regular-durable', 'fullscreen-memory', 'fullscreen-durable'])('owns installed terminal branch lifetimes and exact copies (%s)', async scenario => {
+    const worker = path.join(consumer, `branch-terminal-${scenario}.mjs`);
+    await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', 'session-branch-terminal.mjs'), worker);
+    const result = await run(process.execPath, [worker, scenario], consumer, { ...environment,
+      AIH_STATE_COMMAND: 'ai-harness', AIH_TEST_PTY_MODULE: require.resolve('node-pty') });
+    expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe(''); expect(result.stdout).toContain('TERMINAL_BRANCH_LIFETIME_OK');
+  });
+
   it('publishes installed active-branch state and related-copy declarations without adding a facade method', async () => {
     await writeFile(path.join(consumer, 'extension-state-public.ts'), `
-      import { SessionManager, AI_HARNESS_CORE_API_VERSION, SESSION_SCHEMA_VERSION,
-        type SessionEntry, type ExtensionRuntimeContext, type AgentSession } from '@ai-harness/core';
+      import { SessionManager, SessionBranchCancelledError, AI_HARNESS_CORE_API_VERSION, SESSION_SCHEMA_VERSION,
+        type SessionEntry, type ExtensionRuntimeContext, type AgentSession, type ExtensionAPI,
+        type SessionBranchEvent, type SessionBranchHook, type SessionBranchOptions,
+        type BranchSummaryEvent, type BranchSummaryHook } from '@ai-harness/core';
       const manager = new SessionManager();
       const entries: Promise<SessionEntry[]> = manager.getActiveBranchEntries('session');
       declare const context: ExtensionRuntimeContext;
       const extensionEntries: Promise<SessionEntry[]> = context.sessionManager.getActiveBranchEntries(context.currentSessionId ?? '');
       void entries; void extensionEntries;
       const api: 1 = AI_HARNESS_CORE_API_VERSION; const schema: 2 = SESSION_SCHEMA_VERSION; void api; void schema;
-      manager.forkSessionAtEntry('session', 'entry', undefined, { before: true });
+      const options: SessionBranchOptions = { signal: new AbortController().signal };
+      const before: SessionBranchHook = (event: Readonly<SessionBranchEvent>) => { const id: string = event.sourceSessionId; void id; return false; };
+      manager.onBeforeBranch(before);
+      const summary: BranchSummaryHook = (event: Readonly<BranchSummaryEvent>) => ({ summary: event.transcript, usage: { totalTokens: 3 } });
+      manager.onBeforeBranchSummary(summary);
+      manager.forkSession('session', undefined, undefined, options); manager.cloneSession('session', undefined, undefined, options);
+      manager.branchBeforeEntry('session', 'entry', options);
+      manager.forkSessionAtEntry('session', 'entry', undefined, { ...options, before: true });
+      const code: 'SESSION_BRANCH_CANCELLED' = new SessionBranchCancelledError().code; void code;
+      declare const extension: ExtensionAPI;
+      extension.before('before:session:branch', () => ({ cancel: true }));
+      extension.before('before:session:summary', event => ({ summary: event.transcript }));
+      // @ts-expect-error cancellation admission cannot rewrite a source
+      extension.before('before:session:branch', () => ({ sourceSessionId: 'rewritten' }));
+      // @ts-expect-error summary results cannot rewrite navigation targets
+      extension.before('before:session:summary', () => ({ targetEntryId: 'rewritten' }));
       // @ts-expect-error identities are primitive strings, never option/accessor objects
       manager.getActiveBranchEntries({ id: 'session' });
       // @ts-expect-error fork-before stays a boolean

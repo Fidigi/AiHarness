@@ -23,10 +23,12 @@ import {
   McpOAuthFlowService,
   ProviderCredentialService,
   serializeSession,
+  SessionBranchCancelledError,
 } from '@ai-harness/core';
 import type { AgentSettings, Session, SessionManager } from '@ai-harness/core';
 import { closeServerWebSockets, handleWebSocketUpgrade } from './api/websocket.js';
 import { createAgentRouter, userBlocks } from './api/agent-routes.js';
+import { sessionCopyRequest } from './api/session-copy-request.js';
 import { createWorkspaceRouter } from './api/workspace-routes.js';
 import type { WorkspaceFileManagerOptions } from './api/workspace-file-manager.js';
 import { createFileRouter } from './api/file-routes.js';
@@ -1321,6 +1323,7 @@ export function createApp(config?: ServerConfig): express.Application {
 
   /** POST /api/sessions/:id/fork - Fork a session */
   asyncPost('/api/sessions/:id/fork', async (req: Request, res: Response): Promise<void> => {
+    const lifetime = sessionCopyRequest(req, res);
     try {
       const { id } = req.params;
       const { messageIndex, messageId, before, title: rawTitle } = (req.body ?? {}) as {
@@ -1377,8 +1380,9 @@ export function createApp(config?: ServerConfig): express.Application {
         return;
       }
       const forked = before && messageId
-        ? await sm.forkSessionAtEntry(id, messageId, title, { before: true })
-        : await sm.forkSession(id, messageId ?? resolvedMessageIndex, title);
+        ? await sm.forkSessionAtEntry(id, messageId, title, { before: true, signal: lifetime.signal })
+        : await sm.forkSession(id, messageId ?? resolvedMessageIndex, title, { signal: lifetime.signal });
+      if (res.destroyed) return;
 
       if (!forked) {
         res.status(409).json({ error: 'The source message changed before copying.', code: 'MESSAGE_TARGET_CHANGED' });
@@ -1387,16 +1391,21 @@ export function createApp(config?: ServerConfig): express.Application {
 
       res.status(201);
       sendBoundedJson(res, serializeSessionPage(forked, { limit: 80 }));
-    } catch {
+    } catch (error) {
+      if (error instanceof SessionBranchCancelledError) {
+        if (!res.headersSent && !res.destroyed) res.status(409).json({ error: error.message, code: error.code });
+        return;
+      }
       console.error('[Server] Failed to fork a session.');
-      if (!res.headersSent) {
+      if (!res.headersSent && !res.destroyed) {
         res.status(500).json({ error: 'Failed to fork session' });
       }
-    }
+    } finally { lifetime.dispose(); }
   });
 
   /** POST /api/sessions/:id/clone - Clone a session */
   asyncPost('/api/sessions/:id/clone', async (req: Request, res: Response): Promise<void> => {
+    const lifetime = sessionCopyRequest(req, res);
     try {
       const { id } = req.params;
       const { title: rawTitle, messageIndex, messageId } = (req.body ?? {}) as {
@@ -1444,7 +1453,8 @@ export function createApp(config?: ServerConfig): express.Application {
         res.status(409).json({ error: 'A running command cannot be copied.', code: 'RUNNING_COMMAND_SOURCE' });
         return;
       }
-      const cloned = await sm.cloneSession(id, title, messageId ?? resolvedMessageIndex);
+      const cloned = await sm.cloneSession(id, title, messageId ?? resolvedMessageIndex, { signal: lifetime.signal });
+      if (res.destroyed) return;
 
       if (!cloned) {
         res.status(409).json({ error: 'The source message changed before copying.', code: 'MESSAGE_TARGET_CHANGED' });
@@ -1453,12 +1463,16 @@ export function createApp(config?: ServerConfig): express.Application {
 
       res.status(201);
       sendBoundedJson(res, serializeSessionPage(cloned, { limit: 80 }));
-    } catch {
+    } catch (error) {
+      if (error instanceof SessionBranchCancelledError) {
+        if (!res.headersSent && !res.destroyed) res.status(409).json({ error: error.message, code: error.code });
+        return;
+      }
       console.error('[Server] Failed to clone a session.');
-      if (!res.headersSent) {
+      if (!res.headersSent && !res.destroyed) {
         res.status(500).json({ error: 'Failed to clone session' });
       }
-    }
+    } finally { lifetime.dispose(); }
   });
 
   // Normalize errors from modular routes without leaking stack traces or secrets.

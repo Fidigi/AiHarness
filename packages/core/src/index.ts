@@ -147,6 +147,8 @@ export type {
 } from './providers/model-catalog.js';
 
 // Sessions
+export { SessionBranchCancelledError } from './sessions/session-branch-admission.js';
+export type { SessionBranchEvent, SessionBranchHook, SessionBranchOptions } from './sessions/session-branch-admission.js';
 export {
   SessionManager,
   JsonlSessionStore,
@@ -174,6 +176,7 @@ export type {
 export { createProviderBranchSummarizer } from './sessions/provider-branch-summarizer.js';
 export type {
   BranchNavigationOptions, BranchNavigationResult, BranchSummaryRequest, BranchSummaryOutput, BranchSummarizer,
+  BranchSummaryEvent, BranchSummaryHook,
 } from './sessions/branch-summarization.js';
 export { getSessionAccounting } from './sessions/session-accounting.js';
 export type { SessionAccounting, SessionUsageAccounting } from './sessions/session-accounting.js';

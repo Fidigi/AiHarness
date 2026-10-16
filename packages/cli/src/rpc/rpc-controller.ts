@@ -3,6 +3,7 @@ import { lstat, mkdir, open } from 'node:fs/promises';
 import path from 'node:path';
 import {
   AgentMessageQueue,
+  SessionBranchCancelledError,
   type AgentMessageQueueKind,
   type AgentQueueMode,
   buildProviderModelCatalog,
@@ -951,24 +952,29 @@ export class RpcController {
           }
         }
         case 'fork': {
-          await this.ensureIdle(command);
-          const source = this.session();
-          const entryId = requiredString(request.entryId, 'entryId');
-          const selected = await this.context.sessionManager.branchBeforeEntry(source.id, entryId);
-          if (!selected) throw new Error(`Entry not found: ${entryId}`);
-          this.resetQueues();
-          return success(id, command, { text: selected.content, cancelled: false });
+          const sourceSessionId = this.currentSessionId, entryId = requiredString(request.entryId, 'entryId');
+          const result = await this.withBranchNavigation(command, sourceSessionId, async signal => {
+            const selected = await this.context.sessionManager.branchBeforeEntry(sourceSessionId, entryId, { signal });
+            if (!selected) throw new Error(`Entry not found: ${entryId}`);
+            this.resetQueues();
+            return selected;
+          });
+          return success(id, command, result.cancelled ? { cancelled: true } : { text: result.value.content, cancelled: false });
         }
         case 'clone': {
-          await this.ensureIdle(command);
-          const source = this.session();
-          if (source.messages.length === 0) throw new Error('Cannot clone session: no current entry selected');
-          const clone = await this.context.sessionManager.cloneSession(source.id, source.title);
-          if (!clone) throw new Error(`Session not found: ${source.id}`);
-          this.currentSessionId = clone.id;
-          this.resetQueues();
-          await this.emit({ type: 'session_info_changed', name: clone.title });
-          return success(id, command, { cancelled: false });
+          const sourceSessionId = this.currentSessionId, title = this.session().title;
+          const result = await this.withBranchNavigation(command, sourceSessionId, async signal => {
+            const source = this.session();
+            if (!source.activeLeafId && source.messages.length === 0 && !source.commands?.length) {
+              throw new Error('Cannot clone session: no current entry selected');
+            }
+            const clone = await this.context.sessionManager.cloneSession(sourceSessionId, title, undefined, { signal });
+            if (!clone) throw new Error(`Session not found: ${sourceSessionId}`);
+            this.currentSessionId = clone.id;
+            this.resetQueues();
+            await this.emit({ type: 'session_info_changed', name: clone.title });
+          });
+          return success(id, command, { cancelled: result.cancelled });
         }
         case 'get_fork_messages': {
           const messages = (await this.activeRawEntries())
@@ -1540,6 +1546,29 @@ export class RpcController {
 
   private assertNoContextReload(command: string): void {
     if (this.activeContextReload) throw new Error(`${command} is not available while reloading context settings.`);
+  }
+
+  private async withBranchNavigation<T>(command: string, sourceSessionId: string,
+    operation: (signal: AbortSignal) => Promise<T>): Promise<{ cancelled: true } | { cancelled: false; value: T }> {
+    if (this.navigationRetired) return { cancelled: true };
+    await this.ensureIdle(command);
+    if (this.navigationRetired) return { cancelled: true };
+    if (this.activeNavigation || this.activeContextReload || this.activeRun || this.activeBash || this.compacting) {
+      throw new Error(`${command} is not available while a foreground operation is processing.`);
+    }
+    if (this.currentSessionId !== sourceSessionId) throw new Error('Session changed while admitting a branch operation.');
+    const controller = new AbortController();
+    let finish!: () => void;
+    const navigation: ActiveRun = { controller, done: new Promise<void>(resolve => { finish = resolve; }) };
+    this.activeNavigation = navigation;
+    try { return { cancelled: false, value: await operation(controller.signal) }; }
+    catch (error) {
+      if (error instanceof SessionBranchCancelledError) return { cancelled: true };
+      throw error;
+    } finally {
+      if (this.activeNavigation === navigation) this.activeNavigation = undefined;
+      finish();
+    }
   }
 
   private async ensureIdle(command: string): Promise<void> {

@@ -677,7 +677,10 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
         }
         if (parsed.type === 'abort') extensionUi.cancelPending();
         const response = await controller!.handle(parsed);
-        if (response?.success && ['new_session', 'switch_session', 'fork', 'navigate_tree'].includes(parsed.type)) {
+        const selection = response?.success && response.data && typeof response.data === 'object'
+          ? response.data as Record<string, unknown> : undefined;
+        if (response?.success && ['new_session', 'switch_session', 'fork', 'clone', 'navigate_tree'].includes(parsed.type)
+          && selection?.cancelled !== true && (parsed.type !== 'navigate_tree' || selection?.cancelled === false && selection?.stale === false)) {
           extensionUi.cancelPending('session-changed');
         }
         if (response) await output(response as unknown as Record<string, unknown>);

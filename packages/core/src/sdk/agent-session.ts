@@ -127,6 +127,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
     resourceLoader: options.resourceLoader ? 'caller' : 'none', cleanup: 'last-handle',
   });
   let handles = 0;
+  let detachBranchHooks: () => void = () => undefined;
   const safeError = (value: unknown): Error => {
     const error = new Error(redactor.redact(value instanceof Error ? value.message : 'SDK operation failed.'));
     if (value instanceof Error) {
@@ -141,6 +142,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
   function handle(sessionId: string): AgentSession {
     handles++;
     let disposed = false;
+    const branchLifetime = new AbortController();
     let disposal: Promise<void> | undefined;
     let tail: Promise<unknown> = Promise.resolve();
     let settlement: Promise<AgentRunSnapshot | undefined> | undefined;
@@ -253,19 +255,20 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
       setThinking: thinking => serial(async () => { idle(); await manager.update(sessionId, { thinking }); }),
       fork: (id, forkOptions = {}) => serialInput(forkOptions, async forkOptions => {
         idle();
-        const session = await manager.forkSessionAtEntry(sessionId, id, forkOptions.title, { before: forkOptions.before });
+        const session = await manager.forkSessionAtEntry(sessionId, id, forkOptions.title,
+          { before: forkOptions.before, signal: branchLifetime.signal });
         if (!session) throw new Error('Fork requires a durable user entry.');
         return handle(session.id);
       }),
       branchBefore: id => serial(async () => {
         idle();
-        const message = await manager.branchBeforeEntry(sessionId, id);
+        const message = await manager.branchBeforeEntry(sessionId, id, { signal: branchLifetime.signal });
         if (!message) throw new Error('Branch requires a durable user entry.');
         return safe(message);
       }),
       clone: title => serial(async () => {
         idle();
-        const session = await manager.cloneSession(sessionId, title);
+        const session = await manager.cloneSession(sessionId, title, undefined, { signal: branchLifetime.signal });
         if (!session) throw new Error('Session cannot be cloned.');
         return handle(session.id);
       }),
@@ -299,11 +302,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
           runtime.journal.clear(sessionId);
           handles--;
           if (handles === 0) {
+            detachBranchHooks();
             manager.removeAllListeners();
             if (!options.extensionRegistry) await registry.unloadAll();
             await closeProviderNetworkDispatchers(scope, { permanent: true });
           }
         });
+        // Abort listeners may synchronously reenter dispose: publish the sole promise first.
+        branchLifetime.abort();
         return disposal;
       },
     };
@@ -311,6 +317,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
   }
 
   try {
+    detachBranchHooks = registry.attachSessionBranchHooks(manager);
     let session: Session | null;
     if (options.session?.kind === 'resume') {
       if (!options.store) throw new Error('Resume requires a caller SessionStore.');
@@ -328,6 +335,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
     }
     return handle(session.id);
   } catch (error) {
+    detachBranchHooks();
     await closeProviderNetworkDispatchers(scope, { permanent: true });
     throw new Error(redactor.redact(error instanceof Error ? error.message : 'Agent session creation failed.'));
   }

@@ -195,7 +195,7 @@ Les commandes et outils reçoivent le véritable `context.sessionManager` et l�
 - `appendCustomMessage(id, customType, content, {display?,details?})` ajoute son contenu au contexte modèle même avec `display:false` ; les détails en restent exclus. Ce n’est ni un coffre à secrets, ni un renderer UI arbitraire.
 - `await getActiveBranchEntries(id)` rend un chemin parent-d’abord copié, avec l’état privé antérieur au compactage. Filtrez votre type exact et prenez sa dernière entrée pour restaurer l’état. La lecture exclut les branches abandonnées, ignore la provenance source des résumés, retient la dernière projection ajoutée par identifiant et refuse une ascendance incomplète. L’historique brut inclut les branches abandonnées ; le contexte modèle exclut volontairement les données privées : aucun ne remplace ce chemin.
 - Les forks liés conservent l’ascendance personnalisée sélectionnée et ses identifiants ; les clones indépendants remappent les identifiants internes. Les deux réutilisent la copie bornée Core (1 024 entrées custom/résumé/compactage supplémentaires maximum), conservent l’état privé requis et refusent les commandes ancêtres encore actives. Les identifiants arbitraires dans les payloads ne sont pas réécrits.
-- Au démarrage, `--fork` par ID/préfixe/fichier réutilise ce moteur Core ; copier les seuls messages modèle perdrait l’état privé. Une source native externe est lue une fois par `JsonlSessionStore.getSessionSnapshot(id)`, sur fichier stable borné, sans réécriture ni insertion de la session source dans le manager cible. Ses entrées sont l’historique brut, pas l’état actif. Au niveau inférieur, le quatrième argument de `forkSession` capture les propriétés propres `{sourceStore?,id?,cwd?,workspaceId?}` avant l’attente ; accesseurs, clés inconnues, valeurs invalides et autorité de store cible périmée sont refusés. Un workspace explicitement undefined efface l’héritage. La priorité existante de no-session reste inchangée ; aucune méthode de façade, hook de cycle de vie ou transaction CAS n’est ajouté.
+- Au démarrage, `--fork` par ID/préfixe/fichier réutilise ce moteur Core ; copier les seuls messages modèle perdrait l’état privé. Une source native externe est lue une fois par `JsonlSessionStore.getSessionSnapshot(id)`, sur fichier stable borné, sans réécriture ni insertion de la session source dans le manager cible. Ses entrées sont l’historique brut, pas l’état actif. Au niveau inférieur, le quatrième argument de `forkSession` capture les propriétés propres `{sourceStore?,id?,cwd?,workspaceId?,signal?}` avant l’attente ; accesseurs, clés inconnues, valeurs invalides et autorité de store cible périmée sont refusés. Un workspace explicitement undefined efface l’héritage. La priorité existante de no-session reste inchangée ; aucune méthode de façade ni transaction CAS n’est ajoutée. L’admission annulable ordonnée est décrite séparément ci-dessous.
 
 ```js
 api.registerCommand('remember', {
@@ -217,7 +217,7 @@ L’état durable survit aux redémarrages et générations exécutables ; celui
 
 ### Hooks transformants et annulables
 
-Trois hooks sont disponibles :
+Les hooks transformants comprennent :
 
 - `before:agent` reçoit `{ sessionId, provider, input }` ;
 - `before:provider` reçoit `{ provider, model, messages, options }` ;
@@ -232,6 +232,14 @@ api.before('before:provider', data => ({
   options: { ...data.options, temperature: 0.2 },
 }));
 ```
+
+### Hooks ordonnés de branche et résumé
+
+`before:session:branch` est uniquement annulable : `{sourceSessionId,operation,entryId?,position,externalSource,signal}` gelé décrit fork/clone/branch-before sans données privées du journal. Undefined continue ; false ou `{cancel:true,reason?}` propre oppose un veto. Clés inconnues, accesseurs, transformations et résultats invalides échouent fermés ; raison bornée à 4 096 octets UTF-8/sans NUL, non divulguée par les adaptateurs du manager. Les observateurs ordinaires du cycle de vie restent concurrents et isolent leurs erreurs.
+
+`before:session:summary` ne s’exécute que pour un résumé de navigation explicitement demandé. IDs source/départ/cible, transcript modèle, budgets et signal possédé gelés n’accordent aucune réécriture. Retournez undefined, une annulation ou `{summary,provider?,model?,usage?}` copié/validé. Dernière sortie définie retenue ; veto ultérieur prioritaire ; callback de secours seulement sans override. État/détails privés exclus, contenu custom `display:false` toujours visible au modèle. Les hooks globaux reçoivent le signal de génération possédé ; le callback historique conserve le signal exact de l’appelant.
+
+Enregistrement/retrait/déchargement/reliaison/shutdown retire le travail non admis avant le nettoyage attendu, même si un callback ignore son signal. Bornes :128 hooks Core/type,256 admissions en attente ; registre128 managers,256 références/manager et256 callbacks/type. `attachSessionBranchHooks(manager)` prête une référence indépendante ; le SDK ne déplace/supprime jamais la liaison d’un autre hôte. Les écritures durables admises finissent, sans rollback/CAS. CLI/RPC conservent le refus non destructif quand occupés, files/sélection sur veto et dialogues jusqu’à publication ; Server autorise toujours les copies de cibles persistées pendant le run source. Aucune méthode de façade/store n’est ajoutée. Voir la [propriété des branches](../../ai/topics/sessions.md#fork-versus-clone).
 
 ### Appels automatiques d'outils
 

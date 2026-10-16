@@ -20,6 +20,7 @@ import {
   resolveModelReference,
   resolveModelScope,
   ProviderFactory,
+  SessionBranchCancelledError,
   readBoundedResourceText,
   WorkspaceManager
 } from '@ai-harness/core';
@@ -922,17 +923,8 @@ const commands: CommandEntry[] = [
     handler: async (args, ctx) => {
       if (!args[0]) return chalk.red('Usage: /fork <session-id> [message-index] [title]');
 
-      const sessionId = args[0];
-      let session: Session | null | undefined = ctx.sessionManager.get(sessionId);
-
-      // Try loading from store if not in memory
-      if (!session) {
-        session = await ctx.sessionManager.loadFromStore(sessionId);
-      }
-
-      if (!session) return chalk.red(`Session not found: ${chalk.yellow(sessionId)}. Use /list to see available sessions.`);
-
-      // Parse optional arguments
+      const sessionId = args[0], signal = ctx.signal;
+      // Capture all caller choices before an awaited source load.
       let messageIndex: number | undefined;
       let newTitle: string | undefined;
 
@@ -950,7 +942,9 @@ const commands: CommandEntry[] = [
         newTitle = args.slice(2).join(' ');
       }
 
-      const forked = await ctx.sessionManager.forkSession(sessionId, messageIndex, newTitle);
+      const session = ctx.sessionManager.get(sessionId) ?? await ctx.sessionManager.loadFromStore(sessionId);
+      if (!session) return chalk.red(`Session not found: ${chalk.yellow(sessionId)}. Use /list to see available sessions.`);
+      const forked = await ctx.sessionManager.forkSession(sessionId, messageIndex, newTitle, { signal });
 
       if (!forked) return chalk.red('Fork failed: session not found');
 
@@ -966,18 +960,11 @@ const commands: CommandEntry[] = [
     handler: async (args, ctx) => {
       if (!args[0]) return chalk.red('Usage: /clone <session-id> [title]');
 
-      const sessionId = args[0];
-      let session: Session | null | undefined = ctx.sessionManager.get(sessionId);
-
-      // Try loading from store if not in memory
-      if (!session) {
-        session = await ctx.sessionManager.loadFromStore(sessionId);
-      }
-
-      if (!session) return chalk.red(`Session not found: ${chalk.yellow(sessionId)}. Use /list to see available sessions.`);
-
+      const sessionId = args[0], signal = ctx.signal;
       const newTitle = args.length > 1 ? args.slice(1).join(' ') : undefined;
-      const cloned = await ctx.sessionManager.cloneSession(sessionId, newTitle);
+      const session = ctx.sessionManager.get(sessionId) ?? await ctx.sessionManager.loadFromStore(sessionId);
+      if (!session) return chalk.red(`Session not found: ${chalk.yellow(sessionId)}. Use /list to see available sessions.`);
+      const cloned = await ctx.sessionManager.cloneSession(sessionId, newTitle, undefined, { signal });
 
       if (!cloned) return chalk.red('Clone failed: session not found');
 
@@ -1642,8 +1629,9 @@ export class CommandHandler {
           && args.length === 2 && args[0] === 'reveal' && Boolean(args[1]);
         this.writeOutput(output.text, output.kind === 'explicit-local-credential-reveal' && exactCredentialReveal);
       }
-    } catch {
-      this.ctx.terminal.showError('Command failed.');
+    } catch (error) {
+      if (error instanceof SessionBranchCancelledError) this.writeOutput(chalk.yellow('Session branch cancelled.'));
+      else this.ctx.terminal.showError('Command failed.');
     }
   }
 

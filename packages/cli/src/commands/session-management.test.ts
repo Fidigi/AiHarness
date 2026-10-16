@@ -96,6 +96,43 @@ describe.each([false, true])('session commands (durable=%s)', durable => {
       expect(f.errors).toEqual([]);
     } finally { await f.cleanup(); }
   });
+
+  for (const operation of ['fork', 'clone'] as const) {
+    it(`reports a ${operation} veto without claiming a destination or changing selection`, async () => {
+      const f = await fixture(durable);
+      try {
+        await f.manager.addMessage(f.session.id, { role: 'user', content: 'Selected user' });
+        await f.manager.appendCustomEntry(f.session.id, 'fixture:branch-command', { revision: 1 });
+        const raw = await f.manager.getRawEntries(f.session.id), leaf = f.session.activeLeafId;
+        const before = durable ? await readFile(f.store.getSessionFilePath(f.session.id)!) : undefined;
+        f.manager.onBeforeBranch(event => { expect(event.operation).toBe(operation); return false; });
+        await f.handler.execute(`/${operation} ${f.session.id}`);
+        expect(f.output.join('\n')).toContain('Session branch cancelled.'); expect(f.errors).toEqual([]);
+        expect(f.output.join('\n')).not.toContain('✅'); expect(f.manager.list()).toHaveLength(1);
+        expect(f.handler.getContext().currentSessionId).toBe(f.session.id); expect(f.session.activeLeafId).toBe(leaf);
+        expect(await f.manager.getRawEntries(f.session.id)).toEqual(raw);
+        if (durable) expect(await readFile(f.store.getSessionFilePath(f.session.id)!)).toEqual(before);
+      } finally { await f.cleanup(); }
+    });
+
+    it(`passes the admitted ${operation} signal even if the mutable command context is replaced`, async () => {
+      const f = await fixture(durable), controller = new AbortController();
+      let release!: () => void, entered!: () => void;
+      const gate = new Promise<void>(resolve => { release = resolve; }), started = new Promise<void>(resolve => { entered = resolve; });
+      try {
+        await f.manager.addMessage(f.session.id, { role: 'user', content: 'Selected user' });
+        const raw = await f.manager.getRawEntries(f.session.id);
+        f.handler.getContext().signal = controller.signal;
+        f.manager.onBeforeBranch(async () => { entered(); await gate; });
+        const pending = f.handler.execute(`/${operation} ${f.session.id}`); await started;
+        f.handler.getContext().signal = new AbortController().signal; controller.abort(); await pending;
+        expect(f.output.join('\n')).toContain('Session branch cancelled.'); expect(f.errors).toEqual([]);
+        release(); await new Promise<void>(resolve => setImmediate(resolve));
+        expect(f.manager.list()).toHaveLength(1); expect(await f.manager.getRawEntries(f.session.id)).toEqual(raw);
+        expect(f.handler.getContext().currentSessionId).toBe(f.session.id);
+      } finally { release(); await f.cleanup(); }
+    });
+  }
 });
 
 it('refuses linked deletion without removing memory state, following the link or touching another file', async () => {
