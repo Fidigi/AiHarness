@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type {
   McpConfigFileInventory,
   McpConfigInventory,
@@ -31,6 +31,8 @@ import {
   type McpReplaceTarget,
 } from '../services/mcp-api';
 import { useSessionStore } from '../store/session-store';
+import { readMcpSelection, selectedMcpServer, writeMcpSelection, type McpSelection } from '../store/mcp-selection.js';
+import { mcpDetailMessage } from './mcp-detail-messages.js';
 
 const PROBLEM_KEYS: Record<McpConfigProblemReason, string> = {
   'invalid-shape': 'settings.mcp.problem.invalidShape',
@@ -244,6 +246,8 @@ function McpOAuthPanel({
 
 function ServerCard({
   server,
+  selected,
+  onSelect,
   disabled,
   testing,
   oauthStatus,
@@ -261,6 +265,8 @@ function ServerCard({
   onRemove,
 }: {
   server: McpServerInventoryEntry;
+  selected: boolean;
+  onSelect: () => void;
   disabled: boolean;
   testing: boolean;
   oauthStatus?: McpOAuthStatusEntry;
@@ -279,6 +285,8 @@ function ServerCard({
 }) {
   const { locale, t } = useI18n();
   const state = serverState(server);
+  const detailId = useId();
+  const identity = `${t(SCOPE_KEYS[server.scope])} / ${server.name}`;
   const target = server.transport === 'stdio'
     ? [server.command, ...(server.args ?? [])].filter(Boolean).join(' ')
     : server.url;
@@ -287,17 +295,11 @@ function ServerCard({
     <div>
       <strong>{server.name}</strong>
       <code>{t(SCOPE_KEYS[server.scope])} · {server.transport ? t(`settings.mcp.transport.${server.transport}`) : t('settings.mcp.transport.unknown')}</code>
-      {target && <small>{target}</small>}
-      <small>{server.sourcePath}</small>
-      {server.envNames.length > 0 && <small>{t('settings.mcp.envNames', { names: server.envNames.join(', ') })}</small>}
-      {server.headerNames.length > 0 && <small>{t('settings.mcp.headerNames', { names: server.headerNames.join(', ') })}</small>}
-      {server.commandFields.length > 0 && <small>{t('settings.mcp.commandFields', { fields: server.commandFields.join(', ') })}</small>}
-      {server.variableReferences.map(reference => <small key={`${reference.field}:${reference.names.join(',')}`}>
-        {t('settings.mcp.variableReferences', { field: reference.field, names: reference.names.join(', ') })}
-      </small>)}
-      {server.problems.length > 0 && <ul className="mcp-diagnostics">
-        {server.problems.map((diagnostic, index) => <li key={`${index}:${diagnostic}`}>{diagnostic}</li>)}
-      </ul>}
+      <button type="button" className="mcp-detail-toggle" disabled={disabled}
+        aria-label={`${mcpDetailMessage(locale, 'show')} ${identity}`}
+        aria-expanded={selected} aria-controls={detailId} onClick={onSelect}>
+        {mcpDetailMessage(locale, 'action')}
+      </button>
     </div>
     <div className="mcp-server-controls">
       <span className={state === 'configured' ? 'status-success' : 'status-warning'}>
@@ -345,39 +347,72 @@ function ServerCard({
         </button>
       </div>}
     </div>
-    {server.valid && (server.testStatus?.tools.length || Object.keys(server.toolExposure ?? {}).length) ? <details className="mcp-per-tool-exposure mcp-test-report">
-      <summary>{t('settings.mcp.perToolExposure')}</summary>
-      {[...new Set([...Object.keys(server.toolExposure ?? {}), ...server.testStatus?.tools.map(tool => tool.name) ?? []])].map(name => <label key={name} className="mcp-exposure-control">
-        <span><code>{name}</code></span>
-        <select disabled={disabled} value={server.toolExposure?.[name] ?? server.exposure}
-          data-mcp-exposure-key={editKey(server.scope, `${server.name}\0${name}`)}
-          aria-label={t('settings.mcp.exposureNamed', { name: `${server.name} / ${name}` })}
-          onChange={event => onExposureChange(event.currentTarget.value as McpExposure, name)}>
-          {(['direct', 'codemode', 'deferred', 'hidden'] as const).map(exposure => <option key={exposure} value={exposure}>{t(`settings.mcp.exposure.${exposure}`)}</option>)}
-        </select>
-      </label>)}
-    </details> : null}
-    {server.usesOAuth && <McpOAuthPanel
-      server={server}
-      status={oauthStatus}
-      flow={oauthFlow}
-      busy={oauthBusy}
-      error={oauthError}
-      disabled={disabled}
-      onStart={onOAuthStart}
-      onPaste={onOAuthPaste}
-      onCancel={onOAuthCancel}
-      onLogout={onOAuthLogout}
-    />}
-    <McpTestReport server={server} />
+    <div id={detailId} className="mcp-server-detail" hidden={!selected} role="region"
+      aria-label={`${mcpDetailMessage(locale, 'region')} ${identity}`}>
+      {target && <small>{target}</small>}
+      <small>{server.sourcePath}</small>
+      {server.envNames.length > 0 && <small>{t('settings.mcp.envNames', { names: server.envNames.join(', ') })}</small>}
+      {server.headerNames.length > 0 && <small>{t('settings.mcp.headerNames', { names: server.headerNames.join(', ') })}</small>}
+      {server.commandFields.length > 0 && <small>{t('settings.mcp.commandFields', { fields: server.commandFields.join(', ') })}</small>}
+      {server.variableReferences.map(reference => <small key={`${reference.field}:${reference.names.join(',')}`}>
+        {t('settings.mcp.variableReferences', { field: reference.field, names: reference.names.join(', ') })}
+      </small>)}
+      {server.problems.length > 0 && <ul className="mcp-diagnostics">
+        {server.problems.map((diagnostic, index) => <li key={`${index}:${diagnostic}`}>{diagnostic}</li>)}
+      </ul>}
+      {server.valid && (server.testStatus?.tools.length || Object.keys(server.toolExposure ?? {}).length) ? <details className="mcp-per-tool-exposure mcp-test-report">
+        <summary>{t('settings.mcp.perToolExposure')}</summary>
+        {[...new Set([...Object.keys(server.toolExposure ?? {}), ...server.testStatus?.tools.map(tool => tool.name) ?? []])].map(name => <label key={name} className="mcp-exposure-control">
+          <span><code>{name}</code></span>
+          <select disabled={disabled} value={server.toolExposure?.[name] ?? server.exposure}
+            data-mcp-exposure-key={editKey(server.scope, `${server.name}\0${name}`)}
+            aria-label={t('settings.mcp.exposureNamed', { name: `${server.name} / ${name}` })}
+            onChange={event => onExposureChange(event.currentTarget.value as McpExposure, name)}>
+            {(['direct', 'codemode', 'deferred', 'hidden'] as const).map(exposure => <option key={exposure} value={exposure}>{t(`settings.mcp.exposure.${exposure}`)}</option>)}
+          </select>
+        </label>)}
+      </details> : null}
+      {server.usesOAuth && <McpOAuthPanel
+        server={server}
+        status={oauthStatus}
+        flow={oauthFlow}
+        busy={oauthBusy}
+        error={oauthError}
+        disabled={disabled}
+        onStart={onOAuthStart}
+        onPaste={onOAuthPaste}
+        onCancel={onOAuthCancel}
+        onLogout={onOAuthLogout}
+      />}
+      <McpTestReport server={server} />
+    </div>
   </article>;
 }
 
-/** Local MCP administration plus an explicit, bounded one-shot connection test. */
+/** Scope replacement retires presentation/drafts before the replacement view commits. */
 export function McpSettings() {
+  const workspace = useSessionStore(state => state.workspace);
+  return <McpSettingsPanel key={JSON.stringify([
+    workspace?.id, workspace?.cwd, workspace?.operationTrusted, workspace?.trusted,
+  ])} />;
+}
+
+/** Local MCP administration plus an explicit, bounded one-shot connection test. */
+function McpSettingsPanel() {
   const { locale, t } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
   const refreshWorkspace = useSessionStore(state => state.refreshWorkspace);
+  const [selection, setSelection] = useState<(McpSelection & { configKey?: string }) | undefined>(() => readMcpSelection(workspace?.cwd));
+  const selectServer = (server: McpSelection & { configKey?: string }): void => {
+    const next = { scope: server.scope, name: server.name };
+    const configKey = server.configKey;
+    setSelection(previous => ({ ...next, configKey: configKey ?? (
+      previous?.scope === next.scope && previous.name === next.name ? previous.configKey : undefined
+    ) }));
+    setPendingControlFocus(undefined);
+    setTestError(undefined);
+    writeMcpSelection(workspace?.cwd, next);
+  };
   const [inventory, setInventory] = useState<McpConfigInventory>();
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string>();
@@ -562,6 +597,7 @@ export function McpSettings() {
 
   const testServer = async (server: McpServerInventoryEntry): Promise<void> => {
     if (!inventory || busy || testing || importWriting || replacement || !server.valid) return;
+    selectServer(server);
     const request = ++testRequest.current;
     const key = `${server.scope}:${server.name}`;
     setTesting(key);
@@ -699,6 +735,7 @@ export function McpSettings() {
     else if (outcome.status === 'failure') setFeedback(outcome.uncertain ? 'uncertain' : 'error');
     const focusName = outcome.status === 'success' ? outcome.name : selected?.name;
     if (selected && focusName) {
+      selectServer({ scope: selected.scope, name: focusName });
       setPendingControlFocus({ kind: 'edit', scope: selected.scope, name: focusName });
     } else {
       refreshButtonRef.current?.focus();
@@ -815,6 +852,7 @@ export function McpSettings() {
     setOAuthBusy(current => current === key ? undefined : current);
   };
 
+  const selected = selectedMcpServer(inventory?.servers ?? [], selection, selection?.configKey);
   const projectFile = inventory?.files.find(file => file.scope === 'project');
   const groups = (['global', 'project'] as const).map(scope => ({
     scope,
@@ -859,10 +897,16 @@ export function McpSettings() {
     <McpImportPreview
       key={`${workspace?.cwd ?? 'global'}:${(workspace?.operationTrusted ?? workspace?.trusted) ? 'allowed' : 'blocked'}`}
       cwd={workspace?.cwd}
-      disabled={Boolean(busy)}
+      disabled={Boolean(busy) || Boolean(testing) || Boolean(oauthBusy) || Boolean(pendingRemoval)}
       inventory={inventory}
       onInventory={next => {
+        const changed = next.servers.filter(server => !inventory?.servers.some(previous => (
+          previous.scope === server.scope && previous.name === server.name && previous.configKey === server.configKey
+        )));
+        // Select one canonical addition/replacement, never a guessed concurrent row.
+        if (changed.length === 1) selectServer(changed[0]!);
         setInventory(next);
+        void refreshOAuthStatuses(next);
         void refreshWorkspace();
       }}
       onReload={reloadCanonical}
@@ -870,6 +914,9 @@ export function McpSettings() {
       replacement={replacement}
       onReplacementOutcome={finishReplacement}
     />
+    {inventory && selection && !selected && <p role="status" className="settings-help">
+      {mcpDetailMessage(locale, 'unavailable')}
+    </p>}
     {inventory && groups.map(group => {
       const actionable = group.servers.filter(server => server.valid);
       const enableNames = actionable.filter(server => !server.enabled).map(server => server.name);
@@ -894,7 +941,9 @@ export function McpSettings() {
           : <div className="settings-resource-list">{group.servers.map((server, index) => (
             <ServerCard
               server={server}
-              disabled={controlsDisabled}
+              selected={server === selected}
+              onSelect={() => selectServer(server)}
+              disabled={controlsDisabled || Boolean(pendingRemoval)}
               testing={testing === `${server.scope}:${server.name}`}
               oauthStatus={oauthStatuses[oauthKey(server)]}
               oauthFlow={oauthFlows[oauthKey(server)]}
@@ -906,17 +955,25 @@ export function McpSettings() {
               onOAuthPaste={value => void pasteOAuth(server, value)}
               onOAuthCancel={() => void cancelOAuth(server)}
               onOAuthLogout={() => void logoutOAuth(server)}
-              onToggle={() => void setEnabled(server.scope, [server.name], !server.enabled, `row:${server.scope}:${server.name}`)}
-              onExposureChange={(exposure, tool) => void setExposure(server, exposure, tool)}
+              onToggle={() => {
+                selectServer(server);
+                void setEnabled(server.scope, [server.name], !server.enabled, `row:${server.scope}:${server.name}`);
+              }}
+              onExposureChange={(exposure, tool) => {
+                selectServer(server);
+                void setExposure(server, exposure, tool);
+              }}
               onEdit={trigger => {
                 const file = fileForScope(inventory, server.scope);
                 if (!file?.revision || controlsDisabled) return;
+                selectServer(server);
                 editReturnFocus.current = trigger;
                 setFeedback(undefined);
                 setUndo(undefined);
                 setReplacement({ scope: server.scope, name: server.name, revision: file.revision });
               }}
               onRemove={trigger => {
+                selectServer(server);
                 removalReturnFocus.current = trigger;
                 setPendingRemoval({ scope: server.scope, name: server.name, revision });
               }}

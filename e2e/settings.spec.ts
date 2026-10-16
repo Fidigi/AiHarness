@@ -268,6 +268,9 @@ test.describe('Settings and authentication', () => {
     await expect(section.getByText('Connected', { exact: true })).toHaveCount(0);
     await expect(section).toContainText('Command-backed fields: headers.X-Command');
     await expect(section).toContainText('env.CACHE_DIR reads host variables: CACHE_DIR');
+    await section.getByRole('button', { name: 'Show details for Global configuration / bad\\u202ename', exact: true }).click();
+    await expect(section.getByRole('region', { name: 'Server details: Global configuration / bad\\u202ename', exact: true }))
+      .toContainText('The URL must be a bounded HTTP or HTTPS URL.');
     await section.getByText('Configuration file diagnostics').click();
     await expect(section).toContainText(MCP_FILE_PROBLEM_MESSAGES['invalid-shape']);
   });
@@ -506,6 +509,7 @@ test.describe('Settings and authentication', () => {
 
     await expect(section).toContainText('The MCP server was imported.');
     await expect(section.getByRole('article', { name: 'docs-import: Configured', exact: true })).toBeVisible();
+    await expect(section.getByRole('region', { name: 'Server details: Global configuration / docs-import', exact: true })).toBeVisible();
     await expect(section).not.toContainText('SOURCE-SECRET');
     const request = api.requests.find(item => item.path === '/api/mcp/actions'
       && (item.body as { action?: string } | undefined)?.action === 'import');
@@ -549,6 +553,7 @@ test.describe('Settings and authentication', () => {
 
     await expect(dialog).toHaveCount(0);
     await expect(section.getByRole('article', { name: 'fresh-tools: Configured', exact: true })).toBeVisible();
+    await expect(section.getByRole('region', { name: 'Server details: Project configuration / fresh-tools', exact: true })).toBeVisible();
     const request = api.requests.find(item => item.path === '/api/mcp/actions'
       && (item.body as { action?: string } | undefined)?.action === 'import');
     expect(request?.body).toMatchObject({
@@ -633,6 +638,10 @@ test.describe('Settings and authentication', () => {
 
     await expect(section).toContainText('MCP configuration updated.');
     await expect(section.getByRole('article', { name: 'remote-docs-v2: Configured', exact: true })).toBeVisible();
+    await expect(section.getByRole('region', { name: 'Server details: Global configuration / remote-docs-v2', exact: true })).toBeVisible();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ai-harness-mcp-selection-v1')!))).toEqual({
+      version: 1, entries: [{ cwd: '/workspace', scope: 'global', name: 'remote-docs-v2' }],
+    });
     await expect(section.getByRole('article', { name: /remote-docs:/u })).toHaveCount(0);
     await expect(section.getByRole('button', { name: 'Edit remote-docs-v2', exact: true })).toBeFocused();
     await expect(section).not.toContainText('SOURCE-EDIT-SECRET');

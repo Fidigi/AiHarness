@@ -55,6 +55,10 @@ html[data-theme="light"] .codemode-settings { border-color: #b8c3d4; }
 .mcp-scope { min-width: 0; margin-top: .75rem; padding: .55rem; border: 1px solid #40527b; border-radius: 6px; }
 .mcp-scope legend { padding: 0 .35rem; color: #e9eef8; font-weight: 600; }
 .mcp-server-card > .mcp-server-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; max-width: 15rem; align-items: center; }
+.mcp-server-card > div.mcp-server-detail { grid-column: 1 / -1; min-width: 0; display: grid; justify-content: stretch; gap: .3rem; padding-top: .5rem; border-top: 1px solid #40527b; }
+.mcp-server-card > .mcp-server-detail[hidden] { display: none; }
+.mcp-detail-toggle { width: fit-content; }
+.mcp-detail-toggle[aria-expanded="true"] { outline: 2px solid currentColor; outline-offset: 1px; }
 .mcp-test-report { grid-column: 1 / -1; min-width: 0; display: grid; gap: .3rem; margin-top: .15rem; padding: .55rem; border: 1px solid #344c75; border-radius: 5px; background: #0c1429; }
 .mcp-test-summary { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .35rem .7rem; }
 .mcp-test-report small { color: #b5c0d3; }
@@ -161,7 +165,7 @@ html[data-theme="light"] .mcp-file-diagnostics { border-color: #d8dee9; }
 html[data-theme="light"] .mcp-diagnostics { color: #9b1c31; }
 html[data-theme="light"] .mcp-undo { color: #172033; border-color: #b8c3d4; background: #f8f9fc; }
 html[data-theme="light"] .mcp-remove-dialog, html[data-theme="light"] .mcp-import-dialog { color: #172033; border-color: #aeb9ca; background: #fff; }
-html[data-theme="light"] .mcp-remove-button { color: #8b1e32; border-color: #b85b6b; }
+html[data-theme="light"] .mcp-remove-button { color: #8b1e32; border-color: #b85b6b; background: #fff2f4; }
 html[data-theme="light"] .mcp-import-panel, html[data-theme="light"] .mcp-import-results { border-color: #d8dee9; }
 html[data-theme="light"] .mcp-import-panel > summary { color: #26344e; }
 html[data-theme="light"] .mcp-import-body > label:not(.mcp-import-syntax) { color: #52627b; }

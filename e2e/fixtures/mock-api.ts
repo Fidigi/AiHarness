@@ -574,6 +574,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
     steerQueue: Array<{ id: string; kind: 'steer'; content: string; createdAt: string }>;
     followUpQueue: Array<{ id: string; kind: 'follow-up'; content: string; createdAt: string }>;
     retry?: { attempt: number; max: number; delayMs: number; message: string; scheduledAt: string };
+    error?: string;
     activeTool?: { id: string; name: string; input: unknown; startedAt: string; nestedCalls?: CodemodeCall[] };
     extensionRequest?: ExtensionInteractionSnapshot;
     lastSequence: number;
@@ -864,6 +865,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
         mcpConfig.servers[targetIndex] = {
           name,
           scope,
+          configKey: mcpRevisionSequence.toString(16).padStart(64, '0'),
           sourcePath: file?.path ?? (scope === 'project' ? `${workspace.cwd}/.ai-harness/mcp.json` : '/agent/mcp.json'),
           valid: previewEntry.persisted.valid,
           enabled: previewEntry.persisted.enabled,
@@ -907,6 +909,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
         mcpConfig.servers.push({
           name,
           scope,
+          configKey: mcpRevisionSequence.toString(16).padStart(64, '0'),
           sourcePath: file?.path ?? (scope === 'project' ? `${workspace.cwd}/.ai-harness/mcp.json` : '/agent/mcp.json'),
           valid: previewEntry.persisted.valid,
           enabled: previewEntry.persisted.enabled,
@@ -2033,7 +2036,8 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       if (!run) { await fulfillJson(route, { error: 'Run not found' }, 404); return; }
       const input = body as { kind: 'steer' | 'follow-up'; content: string };
       const queue = input.kind === 'steer' ? run.steerQueue : run.followUpQueue;
-      queue.push({ id: `queued-${queue.length + 1}`, ...input, createdAt: DEFAULT_DATE });
+      if (input.kind === 'steer') run.steerQueue.push({ id: `queued-${queue.length + 1}`, ...input, kind: input.kind, createdAt: DEFAULT_DATE });
+      else run.followUpQueue.push({ id: `queued-${queue.length + 1}`, ...input, kind: input.kind, createdAt: DEFAULT_DATE });
       run.lastSequence++;
       await fulfillJson(route, run, 202); return;
     }
