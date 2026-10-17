@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import {
   loadAgentSettings,
+  prepareCompactionContext,
   resolveInstructionPrompt,
   type AgentEvent,
   type MessageContentBlock,
@@ -14,6 +15,7 @@ import { requireCapability } from '../security/request-security.js';
 import { SseChannel } from './sse-channel.js';
 import { agentEventPolicy } from './agent-event-policy.js';
 import { providerAdministration, providerOperation } from '../runtime/provider-administration.js';
+import { sessionCopyRequest } from './session-copy-request.js';
 
 function stringValue(value: unknown, name: string, options: { optional?: boolean; max?: number } = {}): string | undefined {
   if (value === undefined && options.optional) return undefined;
@@ -562,21 +564,27 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
   });
 
   router.post('/sessions/:sessionId/compact', operation(async (request, response, next) => {
-    const controller = new AbortController();
-    const abort = () => controller.abort();
-    request.once('aborted', abort);
-    response.once('close', () => {
-      if (!response.writableEnded) abort();
-    });
+    const lifetime = sessionCopyRequest(request, response);
+    const sessionId = request.params.sessionId;
+    const aborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')!.get!.bind(lifetime.signal);
+    let redactText = (value: string): string => value;
+    let failed = (_message: string): void => undefined;
     try {
       const services = await servicesPromise;
-      const session = services.sessionManager.get(request.params.sessionId)
-        ?? await services.sessionManager.loadFromStore(request.params.sessionId);
+      const manager = services.sessionManager;
+      redactText = services.redactText.bind(services);
+      const redactJson = services.redactJson.bind(services), recordUsage = services.recordUsage.bind(services);
+      const publish = services.agentRuntime.publishSessionEvent.bind(services.agentRuntime);
+      failed = message => { publish(sessionId, 'compaction.failed', { message }); };
+      if (aborted()) throw new DOMException('Compaction cancelled', 'AbortError');
+      const session = manager.get(sessionId) ?? await manager.loadFromStore(sessionId);
       if (!session) {
         response.status(404).json({ error: 'Session not found' });
         return;
       }
-      const activeRun = services.agentRuntime.getSessionRun(session.id);
+      const source = manager.captureCompactionSource(sessionId);
+      if (!source) throw new Error('Compaction context or policy changed.');
+      const activeRun = services.agentRuntime.getSessionRun(sessionId);
       if (activeRun && !['completed', 'failed', 'stopped'].includes(activeRun.phase)) {
         response.status(409).json({ error: 'Arrêtez l’agent avant de compacter la session.' });
         return;
@@ -585,9 +593,16 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         response.status(400).json({ error: 'Au moins quatre messages sont requis.' });
         return;
       }
+      const preparation = prepareCompactionContext(manager, sessionId);
+      if (!preparation) {
+        response.status(400).json({ error: 'No complete context prefix to compact.' });
+        return;
+      }
+      const before = manager.getTokenCount(sessionId), firstKeptEntryId = preparation.firstKeptEntryId;
+      const retainedEstimate = Math.ceil(preparation.keptMessages.reduce((sum, message) => sum + message.content.length, 0) / 4);
       const effective = resolveEffectiveConfiguration(services, {
         projectId: session.workspaceId,
-        sessionId: session.id,
+        sessionId,
         session,
       });
       const providerName = typeof request.body?.provider === 'string'
@@ -596,44 +611,43 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       const rawInstruction = typeof request.body?.instruction === 'string'
         ? request.body.instruction.slice(0, 10_000)
         : 'Summarize concisely while preserving decisions, constraints, commands, and unresolved work.';
-      const instruction = services.redactText(rawInstruction);
-      const before = services.sessionManager.getTokenCount(session.id);
-      const firstKeptIndex = Math.max(1, session.messages.length - 2);
-      const compacted = session.messages.slice(0, firstKeptIndex);
-      services.agentRuntime.publishSessionEvent(session.id, 'compaction.started', { tokensBefore: before });
+      const instruction = redactText(rawInstruction);
       const provider = services.resolveProvider(providerName);
       if (!provider) throw Object.assign(new Error(`Provider inconnu : ${providerName}`), { status: 400 });
+      const chat = provider.chat.bind(provider);
       const rawModel = typeof request.body?.model === 'string' ? request.body.model : effective.values.model;
-      const requestedModel = rawModel ? services.redactText(rawModel) : undefined;
-      const rawSummaryResponse = await provider.chat([{
-        id: `compaction:${session.id}`,
-        role: 'user',
-        content: services.redactText(compacted.map(message => `${message.role}: ${message.content}`).join('\n---\n')),
-        timestamp: new Date(),
-      }], {
+      const requestedModel = rawModel ? redactText(rawModel) : undefined;
+      const summaryMessages = redactJson(preparation.toCompact);
+      const validateBinding = (): void => {
+        if (services.sessionManager !== manager) throw new Error('Compaction context or policy changed.');
+      };
+      validateBinding();
+      publish(sessionId, 'compaction.started', { tokensBefore: before });
+      validateBinding();
+      if (aborted()) throw new DOMException('Compaction cancelled', 'AbortError');
+      const rawSummaryResponse = await chat(summaryMessages, {
         model: requestedModel,
-        sessionId: session.id,
+        sessionId,
         systemPrompt: `You summarize an agent conversation. ${instruction}`,
-        signal: controller.signal,
+        signal: lifetime.signal,
       });
-      const summaryResponse = services.redactJson(rawSummaryResponse);
-      if (summaryResponse.usage) services.recordUsage(providerName, summaryResponse.model ?? requestedModel, summaryResponse.usage);
+      const summaryResponse = redactJson(rawSummaryResponse);
+      if (summaryResponse.usage) recordUsage(providerName, summaryResponse.model ?? requestedModel, summaryResponse.usage);
       const summary = summaryResponse.content.trim();
       if (!summary) throw new Error('Le provider a renvoyé un résumé vide.');
-      const firstKeptEntryId = session.messages[firstKeptIndex].id;
-      const afterEstimate = Math.ceil(summary.length / 4)
-        + Math.ceil(session.messages.slice(firstKeptIndex).reduce((sum, message) => sum + message.content.length, 0) / 4);
-      await services.sessionManager.applyCompaction(session.id, summary, firstKeptEntryId, {
+      const afterEstimate = Math.ceil(summary.length / 4) + retainedEstimate;
+      validateBinding();
+      await manager.applyCompaction(sessionId, summary, firstKeptEntryId, {
         instruction,
         tokensBefore: before,
         tokensAfter: afterEstimate,
-      });
-      services.agentRuntime.publishSessionEvent(session.id, 'compaction.completed', {
+      }, { signal: lifetime.signal, source });
+      publish(sessionId, 'compaction.completed', {
         tokensBefore: before,
         tokensAfter: afterEstimate,
         tokensSaved: Math.max(0, before - afterEstimate),
       });
-      response.json({
+      if (!response.destroyed && !response.writableEnded) response.json({
         session: serializeSessionPage(session, { limit: 80 }),
         summary,
         tokensBefore: before,
@@ -641,12 +655,13 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         tokensSaved: Math.max(0, before - afterEstimate),
       });
     } catch (error) {
-      const services = await servicesPromise;
-      services.agentRuntime.publishSessionEvent(request.params.sessionId, 'compaction.failed', {
-        message: services.redactText(error instanceof Error ? error.message : 'Compaction failed'),
-      });
-      next(error);
-    }
+      const message = error instanceof Error ? error.message : 'Compaction failed';
+      failed(redactText(message));
+      if (!response.destroyed && !response.writableEnded) {
+        next(error instanceof Error && ['Compaction cancelled', 'Compaction context or policy changed.'].includes(message)
+          ? Object.assign(error, { status: 409 }) : error);
+      }
+    } finally { lifetime.dispose(); }
   }));
 
   router.post('/commands', requireCapability('terminal'), operation(async (request, response, next) => {

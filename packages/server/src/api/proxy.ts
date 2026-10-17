@@ -3,6 +3,7 @@
 // ============================================================
 
 import type { Request, Response } from 'express';
+import { sessionCopyRequest } from './session-copy-request.js';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -1195,7 +1196,11 @@ export function createProxyRoutes(
 
   /** POST /api/chat/compact - Compact conversation with LLM summary */
   const compactHandler = async (req: Request, res: Response): Promise<void> => {
+    const lifetime = sessionCopyRequest(req, res);
+    const aborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')!.get!.bind(lifetime.signal);
+    const sendChat = proxy.sendChat.bind(proxy), configured = proxy.isConfigured.bind(proxy), redact = proxy.redactText.bind(proxy);
     try {
+      if (aborted()) return;
       const { messages, provider, options } = (req.body ?? {}) as {
         messages: Message[];
         provider?: string;
@@ -1213,25 +1218,27 @@ export function createProxyRoutes(
       }
 
       const proxyType = provider ?? (process.env.OPENAI_API_KEY ? 'openai' : 'anthropic');
-      if (!proxy || !proxy.isConfigured(proxyType)) {
+      if (!configured(proxyType)) {
         res.status(400).json({ error: `Provider "${proxyType}" not configured` });
         return;
       }
 
-      const result = await proxy.sendChat(
+      const ownedMessages = sanitizedProxyMessages(messages, 'compact');
+      if (aborted()) return;
+      const result = await sendChat(
         proxyType,
-        sanitizedProxyMessages(messages, 'compact'),
-        { ...(safeOptions ?? {}), stream: false, systemPrompt: `You are a conversation summarizer. ${instructions}` },
+        ownedMessages,
+        { ...(safeOptions ?? {}), stream: false, systemPrompt: `You are a conversation summarizer. ${instructions}`, signal: lifetime.signal },
       );
 
-      res.json({ summary: result.content });
+      if (!aborted() && !res.destroyed && !res.writableEnded) res.json({ summary: result.content });
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      console.error(proxy.redactText(`[Proxy] Compact handler error: ${err.message}`));
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Internal server error' });
+      console.error(redact(`[Proxy] Compact handler error: ${err.message}`));
+      if (!res.headersSent && !res.destroyed && !res.writableEnded) {
+        res.status(aborted() ? 409 : 500).json({ error: aborted() ? 'Compaction cancelled' : 'Internal server error' });
       }
-    }
+    } finally { lifetime.dispose(); }
   };
 
   /** GET /api/providers - List configured providers */
