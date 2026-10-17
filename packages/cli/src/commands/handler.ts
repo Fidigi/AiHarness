@@ -48,6 +48,7 @@ import type {
 import type { TerminalUI } from '../tui/terminal-ui.js';
 import { usageText } from '../tui/status.js';
 import { renderSessionHtml, sanitizeFilename } from '../utils/session-export.js';
+import { DIAGNOSTIC_PRIVACY_WARNING, EXPORT_PRIVACY_WARNING, SHARE_PRIVACY_WARNING } from '../security/privacy-warnings.js';
 import { copyToClipboard } from '../utils/system-integration.js';
 import type { ProjectTrustManager } from '../security/project-trust.js';
 import { OAuthDeviceClient, oauthConfigFromEnv } from '../security/oauth-device.js';
@@ -129,6 +130,8 @@ export interface CommandContext {
   sessionManager: SessionManager;
   jsonlStore: JsonlSessionStore;
   terminal: TerminalUI;
+  /** Optional host warning sink; headless hosts must keep notices off transcript stdout. */
+  writeWarning?: (message: string) => void;
   currentSessionId?: string;
   provider?: AiProvider;
   providers: Map<string, AiProvider>;
@@ -170,6 +173,7 @@ export interface CommandMcpControl {
 
 export interface CommandWorkspaceContext {
   offline?: boolean;
+  writeWarning?: (message: string) => void;
   cwd: string;
   workspaceManager?: WorkspaceManager;
   workspaceId?: string;
@@ -191,6 +195,13 @@ export interface CommandWorkspaceContext {
 
 function safeText(ctx: CommandContext, value: string): string {
   return ctx.redactText?.(value) ?? value;
+}
+
+function privacyWarning(ctx: CommandContext, message: string): void {
+  const text = safeText(ctx, message);
+  if (ctx.writeWarning) ctx.writeWarning(text);
+  else if (typeof ctx.terminal.writeOutput === 'function') ctx.terminal.writeOutput(chalk.yellow(text));
+  else process.stderr.write(`${text}\n`);
 }
 
 function safeJson<T>(ctx: CommandContext, value: T): T {
@@ -1006,6 +1017,7 @@ const commands: CommandEntry[] = [
       }
       const baseUrl = resolveShareServerUrl(process.env.AI_HARNESS_SERVER_URL || 'http://127.0.0.1:3080');
       if (!baseUrl) return chalk.red('URL du serveur de partage invalide.');
+      privacyWarning(ctx, SHARE_PRIVACY_WARNING);
       const endpoint = new URL(`api/sessions/${encodeURIComponent(sessionId)}/share`, baseUrl);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(new Error('Share request timed out.')), SHARE_REQUEST_TIMEOUT_MS);
@@ -1044,7 +1056,8 @@ const commands: CommandEntry[] = [
     name: 'bug',
     description: 'Préparer un rapport de bug GitHub',
     usage: '/bug [description]',
-    handler: async args => {
+    handler: async (args, ctx) => {
+      privacyWarning(ctx, DIAGNOSTIC_PRIVACY_WARNING);
       const description = args.join(' ') || 'Décrivez le problème rencontré.';
       const body = [description, '', `Node: ${process.version}`, `Platform: ${process.platform}/${process.arch}`].join('\n');
       const repository = process.env.AI_HARNESS_ISSUES_URL || 'https://github.com/Fidigi/AiHarness/issues/new';
@@ -1137,6 +1150,7 @@ const commands: CommandEntry[] = [
         filename = `${safeTitle}-${timestamp}.${extMap[format]}`;
       }
 
+      privacyWarning(ctx, EXPORT_PRIVACY_WARNING);
       const destination = await resolveCommandPath(ctx, filename, { mustExist: false });
       await atomicWriteStableFile(destination, content, { overwrite: true, maxBytes: 64 * 1024 * 1024 });
       filename = destination;
@@ -1547,6 +1561,7 @@ export class CommandHandler {
       sessionManager,
       jsonlStore,
       terminal,
+      writeWarning: workspace.writeWarning,
       currentSessionId: undefined,
       provider: providers.get('mock'), // Default to mock
       providers,

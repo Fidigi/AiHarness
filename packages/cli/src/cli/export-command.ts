@@ -9,6 +9,7 @@ import { CommandHandler } from '../commands/handler.js';
 import type { TerminalUI } from '../tui/terminal-ui.js';
 import { resolveStartupSessionDirectory } from '../sessions/startup-session.js';
 import { loadTopLevelCredentialService } from './provider-auth-command.js';
+import { EXPORT_PRIVACY_WARNING } from '../security/privacy-warnings.js';
 
 export const EXPORT_HELP = `Usage: ai-harness export --session <path|id-prefix> --format <html|jsonl|json|markdown> --output <path> [options]
   --session-dir <dir>                Select the existing session storage root
@@ -19,6 +20,7 @@ Paths must be ordinary files in the selected store or current workspace, with no
 Output must be an explicit trusted current-workspace file, ending in .html/.jsonl/.json/.md.
 Existing ordinary output files are atomically replaced, mode 0600; source files cannot be replaced.
 JSONL is the existing message projection, not the v2 session journal. No transcript is printed.
+${EXPORT_PRIVACY_WARNING}
 Exits: 0 success/help, 2 usage, 1 selection/trust/publication failure.
 `;
 
@@ -138,6 +140,7 @@ export async function runExportCommand(args: readonly string[]): Promise<number>
     } as unknown as TerminalUI;
     const handler = new CommandHandler(manager, ephemeral, terminal, undefined, undefined, {
       cwd, workspaceManager: workspace, providers: new Map(), isProjectTrusted: () => true,
+      writeWarning: warning => { process.stderr.write(`${warning}\n`); },
       redactText: value => redactor.redact(value), redactJson: value => redactor.redactJson(value),
     });
     handler.getContext().currentSessionId = projection.id;

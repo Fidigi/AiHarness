@@ -331,6 +331,32 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     } finally { await rm(extension); }
   });
 
+  it('warns about all four installed PATH-bin exports on stderr without disclosing conversation or credential values', async () => {
+    const directory = await mkdtemp(path.join(consumer, 'installed-export-privacy-'));
+    const cwd = path.join(directory, 'workspace'), sessions = path.join(directory, 'sessions');
+    const unknown = 'disposable-installed-private-export-text', secret = 'disposable-installed-export-credential';
+    await mkdir(cwd); await mkdir(sessions);
+    const script = path.join(consumer, 'installed-export-privacy.mjs');
+    await writeFile(script, `import { JsonlSessionStore } from '@ai-harness/core';
+      const date = new Date('2025-01-01T00:00:00Z');
+      await new JsonlSessionStore(${JSON.stringify(sessions)}).saveSession({id:'privacy-installed',title:'private fixture',cwd:${JSON.stringify(cwd)},createdAt:date,updatedAt:date,
+        messages:[{id:'m1',role:'user',content:${JSON.stringify(unknown+' '+secret)},timestamp:date}],activeLeafId:'m1'});`);
+    try {
+      expect(await run(process.execPath, [script], consumer, environment)).toEqual({ code: 0, stdout: '', stderr: '' });
+      const source = path.join(sessions, 'privacy-installed.jsonl'), before = await readFile(source);
+      for (const format of ['html','jsonl','json','markdown']) {
+        const name = 'result.'+(format==='markdown'?'md':format);
+        const result = await run('ai-harness', ['export','--session','privacy-installed','--session-dir',sessions,'--format',format,'--output',name,'--approve'], cwd,
+          { ...environment, AI_HARNESS_AGENT_DIR: path.join(directory,'agent'), OPENAI_API_KEY: secret });
+        expect(result.code, result.stderr).toBe(0); expect(result.stdout).toBe('Session export published.\n');
+        expect(result.stderr).toMatch(/^Privacy warning:.*unrecognized secrets.*\n$/u);
+        for (const value of [secret, unknown, cwd, sessions]) expect(result.stderr).not.toContain(value);
+        const body = await readFile(path.join(cwd,name),'utf8'); expect(body).toContain(unknown); expect(body).not.toContain(secret);
+      }
+      expect(await readFile(source)).toEqual(before);
+    } finally { await rm(directory,{recursive:true,force:true}); await rm(script,{force:true}); }
+  });
+
   describe('installed PATH-bin definitive credential authority', () => {
     const literal = 'ordinary-installed-arity', secret = 'genuine-installed-arity: +/字';
     const secretVariants = [...new Set([secret, Buffer.from(secret).toString('base64'), Buffer.from(secret).toString('base64url'), Buffer.from(secret).toString('hex'), encodeURIComponent(secret)])];

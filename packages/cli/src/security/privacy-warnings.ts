@@ -1,0 +1,4 @@
+/** Fixed, value-free notices. Redaction does not recognize arbitrary conversation secrets. */
+export const EXPORT_PRIVACY_WARNING = 'Privacy warning: exported conversations and tool output may contain private data or unrecognized secrets. Review the file before sharing; registered-credential redaction is not complete sanitization.';
+export const SHARE_PRIVACY_WARNING = 'Privacy warning: sharing creates a public link. Conversation and tool output may contain private data or unrecognized secrets. Review the session first; expiry and registered-credential redaction do not guarantee confidentiality.';
+export const DIAGNOSTIC_PRIVACY_WARNING = 'Privacy warning: diagnostic logs and bug descriptions may contain private data or unrecognized secrets. Review the report and URL before submitting; do not attach credentials or unreviewed transcripts.';

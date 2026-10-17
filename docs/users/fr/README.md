@@ -3,6 +3,7 @@
 | Document | Description |
 |---|---|
 | [Guide utilisateur](./user-guide.md) | Installation, configuration CLI/Web, commandes, sessions et sécurité |
+| [Sécurité CLI](./cli-security.md) | Avertissements/canaux, portée offline/proxy, alias, matrice Windows/terminal et diagnostics sûrs |
 | [Guide opérateur](./operations.md) | Préparation de l’hôte, MCP/code mode, fichiers/confiance, sauvegarde, rechargement et incidents |
 | [Réponses Web et progression](./web-replies.md) | Limites de sortie, échecs partiels, demandes concurrentes et limites de reconnexion |
 | [Conteneurisation](./containerization.md) | Exécution du CLI et du lanceur Web avec Docker |

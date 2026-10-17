@@ -440,7 +440,9 @@ La compaction automatique revérifie l’annulation, la branche active et la pol
 /bug [description]
 ```
 
-Sans chemin, les exports sont créés dans `~/.ai-harness/exports/`. La commande `/import` accepte un JSON contenant un tableau de sessions ou un JSONL contenant un message par ligne.
+Sans chemin, les exports slash sont créés dans le workspace actif approuvé, avec titre assaini et horodatage. Les destinations explicites restent dans ce workspace. La commande `/import` accepte un JSON contenant un tableau de sessions ou un JSONL contenant un message par ligne.
+
+Exports, `/share` et `/bug` émettent des avertissements fixes : masquer les secrets enregistrés ne retire pas toute donnée privée. Relisez avant partage/envoi. L’export autonome avertit sur stderr ; RPC HTML ajoute `data.warnings` à côté de `path`, sans nouvel événement ni confirmation avant écriture. Voir [sécurité CLI](./cli-security.md) pour canaux, limites offline/proxy, alias et consignes Windows/terminal.
 
 `/share` nécessite le serveur AiHarness. Par défaut, le CLI l’appelle sur `http://127.0.0.1:3080`. Les variables utiles sont :
 
@@ -1062,7 +1064,7 @@ Par défaut, le CLI et le serveur utilisent :
 | Donnée | Emplacement |
 |---|---|
 | Sessions JSONL | `~/.ai-harness/sessions/<id>.jsonl` |
-| Exports CLI | `~/.ai-harness/exports/` |
+| Exports CLI | Workspace actif approuvé ; destination autonome explicite obligatoire |
 | Credentials Web chiffrés | `~/.ai-harness/credentials.enc` |
 | Configuration non secrète par portée | `~/.ai-harness/config.json` |
 | Providers/modèles personnalisés | `~/.ai-harness/providers.json` |

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { EncryptedCredentialStore, JsonlSessionStore, ProviderCredentialService, type Session } from '@ai-harness/core';
+import { EXPORT_PRIVACY_WARNING } from '../security/privacy-warnings.js';
 
 const entry = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 let root: string, cwd: string, agent: string, sessions: string, source: string;
@@ -38,7 +39,7 @@ beforeEach(async () => {
     id: 'selected-session', title: '<private-title> export', cwd,
     createdAt: new Date('2025-01-01T00:00:00Z'), updatedAt: new Date('2025-01-01T00:00:01Z'),
     messages: [{ id: 'm1', role: 'user', content: `<script>bad()</script> ${secret}`, timestamp: new Date('2025-01-01T00:00:00Z') },
-      { id: 'm2', parentEntryId: 'm1', role: 'tool', name: '<img src=x onerror=bad()>', content: 'tool content', timestamp: new Date('2025-01-01T00:00:01Z') }],
+      { id: 'm2', parentEntryId: 'm1', role: 'tool', name: '<img src=x onerror=bad()>', content: 'tool content', timestamp: new Date('2025-01-01T00:00:01Z') } as Session['messages'][number] & { parentEntryId: string }],
     activeLeafId: 'm2', metadata: { secretCopy: secret }, providerConfig: { type: 'openai', apiKey: secret },
   };
   await new JsonlSessionStore(sessions).saveSession(session);
@@ -64,7 +65,7 @@ describe('actual top-level export CLI', () => {
   it.each(['html', 'jsonl', 'json', 'markdown'])('publishes real %s bytes privately, with copied redaction and unchanged source', async format => {
     const before = await readFile(source);
     const result = await invoke(args(format));
-    expect(result).toEqual({ code: 0, signal: null, stdout: 'Session export published.\n', stderr: '' });
+    expect(result).toEqual({ code: 0, signal: null, stdout: 'Session export published.\n', stderr: EXPORT_PRIVACY_WARNING+'\n' });
     expect(result.stdout).not.toContain('<private-title>');
     const output = path.join(cwd, `out.${format === 'markdown' ? 'md' : format}`);
     const bytes = await readFile(output, 'utf8');
@@ -93,7 +94,7 @@ describe('actual top-level export CLI', () => {
     await writeFile(source, (await readFile(source, 'utf8')).replaceAll(secret, stored));
     const before = await readFile(source);
     const result = await invoke(args('json'), { OPENAI_API_KEY: '', AI_HARNESS_MASTER_KEY: master });
-    expect(result).toEqual({ code: 0, signal: null, stdout: 'Session export published.\n', stderr: '' });
+    expect(result).toEqual({ code: 0, signal: null, stdout: 'Session export published.\n', stderr: EXPORT_PRIVACY_WARNING+'\n' });
     const output = await readFile(path.join(cwd, 'out.json'), 'utf8');
     expect(output).not.toContain(stored); expect(output).toContain('[REDACTED]');
     expect(await readFile(source)).toEqual(before);
@@ -106,6 +107,20 @@ describe('actual top-level export CLI', () => {
     expect(await invoke(args('json', copy))).toMatchObject({ code: 0, signal: null });
     const explicit = args('json', 'workspace-session'); explicit.push('--session-dir', cwd);
     expect(await invoke(explicit)).toMatchObject({ code: 0, signal: null });
+  });
+
+  it.each(['html', 'jsonl', 'json', 'markdown'])('keeps the %s risk notice on stderr without leaking transcript text or claiming arbitrary-secret sanitization', async format => {
+    const unknown = 'disposable-private-export-text-not-a-registered-credential';
+    await writeFile(source, (await readFile(source, 'utf8')).replace('tool content', unknown));
+    const before = await readFile(source);
+    const result = await invoke(args(format));
+    expect(result).toEqual({ code: 0, signal: null, stdout: 'Session export published.\n', stderr: EXPORT_PRIVACY_WARNING+'\n' });
+    expect(result.stderr).not.toContain(unknown); expect(result.stderr).not.toContain(secret);
+    expect(result.stderr).not.toContain(cwd); expect(result.stdout).not.toContain(unknown);
+    const file = path.join(cwd, `out.${format === 'markdown' ? 'md' : format}`);
+    expect(await readFile(file, 'utf8')).toContain(unknown);
+    expect(await readFile(source)).toEqual(before);
+    await expect(readFile(path.join(cwd, 'command-ran'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('selects exact IDs, unique prefixes and confined paths without creating sessions', async () => {

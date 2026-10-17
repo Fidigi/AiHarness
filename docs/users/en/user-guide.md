@@ -440,7 +440,9 @@ Automatic compaction rechecks cancellation, the active branch and local policy b
 /bug [description]
 ```
 
-Without a path, exports are created in `~/.ai-harness/exports/`. The `/import` command accepts JSON containing an array of sessions or JSONL with one message per line.
+Without a path, slash exports are created inside the active trusted workspace, using a sanitized title and timestamp. Explicit destinations stay within that workspace. The `/import` command accepts JSON containing an array of sessions or JSONL with one message per line.
+
+Exports, `/share` and `/bug` emit fixed privacy notices: registered-secret redaction does not remove every private value. Review before sharing/submitting. Standalone export notices use stderr; RPC HTML returns an additive `data.warnings` array alongside `path`, not a new event or pre-write confirmation. See [CLI security](./cli-security.md) for exact channels, offline/proxy limits, shell aliases and Windows/terminal guidance.
 
 **/share** requires the AiHarness server. By default, the CLI calls it on `http://127.0.0.1:3080`. Useful variables are:
 
@@ -1057,7 +1059,7 @@ By default, CLI and server use:
 | Data | Location |
 |---|---|
 | JSONL sessions | `~/.ai-harness/sessions/<id>.jsonl` |
-| CLI exports | `~/.ai-harness/exports/` |
+| CLI exports | Active trusted workspace; explicit standalone destination required |
 | Encrypted Web credentials | `~/.ai-harness/credentials.enc` |
 | Non-secret config by scope | `~/.ai-harness/config.json` |
 | Custom providers/models | `~/.ai-harness/providers.json` |

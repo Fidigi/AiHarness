@@ -160,6 +160,8 @@ The launcher binds to `127.0.0.1` by default. A non-loopback bind without authen
 
 Opening a workspace in the host file manager is narrower than ordinary authenticated access: both the Host header and actual socket peer must be loopback, the platform must have an explicit command mapping, and the requested cwd must resolve as an allowed directory. The shared Core launcher never invokes a shell and passes only desktop/session environment keys, not API keys, auth tokens or arbitrary server variables. The availability probe and action are no-store; remote clients receive no action.
 
+CLI privacy notices are fixed and value-free, not authorization, complete sanitization or a physical-delivery barrier. Interactive share/export/bug operations emit them before their request/write/report output; standalone exports use stderr and successful RPC HTML adds correlated `data.warnings` rather than raw events. Review arbitrary sensitive text before publication; a failed/lost response is not proof of no write. The [EN](../../users/en/cli-security.md)/[FR](../../users/fr/cli-security.md) guidance separates provider proxy/offline policy from OS isolation and documents shell profiles/aliases, Windows shell conventions, terminal fallback, ACL and diagnostic-risk limits.
+
 ## Associated Tests
 
 - `packages/core/src/providers/offline-policy.test.ts`, `packages/cli/src/cli/offline-mode{,-process}.test.ts` — suppressed command/cache/fallback and OAuth/config-getter/byte-mutation negatives; actual loopback online controls, explicit-network conservation, definitive flag arity and genuine PTY reload snapshots

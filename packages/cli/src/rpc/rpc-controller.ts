@@ -50,6 +50,7 @@ import { runToolLoop } from '../agent/tool-loop.js';
 import { streamProviderTurn } from '../agent/provider-turn.js';
 import { JsonEventStream, toJsonProtocolMessage } from '../cli/json-output.js';
 import { renderSessionHtml, sanitizeFilename } from '../utils/session-export.js';
+import { EXPORT_PRIVACY_WARNING } from '../security/privacy-warnings.js';
 import { parseResourceCommandLine, type ResourceManager } from '../resources/resource-manager.js';
 
 export interface RpcDynamicTools {
@@ -896,7 +897,7 @@ export class RpcController {
           const exportedPath = await this.exportHtml(
             typeof request.outputPath === 'string' ? request.outputPath : undefined,
           );
-          return success(id, command, { path: exportedPath });
+          return success(id, command, { path: exportedPath, warnings: [EXPORT_PRIVACY_WARNING] });
         }
         case 'switch_session': {
           await this.ensureIdle(command);

@@ -160,6 +160,8 @@ export class FullscreenUI extends TerminalUI {
       '/help · /new [titre] · /list [filtre] · /switch <id>',
       '/provider · /model · /compact · /search <texte>',
       '/edit · /export · /import · /settings · /extensions · /tools · /trust · /reload · /exit',
+      '/share [heures] · /bug [description] : vérifier les données privées avant publication',
+      'Confidentialité : relire exports, partages et diagnostics ; le masquage ne reconnaît pas tous les secrets.',
       '!commande (contexte) · !!commande (hors contexte)',
       '',
       'Entrée : envoyer/steer · Alt+Entrée ou Ctrl+Q : follow-up · Alt+↑ : rappeler la file',

@@ -359,6 +359,7 @@ ${chalk.bold('Files, resources and sharing')}
   ${chalk.cyan('/import <path>')}                Import JSON or JSONL sessions
   ${chalk.cyan('/share [hours]')}                Create a temporary share link
   ${chalk.cyan('/bug [description]')}            Prepare a GitHub issue URL
+  Privacy: review exports, public shares and diagnostic text for unrecognized secrets.
   ${chalk.cyan('/skills')}                       List discovered skills
   ${chalk.cyan('/skill:<name> [request]')}       Invoke a skill
   ${chalk.cyan('/prompts')}                      List prompt templates

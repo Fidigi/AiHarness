@@ -13,6 +13,7 @@ import {
 } from '@ai-harness/core';
 import { ResourceManager } from '../resources/resource-manager';
 import { RpcController, type RpcControllerContext } from './rpc-controller';
+import { EXPORT_PRIVACY_WARNING } from '../security/privacy-warnings.js';
 
 class RpcToolProvider extends AiProvider {
   constructor() { super({ type: 'mock' as never }); }
@@ -100,7 +101,7 @@ function createController(responses = ['RPC response']): {
     },
   };
   const records: Array<Record<string, unknown>> = [];
-  return { controller: new RpcController(context, record => records.push(record)), context, records };
+  return { controller: new RpcController(context, record => { records.push(record); }), context, records };
 }
 
 describe('RPC command controller', () => {
@@ -287,7 +288,7 @@ describe('RPC command controller', () => {
       tools: [search],
       resolveTools: () => loaded ? [search, lookup] : [search],
       execute,
-      getActivatedTools: (name, result) => name === 'tool_search' && result.details === details
+      getActivatedTools: (name: string, result: { details?: unknown }) => name === 'tool_search' && result.details === details
         ? details.loaded
         : undefined,
     }));
@@ -900,6 +901,7 @@ describe('RPC command controller', () => {
       }),
     ]));
     const stats = await controller.handle({ type: 'get_session_stats' });
+    if (!stats) throw new Error('Missing RPC session statistics response.');
     expect((stats.data as any).tokens).toMatchObject({ input: 1_001_000, output: 500_100, cacheRead: 200_000 });
     expect((stats.data as any).cost).toBeCloseTo(6.1028);
     await expect(controller.handle({ type: 'get_entries' })).resolves.toMatchObject({
@@ -924,7 +926,7 @@ describe('RPC command controller', () => {
       await context.sessionManager.addMessage('rpc-test-session', { role: 'user', content: '<unsafe>' });
 
       const response = await controller.handle({ type: 'export_html', outputPath: 'exports/review.html' });
-      expect(response).toMatchObject({ success: true, data: { path: path.join(directory, 'exports/review.html') } });
+      expect(response).toMatchObject({ success: true, data: { path: path.join(directory, 'exports/review.html'), warnings: [EXPORT_PRIVACY_WARNING] } });
       const exportedPath = path.join(directory, 'exports/review.html');
       expect(await readFile(exportedPath, 'utf8')).toContain('&lt;unsafe&gt;');
       await chmod(exportedPath, 0o644);
@@ -951,6 +953,26 @@ describe('RPC command controller', () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  it.each([false, true])('returns a value-free additive export warning with registered redaction=%s and no extra protocol records', async redact => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'aih-rpc-privacy-'));
+    const { controller, context, records } = createController();
+    const text = 'disposable-sensitive-rpc-export-text';
+    try {
+      context.toolContext.cwd = directory;
+      if (redact) context.redactJson = <T>(value: T): T => JSON.parse(JSON.stringify(value).replaceAll(text, '[REDACTED]')) as T;
+      await controller.initialize();
+      await context.sessionManager.addMessage('rpc-test-session', { role: 'user', content: text });
+      const before = records.length;
+      const response = await controller.handle({ type: 'export_html', id: 'privacy', outputPath: 'review.html' });
+      expect(response).toEqual({ type: 'response', command: 'export_html', id: 'privacy', success: true,
+        data: { path: path.join(directory, 'review.html'), warnings: [EXPORT_PRIVACY_WARNING] } });
+      expect(JSON.stringify(response)).not.toContain(text); expect(records).toHaveLength(before);
+      const body = await readFile(path.join(directory, 'review.html'), 'utf8');
+      if (redact) { expect(body).not.toContain(text); expect(body).toContain('[REDACTED]'); }
+      else expect(body).toContain(text);
+    } finally { await context.extensionRegistry.shutdown(); await rm(directory, { recursive: true, force: true }); }
   });
 
   it('supports queue clearing, naming, cloning, and session replacement', async () => {
