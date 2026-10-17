@@ -60,6 +60,7 @@ type CommandOutput = string | ExplicitCredentialRevealOutput;
 
 const MAX_SHARE_RESPONSE_BYTES = 256 * 1024;
 const SHARE_REQUEST_TIMEOUT_MS = 30_000;
+const compactionAbortState = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')!.get!;
 
 function isLoopbackHost(hostname: string): boolean {
   const normalized = hostname.replace(/^\[|\]$/g, '').toLowerCase();
@@ -766,55 +767,58 @@ const commands: CommandEntry[] = [
     description: 'Compact conversation context (summarize old messages)',
     usage: '/compact [instructions]',
     handler: async (args, ctx) => {
-      const sessions = ctx.sessionManager.list();
+      const manager = ctx.sessionManager, selectedSessionId = ctx.currentSessionId, signal = ctx.signal;
+      const sessions = manager.list();
       if (!sessions.length) return chalk.yellow('No active session to compact.');
-
-      const instructions = args.length > 0 ? args.join(' ') : undefined;
-      const session = (ctx.currentSessionId && ctx.sessionManager.get(ctx.currentSessionId)) || sessions[0];
-      const messages = session.messages;
-
-      if (messages.length < 3) {
-        return chalk.yellow(`Not enough messages to compact (${messages.length}/3 minimum).`);
-      }
-
-      // Find the provider for LLM summarization
-      const provider = ctx.provider;
-      if (!provider || !provider.validateConfig()) {
-        return chalk.red('No configured AI provider for compaction. Set API keys or use /provider mock.');
-      }
-
+      const session = (selectedSessionId && manager.get(selectedSessionId)) || sessions[0];
+      const provider = ctx.provider, chat = provider?.chat.bind(provider);
+      const redactText = ctx.redactText?.bind(ctx) ?? ((value: string) => value);
+      const redactJson = ctx.redactJson?.bind(ctx);
+      const leaf = session.activeLeafId;
+      const identity = Object.getOwnPropertyDescriptor(session, 'id');
+      const sessionId: string | undefined = identity && Object.hasOwn(identity, 'value') && typeof identity.value === 'string'
+        ? identity.value : undefined;
+      const validate = () => {
+        if (signal && compactionAbortState.call(signal)) throw new DOMException('Compaction cancelled', 'AbortError');
+        const currentIdentity = Object.getOwnPropertyDescriptor(session, 'id');
+        if (!sessionId || !currentIdentity || !Object.hasOwn(currentIdentity, 'value') || currentIdentity.value !== sessionId
+          || ctx.sessionManager !== manager || ctx.currentSessionId !== selectedSessionId
+          || manager.get(sessionId) !== session || session.activeLeafId !== leaf) {
+          throw new Error('Compaction context or policy changed.');
+        }
+      };
       try {
-        // Build system prompt for summarization
-        const instructionsText = instructions || 'Summarize this conversation concisely, preserving key information and context.';
+        if (!sessionId) throw new Error('Compaction context or policy changed.');
+        validate();
+        const messages = structuredClone(session.messages);
+        if (messages.length < 3) return chalk.yellow(`Not enough messages to compact (${messages.length}/3 minimum).`);
+        const firstKeptId = messages[messages.length - 2]!.id;
+        const source = manager.captureCompactionSource(sessionId);
+        if (!source) throw new Error('Compaction context or policy changed.');
+        if (!provider || !chat || !provider.validateConfig()) {
+          return chalk.red('No configured AI provider for compaction. Set API keys or use /provider mock.');
+        }
+        validate();
         const summaryMessages: Message[] = [
-          ...messages.map(m => ({ ...m })),
+          ...(redactJson?.(messages) ?? messages),
           { id: '__compact__', role: 'user', content: `Please summarize the above conversation. Focus on preserving important facts, decisions, and context needed for future responses. Keep it concise but comprehensive.`, timestamp: new Date() },
         ];
-
-        // Use provider's chat to generate summary (non-streaming for reliability)
-        const result = await provider.chat(summaryMessages, {
-          systemPrompt: instructionsText,
-          sessionId: session.id,
+        validate();
+        const result = await chat(summaryMessages, {
+          systemPrompt: args.join(' ') || 'Summarize this conversation concisely, preserving key information and context.',
+          sessionId,
+          signal,
         });
-
-        if (!result.content) {
-          return chalk.red('Compaction failed: no summary generated.');
-        }
-
-        // Apply only scrubbed provider output so credentials never reach session persistence.
-        const summary = safeText(ctx, result.content);
-        const firstKeptId = session.messages[session.messages.length - 2]?.id || '';
-        await ctx.sessionManager.applyCompaction(
-          session.id,
-          summary,
-          firstKeptId,
-        );
-
+        validate();
+        if (!result.content) return chalk.red('Compaction failed: no summary generated.');
+        const summary = redactText(result.content);
+        await manager.applyCompaction(sessionId, summary, firstKeptId, {}, { signal, source });
+        // Cancellation after final save admission must not turn durable success into failure.
         return chalk.green(`✅ Compacted ${chalk.bold(session.title || 'conversation')}\n` +
           `   Summary: ${summary.slice(0, 100)}${summary.length > 100 ? '...' : ''}`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        return chalk.red(`Compaction failed: ${errorMessage}`);
+        return chalk.red(`Compaction failed: ${redactText(errorMessage)}`);
       }
     },
   },

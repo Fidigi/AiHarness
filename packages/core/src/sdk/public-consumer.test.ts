@@ -37,7 +37,8 @@ async function consumer(run: (cwd: string) => Promise<void>): Promise<void> {
 const declarations = `
 import {
   AI_HARNESS_CORE_API_VERSION, createAgentSession, createAgentResourceLoader,
-  AiProvider, JsonlSessionStore, deserializeSession, serializeSession,
+  AiProvider, JsonlSessionStore, SessionManager, deserializeSession, serializeSession,
+  type SessionCompactionOptions, type SessionCompactionSource,
   type AgentSession, type AgentProvider, type AgentProviderConfig,
   type CreateAgentSessionOptions, type SessionStore, type AgentCredential,
   type AgentAuthDescriptor, type AgentModel, type AgentResourceLoader,
@@ -78,6 +79,22 @@ await sdk.rename('name'); await sdk.setModel('model'); await sdk.setThinking('ma
 const fork: AgentSession = await sdk.fork('user-id', { before: true });
 await sdk.branchBefore('user-id'); await sdk.clone('copy');
 sdk.compactionTarget(); await sdk.applyCompaction('summary', 'first-kept', { usage: { totalTokens: 5 } });
+const manager = new SessionManager();
+const source: Readonly<SessionCompactionSource> | null = manager.captureCompactionSource('session-id');
+if (source) {
+  const publication: SessionCompactionOptions = { signal: new AbortController().signal, source };
+  await manager.applyCompaction('session-id', 'supplied summary', 'first-kept', {}, publication);
+  // @ts-expect-error manager-local source views are readonly identities, not mutable sessions
+  source.sourceSessionId = 'other';
+  // @ts-expect-error source views do not expose private journals or store authority
+  source.entries;
+  // @ts-expect-error optional publication options do not add a high-level facade capability
+  await sdk.applyCompaction('summary', 'first-kept', {}, publication);
+}
+// @ts-expect-error a structural aborted boolean is not an authentic AbortSignal contract
+await manager.applyCompaction('session-id', 'summary', 'first-kept', {}, { signal: { aborted: false } });
+// @ts-expect-error publication options admit only signal/source, not persistence replacement
+await manager.applyCompaction('session-id', 'summary', 'first-kept', {}, { store });
 await sdk.reloadResources(); sdk.resources(); sdk.resourceDiagnostics();
 await sdk.expandPrompt('template', ['value']); await sdk.invokeSkill('skill', 'question');
 unsubscribe(); await fork.dispose(); await sdk.dispose();

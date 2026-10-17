@@ -276,9 +276,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
       applyCompaction: (summary, firstKeptEntryId, details) => serialInput(details, async details => {
         idle();
         if (!current().messages.some(message => message.id === firstKeptEntryId)) throw new Error('Compaction boundary is not an active message.');
+        const source = manager.captureCompactionSource(sessionId);
+        if (!source) throw new Error('Session no longer exists.');
         runtime.publishSessionEvent(sessionId, 'compaction.started', { automatic: false });
         try {
-          await manager.applyCompaction(sessionId, summary, firstKeptEntryId, details);
+          await manager.applyCompaction(sessionId, summary, firstKeptEntryId, details, { signal: branchLifetime.signal, source });
           runtime.publishSessionEvent(sessionId, 'compaction.completed', { automatic: false, summaryLength: redactor.redact(summary).trim().length });
         } catch (error) {
           runtime.publishSessionEvent(sessionId, 'compaction.failed', { automatic: false, error: redactor.redact(error instanceof Error ? error.message : 'Compaction failed.') });

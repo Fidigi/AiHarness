@@ -172,6 +172,8 @@ export type {
   AutoCompactionCallback,
   AutoCompactionResult,
   AutoCompactionPolicy,
+  SessionCompactionOptions,
+  SessionCompactionSource,
 } from './sessions/session-manager.js';
 export { createProviderBranchSummarizer } from './sessions/provider-branch-summarizer.js';
 export type {

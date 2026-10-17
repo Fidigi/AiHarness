@@ -324,19 +324,25 @@ function rpcThinkingLevel(level: RpcThinkingLevel | ThinkingLevel | Session['thi
   return level ?? 'off';
 }
 
-function waitForRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
-  if (signal?.aborted) return Promise.reject(Object.assign(new Error('Retry aborted.'), { name: 'AbortError' }));
-  return new Promise((resolve, reject) => {
-    const abort = (): void => {
-      clearTimeout(timer);
-      reject(Object.assign(new Error('Retry aborted.'), { name: 'AbortError' }));
-    };
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', abort);
-      resolve();
-    }, delayMs);
-    signal?.addEventListener('abort', abort, { once: true });
-  });
+const summaryAbortState = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')!.get!;
+function summaryAborted(signal: AbortSignal): boolean { return summaryAbortState.call(signal) === true; }
+
+async function waitForRetry(delayMs: number, signal: AbortSignal, cancelled: Promise<never>): Promise<void> {
+  if (summaryAborted(signal)) throw Object.assign(new Error('Retry aborted.'), { name: 'AbortError' });
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      new Promise<void>(resolve => { timer = setTimeout(resolve, delayMs); }),
+      cancelled.catch(() => { throw Object.assign(new Error('Retry aborted.'), { name: 'AbortError' }); }),
+    ]);
+  } finally { if (timer) clearTimeout(timer); }
+}
+
+async function awaitSummary<T>(operation: Promise<T>, signal: AbortSignal, cancelled: Promise<never>): Promise<T> {
+  const result = await Promise.race([operation, cancelled]);
+  // Fulfillment can win the microtask race even though cancellation already happened.
+  if (summaryAborted(signal)) throw new DOMException('Compaction cancelled', 'AbortError');
+  return result;
 }
 
 /**
@@ -355,6 +361,7 @@ export class RpcController {
   private retryAbortController?: AbortController;
   private summarizationAbortController?: AbortController;
   private compacting = false;
+  private activeCompaction?: ActiveRun;
   private activeNavigation?: ActiveRun;
   private activeContextReload?: ActiveRun;
   private navigationRetired = false;
@@ -481,7 +488,7 @@ export class RpcController {
 
   /** Let accepted work finish on clean JSONL EOF without turning EOF into cancellation. */
   async drain(timeoutMs = 30_000): Promise<void> {
-    const work = [this.activeBash?.done, this.activeRun?.done].filter(
+    const work = [this.activeBash?.done, this.activeRun?.done, this.activeCompaction?.done].filter(
       (item): item is Promise<void> => item !== undefined,
     );
     if (work.length === 0) return;
@@ -504,11 +511,13 @@ export class RpcController {
     this.navigationRetired = true;
     this.activeNavigation?.controller.abort();
     this.activeContextReload?.controller.abort();
+    this.activeCompaction?.controller.abort();
   }
 
   async close(): Promise<void> {
     const navigation = this.activeNavigation;
     const contextReload = this.activeContextReload;
+    const compaction = this.activeCompaction;
     this.abortNavigation();
     this.retryAbortController?.abort();
     this.summarizationAbortController?.abort();
@@ -521,6 +530,7 @@ export class RpcController {
     }
     if (navigation) await navigation.done;
     if (contextReload) await contextReload.done;
+    if (compaction) await compaction.done;
     await this.eventTail;
     if (this.eventFailure) throw this.eventFailure;
   }
@@ -537,6 +547,7 @@ export class RpcController {
       ].includes(command);
       if (!foregroundSafe) {
         if (this.activeNavigation) throw new Error(`${command} is not available while navigating the session tree.`);
+        if (this.activeCompaction) throw new Error(`${command} is not available while compacting the session.`);
         this.assertNoContextReload(command);
       }
       switch (command) {
@@ -580,8 +591,10 @@ export class RpcController {
         case 'abort': {
           const navigation = this.activeNavigation;
           const contextReload = this.activeContextReload;
+          const compaction = this.activeCompaction;
           navigation?.controller.abort();
           contextReload?.controller.abort();
+          compaction?.controller.abort();
           const active = this.activeRun;
           if (active) {
             active.controller.abort();
@@ -589,6 +602,7 @@ export class RpcController {
           }
           if (navigation) await navigation.done;
           if (contextReload) await contextReload.done;
+          if (compaction) await compaction.done;
           return success(id, command);
         }
         case 'clear_queue': {
@@ -737,7 +751,6 @@ export class RpcController {
           if (this.retryActive) this.retryAbortController?.abort();
           return success(id, command);
         case 'compact': {
-          await this.ensureIdle(command);
           const result = await this.compact(
             typeof request.customInstructions === 'string' ? request.customInstructions : undefined,
           );
@@ -1386,107 +1399,117 @@ export class RpcController {
   ): Promise<T> {
     const maxAttempts = 3;
     const retryController = new AbortController();
-    this.summarizationAbortController = retryController;
     const signal = externalSignal
       ? AbortSignal.any([externalSignal, retryController.signal])
       : retryController.signal;
+    this.summarizationAbortController = retryController;
+    let cancel!: () => void;
+    const cancelled = new Promise<never>((_resolve, reject) => { cancel = () => reject(new DOMException('Compaction cancelled', 'AbortError')); });
+    void cancelled.catch(() => undefined);
+    const removeListener = signal.removeEventListener.bind(signal);
     let retried = false;
+    let completed: { result: T } | undefined;
     try {
+      // Node's composite-signal listener hook reads .aborted; subscribe before exposing it.
+      signal.addEventListener('abort', cancel, { once: true });
+      if (summaryAborted(signal)) cancel();
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (summaryAborted(signal)) throw new DOMException('Compaction cancelled', 'AbortError');
         if (attempt > 1) await this.events.summarizationRetryAttemptStart('compaction', reason);
         try {
-          return await operation(signal);
+          if (summaryAborted(signal)) throw new DOMException('Compaction cancelled', 'AbortError');
+          completed = { result: await awaitSummary(Promise.resolve(operation(signal)), signal, cancelled) };
+          break;
         } catch (error) {
-          if (signal.aborted || attempt >= maxAttempts) throw error;
+          if (summaryAborted(signal)) throw new DOMException('Compaction cancelled', 'AbortError');
+          if (attempt >= maxAttempts) throw error;
           retried = true;
           this.retryActive = true;
           this.retryAbortController = retryController;
           const delayMs = Math.min(5_000, (this.context.summarizationRetryDelayMs ?? 2_000) * 2 ** (attempt - 1));
           await this.events.summarizationRetryScheduled(attempt, maxAttempts, delayMs, error);
-          await waitForRetry(delayMs, signal);
+          await waitForRetry(delayMs, signal, cancelled);
         }
       }
-      throw new Error('Summarization retry exhausted.');
+      if (!completed) throw new Error('Summarization retry exhausted.');
     } finally {
-      if (retried) await this.events.summarizationRetryFinished();
-      if (this.retryAbortController === retryController) this.retryAbortController = undefined;
-      if (this.summarizationAbortController === retryController) this.summarizationAbortController = undefined;
-      this.retryActive = false;
+      try {
+        if (retried) await this.events.summarizationRetryFinished();
+      } finally {
+        removeListener('abort', cancel);
+        if (this.retryAbortController === retryController) this.retryAbortController = undefined;
+        if (this.summarizationAbortController === retryController) this.summarizationAbortController = undefined;
+        this.retryActive = false;
+      }
     }
+    if (summaryAborted(signal)) throw new DOMException('Compaction cancelled', 'AbortError');
+    return completed.result;
   }
 
   private async compact(customInstructions?: string): Promise<Record<string, unknown>> {
-    const session = this.session();
-    if (session.messages.length < 3) {
-      throw new Error(`Not enough messages to compact (${session.messages.length}/3 minimum).`);
-    }
+    // Admit synchronously before observers/provider callbacks can reenter the controller.
+    if (this.navigationRetired) throw new DOMException('Compaction cancelled', 'AbortError');
+    this.assertNoContextReload('compact');
+    if (this.activeNavigation) throw new Error('compact is not available while navigating the session tree.');
+    if (this.activeRun) throw new Error('compact is not available while the agent is processing.');
+    if (this.activeBash || this.activeCompaction || this.compacting) throw new Error('compact is not available while a foreground operation is processing.');
+    const manager = this.context.sessionManager, session = this.session(), sourceSessionId = this.currentSessionId;
+    const source = manager.captureCompactionSource(sourceSessionId);
+    if (!source) throw new Error('Compaction context or policy changed.');
+    const leaf = session.activeLeafId, provider = this.context.provider, providerName = this.context.providerName, model = this.model, thinking = this.thinking;
+    const redactText = this.context.redactText?.bind(this.context), redactJson = this.context.redactJson?.bind(this.context);
+    const messages = session.messages.map(cloneMessage);
+    if (messages.length < 3) throw new Error(`Not enough messages to compact (${messages.length}/3 minimum).`);
+    const firstKeptEntryId = messages.at(-2)?.id;
+    if (!firstKeptEntryId) throw new Error('Compaction requires at least two retained messages.');
+    const controller = new AbortController();
+    let finish!: () => void;
+    const compaction: ActiveRun = { controller, done: new Promise<void>(resolve => { finish = resolve; }) };
+    this.activeCompaction = compaction;
     this.compacting = true;
-    await this.events.compactionStart('manual');
+    const validate = (): void => {
+      if (controller.signal.aborted) throw new DOMException('Compaction cancelled', 'AbortError');
+      if (this.context.sessionManager !== manager || this.currentSessionId !== sourceSessionId
+        || manager.get(sourceSessionId) !== session || session.activeLeafId !== leaf) {
+        throw new Error('Compaction context or policy changed.');
+      }
+    };
     try {
+      await this.events.compactionStart('manual');
+      validate();
       const rawInstruction = customInstructions?.trim()
         || 'Summarize this conversation concisely, preserving key information, decisions, and context.';
-      const instruction = this.context.redactText?.(rawInstruction) ?? rawInstruction;
-      const safeMessages = this.context.redactJson?.(session.messages.map(cloneMessage))
-        ?? session.messages.map(cloneMessage);
-      const rawSummaryResponse = await this.summarizeWithRetry('manual', signal => this.context.provider.chat([
+      const instruction = redactText?.(rawInstruction) ?? rawInstruction;
+      const safeMessages = redactJson?.(messages) ?? messages;
+      const rawSummaryResponse = await this.summarizeWithRetry('manual', signal => provider.chat([
         ...safeMessages,
-        {
-          id: '__compact__',
-          role: 'user',
-          content: 'Summarize the conversation for future turns. Preserve unresolved work and concrete results.',
-          timestamp: new Date(),
-        },
-      ], {
-        model: this.model,
-        sessionId: this.currentSessionId,
-        thinking: coreThinkingLevel(this.thinking),
-        systemPrompt: instruction,
-        signal,
-      }));
-      const summaryResponse = this.context.redactJson?.(rawSummaryResponse) ?? rawSummaryResponse;
+        { id: '__compact__', role: 'user', content: 'Summarize the conversation for future turns. Preserve unresolved work and concrete results.', timestamp: new Date() },
+      ], { model, sessionId: sourceSessionId, thinking: coreThinkingLevel(thinking), systemPrompt: instruction, signal }), controller.signal);
+      validate();
+      const summaryResponse = redactJson?.(rawSummaryResponse) ?? rawSummaryResponse;
       if (!summaryResponse.content.trim()) throw new Error('Compaction failed: no summary generated.');
-      const firstKeptEntryId = session.messages.at(-2)?.id;
-      if (!firstKeptEntryId) throw new Error('Compaction requires at least two retained messages.');
-      const tokensBefore = session.messages.reduce((total, message) => total + Math.ceil(message.content.length / 4), 0);
+      const tokensBefore = messages.reduce((total, message) => total + Math.ceil(message.content.length / 4), 0);
       const estimatedTokensAfter = Math.ceil(summaryResponse.content.length / 4)
-        + session.messages.slice(-2).reduce((total, message) => total + Math.ceil(message.content.length / 4), 0);
+        + messages.slice(-2).reduce((total, message) => total + Math.ceil(message.content.length / 4), 0);
       const persistedUsage = normalizeProviderUsage(summaryResponse.usage);
-      await this.context.sessionManager.applyCompaction(
-        session.id,
-        summaryResponse.content,
-        firstKeptEntryId,
-        {
-          instruction,
-          tokensBefore,
-          tokensAfter: estimatedTokensAfter,
-          provider: this.context.providerName,
-          model: summaryResponse.model ?? this.model,
-          ...(persistedUsage ? { usage: persistedUsage } : {}),
-        },
-      );
-      const rpcUsage = protocolUsage(
-        this.context.providerName,
-        summaryResponse.model ?? this.model,
-        persistedUsage,
-      );
-      const result = {
-        summary: summaryResponse.content,
-        firstKeptEntryId,
-        tokensBefore,
-        estimatedTokensAfter,
-        ...(rpcUsage ? { usage: rpcUsage } : {}),
-        details: {},
-      };
+      validate();
+      await manager.applyCompaction(sourceSessionId, summaryResponse.content, firstKeptEntryId, {
+        instruction, tokensBefore, tokensAfter: estimatedTokensAfter, provider: providerName,
+        model: summaryResponse.model ?? model, ...(persistedUsage ? { usage: persistedUsage } : {}),
+      }, { signal: controller.signal, source });
+      // A save already admitted by Core completes even if abort/close arrives during it.
+      const rpcUsage = protocolUsage(providerName, summaryResponse.model ?? model, persistedUsage);
+      const result = { summary: summaryResponse.content, firstKeptEntryId, tokensBefore, estimatedTokensAfter,
+        ...(rpcUsage ? { usage: rpcUsage } : {}), details: {} };
       await this.events.compactionEnd('manual', { result });
       return result;
     } catch (error) {
-      await this.events.compactionEnd('manual', {
-        error,
-        aborted: error instanceof Error && error.name === 'AbortError',
-      });
+      await this.events.compactionEnd('manual', { error, aborted: error instanceof Error && error.name === 'AbortError' });
       throw error;
     } finally {
+      if (this.activeCompaction === compaction) this.activeCompaction = undefined;
       this.compacting = false;
+      finish();
     }
   }
 

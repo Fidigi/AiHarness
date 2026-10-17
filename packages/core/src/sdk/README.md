@@ -107,6 +107,23 @@ output at the existing policy/start/summary/queue boundaries. Clearing it retain
 the legacy host trigger. Manual target selection is unchanged. The facade neither
 infers this limit nor gains a setter.
 
+Lower-level `SessionManager.applyCompaction(id, summary, firstKeptEntryId, details?,
+{signal?,source?})` publishes an explicitly supplied summary without invoking a
+registered generation callback, even when automatic compaction is disabled.
+Optional own-data `SessionCompactionOptions` capture an authentic live abort signal.
+Before external generation, `captureCompactionSource(id)` can capture a frozen,
+manager-local `SessionCompactionSource` view (or null for a missing session), without
+provider or store work. Its public fields are only `sourceSessionId` and optional
+`entryId`. Pass that exact view as `source` to require the same own-data canonical
+session ID, session/leaf, manager-owned journal/legacy context and captured store
+generation at publication; substituted IDs/accessors are refused without execution;
+store replacement followed by restoration still withdraws it. Copies, foreign
+views and consumed views are refused. Title/settings changes alone do not revoke
+caller-summary authority. Admission is checked after structural preparation,
+immediately before the captured save; an admitted save finishes. This is not
+cross-process CAS, host isolation, a serialized capability or a new facade/store
+method. Hosts still own foreground admission and generation lifetimes.
+
 The passive root helper `resolveAgentCompactionContextWindow(provider?, model?)`
 uses published limits, or a 128,000-token fallback for other non-mock providers;
 mock/unspecified hosts retain legacy policy. CLI/RPC apply it after model changes.
@@ -222,6 +239,13 @@ APIs do not expand the SDK facade, API major1, schema2, retained-file bounds or 
 `applyCompaction(summary, firstKeptMessageId, details)` await Core persistence.
 `compactionTarget()` uses Core selection. Manual compaction requires a caller
 summary and valid active message boundary; it never invokes a model implicitly.
+It remains available with automatic compaction disabled. The facade captures Core's
+source lease before observational `compaction.started` dispatch; a start observer
+cannot lend replacement-store authority to that pending publication. Title-only
+updates remain valid. `dispose` withdraws this handle's unpublished explicit
+compaction, including while structural preparation
+waits, and waits an already-admitted save without false cancellation. Siblings and
+borrowed resources retain their independent lifetimes.
 `fork(userEntryId,{before?,title?})` returns a related handle copied from durable
 user-entry ancestry, including an empty prefix. `clone(title?)` returns an
 independent-root handle with remapped active message/command/custom/summary and
@@ -331,6 +355,23 @@ exige `estimateContextTokens(id) > fenêtre - reserveTokens`, puis `keepRecentTo
 choisit la coupe. La fenêtre est revérifiée après politique/observateurs/résumé/file ;
 une sortie devenue inéligible n’est pas publiée. Effacer la limite conserve le
 seuil historique ; les cibles manuelles et la façade restent inchangées.
+La primitive `SessionManager.applyCompaction(id, résumé, premièreEntréeConservée,
+détails?,{signal?,source?})` publie un résumé fourni sans invoquer le callback de
+génération enregistré, même si l’automatique est désactivé. Les options propres
+`SessionCompactionOptions` capturent un signal d’abort authentique vivant.
+Avant une génération externe, `captureCompactionSource(id)` capture sans appel
+provider/stockage une vue gelée locale `SessionCompactionSource` (ou null si absente),
+exposant seulement `sourceSessionId` et `entryId` optionnel. Passez cette vue exacte
+comme `source` : ID canonique propre de données, session/feuille, journal/contexte
+historique possédés et génération du stockage doivent encore correspondre. Un ID
+substitué ou un accesseur est refusé sans exécution. Remplacer puis restaurer le stockage
+retire aussi ce travail. Copies, vues étrangères et vues consommées sont refusées.
+Le titre/réglage seul ne retire pas l’autorité du résumé fourni. L’admission suit
+la préparation structurelle, juste avant la sauvegarde capturée ; une sauvegarde
+admise finit. Ce n’est ni CAS interprocessus, isolation hôte, capacité sérialisée,
+ni nouvelle méthode de façade/stockage. L’hôte possède encore l’admission au premier
+plan et les durées de génération.
+
 L’utilitaire passif `resolveAgentCompactionContextWindow(provider?, model?)` utilise
 la limite publiée ou un repli de 128 000 tokens hors mock ; sans provider ou pour
 mock, l’ancienne politique est conservée. CLI/RPC l’appliquent après changement de
@@ -409,7 +450,14 @@ sur une nouvelle racine indépendante.
 
 `rename`, `setModel`, `setThinking`, `branchBefore` et `applyCompaction` attendent
 la persistance Core. La compaction manuelle exige un résumé fourni et une borne
-active valide : aucun appel modèle implicite. `compactionTarget` réutilise Core.
+active valide : aucun appel modèle implicite. Elle reste disponible si l’automatique
+est désactivé. La façade capture la source Core avant l’observation
+`compaction.started` : un observateur ne peut pas prêter l’autorité d’un stockage
+remplaçant à cette publication en attente. Un changement de titre seul reste valide.
+`dispose` retire la compaction explicite non publiée de ce handle, y compris pendant
+la préparation structurelle, puis attend une sauvegarde déjà
+admise sans fausse annulation. Les frères et ressources prêtées gardent leurs
+propres durées. `compactionTarget` réutilise Core.
 `fork` copie l'ascendance d'une entrée utilisateur durable, éventuellement avant
 cette entrée ; `clone` crée une racine indépendante et remappe l'ascendance active
 messages/commandes/état et messages personnalisés/résumés/compaction. Les références

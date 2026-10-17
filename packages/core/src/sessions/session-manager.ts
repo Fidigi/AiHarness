@@ -11,6 +11,7 @@ import {
 } from '../types/index.js';
 import { constants as fsConstants } from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { EventHandler, EventMap } from '../utils/event-emitter.js';
@@ -1375,6 +1376,35 @@ class TokenEstimator {
   }
 }
 
+/** Process-local captured source; copied or fabricated values cannot carry its publication lease. */
+export interface SessionCompactionSource { readonly sourceSessionId: string; readonly entryId?: string }
+/** Optional caller lifetime/source for explicit summary publication; admitted saves still finish. */
+export interface SessionCompactionOptions { signal?: AbortSignal; source?: SessionCompactionSource }
+
+const compactionAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')!.get!;
+function isCompactionAborted(signal?: AbortSignal): boolean {
+  if (!signal) return false;
+  try { return compactionAborted.call(signal) as boolean; }
+  catch { throw new Error('Compaction options are invalid.'); }
+}
+
+function copyCompactionOptions(value: SessionCompactionOptions): SessionCompactionOptions {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Compaction options are invalid.');
+  let signal: AbortSignal | undefined, source: SessionCompactionSource | undefined;
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if ((key !== 'signal' && key !== 'source') || !descriptor || !('value' in descriptor)) throw new Error('Compaction options are invalid.');
+    if (key === 'signal') {
+      if (descriptor.value !== undefined && !(descriptor.value instanceof AbortSignal)) throw new Error('Compaction options are invalid.');
+      signal = descriptor.value as AbortSignal | undefined;
+    } else {
+      if (descriptor.value !== undefined && (!descriptor.value || typeof descriptor.value !== 'object' || Array.isArray(descriptor.value))) throw new Error('Compaction options are invalid.');
+      source = descriptor.value as SessionCompactionSource | undefined;
+    }
+  }
+  return { signal, source };
+}
+
 interface CompactionDetails {
   instruction?: string;
   tokensBefore?: number;
@@ -1411,6 +1441,7 @@ export class SessionManager {
   private onSessionUpdate?: (sessionId: string) => void;
   private store: JsonlSessionStore | null = null;
   private storeGeneration = 0;
+  private readonly compactionSources = new WeakMap<SessionCompactionSource, SessionPublicationAdmission & { sourceSessionId: string }>();
   private compactionSettings: CompactionSettings = DEFAULT_COMPACTION_SETTINGS;
   private compactionContextWindow?: number;
   private autoCompactionCallback?: AutoCompactionCallback;
@@ -2283,14 +2314,72 @@ export class SessionManager {
     return { toCompact, keptEntries };
   }
 
+  /** Capture before a host awaits summary generation; no provider or store work is started. */
+  captureCompactionSource(sessionId: string): Readonly<SessionCompactionSource> | null {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    const source = Object.freeze({ sourceSessionId: sessionId, ...(session.activeLeafId ? { entryId: session.activeLeafId } : {}) });
+    this.compactionSources.set(source, this.compactionAdmission(sessionId));
+    return source;
+  }
+
+  private compactionAdmission(sessionId: string): SessionPublicationAdmission & { sourceSessionId: string } {
+    const session = this.sessions.get(sessionId), leaf = session?.activeLeafId;
+    const store = this.store, generation = this.storeGeneration;
+    const canonicalIdentity = (): boolean => {
+      if (!session) return true; // Keep legacy missing-session publication a no-op.
+      const descriptor = Object.getOwnPropertyDescriptor(session, 'id');
+      return !!descriptor && Object.hasOwn(descriptor, 'value') && descriptor.value === sessionId;
+    };
+    if (!canonicalIdentity()) throw new Error('Compaction context or policy changed.');
+    // Compare the same owned representation on both sides: structuredClone normalizes
+    // valid null-prototype custom JSON in true-memory journals to ordinary objects.
+    const currentJournal = (): SessionEntry[] => structuredClone((this.committedEntries.get(sessionId)
+      ?? this.volatileEntries.get(sessionId) ?? []).filter(entry => entry.type !== 'metadata'));
+    const currentLegacy = (): unknown[] => ['compactionSummary', 'lastCompacted', 'compactionEntryId', 'aiHarnessLegacyCompactionPrefix',
+      'legacyRootBoundaryId', 'hasBranchedHistory', 'activeLeafReset'].map(key => {
+      const descriptor = Object.getOwnPropertyDescriptor(session?.metadata ?? {}, key);
+      if (descriptor && !('value' in descriptor)) throw new Error('Compaction context or policy changed.');
+      if (key === 'aiHarnessLegacyCompactionPrefix') return readLegacyCompactionPrefix(session?.metadata);
+      const value: unknown = descriptor?.value;
+      return key === 'hasBranchedHistory' || key === 'activeLeafReset' ? value === true : typeof value === 'string' ? value : undefined;
+    });
+    // Preserve the shared legacy validation error and never clone/serialize its unvalidated input.
+    const metadata = currentLegacy();
+    let journal: SessionEntry[], legacy: unknown[];
+    try {
+      const entries = currentJournal();
+      boundedSessionJson(entries, MAX_SESSION_FILE_BYTES, 'Compaction source is invalid.');
+      boundedSessionJson(metadata, MAX_SESSION_FILE_BYTES, 'Compaction source is invalid.');
+      journal = entries; legacy = structuredClone(metadata);
+    } catch { throw new Error('Compaction source is invalid.'); }
+    let admitted = false;
+    const check = (): void => {
+      if (admitted || this.sessions.get(sessionId) !== session || !canonicalIdentity() || session?.activeLeafId !== leaf
+        || this.store !== store || this.storeGeneration !== generation || !isDeepStrictEqual(currentJournal(), journal)
+        || !isDeepStrictEqual(currentLegacy(), legacy)) throw new Error('Compaction context or policy changed.');
+    };
+    return { sourceSessionId: sessionId, check, admit: () => { check(); admitted = true; } };
+  }
+
   /** Apply a compaction by adding a summary entry. */
   async applyCompaction(
     sessionId: string,
     summary: string,
     firstKeptEntryId: string,
     details: CompactionDetails = {},
+    options: SessionCompactionOptions = {},
   ): Promise<void> {
-    await this.applyCompactionResult(sessionId, summary, firstKeptEntryId, details);
+    const { signal, source } = copyCompactionOptions(options);
+    if (isCompactionAborted(signal)) throw new DOMException('Compaction cancelled', 'AbortError');
+    const admission = source ? this.compactionSources.get(source) : this.compactionAdmission(sessionId);
+    if (!admission || admission.sourceSessionId !== sessionId) throw new Error('Compaction source is invalid.');
+    const validate = (): void => {
+      if (isCompactionAborted(signal)) throw new DOMException('Compaction cancelled', 'AbortError');
+      admission.check();
+    };
+    validate();
+    await this.applyCompactionResult(sessionId, summary, firstKeptEntryId, details, validate, admission.admit);
   }
 
   private async applyCompactionResult(
@@ -2299,6 +2388,7 @@ export class SessionManager {
     firstKeptEntryId: string,
     details: CompactionDetails = {},
     validateAdmission?: () => void,
+    admit?: () => void,
   ): Promise<boolean> {
     summary = this.redactText(summary);
     details = this.redactJson(details);
@@ -2358,7 +2448,7 @@ export class SessionManager {
       };
       // Structural-store preparation may await after the mutation-queue check.
       // Revalidate immediately before its captured save, not after an admitted write.
-      await this.persistSession(next, [compactionEntry], {}, validateAdmission);
+      await this.persistSession(next, [compactionEntry], {}, () => { validateAdmission?.(); admit?.(); });
       Object.assign(session, next);
       if (!this.usesSessionStore()) this.volatileEntries.get(sessionId)?.push(compactionEntry);
       return true;
