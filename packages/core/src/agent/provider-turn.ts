@@ -12,6 +12,11 @@ import type { Message } from '../types/index.js';
 import { calculatePublishedModelCost } from '../providers/model-metadata.js';
 import type { CredentialRedactionStream } from '../providers/credentials.js';
 import { copyThinkingBudgets } from '../providers/thinking-budgets.js';
+import { captureNativeOutputBudget, ProviderOutputBudgetError } from '../providers/provider-output-budget.js';
+import { assertProviderRequestBudget, captureProviderRequestBudget, ProviderRequestContextError,
+  type ProviderRequestBudget } from './provider-request-estimate.js';
+import { ProviderRequestOptionsError } from './provider-request-options.js';
+import { captureProviderCallLabels, captureProviderMessages, prepareProviderPayload } from './provider-request-payload.js';
 
 export interface StreamProviderTurnOptions {
   provider: AiProvider;
@@ -27,6 +32,8 @@ export interface StreamProviderTurnOptions {
   signal?: AbortSignal;
   /** Cancels only an in-progress retry delay, without aborting the provider run. */
   retrySignal?: AbortSignal;
+  /** Optional owned canonical-policy ceiling; not vendor/media tokenization. */
+  contextBudget?: ProviderRequestBudget;
   extensionRegistry: ExtensionRegistry;
   onStart?(provider: string, model?: string): void | Promise<void>;
   onTextDelta?(delta: string): void | Promise<void>;
@@ -51,6 +58,21 @@ export interface StreamProviderTurnOptions {
   createTextRedactor?(): CredentialRedactionStream;
 }
 
+function captureRedactor<K extends 'redactText' | 'redactJson'>(options: StreamProviderTurnOptions,
+  key: K): StreamProviderTurnOptions[K] {
+  try {
+    let source: object | null = options;
+    for (let depth = 0; source && depth < 32; depth++, source = Object.getPrototypeOf(source)) {
+      const property = Object.getOwnPropertyDescriptor(source, key);
+      if (!property) continue;
+      if (!('value' in property) || (property.value !== undefined && typeof property.value !== 'function')) throw new Error();
+      return property.value as StreamProviderTurnOptions[K];
+    }
+    if (source) throw new Error();
+    return undefined;
+  } catch { throw new ProviderRequestOptionsError(); }
+}
+
 function abortableDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) return Promise.reject(Object.assign(new Error('Request aborted'), { name: 'AbortError' }));
   return new Promise((resolve, reject) => {
@@ -72,10 +94,12 @@ function abortableDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
  * preserving streamed text/reasoning deltas for any frontend adapter.
  */
 export async function streamProviderTurn(options: StreamProviderTurnOptions): Promise<ChatResponse> {
-  const safeText = (value: string): string => options.redactText?.(value) ?? value;
-  const safeJson = <T>(value: T): T => options.redactJson?.(value) ?? value;
+  const contextBudget = captureProviderRequestBudget(options), signal = options.signal;
+  const redactText = captureRedactor(options, 'redactText'), redactJson = captureRedactor(options, 'redactJson');
+  const safeText = (value: string): string => redactText ? Reflect.apply(redactText, options, [value]) as string ?? value : value;
+  const safeJson = <T>(value: T): T => redactJson ? Reflect.apply(redactJson, options, [value]) as T ?? value : value;
   const safeError = (value: unknown): unknown => {
-    if (!options.redactText) return value;
+    if (!redactText) return value;
     const message = safeText(value instanceof Error ? value.message : String(value));
     const error = new Error(message);
     if (value instanceof Error && value.name && value.name !== 'Error') error.name = safeText(value.name);
@@ -97,10 +121,12 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
     throw new Error('Streaming queue limits must be positive safe integers.');
   }
 
+  const provider = options.provider, streamChat = provider.streamChat.bind(provider);
+  const nativeOutputPolicy = contextBudget ? captureNativeOutputBudget(provider) : undefined;
   const providerHook = await options.extensionRegistry.runBefore('before:provider', {
     provider: safeText(options.providerName),
     model: options.model ? safeText(options.model) : undefined,
-    messages: safeJson(options.messages),
+    messages: safeJson(captureProviderMessages(options.messages)),
     options: {
       model: options.model ? safeText(options.model) : undefined,
       sessionId: options.sessionId ? safeText(options.sessionId) : undefined,
@@ -108,22 +134,32 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
       tools: options.tools,
       thinking: options.thinking,
       ...(options.thinkingBudgets !== undefined ? { thinkingBudgets: copyThinkingBudgets(options.thinkingBudgets) } : {}),
-      signal: options.signal,
+      signal,
     },
   });
   if (providerHook.cancelled) {
     throw new Error(providerHook.reason ?? "Appel provider annulé par un hook d'extension.");
   }
 
+  // Validate before any extensible metadata redactor, without detaching the
+  // mutable hook payload subsequently exposed to awaited start observers.
+  const prepare = (redact: <T>(value: T) => T) => {
+    try { return prepareProviderPayload(providerHook.data, redact, signal); }
+    catch (error) {
+      if (contextBudget && error instanceof ProviderRequestOptionsError) throw new ProviderRequestContextError('unmeasurable');
+      throw error;
+    }
+  };
+  const preview = prepare(<T>(value: T): T => value).data;
+  const callLabels = captureProviderCallLabels(safeJson(captureProviderCallLabels(preview)));
   const callStartedAt = Date.now();
-  providerHook.data = safeJson(providerHook.data);
   await options.extensionRegistry.emit('provider:call:start', {
-    provider: safeText(providerHook.data.provider),
-    model: providerHook.data.model ? safeText(providerHook.data.model) : undefined,
+    provider: safeText(callLabels.provider),
+    model: callLabels.model ? safeText(callLabels.model) : undefined,
   });
   await options.onStart?.(
-    safeText(providerHook.data.provider),
-    providerHook.data.model ? safeText(providerHook.data.model) : undefined,
+    safeText(callLabels.provider),
+    callLabels.model ? safeText(callLabels.model) : undefined,
   );
 
   const maxAttempts = maxRetries + 1;
@@ -197,12 +233,17 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
 
       let providerFailure: unknown;
       try {
-        await options.provider.streamChat(
-          providerHook.data.messages,
+        const prepared = prepare(safeJson);
+        const nativeOutput = nativeOutputPolicy?.(prepared.data.options);
+        const requestMessages = prepared.data.messages, requestOptions = nativeOutput?.options ?? prepared.data.options;
+        if (contextBudget) assertProviderRequestBudget(requestMessages, requestOptions, contextBudget,
+          Math.max(prepared.requestedMaxTokens ?? 0, nativeOutput?.maxTokens ?? 0));
+        await streamChat(
+          requestMessages,
           deliver,
           result => { completedResponse = result; },
           error => { streamError = error; },
-          { ...providerHook.data.options, signal: options.signal },
+          requestOptions,
         );
       } catch (error) {
         providerFailure = error;
@@ -223,12 +264,14 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
     } catch (error) {
       const outwardError = safeError(error);
       await options.extensionRegistry.emit('provider:call:error', {
-        provider: safeText(providerHook.data.provider),
+        provider: safeText(callLabels.provider),
         error: outwardError instanceof Error ? outwardError.message : String(outwardError),
       });
       const canRetry = !attemptProducedOutput
+        && !(error instanceof ProviderRequestContextError)
+        && !(error instanceof ProviderOutputBudgetError)
         && !callbackDeliveryFailed
-        && !options.signal?.aborted
+        && !signal?.aborted
         && !options.retrySignal?.aborted
         && attempt < maxAttempts;
       if (!canRetry) {
@@ -243,9 +286,9 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
       );
       await options.onRetryStart?.({ attempt, maxAttempts, delayMs, error: outwardError });
       try {
-        const retryWaitSignal = options.signal && options.retrySignal
-          ? AbortSignal.any([options.signal, options.retrySignal])
-          : options.retrySignal ?? options.signal;
+        const retryWaitSignal = signal && options.retrySignal
+          ? AbortSignal.any([signal, options.retrySignal])
+          : options.retrySignal ?? signal;
         await abortableDelay(delayMs, retryWaitSignal);
       } catch (delayError) {
         const outwardDelayError = safeError(delayError);
@@ -278,8 +321,8 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
   }
   if (response.usage && response.usage.costUsd === undefined) {
     const costUsd = calculatePublishedModelCost(
-      providerHook.data.provider,
-      response.model ?? providerHook.data.model ?? '',
+      callLabels.provider,
+      response.model ?? callLabels.model ?? '',
       {
         inputTokens: response.usage.promptTokens,
         outputTokens: response.usage.completionTokens,
@@ -290,7 +333,7 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
     if (costUsd !== undefined) response = { ...response, usage: { ...response.usage, costUsd } };
   }
   await options.extensionRegistry.emit('provider:call:end', {
-    provider: providerHook.data.provider,
+    provider: callLabels.provider,
     tokensUsed: response.usage?.totalTokens,
     durationMs: Date.now() - callStartedAt,
   });

@@ -23,7 +23,9 @@ CLI/Web runtime -> streamChat -> normalized response and usage
 | File | Responsibility |
 |---|---|
 | `packages/core/src/providers/index.ts` | `AiProvider`, factory, built-ins, bounded payloads/streams, OpenAI Responses SSE/WebSocket transport, discovery, retry and usage normalization |
-| `packages/core/src/providers/anthropic-thinking.ts` | Per-call numeric/adaptive request policy for the explicitly qualified published Anthropic profile |
+| `packages/core/src/providers/anthropic-thinking.ts` | Shared native defaults and per-call numeric/adaptive request policy for the explicitly qualified published Anthropic profile |
+| `packages/core/src/providers/provider-output-budget.ts` | Internal first-party output-policy registration and descriptor-only configured-model capture; no mandatory provider capability |
+| `packages/core/src/agent/provider-request-{estimate,options,payload}.ts` | Bounded canonical request estimate, passive known option slots and owned post-hook/redactor payload copies |
 | `packages/core/src/providers/thinking-budgets.ts` | Public readonly budget type, inert per-turn copies and conservative numeric-dialect bounds |
 | `packages/core/src/providers/provider-endpoints.ts` | Strict based-path discovery endpoint normalization |
 | `packages/core/src/providers/provider-network.ts` | Shared HTTP proxy, request/idle/connect deadlines, bounded retry and cached WebSocket leases |
@@ -87,13 +89,24 @@ Core `providers/anthropic-thinking.test.ts` captures chat/stream payloads, defau
 
 This is a request-dialect qualification, not live vendor certification or full Anthropic support. Other model profiles, adaptive Gemini, complete defaults/capability maps and signed thinking-block preservation across tool continuations remain open. Existing text/reasoning projections are not an opaque provider-transcript round-trip.
 
+## Bounded ordinary request admission
+
+Shared `agent/provider-turn.ts` captures the selected streaming method and redactor bindings before callbacks. Own model-bearing input before extensible JSON redaction and own its result again; reprepare after awaited start observers and on each retry. Mutable hook arrays remain mutable without aliasing the dispatched request. Recognized fields require own data or genuine absence; unrelated legacy getters/serializers are ignored. Keep authentic signal and opaque unused thinking maps outside JSON redaction. Initial malformed hook payloads refuse quietly; later local refusal pairs with the admitted error lifecycle and is not retried unchanged.
+
+Optional `StreamProviderTurnOptions.contextBudget` owns positive safe-integer `contextWindow` and nonnegative `reserveTokens`. Its canonical policy is bounded JSON UTF-8 bytes/4 over projected messages/system/tools,not historical billed usage or vendor tokenization. Reserve the maximum of configured reservation,pre-redaction explicit output and final effective output. Output alone greater than the window refuses before provider work. Core `AgentRuntime` captures an existing known manager policy;private checks revalidate current window/reservation at the guard. Equivalent values/title changes conserve admission,recognized reservation accessors refuse unread and unrelated settings getters remain unused.
+
+Only exact first-party `AnthropicProvider` instances register native output preparation;structural/extension/subclass providers gain no mandatory capability. Capture the configured fallback model before callbacks;prepare used numeric maps after awaited observers without freezing caller maps. Reuse actual `applyAnthropicThinking` and native defaults:1024 without thinking,low budget2048 expands explicit64 to3072,and adaptive high without an explicit maximum produces9216 while explicit64 stays64. Off/adaptive effort-only modes leave unused numeric maps opaque.
+
+[WARNING] Unknown manager windows retain legacy behavior and currently lose later-known ceilings. This is not full effective-model/native-dialect/media admission:unknown media is unmeasured,the current guard only checks independently known non-message overhead in that case,and post-hook model capacity,useful compaction/rebuild/overflow,CLI/RPC budget composition,general lifetime authority and actual-settled accounting remain separate. Do not infer a zero media cost,live-vendor proof or complete compaction from a refusal.
+
 ## Critical Flows
 
 ### Runtime request
 
 ```text
-before:provider hook
-  -> provider.streamChat(messages, callbacks, options.signal)
+before:provider hook -> own/validate payload -> awaited start observers
+  -> re-own redacted payload/native output -> optional canonical budget guard
+  -> captured provider.streamChat(messages, callbacks, authentic signal)
   -> awaited, bounded deltas/tool calls
   -> cache-aware normalized usage (uncached input + cache read/write + output)
   -> shared tool loop and message persistence
@@ -143,6 +156,7 @@ Provider OAuth remains Device Flow; it has no pasted callback endpoint. The shar
 ## Associated Tests
 
 - `packages/core/src/providers/{index,provider-network,credentials,provider-websocket.integration}.test.ts` and `packages/cli/src/agent/provider-turn.test.ts` — built-ins, bounded payloads/streaming, real local WebSocket and CONNECT-proxy handshakes, cached continuation/fallback, credentials, tools, images, reasoning, usage and cancellation
+- Core `agent/provider-request-{estimate,budget,options,payload,options-flow}.test.ts` and `providers/provider-output-budget.test.ts` — canonical input versus billed history,passive descriptors,redactor ownership/output evidence,late observer mutations,known policy checks and exact first-party native output/lifecycle compatibility
 - `packages/server/src/runtime/model-catalog.test.ts` — catalogue merge, capabilities, pricing and refresh bounds
 - `packages/server/src/runtime/provider-registry.test.ts` — custom lifecycle and secret separation
 - `packages/server/src/runtime/provider-oauth.test.ts` — OAuth flow lifecycle

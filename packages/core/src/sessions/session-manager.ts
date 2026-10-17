@@ -1294,6 +1294,20 @@ const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
   keepRecentTokens: 20000,
 };
 
+/** Read only recognized own-data policy; legacy fields gain no read/serialization authority. */
+function ownedCompactionSettings(value: unknown): CompactionSettings | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const enabled = Object.getOwnPropertyDescriptor(value, 'enabled');
+  const reserve = Object.getOwnPropertyDescriptor(value, 'reserveTokens');
+  const keep = Object.getOwnPropertyDescriptor(value, 'keepRecentTokens');
+  if (!enabled || !('value' in enabled) || typeof enabled.value !== 'boolean'
+    || !reserve || !('value' in reserve) || typeof reserve.value !== 'number'
+    || !Number.isSafeInteger(reserve.value) || reserve.value < 0
+    || !keep || !('value' in keep) || typeof keep.value !== 'number'
+    || !Number.isSafeInteger(keep.value) || keep.value < 0) return null;
+  return { enabled: enabled.value, reserveTokens: reserve.value, keepRecentTokens: keep.value };
+}
+
 export interface SessionStoreSnapshot {
   session: Session;
   entries: SessionEntry[];
@@ -1554,29 +1568,32 @@ export class SessionManager {
 
   private async checkAndTriggerCompactionUnlocked(sessionId: string, signal?: AbortSignal): Promise<boolean> {
     const session = this.sessions.get(sessionId);
-    const settings = { ...this.compactionSettings };
+    const settings = ownedCompactionSettings(this.compactionSettings);
     const contextWindow = this.compactionContextWindow;
     const store = this.store;
     const storeGeneration = this.storeGeneration;
     const summarize = this.autoCompactionCallback;
     const policy = this.autoCompactionPolicy;
     const redactText = this.redactText.bind(this);
-    if (!session || !settings.enabled || !summarize || isCompactionAborted(signal)) return false;
+    if (!session || !settings || !settings.enabled || !summarize || isCompactionAborted(signal)) return false;
     if (session.autoCompaction === false) return false;
     let started = false;
     try {
       const admission = this.compactionAdmission(sessionId);
       const activeLeafId = session.activeLeafId;
-      const isCurrent = (): boolean => this.sessions.get(sessionId) === session
-        && this.store === store && this.storeGeneration === storeGeneration
-        && session.activeLeafId === activeLeafId
-        && session.autoCompaction !== false
-        && this.compactionSettings.enabled
-        && this.compactionSettings.reserveTokens === settings.reserveTokens
-        && this.compactionSettings.keepRecentTokens === settings.keepRecentTokens
-        && this.compactionContextWindow === contextWindow
-        && this.autoCompactionCallback === summarize
-        && this.autoCompactionPolicy === policy;
+      const isCurrent = (): boolean => {
+        const current = ownedCompactionSettings(this.compactionSettings);
+        return current !== null && this.sessions.get(sessionId) === session
+          && this.store === store && this.storeGeneration === storeGeneration
+          && session.activeLeafId === activeLeafId
+          && session.autoCompaction !== false
+          && current.enabled
+          && current.reserveTokens === settings.reserveTokens
+          && current.keepRecentTokens === settings.keepRecentTokens
+          && this.compactionContextWindow === contextWindow
+          && this.autoCompactionCallback === summarize
+          && this.autoCompactionPolicy === policy;
+      };
       if (policy && !await policy(session)) return false;
       admission.check();
       if (isCompactionAborted(signal) || !isCurrent()) return false;

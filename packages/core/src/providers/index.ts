@@ -8,7 +8,8 @@ import type { Message, ProviderConfig, ToolCall, TokenUsage } from '../types/ind
 import { ProviderType } from '../types/index.js';
 import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
-import { applyAnthropicThinking } from './anthropic-thinking.js';
+import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, prepareAnthropicOutputBudget } from './anthropic-thinking.js';
+import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
 export type { ThinkingBudgets } from './thinking-budgets.js';
 import {
   validateClassificationRequest, validateImageGenerationRequest, validateGeneratedImages,
@@ -2250,6 +2251,10 @@ export class AnthropicProvider extends AiProvider {
   constructor(config: ProviderConfig) {
     super(config);
     this.baseUrl = config.baseUrl || AnthropicProvider.DEFAULT_BASE_URL;
+    if (new.target === AnthropicProvider) registerNativeOutputBudget(this, () => {
+      const model = captureNativeConfiguredModel(this.config, ANTHROPIC_DEFAULT_MODEL);
+      return options => prepareAnthropicOutputBudget(options, model);
+    });
   }
 
   validateConfig(): boolean {
@@ -2315,7 +2320,7 @@ export class AnthropicProvider extends AiProvider {
       throw new Error('Anthropic API key is required');
     }
 
-    const model = options?.model || (this.config.model as string) || 'claude-3-haiku-20240307';
+    const model = options?.model || (this.config.model as string) || ANTHROPIC_DEFAULT_MODEL;
 
     const systemPrompt = options?.systemPrompt || '';
     const anthropicMessages = this.buildAnthropicMessages(messages);
@@ -2330,7 +2335,7 @@ export class AnthropicProvider extends AiProvider {
     const body: Record<string, unknown> = {
       model,
       messages: bodyMessages.length > 0 ? bodyMessages : [{ role: 'user', content: 'Hello' }],
-      max_tokens: options?.maxTokens ?? 1024,
+      max_tokens: options?.maxTokens ?? ANTHROPIC_DEFAULT_MAX_TOKENS,
       stream: false,
     };
 
@@ -2413,7 +2418,7 @@ export class AnthropicProvider extends AiProvider {
       throw new Error('Anthropic API key is required');
     }
 
-    const model = options?.model || (this.config.model as string) || 'claude-3-haiku-20240307';
+    const model = options?.model || (this.config.model as string) || ANTHROPIC_DEFAULT_MODEL;
     const url = `${this.baseUrl}/v1/messages`;
 
     const systemPrompt = options?.systemPrompt || '';
@@ -2427,7 +2432,7 @@ export class AnthropicProvider extends AiProvider {
     const body: Record<string, unknown> = {
       model,
       messages: bodyMessages,
-      max_tokens: options?.maxTokens ?? 1024,
+      max_tokens: options?.maxTokens ?? ANTHROPIC_DEFAULT_MAX_TOKENS,
       stream: true,
     };
 

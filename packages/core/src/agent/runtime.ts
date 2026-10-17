@@ -18,6 +18,7 @@ import {
   createAgentToolLoadout,
 } from '../tools/tool-search.js';
 import { streamProviderTurn } from './provider-turn.js';
+import { captureManagerProviderBudget } from './provider-request-estimate.js';
 import { AgentAbortError, runToolLoop } from './tool-loop.js';
 import {
   AgentMessageQueue,
@@ -638,12 +639,14 @@ export class AgentRuntime {
         let content = '';
         let reasoning = '';
         let providerModel: string | undefined;
+        const contextBudget = captureManagerProviderBudget(this.sessionManager);
         const response = await streamProviderTurn({
           provider,
           providerName: run.snapshot.provider,
           model: request.model,
           sessionId: run.snapshot.sessionId,
           messages: currentMessages.length ? currentMessages : messages,
+          contextBudget,
           tools: definitions,
           systemPrompt: request.systemPrompt,
           thinking,
