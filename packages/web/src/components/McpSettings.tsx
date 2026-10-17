@@ -33,6 +33,7 @@ import {
 import { useSessionStore } from '../store/session-store';
 import { readMcpSelection, selectedMcpServer, writeMcpSelection, type McpSelection } from '../store/mcp-selection.js';
 import { mcpDetailMessage } from './mcp-detail-messages.js';
+import { mcpEntryProblemMessage } from './mcp-entry-messages.js';
 
 const PROBLEM_KEYS: Record<McpConfigProblemReason, string> = {
   'invalid-shape': 'settings.mcp.problem.invalidShape',
@@ -358,7 +359,9 @@ function ServerCard({
         {t('settings.mcp.variableReferences', { field: reference.field, names: reference.names.join(', ') })}
       </small>)}
       {server.problems.length > 0 && <ul className="mcp-diagnostics">
-        {server.problems.map((diagnostic, index) => <li key={`${index}:${diagnostic}`}>{diagnostic}</li>)}
+        {(Array.isArray(server.problemReasons) && server.problemReasons.length
+          ? server.problemReasons.map(reason => mcpEntryProblemMessage(locale, reason))
+          : server.problems).map((diagnostic, index) => <li key={`${index}:${diagnostic}`}>{diagnostic}</li>)}
       </ul>}
       {server.valid && (server.testStatus?.tools.length || Object.keys(server.toolExposure ?? {}).length) ? <details className="mcp-per-tool-exposure mcp-test-report">
         <summary>{t('settings.mcp.perToolExposure')}</summary>

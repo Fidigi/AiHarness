@@ -55,6 +55,7 @@ export type {
   McpConfigProblem,
   McpConfigProblemReason,
   McpConfigScope,
+  McpEntryProblemReason,
   McpHttpRuntimeConfig,
   McpExposure,
   McpFreshProjectTrustStatus,

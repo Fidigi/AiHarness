@@ -4,6 +4,18 @@ import os from 'node:os';
 import path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { createRequire } from 'node:module';
+import { text as readText } from 'node:stream/consumers';
+
+// Poll only LF-complete records. A concurrent append may expose a partial suffix;
+// malformed completed records must still fail rather than being silently ignored.
+function completeTraceRecords(value) {
+  return value.slice(0, value.lastIndexOf('\n') + 1).split('\n').filter(Boolean).map(line => JSON.parse(line));
+}
+if (process.argv[2] === '--trace-records') {
+  const output = JSON.stringify(completeTraceRecords(await readText(process.stdin))) + '\n';
+  await new Promise((resolve, reject) => process.stdout.write(output, error => error ? reject(error) : resolve()));
+  process.exit(0);
+}
 
 // The driver uses test-image PTY tooling; the child still executes the installed PATH-bin.
 const pty = createRequire(import.meta.url)(process.env.AIH_TEST_PTY_MODULE ?? 'node-pty');
@@ -58,7 +70,7 @@ export default api=>{
     assert.equal(tag,'summary-override');return {summary:'TERMINAL_GLOBAL_OVERRIDE',provider:'extensionfixture',model:'summary-override',usage:{totalTokens:3}};
   });
 };`);
-const records = async () => (await readFile(trace, 'utf8').catch(() => '')).split('\n').filter(Boolean).map(line => JSON.parse(line));
+const records = async () => completeTraceRecords(await readFile(trace, 'utf8').catch(() => ''));
 let terminal, exited, output = '', generation = 0, passed = false;
 const visible = () => stripVTControlCharacters(output);
 const waitFor = async (predicate, label) => {

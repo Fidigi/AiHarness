@@ -142,6 +142,13 @@ export interface McpVariableReference {
   names: string[];
 }
 
+/** Stable value-free entry diagnostics; adapters must not classify English text. */
+export type McpEntryProblemReason =
+  | 'entry-shape' | 'server-name' | 'unsupported-properties' | 'target'
+  | 'command' | 'url' | 'transport' | 'stdio-transport' | 'http-transport'
+  | 'args' | 'cwd' | 'description' | 'env' | 'headers' | 'stdio-fields'
+  | 'http-fields' | 'enabled' | 'exposure' | 'tool-exposure' | 'oauth';
+
 export interface McpServerInventoryEntry {
   name: string;
   scope: McpConfigScope;
@@ -166,6 +173,8 @@ export interface McpServerInventoryEntry {
   shadowedByProject: boolean;
   replacesGlobal: boolean;
   problems: string[];
+  /** Optional additive localized-presentation codes; legacy diagnostics stay unchanged. */
+  problemReasons?: McpEntryProblemReason[];
   /** Last bounded one-shot connection test for this exact configuration generation. */
   testStatus?: McpServerTestResult;
   /** Latest persistent session-host connection state for this configuration generation. */
@@ -689,37 +698,42 @@ function describeEntry(
   sourcePath: string,
 ): ParsedEntry {
   const problems: string[] = [];
+  const problemReasons: McpEntryProblemReason[] = [];
+  const invalid = (reason: McpEntryProblemReason, message: string): void => {
+    problemReasons.push(reason);
+    problems.push(message);
+  };
   const config = isRecord(value) ? value : {};
-  if (!isRecord(value)) problems.push('The server entry must be an object.');
-  if (!validName(rawName)) problems.push('The server name is empty, too long, or contains hidden characters.');
+  if (!isRecord(value)) invalid('entry-shape', 'The server entry must be an object.');
+  if (!validName(rawName)) invalid('server-name', 'The server name is empty, too long, or contains hidden characters.');
 
   const knownFields = new Set([
     'args', 'command', 'cwd', 'description', 'enabled', 'env', 'exposure', 'headers', 'oauth', 'type', 'url', 'toolExposure',
   ]);
   if (Object.keys(config).some(key => !knownFields.has(key))) {
-    problems.push('The server entry contains unsupported properties.');
+    invalid('unsupported-properties', 'The server entry contains unsupported properties.');
   }
 
   const commandPresent = Object.hasOwn(config, 'command');
   const urlPresent = Object.hasOwn(config, 'url');
-  if (commandPresent === urlPresent) problems.push('The server entry must define exactly one command or URL.');
+  if (commandPresent === urlPresent) invalid('target', 'The server entry must define exactly one command or URL.');
   if (commandPresent && (!boundedString(config.command) || !config.command.trim())) {
-    problems.push('The command must be a non-empty bounded string.');
+    invalid('command', 'The command must be a non-empty bounded string.');
   }
   const url = typeof config.url === 'string' ? maskedUrl(config.url) : undefined;
   if (urlPresent && (!boundedString(config.url) || !url?.valid)) {
-    problems.push('The URL must be a bounded HTTP or HTTPS URL.');
+    invalid('url', 'The URL must be a bounded HTTP or HTTPS URL.');
   }
 
   const inferredTransport: McpTransportKind | undefined = commandPresent ? 'stdio' : urlPresent ? 'http' : undefined;
   if (config.type !== undefined && config.type !== 'stdio' && config.type !== 'http'
     && config.type !== 'streamable-http') {
-    problems.push('The transport type is unsupported.');
+    invalid('transport', 'The transport type is unsupported.');
   } else if (inferredTransport === 'stdio' && config.type !== undefined && config.type !== 'stdio') {
-    problems.push('The transport type does not match the command transport.');
+    invalid('stdio-transport', 'The transport type does not match the command transport.');
   } else if (inferredTransport === 'http' && config.type !== undefined
     && config.type !== 'http' && config.type !== 'streamable-http') {
-    problems.push('The transport type does not match the URL transport.');
+    invalid('http-transport', 'The transport type does not match the URL transport.');
   }
 
   const argsValid = config.args === undefined || (
@@ -727,30 +741,30 @@ function describeEntry(
     && config.args.length <= MCP_CONFIG_MAX_COLLECTION_ENTRIES
     && config.args.every(boundedString)
   );
-  if (!argsValid) problems.push('Arguments must be a bounded array of strings.');
-  if (config.cwd !== undefined && !boundedString(config.cwd)) problems.push('The working directory must be a bounded string.');
+  if (!argsValid) invalid('args', 'Arguments must be a bounded array of strings.');
+  if (config.cwd !== undefined && !boundedString(config.cwd)) invalid('cwd', 'The working directory must be a bounded string.');
   if (config.description !== undefined && !boundedString(config.description)) {
-    problems.push('The description must be a bounded string.');
+    invalid('description', 'The description must be a bounded string.');
   }
   const envValid = config.env === undefined || validateStringMap(config.env);
   const headersValid = config.headers === undefined || validateStringMap(config.headers);
-  if (!envValid) problems.push('Environment entries must be a bounded string map.');
-  if (!headersValid) problems.push('Header entries must be a bounded string map.');
+  if (!envValid) invalid('env', 'Environment entries must be a bounded string map.');
+  if (!headersValid) invalid('headers', 'Header entries must be a bounded string map.');
   if (inferredTransport === 'stdio' && (config.headers !== undefined || config.oauth !== undefined)) {
-    problems.push('Standard-input servers cannot declare HTTP headers or OAuth settings.');
+    invalid('stdio-fields', 'Standard-input servers cannot declare HTTP headers or OAuth settings.');
   }
   if (inferredTransport === 'http'
     && (config.args !== undefined || config.cwd !== undefined || config.env !== undefined)) {
-    problems.push('HTTP servers cannot declare command arguments, a working directory, or process environment.');
+    invalid('http-fields', 'HTTP servers cannot declare command arguments, a working directory, or process environment.');
   }
-  if (config.enabled !== undefined && typeof config.enabled !== 'boolean') problems.push('Enabled must be a boolean.');
+  if (config.enabled !== undefined && typeof config.enabled !== 'boolean') invalid('enabled', 'Enabled must be a boolean.');
   if (config.exposure !== undefined && !isMcpExposure(config.exposure)) {
-    problems.push('Exposure must be direct, codemode, deferred, or hidden.');
+    invalid('exposure', 'Exposure must be direct, codemode, deferred, or hidden.');
   }
   const toolExposureValid = config.toolExposure === undefined || (isRecord(config.toolExposure)
     && Object.keys(config.toolExposure).length <= MCP_CONFIG_MAX_COLLECTION_ENTRIES
     && Object.entries(config.toolExposure).every(([name, mode]) => validName(name) && isMcpExposure(mode)));
-  if (!toolExposureValid) problems.push('Per-tool exposure must be a bounded map of exact tool names and exposure modes.');
+  if (!toolExposureValid) invalid('tool-exposure', 'Per-tool exposure must be a bounded map of exact tool names and exposure modes.');
 
   let oauthValid = true;
   if (config.oauth !== undefined) {
@@ -764,7 +778,7 @@ function describeEntry(
         && config.oauth.scopes.length <= MCP_CONFIG_MAX_COLLECTION_ENTRIES
         && config.oauth.scopes.every(boundedString)
       ));
-    if (!oauthValid) problems.push('OAuth settings do not match the supported schema.');
+    if (!oauthValid) invalid('oauth', 'OAuth settings do not match the supported schema.');
   }
 
   const command = typeof config.command === 'string' ? maskedCommand(config.command) : undefined;
@@ -817,6 +831,7 @@ function describeEntry(
       shadowedByProject: false,
       replacesGlobal: false,
       problems,
+      ...(problemReasons.length ? { problemReasons } : {}),
     },
   };
 }

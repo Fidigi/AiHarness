@@ -79,6 +79,8 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → packages/web/src/components/{domain}.tsx
 ```
 
+**UI localization or diagnostics** → Load `web-app-architecture.md` + the i18n rows in `project-map.md`; use typed app codes from `packages/core/src/mcp/config-inventory.ts`, feature-local `packages/web/src/components/{mcp-entry-messages,tool-progress-messages}.ts`, the registry and Settings allocation tests. Preserve arbitrary technical details and the existing lazy/fill-only copy boundary; never classify API errors by English text.
+
 **The separate static demo or Pages artifact** → Load `static-demo.md` + the root/validation rows in `project-map.md`; use `bash demo/run-docker.sh`, not production agent APIs.
 
 **MCP hosting, OAuth, or discovery** → Load `security.md` + the MCP flow in `project-map.md` §4; add `server-api.md` or `cli-reference.md` for the adapter

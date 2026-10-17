@@ -211,7 +211,7 @@ The server has adapter/proxy code in addition to the provider implementations in
 | Global keyboard/accessibility | `src/components/{CommandPalette,StatusCenter,SubagentMonitor}.tsx`, `src/services/{keyboard,escape-stack,notices}.ts`, `src/hooks/{useFocusTrap,useEscapeLayer}.ts` | Capture-phase nearest-layer Escape/IME/repeat ownership, guarded existing Stop, Settings return, coarse-safe focus with suspended-parent invokers, bounded notices and bootstrap shortcuts |
 | Settings | `src/components/{SettingsView,EcosystemSettings,McpSettings,McpImportPreview,PluginSettings,SubagentSettings,ResourceBatchControls}.tsx` | Provider lifecycle/custom resources, defaults/tools with cached sandbox health and scoped code-mode controls/reasons, model/skill registry, exact filter-preserving model/skill-group batches with retired-view guards and owned Markdown rollback, redacted MCP files with a workspace/trust-keyed panel, persistent per-workspace/no-project selected detail, explicit Test reports, volatile persistent-runtime state and server-side OAuth sign-in/paste/cancel/logout state, paste preview, confirmation-gated atomic import/replacement, row/group activation, exposure, removal/undo, grouped package controls, child profiles, auth, appearance, Push preferences, versions and shortcuts |
 | PWA shell | `src/components/PwaStatus.tsx`, `src/services/push.ts`, `public/{manifest.webmanifest,sw.js,offline.html}` | Install/update/offline shell plus explicit Web Push subscription, visible-client deduplication and notification routing |
-| Internationalization | `src/hooks/useI18n.tsx`, `src/i18n/`, `src/components/LanguageSelector.tsx`, `src/components/{mcp-import-messages,settings-locale}.ts`, `src/components/SettingsLocaleBoundary.tsx` | Browser locale detection, English fallback, registered packages/persisted selection, local bilingual MCP copy and conserved Settings-only dictionaries loaded before controls; fill-only registration, translated local loading/error/Close and explicit page-reload retry |
+| Internationalization | `src/hooks/useI18n.tsx`, `src/i18n/`, `src/components/LanguageSelector.tsx`, `src/components/{mcp-import-messages,mcp-entry-messages,tool-progress-messages,settings-locale}.ts`, `src/components/SettingsLocaleBoundary.tsx` | Browser locale detection, English fallback, registered packages/persisted selection, typed-code-only EN/FR MCP diagnostics, execution/progress copy and conserved lazy Settings dictionaries; legacy technical details untouched, fill-only registration/custom overrides and translated loading/error/Close/reload retry |
 | Styling | `src/{index,settings}.css`, `src/agent.css`, component CSS | Global/chat layout plus route-split Settings styles, themes and responsive behavior |
 | Tooling | `vite.config.ts`, `vitest.config.ts`, `scripts/check-bundle-budget.mjs` | Source aliases, development proxy, package test settings, production chunks and failing bundle budgets |
 
@@ -302,7 +302,8 @@ Settings › MCP -> GET /api/mcp?cwd=<selected workspace>
        `-> no allow/refusal/store error: inspect metadata only; never open the body
   -> JSON/JSONC parse + strict shallow schema and depth/count limits
   -> redact command paths/arguments/URL credentials and paths; return names/references only
-  -> render global/project entries, shadowing, trust and fixed diagnostics
+  -> retain legacy value-free diagnostics; add optional typed invalid-entry reasons, omitted for valid DTOs
+  -> render global/project entries, shadowing and trust; localize app codes in EN/FR, never English API text
 
 paste URL/command/install link/JSON -> POST /api/mcp/preview
   -> workspace:read + administrator configuration capability + Origin check
