@@ -3,6 +3,7 @@
 | Document | Description |
 |---|---|
 | [User guide](./user-guide.md) | Installation, CLI/Web configuration, commands, sessions and security |
+| [Operator runbook](./operations.md) | Host preparation, MCP/code mode, files/trust, session backup, settings/reload and incident recovery |
 | [Web replies and progress](./web-replies.md) | Output limits, partial failures, concurrent requests and reconnect limits |
 | [Containerization](./containerization.md) | Running the CLI and Web launcher with Docker |
 | [Package command policy](./npm-command.md) | Literal npm argv, declaring-source trust and CLI/Web failure rules |

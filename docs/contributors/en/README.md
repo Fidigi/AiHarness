@@ -5,6 +5,7 @@
 | Document | Description |
 |---|---|
 | [architecture-overview.md](./architecture-overview.md) | Monorepo overview and Core foundation |
+| [architecture-decisions.md](./architecture-decisions.md) | Shared-runtime/Web delta decisions, source/test ownership and operational consequences |
 | [server-architecture.md](./server-architecture.md) | Detailed server API architecture |
 | [web-architecture.md](./web-architecture.md) | React Web application architecture |
 | [extensions-cli.md](./extensions-cli.md) | CLI extension development guide |
@@ -20,6 +21,7 @@ The following documents are also available in French:
 | Document | Description |
 |---|---|
 | [architecture-overview.md](../fr/architecture-overview.md) (FR) | Monorepo overview and Core foundation |
+| [architecture-decisions.md](../fr/architecture-decisions.md) (FR) | Shared-runtime/Web delta decisions and operator boundaries |
 | [server-architecture.md](../fr/server-architecture.md) (FR) | Detailed server API architecture |
 | [web-architecture.md](../fr/web-architecture.md) (FR) | React Web application architecture |
 | [extensions-cli.md](../fr/extensions-cli.md) (FR) | CLI extension development guide |

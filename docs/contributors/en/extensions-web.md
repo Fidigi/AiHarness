@@ -33,7 +33,7 @@ Server reload can be triggered from:
 - `POST /api/agent/reload` with `cwd`/`projectId` in the body;
 - `POST /api/plugins/reload` with `sessionId` in the body to resolve a specific workspace.
 
-The CLI command `/reload` reloads only extensions in the CLI process; it does not notify the Web server.
+The CLI command `/reload` refreshes its supported settings/resources in the CLI process; it does not notify the Web server. RPC and Web have different [reload scopes](../../users/en/operations.md#6-models-settings-and-reload-scope).
 
 A workspace change immediately invalidates handlers of the old project and removes its resources before restoring those of the new one.
 
@@ -99,7 +99,13 @@ The detached Core/Server host supports concurrent pending requests. The Web clie
 
 These are in-memory requests, not crash-durable dialogs or concurrent CLI/RPC UI parity. The inherited completed-run registry is not newly bounded. Stop acknowledgement is not durable settlement: interrupted-tool accounting still persists before terminal replay.
 
-## Experimental Generic Tool Progress — WIP
+## Generic tool progress: current contract
+
+The current detached Web adapter presents host-issued bounded v1 progress with reconnect restoration, lazy optional assets and inert output. `e2e/tool-progress.spec.ts` is a complete 24-case configuration, independently admitted as part of the current nine-configuration browser coverage. This does not add crash-durable running progress or actual-settled accounting. Use the [reply/progress guide](../../users/en/web-replies.md) and [architecture decisions](./architecture-decisions.md) for current ownership and limits.
+
+### Historical development checkpoint — not current acceptance
+
+The following WIP observations are retained as history. Their original failures remain failed; later complete passing configurations do not erase or diagnose them. The old statement that the feature was not browser-qualified describes that checkpoint, not the current product.
 
 `ToolProgressBoundary`, `ToolProgressCard` and `tool-progress-state.ts` preserve a work-in-progress browser adapter for host-issued v1 progress. Text/details are inert and bounded; custom progress does not replace the specialized code-mode card or acquire invocation, usage or store authority.
 

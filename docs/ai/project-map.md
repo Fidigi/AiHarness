@@ -520,12 +520,14 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 | `docs/ai/topics/child-agents.md` | English | Agents | Versioned | Profiles, delegation limits, linked sessions and parent events |
 | `docs/ai/acceptance/`, `docs/ai/workflows/` | English | Agents | Versioned | Acceptance criteria and task-specific documentation workflows |
 | `docs/audit/documentation/AUDIT-1` | English | Agents + humans | Versioned | Current documentation audit; plain path intentionally omits `.md` |
-| `docs/users/{fr,en}/` | French/English | End users | Versioned | Complete user guides, container guidance and language indexes |
-| `docs/contributors/{fr,en}/` | French/English | Contributors | Versioned | Parallel architecture, extension, session SDK, public-contract/parity and i18n guides |
+| `docs/users/{fr,en}/` | French/English | End users/operators | Versioned | User guides, operator runbooks, container guidance and language indexes |
+| `docs/contributors/{fr,en}/` | French/English | Contributors | Versioned | Parallel architecture decisions, extension, session SDK, public-contract/parity and i18n guides |
 | `docs/screenshots/` | English/French | Humans | Versioned | Playwright-derived documented product states and capture inventory |
 | `README.md`, `CHANGELOG.md` | English/French | Everyone | Versioned | Product overview and history; changelog planning notes are not a roadmap |
 
 Load human-facing files only when the user explicitly requests their audit or maintenance. The current documentation audit is `DONE`; reopen it only when a criterion regresses or a recorded re-examination trigger occurs.
+
+The operator runbook ([EN](../users/en/operations.md)/[FR](../users/fr/operations.md)) covers host preparation, MCP/code mode, files/access, sessions, models/tools/settings, reload and incident recovery. The architecture decisions ([EN](../contributors/en/architecture-decisions.md)/[FR](../contributors/fr/architecture-decisions.md)) map those contracts to source/tests and explicit limits. They document implemented behavior, not missing feature or deployment acceptance.
 
 Authority for behavior, from strongest to weakest:
 

@@ -33,7 +33,7 @@ Le reload serveur est déclenchable depuis :
 - `POST /api/agent/reload` avec `cwd`/`projectId` dans le corps ;
 - `POST /api/plugins/reload` avec `sessionId` dans le corps pour résoudre un workspace spécifique.
 
-La commande CLI `/reload` recharge uniquement les extensions du processus CLI ; elle ne notifie pas le serveur Web.
+La commande CLI `/reload` rafraîchit les réglages/ressources pris en charge dans le processus CLI ; elle ne notifie pas le serveur Web. RPC et Web ont des [portées de rechargement distinctes](../../users/fr/operations.md).
 
 Un changement de workspace invalide immédiatement les handlers de l'ancien projet et retire ses ressources avant de restaurer celles du nouveau.
 
@@ -99,7 +99,13 @@ Le runtime détaché Core/Server prend en charge plusieurs demandes en attente. 
 
 Ces demandes sont en mémoire, sans durabilité après crash ni parité UI concurrente CLI/RPC. Le registre existant des runs terminés n’est pas nouvellement borné. L’accusé de réception de Stop ne vaut pas règlement durable : la comptabilité des outils interrompus est encore persistée avant le rejeu terminal.
 
-## Progression générique des outils expérimentale — WIP
+## Progression générique : contrat courant
+
+L’adaptateur Web détaché courant présente la progression v1 bornée émise par l’hôte, avec restauration à la reconnexion, assets optionnels différés et sortie inerte. `e2e/tool-progress.spec.ts` constitue une configuration entière de 24 cas, admise indépendamment dans la couverture navigateur courante à neuf configurations. Cela n’ajoute ni progression active durable après crash ni comptabilité par règlement réel. Consultez les [réponses/progressions](../../users/fr/web-replies.md) et les [décisions d’architecture](./architecture-decisions.md) pour les responsabilités et limites courantes.
+
+### Checkpoint historique de développement — pas l’acceptance courante
+
+Les observations WIP suivantes restent conservées comme historique. Les échecs initiaux restent échoués ; des configurations entières passées ultérieures ne les effacent ni ne les diagnostiquent. L’ancien constat de non-qualification navigateur décrit ce checkpoint, pas le produit courant.
 
 `ToolProgressBoundary`, `ToolProgressCard` et `tool-progress-state.ts` conservent un adaptateur navigateur en cours de développement pour la progression v1 émise par le runtime. Texte/détails restent inertes et bornés ; la progression personnalisée ne remplace pas la carte spécialisée code-mode et n’acquiert aucune autorité sur l’invocation, l’usage ou le store.
 

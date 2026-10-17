@@ -3,6 +3,7 @@
 | Document | Description |
 |---|---|
 | [Vue d’ensemble de l’architecture](./architecture-overview.md) | Monorepo et socle Core |
+| [Décisions d’architecture](./architecture-decisions.md) | Décisions du runtime partagé/Web, propriétaires source/tests et conséquences opérationnelles |
 | [Architecture serveur](./server-architecture.md) | API, transports et runtimes serveur |
 | [Architecture Web](./web-architecture.md) | Application React, état et rendu |
 | [Extensions CLI](./extensions-cli.md) | Développement d’extensions terminal |
