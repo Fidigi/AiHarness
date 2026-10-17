@@ -2,6 +2,9 @@ import { Router, type Request, type Response } from 'express';
 import {
   loadAgentSettings,
   prepareCompactionContext,
+  assertCompactionTranscript,
+  readCompactionSummary,
+  copyCompactionResponse,
   resolveInstructionPrompt,
   type AgentEvent,
   type MessageContentBlock,
@@ -598,6 +601,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         response.status(400).json({ error: 'No complete context prefix to compact.' });
         return;
       }
+      assertCompactionTranscript(preparation.toCompact);
       const before = manager.getTokenCount(sessionId), firstKeptEntryId = preparation.firstKeptEntryId;
       const retainedEstimate = Math.ceil(preparation.keptMessages.reduce((sum, message) => sum + message.content.length, 0) / 4);
       const effective = resolveEffectiveConfiguration(services, {
@@ -618,6 +622,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       const rawModel = typeof request.body?.model === 'string' ? request.body.model : effective.values.model;
       const requestedModel = rawModel ? redactText(rawModel) : undefined;
       const summaryMessages = redactJson(preparation.toCompact);
+      assertCompactionTranscript(summaryMessages);
       const validateBinding = (): void => {
         if (services.sessionManager !== manager) throw new Error('Compaction context or policy changed.');
       };
@@ -629,12 +634,17 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         model: requestedModel,
         sessionId,
         systemPrompt: `You summarize an agent conversation. ${instruction}`,
+        tools: [], maxTokens: 4096,
         signal: lifetime.signal,
       });
-      const summaryResponse = redactJson(rawSummaryResponse);
+      const content = Object.getOwnPropertyDescriptor(rawSummaryResponse, 'content');
+      if (content && 'value' in content && typeof content.value === 'string' && !content.value.trim()) {
+        throw new Error('Le provider a renvoyé un résumé vide.');
+      }
+      const summaryResponse = redactJson(copyCompactionResponse(rawSummaryResponse));
       if (summaryResponse.usage) recordUsage(providerName, summaryResponse.model ?? requestedModel, summaryResponse.usage);
-      const summary = summaryResponse.content.trim();
-      if (!summary) throw new Error('Le provider a renvoyé un résumé vide.');
+      if (!summaryResponse.content.trim()) throw new Error('Le provider a renvoyé un résumé vide.');
+      const summary = readCompactionSummary(summaryResponse).trim();
       const afterEstimate = Math.ceil(summary.length / 4) + retainedEstimate;
       validateBinding();
       await manager.applyCompaction(sessionId, summary, firstKeptEntryId, {

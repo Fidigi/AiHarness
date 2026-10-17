@@ -3,6 +3,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   AgentRuntime,
+  assertCompactionTranscript,
+  compactionMessagesFromEntries,
+  copyCompactionResponse,
   ExtensionModuleLoader,
   ExtensionRegistry,
   JsonlSessionStore,
@@ -467,19 +470,22 @@ export async function createRuntimeServices(
     const provider = proxy.getAgentProvider(providerName);
     if (!provider) throw new Error(`Provider unavailable: ${providerName}`);
     const requestedModel = effective.values.model ?? activeRun?.model;
-    const response = await provider.chat(toCompact
-      .filter((entry): entry is typeof entry & { role: 'user' | 'assistant' | 'system' | 'tool'; content: string } => entry.type === 'message')
-      .map(entry => ({
-        id: entry.id,
-        role: entry.role,
-        content: entry.content,
-        timestamp: new Date(entry.timestamp),
-      })), {
-        model: requestedModel,
-        systemPrompt: 'Summarize this conversation while preserving decisions and unresolved tasks.',
-        signal,
-      });
-    if (response.usage) proxy.recordUsage(providerName, response.model ?? requestedModel, response.usage);
+    assertCompactionTranscript(toCompact);
+    const messages = compactionMessagesFromEntries(toCompact);
+    assertCompactionTranscript(messages);
+    const chat = provider.chat.bind(provider), recordUsage = proxy.recordUsage.bind(proxy);
+    const rawResponse = await chat(messages, {
+      model: requestedModel,
+      systemPrompt: 'Summarize this conversation while preserving decisions and unresolved tasks.',
+      tools: [], maxTokens: 4096,
+      signal,
+    });
+    const content = Object.getOwnPropertyDescriptor(rawResponse, 'content');
+    if (content && 'value' in content && typeof content.value === 'string' && !content.value.trim()) {
+      throw new Error('Automatic compaction produced an empty summary.');
+    }
+    const response = copyCompactionResponse(rawResponse);
+    if (response.usage) recordUsage(providerName, response.model ?? requestedModel, response.usage);
     return {
       summary: response.content,
       provider: providerName,

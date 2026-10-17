@@ -31,6 +31,7 @@ import type { BranchNavigationOptions, BranchNavigationResult, BranchSummaryEven
 import { copyBranchSummaryAccounting, copyBranchSummaryEvent, copyBranchSummaryOutput } from './session-branch-summary.js';
 import { copySessionCustomValue } from './session-custom-data.js';
 import { selectCompactionCut } from './compaction-cut.js';
+import { assertCompactionTranscript, copyAutomaticCompactionResult, readCompactionSummary } from './compaction-generation.js';
 import {
   captureSessionBranchSignal, copySessionBranchOptions, SessionBranchAdmissions, SessionBranchCancelledError,
 } from './session-branch-admission.js';
@@ -1559,40 +1560,50 @@ export class SessionManager {
     const storeGeneration = this.storeGeneration;
     const summarize = this.autoCompactionCallback;
     const policy = this.autoCompactionPolicy;
-    if (!session || !settings.enabled || !summarize || signal?.aborted) return false;
+    const redactText = this.redactText.bind(this);
+    if (!session || !settings.enabled || !summarize || isCompactionAborted(signal)) return false;
     if (session.autoCompaction === false) return false;
-    const activeLeafId = session.activeLeafId;
-    const isCurrent = (): boolean => this.sessions.get(sessionId) === session
-      && this.store === store && this.storeGeneration === storeGeneration
-      && session.activeLeafId === activeLeafId
-      && session.autoCompaction !== false
-      && this.compactionSettings.enabled
-      && this.compactionSettings.reserveTokens === settings.reserveTokens
-      && this.compactionSettings.keepRecentTokens === settings.keepRecentTokens
-      && this.compactionContextWindow === contextWindow
-      && this.autoCompactionCallback === summarize
-      && this.autoCompactionPolicy === policy;
-    if (policy && !await policy(session)) return false;
-    if (signal?.aborted || !isCurrent()) return false;
-    if (contextWindow !== undefined
-      && this.estimateContextTokens(sessionId) <= contextWindow - settings.reserveTokens) return false;
-
-    const result = this.requestCompaction(sessionId);
-    if (!result) return false;
-    const firstKeptMessage = result.keptEntries.find(entry => entry.type === 'message');
-    if (!firstKeptMessage) return false;
-    const tokensBefore = TokenEstimator.totalMessages([
-      ...result.toCompact,
-      ...result.keptEntries,
-    ]);
-
-    const validateAdmission = (): void => {
-      if (signal?.aborted) throw new DOMException('Compaction cancelled', 'AbortError');
-      if (!isCurrent()) throw new Error('Compaction context or policy changed.');
-    };
+    let started = false;
     try {
+      const admission = this.compactionAdmission(sessionId);
+      const activeLeafId = session.activeLeafId;
+      const isCurrent = (): boolean => this.sessions.get(sessionId) === session
+        && this.store === store && this.storeGeneration === storeGeneration
+        && session.activeLeafId === activeLeafId
+        && session.autoCompaction !== false
+        && this.compactionSettings.enabled
+        && this.compactionSettings.reserveTokens === settings.reserveTokens
+        && this.compactionSettings.keepRecentTokens === settings.keepRecentTokens
+        && this.compactionContextWindow === contextWindow
+        && this.autoCompactionCallback === summarize
+        && this.autoCompactionPolicy === policy;
+      if (policy && !await policy(session)) return false;
+      admission.check();
+      if (isCompactionAborted(signal) || !isCurrent()) return false;
+      if (contextWindow !== undefined
+        && this.estimateContextTokens(sessionId) <= contextWindow - settings.reserveTokens) return false;
+
+      const result = this.requestCompaction(sessionId);
+      if (!result) return false;
+      const firstKeptMessage = result.keptEntries.find(entry => entry.type === 'message');
+      if (!firstKeptMessage) return false;
+      const firstKeptEntryId = firstKeptMessage.id;
+      const keptTokens = TokenEstimator.totalMessages(result.keptEntries);
+      const tokensBefore = TokenEstimator.totalMessages([
+        ...result.toCompact,
+        ...result.keptEntries,
+      ]);
+
+      const validateAdmission = (): void => {
+        if (isCompactionAborted(signal)) throw new DOMException('Compaction cancelled', 'AbortError');
+        admission.check();
+        if (!isCurrent()) throw new Error('Compaction context or policy changed.');
+      };
+      validateAdmission();
+      started = true;
       await this.emitter.emit('compaction:start', { sessionId, automatic: true, tokensBefore });
       validateAdmission();
+      assertCompactionTranscript(result.toCompact);
       const generated = await summarize(
         sessionId,
         result.toCompact,
@@ -1600,18 +1611,16 @@ export class SessionManager {
         signal,
       );
       validateAdmission();
-      const summary = typeof generated === 'string' ? generated : generated.summary;
-      const tokensAfter = TokenEstimator.estimateTokens(summary)
-        + TokenEstimator.totalMessages(result.keptEntries);
-      const applied = await this.applyCompactionResult(sessionId, summary, firstKeptMessage.id, {
+      const output = copyAutomaticCompactionResult(generated);
+      const summary = readCompactionSummary({ content: redactText(output.summary) }).trim();
+      const tokensAfter = TokenEstimator.estimateTokens(summary) + keptTokens;
+      const applied = await this.applyCompactionResult(sessionId, summary, firstKeptEntryId, {
         tokensBefore,
         tokensAfter,
-        ...(typeof generated === 'string' ? {} : {
-          provider: generated.provider,
-          model: generated.model,
-          usage: generated.usage,
-        }),
-      }, validateAdmission);
+        provider: output.provider,
+        model: output.model,
+        usage: output.usage,
+      }, validateAdmission, admission.admit, 16_384, true);
       if (!applied) throw new Error('Compaction context or policy changed.');
       await this.emitter.emit('compaction:end', {
         sessionId,
@@ -1623,11 +1632,12 @@ export class SessionManager {
       });
       return true;
     } catch (error) {
-      const cancelled = signal?.aborted || (error instanceof Error && error.name === 'AbortError');
+      const cancelled = isCompactionAborted(signal) || (error instanceof Error && error.name === 'AbortError');
       const errorMessage = cancelled
         ? 'Compaction cancelled'
         : error instanceof Error ? error.message : 'Unknown error';
-      if (!cancelled) console.error(this.redactText('[SessionManager] Auto-compaction failed.'));
+      if (!cancelled) console.error(redactText('[SessionManager] Auto-compaction failed.'));
+      if (!started) return false;
       await this.emitter.emit('compaction:error', {
         sessionId, error: errorMessage, automatic: true, cancelled,
       });
@@ -2387,10 +2397,12 @@ export class SessionManager {
     details: CompactionDetails = {},
     validateAdmission?: () => void,
     admit?: () => void,
+    maxSummaryBytes = 1024 * 1024,
+    preparedSummary = false,
   ): Promise<boolean> {
-    summary = this.redactText(summary);
+    if (!preparedSummary) summary = this.redactText(summary);
     details = this.redactJson(details);
-    if (!summary.trim() || Buffer.byteLength(summary) > 1024 * 1024 || !isValidEntryId(firstKeptEntryId)
+    if (!summary.trim() || Buffer.byteLength(summary) > maxSummaryBytes || !isValidEntryId(firstKeptEntryId)
       || (details.instruction !== undefined && (typeof details.instruction !== 'string'
         || Buffer.byteLength(details.instruction) > 1024 * 1024))
       || (details.provider !== undefined && !isBoundedSessionString(details.provider, 128))

@@ -15,6 +15,9 @@ import {
   getSupportedThinkingLevels,
   getSessionAccounting,
   prepareCompactionContext,
+  assertCompactionTranscript,
+  copyCompactionResponse,
+  readCompactionSummary,
   isValidSessionId,
   resolveAgentCompactionContextWindow,
   resolveAgentCompactionSettings,
@@ -802,8 +805,11 @@ const commands: CommandEntry[] = [
           return chalk.red('No configured AI provider for compaction. Set API keys or use /provider mock.');
         }
         validate();
+        assertCompactionTranscript(messages);
+        const safeMessages = redactJson?.(messages) ?? messages;
+        assertCompactionTranscript(safeMessages);
         const summaryMessages: Message[] = [
-          ...(redactJson?.(messages) ?? messages),
+          ...safeMessages,
           { id: '__compact__', role: 'user', content: `Please summarize the above conversation. Focus on preserving important facts, decisions, and context needed for future responses. Keep it concise but comprehensive.`, timestamp: new Date() },
         ];
         validate();
@@ -811,10 +817,14 @@ const commands: CommandEntry[] = [
           systemPrompt: args.join(' ') || 'Summarize this conversation concisely, preserving key information and context.',
           sessionId,
           signal,
+          tools: [],
+          maxTokens: 4096,
         });
         validate();
-        if (!result.content) return chalk.red('Compaction failed: no summary generated.');
-        const summary = redactText(result.content);
+        const content = result && typeof result === 'object' ? Object.getOwnPropertyDescriptor(result, 'content') : undefined;
+        if (content && 'value' in content && content.value === '') return chalk.red('Compaction failed: no summary generated.');
+        const ownedResponse = copyCompactionResponse(result);
+        const summary = readCompactionSummary({ content: redactText(ownedResponse.content) });
         await manager.applyCompaction(sessionId, summary, firstKeptId, {}, { signal, source });
         // Cancellation after final save admission must not turn durable success into failure.
         return chalk.green(`✅ Compacted ${chalk.bold(session.title || 'conversation')}\n` +

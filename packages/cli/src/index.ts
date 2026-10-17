@@ -5,6 +5,9 @@
 
 import {
   AgentMessageQueue,
+  assertCompactionTranscript,
+  compactionMessagesFromEntries,
+  copyCompactionResponse,
   clampPublishedThinkingLevel,
   closeProviderNetworkDispatchers,
   collectToolSearchLoadedNames,
@@ -44,12 +47,10 @@ import {
 import type {
   AgentMessageQueueKind,
   AiProvider,
-  Message,
   MessageContentBlock,
   PluginResourceKind,
   ResolvedAgentSettings,
   Session,
-  SessionEntry,
   ThinkingLevel,
   ToolCall,
 } from '@ai-harness/core';
@@ -132,27 +133,6 @@ interface InputDriver {
 interface InteractiveQueuedInput {
   content: string;
   imageBlocks?: MessageContentBlock[];
-}
-
-function messagesFromSessionEntries(entries: SessionEntry[]): Message[] {
-  return entries.flatMap(entry => entry.type === 'message' ? [{
-    id: entry.id,
-    role: entry.role,
-    content: entry.content,
-    timestamp: new Date(entry.timestamp),
-    blocks: entry.blocks,
-    toolCalls: entry.toolCalls,
-    toolCallId: entry.toolCallId,
-    name: entry.name,
-    isError: entry.isError,
-    provider: entry.provider,
-    model: entry.model,
-    usage: entry.usage,
-    durationMs: entry.durationMs,
-    parentMessageId: entry.parentMessageId,
-    agentId: entry.agentId,
-    metadata: entry.metadata,
-  }] : []);
 }
 
 function coreThinkingLevel(level: CliThinkingLevel | undefined): ThinkingLevel | undefined {
@@ -1159,16 +1139,26 @@ async function main(): Promise<void> {
   sessionManager.setAutoCompactionCallback(async (_sessionId, toCompact, _keptEntries, signal) => {
     const provider = ctx.provider;
     if (!provider?.validateConfig()) throw new Error('No configured provider for automatic compaction.');
-    const response = await provider.chat(messagesFromSessionEntries(toCompact), {
-      thinking: ctx.thinkingLevel,
+    assertCompactionTranscript(toCompact);
+    const messages = compactionMessagesFromEntries(toCompact);
+    assertCompactionTranscript(messages);
+    const chat = provider.chat.bind(provider), providerName = provider.getProviderType(), model = provider.getConfiguredModel();
+    const thinking = ctx.thinkingLevel;
+    const rawResponse = await chat(messages, {
+      thinking,
       systemPrompt: 'Summarize this conversation while preserving decisions and unresolved tasks.',
+      tools: [], maxTokens: 4096,
       signal,
     });
-    if (!response.content.trim()) throw new Error('Automatic compaction produced an empty summary.');
+    const content = Object.getOwnPropertyDescriptor(rawResponse, 'content');
+    if (content && 'value' in content && typeof content.value === 'string' && !content.value.trim()) {
+      throw new Error('Automatic compaction produced an empty summary.');
+    }
+    const response = copyCompactionResponse(rawResponse);
     return {
       summary: response.content,
-      provider: provider.getProviderType(),
-      model: response.model ?? provider.getConfiguredModel(),
+      provider: providerName,
+      model: response.model ?? model,
       usage: normalizeProviderUsage(response.usage),
     };
   });

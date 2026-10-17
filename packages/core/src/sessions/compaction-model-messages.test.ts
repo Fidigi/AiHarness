@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SessionManager } from './session-manager.js';
-import { getCompactionModelMessages } from './compaction-model-messages.js';
+import { compactionMessagesFromEntries, getCompactionModelMessages } from './compaction-model-messages.js';
 
 async function fixture() {
   const manager = new SessionManager();
@@ -93,6 +93,19 @@ describe('shared model projection for compaction', () => {
     const messages = getCompactionModelMessages(manager, id);
     expect(messages.map(message => message.timestamp.getTime())).toEqual([forward.getTime(), backward.getTime()]);
     expect(messages.slice(-2).map(message => message.content)).toEqual(['clock-forward', 'clock-backward']);
+  });
+
+  it.each([0, 1, 4])('converts only the captured %s-entry prefix without rereading or aliasing the source', async count => {
+    const { manager, id } = await fixture();
+    const prefix = manager.getEffectiveContext(id).slice(0, count), before = JSON.stringify(prefix);
+    await manager.addMessage(id, { role: 'user', content: 'LATER_SUFFIX_NOT_ADMITTED' }, { skipAutoCompaction: true });
+    const messages = compactionMessagesFromEntries(prefix);
+    expect(messages.map(message => message.id)).toEqual(prefix.map(entry => entry.id));
+    expect(JSON.stringify(messages)).not.toContain('LATER_SUFFIX_NOT_ADMITTED');
+    for (const message of messages) expect(message.timestamp).toBeInstanceOf(Date);
+    if (messages.length) messages[0].content = 'LOCAL_MUTATION';
+    expect(JSON.stringify(prefix)).toBe(before);
+    expect(JSON.stringify(manager.getEffectiveContext(id))).not.toContain('LOCAL_MUTATION');
   });
 
   it('has no model data or generation side effects for a missing session', () => {

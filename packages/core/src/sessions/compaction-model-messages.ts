@@ -1,5 +1,5 @@
 import type { Message } from '../types/index.js';
-import type { SessionManager } from './session-manager.js';
+import type { SessionEntry, SessionManager } from './session-manager.js';
 
 /**
  * Owned projection adapter, not a second context engine. Token policy, atomic
@@ -8,8 +8,13 @@ import type { SessionManager } from './session-manager.js';
  * custom entries or the UI's ordinary-message-only session list.
  */
 export function getCompactionModelMessages(manager: SessionManager, sessionId: string): Message[] {
-  const entries = structuredClone(manager.getEffectiveContext(sessionId));
-  return entries.flatMap(entry => entry.type !== 'message' ? [] : [{
+  return compactionMessagesFromEntries(manager.getEffectiveContext(sessionId));
+}
+
+/** Convert an already selected effective-model prefix; this does not select ancestry or grant source authority. */
+export function compactionMessagesFromEntries(entries: readonly SessionEntry[]): Message[] {
+  const owned = structuredClone(entries);
+  return owned.flatMap(entry => entry.type !== 'message' ? [] : [{
     id: entry.id,
     role: entry.role,
     content: entry.content,

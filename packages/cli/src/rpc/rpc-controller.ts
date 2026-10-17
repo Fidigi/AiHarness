@@ -10,6 +10,9 @@ import {
   calculatePublishedModelCost,
   getSessionAccounting,
   prepareCompactionContext,
+  assertCompactionTranscript,
+  copyCompactionResponse,
+  compactionMessagesFromEntries,
   clampPublishedThinkingLevel,
   cleanupExpiredProcessOutputs,
   createProtocolModelDescriptor,
@@ -422,11 +425,12 @@ export class RpcController {
 
     this.refreshCompactionSettings();
     this.context.sessionManager.setAutoCompactionCallback(async (_sessionId, toCompact, _keptEntries, signal) => {
-      const messages = toCompact.flatMap(entry => {
-        const message = entryMessage(entry);
-        return message ? [message] : [];
-      });
-      const response = await this.summarizeWithRetry('threshold', retrySignal => this.context.provider.chat([
+      assertCompactionTranscript(toCompact);
+      const messages = compactionMessagesFromEntries(toCompact);
+      assertCompactionTranscript(messages);
+      const provider = this.context.provider, chat = provider.chat.bind(provider);
+      const providerName = this.context.providerName, model = this.model, thinking = coreThinkingLevel(this.thinking);
+      const rawResponse = await this.summarizeWithRetry('threshold', retrySignal => chat([
         ...messages,
         {
           id: '__auto_compact__',
@@ -435,16 +439,21 @@ export class RpcController {
           timestamp: new Date(),
         },
       ], {
-        model: this.model,
-        thinking: coreThinkingLevel(this.thinking),
+        model,
+        thinking,
         systemPrompt: 'Produce a concise context summary for future assistant turns.',
+        tools: [], maxTokens: 4096,
         signal: retrySignal,
       }), signal);
-      if (!response.content.trim()) throw new Error('Automatic compaction produced an empty summary.');
+      const content = Object.getOwnPropertyDescriptor(rawResponse, 'content');
+      if (content && 'value' in content && typeof content.value === 'string' && !content.value.trim()) {
+        throw new Error('Automatic compaction produced an empty summary.');
+      }
+      const response = copyCompactionResponse(rawResponse);
       return {
         summary: response.content,
-        provider: this.context.providerName,
-        model: response.model ?? this.model,
+        provider: providerName,
+        model: response.model ?? model,
         usage: normalizeProviderUsage(response.usage),
       };
     });
@@ -1458,6 +1467,7 @@ export class RpcController {
     const source = manager.captureCompactionSource(sourceSessionId);
     if (!source) throw new Error('Compaction context or policy changed.');
     const leaf = session.activeLeafId, provider = this.context.provider, providerName = this.context.providerName, model = this.model, thinking = this.thinking;
+    const chat = provider.chat.bind(provider);
     const redactText = this.context.redactText?.bind(this.context), redactJson = this.context.redactJson?.bind(this.context);
     const sourceMessages = session.messages.map(cloneMessage);
     if (sourceMessages.length < 3) throw new Error(`Not enough messages to compact (${sourceMessages.length}/3 minimum).`);
@@ -1484,14 +1494,18 @@ export class RpcController {
       const rawInstruction = customInstructions?.trim()
         || 'Summarize this conversation concisely, preserving key information, decisions, and context.';
       const instruction = redactText?.(rawInstruction) ?? rawInstruction;
+      assertCompactionTranscript(messages);
       const safeMessages = redactJson?.(messages) ?? messages;
-      const rawSummaryResponse = await this.summarizeWithRetry('manual', signal => provider.chat([
+      assertCompactionTranscript(safeMessages);
+      const rawSummaryResponse = await this.summarizeWithRetry('manual', signal => chat([
         ...safeMessages,
         { id: '__compact__', role: 'user', content: 'Summarize the conversation for future turns. Preserve unresolved work and concrete results.', timestamp: new Date() },
-      ], { model, sessionId: sourceSessionId, thinking: coreThinkingLevel(thinking), systemPrompt: instruction, signal }), controller.signal);
+      ], { model, sessionId: sourceSessionId, thinking: coreThinkingLevel(thinking), systemPrompt: instruction, signal, tools: [], maxTokens: 4096 }), controller.signal);
       validate();
-      const summaryResponse = redactJson?.(rawSummaryResponse) ?? rawSummaryResponse;
-      if (!summaryResponse.content.trim()) throw new Error('Compaction failed: no summary generated.');
+      const content = rawSummaryResponse && typeof rawSummaryResponse === 'object' ? Object.getOwnPropertyDescriptor(rawSummaryResponse, 'content') : undefined;
+      if (content && 'value' in content && typeof content.value === 'string' && !content.value.trim()) throw new Error('Compaction failed: no summary generated.');
+      const ownedResponse = copyCompactionResponse(rawSummaryResponse);
+      const summaryResponse = copyCompactionResponse(redactJson?.(ownedResponse) ?? ownedResponse);
       const estimatedTokensAfter = Math.ceil(summaryResponse.content.length / 4) + retainedTokenEstimate;
       const persistedUsage = normalizeProviderUsage(summaryResponse.usage);
       validate();

@@ -9,6 +9,9 @@ import path from 'node:path';
 import {
   AnthropicProvider as CoreAnthropicProvider,
   atomicWriteStableFile,
+  assertCompactionTranscript,
+  readCompactionSummary,
+  copyCompactionResponse,
   BedrockProvider,
   closeProviderNetworkDispatchers,
   createProviderNetworkScope,
@@ -194,9 +197,17 @@ function providerNetworkConfig(
 
 // Every built-in and custom adapter below uses the shared Core network path.
 
+interface ProxyChatResult {
+  content: string;
+  model?: string;
+  usage?: Record<string, number>;
+  /** Internal completion evidence; never part of ordinary legacy chat output. */
+  compactionSummaryValid?: boolean;
+}
+
 interface ProviderProxy {
   stream(messages: Message[], options?: ChatOptions): AsyncGenerator<{ content: string; usage?: Record<string, number> }, void, unknown>;
-  chat(messages: Message[], options?: ChatOptions): Promise<{ content: string; model?: string; usage?: Record<string, number> }>;
+  chat(messages: Message[], options?: ChatOptions): Promise<ProxyChatResult>;
 }
 
 class CoreProviderProxy implements ProviderProxy {
@@ -227,7 +238,7 @@ class CoreProviderProxy implements ProviderProxy {
     };
   }
 
-  async chat(messages: Message[], options?: ChatOptions): Promise<{ content: string; model?: string; usage?: Record<string, number> }> {
+  async chat(messages: Message[], options?: ChatOptions): Promise<ProxyChatResult> {
     const result = await this.provider.chat(messages, options);
     if (!result || typeof result !== 'object') throw new Error('Provider response was invalid.');
     const own = (key: 'content' | 'model' | 'usage'): unknown => {
@@ -244,7 +255,9 @@ class CoreProviderProxy implements ProviderProxy {
       throw new Error('Provider response was invalid.');
     }
     const usage = this.usage(own('usage') as Awaited<ReturnType<AiProvider['chat']>>['usage']);
-    return { content, ...(model === undefined ? {} : { model }), ...(usage ? { usage } : {}) };
+    let compactionSummaryValid = true;
+    try { copyCompactionResponse(result); } catch { compactionSummaryValid = false; }
+    return { content, ...(model === undefined ? {} : { model }), ...(usage ? { usage } : {}), compactionSummaryValid };
   }
 
   async *stream(
@@ -796,6 +809,7 @@ export class AiProxyServer {
     messages: Message[],
     options?: ProxyChatOptions,
     onChunk?: (chunk: { content: string; usage?: Record<string, number> }) => void,
+    forCompaction = false,
   ): Promise<{ content: string; model?: string; usage?: Record<string, number> }> {
     const provider = this.getProxy(providerType);
 
@@ -808,7 +822,7 @@ export class AiProxyServer {
     // Streaming mode (preferred for web UI)
     const safeMessages = this.redactJson(messages);
     const safeOptions = options ? this.redactJson(options) : undefined;
-    if (safeOptions?.stream !== false && onChunk) {
+    if (!forCompaction && safeOptions?.stream !== false && onChunk) {
       const stream = provider.stream(safeMessages, safeOptions);
       const contentRedactor = this.redactor.createStream();
       const contentParts: string[] = [];
@@ -838,9 +852,15 @@ export class AiProxyServer {
     }
 
     // Non-streaming mode
-    const result = this.redactJson(await provider.chat(safeMessages, safeOptions));
+    const rawResult = await provider.chat(safeMessages, safeOptions);
+    const compactionSummaryValid = rawResult.compactionSummaryValid;
+    const result = this.redactJson(rawResult);
     if (result.usage) this.recordProxyUsage(providerType, result.model ?? safeOptions?.model, result.usage);
-    return result;
+    if (forCompaction) {
+      if (compactionSummaryValid === false) throw new Error('Compaction did not produce a complete bounded text summary.');
+      readCompactionSummary(result);
+    }
+    return { content: result.content, ...(result.model === undefined ? {} : { model: result.model }), ...(result.usage ? { usage: result.usage } : {}) };
   }
 
   private recordProxyUsage(provider: string, model: string | undefined, usage: Record<string, number>): void {
@@ -1224,14 +1244,17 @@ export function createProxyRoutes(
       }
 
       const ownedMessages = sanitizedProxyMessages(messages, 'compact');
+      assertCompactionTranscript(ownedMessages);
       if (aborted()) return;
       const result = await sendChat(
         proxyType,
         ownedMessages,
-        { ...(safeOptions ?? {}), stream: false, systemPrompt: `You are a conversation summarizer. ${instructions}`, signal: lifetime.signal },
+        { ...(safeOptions ?? {}), stream: false, systemPrompt: `You are a conversation summarizer. ${instructions}`, tools: [], maxTokens: Math.min(4096, safeOptions?.maxTokens ?? 4096), signal: lifetime.signal },
+        undefined, true,
       );
 
-      if (!aborted() && !res.destroyed && !res.writableEnded) res.json({ summary: result.content });
+      const summary = readCompactionSummary(result);
+      if (!aborted() && !res.destroyed && !res.writableEnded) res.json({ summary });
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       console.error(redact(`[Proxy] Compact handler error: ${err.message}`));
