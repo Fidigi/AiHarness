@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import type { Interface, Key } from 'readline';
 import { ThemeManager, type TerminalTheme } from './theme-manager.js';
 import { statusLines, type TerminalStatus } from './status.js';
-import { TerminalTextFilter, terminalText, wrapTerminalText } from './terminal-text.js';
+import { clipTerminalText, TerminalTextFilter, terminalText, wrapTerminalText } from './terminal-text.js';
 
 interface TerminalTextRedactor {
   push(chunk: string): string;
@@ -44,6 +44,7 @@ export interface ShellCommandWriter {
 
 const MAX_TERMINAL_TEXT_BYTES = 1024 * 1024;
 const MAX_TRANSCRIPT_BYTES = 16 * 1024 * 1024;
+const TRANSCRIPT_PAGE_ENTRIES = 20;
 
 /** Manages terminal output with scrollable transcript and streaming support */
 export class TerminalUI {
@@ -385,6 +386,7 @@ ${chalk.bold('Input')}
   ${chalk.cyan('Alt+Up')}                        Restore queued messages to the editor
   ${chalk.cyan('Ctrl+G')}                        Open $VISUAL or $EDITOR
   ${chalk.cyan('Escape / Ctrl+C')}               Interrupt; queued messages return to the editor
+  ${chalk.cyan('F1 / Alt+K')}                     Browse/filter all keyboard actions; Escape returns
 
 ${chalk.bold('Providers:')}
   mock, openai, anthropic, google, local, azure, vertex, bedrock
@@ -392,7 +394,7 @@ ${chalk.bold('Providers:')}
 ${chalk.bold('Main environment variables:')}
   ${chalk.dim('OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY')}
   ${chalk.dim('LOCAL_BASE_URL / LLAMA_BASE_URL, AI_HARNESS_AGENT_DIR')}
-  ${chalk.dim('AI_HARNESS_SESSIONS_DIR, AI_HARNESS_TUI_MODE')}
+  ${chalk.dim('AI_HARNESS_SESSIONS_DIR, AI_HARNESS_TUI_MODE, AI_HARNESS_KEYBINDINGS')}
 `;
     console.log(helpText);
   }
@@ -425,11 +427,13 @@ ${chalk.bold('Main environment variables:')}
   addTranscriptEntry(entry: Omit<TranscriptEntry, 'timestamp'>): void {
     const content = this.safeText(entry.content);
     this.transcript.push({ ...entry, content, timestamp: new Date() });
+    if (this.scrollPosition > 0) this.scrollPosition++;
     this.transcriptBytes += Buffer.byteLength(content);
     while (this.transcript.length > this.maxTranscriptEntries || this.transcriptBytes > MAX_TRANSCRIPT_BYTES) {
       const removed = this.transcript.shift();
       if (removed) this.transcriptBytes -= Buffer.byteLength(removed.content);
     }
+    this.scrollPosition = Math.min(this.scrollPosition, Math.max(0, this.transcript.length - TRANSCRIPT_PAGE_ENTRIES));
   }
 
   /** Display the transcript with scrolling support */
@@ -475,24 +479,34 @@ ${chalk.bold('Main environment variables:')}
     }
   }
 
-  /** Scroll up in transcript */
+  /** Replay an older bounded page; do not mutate the live stream or editor. */
   scrollUp(lines: number = 1): void {
-    if (this.transcript.length === 0) return;
-    
-    this.scrollPosition = Math.max(0, this.scrollPosition - lines);
-    const visibleEntries = this.transcript.slice(-Math.min(this.scrollPosition + 20, this.transcript.length));
-    
-    console.log(chalk.dim(`[Scroll: showing last ${visibleEntries.length} entries]`));
+    const step = Number.isSafeInteger(lines) ? Math.max(0, Math.min(500, lines)) : 1;
+    this.scrollPosition = Math.min(Math.max(0, this.transcript.length - TRANSCRIPT_PAGE_ENTRIES), this.scrollPosition + step);
+    this.displayTranscriptPage();
   }
 
-  /** Scroll down in transcript */
+  /** Replay a newer page, stopping at the newest buffered entries. */
   scrollDown(lines: number = 1): void {
-    if (this.transcript.length === 0) return;
-    
-    this.scrollPosition = Math.min(this.transcript.length - 20, this.scrollPosition + lines);
-    const visibleEntries = this.transcript.slice(-Math.min(this.scrollPosition + 20, this.transcript.length));
-    
-    console.log(chalk.dim(`[Scroll: showing last ${visibleEntries.length} entries]`)); // Fixed: removed extra space
+    const step = Number.isSafeInteger(lines) ? Math.max(0, Math.min(500, lines)) : 1;
+    this.scrollPosition = Math.max(0, this.scrollPosition - step);
+    this.displayTranscriptPage();
+  }
+
+  private displayTranscriptPage(): void {
+    if (!this.transcript.length) return;
+    const columns = process.stdout.columns ?? 80;
+    const width = Number.isFinite(columns) ? Math.max(1, Math.min(300, Math.floor(columns))) : 80;
+    const end = this.transcript.length - this.scrollPosition;
+    const start = Math.max(0, end - TRANSCRIPT_PAGE_ENTRIES);
+    const labels: Record<TranscriptEntry['type'], string> = { user: 'You', assistant: 'AI', system: 'System', command: 'Command' };
+    console.log(chalk.hex(this.theme.colors.muted)(clipTerminalText(`Transcript entries ${start + 1}-${end}/${this.transcript.length} (buffered preview)`, width)));
+    for (const entry of this.transcript.slice(start, end)) {
+      // Redact complete stored text before limiting preview work, including secrets
+      // learned after admission. Each entry occupies at most one bounded cell row.
+      const preview = this.safeText(entry.content).slice(0, 4096).replace(/\s+/gu, ' ');
+      console.log(clipTerminalText(`${labels[entry.type]}: ${preview}`, width));
+    }
   }
 
   /** Get transcript statistics */

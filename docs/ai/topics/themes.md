@@ -1,5 +1,7 @@
 # Terminal theme sources
 
+> **Navigation:** Start with [`project-map.md`](../project-map.md) for repository ownership and validation.
+
 Core owns palette validation and bounded metadata discovery; CLI owns source composition and presentation. These are terminal themes, not Web CSS or extension-executable modules.
 
 ## Owners
@@ -9,6 +11,7 @@ Core owns palette validation and bounded metadata discovery; CLI owns source com
 - `packages/core/src/themes/theme-manager.ts`: stable palette reads, schema/color resolution, built-ins, inventory and adaptive terminal probes.
 - `packages/cli/src/cli/theme-sources.ts`: global/project/package/explicit composition and selection precedence.
 - `packages/cli/src/{index,commands/handler}.ts`: startup, reload, current palette and interactive inventory.
+- `packages/cli/schemas/theme.schema.json`, `packages/cli/scripts/copy-assets.mjs`: complete declarative theme editor asset and byte-exact installed distribution; Core remains the runtime authority.
 
 ## Discovery and precedence
 
@@ -48,6 +51,28 @@ Print/JSON retain their existing literal-prompt and pure-output contracts: `/the
 
 These bounds are not a sandbox, filesystem-wide snapshot or new cross-platform race certification.
 
+## Shipped palette schema
+
+The source `packages/cli/schemas/theme.schema.json` ships at `@ai-harness/cli/dist/schemas/theme.schema.json`, beside the keybinding schema. It enumerates all 58 rich/optional/legacy color tokens and all three literal-only export fields (`pageBg`, `cardBg`, `infoBg`), bounded variable names/values, ANSI indices and hex/named literal grammar. Built-ins initialize 54 fields; the other four are optional scrollbar/search tokens, not missing runtime support. Partial custom colors inherit the selected built-in appearance.
+
+`name` and `colors` are required. Nonnull `appearance` takes precedence over legacy `mode`; absent/null `appearance` requires `mode: dark|light`. Unknown root metadata is accepted in the input file but not copied into the loaded palette. Unknown color/export keys fail. Exact case-sensitive variable references resolve before named literals; Core resolves forward references with own-property lookups, rejects cycles/missing literals, and never borrows `Object.prototype` values. Export fields do not resolve variables.
+
+JSON Schema is an editor aid, not filesystem or execution authority. Core separately enforces stable 256 KiB UTF-8 file admission, UTF-16 code-unit ceilings, reference existence/cycles and project trust. `x-maxUtf8Bytes`/`x-maxUtf16CodeUnits` document those runtime-only limits; schema character counts alone cannot enforce them.
+
+## Common Changes
+
+- Adding a palette token: update Core types/defaults/validation, renderer uses, the full schema token inventory and actual per-token load tests together; optional tokens need not appear in every built-in.
+- Changing theme sources: preserve metadata/body separation, declaring-directory identity, trust, suppression, bounds and current active-path identity.
+- Changing color parsing: retain variable-before-literal semantics and own-property resolution; test inherited literals and forward references, not only ordinary hex colors.
+
 ## Evidence
 
+`packages/cli/src/utils/theme-schema.test.ts` covers all 58 real token loads, literal/export grammar, legacy precedence, variables, invalid names/keys and emitted schema equality. Core `themes/theme-color-ownership.test.ts` covers prototype literals/forward references; packed PATH-bin consumers assert both schemas' inventory, nonsymlink files and byte equality outside the checkout. These tests do not certify arbitrary editors or fresh-registry installation.
+
 `themes/theme-sources.test.ts`, CLI `cli/theme-sources{,-process}.test.ts` and the actual installed-package test cover metadata/body separation, ordered sources, negative trust, identity, limits, public readonly declarations, both real PTYs, reload and headless conservation. Existing selector/module-entry tests protect the extracted engine's extension behavior. See the [acceptance record](../../audit/pi/acceptance/theme-sources.md) for exact qualified artifacts and retained failures; the [CLI reference](./cli-reference.md) describes the surrounding runtime.
+
+## Related Domains
+
+- [CLI reference](./cli-reference.md): keybinding ownership, renderer/input lifecycle and installed commands.
+- [Security](./security.md): project trust, stable-file admission and privileged extension boundaries.
+- [Extensions](./extensions.md): package resources and fresh generation composition.

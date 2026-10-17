@@ -26,10 +26,15 @@ export class TerminalEscapeSequence {
     }, this.graceMs);
   }
 
+  /** Inspect pending interpretation without stealing the native driver's timer/key. */
+  isFollowingEnter(key: readline.Key): boolean {
+    return this.timer !== undefined && (key.name === 'return' || key.name === 'enter') && !key.ctrl && !key.shift;
+  }
+
   consumeFollowingKey(key: readline.Key): boolean {
-    if (this.timer === undefined) return false;
+    const enter = this.isFollowingEnter(key);
     this.cancel();
-    return (key.name === 'return' || key.name === 'enter') && !key.ctrl && !key.shift;
+    return enter;
   }
 
   cancel(): void {

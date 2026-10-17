@@ -1,310 +1,180 @@
-// ============================================================
-// KeyBinding Manager - CLI Keyboard Shortcut System
-// Features: register/unregister bindings, event dispatching,
-//           default keybindings, custom config loading
-// ============================================================
+import { readBoundedResourceText, type KeyBinding, type KeyBindingHandler, type KeyBindingContext } from '@ai-harness/core';
+import { KeyBindingConfigError, MAX_KEYBINDING_CONFIG_BYTES, normalizedKeyParts, parseKeyBindingConfig } from './keybinding-config.js';
+import { defaultTerminalBindings, TERMINAL_ACTIONS } from './terminal-actions.js';
+export type { KeyBindingContext } from '@ai-harness/core';
 
-import type { KeyBinding, KeyBindingHandler } from '@ai-harness/core';
-
-/** Context passed to keybinding handlers */
-export interface KeyBindingContext {
-  /** The original keyboard event (if available) */
-  event?: unknown;
-  /** Current command being typed (for input-mode bindings) */
-  currentInput?: string;
-  /** Whether we're currently in streaming mode */
-  isStreaming: boolean;
+export interface KeyBindingActionView {
+  id: string;
+  description: string;
+  keys: string[];
+  registered: boolean;
+  conditional: boolean;
+  reserved: boolean;
+}
+interface ResolvedKeyBinding extends KeyBindingHandler { preventDefault?: boolean; }
+type Action = Omit<KeyBindingHandler, 'keys'>;
+/** Declarative defaults contain NO ambient process/stdout authority or placeholder handlers. */
+export const DEFAULT_KEYBINDINGS: KeyBinding[] = defaultTerminalBindings();
+function actionSnapshot(value: Action): Action {
+  const slots = Object.getOwnPropertyDescriptors(value);
+  for (const key of ['handler', 'description', 'when']) {
+    if ((slots[key] && !('value' in slots[key]!)) || (!slots[key] && key in value)) {
+      throw new TypeError('Keybinding actions require own data fields.');
+    }
+  }
+  if (typeof slots.handler?.value !== 'function'
+    || (slots.description?.value !== undefined && typeof slots.description.value !== 'string')
+    || (slots.when?.value !== undefined && typeof slots.when.value !== 'function')) {
+    throw new TypeError('Keybinding action fields are invalid.');
+  }
+  return { handler: slots.handler.value as Action['handler'],
+    ...(slots.description?.value !== undefined ? { description: slots.description.value as string } : {}),
+    ...(slots.when?.value !== undefined ? { when: slots.when.value as () => boolean } : {}) };
 }
 
-/** Default keybindings for the AiHarness CLI */
-export const DEFAULT_KEYBINDINGS: KeyBindingHandler[] = [
-  {
-    keys: ['ctrl', 'c'],
-    description: 'Interrupt current operation or exit',
-    handler: (ctx) => {
-      if (ctx.isStreaming) {
-        // Interrupt streaming
-        process.stdout.write('\n');
-        console.log('[Interrupted]');
-      }
-      // Return to prompt for non-streaming ctrl+c
-    },
-  },
-  {
-    keys: ['ctrl', 'd'],
-    description: 'Exit the application',
-    handler: () => {
-      process.exit(0);
-    },
-  },
-  {
-    keys: ['alt', 'up'],
-    description: 'Scroll up in transcript',
-    when: () => true, // Would need terminal scroll support for real effect
-    handler: () => {
-      console.log('[Scroll up - requires TUI mode]');
-    },
-  },
-  {
-    keys: ['alt', 'down'],
-    description: 'Scroll down in transcript',
-    when: () => true,
-    handler: () => {
-      console.log('[Scroll down - requires TUI mode]');
-    },
-  },
-  {
-    keys: ['ctrl', 'l'],
-    description: 'Clear the terminal screen',
-    handler: () => {
-      process.stdout.write('\x1Bc');
-    },
-  },
-  {
-    keys: ['alt', 'h'],
-    description: 'Show help menu',
-    when: () => true,
-    handler: () => {
-      console.log('[Help - use /help command]');
-    },
-  },
-];
-
-/** KeyBindingManager manages all registered keyboard shortcuts */
 export class KeyBindingManager {
-  private handlers: Map<string, KeyBindingHandler[]> = new Map(); // keyed by normalized key string
+  private readonly handlers = new Map<string, KeyBindingHandler[]>();
+  private readonly actions = new Map<string, Action>();
+  private defaults: KeyBinding[] = [];
   private bindings: KeyBinding[] = [];
-  private readonly actions = new Map<string, Omit<KeyBindingHandler, 'keys'>>();
   private isStreaming = false;
-
-  /** Create a new KeyBindingManager with default bindings. */
-  constructor(private readonly redactText: (value: string) => string = value => value) {
-    this.registerDefaults();
-  }
-
-  /** Register all default keybindings */
-  registerDefaults(): void {
-    for (const binding of DEFAULT_KEYBINDINGS) {
-      this.registerHandler(binding);
-    }
-  }
-
-  registerAction(id: string, handler: Omit<KeyBindingHandler, 'keys'>): void {
-    this.actions.set(id, handler);
-  }
-
-  /** Register a single keybinding handler */
+  private loadGeneration = 0;
+  constructor(private readonly redactText: (value: string) => string = value => value) { this.registerDefaults(); }
+  registerDefaults(): void { this.defaults = defaultTerminalBindings(); }
+  registerAction(id: string, action: Action): void { this.actions.set(id, actionSnapshot(action)); }
   registerHandler(handler: KeyBindingHandler): void {
-    const normalizedKeys = this.normalizeKeys(handler.keys);
-    
-    if (!this.handlers.has(normalizedKeys)) {
-      this.handlers.set(normalizedKeys, []);
-    }
-    
-    this.handlers.get(normalizedKeys)!.push(handler);
+    const key = this.normalizeKeys(handler.keys);
+    const captured = { ...actionSnapshot(handler), keys: normalizedKeyParts(handler.keys) };
+    const entries = this.handlers.get(key) ?? [];
+    entries.push(captured); this.handlers.set(key, entries);
   }
-
-  /** Register multiple keybindings at once */
-  registerHandlers(handlers: KeyBindingHandler[]): void {
-    for (const handler of handlers) {
-      this.registerHandler(handler);
-    }
-  }
-
-  /** Unregister a specific binding by its keys */
+  registerHandlers(handlers: KeyBindingHandler[]): void { for (const handler of handlers) this.registerHandler(handler); }
   unregister(keys: string[]): boolean {
-    const normalizedKeys = this.normalizeKeys(keys);
-    return this.handlers.delete(normalizedKeys);
+    this.loadGeneration++;
+    const key = this.normalizeKeys(keys), before = this.defaults.length + this.bindings.length;
+    this.defaults = this.defaults.filter(entry => this.normalizeKeys(entry.keys) !== key);
+    this.bindings = this.bindings.filter(entry => this.normalizeKeys(entry.keys) !== key);
+    return this.handlers.delete(key) || before !== this.defaults.length + this.bindings.length;
   }
-
-  /** Clear all registered keybindings */
-  clearAll(): void {
-    this.handlers.clear();
-    this.bindings = [];
+  clearConfig(): void { this.loadGeneration++; this.bindings = []; }
+  clearAll(): void { this.clearConfig(); this.handlers.clear(); this.defaults = []; }
+  setStreaming(value: boolean): void { this.isStreaming = value; }
+  private resolve(binding: KeyBinding): ResolvedKeyBinding | null {
+    const action = this.actions.get(binding.action ?? binding.id);
+    if (!action) return null;
+    try {
+      if (action.when && !action.when()) return null;
+      return { ...action, keys: [...binding.keys], description: binding.description ?? action.description,
+        ...(binding.preventDefault !== undefined ? { preventDefault: binding.preventDefault } : {}) };
+    } catch { return null; }
   }
-
-  /** Set streaming state (for interrupt handling) */
-  setStreaming(isStreaming: boolean): void {
-    this.isStreaming = isStreaming;
-  }
-
-  /** Check if a key sequence matches any registered binding */
-  matchKey(keys: string[]): KeyBindingHandler | null {
-    const normalizedKeys = this.normalizeKeys(keys);
-    
-    // Direct match first
-    const directHandlers = this.handlers.get(normalizedKeys);
-    if (directHandlers && directHandlers.length > 0) {
-      // Return the first handler that passes its 'when' condition, or any if no conditions
-      for (const handler of directHandlers) {
-        try {
-          if (!handler.when || handler.when()) {
-            return handler;
-          }
-        } catch {
-          // Skip handlers whose when() function throws an error
-          continue;
-        }
-      }
+  matchKey(keys: string[]): ResolvedKeyBinding | null {
+    const key = this.normalizeKeys(keys);
+    for (const binding of this.bindings) {
+      if (this.normalizeKeys(binding.keys) !== key) continue;
+      const resolved = this.resolve(binding); if (resolved) return resolved;
     }
-
-    // No match found
+    for (const handler of this.handlers.get(key) ?? []) {
+      try { if (!handler.when || handler.when()) return handler; } catch { /* Isolate broken predicates. */ }
+    }
+    for (const binding of this.defaults) {
+      if (this.normalizeKeys(binding.keys) !== key) continue;
+      const resolved = this.resolve(binding); if (resolved) return resolved;
+    }
     return null;
   }
-
-  /** Convert a Node readline keypress event and dispatch it. */
-  handleKeypress(key?: { name?: string; ctrl?: boolean; meta?: boolean; shift?: boolean }): boolean {
-    if (!key?.name) return false;
-
-    const keys: string[] = [];
-    if (key.ctrl) keys.push('ctrl');
-    if (key.meta) keys.push('alt');
-    if (key.shift) keys.push('shift');
-    keys.push(key.name);
-
-    if (!this.matchKey(keys)) return false;
-    void this.processKey(keys);
-    return true;
+  handleKeypress(key?: { name?: string; sequence?: string; ctrl?: boolean; meta?: boolean; shift?: boolean }, context?: Partial<KeyBindingContext>): boolean {
+    if (!key) return false;
+    const name = key.sequence === '\u001f' ? 'slash' : key.name;
+    if (!name) return false;
+    const keys = [...(key.ctrl || key.sequence === '\u001f' ? ['ctrl'] : []), ...(key.meta ? ['alt'] : []), ...(key.shift ? ['shift'] : []), name];
+    const binding = this.matchKey(keys); if (!binding) return false;
+    void this.invoke(binding, keys, { event: key, ...context });
+    return binding.preventDefault !== false;
   }
-
-  /** Process a key event and execute the matching handler */
   async processKey(keys: string[], context?: Partial<KeyBindingContext>): Promise<boolean> {
-    const binding = this.matchKey(keys);
-    
-    if (!binding) {
-      return false; // No binding matched, let input pass through
-    }
-
-    const ctx: KeyBindingContext = {
-      event: undefined,
-      isStreaming: this.isStreaming,
-      ...context,
-    };
-
-    try {
-      await binding.handler(ctx);
-      return true; // Binding was handled
-    } catch (error) {
-      console.error(this.redactText(
-        `[KeyBinding] Error executing handler for ${keys.join('+')}: ${error instanceof Error ? error.message : String(error)}`,
-      ));
+    const binding = this.matchKey(keys); return binding ? this.invoke(binding, keys, context) : false;
+  }
+  private async invoke(binding: KeyBindingHandler, keys: string[], context?: Partial<KeyBindingContext>): Promise<boolean> {
+    try { await binding.handler({ isStreaming: this.isStreaming, ...context }); return true; }
+    catch (error) {
+      console.error(this.redactText(`[KeyBinding] Error executing handler for ${keys.join('+')}: ${error instanceof Error ? error.message : String(error)}`));
       return false;
     }
   }
-
-  /** Get all registered bindings as a list */
   getBindings(): KeyBinding[] {
-    const result: KeyBinding[] = [];
-    
-    for (const [normalizedKeys, handlers] of this.handlers) {
-      for (const handler of handlers) {
-        if (!result.find(b => b.keys.join('+') === normalizedKeys)) {
-          // Split the normalized keys back into individual parts
-          const keyParts = normalizedKeys.split('+');
-          result.push({
-            id: `binding-${normalizedKeys}`,
-            keys: keyParts,
-            description: handler.description,
-          });
-        }
-      }
+    const result = new Map<string, KeyBinding>();
+    for (const binding of this.defaults) result.set(this.normalizeKeys(binding.keys), { ...binding, keys: [...binding.keys] });
+    for (const [key, handlers] of this.handlers) {
+      const first = handlers[0];
+      if (first) result.set(key, { id: `binding-${key}`, keys: [...first.keys], description: first.description });
     }
-
     for (const binding of this.bindings) {
-      const normalizedKeys = this.normalizeKeys(binding.keys);
-      if (!result.some(item => this.normalizeKeys(item.keys) === normalizedKeys)) {
-        result.push(binding);
+      const key = this.normalizeKeys(binding.keys);
+      if (!result.has(key) || this.actions.has(binding.action ?? binding.id)) result.set(key, { ...binding, keys: [...binding.keys] });
+    }
+    return [...result.values()];
+  }
+  /** Passive metadata only: rendering never invokes callbacks, predicates or serializers. */
+  getActionViews(): KeyBindingActionView[] {
+    const rows = new Map<string, KeyBindingActionView>();
+    const configuredIds = new Set(this.bindings.map(binding => binding.id));
+    const ensure = (id: string, description = ''): KeyBindingActionView => {
+      let row = rows.get(id);
+      if (!row) { row = { id, description, keys: [], registered: false, conditional: false, reserved: false }; rows.set(id, row); }
+      return row;
+    };
+    for (const action of TERMINAL_ACTIONS) ensure(action.id, action.description).reserved = 'reserved' in action && action.reserved;
+    for (const [id, action] of this.actions) {
+      const row = ensure(id); row.description = action.description ?? row.description;
+      row.registered = true; row.conditional = Boolean(action.when);
+    }
+    for (const binding of this.getBindings()) {
+      const row = ensure(binding.action ?? binding.id, binding.description);
+      if (configuredIds.has(binding.id) && binding.description !== undefined) row.description = binding.description;
+      row.keys.push(this.normalizeKeys(binding.keys));
+      if (!binding.action && this.handlers.has(this.normalizeKeys(binding.keys))) {
+        row.registered = true; row.conditional = (this.handlers.get(this.normalizeKeys(binding.keys)) ?? []).some(handler => Boolean(handler.when));
       }
     }
-
-    return result;
+    for (const binding of this.bindings) {
+      const id = binding.action ?? binding.id;
+      if (!this.actions.has(id)) {
+        const row = ensure(id, binding.description); const key = this.normalizeKeys(binding.keys);
+        if (!row.keys.includes(key)) row.keys.push(key);
+      }
+    }
+    return [...rows.values()].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
   }
-
-  /** Get a formatted help string for all bindings */
   getHelpText(): string {
-    const bindings = this.getBindings();
-    
-    if (bindings.length === 0) {
-      return 'No keybindings registered.';
-    }
-
-    let text = '\n📋 Keybindings:\n';
-    text += `${'─'.repeat(40)}\n`;
-    
-    for (const binding of bindings) {
-      const keysStr = binding.keys.map(k => this.formatKey(k)).join(' + ');
-      const desc = binding.description || 'No description';
-      
-      // Pad the key string for alignment
-      text += `  ${keysStr.padEnd(15)}${desc}\n`;
-    }
-
-    return text;
+    const bindings = this.getBindings(); if (!bindings.length) return 'No keybindings registered.';
+    return '\n📋 Keybindings:\n' + '─'.repeat(40) + '\n' + bindings.map(binding => {
+      const keys = binding.keys.map(key => this.formatKey(key)).join(' + ');
+      return `  ${keys.padEnd(15)}${binding.description || 'No description'}\n`;
+    }).join('');
   }
-
-  /** Load custom bindings from a JSON file */
   async loadFromFile(filePath: string): Promise<void> {
+    const generation = ++this.loadGeneration;
     try {
-      const fs = await import('fs/promises');
-      const content = await fs.readFile(filePath, 'utf-8');
-      const bindings = JSON.parse(content) as KeyBinding[];
-      this.bindings = bindings;
-      for (const binding of bindings) {
-        const action = this.actions.get(binding.action || binding.id);
-        if (!action) continue;
-        this.registerHandler({ keys: binding.keys, ...action });
-      }
-      console.log(this.redactText(`[KeyBinding] Loaded ${bindings.length} custom bindings from ${filePath}`));
+      const content = await readBoundedResourceText(filePath, MAX_KEYBINDING_CONFIG_BYTES);
+      const bindings = parseKeyBindingConfig(content); if (generation !== this.loadGeneration) return;
+      this.bindings = bindings; console.log(this.redactText(`[KeyBinding] Loaded ${bindings.length} custom bindings.`));
     } catch (error) {
-      console.warn(this.redactText(
-        `[KeyBinding] Failed to load custom bindings: ${error instanceof Error ? error.message : String(error)}`,
-      ));
+      if (generation !== this.loadGeneration) return;
+      const reason = error instanceof KeyBindingConfigError ? error.reason : 'read';
+      console.warn(this.redactText(`[KeyBinding] Failed to load custom bindings (${reason}). Previous bindings remain active.`));
     }
   }
-
-  /** Save current bindings to a JSON file */
   async saveToFile(filePath: string): Promise<void> {
     try {
-      const fs = await import('fs/promises');
-      const content = JSON.stringify(this.getBindings(), null, 2);
-      await fs.writeFile(filePath, content);
-    } catch (error) {
-      console.error(this.redactText(
-        `[KeyBinding] Failed to save bindings: ${error instanceof Error ? error.message : String(error)}`,
-      ));
-    }
+      const content = JSON.stringify(this.getBindings(), null, 2); parseKeyBindingConfig(content);
+      const fs = await import('node:fs/promises'); await fs.writeFile(filePath, content, { mode: 0o600 });
+    } catch { console.error('[KeyBinding] Failed to save bindings.'); }
   }
-
-  // Private helpers
-
-  /** Normalize key sequence for consistent matching */
-  private normalizeKeys(keys: string[]): string {
-    // First, split any '+'-separated keys into individual components
-    const allParts = keys.flatMap(k => k.split('+').map(s => s.trim().toLowerCase()));
-    
-    // Sort alphabetically for canonical representation (e.g., 'ctrl+c' === 'c+ctrl')
-    return allParts.sort().join('+');
-  }
-
-  /** Format a single key for display */
+  private normalizeKeys(keys: string[]): string { return normalizedKeyParts(keys).join('+'); }
   private formatKey(key: string): string {
-    // Convert special names to readable form
-    const keyMap: Record<string, string> = {
-      'ctrl': '^',
-      'alt': '⌥',
-      'shift': '⇧',
-      'cmd': '⌘',
-      'meta': '⌘',
-      'enter': '↵',
-      'space': '␣',
-      'tab': '⇥',
-      'backspace': '⌫',
-      'delete': 'del',
-      'escape': 'esc',
-    };
-
-    return keyMap[key] || key;
+    const names: Record<string, string> = { ctrl: '^', alt: '⌥', shift: '⇧', cmd: '⌘', meta: '⌘', enter: '↵', space: '␣', tab: '⇥', backspace: '⌫', delete: 'del', escape: 'esc' };
+    return Object.hasOwn(names, key) ? names[key]! : key;
   }
 }
-
 export default KeyBindingManager;

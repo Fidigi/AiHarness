@@ -15,6 +15,10 @@ describe('KeyBindingManager', () => {
   beforeEach(() => {
     // Create a fresh instance for each test
     manager = new KeyBindingManager();
+    // Default bindings are declarative; only the host grants effects.
+    for (const id of ['app.interrupt', 'app.exit', 'terminal.clear']) {
+      manager.registerAction(id, { handler: vi.fn() });
+    }
   });
 
   afterEach(() => {

@@ -3,6 +3,7 @@
 | Document | Description |
 |---|---|
 | [Guide utilisateur](./user-guide.md) | Installation, configuration CLI/Web, commandes, sessions et sécurité |
+| [Raccourcis du terminal](./terminal-keybindings.md) | Emplacements, 22 actions, vue passive, rechargement, touches de sécurité et schéma livré |
 | [Sécurité CLI](./cli-security.md) | Avertissements/canaux, portée offline/proxy, alias, matrice Windows/terminal et diagnostics sûrs |
 | [Guide opérateur](./operations.md) | Préparation de l’hôte, MCP/code mode, fichiers/confiance, sauvegarde, rechargement et incidents |
 | [Réponses Web et progression](./web-replies.md) | Limites de sortie, échecs partiels, demandes concurrentes et limites de reconnexion |

@@ -538,7 +538,11 @@ Themes are discovered from `<AI_HARNESS_AGENT_DIR>/themes/` (by default `~/.ai-h
 
 Use `--no-themes --theme-source ./palettes --theme ocean` to skip automatic sources while retaining an explicit directory. The switch does not disable built-ins, direct file selection (via `--theme` or a saved `theme` value), extensions or tools, and does not grant project trust. `/reload` refreshes discovery and settings-driven selection; a manually selected theme keeps its selection. `/theme` lists provenance and marks the actual active file, including a directly loaded palette. Same-name files do not all appear active. Discovery is metadata-only and rejects overflow (1,000 requests, 512 final custom candidates); selected bodies still undergo the existing 256 KiB stable-file and palette validation. A failed reload reports the error and retains the already rendered palette, without retaining the failed candidate catalogue. These are terminal options, not Web themes or an RPC palette API.
 
-A keybindings file can reassign `app.help` and `terminal.clear` actions:
+The complete [theme schema](../../../packages/cli/schemas/theme.schema.json) is installed at `@ai-harness/cli/dist/schemas/theme.schema.json`, beside the keybinding schema. Associate it with theme files in your editor: it covers all 58 color tokens, variables, appearance/legacy mode and the three optional literal export colors. Omitted colors inherit the built-in palette. Runtime additionally checks stable-file trust, UTF-8/UTF-16 limits, exact variable references and cycles; editor validation is not permission to load a project file.
+
+Regular and fullscreen terminals load `<agent-directory>/keybindings.json` by default. `AI_HARNESS_KEYBINDINGS` selects a literal alternative; a workspace-located file still requires project trust. Save a strict JSON array and use `/reload` to replace its complete custom layer. Invalid same-source reloads retain the last valid layer. F1 or Alt+K opens the passive all-action view with filter/paging and draft/caret restoration. See [terminal keybindings](./terminal-keybindings.md) for all 22 actions, grammar, reserved safety keys, real history paging, packaged schema and limits.
+
+For example, add help and clear chords:
 
 ```json
 [

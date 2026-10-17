@@ -3,6 +3,7 @@
 | Document | Description |
 |---|---|
 | [User guide](./user-guide.md) | Installation, CLI/Web configuration, commands, sessions and security |
+| [Terminal keybindings](./terminal-keybindings.md) | File locations, all 22 actions, passive hotkey view, reload, safety keys and packaged schema |
 | [CLI security](./cli-security.md) | Privacy warnings/channels, offline/proxy scope, shell aliases, Windows/terminal matrix and safe diagnostics |
 | [Operator runbook](./operations.md) | Host preparation, MCP/code mode, files/trust, session backup, settings/reload and incident recovery |
 | [Web replies and progress](./web-replies.md) | Output limits, partial failures, concurrent requests and reconnect limits |

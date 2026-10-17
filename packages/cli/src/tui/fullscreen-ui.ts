@@ -50,6 +50,7 @@ export class FullscreenUI extends TerminalUI {
   private streamingContent = '';
   private scrollOffset = 0;
   private panelProvider?: () => string[];
+  private viewProvider?: () => string[] | undefined;
 
   constructor(options: FullscreenOptions = {}) {
     super({ ...options, title: options.title ?? 'AiHarness CLI' });
@@ -98,6 +99,12 @@ export class FullscreenUI extends TerminalUI {
 
   setPanelProvider(provider: () => string[]): void {
     this.panelProvider = provider;
+    this.render();
+  }
+
+  /** Optional host-owned view; transcript, stream and scroll position are retained underneath. */
+  setViewProvider(provider: () => string[] | undefined): void {
+    this.viewProvider = provider;
     this.render();
   }
 
@@ -166,6 +173,7 @@ export class FullscreenUI extends TerminalUI {
       '',
       'Entrée : envoyer/steer · Alt+Entrée ou Ctrl+Q : follow-up · Alt+↑ : rappeler la file',
       'Escape/Ctrl+C : interrompre · ↑/↓ historique · Alt+↓ transcript · Ctrl+L rafraîchir',
+      'F1 / Alt+K : actions et raccourcis · filtre + Entrée · Escape pour revenir',
     ].join('\n'));
   }
 
@@ -302,7 +310,8 @@ export class FullscreenUI extends TerminalUI {
     const width = Math.max(1, this.configuredColumns ?? this.output.columns ?? 80);
     const height = Math.max(2, this.configuredRows ?? this.output.rows ?? 24);
     const innerWidth = Math.max(1, width - 2);
-    const panels = (this.panelProvider?.() ?? [])
+    const view = this.viewProvider?.();
+    const panels = (view ? [] : this.panelProvider?.() ?? [])
       .slice(0, 32)
       .flatMap(panel => this.wrap(this.stripAnsi(this.safeText(panel)), width))
       .slice(0, Math.max(0, height - 7));
@@ -313,15 +322,16 @@ export class FullscreenUI extends TerminalUI {
     const viewportHeight = Math.max(0, height - 4 - panels.length - footer.length);
     const separator = chalk.hex(this.theme.colors.borderMuted)('─'.repeat(width));
     const title = this.fit(` ${this.safeText(this.title).replace(/\s+/g, ' ')} · ${this.safeText(this.status).replace(/\s+/g, ' ')} `, width);
-    const transcript = this.getRenderedTranscriptLines();
-    const streaming = this.streamingContent
+    const transcript = view
+      ? view.map(line => this.safeText(line)) : this.getRenderedTranscriptLines();
+    const streaming = !view && this.streamingContent
       ? this.wrap(`Assistant: ${this.streamingContent}`, innerWidth)
           .map(line => chalk.hex(this.theme.colors.text)(line))
       : [];
     const allLines = [...transcript, ...streaming];
     const end = Math.max(0, allLines.length - this.scrollOffset);
     const start = Math.max(0, end - viewportHeight);
-    const visible = allLines.slice(start, end);
+    const visible = view ? allLines.slice(0, viewportHeight) : allLines.slice(start, end);
 
     while (visible.length < viewportHeight) visible.unshift('');
 

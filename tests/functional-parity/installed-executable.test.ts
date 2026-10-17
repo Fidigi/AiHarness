@@ -881,6 +881,85 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     } finally { if (!exited) terminal.kill(); }
   }, 60_000);
 
+  it.each(['regular', 'fullscreen'] as const)('loads, browses and freshly reloads installed PATH-bin keyboard actions with its packaged schema (%s)', async mode => {
+    const installed = path.join(consumer, 'node_modules', '@ai-harness', 'cli');
+    const schemaPath = 'dist/schemas/keybindings.schema.json';
+    expect(inventory.find(item => item.name === '@ai-harness/cli')!.files.some(file => file.path === schemaPath)).toBe(true);
+    expect((await lstat(path.join(installed, schemaPath))).isSymbolicLink()).toBe(false);
+    const schemaBytes = await readFile(path.join(installed, schemaPath));
+    expect(schemaBytes).toEqual(await readFile(path.join(build, 'packages', 'cli', schemaPath)));
+    const schema = JSON.parse(schemaBytes.toString('utf8'));
+    expect(schema.type).toBe('array'); expect(schema.maxItems).toBe(512);
+    expect(Object.keys(schema.items.properties).sort()).toEqual(['action', 'description', 'id', 'keys', 'preventDefault']);
+    const themeSchemaPath = 'dist/schemas/theme.schema.json';
+    expect(inventory.find(item => item.name === '@ai-harness/cli')!.files.some(file => file.path === themeSchemaPath)).toBe(true);
+    expect((await lstat(path.join(installed, themeSchemaPath))).isSymbolicLink()).toBe(false);
+    const themeSchemaBytes = await readFile(path.join(installed, themeSchemaPath));
+    expect(themeSchemaBytes).toEqual(await readFile(path.join(build, 'packages', 'cli', themeSchemaPath)));
+    const themeSchema = JSON.parse(themeSchemaBytes.toString('utf8'));
+    expect(themeSchema.type).toBe('object'); expect(themeSchema.properties.colors.propertyNames.enum).toHaveLength(58);
+    expect(Object.keys(themeSchema.properties.export.properties).sort()).toEqual(['cardBg', 'infoBg', 'pageBg']);
+    expect(await realpath(path.join(consumer, 'node_modules', '.bin', 'ai-harness'))).toBe(path.join(installed, 'dist/index.js'));
+    const root = await mkdtemp(path.join(consumer, `installed-keybindings-${mode}-`));
+    const cwd = path.join(root, 'workspace'), data = path.join(root, 'agent');
+    await mkdir(cwd); await mkdir(data);
+    const target = path.join(data, 'keybindings.json'), capture = path.join(root, 'capture.jsonl');
+    const ends = path.join(root, 'ends.txt'), editorMarker = path.join(root, 'editor-executed');
+    const editor = path.join(root, 'editor.mjs'), probe = path.join(root, 'probe.mjs');
+    const configure = (key: string, description: string) => writeFile(target, JSON.stringify([
+      { id: 'installed-menu', keys: [key], action: 'app.hotkeys', description },
+      { id: 'view-letter-guard', keys: ['v'], action: 'input.externalEditor' },
+    ]));
+    await writeFile(path.join(data, 'settings.json'), JSON.stringify({ quietStartup: true, theme: 'dark' }));
+    await configure('f2', 'INSTALLED_KEYS_V1');
+    await writeFile(editor, `import{writeFileSync}from'node:fs';writeFileSync(${JSON.stringify(editorMarker)},'executed');`);
+    await writeFile(probe, `import{appendFileSync}from'node:fs';export default api=>{api.before('before:provider',data=>appendFileSync(${JSON.stringify(capture)},JSON.stringify(data.messages.filter(x=>x.role==='user').map(x=>x.content))+'\\n'));api.on('agent:end',()=>{setImmediate(()=>appendFileSync(${JSON.stringify(ends)},'end\\n'));});};`);
+    const terminal = spawnPty('ai-harness', ['--approve', '--no-session', '--no-extensions', '-e', probe, '--model', 'mock/mock-model', '--tui-mode', mode, '--name', 'installed-keys'], {
+      cwd, cols: 140, rows: 35, env: { ...environment, HOME: path.join(root, 'home'), AI_HARNESS_AGENT_DIR: data,
+        AI_HARNESS_KEYBINDINGS: '', AI_HARNESS_OFFLINE: '1', AI_HARNESS_THEME: 'dark', TERM: 'xterm-256color',
+        EDITOR: `${process.execPath} ${JSON.stringify(editor)}`, VISUAL: '' },
+    });
+    let output = '', original = ''; let exited: { exitCode: number; signal?: number } | undefined;
+    terminal.onData(value => { output += value; original += value; }); terminal.onExit(value => { exited = value; });
+    const visible = () => stripVTControlCharacters(output);
+    const wait = (value: string) => vi.waitFor(() => expect(visible()).toContain(value), { timeout: 10_000 });
+    const idle = (count: number) => vi.waitFor(async () => expect((await readFile(ends, 'utf8')).split('\n').slice(0, -1)).toHaveLength(count), { timeout: 10_000 });
+    try {
+      await wait('installed-keys: '); terminal.write('draft\u001b[D\u001b[D'); output = ''; terminal.write('\u001bOQ');
+      await wait('INSTALLED_KEYS_V1'); await wait('Hotkeys 22/22');
+      output = ''; terminal.write('editor.previous\r'); await wait('Hotkeys 1/22'); expect(visible()).toContain('editor.previous');
+      output = ''; terminal.write(':all\r'); await wait('Hotkeys 22/22');
+      output = ''; terminal.write('\u001b[6~'); await wait('2/3');
+      await expect(readFile(editorMarker)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(readFile(capture)).rejects.toMatchObject({ code: 'ENOENT' });
+      output = ''; terminal.write('\u001b'); await wait('draft');
+      output = ''; terminal.write('X\r'); await wait('[Mock AI Response]'); await idle(1);
+      // Passive view queries never become native editor history either.
+      output = ''; terminal.write('\u001b[A'); await wait('draXft'); terminal.write('\u0015');
+      await configure('f3', 'INSTALLED_KEYS_V2'); output = ''; terminal.write('/reload\r'); await wait('Reloaded ');
+      output = ''; terminal.write('\u001bOR'); await wait('INSTALLED_KEYS_V2'); expect(visible()).not.toContain('F2');
+      output = ''; terminal.write('\u001b'); await wait('installed-keys: ');
+      output = ''; terminal.write('\u001bOQhello\r'); await wait('[Mock AI Response]'); await idle(2);
+      terminal.write('\u0004'); await vi.waitFor(() => expect(exited).toMatchObject({ exitCode: 0 }), { timeout: 10_000 });
+      expect((await readFile(capture, 'utf8')).split('\n').slice(0, -1).map(line => JSON.parse(line))).toEqual([['draXft'], ['draXft', 'hello']]);
+      await expect(readFile(editorMarker)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      try { if (!exited) { terminal.kill(); await vi.waitFor(() => expect(exited).toBeDefined(), { timeout: 5000 }); } }
+      finally {
+        if (process.env.AIH_INSTALLED_EVIDENCE_DIR) {
+          const evidence = path.join(process.env.AIH_INSTALLED_EVIDENCE_DIR, `keyboard-${mode}`); await mkdir(evidence, { recursive: true });
+          await writeFile(path.join(evidence, 'terminal.raw.txt'), original); await writeFile(path.join(evidence, 'terminal.plain.txt'), stripVTControlCharacters(original));
+          await writeFile(path.join(evidence, 'exit.json'), JSON.stringify(exited ?? { notYetObserved: true }));
+          await writeFile(path.join(evidence, 'schema.json'), schemaBytes); await writeFile(path.join(evidence, 'theme-schema.json'), themeSchemaBytes);
+          await cp(target, path.join(evidence, 'configuration.json'));
+          for (const file of [capture, ends, probe]) { try { await cp(file, path.join(evidence, path.basename(file))); } catch { /* Missing evidence remains missing. */ } }
+          await writeFile(path.join(evidence, 'installed-paths.json'), JSON.stringify({ checkout, consumer, installed, cwd, binRealpath: await realpath(path.join(consumer, 'node_modules', '.bin', 'ai-harness')) }, null, 2));
+        }
+        await rm(root, { recursive: true, force: true });
+      }
+    }
+  }, 30_000);
+
   it('runs installed print/JSON/RPC against the unchanged reviewed protocol goldens', async () => {
     const manifest = await loadManifest();
     for (const id of ['cli-version', 'cli-print-input', 'json-lifecycle-purity', 'rpc-state-purity', 'rpc-legacy-chat-migration']) {

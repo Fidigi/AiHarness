@@ -1,6 +1,7 @@
 import readline from 'readline';
 import type { AgentMessageQueueKind } from '@ai-harness/core';
 import type { FullscreenUI } from './fullscreen-ui.js';
+import { EDITOR_ACTION_KEYS, type TerminalActionId } from '../utils/terminal-actions.js';
 import {
   TerminalEscapeSequence,
   TERMINAL_ESCAPE_CODE_TIMEOUT_MS,
@@ -16,6 +17,7 @@ export interface FullscreenInputHandlers {
   onExternalEditor?: (currentInput: string) => Promise<string | undefined>;
   /** Return replacement editor text, or undefined when there was nothing queued. */
   onDequeue?: (currentInput: string) => string | undefined;
+  recordHistory?: () => boolean;
 }
 
 interface KeypressInput {
@@ -35,6 +37,7 @@ export class FullscreenInput {
   private readonly history: string[] = [];
   private historyIndex = 0;
   private started = false;
+  private retired = false;
   private processing = Promise.resolve();
   private readonly escapeSequence: TerminalEscapeSequence;
   private readonly keypressListener: (text: string, key: readline.Key) => void;
@@ -49,7 +52,7 @@ export class FullscreenInput {
   }
 
   start(): void {
-    if (this.started) return;
+    if (this.started || this.retired) return;
     this.started = true;
     // The optional interface argument supplies Node's raw Escape decoder timeout;
     // fullscreen owns line editing, so only the decoder state object is needed.
@@ -81,6 +84,7 @@ export class FullscreenInput {
   }
 
   close(): void {
+    this.retired = true;
     this.stop();
     this.ui.leave();
   }
@@ -89,13 +93,35 @@ export class FullscreenInput {
     return this.value;
   }
 
-  replaceValue(value: string): void {
+  getCursor(): number { return this.cursor; }
+
+  replaceValue(value: string, cursor = value.length): void {
     this.value = value;
-    this.cursor = value.length;
+    this.cursor = Number.isFinite(cursor) ? Math.max(0, Math.min(value.length, cursor)) : value.length;
     this.ui.setInput(this.value, this.cursor);
   }
 
+  cancelPendingEscape(): void { this.escapeSequence.cancel(); }
+
+  /** Resolve a split Alt+Enter for binding lookup; native pass-through stays untouched. */
+  keyForBindings(key: readline.Key): readline.Key {
+    return this.escapeSequence.isFollowingEnter(key) ? { ...key, name: 'enter', meta: true } : key;
+  }
+
+  /** Dispatch real native operations without recursively entering the stream gate. */
+  performAction(action: TerminalActionId): boolean {
+    if (this.retired) return false;
+    this.escapeSequence.cancel();
+    if (action === 'app.escape') { this.handlers.onEscape(); return true; }
+    if (action === 'transcript.up') { this.ui.scrollUp(); return true; }
+    if (action === 'transcript.down') { this.ui.scrollDown(); return true; }
+    const key = Object.hasOwn(EDITOR_ACTION_KEYS, action) ? EDITOR_ACTION_KEYS[action] : undefined;
+    if (!key) return false;
+    this.handleKeypress('', key); return true;
+  }
+
   handleKeypress(text: string, key: readline.Key = {}): void {
+    if (this.retired) return;
     if (key.ctrl && key.name === 'c') {
       this.escapeSequence.cancel();
       this.handlers.onInterrupt();
@@ -128,17 +154,18 @@ export class FullscreenInput {
 
     if (key.ctrl && key.name === 'g' && this.handlers.onExternalEditor) {
       this.processing = this.processing.then(async () => {
+        if (this.retired) return;
         this.stop();
         try {
           const edited = await this.handlers.onExternalEditor!(this.value);
-          if (edited !== undefined) {
+          if (!this.retired && edited !== undefined) {
             this.value = edited;
             this.cursor = edited.length;
           }
         } catch (error) {
-          this.handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
+          if (!this.retired) this.handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
         } finally {
-          this.start();
+          if (!this.retired) this.start();
         }
       });
       return;
@@ -215,7 +242,7 @@ export class FullscreenInput {
 
   private submit(kind: AgentMessageQueueKind): void {
     const line = this.value;
-    if (line.trim()) {
+    if (line.trim() && this.handlers.recordHistory?.() !== false) {
       this.history.push(line);
       if (this.history.length > 100) this.history.shift();
     }

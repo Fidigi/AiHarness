@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AiHarness terminal theme",
+  "description": "Complete terminal palette fields accepted by Core ThemeManager. Partial colors inherit the selected built-in appearance. Runtime additionally enforces 256 KiB stable UTF-8 regular-file admission, UTF-16 name/value ceilings, exact variable references and acyclic resolution. Unknown root metadata is retained as inert compatibility data; unknown color/export tokens are refused.",
+  "type": "object",
+  "required": ["name", "colors"],
+  "additionalProperties": true,
+  "x-maxUtf8Bytes": 262144,
+  "properties": {
+    "name": { "type": "string", "minLength": 1, "maxLength": 128, "allOf": [{ "pattern": "^[^/]*$" }, { "pattern": "\\S" }], "x-maxUtf16CodeUnits": 128 },
+    "appearance": { "enum": ["dark", "light", null], "description": "Preferred appearance. Absent/null uses legacy mode; a nonnull appearance takes precedence over mode." },
+    "mode": { "description": "Legacy appearance, required as dark/light when appearance is absent/null. Otherwise ignored by the runtime." },
+    "vars": {
+      "type": "object", "maxProperties": 256,
+      "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$" },
+      "additionalProperties": { "$ref": "#/$defs/color" },
+      "description": "Case-sensitive exact variable names. References resolve before literal colors; cycles and unresolved nonliteral values are runtime errors."
+    },
+    "colors": {
+      "type": "object", "maxProperties": 128,
+      "propertyNames": { "enum": [
+        "accent", "border", "borderAccent", "borderMuted", "success", "error", "warning", "muted", "dim", "text",
+        "thinkingText", "selectedBg", "userMessageBg", "userMessageText", "customMessageBg", "customMessageText", "customMessageLabel",
+        "toolPendingBg", "toolSuccessBg", "toolErrorBg", "toolTitle", "toolOutput",
+        "mdHeading", "mdLink", "mdLinkUrl", "mdCode", "mdCodeBlock", "mdCodeBlockBorder", "mdQuote", "mdQuoteBorder", "mdHr", "mdListBullet",
+        "toolDiffAdded", "toolDiffRemoved", "toolDiffContext",
+        "syntaxComment", "syntaxKeyword", "syntaxFunction", "syntaxVariable", "syntaxString", "syntaxNumber", "syntaxType", "syntaxOperator", "syntaxPunctuation",
+        "thinkingOff", "thinkingMinimal", "thinkingLow", "thinkingMedium", "thinkingHigh", "thinkingXhigh", "bashMode",
+        "scrollbarTrack", "scrollbarThumb", "searchMatchBg", "searchMatchText", "thinkingMax", "user", "assistant"
+      ] },
+      "additionalProperties": { "$ref": "#/$defs/color" },
+      "description": "All rich renderer, Markdown, diff, syntax, thinking, search, scrollbar and legacy user/assistant tokens. Omitted tokens inherit built-in colors."
+    },
+    "export": {
+      "type": "object", "maxProperties": 3,
+      "additionalProperties": false,
+      "properties": {
+        "pageBg": { "$ref": "#/$defs/literalColor" },
+        "cardBg": { "$ref": "#/$defs/literalColor" },
+        "infoBg": { "$ref": "#/$defs/literalColor" }
+      },
+      "description": "Literal colors only, not variable references. Eight-digit hex alpha is accepted but discarded, as in runtime terminal colors."
+    }
+  },
+  "anyOf": [
+    { "required": ["appearance"], "properties": { "appearance": { "enum": ["dark", "light"] } } },
+    { "required": ["mode"], "properties": { "appearance": { "type": "null" }, "mode": { "enum": ["dark", "light"] } } }
+  ],
+  "$defs": {
+    "color": {
+      "anyOf": [
+        { "$ref": "#/$defs/literalColor" },
+        { "type": "string", "maxLength": 64, "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$", "description": "Exact case-sensitive variable reference. Runtime additionally requires the variable to exist and resolve without cycles; a named literal color remains valid without a variable." }
+      ]
+    },
+    "literalColor": {
+      "oneOf": [
+        { "type": "integer", "minimum": 0, "maximum": 255 },
+        { "type": "string", "maxLength": 256, "x-maxUtf16CodeUnits": 256, "pattern": "^\\s*(?:#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})|[bB][lL][aA][cC][kK]|[wW][hH][iI][tT][eE]|[rR][eE][dD]|[gG][rR][eE][eE][nN]|[bB][lL][uU][eE]|[yY][eE][lL][lL][oO][wW]|[cC][yY][aA][nN]|[mM][aA][gG][eE][nN][tT][aA]|[gG][rR][aA][yY]|[gG][rR][eE][yY]|[tT][rR][aA][nN][sS][pP][aA][rR][eE][nN][tT])\\s*$", "description": "Trimmed #RGB/#RRGGBB/#RRGGBBAA or case-insensitive black, white, red, green, blue, yellow, cyan, magenta, gray, grey, transparent. Variable names are not resolved here." }
+      ]
+    }
+  }
+}

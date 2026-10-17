@@ -312,7 +312,7 @@ function literalColor(value: ThemeColorValue): string {
   }
   if (/^#[0-9a-f]{6}$/i.test(normalized)) return normalized;
   if (/^#[0-9a-f]{8}$/i.test(normalized)) return normalized.slice(0, 7);
-  const named = NAMED_COLORS[normalized];
+  const named = Object.hasOwn(NAMED_COLORS, normalized) ? NAMED_COLORS[normalized] : undefined;
   if (named) return named;
   throw new Error('Theme colors must use a variable, a named color, a hex color, or a 0–255 index.');
 }
@@ -345,7 +345,7 @@ function resolvePalette(
   const resolve = (value: ThemeColorValue): string => {
     if (typeof value === 'string' && variables.has(value)) {
       if (resolving.has(value)) throw new Error('Theme variables contain a cycle.');
-      if (resolvedVariables[value]) return resolvedVariables[value]!;
+      if (Object.hasOwn(resolvedVariables, value)) return resolvedVariables[value]!;
       resolving.add(value);
       const result = resolve(variables.get(value)!);
       resolving.delete(value);

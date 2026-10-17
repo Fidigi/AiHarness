@@ -538,7 +538,11 @@ Les thèmes proviennent de `<AI_HARNESS_AGENT_DIR>/themes/` (par défaut `~/.ai-
 
 Utilisez `--no-themes --theme-source ./palettes --theme ocean` pour ignorer les sources automatiques tout en gardant un répertoire explicite. Ce drapeau ne désactive ni les thèmes intégrés, ni la sélection directe d’un fichier (par `--theme` ou la valeur `theme` enregistrée), ni les extensions/outils, et n’accorde aucune confiance au projet. `/reload` actualise la découverte et la sélection configurée ; un thème choisi manuellement garde sa sélection. `/theme` indique la provenance et le fichier réellement actif, y compris une palette chargée directement. Les fichiers homonymes ne sont pas tous marqués actifs. La découverte ne lit que les métadonnées et refuse les dépassements (1 000 demandes, 512 candidats personnalisés finaux) ; les contenus sélectionnés conservent la validation de fichier stable de 256 Kio et de palette. Un rechargement invalide signale l’erreur et conserve la palette déjà affichée, sans conserver le catalogue candidat échoué. Ces options concernent le terminal, pas les thèmes Web ni une API de palette RPC.
 
-Un fichier de raccourcis peut réaffecter les actions `app.help` et `terminal.clear` :
+Le [schéma complet des thèmes](../../../packages/cli/schemas/theme.schema.json) est livré dans `@ai-harness/cli/dist/schemas/theme.schema.json`, à côté du schéma des raccourcis. Associez-le aux thèmes dans votre éditeur : il couvre les 58 tokens de couleur, les variables, l’apparence/le mode historique et les trois couleurs d’export littérales facultatives. Les couleurs omises héritent de la palette intégrée. Le runtime vérifie aussi fichier stable/confiance, limites UTF-8/UTF-16, références exactes et cycles ; une validation éditeur n’autorise pas le chargement d’un fichier projet.
+
+Les terminaux classique et plein écran chargent par défaut `<répertoire-agent>/keybindings.json`. `AI_HARNESS_KEYBINDINGS` choisit un autre fichier littéral ; un fichier dans le workspace exige toujours sa confiance. Enregistrez un tableau JSON strict puis utilisez `/reload` pour remplacer toute la couche personnalisée. Un reload invalide à la même source conserve la dernière couche valide. F1 ou Alt+K ouvre la vue passive de toutes les actions avec filtre/pages et restauration du brouillon/curseur. Voir les [raccourcis du terminal](./terminal-keybindings.md) pour les 22 actions, la grammaire, les touches de sécurité, les vraies pages d’historique, le schéma livré et les limites.
+
+Par exemple, ajoutez des accords d’aide et d’effacement :
 
 ```json
 [

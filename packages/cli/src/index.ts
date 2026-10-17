@@ -55,13 +55,15 @@ import type {
   ToolCall,
 } from '@ai-harness/core';
 import path from 'node:path';
+import { lstat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import readline from 'readline';
 import chalk from 'chalk';
 import { CommandHandler } from './commands/handler.js';
 import { TerminalUI } from './tui/terminal-ui.js';
 import { FullscreenUI } from './tui/fullscreen-ui.js';
 import { FullscreenInput } from './tui/fullscreen-input.js';
-import { ThemeFilteredInput } from './tui/theme-input-filter.js';
+import { KeypressFilteredInput } from './utils/keypress-gate.js';
 import { configuredThemeSelection, configuredThemeSources } from './cli/theme-sources.js';
 import {
   TerminalEscapeSequence,
@@ -69,6 +71,9 @@ import {
 } from './tui/terminal-escape.js';
 import { resolveTerminalMode } from './tui/mode.js';
 import { KeyBindingManager } from './utils/keybinding-manager.js';
+import { HotkeyView } from './utils/hotkey-view.js';
+import { resolveKeybindingSource } from './utils/keybinding-source.js';
+import { EDITOR_ACTION_KEYS, TERMINAL_ACTIONS, type TerminalActionId } from './utils/terminal-actions.js';
 import { configuredBuiltinExtensions, configuredExtensionSelectors, explicitExtensionFiles, ExtensionLoader } from './extensions/extension-loader.js';
 import { runToolLoop } from './agent/tool-loop.js';
 import { streamProviderTurn } from './agent/provider-turn.js';
@@ -123,11 +128,13 @@ const outputCredentialRedactor = new CredentialRedactor();
 outputCredentialRedactor.addEnvironment(process.env);
 
 interface InputDriver {
-  prompt(): void;
+  prompt(preserveCursor?: boolean): void;
   close(): void;
   setPrompt(prompt: string): void;
   getValue(): string;
-  replaceValue(value: string): void;
+  replaceValue(value: string, cursor?: number): void;
+  getCursor?(): number;
+  performAction?(action: TerminalActionId, event?: readline.Key): boolean | Promise<boolean>;
 }
 
 interface InteractiveQueuedInput {
@@ -234,6 +241,7 @@ async function main(): Promise<void> {
   // Capture environment policy before trusted extension registration, but resolve
   // flag arity only from the authoritative second parse (never the bootstrap).
   const environmentOffline = resolveOfflineMode();
+  const keybindingFileOverride = process.env.AI_HARNESS_KEYBINDINGS;
   // Bootstrap guesses may conservatively mask startup errors, but cannot grant
   // permanent redaction authority over definitively parsed prompt input.
   const bootstrapCredentialRedactor = new CredentialRedactor();
@@ -565,7 +573,12 @@ async function main(): Promise<void> {
   let foregroundInputRunning = false;
   let activeAbortController: AbortController | null = null;
   let systemThemeProbe: SystemThemeProbe | undefined;
-  let filteredTerminalInput: ThemeFilteredInput | undefined;
+  let filteredTerminalInput: KeypressFilteredInput | undefined;
+  const keyBindings = new KeyBindingManager(redactOutput);
+  let hotkeyView: HotkeyView | undefined;
+  let hotkeyDraft = { value: '', cursor: 0 };
+  let selectedKeybindingPath: string | undefined;
+  let keybindingGeneration = 0;
   const activateSystemThemeProbe = async (): Promise<void> => {
     systemThemeProbe?.close();
     systemThemeProbe = undefined;
@@ -673,6 +686,9 @@ async function main(): Promise<void> {
     additional: readonly (() => void | Promise<void>)[] = [],
   ): Promise<void> => {
     if (earlyCleanupPromise) return earlyCleanupPromise;
+    keybindingGeneration++;
+    keyBindings.clearAll();
+    hotkeyView = undefined;
     const filteredInput = filteredTerminalInput;
     filteredTerminalInput = undefined;
     const themeProbe = systemThemeProbe;
@@ -775,6 +791,7 @@ async function main(): Promise<void> {
 
   extensionRegistry.setReloadHandler(async () => {
     await reloadAgentSettings();
+    await reloadKeybindings();
     await mcpHost.setEnabled(builtinExtensions.mcp);
     await refreshPluginService();
     const refreshedStoreId = `${settingsResolution.agentDirTrusted ? 'persistent' : 'memory'}:${path.resolve(settingsResolution.agentDir)}`;
@@ -1062,25 +1079,28 @@ async function main(): Promise<void> {
     return;
   }
 
-  const keyBindings = new KeyBindingManager(redactOutput);
-  if (!printMode) {
-    const helpAction = {
-      description: 'Afficher l’aide',
-      handler: async () => {
-        terminal.displayUserMessage('/help');
-        terminal.showHelp();
-      },
-    };
-    keyBindings.registerAction('app.help', helpAction);
-    keyBindings.registerAction('terminal.clear', {
-      description: 'Rafraîchir le terminal',
-      handler: async () => terminal.clear(),
-    });
-    keyBindings.registerHandler({ keys: ['ctrl+slash'], ...helpAction });
-    if (process.env.AI_HARNESS_KEYBINDINGS) {
-      await keyBindings.loadFromFile(process.env.AI_HARNESS_KEYBINDINGS);
+  async function reloadKeybindings(): Promise<void> {
+    if (applicationMode !== 'interactive' || earlyCleanupPromise || shuttingDown) return;
+    const generation = ++keybindingGeneration;
+    const source = resolveKeybindingSource({ cwd: workspaceCwd, home: homedir(),
+      agentDir: settingsResolution.agentDir, agentDirTrusted: settingsResolution.agentDirTrusted,
+      projectTrusted: mayLoadProjectResources(), explicitPath: keybindingFileOverride });
+    if (!source.eligible || source.path !== selectedKeybindingPath) keyBindings.clearConfig();
+    selectedKeybindingPath = source.path;
+    if (!source.eligible) { reportError(`Keybinding source unavailable (${source.reason}).`); return; }
+    if (source.kind === 'agent-directory') {
+      try { await lstat(source.path!); }
+      catch (error) {
+        if (generation !== keybindingGeneration || earlyCleanupPromise || shuttingDown) return;
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+          keyBindings.clearConfig(); return;
+        }
+      }
     }
+    if (generation !== keybindingGeneration || earlyCleanupPromise || shuttingDown) return;
+    await keyBindings.loadFromFile(source.path!);
   }
+  await reloadKeybindings();
 
   let startupSession: Session;
   try {
@@ -1242,6 +1262,7 @@ async function main(): Promise<void> {
   });
 
   const sessionPrompt = (): string => {
+    if (hotkeyView) return 'Hotkeys (filter / :next / :close)> ';
     const title = sessionManager.get(currentSessionId)?.title;
     return title ? `${terminalText(redactOutput(title)).replace(/\s+/g, ' ')}: ` : '> ';
   };
@@ -1276,6 +1297,9 @@ async function main(): Promise<void> {
   const shutdown = (message: string, exitCode?: number): void => {
     if (shuttingDown) return;
     shuttingDown = true;
+    keybindingGeneration++;
+    keyBindings.clearAll();
+    hotkeyView = undefined;
     promptBoundary.close();
     statusRevision++;
     sessionManager.off('session:update', onTerminalSessionUpdate);
@@ -1319,11 +1343,13 @@ async function main(): Promise<void> {
   };
 
   const interrupt = (): void => {
+    closeHotkeys();
     if (cancelActiveOperation()) return;
     shutdown('Au revoir ! 👋', terminalMode === 'fullscreen' ? 0 : undefined);
   };
 
   const escapeInterrupt = (): void => {
+    if (hotkeyView) { closeHotkeys(); return; }
     cancelActiveOperation();
   };
 
@@ -1799,6 +1825,11 @@ async function main(): Promise<void> {
   }
 
   async function dispatchLine(input: string, submission: AgentMessageQueueKind = 'steer'): Promise<void> {
+    if (hotkeyView) {
+      if (hotkeyView.update(input) === 'close') closeHotkeys();
+      else renderHotkeys();
+      return;
+    }
     if (input.trim()) terminal.finishStartup();
     if (conversationRunning) {
       await handleLine(input, submission);
@@ -1854,9 +1885,64 @@ async function main(): Promise<void> {
     return;
   }
 
+  function renderHotkeys(): void {
+    if (!hotkeyView || shuttingDown) return;
+    inputDriver.setPrompt(sessionPrompt());
+    if (fullscreenTerminal) fullscreenTerminal.render();
+    else terminal.displayCommand('hotkeys', hotkeyView.render(process.stdout.columns ?? 80, 14).join('\n'));
+    inputDriver.prompt();
+  }
+  function closeHotkeys(): void {
+    if (!hotkeyView) return;
+    hotkeyView = undefined;
+    if (shuttingDown) return;
+    promptBoundary.invalidate();
+    inputDriver.replaceValue(hotkeyDraft.value, hotkeyDraft.cursor);
+    inputDriver.setPrompt(sessionPrompt());
+    inputDriver.prompt(true);
+  }
+  function toggleHotkeys(): void {
+    if (shuttingDown) return;
+    if (hotkeyView) { closeHotkeys(); return; }
+    promptBoundary.invalidate();
+    const value = inputDriver.getValue();
+    hotkeyDraft = { value, cursor: inputDriver.getCursor?.() ?? value.length };
+    hotkeyView = new HotkeyView(() => keyBindings.getActionViews(), redactOutput);
+    inputDriver.replaceValue('');
+    renderHotkeys();
+  }
+  function hotkeyViewKey(key: readline.Key): boolean | undefined {
+    if (!hotkeyView) return undefined;
+    // Native escape disambiguation and interrupt ownership remain with the driver.
+    if (key.name === 'escape' || (key.ctrl && key.name === 'c')) return false;
+    if ((key.ctrl && key.name === 'd') || key.name === 'f1' || (key.meta && key.name === 'k')) {
+      closeHotkeys(); return true;
+    }
+    if (key.name === 'up' || key.name === 'pageup' || key.name === 'down' || key.name === 'pagedown') {
+      hotkeyView.update(key.name === 'up' || key.name === 'pageup' ? ':prev' : ':next');
+      renderHotkeys(); return true;
+    }
+    return false;
+  }
+  for (const action of TERMINAL_ACTIONS) {
+    keyBindings.registerAction(action.id, {
+      description: action.description,
+      when: () => !shuttingDown && Boolean(inputDriver.performAction)
+        && (action.id !== 'app.exit' || inputDriver.getValue().length === 0),
+      handler: async context => {
+        if (action.id === 'app.hotkeys') { toggleHotkeys(); return; }
+        if (action.id === 'app.help') { terminal.displayUserMessage('/help'); terminal.showHelp(); inputDriver.prompt(true); return; }
+        await inputDriver.performAction?.(action.id, context.event as readline.Key | undefined);
+      },
+    });
+  }
+  fullscreenTerminal?.setViewProvider(() => hotkeyView?.render(
+    process.stdout.columns ?? 80, Math.max(1, (process.stdout.rows ?? 24) - 8),
+  ));
   await refreshTerminalStatus();
   await activateSystemThemeProbe();
-  filteredTerminalInput = new ThemeFilteredInput(process.stdin);
+  const keyInput = new KeypressFilteredInput(process.stdin);
+  filteredTerminalInput = keyInput;
   if (fullscreenTerminal) {
     const fullscreenInput = new FullscreenInput(fullscreenTerminal, {
       onLine: dispatchLine,
@@ -1866,16 +1952,35 @@ async function main(): Promise<void> {
       onError: error => terminal.showError(error.message),
       complete: completeCommands,
       onDequeue: currentInput => restoreQueuedInput(currentInput),
+      recordHistory: () => !hotkeyView,
       onExternalEditor: async currentInput => {
         fullscreenTerminal.leave();
         try {
           return await editInExternalEditor(currentInput, settingsResolution.settings.externalEditor);
         } finally {
-          fullscreenTerminal.enter();
+          if (!shuttingDown) fullscreenTerminal.enter();
         }
       },
-    }, filteredTerminalInput);
-    inputDriver = fullscreenInput;
+    }, keyInput);
+    const releaseGate = keyInput.setKeypressGate((_text, key) => {
+      const effective = fullscreenInput.keyForBindings(key);
+      const modal = hotkeyViewKey(effective);
+      if (modal !== undefined) return modal;
+      if ((!key.ctrl && !key.shift && key.name === 'escape')
+        || (key.ctrl && !key.meta && !key.shift && (key.name === 'c' || key.name === 'd'))) return false;
+      const handled = keyBindings.handleKeypress(effective, { currentInput: fullscreenInput.getValue() });
+      if (handled) fullscreenInput.cancelPendingEscape();
+      return handled;
+    });
+    inputDriver = {
+      prompt: () => fullscreenInput.prompt(),
+      close: () => { releaseGate(); fullscreenInput.close(); },
+      setPrompt: prompt => fullscreenInput.setPrompt(prompt),
+      getValue: () => fullscreenInput.getValue(),
+      getCursor: () => fullscreenInput.getCursor(),
+      replaceValue: (value, cursor) => fullscreenInput.replaceValue(value, cursor),
+      performAction: action => fullscreenInput.performAction(action),
+    };
     // The operational screen must exist even when the welcome is suppressed.
     fullscreenTerminal.enter();
     if (startupDisplay.header) terminal.welcome();
@@ -1889,77 +1994,98 @@ async function main(): Promise<void> {
       completer: (line: string): [string[], string] => [completeCommands(line), line],
       escapeCodeTimeout: TERMINAL_ESCAPE_CODE_TIMEOUT_MS,
     });
-    const replaceReadlineValue = (value: string): void => {
+    let regularClosed = false;
+    let regularEditing = false;
+    const replaceReadlineValue = (value: string, cursor = value.length): void => {
+      if (regularClosed || shuttingDown) return;
+      const index = Number.isFinite(cursor) ? Math.max(0, Math.min(value.length, cursor)) : value.length;
+      const prefix = value.slice(0, index).replace(/[\r\n]+/g, ' ');
+      const suffix = value.slice(index).replace(/[\r\n]+/g, ' ');
+      rl.write(null, { ctrl: true, name: 'e' });
       rl.write(null, { ctrl: true, name: 'u' });
-      const singleLine = value.replace(/[\r\n]+/g, ' ');
-      if (singleLine) rl.write(singleLine);
+      if (suffix) rl.write(suffix);
+      rl.write(null, { ctrl: true, name: 'a' });
+      if (prefix) rl.write(prefix);
     };
     const escapeSequence = new TerminalEscapeSequence(escapeInterrupt);
-    let suppressLineEvent = false;
     const submitRegularFollowUp = (): void => {
       const currentInput = rl.line;
-      suppressLineEvent = true;
-      queueMicrotask(() => { suppressLineEvent = false; });
       replaceReadlineValue('');
       void dispatchLine(currentInput, 'follow-up')
         .catch(error => terminal.showError(error instanceof Error ? error.message : String(error)));
     };
-    const regularKeypress = (_text: string, key: readline.Key): void => {
+    const releaseGate = keyInput.setKeypressGate((_text, key) => {
+      if (regularClosed || shuttingDown) return true;
       if (key.name === 'escape' && !key.ctrl && !key.shift) {
-        escapeSequence.deferEscape();
-        return;
+        escapeSequence.deferEscape(); return true;
       }
       const escapedEnter = escapeSequence.consumeFollowingKey(key);
-      if ((key.name === 'return' || key.name === 'enter') && (key.meta || escapedEnter)) {
-        submitRegularFollowUp();
-        return;
+      const effective = escapedEnter ? { ...key, name: 'enter', meta: true } : key;
+      const modal = hotkeyViewKey(effective);
+      if (modal !== undefined) return modal;
+      if (key.ctrl && !key.meta && !key.shift && key.name === 'c') return false;
+      if (key.ctrl && !key.meta && !key.shift && key.name === 'd') {
+        if (!rl.line) { shutdown('Au revoir ! 👋', 0); return true; }
+        return false;
       }
-      if (key.ctrl && key.name === 'q') {
-        submitRegularFollowUp();
-        return;
-      }
-      if (key.meta && key.name === 'up') {
-        const restored = restoreQueuedInput(rl.line);
-        if (restored !== undefined) setImmediate(() => replaceReadlineValue(restored));
-        else terminal.scrollUp();
-        return;
-      }
-      if (key.meta && key.name === 'down') {
-        terminal.scrollDown();
-        return;
-      }
-      if (key.ctrl && key.name === 'g') {
-        const currentInput = rl.line;
-        replaceReadlineValue('');
-        void editInExternalEditor(currentInput, settingsResolution.settings.externalEditor)
-          .then(content => { if (content !== undefined) replaceReadlineValue(content); })
-          .catch(error => terminal.showError(error instanceof Error ? error.message : String(error)));
-        return;
-      }
-      if (key.ctrl && key.name === 'c') return; // readline emits SIGINT below.
-      keyBindings.handleKeypress(key);
-    };
-    filteredTerminalInput.prependListener('keypress', regularKeypress);
+      return keyBindings.handleKeypress(effective, { currentInput: rl.line });
+    });
     inputDriver = {
-      prompt: () => rl.prompt(),
-      close: () => {
-        escapeSequence.cancel();
-        filteredTerminalInput?.removeListener('keypress', regularKeypress);
-        rl.close();
-      },
+      prompt: (preserveCursor = false) => { if (!regularClosed) rl.prompt(preserveCursor); },
+      close: () => { regularClosed = true; releaseGate(); escapeSequence.cancel(); rl.close(); },
       setPrompt: prompt => rl.setPrompt(prompt),
       getValue: () => rl.line,
+      getCursor: () => rl.cursor,
       replaceValue: replaceReadlineValue,
+      performAction: async (action, event) => {
+        if (regularClosed || shuttingDown) return false;
+        escapeSequence.cancel();
+        if (action === 'app.interrupt') { interrupt(); return true; }
+        if (action === 'app.escape') { escapeInterrupt(); return true; }
+        if (action === 'app.exit') { if (!rl.line) shutdown('Au revoir ! 👋', 0); return true; }
+        if (action === 'input.followUp') { submitRegularFollowUp(); return true; }
+        if (action === 'input.dequeue') {
+          const restored = restoreQueuedInput(rl.line);
+          if (restored !== undefined) replaceReadlineValue(restored);
+          else { terminal.scrollUp(20); rl.prompt(true); }
+          return true;
+        }
+        if (action === 'transcript.up') { terminal.scrollUp(20); rl.prompt(true); return true; }
+        if (action === 'transcript.down') { terminal.scrollDown(20); rl.prompt(true); return true; }
+        if (action === 'editor.clear') { replaceReadlineValue(''); return true; }
+        if (action === 'input.externalEditor') {
+          if (regularEditing) return false;
+          regularEditing = true;
+          const draft = rl.line, cursor = rl.cursor;
+          replaceReadlineValue('');
+          try {
+            const content = await editInExternalEditor(draft, settingsResolution.settings.externalEditor);
+            if (!regularClosed && !shuttingDown) replaceReadlineValue(content ?? draft, content === undefined ? cursor : content.length);
+          } catch (error) {
+            if (!regularClosed && !shuttingDown) { replaceReadlineValue(draft, cursor); reportError(error instanceof Error ? error.message : String(error)); }
+          } finally {
+            regularEditing = false;
+            if (!regularClosed && !shuttingDown) rl.prompt(true);
+          }
+          return true;
+        }
+        const key = Object.hasOwn(EDITOR_ACTION_KEYS, action) ? EDITOR_ACTION_KEYS[action] : undefined;
+        if (!key) return false;
+        const native = action === 'input.submit' && (event?.name === 'enter' || event?.name === 'return')
+          ? { ...key, name: event.name, sequence: event.sequence } : key;
+        rl.write(null, native); return true;
+      },
     };
+    let nativeHistory: string[] = [];
+    rl.on('history', (history: string[]) => {
+      if (hotkeyView) history.splice(0, history.length, ...nativeHistory);
+      else nativeHistory = [...history];
+    });
     terminal.setReadline(rl);
     if (startupDisplay.header) terminal.welcome();
 
     rl.on('SIGINT', interrupt);
     rl.on('line', input => {
-      if (suppressLineEvent) {
-        suppressLineEvent = false;
-        return;
-      }
       void dispatchLine(input, 'steer')
         .catch(error => terminal.showError(error instanceof Error ? error.message : String(error)));
     });

@@ -3,7 +3,7 @@
 // Copy CLI assets during build
 // ============================================================
 
-import { chmodSync, existsSync, mkdirSync } from 'fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { join } from 'path';
@@ -21,6 +21,12 @@ if (!existsSync(distDir)) {
 const entryPoint = join(distDir, 'index.js');
 if (existsSync(entryPoint)) {
   chmodSync(entryPoint, 0o755);
+}
+
+const schemaDir = join(distDir, 'schemas');
+mkdirSync(schemaDir, { recursive: true });
+for (const name of ['keybindings.schema.json', 'theme.schema.json']) {
+  copyFileSync(join(rootDir, 'packages/cli/schemas', name), join(schemaDir, name));
 }
 
 console.log('✅ CLI assets copied successfully');

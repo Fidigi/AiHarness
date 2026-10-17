@@ -57,6 +57,8 @@ packages/cli/src/index.ts
 | `packages/cli/src/tui/terminal-ui.ts` | Regular readline output, help and streaming writer |
 | `packages/cli/src/tui/fullscreen-{ui,input}.ts` | Alternate-screen rendering and raw-mode line editor |
 | `packages/cli/src/tui/{mode,theme-manager}.ts` | Mode precedence and built-in/custom themes |
+| `packages/cli/src/utils/{keybinding-manager,keybinding-config,keybinding-source,terminal-actions,keypress-gate,hotkey-view}.ts` | Data-only bounded configuration, literal trusted source, declarative actions, pre-native dispatch and passive view |
+| `packages/cli/schemas/{keybindings,theme}.schema.json`, `packages/cli/scripts/copy-assets.mjs` | Runtime-documented keyboard/palette grammar and byte-exact installed schema assets; [Core palette authority](./themes.md#shipped-palette-schema) remains separate |
 | `packages/cli/src/rpc/{rpc-server,rpc-controller,rpc-extension-ui}.ts` | Strict-LF dispatch, state/queue/session commands and extension-dialog bridge |
 | `packages/cli/src/resources/resource-manager.ts` | Markdown prompts/resources, frontmatter and expansion |
 | `tests/functional-parity/` | Manifest-driven process, transcript, session, extension and SDK golden probes |
@@ -76,6 +78,20 @@ Regular rendering prints status only at startup/prompt boundaries; fullscreen la
 `quietStartup` defaults to `false`: show the installed CLI version/title, hints and initial status snapshot. `"header"` keeps the title/hints but suppresses the initial snapshot; `true` skips both. Strict boolean `--verbose` overrides either quiet value without mutating settings; `-v` remains version. Core reserves the long name against extension registration. Both renderers keep startup detail suppression across empty input, palette updates and redraws, then restore normal live status on the first nonempty submitted line or initial prompt. Fullscreen still retains its operational frame/editor. Resource loading, trust prompts and warnings are not suppressed. Headless print/JSON/RPC channels do not acquire startup text. Reload updates the saved preference for a future start, not the current startup phase. `startup-display{,-process}.test.ts` covers policy, control-safe configured titles, real PTYs, trusted layer precedence, reload and headless purity.
 
 CLI flags override `AI_HARNESS_TUI_MODE`; terminal capability determines whether fullscreen can actually run. Unknown options and missing values fail before session/provider startup, but contributed-option discovery may execute eligible trusted extensions. `--help` and `--version` remain metadata-only exits. `--approve` (`-a`) and `--no-approve` (`-na`) provide opposing one-process project-trust overrides and never mutate `trust.json`; combining them is rejected.
+
+## Terminal Keybindings and Passive View
+
+`terminal-actions.ts` declares 22 application/editor actions without ambient process/stdout authority; `index.ts` registers real regular/fullscreen callbacks. `KeypressFilteredInput` gates public `keypress` emission before native listeners, after theme-report filtering. Consumed events do not also reach readline; explicit `preventDefault:false` deliberately passes through. Native editor bridges use public methods without recursively entering the stream gate. Ctrl+C/Ctrl+D/Escape retain driver safety ownership, including Node's meta-tagged bare-Escape alias; split Escape/Enter preserves the existing 25 ms decoder and 100 ms grace. Closed editor drivers cannot publish late replacements or reenter raw mode.
+
+The default literal source is `<resolved-agent-dir>/keybindings.json`; a nonempty startup-captured `AI_HARNESS_KEYBINDINGS` overrides it. Relative paths use startup cwd, `~/` uses home, brackets stay literal. The independently trusted agent-directory and project-resource gates remain separate; an explicit project path grants no trust. No automatic project or package-keybinding layer is added. Core's exported `readBoundedResourceText` admits stable regular single-link UTF-8 bytes, with safe ancestors. Print/JSON/RPC never load this terminal configuration.
+
+The strict array grammar caps the file at 65,536 UTF-8 bytes/512 entries, ID/action at 256 bytes and descriptions at 512. Entries require `id`/`keys`; only `action`, `description`, boolean `preventDefault` are optional. Case/aliases normalize one nonmodifier and at most five parts; controls/bidi, unknown fields, duplicate IDs/chords and reserved-key reassignment fail value-free. Unknown actions stay inert until explicitly registered; legacy saved-default IDs synthesize no authority. Configured chords override matching defaults, not every chord for an action. Runtime validation owns byte/normalized/reserved constraints beyond the schema, shipped unchanged to `dist/schemas/keybindings.schema.json`.
+
+`KeyBindingManager` publishes complete owned config layers using latest-request generation; clear/reload/shutdown retire stale reads. Invalid same-source candidates retain published bindings, never partially apply or revive stale unpublished ones. Changed/unavailable sources clear their old layer; an absent default file restores defaults quietly. `/reload` rereads bytes but the environment path remains startup-captured. Programmatic action admission requires own data fields; matching evaluates an eligible predicate once, while view projection invokes neither predicates, handlers nor serializers.
+
+F1/Alt+K opens `HotkeyView`: all 22 actions plus registered/configured inventory, effective chords and reserved/conditional/unavailable/unbound states. Filtering/paging is read-only, bounded to eight rows/page, a 256-codepoint query and cell-clipped output; current registered credentials are redacted on complete metadata/input **before** clipping. `:next`, `:prev`, `:all`, empty Enter and arrows browse; `:close`/Escape/F1/Alt+K close. Modal queries never dispatch commands/providers/external editors or enter native history. Both hosts restore exact draft/caret and preserve underlying transcript/stream/scroll; native safety input remains available.
+
+Regular transcript actions display actual 20-entry older/newer previews with clamped direction, anchored arrivals and one cell-bounded control-safe redacted row per entry. The existing buffer remains capped at 500 entries/16 MiB; paging does not mutate live streaming or editor state. This is not complete journal browsing, mouse/selection/scrollbar/image/hyperlink support or general terminal certification. See the [EN](../../users/en/terminal-keybindings.md)/[FR](../../users/fr/terminal-keybindings.md) operational grammar and action inventory, and [theme source/system contracts](./themes.md).
 
 ## Credential Authority During Startup
 
@@ -325,6 +341,10 @@ Reads, searches, and CLI `@path` inputs are canonicalized inside the active work
 
 ## Associated Tests
 
+- `packages/cli/src/utils/{keybinding-config,keybinding-manager,keybinding-source,terminal-actions,keypress-gate,hotkey-view,keybinding-schema}.test.ts` — strict owned layers/races, passive metadata, native consumption/pass-through, complete action defaults, full-value redaction before clipping and schema asset parity
+- `packages/cli/src/cli/{keybindings-process,keybindings-escape-process,keybindings-scroll-process}.test.ts` — actual emitted regular/fullscreen actions, all-action view/filter/reload/trust/headless purity, draft/caret/history/editor lifetimes, disposable-secret suppression, original split-Escape timing and real persisted history pages
+- `packages/cli/src/tui/{terminal-escape,terminal-scroll}.test.ts` — passive split-Enter projection, actual page contents/direction/bounds/arrival anchors, current redaction, controls/width and unchanged live streams; the genuine installed parity leaf adds both packed PATH-bin hosts and schema/reload/modal proof, using disclosed offline dependency seeds
+
 - `packages/cli/src/security/privacy-warnings.test.ts`, `packages/cli/src/cli/export-command.test.ts`, `packages/cli/src/rpc/rpc-controller.test.ts` and the genuine packed installed leaf — fixed bounded notices, warning-before-share/write ordering, synchronous sink failures, four-format stderr hygiene, preserved unknown text/redaction, additive correlated RPC warnings without extra records and installed PATH-bin exports
 
 - `packages/cli/src/cli/startup-credential-arity-process.test.ts`, `extension-args.test.ts` and the installed parity leaf — actual contributed boolean/string arity, exact provider-bound prompt bytes/encoded variants, genuine CLI/env masking, early-error secrecy, RPC framing and four genuine PTY reloads
@@ -365,7 +385,7 @@ Register and test it in `commands/handler.ts`, verify dispatch/completion in `in
 
 ### Change terminal input or rendering
 
-Update both interactive paths where behavior is shared. Test narrow dimensions, ANSI/Unicode width, history/completion, cancellation, external editor transitions, and terminal restoration.
+Update both interactive paths where behavior is shared. Test narrow dimensions, ANSI/Unicode width, history/completion, cancellation, external editor transitions, and terminal restoration. For keyboard changes, keep callbacks in the host, update `utils/terminal-actions.ts` and the packaged schema together, preserve reserved native ownership and test real PTY consumption, passive browsing, full-value redaction, reload and packed PATH consumers.
 
 ### Change RPC
 
@@ -374,6 +394,7 @@ Keep stdout strictly JSONL, validate untrusted IDs/params, update RPC tests, aff
 ## Related Domains
 
 - [`codemode.md`](./codemode.md) — shared sandbox, ceilings and branch store
+- [`themes.md`](./themes.md) — bounded theme discovery, adaptive system palette and complete shipped schema
 - [`providers.md`](./providers.md) — provider initialization and streaming
 - [`sessions.md`](./sessions.md) — JSONL persistence, branches and compaction
 - [`extensions.md`](./extensions.md) — commands, hooks, tools and trusted loading

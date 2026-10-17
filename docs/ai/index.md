@@ -13,8 +13,8 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~200 lines |
 | TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~55 lines |
 | Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~240 lines |
-| CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~370 lines |
-| Terminal Themes | [`topics/themes.md`](./topics/themes.md) | ~55 lines |
+| CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~405 lines |
+| Terminal Themes | [`topics/themes.md`](./topics/themes.md) | ~80 lines |
 | QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
 | Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~220 lines |
 | Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~200 lines |
@@ -64,6 +64,8 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → packages/cli/src/tui/*.ts (UI implementations)
 → tests/functional-parity/ (public contract probes and reviewed goldens)
 ```
+
+**Terminal keybindings or passive hotkey browsing** → Load `cli-reference.md` and the CLI rows in `project-map.md`; inspect `packages/cli/src/utils/{terminal-actions,keybinding-config,keybinding-manager,keybinding-source,keypress-gate,hotkey-view}.ts`, both input hosts, schema copy and actual emitted/packed PTY tests. Preserve reserved driver controls and draft/caret/history; never execute actions or predicates to render the view.
 
 **A server API endpoint or startup lifecycle** → Load only `server-api.md` + `project-map.md` §§3–4
 ```
@@ -146,6 +148,7 @@ These files do NOT belong to the agent documentation system:
 | Session SDK | Contributors | [FR](../contributors/fr/session-sdk.md) / [EN](../contributors/en/session-sdk.md) |
 | Internationalization and lazy Settings copy | Contributors / users | [FR contributor](../contributors/fr/i18n.md) / [EN contributor](../contributors/en/i18n.md); [FR loading](../users/fr/settings-loading.md) / [EN loading](../users/en/settings-loading.md) |
 | Optional file-pane loading | Users | [FR](../users/fr/workspace-loading.md) / [EN](../users/en/workspace-loading.md) |
+| Terminal keybindings | Users | [FR](../users/fr/terminal-keybindings.md) / [EN](../users/en/terminal-keybindings.md); all actions, passive view, source/reload and schema limits |
 | Standalone authentication/export | Users / operators | [FR](../users/fr/standalone-operations.md) / [EN](../users/en/standalone-operations.md) |
 | Mobile keyboard layout | Users | [FR](../users/fr/mobile-keyboard.md) / [EN](../users/en/mobile-keyboard.md); conservative detection and device limits |
 | User/contributor navigation | Humans | [`users/README.md`](../users/README.md) / [`contributors/README.md`](../contributors/README.md) |
