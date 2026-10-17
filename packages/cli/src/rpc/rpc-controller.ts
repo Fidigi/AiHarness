@@ -9,6 +9,7 @@ import {
   buildProviderModelCatalog,
   calculatePublishedModelCost,
   getSessionAccounting,
+  prepareCompactionContext,
   clampPublishedThinkingLevel,
   cleanupExpiredProcessOutputs,
   createProtocolModelDescriptor,
@@ -1458,10 +1459,13 @@ export class RpcController {
     if (!source) throw new Error('Compaction context or policy changed.');
     const leaf = session.activeLeafId, provider = this.context.provider, providerName = this.context.providerName, model = this.model, thinking = this.thinking;
     const redactText = this.context.redactText?.bind(this.context), redactJson = this.context.redactJson?.bind(this.context);
-    const messages = session.messages.map(cloneMessage);
-    if (messages.length < 3) throw new Error(`Not enough messages to compact (${messages.length}/3 minimum).`);
-    const firstKeptEntryId = messages.at(-2)?.id;
-    if (!firstKeptEntryId) throw new Error('Compaction requires at least two retained messages.');
+    const sourceMessages = session.messages.map(cloneMessage);
+    if (sourceMessages.length < 3) throw new Error(`Not enough messages to compact (${sourceMessages.length}/3 minimum).`);
+    const preparation = prepareCompactionContext(manager, sourceSessionId);
+    if (!preparation) throw new Error('No complete context prefix to compact.');
+    const messages = preparation.toCompact, firstKeptEntryId = preparation.firstKeptEntryId;
+    const tokensBefore = preparation.messages.reduce((total, message) => total + Math.ceil(message.content.length / 4), 0);
+    const retainedTokenEstimate = preparation.keptMessages.reduce((total, message) => total + Math.ceil(message.content.length / 4), 0);
     const controller = new AbortController();
     let finish!: () => void;
     const compaction: ActiveRun = { controller, done: new Promise<void>(resolve => { finish = resolve; }) };
@@ -1488,9 +1492,7 @@ export class RpcController {
       validate();
       const summaryResponse = redactJson?.(rawSummaryResponse) ?? rawSummaryResponse;
       if (!summaryResponse.content.trim()) throw new Error('Compaction failed: no summary generated.');
-      const tokensBefore = messages.reduce((total, message) => total + Math.ceil(message.content.length / 4), 0);
-      const estimatedTokensAfter = Math.ceil(summaryResponse.content.length / 4)
-        + messages.slice(-2).reduce((total, message) => total + Math.ceil(message.content.length / 4), 0);
+      const estimatedTokensAfter = Math.ceil(summaryResponse.content.length / 4) + retainedTokenEstimate;
       const persistedUsage = normalizeProviderUsage(summaryResponse.usage);
       validate();
       await manager.applyCompaction(sourceSessionId, summaryResponse.content, firstKeptEntryId, {

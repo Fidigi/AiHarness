@@ -190,18 +190,33 @@ export function projectContextPath(path: readonly SessionEntry[]): MessageEntry[
   ]);
 }
 
-export function projectSessionContext(entries: readonly SessionEntry[], leafId: string | undefined,
-  strict: boolean, reset: boolean, legacyBoundary?: string): MessageEntry[] {
+/** Canonical raw ancestry for model projection; private entries remain raw, never formatted here. */
+export function sessionContextPath(entries: readonly SessionEntry[], leafId: string | undefined,
+  strict: boolean, reset: boolean, legacyBoundary?: string): SessionEntry[] {
   if (reset && !leafId) return [];
   const graph = legacyContextEntries(entries, legacyBoundary ?? (!strict ? legacyRootBoundary(entries) : undefined));
   const unique = [...new Map(graph.filter(entry => entry.type !== 'metadata').map(entry => [entry.id, entry])).values()];
   const path = sessionEntryPath(unique, leafId);
-  if (strict) return path.complete ? projectContextPath(path.entries) : [];
+  if (strict) return path.complete ? path.entries : [];
   // Legacy unlinked roots are chronological history, not abandoned branches. Real
   // navigation always sets hasBranchedHistory and therefore uses the strict path.
   const linkedEntries = unique.some(entry => sessionEntryParent(entry) !== undefined);
-  if (!linkedEntries || !leafId) {
-    return projectContextPath(unique.sort((left, right) => left.timestamp - right.timestamp));
-  }
-  return path.complete ? projectContextPath(path.entries) : [];
+  if (!linkedEntries || !leafId) return unique.sort((left, right) => left.timestamp - right.timestamp);
+  return path.complete ? path.entries : [];
+}
+
+export function projectSessionContext(entries: readonly SessionEntry[], leafId: string | undefined,
+  strict: boolean, reset: boolean, legacyBoundary?: string): MessageEntry[] {
+  return projectContextPath(sessionContextPath(entries, leafId, strict, reset, legacyBoundary));
+}
+
+/** Known model links only: a command's projected ID is not a private-payload rewrite rule. */
+export function contextBoundaryMessageIds(path: readonly SessionEntry[], boundary: string,
+  beforeEntryId?: string): Set<string> | undefined {
+  const end = beforeEntryId === undefined ? path.length : path.findIndex(entry => entry.id === beforeEntryId);
+  if (end < 0) return undefined;
+  const matches = path.flatMap((entry, index) => index < end
+    && contextEntryMessages(entry).some(message => message.id === boundary) ? [index] : []);
+  if (matches.length !== 1) return undefined;
+  return new Set(path.slice(matches[0]).flatMap(entry => entry.type === 'message' ? [entry.id] : []));
 }

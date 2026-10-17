@@ -275,7 +275,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
       compactionTarget: () => { open(); idle(); return safe(manager.requestCompaction(sessionId)); },
       applyCompaction: (summary, firstKeptEntryId, details) => serialInput(details, async details => {
         idle();
-        if (!current().messages.some(message => message.id === firstKeptEntryId)) throw new Error('Compaction boundary is not an active message.');
+        if (!current().messages.some(message => message.id === firstKeptEntryId)
+          && manager.getEffectiveContext(sessionId).filter(entry => entry.type === 'message'
+            && entry.role === 'user' && entry.id === firstKeptEntryId).length !== 1) {
+          throw new Error('Compaction boundary is not an active message.');
+        }
         const source = manager.captureCompactionSource(sessionId);
         if (!source) throw new Error('Session no longer exists.');
         runtime.publishSessionEvent(sessionId, 'compaction.started', { automatic: false });

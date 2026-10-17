@@ -122,7 +122,23 @@ views and consumed views are refused. Title/settings changes alone do not revoke
 caller-summary authority. Admission is checked after structural preparation,
 immediately before the captured save; an admitted save finishes. This is not
 cross-process CAS, host isolation, a serialized capability or a new facade/store
-method. Hosts still own foreground admission and generation lifetimes.
+method. Hosts still own foreground admission and generation lifetimes. Legacy
+four-slot invalid boundaries remain no-ops; with an exact captured source, an
+invalid boundary rejects rather than permitting a false host completion event.
+
+Optional root helpers `getCompactionModelMessages` and `prepareCompactionContext`
+share Core's owned model view: prior summaries, public custom content (including
+`display:false`) and completed command context, never private custom state/details.
+Capture publication source and host bindings before preparation/callback exposure.
+Preparation returns mutable owned Message arrays, a retained model-entry ID and
+legacy context estimates; it does not generate, publish or renew source authority.
+`selectCompactionCut` accepts an owned complete projection and aligned trusted
+weights; assistant/tool units are indivisible and may exceed soft keep. Explicit
+manual fallback keeps two whole units when default keep fits everything; no useful
+prefix returns null. These are not full system/tool/media wire estimates, hooks,
+usage accounting or overflow recovery. No new facade/store capability is required.
+Native reload/copies/navigation retain custom/summary/command boundaries and remap
+known projected command links, never IDs inside private payloads.
 
 The passive root helper `resolveAgentCompactionContextWindow(provider?, model?)`
 uses published limits, or a 128,000-token fallback for other non-mock providers;
@@ -238,7 +254,8 @@ APIs do not expand the SDK facade, API major1, schema2, retained-file bounds or 
 `rename`, `setModel`, `setThinking`, `branchBefore(userEntryId)` and
 `applyCompaction(summary, firstKeptMessageId, details)` await Core persistence.
 `compactionTarget()` uses Core selection. Manual compaction requires a caller
-summary and valid active message boundary; it never invokes a model implicitly.
+summary and valid active model boundary (ordinary/custom/branch-summary/command);
+it never invokes a model implicitly.
 It remains available with automatic compaction disabled. The facade captures Core's
 source lease before observational `compaction.started` dispatch; a start observer
 cannot lend replacement-store authority to that pending publication. Title-only
@@ -370,7 +387,24 @@ Le titre/réglage seul ne retire pas l’autorité du résumé fourni. L’admis
 la préparation structurelle, juste avant la sauvegarde capturée ; une sauvegarde
 admise finit. Ce n’est ni CAS interprocessus, isolation hôte, capacité sérialisée,
 ni nouvelle méthode de façade/stockage. L’hôte possède encore l’admission au premier
-plan et les durées de génération.
+plan et les durées de génération. Sans source capturée, une borne invalide reste
+sans effet ; avec une source capturée exacte, elle rejette pour éviter une fausse
+notification de réussite hôte.
+
+Les utilitaires racine optionnels `getCompactionModelMessages` et
+`prepareCompactionContext` reprennent le contexte modèle possédé par Core : résumés
+antérieurs, contenu custom public même `display:false`, commandes terminées, jamais
+les données/détails custom privés. Capturez source de publication et liaisons hôte
+avant préparation/exposition de callbacks. Le résultat contient des tableaux Message
+possédés modifiables, une borne modèle et des estimations historiques ; il ne génère,
+ne publie et ne renouvelle aucune autorité de source. `selectCompactionCut` reçoit
+une projection complète possédée et des poids alignés fiables ; un groupe complet
+assistant/outils est indivisible et peut dépasser la conservation souple. Le repli
+manuel forcé garde deux unités entières si le seuil par défaut conserve tout ; sans
+préfixe utile, le résultat est null. Ni payload complet système/outils/médias, hooks,
+comptabilité ou récupération d’overflow ne sont ajoutés. Aucune nouvelle capacité
+obligatoire de façade/stockage. Rechargement/copie/navigation conservent les bornes
+custom/résumé/commande et remappent les liens de commandes connus, pas les IDs privés.
 
 L’utilitaire passif `resolveAgentCompactionContextWindow(provider?, model?)` utilise
 la limite publiée ou un repli de 128 000 tokens hors mock ; sans provider ou pour
@@ -450,7 +484,8 @@ sur une nouvelle racine indépendante.
 
 `rename`, `setModel`, `setThinking`, `branchBefore` et `applyCompaction` attendent
 la persistance Core. La compaction manuelle exige un résumé fourni et une borne
-active valide : aucun appel modèle implicite. Elle reste disponible si l’automatique
+modèle active valide (message/custom/résumé de branche/commande) : aucun appel
+modèle implicite. Elle reste disponible si l’automatique
 est désactivé. La façade capture la source Core avant l’observation
 `compaction.started` : un observateur ne peut pas prêter l’autorité d’un stockage
 remplaçant à cette publication en attente. Un changement de titre seul reste valide.

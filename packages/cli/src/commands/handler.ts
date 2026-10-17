@@ -14,6 +14,7 @@ import {
   flattenModelCatalog,
   getSupportedThinkingLevels,
   getSessionAccounting,
+  prepareCompactionContext,
   isValidSessionId,
   resolveAgentCompactionContextWindow,
   resolveAgentCompactionSettings,
@@ -790,11 +791,13 @@ const commands: CommandEntry[] = [
       try {
         if (!sessionId) throw new Error('Compaction context or policy changed.');
         validate();
-        const messages = structuredClone(session.messages);
-        if (messages.length < 3) return chalk.yellow(`Not enough messages to compact (${messages.length}/3 minimum).`);
-        const firstKeptId = messages[messages.length - 2]!.id;
+        const sourceMessages = structuredClone(session.messages);
+        if (sourceMessages.length < 3) return chalk.yellow(`Not enough messages to compact (${sourceMessages.length}/3 minimum).`);
         const source = manager.captureCompactionSource(sessionId);
         if (!source) throw new Error('Compaction context or policy changed.');
+        const preparation = prepareCompactionContext(manager, sessionId);
+        if (!preparation) return chalk.yellow('No complete context prefix to compact.');
+        const messages = preparation.toCompact, firstKeptId = preparation.firstKeptEntryId;
         if (!provider || !chat || !provider.validateConfig()) {
           return chalk.red('No configured AI provider for compaction. Set API keys or use /provider mock.');
         }

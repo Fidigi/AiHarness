@@ -2,6 +2,8 @@
 
 Evidence: `E-AH-MANUAL-COMPACTION-01` / DEC-93. Parent `525fec08f62788d8b557a1177da57170329ac32b`, branch `feature/v0.1.1`. **Bounded source/publication/host-lifetime repair only.** Global97 DONE/55 PARTIAL/152 remains unchanged; CLI-SES-07 stays PARTIAL. This receipt does not replace any of its complete preparation/hooks/accounting/overflow requirements or erase historical failures.
 
+Historical receipt for `7098220`, clarified by `e27b3c2`: the V9 preparation/last-two policy and remaining-preparation observations below describe that source, not later delivery. [DEC-94 shared preparation/model-boundary acceptance](./compaction-model-preparation.md) supplies the subsequent bounded repair without erasing these original failures or closing CLI-SES-07.
+
 ## Implemented bounded contract
 
 - Optional fifth manager-only own-data `{signal?,source?}`; authentic native signal state, exact manager-local frozen public source IDs and private WeakMap source/journal/legacy/store-generation authority. Capture before generation. Validate own-data canonical Session ID before snapshot/queue/final save without invoking replacement accessors. Preserve missing-session no-op, valid null-prototype private JSON and safe legacy error/ignored-nonstring/toJSON behavior. Copies/foreign/consumed views refuse. Store replace→restore withdraws; identical store, title/settings/automatic-disable conserve caller-summary authority. Structural reads/queue acquisition are not save admission; already-admitted saves finish.

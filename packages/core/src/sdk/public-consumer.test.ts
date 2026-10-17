@@ -39,6 +39,8 @@ import {
   AI_HARNESS_CORE_API_VERSION, createAgentSession, createAgentResourceLoader,
   AiProvider, JsonlSessionStore, SessionManager, deserializeSession, serializeSession,
   type SessionCompactionOptions, type SessionCompactionSource,
+  getCompactionModelMessages, prepareCompactionContext, selectCompactionCut,
+  type PreparedCompactionContext, type CompactionReason, type CompactionCut,
   type AgentSession, type AgentProvider, type AgentProviderConfig,
   type CreateAgentSessionOptions, type SessionStore, type AgentCredential,
   type AgentAuthDescriptor, type AgentModel, type AgentResourceLoader,
@@ -80,6 +82,15 @@ const fork: AgentSession = await sdk.fork('user-id', { before: true });
 await sdk.branchBefore('user-id'); await sdk.clone('copy');
 sdk.compactionTarget(); await sdk.applyCompaction('summary', 'first-kept', { usage: { totalTokens: 5 } });
 const manager = new SessionManager();
+const reason: CompactionReason = 'manual';
+const preparation: PreparedCompactionContext | null = prepareCompactionContext(manager, 'session-id', reason);
+const cut: CompactionCut | null = selectCompactionCut([], [], 1, reason);
+if (preparation) {
+  preparation.toCompact.push(...getCompactionModelMessages(manager, 'session-id'));
+  // @ts-expect-error preparation grants no private source, store or publication authority
+  preparation.source;
+}
+void cut;
 const source: Readonly<SessionCompactionSource> | null = manager.captureCompactionSource('session-id');
 if (source) {
   const publication: SessionCompactionOptions = { signal: new AbortController().signal, source };

@@ -20,9 +20,9 @@ import { readStableDirectoryEntries } from '../security/stable-directory.js';
 import { releaseStableLockPath } from '../security/stable-lock.js';
 import { redactProviderConfig as sanitizeProviderConfig } from './serialization.js';
 import {
-  captureLegacyCompactionPrefix, completeContextToolGroups, legacyCompactionPrefixApplies,
+  captureLegacyCompactionPrefix, completeContextToolGroups, contextBoundaryMessageIds, legacyCompactionPrefixApplies,
   legacyContextEntries, legacyRootBoundary, projectContextPath, projectSessionContext, readLegacyCompactionPrefix,
-  sessionEntryParent, sessionEntryPath,
+  sessionContextPath, sessionEntryParent, sessionEntryPath,
 } from './session-context.js';
 import {
   collectAbandonedEntries, copyBranchNavigationOptions, prepareBranchSummary,
@@ -30,6 +30,7 @@ import {
 import type { BranchNavigationOptions, BranchNavigationResult, BranchSummaryEvent, BranchSummaryHook, BranchSummaryOutput } from './branch-summarization.js';
 import { copyBranchSummaryAccounting, copyBranchSummaryEvent, copyBranchSummaryOutput } from './session-branch-summary.js';
 import { copySessionCustomValue } from './session-custom-data.js';
+import { selectCompactionCut } from './compaction-cut.js';
 import {
   captureSessionBranchSignal, copySessionBranchOptions, SessionBranchAdmissions, SessionBranchCancelledError,
 } from './session-branch-admission.js';
@@ -87,7 +88,7 @@ export interface CompactionEntry extends SessionEntryBase {
   type: 'compaction';
   parentEntryId?: string;
   summary: string;
-  firstKeptEntryId: string; // ID of the first message kept after compaction
+  firstKeptEntryId: string; // ID of the first model-visible entry kept after compaction
   tokenEstimate?: number;
   instruction?: string;
   tokensBefore?: number;
@@ -944,6 +945,12 @@ export class JsonlSessionStore {
     if (latestCompaction) {
       const firstKeptIndex = messages.findIndex(message => message.id === latestCompaction!.firstKeptEntryId);
       if (firstKeptIndex >= 0) messages = messages.slice(firstKeptIndex);
+      else {
+        const activePath = sessionContextPath(entries, activeLeafId, metadata?.hasBranchedHistory === true,
+          activeLeafReset, legacyBoundary);
+        const retainedIds = contextBoundaryMessageIds(activePath, latestCompaction.firstKeptEntryId, latestCompaction.id);
+        if (retainedIds) messages = messages.filter(message => retainedIds.has(message.id));
+      }
       const compactedAt = new Date(latestCompaction.timestamp);
       metadata = {
         ...metadata,
@@ -2223,7 +2230,8 @@ export class SessionManager {
       ? this.committedEntries.get(sessionId) : this.volatileEntries.get(sessionId);
     let entries: MessageEntry[];
     if (journal && (session.metadata?.hasBranchedHistory === true || readLegacyCompactionPrefix(session.metadata) !== undefined
-      || journal.some(entry => entry.type === 'branch_summary' || entry.type === 'custom' || entry.type === 'custom_message'))) {
+      || journal.some(entry => entry.type === 'compaction' || entry.type === 'branch_summary'
+        || entry.type === 'custom' || entry.type === 'custom_message'))) {
       entries = structuredClone(projectSessionContext(journal, session.activeLeafId,
         session.metadata?.hasBranchedHistory === true, session.metadata?.activeLeafReset === true,
         typeof session.metadata?.legacyRootBoundaryId === 'string' ? session.metadata.legacyRootBoundaryId : undefined));
@@ -2288,30 +2296,17 @@ export class SessionManager {
     const session = this.sessions.get(sessionId);
     if (!session || !this.compactionSettings.enabled) return null;
 
-    const entries = this.getEffectiveContext(sessionId);
-
-    if (entries.length < 4) return null; // Need at least a few messages to compact
-
-    const keepThreshold = this.compactionSettings.keepRecentTokens;
-
-    // Find the cut point: walk backwards until we've kept enough tokens
-    let accumulatedTokens = 0;
-    let cutIndex = entries.length - 1;
-
-    for (let i = entries.length - 1; i >= 0; i--) {
-      const entryTokens = TokenEstimator.estimateMessageEntry(entries[i]);
-      if (accumulatedTokens + entryTokens > keepThreshold) break;
-      accumulatedTokens += entryTokens;
-      cutIndex = i;
+    const entries = structuredClone(this.getEffectiveContext(sessionId))
+      .filter((entry): entry is MessageEntry => entry.type === 'message');
+    if (entries.length < 4) return null;
+    const keep = Object.getOwnPropertyDescriptor(this.compactionSettings, 'keepRecentTokens');
+    if (!keep || !('value' in keep) || typeof keep.value !== 'number' || !Number.isSafeInteger(keep.value) || keep.value < 0) {
+      throw new Error('Compaction cut policy is invalid.');
     }
-
-    // If we kept everything, no compaction needed
-    if (cutIndex === 0) return null;
-
-    const toCompact = entries.slice(0, cutIndex);
-    const keptEntries = entries.slice(cutIndex);
-
-    return { toCompact, keptEntries };
+    const cut = selectCompactionCut(entries, entries.map(entry => TokenEstimator.estimateMessageEntry(entry)),
+      Math.max(1, keep.value), 'threshold');
+    // Preserve the existing mutable two-array callback/public return shape.
+    return cut ? { toCompact: cut.toCompact, keptEntries: cut.keptEntries } : null;
   }
 
   /** Capture before a host awaits summary generation; no provider or store work is started. */
@@ -2379,7 +2374,10 @@ export class SessionManager {
       admission.check();
     };
     validate();
-    await this.applyCompactionResult(sessionId, summary, firstKeptEntryId, details, validate, admission.admit);
+    const applied = await this.applyCompactionResult(sessionId, summary, firstKeptEntryId, details, validate, admission.admit);
+    // Legacy four-slot invalid boundaries remain no-ops. A captured publication must
+    // report refusal, never let a generation owner publish a false completion event.
+    if (!applied && source) throw new Error('Compaction boundary is not an active model entry.');
   }
 
   private async applyCompactionResult(
@@ -2409,9 +2407,22 @@ export class SessionManager {
       const session = this.sessions.get(sessionId);
       if (!session) return false;
 
-      // Refuse an invalid boundary rather than silently dropping almost all history.
+      // Resolve nonordinary boundaries through the same owned model projection and raw ancestry.
+      // A provider-supplied private ID, orphan or ambiguous projected link grants no authority.
       const firstKeptIndex = session.messages.findIndex(message => message.id === firstKeptEntryId);
-      if (firstKeptIndex < 0) return false;
+      let messages = session.messages.slice(firstKeptIndex);
+      if (firstKeptIndex < 0) {
+        const model = this.getEffectiveContext(sessionId);
+        if (model.filter(entry => entry.id === firstKeptEntryId).length !== 1) return false;
+        const raw = await this.getRawEntries(sessionId);
+        validateAdmission?.();
+        const activePath = sessionContextPath(raw, session.activeLeafId, session.metadata?.hasBranchedHistory === true,
+          session.metadata?.activeLeafReset === true, typeof session.metadata?.legacyRootBoundaryId === 'string'
+            ? session.metadata.legacyRootBoundaryId : undefined);
+        const retainedIds = contextBoundaryMessageIds(activePath, firstKeptEntryId);
+        if (!retainedIds) return false;
+        messages = session.messages.filter(message => retainedIds.has(message.id));
+      }
       let legacyPrefix = readLegacyCompactionPrefix(session.metadata);
       if (!legacyPrefix && typeof Object.getOwnPropertyDescriptor(session.metadata ?? {}, 'compactionSummary')?.value === 'string') {
         legacyPrefix = captureLegacyCompactionPrefix(session, await this.getRawEntries(sessionId));
@@ -2420,7 +2431,6 @@ export class SessionManager {
       }
 
       const updatedAt = new Date();
-      const messages = session.messages.slice(firstKeptIndex);
       const compactionEntry: CompactionEntry = {
         id: `compaction-${crypto.randomUUID()}`,
         type: 'compaction',
@@ -2671,7 +2681,10 @@ export class SessionManager {
       const compaction = path.filter((entry): entry is CompactionEntry => entry.type === 'compaction').at(-1);
       if (compaction) {
         const firstKept = messages.findIndex(message => message.id === compaction.firstKeptEntryId);
-        messages = firstKept >= 0 ? messages.slice(firstKept) : messages.filter(message => {
+        const retainedIds = contextBoundaryMessageIds(path, compaction.firstKeptEntryId, compaction.id);
+        if (firstKept >= 0) messages = messages.slice(firstKept);
+        else if (retainedIds) messages = messages.filter(message => retainedIds.has(message.id));
+        else messages = messages.filter(message => {
           const position = path.findIndex(entry => entry.id === message.id);
           return position > path.indexOf(compaction);
         });
@@ -3123,8 +3136,12 @@ export class SessionManager {
     };
     const clonedEntries: RestorableSessionEntry[] = structuredClone(retainedEntries).map(entry => {
       const base = { id: extraIds.get(entry.id)!, parentEntryId: entry.parentEntryId ? remapParent(entry.parentEntryId) : undefined };
-      if (entry.type === 'compaction') return { ...entry, ...base,
-        firstKeptEntryId: messageIds.get(entry.firstKeptEntryId) ?? messageIds.get(sourceMessages[0]?.id) ?? base.id };
+      if (entry.type === 'compaction') {
+        const commandBoundary = [...commandIds].find(([source]) => entry.firstKeptEntryId === `context-${source}`)?.[1];
+        return { ...entry, ...base, firstKeptEntryId: copiedId(entry.firstKeptEntryId)
+          ?? (commandBoundary ? `context-${commandBoundary}` : undefined)
+          ?? messageIds.get(sourceMessages[0]?.id) ?? base.id };
+      }
       if (entry.type === 'branch_summary') return { ...entry, ...base,
         ...(entry.fromEntryId ? { fromEntryId: copiedId(entry.fromEntryId) ?? entry.fromEntryId } : {}) };
       return { ...entry, ...base };

@@ -197,6 +197,11 @@ export {
   TokenEstimator,
 } from './sessions/compaction.js';
 export type { CompactionConfig, CompactionResult } from './sessions/compaction.js';
+export { getCompactionModelMessages } from './sessions/compaction-model-messages.js';
+export { prepareCompactionContext } from './sessions/compaction-preparation.js';
+export type { CompactionReason, PreparedCompactionContext } from './sessions/compaction-preparation.js';
+export { selectCompactionCut } from './sessions/compaction-cut.js';
+export type { CompactionCut } from './sessions/compaction-cut.js';
 
 // Agent execution shared by CLI and server
 export { runToolLoop, AgentAbortError } from './agent/tool-loop.js';

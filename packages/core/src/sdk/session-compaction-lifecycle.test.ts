@@ -102,6 +102,38 @@ for (const mode of ['memory', 'native-backed', 'structural-backed'] as const) de
       expect(f.summarize).not.toHaveBeenCalled(); expect(f.chat).not.toHaveBeenCalled(); expect(f.stream).not.toHaveBeenCalled();
     } finally { await cleanup(f); }
   });
+  it.each(['custom-message', 'command', 'branch-summary'] as const)('publishes its genuine nonordinary compactionTarget at %s without implicit generation', async family => {
+    const f = await fixture(mode);
+    try {
+      const target = family === 'custom-message'
+        ? await f.manager.appendCustomMessage(f.sdk.id, 'public', 'KEPT_PUBLIC_BOUNDARY', { display: false, details: { secret: 'PRIVATE_DETAILS' } })
+        : family === 'branch-summary'
+          ? await f.manager.addBranchSummary(f.sdk.id, 'KEPT_PUBLIC_BOUNDARY', 'kept')
+          : await f.manager.addCommand(f.sdk.id, { command: 'kept', cwd: f.cwd, output: 'KEPT_PUBLIC_BOUNDARY', status: 'completed' });
+      if (!target) throw new Error('Fixture boundary missing.');
+      const boundary = family === 'command' ? `context-${target.id}` : target.id;
+      await f.manager.appendCustomEntry(f.sdk.id, 'private', { secret: 'PRIVATE_STATE', anchor: boundary });
+      f.manager.setCompactionSettings({ enabled: true, keepRecentTokens: 1 });
+      const prepared = f.sdk.compactionTarget();
+      expect(prepared?.keptEntries[0].id).toBe(boundary);
+      const before = (await f.manager.getRawEntries(f.sdk.id)).filter(entry => entry.type !== 'metadata');
+      await f.sdk.applyCompaction('Provided SDK boundary summary', boundary);
+      expect(f.sdk.messages()).toEqual([]);
+      const contents = f.sdk.effectiveContext().flatMap(entry => entry.type === 'message' ? [entry.content] : []);
+      expect(contents).toHaveLength(2); expect(contents[0]).toBe('[Context Summary] Provided SDK boundary summary');
+      expect(contents[1]).toContain('KEPT_PUBLIC_BOUNDARY'); expect(JSON.stringify(contents)).not.toMatch(/PRIVATE_|Seed/);
+      const raw = await f.sdk.history(); for (const entry of before) expect(raw.find(next => next.id === entry.id)).toEqual(entry);
+      expect(f.events.map(event => event.type)).toEqual(['compaction.started', 'compaction.completed']);
+      const copy = await f.sdk.clone('nonordinary boundary clone');
+      try {
+        expect(copy.effectiveContext().flatMap(entry => entry.type === 'message' ? [entry.content] : [])).toEqual(contents);
+        const privateEntry = (await copy.history()).find(entry => entry.type === 'custom' && entry.customType === 'private');
+        expect(privateEntry?.type === 'custom' && privateEntry.data).toEqual({ secret: 'PRIVATE_STATE', anchor: boundary });
+      } finally { await copy.dispose(); }
+      expect(f.summarize).not.toHaveBeenCalled(); expect(f.chat).not.toHaveBeenCalled(); expect(f.stream).not.toHaveBeenCalled();
+      await borrowedSibling(f);
+    } finally { await cleanup(f); }
+  });
   it('withdraws when its start observer synchronously disposes the handle without stealing the live sibling', async () => {
     const f = await fixture(mode), before = await f.manager.getRawEntries(f.sdk.id), snapshot = structuredClone(f.manager.get(f.sdk.id)), bytes = await f.bytes();
     let disposal: Promise<void> | undefined;
