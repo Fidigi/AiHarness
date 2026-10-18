@@ -460,6 +460,12 @@ export class ResourceManager {
     const knownRoots = [this.cwd, this.agentDir, this.homeDir].sort((a, b) => b.length - a.length);
     const resolve = (entries: readonly string[]): ResourceFileSelector[] => entries.map(pattern => {
       const value = typeof pattern === 'string' && /^[+!-]/u.test(pattern) ? pattern.slice(1) : pattern;
+      // Expand only the home prefix after the selector modifier. Keep the home
+      // directory literal, including any glob metacharacters in its name.
+      if (typeof value === 'string' && (value === '~' || value.startsWith('~/') || value.startsWith('~\\'))) {
+        const marker = pattern.slice(0, pattern.length - value.length);
+        return { pattern: marker + (value === '~' ? '.' : value.slice(2)), baseDir: path.resolve(this.homeDir) };
+      }
       const baseDir = typeof value === 'string' && path.isAbsolute(value)
         ? knownRoots.find(root => inside(root, value)) ?? this.cwd : this.cwd;
       return { pattern, baseDir };

@@ -389,6 +389,15 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       expect(JSON.parse(result.stdout)).toEqual({ result: 'STREAM_ERROR_OK', mode, kind });
     }, 20_000);
 
+  for (const mode of ['core', 'sdk', 'print', 'json', 'rpc']) for (const scope of ['global', 'project', 'explicit']) for (const policy of ['allow', 'refuse']) {
+    it(`preserves home selectors and template arguments through installed packages (${mode}/${scope}/${policy})`, async () => {
+      const worker = path.join(consumer, `resource-home-${mode}-${scope}-${policy}.mjs`);
+      await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/resource-home-probe.mjs'), worker);
+      expect(await run(process.execPath, [worker, mode, scope, policy], consumer, { ...environment, AIH_RESOURCE_COMMAND: 'ai-harness' }))
+        .toEqual({ code: 0, stdout: 'resource home/arguments OK\n', stderr: '' });
+    });
+  }
+
   describe('installed PATH-bin definitive credential authority', () => {
     const literal = 'ordinary-installed-arity', secret = 'genuine-installed-arity: +/字';
     const secretVariants = [...new Set([secret, Buffer.from(secret).toString('base64'), Buffer.from(secret).toString('base64url'), Buffer.from(secret).toString('hex'), encodeURIComponent(secret)])];
