@@ -1,6 +1,6 @@
 # Mixed Reasoning/Text Order — A3-CLI-11 Subset
 
-> **Status: PARTIAL for A3-CLI-11 — 2026-10-18.** Mixed-input ordering remains **uncommitted work on base `81129d5`**. Complete unit/public parity checks pass, but integrated E2E FAILED: eight application configurations failed and only demo executed successfully. Implementation is paused for the user-requested [active tracker](../AUDIT-3.md) reconciliation. No whole-review or integrated acceptance is claimed.
+> **Status: PARTIAL for A3-CLI-11 — 2026-10-18.** Mixed-input ordering is included in the post-reconciliation implementation increment (parent `e939b2b`), together with the [active tracker](../AUDIT-3.md) update. Complete unit/public parity checks pass, but integrated E2E FAILED: eight application configurations failed and only demo reports executed passing tests. No whole-review or integrated acceptance is claimed.
 
 ## Narrow Contract and Owning Changes
 
@@ -53,7 +53,7 @@ All services, directories, trust and credentials are disposable/local. The publi
 | progress | Status 1; same occupied 3099 health URL |
 | demo | **8 passed**, 23.5 seconds |
 
-The current `test-results/e2e-suites.json` preserves those eight failures and demo success; `/tmp/aih-a3-mixed-delta-e2e.log` contains the actual startup/URL errors. Standard's cause and remaining server ownership are **not diagnosed**. Passing bundle/demo checks or the unit/public gates do not replace this failed aggregate. No timeout, browser flag, assertion, selector, retry or suite-ownership change is made to conceal it. Source/test hashes remain frozen; the product patch is not committed by this documentation reconciliation.
+The current `test-results/e2e-suites.json` preserves those eight failures and demo success; `/tmp/aih-a3-mixed-delta-e2e.log` contains the actual startup/URL errors. Standard's cause and remaining server ownership are **not diagnosed**. Passing bundle/demo checks or the unit/public gates do not replace this failed aggregate. No timeout, browser flag, assertion, selector, retry or suite-ownership change is made to conceal it. Source/test hashes remain frozen; the same frozen product patch is included in the post-reconciliation partial implementation increment, not accepted as integrated.
 
 ## Boundaries Still Open
 

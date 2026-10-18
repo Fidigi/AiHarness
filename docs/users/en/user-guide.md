@@ -577,6 +577,8 @@ ai-harness --mode json --no-session "List the important files"
 
 The first record is a version-3 session header. It is followed by agent, turn, message, text/reasoning update, tool execution/result, retry, compaction, usage, error, and settled records as applicable. Completed `message_end` values are authoritative. Diagnostics and extension logs use stderr, so stdout can be piped directly to a JSONL consumer. Read the stream continuously and split records only on LF.
 
+When an OpenAI-compatible delta (including Azure/local) carries both reasoning and answer text, reasoning updates precede text updates. The shared agent turn does the same for a combined extension callback. Distinct events keep their input order; this is not global transcript sorting, and independent redaction buffering is unchanged. JSON/RPC retain their existing record types and per-message block indexing; print still writes only the final answer.
+
 Tools may report version-1 replacement progress snapshots through `context.onProgress`. JSON/RPC expose `tool_execution_update.partialResult.details.toolProgress` with host-issued tool IDs, increasing sequence and bounded text/JSON details. Awaiting the callback applies backpressure; ignored floods coalesce and omissions are reported. Oversized strings are suppressed rather than exposing a possibly secret prefix. Details never authorize billing, store writes or tool activation. The last accepted snapshot is persisted once with completed/failed/cancelled state in the outer result’s `metadata.toolProgress`; cancellation suppresses late updates. Print mode remains final-text-only. Running updates are rebuildable, not a crash-durable per-update journal.
 
 ### RPC Mode

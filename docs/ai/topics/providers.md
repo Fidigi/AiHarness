@@ -62,6 +62,10 @@ CLI and RPC layer explicit flags over agent settings `defaultProvider`, `default
 
 Credential resolution order is environment, trusted `providerApiKeyCommands`, process memory, then encrypted storage. Command output is bounded, cached only in the process, and immediately registered with the shared redactor. OAuth endpoints and responses are bounded and HTTPS-only; refreshed access/refresh tokens replace the encrypted record without crossing descriptor boundaries. The redactor covers raw, URI, base64/base64url, hex and JSON-escaped variants, recursively bounds JSON traversal, and supplies independent stateful streams for chunked channels.
 
+### Mixed reasoning/text deltas
+
+An OpenAI-compatible SSE delta containing both `reasoning_content` and `content` publishes and awaits reasoning before text, regardless of JSON property order. Azure/local inherit that normalization. Shared turns likewise await reasoning before text when one extension callback supplies both. Separate callbacks/SSE events retain their input order; HTTP byte chunks do not define a sorting boundary. Final text/reasoning, usage, tool calls, output ceilings and protocol versions are conserved. Independent stateful redactor buffering/flush remains unchanged; this is not global transcript sorting, signed reasoning replay or conformance for every dialect.
+
 ### Final tool-argument JSON
 
 OpenAI-compatible chat/stream, OpenAI Responses SSE/WebSocket and Anthropic streaming share an internal final string decoder. Malformed nonempty JSON refuses the entire batch before any complete `tool_call` event or tool execution, including when an earlier call in that response is valid. The fixed error `The provider tool arguments were invalid JSON.` includes no argument body or parser exception. Shared turns treat this protocol failure as terminal even before text; normal transient-error retries remain unchanged. A started Responses WebSocket failure cannot trigger an SSE replay, and its cached connection is retired.
@@ -162,6 +166,7 @@ Provider OAuth remains Device Flow; it has no pasted callback endpoint. The shar
 
 ## Associated Tests
 
+- `packages/core/src/providers/mixed-delta-order.test.ts`, `packages/cli/src/cli/mixed-delta-process.test.ts` and the installed parity consumer — mixed-field/callback reasoning-first order, separate-event controls, awaited observers, terminal observer failure, exact final output and retained JSON/RPC/SDK framing/history
 - `packages/core/src/providers/tool-arguments{,-admission}.test.ts` — real loopback fragmented final JSON, valid/empty/primitive controls, whole-batch refusal before hooks/effects, terminal retry classification and passive nonstring decoding
 - `packages/core/src/providers/provider-websocket.integration.test.ts`, `packages/cli/src/cli/tool-json-process.test.ts` and the installed parity consumer — real cached/auto WebSocket no-replay/connection retirement, emitted print/JSON/RPC/SDK errors, no tool effects/retries, valid controls and explicit recovery through the public installed package
 - `packages/core/src/providers/{index,provider-network,credentials,provider-websocket.integration}.test.ts` and `packages/cli/src/agent/provider-turn.test.ts` — built-ins, bounded payloads/streaming, real local WebSocket and CONNECT-proxy handshakes, cached continuation/fallback, credentials, tools, images, reasoning, usage and cancellation

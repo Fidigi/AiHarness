@@ -780,15 +780,15 @@ export class OpenAiProvider extends AiProvider {
           catch { throw new Error('The provider streaming response was invalid.'); }
           stopReason = lengthStop(data.choices?.[0]?.finish_reason).stopReason ?? stopReason;
           const delta = data.choices?.[0]?.delta;
-          if (typeof delta?.content === 'string' && delta.content) {
-            addOutput(delta.content);
-            fullContent += delta.content;
-            await onChunk(delta.content, { type: 'text_delta', data });
-          }
           if (typeof delta?.reasoning_content === 'string' && delta.reasoning_content) {
             addOutput(delta.reasoning_content);
             fullReasoning += delta.reasoning_content;
             await onChunk('', { type: 'reasoning_delta', data: { content: delta.reasoning_content } });
+          }
+          if (typeof delta?.content === 'string' && delta.content) {
+            addOutput(delta.content);
+            fullContent += delta.content;
+            await onChunk(delta.content, { type: 'text_delta', data });
           }
           for (const fragment of Array.isArray(delta?.tool_calls) ? delta.tool_calls : []) {
             if (!Number.isSafeInteger(fragment.index) || fragment.index < 0

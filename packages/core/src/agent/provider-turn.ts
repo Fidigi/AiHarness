@@ -203,15 +203,15 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
         const operation = deliveryTail.then(async () => {
           if (deliveryFailure) throw deliveryFailure;
           if (event) await options.onProviderEvent?.(safeJson(event));
-          if (chunk) {
-            const safeChunk = contentRedactor?.push(chunk) ?? safeText(chunk);
-            streamedContent += safeChunk;
-            if (safeChunk) await options.onTextDelta?.(safeChunk);
-          }
           if (reasoningDelta) {
             const safeReasoning = reasoningRedactor?.push(reasoningDelta) ?? safeText(reasoningDelta);
             streamedReasoning += safeReasoning;
             if (safeReasoning) await options.onReasoningDelta?.(safeReasoning);
+          }
+          if (chunk) {
+            const safeChunk = contentRedactor?.push(chunk) ?? safeText(chunk);
+            streamedContent += safeChunk;
+            if (safeChunk) await options.onTextDelta?.(safeChunk);
           }
         });
         deliveryTail = operation.then(

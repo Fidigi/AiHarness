@@ -379,6 +379,16 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     expect(JSON.parse(result.stdout)).toMatchObject({ result: 'TOOL_JSON_OK', mode, dialect, kind });
   });
 
+  it.each(['print', 'json', 'rpc', 'sdk'].flatMap(mode => ['native', 'combined', 'split'].map(kind => `${mode}/${kind}`)))(
+    'preserves mixed-delta ordering through installed public packages (%s)', async scenario => {
+      const worker = path.join(consumer, `mixed-delta-${scenario.replace('/', '-')}.mjs`);
+      await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', 'mixed-delta-probe.mjs'), worker);
+      const result = await run(process.execPath, [worker, scenario], consumer, { ...environment, AIH_MIXED_DELTA_COMMAND: 'ai-harness' });
+      expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe('');
+      const [mode, kind] = scenario.split('/');
+      expect(JSON.parse(result.stdout)).toMatchObject({ result: 'MIXED_DELTA_OK', mode, kind });
+    });
+
   describe('installed PATH-bin definitive credential authority', () => {
     const literal = 'ordinary-installed-arity', secret = 'genuine-installed-arity: +/字';
     const secretVariants = [...new Set([secret, Buffer.from(secret).toString('base64'), Buffer.from(secret).toString('base64url'), Buffer.from(secret).toString('hex'), encodeURIComponent(secret)])];
