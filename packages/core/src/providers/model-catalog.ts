@@ -295,6 +295,20 @@ function bestPartial<T extends ModelIdentity>(matches: T[]): T | undefined {
     .sort((left, right) => right.id.localeCompare(left.id))[0];
 }
 
+function partialChoice<T extends ModelIdentity>(matches: T[], reference: string): ResolvedModel<T> {
+  // Alias/date preference selects a model within one provider, not authority
+  // between providers. Credentials may disambiguate only a sole available one.
+  const providers = new Map<string, T[]>();
+  for (const model of matches) {
+    const key = model.provider.toLowerCase();
+    const group = providers.get(key) ?? [];
+    group.push(model);
+    providers.set(key, group);
+  }
+  const choices = [...providers.values()].map(group => bestPartial(group)!).filter(Boolean);
+  return exactChoice(choices, reference);
+}
+
 function resolvePlainModel<T extends ModelIdentity>(
   rawReference: string,
   models: readonly T[],
@@ -343,8 +357,7 @@ function resolvePlainModel<T extends ModelIdentity>(
     model.id.toLowerCase().includes(normalized)
     || (model.name ?? '').toLowerCase().includes(normalized)
   ));
-  const model = bestPartial(partial);
-  if (model) return { model };
+  if (partial.length) return partialChoice(partial, rawReference);
 
   if (inferredProvider) {
     const rawNormalized = rawReference.toLowerCase();
@@ -354,8 +367,7 @@ function resolvePlainModel<T extends ModelIdentity>(
       candidate.id.toLowerCase().includes(rawNormalized)
       || (candidate.name ?? '').toLowerCase().includes(rawNormalized)
     ));
-    const fallback = bestPartial(rawPartial);
-    if (fallback) return { model: fallback };
+    if (rawPartial.length) return partialChoice(rawPartial, rawReference);
   }
   return { code: 'no-match', message: `Model "${rawReference}" not found.` };
 }
@@ -459,19 +471,34 @@ export function resolveModelScope<T extends ModelIdentity>(
       continue;
     }
 
-    const resolved = resolveModelReference(trimmed, availableModels);
-    if (!resolved.model) {
+    const providerGroups = new Map<string, T[]>();
+    for (const model of availableModels) {
+      const provider = model.provider.toLowerCase();
+      const group = providerGroups.get(provider) ?? [];
+      group.push(model);
+      providerGroups.set(provider, group);
+    }
+    // Explicit provider references keep full-ID-first/routed-ID semantics. A
+    // bare scope is intentionally plural, unlike a single --model reference.
+    const qualified = [...providerGroups.keys()].some(provider => trimmed.toLowerCase().startsWith(`${provider}/`));
+    const resolved = (qualified ? [availableModels] : [...providerGroups.values()])
+      .map(candidates => resolveModelReference(trimmed, candidates));
+    const matched = resolved.filter(result => result.model !== undefined);
+    if (!matched.length) {
+      const failure = resolveModelReference(trimmed, availableModels);
       diagnostics.push({
-        code: resolved.code ?? 'no-match',
+        code: failure.code ?? 'no-match',
         pattern: trimmed,
-        message: resolved.message ?? `No models match pattern "${trimmed}".`,
+        message: failure.message ?? `No models match pattern "${trimmed}".`,
       });
       continue;
     }
-    const key = modelKey(resolved.model);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    models.push({ model: resolved.model, thinkingLevel: resolved.thinkingLevel });
+    for (const result of matched) {
+      const key = modelKey(result.model!);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      models.push({ model: result.model!, thinkingLevel: result.thinkingLevel });
+    }
   }
   return { models, diagnostics };
 }

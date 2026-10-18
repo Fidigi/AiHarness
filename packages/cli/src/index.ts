@@ -826,6 +826,7 @@ async function main(): Promise<void> {
       apiKey: cliArguments.apiKey,
     }, settingsResolution.settings);
     const refreshedStartup = await resolveStartupProvider(configuredProviders, { ...refreshedModelSettings.selection, offline });
+    refreshedStartup.scopeDiagnostics?.forEach(() => process.stderr.write('Warning: A model scope entry could not be resolved.\n'));
     commandContext.provider = refreshedStartup.provider;
     commandContext.modelPatterns = refreshedModelSettings.modelPatterns;
     const refreshedModel = refreshedStartup.model ?? refreshedStartup.provider.getConfiguredModel();
@@ -1026,6 +1027,7 @@ async function main(): Promise<void> {
   let ctx = commandHandler.getContext();
   try {
     const startup = await resolveStartupProvider(ctx.providers, { ...effectiveModelSettings.selection, offline });
+    startup.scopeDiagnostics?.forEach(() => process.stderr.write('Warning: A model scope entry could not be resolved.\n'));
     ctx.provider = startup.provider;
     const startupModel = startup.model ?? startup.provider.getConfiguredModel();
     const requestedThinking = coreThinkingLevel(cliArguments.thinking)

@@ -379,6 +379,15 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       expect(JSON.parse(result.stdout)).toEqual({ result: 'MCP_PATTERN_OK', mode, scope });
     });
 
+  for (const mode of ['print', 'json', 'rpc']) for (const scenario of ['one', 'two', 'none', 'qualified', 'native', 'pin', 'scope', 'warning', 'selected-warning', 'unmatched']) {
+    it(`resolves models and plural scopes through the installed PATH bin (${mode}/${scenario})`, async () => {
+      const worker = path.join(consumer, `model-resolution-${mode}-${scenario}.mjs`);
+      await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/model-resolution-probe.mjs'), worker);
+      expect(await run(process.execPath, [worker, mode, scenario], consumer, { ...environment, AIH_MODEL_RESOLUTION_COMMAND: 'ai-harness' }))
+        .toEqual({ code: 0, stdout: 'model resolution OK\n', stderr: '' });
+    });
+  }
+
   it.each(['print', 'json', 'rpc', 'sdk'].flatMap(mode => ['recover', 'exhausted', 'prefix', 'queued', 'normal'].map(kind => `${mode}/${kind}`)))(
     'preserves explicit SSE error/retry boundaries through installed public packages (%s)', async scenario => {
       const worker = path.join(consumer, `stream-error-${scenario.replace('/', '-')}.mjs`);

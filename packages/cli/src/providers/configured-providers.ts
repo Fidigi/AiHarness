@@ -13,6 +13,7 @@ import {
   type ProviderConfig,
   type ExtensionProvider,
   type ThinkingLevel,
+  type ModelScopeDiagnostic,
 } from '@ai-harness/core';
 
 export interface StartupProviderSelection {
@@ -66,6 +67,8 @@ export interface ResolvedStartupProvider {
   providerName: string;
   model?: string;
   thinkingLevel?: ThinkingLevel;
+  /** Nonfatal scope failures; adapters warn on stderr without protocol records. */
+  scopeDiagnostics?: ModelScopeDiagnostic[];
 }
 
 function attempt(
@@ -206,6 +209,7 @@ export async function resolveStartupProvider(
   let providerName = requestedProvider;
   let model = requestedModel;
   let thinkingLevel: ThinkingLevel | undefined;
+  let scopeDiagnostics: ModelScopeDiagnostic[] = [];
 
   if (requestedModel || selection.models?.length) {
     const catalog = flattenModelCatalog(requestedModel
@@ -226,6 +230,11 @@ export async function resolveStartupProvider(
           retries: 0,
         }));
     const providerNames = new Map(catalog.map(item => [item.provider.toLowerCase(), item.provider]));
+    const candidates = requestedProvider
+      ? catalog.filter(item => item.provider.toLowerCase() === requestedProvider)
+      : catalog;
+    const scope = resolveModelScope(selection.models ?? [], candidates);
+    scopeDiagnostics = scope.diagnostics;
 
     if (requestedModel) {
       const prefix = requestedModel.slice(0, requestedModel.indexOf('/')).toLowerCase();
@@ -235,6 +244,7 @@ export async function resolveStartupProvider(
         model = resolved.model.id;
         thinkingLevel = resolved.thinkingLevel;
       } else {
+        if (resolved.code === 'ambiguous') throw new Error(resolved.message ?? 'Model reference is ambiguous. Use provider/model.');
         if (requestedProvider && requestedModel.includes('/') && providerNames.has(prefix) && prefix !== requestedProvider) {
           throw new Error(`Provider ${requestedProvider} conflicts with qualified model ${requestedModel}.`);
         }
@@ -251,10 +261,6 @@ export async function resolveStartupProvider(
         thinkingLevel = custom.thinkingLevel;
       }
     } else {
-      const candidates = requestedProvider
-        ? catalog.filter(item => item.provider.toLowerCase() === requestedProvider)
-        : catalog;
-      const scope = resolveModelScope(selection.models ?? [], candidates);
       const selectable = selection.apiKey
         ? scope.models
         : scope.models.filter(item => item.model.available);
@@ -310,5 +316,6 @@ export async function resolveStartupProvider(
     providerName,
     ...(model ? { model } : {}),
     ...(thinkingLevel ? { thinkingLevel } : {}),
+    ...(scopeDiagnostics.length ? { scopeDiagnostics } : {}),
   };
 }

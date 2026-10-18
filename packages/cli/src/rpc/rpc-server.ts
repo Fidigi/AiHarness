@@ -470,6 +470,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       apiKey: options.apiKey,
     }, settingsResolution.settings);
     const startup = await resolveStartupProvider(providers, { ...effectiveModels.selection, offline });
+    startup.scopeDiagnostics?.forEach(() => process.stderr.write('Warning: A model scope entry could not be resolved.\n'));
     const startupModel = startup.model ?? startup.provider.getConfiguredModel();
     const startupThinking = options.thinking
       ?? startup.thinkingLevel
