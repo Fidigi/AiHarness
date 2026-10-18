@@ -1,6 +1,6 @@
 # A3-CLI-05 — Guest Intrinsics and Physical Worker Lifetime
 
-> **Status: NOT QUALIFIED — 2026-10-18.** Candidate after `d1ba9cb`. Types, focused and installed parity pass; the required full root fails on an existing module-entry CLI child (`null`/`SIGSEGV`). The earlier failed overlay remains separate evidence. A3-CLI-05 and A3-CLI-09 remain PARTIAL; the ten-closure mandate remains 1/10.
+> **Status: NOT QUALIFIED — 2026-10-18.** `ed3e89c` delivers the first guest-bootstrap increment below; its failed overlay/full gate remains historical. The subsequent engine-intrinsic correction closes the observed InternalError coverage gap, with causal differential and fresh types/focused success, but **both required parity and full root fail**. A3-CLI-05 and A3-CLI-09 remain PARTIAL; the ten-closure mandate remains 1/10.
 
 ## Whole-criterion checklist
 
@@ -57,4 +57,20 @@ The existing `packages/cli/src/cli/module-entry-process.test.ts` case `rpc: dire
 
 A supplemental, file-launched public Core probe in the same inspected image (`/tmp/aih-a3-codemode-global-inventory{.mjs,-corrected.log}`) finds QuickJS's additional **`InternalError` constructor/prototype still mutable**. The other unfrozen object/function globals it reports are script API helpers, not language intrinsics. This real coverage gap is another reason not to qualify A3-CLI-05. Add it to the freeze graph and strengthen constructor/prototype and public-host controls in a subsequent genuine frozen candidate; do not rewrite this candidate's receipts. An initial `--input-type=module` inventory invocation returned only a generic sandbox failure and no inventory (`/tmp/aih-a3-codemode-global-inventory.log`); its failure is retained, not diagnosed or counted as evidence for the intrinsic finding.
 
-No fresh E2E or production result is claimed for this guest-bootstrap increment. Historical failed aggregates/context evidence, all five unresolved product decisions and A3-CLI-09's failed full-root compiler receipt remain intact. Only an explicit whole-clause and required-gate review may promote a criterion to DONE.
+## Subsequent genuine correction — engine-specific InternalError
+
+The candidate after `ed3e89c` adds only `InternalError` to the existing freeze graph and named constructor/prototype test, and strengthens the existing Core/print/JSON/RPC `freeze` probe with that engine-specific constructor. The declared quota, ceilings, deadlines, retries, selectors and runtime flags remain unchanged. It is a real discovered coverage correction, not a failed-case rerun or a waiver of any previous aggregate.
+
+- Frozen differential against the inspected `ed3e89c` image: **5 failures / 119 controls** (one Core constructor/prototype case plus four public freeze hosts) → **5 files / 124 passed**, 18.41 s.
+- Fresh types pass, including packaging **4/4** and dispatcher **19/19**. Combined code-mode/model focused suite: **11 files / 199 passed**, 26.54 s.
+- Genuine installed parity **FAILS: 2 files / 236 tests passed; 1 file / 1 test failed**, 245.90 s, Make 2 / runner 1. New installed `json/error` outer probe closes **null/SIGSEGV**, with empty captured stdout/stderr, at `installed-executable.test.ts:415`. The private runner retains the signal. The other 25 installed code-mode cases pass.
+- Required full root **FAILS: 352 files / 5,570 tests passed; 3 files / 3 tests failed**, 1065.66 s, Make 2 / runner 1:
+  1. Existing installed `runs installed print/JSON/RPC against the unchanged reviewed protocol goldens`, `installed-executable.test.ts:1034`: child null/SIGSEGV. The current bulk loop does not retain which inner scenario failed; do not invent its identity or stdout.
+  2. Existing `model-resolution-process.test.ts`, **`rpc/scope`**: actual CLI child null/SIGSEGV, empty stdout/stderr, retained by `fixtures/model-resolution-probe.mjs:73`, outer assertion line 16.
+  3. Existing `workspace-tools.test.ts:141`, catastrophic-regexp grep deadline: observed **7,077 ms**, unchanged assertion **<7,000 ms**. No attribution to CPU, native termination or another source is established.
+- All **111** current code-mode Core/emitted/installed cases pass inside this failed full root. That does not replace either failed required aggregate or the failed installed parity case above.
+- All three fresh tags (`aih-a3-codemode-engine:{test,parity,full}`) share **`sha256:008f6d42711d043da169d79c720ee7594a3aff73eb5deaf4ad202af71e9e09bc`**. Actual-image inspection verifies all thirteen source/test hashes, separate unchanged SDK README and absent `.git`; the **1,154-input** checkout snapshot remains identical before/after every gate. Node **24.15.0**, V8 **13.6.233.17-node.48**, Linux x64.
+
+Receipts are `/tmp/aih-a3-codemode-engine-{red,green,typecheck,focused,parity,full}.{log,exit}`, the settled qualification launcher, `*-sources.sha256`, `*-included-docs.sha256`, `*-checkout-inputs.json`, `*-all-image-ids.txt` and actual-image source-check log/exit. No native cause or deadline-failure cause is established; no changed flag, budget, retry or aggregate waiver is introduced. Whole criteria stay PARTIAL and the mandate stays **1/10**.
+
+No fresh E2E or production result is claimed for either guest-bootstrap increment. Historical failed aggregates/context evidence, all five unresolved product decisions and A3-CLI-09's failed full-root compiler receipt remain intact. Only an explicit whole-clause and required-gate review may promote a criterion to DONE.

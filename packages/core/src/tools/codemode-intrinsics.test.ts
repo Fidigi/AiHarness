@@ -20,7 +20,7 @@ function run(code: string, extra: Partial<Parameters<typeof runCodemode>[0]> = {
   return runCodemode({ code, context, tools: () => [tool], execute: async () => ({ content: 'document' }), ...extra });
 }
 describe('A3-CLI-05 guest bootstrap and actual worker lifetimes', () => {
-  it.each(['Object', 'Array', 'Function', 'Promise', 'String', 'Number', 'Boolean', 'BigInt', 'Symbol', 'RegExp', 'Date', 'Error', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Map', 'Set', 'WeakMap', 'WeakSet', 'Proxy', 'ArrayBuffer', 'DataView', 'Int8Array', 'Uint8Array', 'Int16Array', 'Uint16Array', 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'JSON', 'Math', 'Reflect'])(
+  it.each(['Object', 'Array', 'Function', 'Promise', 'String', 'Number', 'Boolean', 'BigInt', 'Symbol', 'RegExp', 'Date', 'Error', 'InternalError', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Map', 'Set', 'WeakMap', 'WeakSet', 'Proxy', 'ArrayBuffer', 'DataView', 'Int8Array', 'Uint8Array', 'Int16Array', 'Uint16Array', 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'JSON', 'Math', 'Reflect'])(
     'freezes %s and its prototype before guest execution', async name => {
       const result = await run(`const value = globalThis[${JSON.stringify(name)}]; return [Object.isFrozen(value), !value.prototype || Object.isFrozen(value.prototype)];`);
       expect(result.isError).toBe(false); expect(result.content).toMatch(/\n\[true,true\]$/);

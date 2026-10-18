@@ -100,7 +100,7 @@ const { parentPort, workerData } = require('node:worker_threads');
       };
       for (const name of [
         'Object', 'Function', 'Array', 'Promise', 'String', 'Number', 'Boolean', 'BigInt', 'Symbol',
-        'RegExp', 'Date', 'Error', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'AggregateError',
+        'RegExp', 'Date', 'Error', 'InternalError', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'AggregateError',
         'Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Proxy',
         'ArrayBuffer', 'SharedArrayBuffer', 'DataView', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray',
         'Int16Array', 'Uint16Array', 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'BigInt64Array', 'BigUint64Array',

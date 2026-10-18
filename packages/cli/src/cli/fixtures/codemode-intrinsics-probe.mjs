@@ -12,7 +12,7 @@ assert.ok(['freeze','globals','error','schema','options','output',...(mode==='co
 const root=await mkdtemp(path.join(os.tmpdir(),'aih-intrinsics-')), cwd=path.join(root,'work'), agent=path.join(root,'agent'), sessions=path.join(root,'sessions'), calls=path.join(root,'calls');
 const schema={type:'object',required:['path'],properties:{path:{type:'string',enum:['requested','fail'],minLength:1,maxLength:100},optional:{type:'array',maxItems:2,items:{type:'integer',minimum:0,maximum:5}}},additionalProperties:false};
 const sources={
-  freeze:`for(const name of ['Object','Array','Function','Promise','JSON','Math','Reflect','Map','Set','Error']) { const value=globalThis[name]; if(!Object.isFrozen(value)||value.prototype&&!Object.isFrozen(value.prototype))throw new Error('Mutable intrinsic'); }
+  freeze:`for(const name of ['Object','Array','Function','Promise','JSON','Math','Reflect','Map','Set','Error','InternalError']) { const value=globalThis[name]; if(!Object.isFrozen(value)||value.prototype&&!Object.isFrozen(value.prototype))throw new Error('Mutable intrinsic'); }
     if(Reflect.set(Object.prototype,'toJSON',()=>({path:'forged'})))throw new Error('Mutable prototype'); store('safe',42); return await tools.lookup({path:'requested'});`,
   globals:`globalThis.JSON={stringify:()=>'{}',parse:()=>'forged'}; globalThis.Object={keys:()=>[],assign:()=>({})}; globalThis.Error=function(){throw 'forged'}; store('safe',42); return await tools.lookup({path:'requested'});`,
   error:`store('rollback',1); await tools.lookup({path:'fail'});`,
