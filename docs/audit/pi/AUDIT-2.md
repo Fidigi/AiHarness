@@ -1,6 +1,12 @@
 # Audit Report — Pi 1.0.0 CLI Functional Parity and Pi Web 0.10.0 Delta / AiHarness
 
-> **Status: IN PROGRESS** (2026-10-18)
+> **Status: ARCHIVED — superseded by [AUDIT-3](./AUDIT-3.md)** (2026-10-18)
+>
+> Administrative closure only: **102 DONE / 50 PARTIAL / 152**. All 50 open criteria retain their IDs and are transferred to AUDIT-3, the sole active audit for remaining work and newer upstream changes. This is not functional completion, release acceptance, or a conversion of PARTIAL criteria to DONE.
+>
+> This report and its linked acceptance records are retained as read-only historical references. Continue implementation and evidence tracking in AUDIT-3; do not maintain a second active backlog here. Historical checkpoints, failures and closure rules below describe their original scope and remain unchanged.
+>
+> Final implementation checkpoint before archival follows:
 >
 > DEC-102 closes only WEB-SET-09: bounded canonical-folder section/group/selection memory,only unavailable Project-scope fallback,mounted canonical trust reload and fresh owned visible focus return.65 additions,whole Web444/dev165/built18,334 leaves/4,872 full-default tests,72 parity,96 equal own frontend files and570 browsers across nine ENTIRE passing configurations qualify this scope. Original canonical standard386/387 SIGSEGV stays FAILED;whole387 replay is separate,not a passing subset or diagnosis. All283 parent PNGs/original122 visual owner/original14 pane suffix remain exact;four new navigation crops and six current post-outcome images individually reviewed. Current result: **102 DONE /50 PARTIAL /152 (67.1%)**,CLI48/39,Web54/11;native health uncertified,watchdog unhealthy,full goal incomplete.
 >
