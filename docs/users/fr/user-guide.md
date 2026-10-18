@@ -561,6 +561,12 @@ Quand le provider signale explicitement une limite de sortie, `--print` conserve
 
 Les messages assistant JSON/RPC exposent `stopReason: "length"`, y compris dans l’historique RPC. RPC reste disponible pour les commandes suivantes ; un accusé de réception réussi signifie « accepté », pas « réponse complète ». Aucun retry automatique n’est ajouté. Un texte mentionnant « length » et un résultat d’outil tronqué ne signalent pas une limite de sortie du modèle.
 
+### Arguments d’outil invalides
+
+Si un provider à arguments textuels renvoie un JSON final mal formé pour un appel d’outil, AiHarness refuse tout le lot d’outils de cette réponse avant d’exécuter même ses appels valides. Print/JSON renvoient le code 1 avec `Error: The provider tool arguments were invalid JSON.` sur stderr ; JSON/RPC conservent leurs enregistrements d’erreur et de stabilisation existants. RPC reste disponible et le SDK signale un run échoué. Le texte déjà diffusé peut rester visible, mais ne prouve pas qu’un outil a été exécuté.
+
+Un tour d’agent ordinaire ne réessaie pas automatiquement cette erreur de protocole, même avant le premier delta texte. Vous pouvez envoyer un nouveau prompt explicite. Les formes vides sans argument et les JSON valides conservent leur comportement ; les schémas et permissions propres aux outils continuent de s’appliquer. Le diagnostic ne contient pas les arguments mal formés. Cela couvre OpenAI-compatible en chat/stream, OpenAI Responses en SSE/WebSocket et Anthropic en streaming, sans ajouter de validateur universel pour les extensions/providers.
+
 ### Mode événements JSON
 
 Le mode JSON écrit exactement un objet JSON par enregistrement stdout, délimité par LF, puis se termine après tous les prompts fournis :

@@ -7,6 +7,7 @@
 import type { Message, ProviderConfig, ToolCall, TokenUsage } from '../types/index.js';
 import { ProviderType } from '../types/index.js';
 import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
+import { parseProviderToolArguments } from './tool-arguments.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, prepareAnthropicOutputBudget } from './anthropic-thinking.js';
 import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
@@ -599,15 +600,11 @@ export class OpenAiProvider extends AiProvider {
     if (!Array.isArray(toolCalls) || toolCalls.length > MAX_PROVIDER_STREAM_TOOL_CALLS) {
       throw new Error('The provider response exceeded the tool-call limit.');
     }
-    return toolCalls.map(call => {
-      let input: unknown = {};
-      try {
-        input = JSON.parse(call.function.arguments || '{}');
-      } catch {
-        input = { raw: call.function.arguments };
-      }
-      return { id: call.id, name: call.function.name, input };
-    });
+    return toolCalls.map(call => ({
+      id: call.id,
+      name: call.function.name,
+      input: parseProviderToolArguments(call.function.arguments),
+    }));
   }
 
   async chat(
@@ -1254,12 +1251,9 @@ async function applyResponsesEvent(
 }
 
 function finalizeResponses(state: ResponsesAccumulator): ChatResponse {
-  const toolCalls: ToolCall[] = [...state.tools.values()].map(tool => {
-    let input: unknown = {};
-    try { input = JSON.parse(tool.arguments || '{}'); }
-    catch { input = { raw: tool.arguments }; }
-    return { id: tool.id, name: tool.name, input };
-  });
+  const toolCalls: ToolCall[] = [...state.tools.values()].map(tool => ({
+    id: tool.id, name: tool.name, input: parseProviderToolArguments(tool.arguments),
+  }));
   return {
     content: state.content,
     ...(state.stopReason ? { stopReason: state.stopReason } : {}),
@@ -2577,15 +2571,9 @@ export class AnthropicProvider extends AiProvider {
       buffer += decoder.decode();
       if (buffer.trim()) throw new Error('The provider streaming response was invalid.');
 
-      const toolCalls = [...toolCallFragments.values()].map(fragment => {
-        let input: unknown = {};
-        try {
-          input = JSON.parse(fragment.json || '{}');
-        } catch {
-          input = { raw: fragment.json };
-        }
-        return { id: fragment.id, name: fragment.name, input };
-      });
+      const toolCalls = [...toolCallFragments.values()].map(fragment => ({
+        id: fragment.id, name: fragment.name, input: parseProviderToolArguments(fragment.json),
+      }));
       for (const call of toolCalls) await onChunk('', { type: 'tool_call', data: call });
         onComplete?.({
           content: fullContent,

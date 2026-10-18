@@ -561,6 +561,12 @@ When the provider explicitly reports an output limit, `--print` preserves the av
 
 JSON/RPC assistant messages report `stopReason: "length"`, including RPC history. RPC remains available for later commands; a successful prompt acknowledgement means accepted, not a complete answer. No automatic retry is introduced. Ordinary text mentioning “length” and truncated tool results are not model output-limit signals.
 
+### Invalid Tool Arguments
+
+If a text-argument provider returns malformed final JSON for a tool call, AiHarness refuses the entire response’s tool batch before running even its valid calls. Print/JSON exit 1 with `Error: The provider tool arguments were invalid JSON.` on stderr; JSON/RPC keep their existing error-message and settled records. RPC stays available, and the SDK reports a failed run. Already streamed text may remain visible, but is not proof that a tool ran.
+
+An ordinary agent turn does not automatically retry this protocol error, including before the first text delta. You may send a new explicit prompt. Empty no-argument forms and valid JSON retain their existing behavior; tool-specific schemas and permissions still apply. The diagnostic does not include the malformed argument body. This covers OpenAI-compatible chat/stream, OpenAI Responses SSE/WebSocket and Anthropic streaming, not a new validator for every extension/provider.
+
 ### JSON Event Mode
 
 JSON mode writes exactly one LF-delimited JSON object per stdout record and exits after all supplied prompts:

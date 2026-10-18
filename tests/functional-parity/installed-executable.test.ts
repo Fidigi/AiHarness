@@ -368,6 +368,17 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     expect(JSON.parse(result.stdout)).toMatchObject({ result: 'LENGTH_STOP_OK', mode: scenario.split('/')[0], kind: scenario.split('/')[1] });
   });
 
+  it.each(['print', 'json', 'rpc', 'sdk'].flatMap(mode =>
+    ['completions', 'responses', 'anthropic'].flatMap(dialect =>
+      ['invalid', 'valid'].map(kind => `${mode}/${dialect}/${kind}`))))('rejects malformed final tool JSON in the installed consumer (%s)', async scenario => {
+    const worker = path.join(consumer, `tool-json-${scenario.replaceAll('/', '-')}.mjs`);
+    await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', 'tool-json-probe.mjs'), worker);
+    const result = await run(process.execPath, [worker, scenario], consumer, { ...environment, AIH_TOOL_JSON_COMMAND: 'ai-harness' });
+    expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe('');
+    const [mode, dialect, kind] = scenario.split('/');
+    expect(JSON.parse(result.stdout)).toMatchObject({ result: 'TOOL_JSON_OK', mode, dialect, kind });
+  });
+
   describe('installed PATH-bin definitive credential authority', () => {
     const literal = 'ordinary-installed-arity', secret = 'genuine-installed-arity: +/字';
     const secretVariants = [...new Set([secret, Buffer.from(secret).toString('base64'), Buffer.from(secret).toString('base64url'), Buffer.from(secret).toString('hex'), encodeURIComponent(secret)])];

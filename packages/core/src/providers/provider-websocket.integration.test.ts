@@ -239,4 +239,59 @@ describe('OpenAI Responses real WebSocket transport', () => {
       ]);
     }
   });
+
+  for (const transport of ['websocket-cached', 'auto'] as const) for (const text of ['', 'Visible prefix']) {
+    it(`${transport} rejects malformed final arguments without SSE replay and retires the connection (text=${!!text})`, async () => {
+      let httpRequests = 0, websocketRequests = 0, connections = 0;
+      const sockets = new Set<Socket>();
+      const server = createServer((_request, response) => { httpRequests++; response.writeHead(500).end(); });
+      server.on('upgrade', (request, socket) => {
+        connections++; sockets.add(socket); socket.once('close', () => sockets.delete(socket));
+        const accept = createHash('sha1').update(`${String(request.headers['sec-websocket-key'])}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64');
+        socket.write(['HTTP/1.1 101 Switching Protocols', 'Upgrade: websocket', 'Connection: Upgrade', `Sec-WebSocket-Accept: ${accept}`, '\r\n'].join('\r\n'));
+        let pending = Buffer.alloc(0);
+        socket.on('data', chunk => {
+          pending = Buffer.concat([pending, chunk]);
+          while (true) {
+            const frame = decodeClientFrame(pending); if (!frame) break;
+            pending = pending.subarray(frame.bytes);
+            if (frame.opcode === 0x8) { socket.write(Buffer.from([0x88, 0x00])); socket.end(); continue; }
+            websocketRequests++;
+            socket.write(serverFrame({ type: 'response.created', response: { id: `r-${websocketRequests}` } }));
+            if (websocketRequests === 1) {
+              if (text) socket.write(serverFrame({ type: 'response.output_text.delta', delta: text }));
+              socket.write(serverFrame({ type: 'response.completed', response: { id: 'r-1', output: [
+                { type: 'function_call', call_id: 'first', name: 'effect', arguments: '{}' },
+                { type: 'function_call', call_id: 'second', name: 'effect', arguments: '{"private-malformed-argument":' },
+              ] } }));
+            } else {
+              socket.write(serverFrame({ type: 'response.output_text.delta', delta: 'Recovered' }));
+              socket.write(serverFrame({ type: 'response.completed', response: { id: 'r-2' } }));
+            }
+          }
+        });
+      });
+      await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+      const provider = new OpenAiResponsesProvider({ type: 'openai', apiKey: 'disposable', transport,
+        baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}`, httpIdleTimeoutMs: 2_000 });
+      try {
+        let failure: Error | undefined, complete = false, streamed = '', toolCalls = 0;
+        await provider.streamChat([message('u', 'user', 'Use tools')], (chunk, event) => {
+          streamed += chunk; if (event?.type === 'tool_call') toolCalls++;
+        }, () => { complete = true; }, error => { failure = error; }, { sessionId: 'invalid-json-ws' });
+        expect(failure?.message).toBe('The provider tool arguments were invalid JSON.');
+        expect(complete).toBe(false); expect(streamed).toBe(text); expect(toolCalls).toBe(0);
+        await waitForCondition(() => sockets.size === 0);
+        expect(httpRequests).toBe(0); expect(websocketRequests).toBe(1);
+        await expect(provider.chat([message('retry-user', 'user', 'New explicit request')], { sessionId: 'invalid-json-ws' }))
+          .resolves.toMatchObject({ content: 'Recovered' });
+        expect(websocketRequests).toBe(2); expect(connections).toBe(2); expect(httpRequests).toBe(0);
+        expect(getOpenAiResponsesTransportStats('invalid-json-ws')).toMatchObject({ sseFallbacks: 0, deltaRequests: 0, websocketConnectionsCreated: 2 });
+      } finally {
+        await closeProviderNetworkDispatchers();
+        for (const socket of sockets) socket.destroy();
+        await new Promise<void>(resolve => server.close(() => resolve()));
+      }
+    });
+  }
 });

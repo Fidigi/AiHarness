@@ -12,6 +12,7 @@ import type { Message } from '../types/index.js';
 import { calculatePublishedModelCost } from '../providers/model-metadata.js';
 import type { CredentialRedactionStream } from '../providers/credentials.js';
 import { copyThinkingBudgets } from '../providers/thinking-budgets.js';
+import { ProviderToolArgumentsError } from '../providers/tool-arguments.js';
 import { captureNativeOutputBudget, ProviderOutputBudgetError } from '../providers/provider-output-budget.js';
 import { assertProviderRequestBudget, captureProviderRequestBudget, ProviderRequestContextError,
   type ProviderRequestBudget } from './provider-request-estimate.js';
@@ -270,6 +271,7 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
       const canRetry = !attemptProducedOutput
         && !(error instanceof ProviderRequestContextError)
         && !(error instanceof ProviderOutputBudgetError)
+        && !(error instanceof ProviderToolArgumentsError)
         && !callbackDeliveryFailed
         && !signal?.aborted
         && !options.retrySignal?.aborted

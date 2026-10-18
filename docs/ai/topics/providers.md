@@ -28,6 +28,7 @@ CLI/Web runtime -> streamChat -> normalized response and usage
 | `packages/core/src/agent/provider-request-{estimate,options,payload}.ts` | Bounded canonical request estimate, passive known option slots and owned post-hook/redactor payload copies |
 | `packages/core/src/providers/thinking-budgets.ts` | Public readonly budget type, inert per-turn copies and conservative numeric-dialect bounds |
 | `packages/core/src/providers/provider-endpoints.ts` | Strict based-path discovery endpoint normalization |
+| `packages/core/src/providers/tool-arguments.ts` | Internal fixed-error final JSON decoding, shared by the text-argument dialects; no repair or raw-input fallback |
 | `packages/core/src/providers/provider-network.ts` | Shared HTTP proxy, request/idle/connect deadlines, bounded retry and cached WebSocket leases |
 | `packages/core/src/providers/credentials.ts` | Process-local credentials, OAuth refresh, command/environment resolution and recursive/streaming redaction |
 | `packages/core/src/security/credential-store.ts` | Private atomic AES-256-GCM credential persistence and inter-process locking |
@@ -60,6 +61,12 @@ Published non-secret metadata lives in Core so CLI and Web use the same descript
 CLI and RPC layer explicit flags over agent settings `defaultProvider`, `defaultModel`, `enabledModels`, `defaultThinkingLevel`, and exact `modelThinkingLevels["provider/model"]`. A saved default inside the enabled scope is preferred; scope suffixes and explicit flags remain stronger, and the final level is capability-clamped. Agent-level retry settings configure shared turn retries. Core applies `transport`, `httpProxy`, `httpIdleTimeoutMs`, `websocketConnectTimeoutMs`, and bounded `retry.provider` timeouts/retries to built-in and extension/custom provider adapters. Network errors are stable and never include the request URL, remote body/headers, or proxy credentials.
 
 Credential resolution order is environment, trusted `providerApiKeyCommands`, process memory, then encrypted storage. Command output is bounded, cached only in the process, and immediately registered with the shared redactor. OAuth endpoints and responses are bounded and HTTPS-only; refreshed access/refresh tokens replace the encrypted record without crossing descriptor boundaries. The redactor covers raw, URI, base64/base64url, hex and JSON-escaped variants, recursively bounds JSON traversal, and supplies independent stateful streams for chunked channels.
+
+### Final tool-argument JSON
+
+OpenAI-compatible chat/stream, OpenAI Responses SSE/WebSocket and Anthropic streaming share an internal final string decoder. Malformed nonempty JSON refuses the entire batch before any complete `tool_call` event or tool execution, including when an earlier call in that response is valid. The fixed error `The provider tool arguments were invalid JSON.` includes no argument body or parser exception. Shared turns treat this protocol failure as terminal even before text; normal transient-error retries remain unchanged. A started Responses WebSocket failure cannot trigger an SSE replay, and its cached connection is retired.
+
+Empty/absent no-argument strings retain the existing `{}` behavior; valid JSON objects, arrays, primitives and null retain the existing `unknown` input contract. This is not a new object-only or JSON Schema policy, partial-JSON repair, general extension-response/accessor validation or a change to the existing wire/output byte ceilings. Native object-input Gemini/Bedrock/Anthropic-chat paths are not string-decoded. Existing error records, SDK failed-run status and explicit subsequent prompts are reused, not a new protocol version or automatic tool retry.
 
 ## Explicit Passive Provider Policies
 
@@ -155,6 +162,8 @@ Provider OAuth remains Device Flow; it has no pasted callback endpoint. The shar
 
 ## Associated Tests
 
+- `packages/core/src/providers/tool-arguments{,-admission}.test.ts` — real loopback fragmented final JSON, valid/empty/primitive controls, whole-batch refusal before hooks/effects, terminal retry classification and passive nonstring decoding
+- `packages/core/src/providers/provider-websocket.integration.test.ts`, `packages/cli/src/cli/tool-json-process.test.ts` and the installed parity consumer — real cached/auto WebSocket no-replay/connection retirement, emitted print/JSON/RPC/SDK errors, no tool effects/retries, valid controls and explicit recovery through the public installed package
 - `packages/core/src/providers/{index,provider-network,credentials,provider-websocket.integration}.test.ts` and `packages/cli/src/agent/provider-turn.test.ts` — built-ins, bounded payloads/streaming, real local WebSocket and CONNECT-proxy handshakes, cached continuation/fallback, credentials, tools, images, reasoning, usage and cancellation
 - Core `agent/provider-request-{estimate,budget,options,payload,options-flow}.test.ts` and `providers/provider-output-budget.test.ts` — canonical input versus billed history,passive descriptors,redactor ownership/output evidence,late observer mutations,known policy checks and exact first-party native output/lifecycle compatibility
 - `packages/server/src/runtime/model-catalog.test.ts` — catalogue merge, capabilities, pricing and refresh bounds
