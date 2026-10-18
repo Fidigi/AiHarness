@@ -10,6 +10,7 @@ import {
   AnthropicProvider as CoreAnthropicProvider,
   atomicWriteStableFile,
   assertCompactionTranscript,
+  getSummaryModelMessages,
   readCompactionSummary,
   copyCompactionResponse,
   BedrockProvider,
@@ -1164,6 +1165,16 @@ function sanitizedProxyMessages(messages: Message[], prefix: string): Message[] 
   }));
 }
 
+/** Summary-only typed data: keep public blocks/tool traces, never grant chat/tool
+ * execution authority or replay private provider fields through the legacy route. */
+function sanitizedProxySummaryMessages(messages: Message[]): Message[] {
+  assertCompactionTranscript(messages);
+  const owned = structuredClone(messages), timestamp = new Date();
+  return getSummaryModelMessages(owned.map((message, index) => ({
+    ...message, id: `compact-${index}`, timestamp,
+  })));
+}
+
 export function createProxyRoutes(
   proxy: AiProxyServer,
   options: {
@@ -1243,7 +1254,7 @@ export function createProxyRoutes(
         return;
       }
 
-      const ownedMessages = sanitizedProxyMessages(messages, 'compact');
+      const ownedMessages = sanitizedProxySummaryMessages(messages);
       assertCompactionTranscript(ownedMessages);
       if (aborted()) return;
       const result = await sendChat(

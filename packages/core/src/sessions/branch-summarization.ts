@@ -1,6 +1,7 @@
 import type { Message } from '../types/index.js';
 import type { BranchSummaryAccounting, BranchSummaryEntry, SessionEntry } from './session-manager.js';
 import { contextEntryMessages, sessionEntryPath } from './session-context.js';
+import { summaryMessageText } from './summary-model-messages.js';
 
 export interface BranchSummaryRequest {
   fromEntryId: string;
@@ -128,7 +129,7 @@ export function prepareBranchSummary(entries: readonly SessionEntry[], from: str
       const callText = calls.map(call => `\n[Tool call ${call.id}: ${call.name}] ${JSON.stringify(call.input)}`).join('');
       const toolId = 'toolCallId' in message ? message.toolCallId : undefined;
       const role = message.role === 'tool' ? `Tool result ${toolId ?? 'unknown'}` : message.role;
-      return `[${role}] ${message.content}${callText}`;
+      return `[${role}] ${summaryMessageText(message)}${callText}`;
     }).join('\n');
     const estimate = Buffer.byteLength(transcript) + 8;
     if (tokens + estimate > tokenBudget) break; // Whole entries only; never overrun for a summary.

@@ -1,6 +1,6 @@
 # A3-CLI-05 — Guest Intrinsics and Physical Worker Lifetime
 
-> **Status: NOT QUALIFIED — 2026-10-18.** `ed3e89c` delivers the first guest-bootstrap increment below; its failed overlay/full gate remains historical. The subsequent engine-intrinsic correction closes the observed InternalError coverage gap, with causal differential and fresh types/focused success, but **both required parity and full root fail**. A3-CLI-05 and A3-CLI-09 remain PARTIAL; the ten-closure mandate remains 1/10.
+> **Status: QUALIFIED — A3-CLI-05 DONE — 2026-10-18.** The later genuine summary-projection delivery after `4a77e57` passes complete frozen qualification and whole-clause reconciliation, including the corrected InternalError graph. The original `ed3e89c` and engine-correction overlay/parity/full failures below remain historical failed evidence. The mandate remains incomplete at **4/10 additional closures**.
 
 ## Whole-criterion checklist
 
@@ -74,3 +74,15 @@ The candidate after `ed3e89c` adds only `InternalError` to the existing freeze g
 Receipts are `/tmp/aih-a3-codemode-engine-{red,green,typecheck,focused,parity,full}.{log,exit}`, the settled qualification launcher, `*-sources.sha256`, `*-included-docs.sha256`, `*-checkout-inputs.json`, `*-all-image-ids.txt` and actual-image source-check log/exit. No native cause or deadline-failure cause is established; no changed flag, budget, retry or aggregate waiver is introduced. Whole criteria stay PARTIAL and the mandate stays **1/10**.
 
 No fresh E2E or production result is claimed for either guest-bootstrap increment. Historical failed aggregates/context evidence, all five unresolved product decisions and A3-CLI-09's failed full-root compiler receipt remain intact. Only an explicit whole-clause and required-gate review may promote a criterion to DONE.
+
+## Later genuine summary-projection delivery — whole criterion qualified
+
+The [summary delivery and combined manifest](./summary-provider-projection.md) introduces real summary-provider input/ownership behavior after `4a77e57`, while preserving all four engine-corrected code-mode product/focused/process/probe hashes and every prior installed case. Its independent frozen types, focused **23 files / 388**, complete parity **3 files / 256** (269.59 s), full root **361 files / 5,641** (1134.28 s) and complete E2E **571/571** all pass, Make/runner 0; packaging 4/dispatcher 19 controls remain included. No source, quota, selector, existing deadline, flag, retry or snapshot changes during qualification.
+
+All four gate images are exactly **`sha256:caee8b36bd7f89b6921e8a009936c5b57d134da4c914d8b87dbfef1e10688494`**. Actual inspection verifies all 28 combined hashes and the separately unchanged SDK README, Git is absent, and every before/after **1,162-input** checkout snapshot passes. Node 24.15.0 / V8 13.6.233.17-node.48 / Linux x64. The settled completion audit verifies all receipts, not selected green cases.
+
+A supplementary actual-file-launched public Core inventory in this exact image returns only `searchTools`, `describeTool`, `describeNamespace`, `store`, `load`, `text`, `exit`, `__run` as mutable object/function globals; these are script API helpers, not language intrinsics. It confirms `InternalError` is present/frozen and its prototype is frozen. The actual copied probe matches its owned source; `/tmp/aih-a3-summary-engine-inventory.{mjs,log,exit}` records exit 0. The old failed stdin probe and old mutable-InternalError result stay unchanged.
+
+Closing audit covers every checklist row with the complete current **111** Core/emitted/installed cases: byte/record-bounded array assembly and one final join/redaction; named/reachable/accessor/async/generator/iterator intrinsic graphs and pollution/global-shadow controls; exact native guest diagnostics; visible hosted schema and seven pre-worker malformed-option refusals; non-interruptible loop/regex/promise/allocation/output termination; and real physical eight-worker admission through exit, including 96 abort-storm and 24 deadline-storm workers with peak eight and zero survivors. The previously existing eight-worker quota and awaited termination are conserved, not claimed as repaired defects. **A3-CLI-05 is DONE.**
+
+Historical native/compiler/browser/deadline failures remain failed and unexplained; no causal mitigation or retrospective waiver is claimed. The mandate remains incomplete at **4/10**, with no production/release or product-policy approval.

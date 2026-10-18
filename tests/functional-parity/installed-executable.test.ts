@@ -416,6 +416,44 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     });
   }
 
+  for (const mode of ['core-branch', 'sdk-auto', 'print-auto', 'json-auto', 'rpc-manual', 'rpc-auto', 'rpc-branch', 'regular', 'fullscreen']) for (const kind of ['private', 'ordinary']) {
+    it(`preserves public summary transcripts through installed packages (${mode}/${kind})`, async () => {
+      const probe = path.join(consumer, `summary-transcript-${mode}-${kind}.mjs`);
+      await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/summary-transcript-probe.mjs'), probe);
+      expect(await run(process.execPath, [probe, mode, kind], consumer, { ...environment, AIH_SUMMARY_COMMAND: 'ai-harness', AIH_TEST_PTY_MODULE: require.resolve('node-pty') }))
+        .toEqual({ code: 0, stdout: 'summary transcript OK\n', stderr: '' });
+    }, 25_000);
+  }
+  it('publishes readonly summary-projection declarations and independent runtime ownership outside the checkout', async () => {
+    await writeFile(path.join(consumer, 'summary-public.ts'), `
+      import { getSummaryModelMessages, type Message } from '@ai-harness/core';
+      const entry: Message = { id:'m',role:'assistant',content:'public',timestamp:new Date(0) };
+      const source: readonly Message[] = Object.freeze([entry]);
+      const projected: Message[] = getSummaryModelMessages(source);
+      projected.push({ id:'n',role:'user',content:'mutable result',timestamp:new Date(1) });
+      // @ts-expect-error This is a typed transcript, not raw prompt text.
+      getSummaryModelMessages('text');
+    `);
+    const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'summary-public.ts'], consumer, environment, 20_000);
+    expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+    await writeFile(path.join(consumer, 'summary-public.mjs'), `
+      import assert from 'node:assert/strict';
+      import { getSummaryModelMessages } from '@ai-harness/core';
+      const source=Object.freeze([Object.freeze({ id:'m',role:'assistant',content:'public',timestamp:new Date(0),
+        blocks:[{type:'reasoning',text:'PRIVATE_REASONING'},{type:'text',text:'public'}],metadata:{signature:'PRIVATE_SIGNATURE'},
+        toolCalls:[{id:'call',name:'lookup',input:{signature:'PUBLIC_LITERAL'}}] })]);
+      const projected=getSummaryModelMessages(source);
+      assert.equal(projected[0].content,'public');assert.equal(projected[0].metadata,undefined);
+      assert.deepEqual(projected[0].blocks,[{type:'text',text:'public'}]);
+      projected[0].timestamp.setTime(1);projected[0].toolCalls[0].input.signature='changed';
+      assert.equal(source[0].timestamp.getTime(),0);assert.equal(source[0].toolCalls[0].input.signature,'PUBLIC_LITERAL');
+      assert.equal(source[0].blocks[0].text,'PRIVATE_REASONING');
+      console.log('summary public types OK');
+    `);
+    expect(await run(process.execPath, ['summary-public.mjs'], consumer, environment))
+      .toEqual({ code: 0, stdout: 'summary public types OK\n', stderr: '' });
+  }, 25_000);
+
   describe('installed PATH-bin definitive credential authority', () => {
     const literal = 'ordinary-installed-arity', secret = 'genuine-installed-arity: +/字';
     const secretVariants = [...new Set([secret, Buffer.from(secret).toString('base64'), Buffer.from(secret).toString('base64url'), Buffer.from(secret).toString('hex'), encodeURIComponent(secret)])];

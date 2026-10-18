@@ -11,6 +11,7 @@ import {
   getSessionAccounting,
   prepareCompactionContext,
   assertCompactionTranscript,
+  getSummaryModelMessages,
   copyCompactionResponse,
   compactionMessagesFromEntries,
   clampPublishedThinkingLevel,
@@ -427,7 +428,7 @@ export class RpcController {
     this.refreshCompactionSettings();
     this.context.sessionManager.setAutoCompactionCallback(async (_sessionId, toCompact, _keptEntries, signal) => {
       assertCompactionTranscript(toCompact);
-      const messages = compactionMessagesFromEntries(toCompact);
+      const messages = getSummaryModelMessages(compactionMessagesFromEntries(toCompact));
       assertCompactionTranscript(messages);
       const provider = this.context.provider, chat = provider.chat.bind(provider);
       const providerName = this.context.providerName, model = this.model, thinking = coreThinkingLevel(this.thinking);
@@ -1495,13 +1496,17 @@ export class RpcController {
       const rawInstruction = customInstructions?.trim()
         || 'Summarize this conversation concisely, preserving key information, decisions, and context.';
       const instruction = redactText?.(rawInstruction) ?? rawInstruction;
-      assertCompactionTranscript(messages);
-      const safeMessages = redactJson?.(messages) ?? messages;
+      const summaryInput = getSummaryModelMessages(messages);
+      const safeMessages = redactJson?.(summaryInput) ?? summaryInput;
       assertCompactionTranscript(safeMessages);
-      const rawSummaryResponse = await this.summarizeWithRetry('manual', signal => chat([
-        ...safeMessages,
-        { id: '__compact__', role: 'user', content: 'Summarize the conversation for future turns. Preserve unresolved work and concrete results.', timestamp: new Date() },
-      ], { model, sessionId: sourceSessionId, thinking: coreThinkingLevel(thinking), systemPrompt: instruction, signal, tools: [], maxTokens: 4096 }), controller.signal);
+      const rawSummaryResponse = await this.summarizeWithRetry('manual', signal => {
+        const summaryMessages: Message[] = [
+          ...safeMessages,
+          { id: '__compact__', role: 'user', content: 'Summarize the conversation for future turns. Preserve unresolved work and concrete results.', timestamp: new Date() },
+        ];
+        assertCompactionTranscript(summaryMessages);
+        return chat(summaryMessages, { model, sessionId: sourceSessionId, thinking: coreThinkingLevel(thinking), systemPrompt: instruction, signal, tools: [], maxTokens: 4096 });
+      }, controller.signal);
       validate();
       const content = rawSummaryResponse && typeof rawSummaryResponse === 'object' ? Object.getOwnPropertyDescriptor(rawSummaryResponse, 'content') : undefined;
       if (content && 'value' in content && typeof content.value === 'string' && !content.value.trim()) throw new Error('Compaction failed: no summary generated.');

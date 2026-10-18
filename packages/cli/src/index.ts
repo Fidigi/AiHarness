@@ -6,6 +6,7 @@
 import {
   AgentMessageQueue,
   assertCompactionTranscript,
+  getSummaryModelMessages,
   compactionMessagesFromEntries,
   copyCompactionResponse,
   clampPublishedThinkingLevel,
@@ -1163,7 +1164,7 @@ async function main(): Promise<void> {
     const provider = ctx.provider;
     if (!provider?.validateConfig()) throw new Error('No configured provider for automatic compaction.');
     assertCompactionTranscript(toCompact);
-    const messages = compactionMessagesFromEntries(toCompact);
+    const messages = getSummaryModelMessages(compactionMessagesFromEntries(toCompact));
     assertCompactionTranscript(messages);
     const chat = provider.chat.bind(provider), providerName = provider.getProviderType(), model = provider.getConfiguredModel();
     const thinking = ctx.thinkingLevel;

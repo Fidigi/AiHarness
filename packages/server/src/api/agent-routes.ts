@@ -3,6 +3,7 @@ import {
   loadAgentSettings,
   prepareCompactionContext,
   assertCompactionTranscript,
+  getSummaryModelMessages,
   readCompactionSummary,
   copyCompactionResponse,
   resolveInstructionPrompt,
@@ -621,7 +622,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       const chat = provider.chat.bind(provider);
       const rawModel = typeof request.body?.model === 'string' ? request.body.model : effective.values.model;
       const requestedModel = rawModel ? redactText(rawModel) : undefined;
-      const summaryMessages = redactJson(preparation.toCompact);
+      const summaryMessages = redactJson(getSummaryModelMessages(preparation.toCompact));
       assertCompactionTranscript(summaryMessages);
       const validateBinding = (): void => {
         if (services.sessionManager !== manager) throw new Error('Compaction context or policy changed.');

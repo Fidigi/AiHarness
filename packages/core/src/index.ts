@@ -198,6 +198,7 @@ export {
 } from './sessions/compaction.js';
 export type { CompactionConfig, CompactionResult } from './sessions/compaction.js';
 export { getCompactionModelMessages, compactionMessagesFromEntries } from './sessions/compaction-model-messages.js';
+export { getSummaryModelMessages } from './sessions/summary-model-messages.js';
 export { prepareCompactionContext } from './sessions/compaction-preparation.js';
 export { assertCompactionTranscript, readCompactionSummary, copyCompactionResponse } from './sessions/compaction-generation.js';
 export type { CompactionReason, PreparedCompactionContext } from './sessions/compaction-preparation.js';

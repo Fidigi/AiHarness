@@ -16,6 +16,7 @@ import {
   getSessionAccounting,
   prepareCompactionContext,
   assertCompactionTranscript,
+  getSummaryModelMessages,
   copyCompactionResponse,
   readCompactionSummary,
   isValidSessionId,
@@ -816,13 +817,14 @@ const commands: CommandEntry[] = [
           return chalk.red('No configured AI provider for compaction. Set API keys or use /provider mock.');
         }
         validate();
-        assertCompactionTranscript(messages);
-        const safeMessages = redactJson?.(messages) ?? messages;
+        const summaryInput = getSummaryModelMessages(messages);
+        const safeMessages = redactJson?.(summaryInput) ?? summaryInput;
         assertCompactionTranscript(safeMessages);
         const summaryMessages: Message[] = [
           ...safeMessages,
           { id: '__compact__', role: 'user', content: `Please summarize the above conversation. Focus on preserving important facts, decisions, and context needed for future responses. Keep it concise but comprehensive.`, timestamp: new Date() },
         ];
+        assertCompactionTranscript(summaryMessages);
         validate();
         const result = await chat(summaryMessages, {
           systemPrompt: args.join(' ') || 'Summarize this conversation concisely, preserving key information and context.',

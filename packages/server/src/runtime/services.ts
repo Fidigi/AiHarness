@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import {
   AgentRuntime,
   assertCompactionTranscript,
+  getSummaryModelMessages,
   compactionMessagesFromEntries,
   copyCompactionResponse,
   ExtensionModuleLoader,
@@ -471,7 +472,7 @@ export async function createRuntimeServices(
     if (!provider) throw new Error(`Provider unavailable: ${providerName}`);
     const requestedModel = effective.values.model ?? activeRun?.model;
     assertCompactionTranscript(toCompact);
-    const messages = compactionMessagesFromEntries(toCompact);
+    const messages = getSummaryModelMessages(compactionMessagesFromEntries(toCompact));
     assertCompactionTranscript(messages);
     const chat = provider.chat.bind(provider), recordUsage = proxy.recordUsage.bind(proxy);
     const rawResponse = await chat(messages, {
