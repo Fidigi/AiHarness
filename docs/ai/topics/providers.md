@@ -66,6 +66,14 @@ Credential resolution order is environment, trusted `providerApiKeyCommands`, pr
 
 An OpenAI-compatible SSE delta containing both `reasoning_content` and `content` publishes and awaits reasoning before text, regardless of JSON property order. Azure/local inherit that normalization. Shared turns likewise await reasoning before text when one extension callback supplies both. Separate callbacks/SSE events retain their input order; HTTP byte chunks do not define a sorting boundary. Final text/reasoning, usage, tool calls, output ceilings and protocol versions are conserved. Independent stateful redactor buffering/flush remains unchanged; this is not global transcript sorting, signed reasoning replay or conformance for every dialect.
 
+### Explicit OpenAI-compatible SSE errors
+
+OpenAI/Azure/local streaming refuses an own truthy top-level `error` before publishing any other fields from that frame or completing pending tool calls. The existing error callback receives only `The provider reported a streaming error.`, never the upstream body/code/message. Absent/null/false markers preserve normal completion, usage and tool calls. This changes neither ordinary chat nor other provider dialects.
+
+Shared turns apply their existing bounded pre-output retry policy; already delivered text or reasoning prevents replay. Defaults remain three attempts in Core/SDK and four in CLI/RPC (2/4/8-second CLI delays), subject to existing host settings. This is error recognition, not a new busy/capacity classifier, backoff policy, strict-tools fallback or retry-budget change. SDK/RPC permit a later explicit prompt after failure.
+
+[WARNING] SDK history retains the interrupted prefix with error evidence. CLI JSON/RPC error records retain streamed text, but durable CLI/RPC history still loses that failed prefix; full cross-host Unicode/partial-stream retention remains unqualified.
+
 ### Final tool-argument JSON
 
 OpenAI-compatible chat/stream, OpenAI Responses SSE/WebSocket and Anthropic streaming share an internal final string decoder. Malformed nonempty JSON refuses the entire batch before any complete `tool_call` event or tool execution, including when an earlier call in that response is valid. The fixed error `The provider tool arguments were invalid JSON.` includes no argument body or parser exception. Shared turns treat this protocol failure as terminal even before text; normal transient-error retries remain unchanged. A started Responses WebSocket failure cannot trigger an SSE replay, and its cached connection is retired.
@@ -166,6 +174,7 @@ Provider OAuth remains Device Flow; it has no pasted callback endpoint. The shar
 
 ## Associated Tests
 
+- `packages/core/src/providers/stream-error-frames.test.ts`, `packages/cli/src/cli/stream-error-process.test.ts` and the installed parity consumer — real SSE errors/mixed fields/pending tools, body-free diagnostics, unchanged retry bounds, visible-prefix no-replay, zero hooks/effects and explicit SDK/RPC continuation; no durable CLI-prefix claim
 - `packages/core/src/providers/mixed-delta-order.test.ts`, `packages/cli/src/cli/mixed-delta-process.test.ts` and the installed parity consumer — mixed-field/callback reasoning-first order, separate-event controls, awaited observers, terminal observer failure, exact final output and retained JSON/RPC/SDK framing/history
 - `packages/core/src/providers/tool-arguments{,-admission}.test.ts` — real loopback fragmented final JSON, valid/empty/primitive controls, whole-batch refusal before hooks/effects, terminal retry classification and passive nonstring decoding
 - `packages/core/src/providers/provider-websocket.integration.test.ts`, `packages/cli/src/cli/tool-json-process.test.ts` and the installed parity consumer — real cached/auto WebSocket no-replay/connection retirement, emitted print/JSON/RPC/SDK errors, no tool effects/retries, valid controls and explicit recovery through the public installed package

@@ -778,6 +778,9 @@ export class OpenAiProvider extends AiProvider {
           let data: OpenAiStreamChunk;
           try { data = JSON.parse(dataStr) as OpenAiStreamChunk; }
           catch { throw new Error('The provider streaming response was invalid.'); }
+          if (data && Object.hasOwn(data, 'error') && data.error) {
+            throw new Error('The provider reported a streaming error.');
+          }
           stopReason = lengthStop(data.choices?.[0]?.finish_reason).stopReason ?? stopReason;
           const delta = data.choices?.[0]?.delta;
           if (typeof delta?.reasoning_content === 'string' && delta.reasoning_content) {
@@ -945,6 +948,7 @@ interface OpenAiStreamToolCallFragment {
 }
 
 interface OpenAiStreamChunk {
+  error?: unknown;
   id?: string;
   object?: string;
   created?: number;
