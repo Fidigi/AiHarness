@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
 import { dedicatedSpecs, suites, ciPartitions, runE2e } from './e2e-suites.mjs';
 
@@ -170,6 +172,55 @@ test('GitHub matrix matches the dispatcher and retains every result and artifact
   assert.match(workflow, /needs: \[typecheck, test, test-e2e, build-prod\]/);
   for (const name of ['typecheck', 'test', 'test-e2e', 'build-prod']) {
     assert.ok(workflow.includes(`needs.${name}.result == 'success'`));
+  }
+});
+
+for (const kind of ['signal', 'interrupt', 'nonzero', 'success', 'spawn-error']) {
+  test(`real dispatcher preserves child termination without leaking command data (${kind})`, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-e2e-exit-'));
+    try {
+      const bin = path.join(root, 'bin');
+      await mkdir(bin);
+      if (kind !== 'spawn-error') {
+        // Only the dispatcher runs: a disposable fake build and CLI, not a
+        // filtered product/browser qualification or an external npm operation.
+        await writeFile(path.join(bin, 'npm'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+        const cli = path.join(root, 'node_modules', '@playwright', 'test', 'cli.js');
+        await mkdir(path.dirname(cli), { recursive: true });
+        await writeFile(cli, kind === 'signal' || kind === 'interrupt'
+          ? `process.kill(process.pid, '${kind === 'interrupt' ? 'SIGINT' : 'SIGTERM'}');`
+          : `process.exit(${kind === 'success' ? 0 : 7});`);
+      }
+      const result = spawnSync(process.execPath, [path.resolve('.docker/e2e-suites.mjs'), '--config=synthetic.config.ts'], {
+        cwd: root, env: { ...process.env, PATH: bin }, encoding: 'utf8', timeout: 10_000, maxBuffer: 128 * 1024,
+      });
+      assert.equal(result.error, undefined); assert.equal(result.signal, null);
+      assert.equal(result.status, kind === 'success' ? 0 : kind === 'nonzero' ? 7 : kind === 'interrupt' ? 130 : 1);
+      const report = JSON.parse(await readFile(path.join(root, 'test-results', 'e2e-suites.json'), 'utf8'));
+      assert.equal(report.results.length, 1);
+      assert.equal(report.results[0].name, kind === 'spawn-error' ? 'build' : 'focused');
+      assert.equal(report.results[0].status, result.status);
+      assert.equal(report.results[0].code, ['spawn-error', 'signal', 'interrupt'].includes(kind) ? null : result.status);
+      assert.equal(report.results[0].signal, kind === 'signal' ? 'SIGTERM' : kind === 'interrupt' ? 'SIGINT' : null);
+      if (kind === 'spawn-error') assert.equal(report.results[0].spawnErrorCode, 'ENOENT');
+      assert.ok(!JSON.stringify(report).includes(root));
+      assert.ok(!JSON.stringify(report).includes('synthetic.config.ts'));
+      assert.ok(!JSON.stringify(report).includes('PATH'));
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+}
+
+test('process receipts survive build, CI shard and preparation failures without dropping siblings', async () => {
+  const receipt = { status: 1, code: null, signal: 'SIGTERM' };
+  for (const stage of ['build', 'standard', 'demo-preparation']) {
+    const { run } = recorder(call => (stage === 'build' ? call.command === 'npm'
+      : stage === 'standard' ? call.args.includes('--config=playwright.config.ts')
+        : call.args.includes('demo/tests/demo.test.mjs')) ? receipt : 0);
+    const result = await runE2e(['--ci-partition=4/4'], run);
+    assert.equal(result.status, 1);
+    assert.deepEqual(result.results.find(row => row.name === (stage === 'demo-preparation' ? 'demo' : stage)),
+      { name: stage === 'demo-preparation' ? 'demo' : stage, ...receipt, ...(stage === 'standard' ? { shard: '4/4' } : {}) });
+    if (stage !== 'build') assert.deepEqual(result.results.map(row => row.name), ['standard', 'progress', 'demo']);
   }
 });
 

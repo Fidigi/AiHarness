@@ -38,8 +38,17 @@ export const ciPartitions = Object.freeze([
 function execute(command, args, env) {
   return new Promise(resolve => {
     const child = spawn(command, args, { stdio: 'inherit', env: { ...process.env, ...env } });
-    child.once('error', () => resolve(1));
-    child.once('exit', (code, signal) => resolve(code ?? (signal === 'SIGINT' ? 130 : 1)));
+    child.once('error', error => {
+      // Never put argv, paths, environment or the native error message in reports.
+      const spawnErrorCode = typeof error.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(error.code)
+        ? error.code : 'UNKNOWN';
+      console.error(`E2E subprocess could not start (${spawnErrorCode}).`);
+      resolve({ status: 1, code: null, signal: null, spawnErrorCode });
+    });
+    child.once('exit', (code, signal) => {
+      if (signal) console.error(`E2E subprocess terminated by ${signal} (exitCode=null).`);
+      resolve({ status: code ?? (signal === 'SIGINT' ? 130 : 1), code, signal });
+    });
   });
 }
 
@@ -65,8 +74,13 @@ export async function runE2e(args, run = execute) {
   const plan = partition ? suites.filter(suite => suite.name === 'standard' || partition.suites.includes(suite.name))
     : all ? suites : [{ name: 'focused' }];
   const results = [];
-  const build = await run('npm', ['run', 'build'], {});
-  if (build) return { status: build, results: [{ name: 'build', status: build }] };
+  // Keep numeric injected runners compatible, but preserve real process evidence.
+  const invoke = async (command, argv, env) => {
+    const result = await run(command, argv, env);
+    return typeof result === 'number' ? { status: result } : result;
+  };
+  const build = await invoke('npm', ['run', 'build'], {});
+  if (build.status) return { status: build.status, results: [{ name: 'build', ...build }] };
   for (const { name, config } of plan) {
     const artifact = `${partition ? `partition-${partition.index}/` : ''}${name}`;
     // Reporter environment paths must be absolute: JSON resolves relative names
@@ -84,22 +98,22 @@ export async function runE2e(args, run = execute) {
         [process.execPath, ['node_modules/typescript/bin/tsc', '--noEmit', '-p', 'demo/tsconfig.json']],
         [process.execPath, ['demo/scripts/build.mjs']],
       ];
-      let failed = 0;
+      let failed;
       for (const [command, argv] of preparation) {
-        failed = await run(command, argv, env);
-        if (failed) break;
+        const outcome = await invoke(command, argv, env);
+        if (outcome.status) { failed = outcome; break; }
       }
-      if (failed) { results.push({ name, status: failed }); continue; }
+      if (failed) { results.push({ name, ...failed }); continue; }
     }
     const shard = partition && name === 'standard' ? `${partition.index}/${partition.total}` : undefined;
     console.log(`E2E suite: ${name}${shard ? ` (shard ${shard})` : ''}`);
-    const status = await run(process.execPath, [
+    const outcome = await invoke(process.execPath, [
       '--no-maglev', 'node_modules/@playwright/test/cli.js', 'test',
       ...(config ? [`--config=${config}`] : []), ...flags,
       ...(shard ? [`--shard=${shard}`] : []),
       '--workers=1', '--retries=0', ...(all ? [`--output=test-results/${artifact}`] : []),
     ], env);
-    results.push({ name, status, ...(shard ? { shard } : {}) });
+    results.push({ name, ...outcome, ...(shard ? { shard } : {}) });
   }
   return { status: results.find(result => result.status)?.status ?? 0, results,
     ...(partition ? { partition: { index: partition.index, total: partition.total } } : {}) };

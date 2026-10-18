@@ -1,6 +1,6 @@
 # Mixed Reasoning/Text Order — A3-CLI-11 Subset
 
-> **Status: PARTIAL for A3-CLI-11 — 2026-10-18.** Mixed-input ordering is included in the post-reconciliation implementation increment (parent `e939b2b`), together with the [active tracker](../AUDIT-3.md) update. Complete unit/public parity checks pass, but integrated E2E FAILED: eight application configurations failed and only demo reports executed passing tests. No whole-review or integrated acceptance is claimed.
+> **Status: PARTIAL for A3-CLI-11 — 2026-10-18.** Mixed-input ordering is committed in `ca8eb79`, together with the [active tracker](../AUDIT-3.md) update. Complete unit/public gates pass; the subsequent full local E2E run passes **570/570 across nine configurations** with the same frozen ordering inputs. The earlier eight-configuration failure remains historical/unexplained. The subsequent production build failed with a native Server compiler abort; no whole-review or release acceptance is claimed.
 
 ## Narrow Contract and Owning Changes
 
@@ -37,7 +37,7 @@ All services, directories, trust and credentials are disposable/local. The publi
 - SHA-256 checks match all six changed/new executable source/test files against both parity and full-test images. The included `packages/core/src/sdk/README.md` is separately hashed and also matches both; root documentation is excluded by `.dockerignore`.
 - `make test IMAGE_TEST_RUN=aih-a3-mixed-delta:full`: **340 files / 5,090 tests passed**, exit 0, 848.06 seconds. This includes the added 12 installed cases as well as the 57 new focused checks; overlapping gate totals are not added together as unique tests.
 
-## Latest Integrated E2E — FAILED
+## Original Ordering E2E — FAILED
 
 `make test-e2e IMAGE_TEST=aih-a3-mixed-delta:e2e`: **Make exit 2 / runner status 1**. All nine configurations were attempted with the owned one-worker/zero-retry runner, but the application test bodies were not qualified:
 
@@ -53,7 +53,13 @@ All services, directories, trust and credentials are disposable/local. The publi
 | progress | Status 1; same occupied 3099 health URL |
 | demo | **8 passed**, 23.5 seconds |
 
-The current `test-results/e2e-suites.json` preserves those eight failures and demo success; `/tmp/aih-a3-mixed-delta-e2e.log` contains the actual startup/URL errors. Standard's cause and remaining server ownership are **not diagnosed**. Passing bundle/demo checks or the unit/public gates do not replace this failed aggregate. No timeout, browser flag, assertion, selector, retry or suite-ownership change is made to conceal it. Source/test hashes remain frozen; the same frozen product patch is included in the post-reconciliation partial implementation increment, not accepted as integrated.
+The original `test-results/e2e-suites.json`, now archived under `/tmp/aih-a3-mixed-delta-e2e-artifacts/`, preserves those eight failures and demo success; `/tmp/aih-a3-mixed-delta-e2e.log` contains the actual startup/URL errors. Standard's cause and remaining server ownership are **not diagnosed**. Passing bundle/demo checks or the unit/public gates do not replace this failed aggregate. No timeout, browser flag, assertion, selector, retry or suite-ownership change is made to conceal it. Source/test hashes remain frozen; the same frozen product patch is committed in `ca8eb79`. No integrated acceptance was claimed for that failed run.
+
+## Subsequent Local Qualification — 2026-10-18
+
+The child-termination receipt increment (parent `ca8eb79`) leaves product code unchanged. All six ordering source/test hashes and the separately hashed included SDK README match its actual E2E container, `aih-a3-e2e-exit:e2e-run-26600`. Fresh `make typecheck` and full `make test` pass (**340 files / 5,090 tests**); complete `make test-e2e` passes **570/570**, all nine configurations, Make/runner status 0 and per-command `code: 0`, `signal: null`. No worker/retry/filter/browser/budget/ownership change was used. See [the complete receipt checkpoint](./e2e-termination-evidence.md) for counts, hashes and actual commands.
+
+This establishes a later passing local aggregate, **not the cause or repair of either original failure**. `make build-prod` at this later checkpoint failed during Server `tsc` on the default Node v26.12.0 builder with a native zone-allocation error/abort, command exit 134 / Make 2. Release, remote CI and native-crash/orphan-server diagnosis remain open.
 
 ## Boundaries Still Open
 
