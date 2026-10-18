@@ -11,6 +11,15 @@ const { parentPort, workerData } = require('node:worker_threads');
   let ticks = 0;
   runtime.setInterruptHandler(() => Date.now() >= deadline || ++ticks > workerData.limits.interrupts);
   const vm = runtime.newContext();
+  // newError() assigns inherited fields; construct through the retained guest
+  // intrinsic instead so frozen Error.prototype keeps its original messages.
+  const errorConstructor = vm.getProp(vm.global, 'Error');
+  const guestError = message => {
+    const text = vm.newString(message);
+    const result = vm.callFunction(errorConstructor, vm.undefined, text);
+    text.dispose();
+    return result.error || result.value;
+  };
   const pending = new Map();
   let nextId = 0;
   let finished = false;
@@ -38,11 +47,11 @@ const { parentPort, workerData } = require('node:worker_threads');
   };
   const bridge = vm.newFunction('__hostCall', (...args) => {
     if (pending.size >= workerData.limits.calls || nextId >= workerData.limits.calls) {
-      throw new Error('Nested call limit exceeded.');
+      return { error: guestError('Nested call limit exceeded.') };
     }
     const values = args.map(handle => vm.getString(handle));
     if (values.some(value => Buffer.byteLength(value) > workerData.limits.inputBytes)) {
-      throw new Error('Nested input limit exceeded.');
+      return { error: guestError('Nested input limit exceeded.') };
     }
     const promise = vm.newPromise();
     const id = ++nextId;
@@ -54,7 +63,7 @@ const { parentPort, workerData } = require('node:worker_threads');
   bridge.dispose();
   const output = vm.newFunction('__output', handle => {
     const value = vm.getString(handle);
-    if (Buffer.byteLength(value) > workerData.limits.outputBytes) throw new Error('Script output limit exceeded.');
+    if (Buffer.byteLength(value) > workerData.limits.outputBytes) return { error: guestError('Script output limit exceeded.') };
     parentPort.postMessage({ type: 'output', value });
   });
   vm.setProp(vm.global, '__output', output);
@@ -64,7 +73,7 @@ const { parentPort, workerData } = require('node:worker_threads');
     const promise = pending.get(message.id);
     if (!promise) return;
     pending.delete(message.id);
-    const value = message.error ? vm.newError(message.error) : vm.newString(message.value);
+    const value = message.error ? guestError(message.error) : vm.newString(message.value);
     if (message.error) promise.reject(value); else promise.resolve(value);
     value.dispose();
     promise.dispose();
@@ -72,6 +81,38 @@ const { parentPort, workerData } = require('node:worker_threads');
   });
   const prelude = String.raw\`
     (() => {
+      // Bridge operations retain their original intrinsics even when a script
+      // shadows a global binding. Freeze intrinsic graphs before any user code.
+      const Object = globalThis.Object, JSON = globalThis.JSON, Error = globalThis.Error;
+      const seen = new Set();
+      const freezeIntrinsic = value => {
+        if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return;
+        if (seen.has(value)) return;
+        seen.add(value);
+        for (const key of Reflect.ownKeys(value)) {
+          const descriptor = Object.getOwnPropertyDescriptor(value, key);
+          if ('value' in descriptor) freezeIntrinsic(descriptor.value);
+          if (descriptor.get) freezeIntrinsic(descriptor.get);
+          if (descriptor.set) freezeIntrinsic(descriptor.set);
+        }
+        freezeIntrinsic(Object.getPrototypeOf(value));
+        Object.freeze(value);
+      };
+      for (const name of [
+        'Object', 'Function', 'Array', 'Promise', 'String', 'Number', 'Boolean', 'BigInt', 'Symbol',
+        'RegExp', 'Date', 'Error', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'AggregateError',
+        'Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Proxy',
+        'ArrayBuffer', 'SharedArrayBuffer', 'DataView', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray',
+        'Int16Array', 'Uint16Array', 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'BigInt64Array', 'BigUint64Array',
+        'JSON', 'Math', 'Reflect', 'Atomics', 'Intl', 'eval', 'isFinite', 'isNaN', 'parseInt', 'parseFloat',
+        'encodeURI', 'encodeURIComponent', 'decodeURI', 'decodeURIComponent', 'escape', 'unescape',
+      ]) freezeIntrinsic(globalThis[name]);
+      for (const value of [
+        Object.getPrototypeOf(async function () {}), Object.getPrototypeOf(function* () {}), Object.getPrototypeOf(async function* () {}),
+        Object.getPrototypeOf([][Symbol.iterator]()), Object.getPrototypeOf(''[Symbol.iterator]()),
+        Object.getPrototypeOf(new Map().entries()), Object.getPrototypeOf(new Set().values()),
+        Object.getPrototypeOf(''.matchAll(/x/g)),
+      ]) freezeIntrinsic(value);
       const host = globalThis.__hostCall;
       const output = globalThis.__output;
       delete globalThis.__hostCall; delete globalThis.__output;

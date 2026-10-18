@@ -407,6 +407,15 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     });
   }
 
+  for (const mode of ['core', 'print', 'json', 'rpc']) for (const scenario of ['freeze', 'globals', 'error', 'schema', 'options', 'output', ...(mode === 'core' ? ['deadline', 'abort'] : [])]) {
+    it(`retains bounded QuickJS intrinsics through installed public packages (${mode}/${scenario})`, async () => {
+      const worker = path.join(consumer, `codemode-intrinsics-${mode}-${scenario}.mjs`);
+      await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/codemode-intrinsics-probe.mjs'), worker);
+      expect(await run(process.execPath, [worker, mode, scenario], consumer, { ...environment, AIH_CODEMODE_INTRINSICS_COMMAND: 'ai-harness' }))
+        .toEqual({ code: 0, stdout: 'codemode intrinsics OK\n', stderr: '' });
+    });
+  }
+
   describe('installed PATH-bin definitive credential authority', () => {
     const literal = 'ordinary-installed-arity', secret = 'genuine-installed-arity: +/字';
     const secretVariants = [...new Set([secret, Buffer.from(secret).toString('base64'), Buffer.from(secret).toString('base64url'), Buffer.from(secret).toString('hex'), encodeURIComponent(secret)])];
