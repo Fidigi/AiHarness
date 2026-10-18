@@ -34,9 +34,34 @@ export type McpExposure = 'direct' | 'codemode' | 'deferred' | 'hidden';
 export function isMcpExposure(value: unknown): value is McpExposure {
   return value === 'direct' || value === 'codemode' || value === 'deferred' || value === 'hidden';
 }
+/** Only '*' is special. Ordered literal segments avoid regex backtracking. */
+function matchesExposurePattern(pattern: string, name: string): boolean {
+  const segments = pattern.split('*');
+  if (segments.length === 1) return false;
+  const prefix = segments[0]!;
+  const suffix = segments.at(-1)!;
+  if (!name.startsWith(prefix) || !name.endsWith(suffix)) return false;
+  let offset = prefix.length;
+  const end = name.length - suffix.length;
+  if (offset > end) return false;
+  for (let index = 1; index < segments.length - 1; index++) {
+    const segment = segments[index]!;
+    const found = name.indexOf(segment, offset);
+    if (found < 0 || found + segment.length > end) return false;
+    offset = found + segment.length;
+  }
+  return true;
+}
+
 export function mcpToolExposure(config: { exposure?: McpExposure; toolExposure?: Record<string, McpExposure> }, name?: string): McpExposure {
-  return (name && Object.hasOwn(config.toolExposure ?? {}, name) ? config.toolExposure?.[name] : undefined)
-    ?? config.exposure ?? 'direct';
+  const overrides = config.toolExposure;
+  if (name && overrides) {
+    if (Object.hasOwn(overrides, name)) return overrides[name] ?? config.exposure ?? 'direct';
+    for (const [pattern, mode] of Object.entries(overrides)) {
+      if (matchesExposurePattern(pattern, name)) return mode;
+    }
+  }
+  return config.exposure ?? 'direct';
 }
 export type McpServerTestState = 'connected' | 'needs-auth' | 'failed';
 
@@ -173,7 +198,7 @@ export interface McpServerInventoryEntry {
   shadowedByProject: boolean;
   replacesGlobal: boolean;
   problems: string[];
-  /** Optional additive localized-presentation codes; legacy diagnostics stay unchanged. */
+  /** Optional stable localized-presentation codes aligned with value-free diagnostics. */
   problemReasons?: McpEntryProblemReason[];
   /** Last bounded one-shot connection test for this exact configuration generation. */
   testStatus?: McpServerTestResult;
@@ -764,7 +789,7 @@ function describeEntry(
   const toolExposureValid = config.toolExposure === undefined || (isRecord(config.toolExposure)
     && Object.keys(config.toolExposure).length <= MCP_CONFIG_MAX_COLLECTION_ENTRIES
     && Object.entries(config.toolExposure).every(([name, mode]) => validName(name) && isMcpExposure(mode)));
-  if (!toolExposureValid) invalid('tool-exposure', 'Per-tool exposure must be a bounded map of exact tool names and exposure modes.');
+  if (!toolExposureValid) invalid('tool-exposure', 'Per-tool exposure must be a bounded map of tool names or * patterns and exposure modes.');
 
   let oauthValid = true;
   if (config.oauth !== undefined) {
@@ -1113,7 +1138,7 @@ export interface McpServerActivationResult {
 
 export interface McpServerExposureMutation extends McpConfigMutationTarget {
   name: string;
-  /** Exact remote tool name; omitted changes the server default. */
+  /** Exact remote tool name or '*' pattern; omitted changes the server default. */
   tool?: string;
   exposure: McpExposure;
 }

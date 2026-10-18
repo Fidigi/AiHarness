@@ -19,7 +19,7 @@ const en: Record<McpEntryProblemReason, string> = {
   'http-fields': 'HTTP servers cannot declare command arguments, a working directory, or process environment.',
   enabled: 'Enabled must be a boolean.',
   exposure: 'Exposure must be direct, codemode, deferred, or hidden.',
-  'tool-exposure': 'Per-tool exposure must be a bounded map of exact tool names and exposure modes.',
+  'tool-exposure': 'Per-tool exposure must be a bounded map of tool names or * patterns and exposure modes.',
   oauth: 'OAuth settings do not match the supported schema.',
 };
 
@@ -42,7 +42,7 @@ const fr: Record<McpEntryProblemReason, string> = {
   'http-fields': 'Un serveur HTTP ne peut pas déclarer d’arguments de commande, de dossier de travail ni d’environnement de processus.',
   enabled: 'L’état d’activation doit être un booléen.',
   exposure: 'L’exposition doit être direct, codemode, deferred ou hidden.',
-  'tool-exposure': 'L’exposition par outil doit être une table bornée de noms exacts et de modes d’exposition.',
+  'tool-exposure': 'L’exposition par outil doit être une table bornée de noms d’outils ou de motifs * et de modes d’exposition.',
   oauth: 'Les paramètres OAuth ne respectent pas le schéma pris en charge.',
 };
 

@@ -23,7 +23,7 @@ const cases: Array<[McpEntryProblemReason, string, unknown, string]> = [
   ['http-fields', 'http-fields', { url: 'https://example.test', env: {} }, 'Un serveur HTTP ne peut pas déclarer d’arguments de commande, de dossier de travail ni d’environnement de processus.'],
   ['enabled', 'enabled', { command: 'node', enabled: 'PRIVATE-LITERAL' }, 'L’état d’activation doit être un booléen.'],
   ['exposure', 'exposure', { command: 'node', exposure: 'PRIVATE-LITERAL' }, 'L’exposition doit être direct, codemode, deferred ou hidden.'],
-  ['tool-exposure', 'tool-exposure', { command: 'node', toolExposure: { tool: 'PRIVATE-LITERAL' } }, 'L’exposition par outil doit être une table bornée de noms exacts et de modes d’exposition.'],
+  ['tool-exposure', 'tool-exposure', { command: 'node', toolExposure: { tool: 'PRIVATE-LITERAL' } }, 'L’exposition par outil doit être une table bornée de noms d’outils ou de motifs * et de modes d’exposition.'],
   ['oauth', 'oauth', { url: 'https://example.test', oauth: { extra: 'PRIVATE-LITERAL' } }, 'Les paramètres OAuth ne respectent pas le schéma pris en charge.'],
 ];
 

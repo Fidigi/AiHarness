@@ -34,6 +34,7 @@ import { useSessionStore } from '../store/session-store';
 import { readMcpSelection, selectedMcpServer, writeMcpSelection, type McpSelection } from '../store/mcp-selection.js';
 import { mcpDetailMessage } from './mcp-detail-messages.js';
 import { mcpEntryProblemMessage } from './mcp-entry-messages.js';
+import { mcpToolExposureValue } from './mcp-tool-exposure.js';
 
 const PROBLEM_KEYS: Record<McpConfigProblemReason, string> = {
   'invalid-shape': 'settings.mcp.problem.invalidShape',
@@ -367,7 +368,7 @@ function ServerCard({
         <summary>{t('settings.mcp.perToolExposure')}</summary>
         {[...new Set([...Object.keys(server.toolExposure ?? {}), ...server.testStatus?.tools.map(tool => tool.name) ?? []])].map(name => <label key={name} className="mcp-exposure-control">
           <span><code>{name}</code></span>
-          <select disabled={disabled} value={server.toolExposure?.[name] ?? server.exposure}
+          <select disabled={disabled} value={mcpToolExposureValue(server, name)}
             data-mcp-exposure-key={editKey(server.scope, `${server.name}\0${name}`)}
             aria-label={t('settings.mcp.exposureNamed', { name: `${server.name} / ${name}` })}
             onChange={event => onExposureChange(event.currentTarget.value as McpExposure, name)}>

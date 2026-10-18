@@ -1,4 +1,5 @@
 import readline from 'node:readline';
+import { appendFileSync } from 'node:fs';
 
 const secret = process.env.MCP_TEST_SECRET || '';
 const reportedSecret = secret.startsWith('prefix:') && secret.endsWith(':suffix')
@@ -53,6 +54,7 @@ lines.on('line', line => {
       result = { prompts: [{ name: 'explain', description: 'Explain a fixture' }] };
       break;
     case 'tools/call':
+      if (process.env.MCP_TEST_CALL_LOG) appendFileSync(process.env.MCP_TEST_CALL_LOG, `${JSON.stringify(request.params?.name)}\n`);
       if (request.params?.name === 'lookup') {
         result = {
           content: [{ type: 'text', text: `lookup:${JSON.stringify(request.params?.arguments ?? {})}${reportedSecret ? `:${reportedSecret}` : ''}` }],

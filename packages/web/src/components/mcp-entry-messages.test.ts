@@ -33,6 +33,11 @@ describe('typed MCP diagnostic localization', () => {
     expect(mcpEntryProblemMessage('unregistered', reason)).toBe(en);
   });
 
+  it('describes the supported star-pattern keys in both languages under the same typed code', () => {
+    expect(mcpEntryProblemMessage('en', 'tool-exposure')).toBe('Per-tool exposure must be a bounded map of tool names or * patterns and exposure modes.');
+    expect(mcpEntryProblemMessage('fr', 'tool-exposure')).toBe('L’exposition par outil doit être une table bornée de noms d’outils ou de motifs * et de modes d’exposition.');
+  });
+
   it.each([undefined, null, '__proto__', 'constructor', 'toString', 'unknown-code', 17, {}])(
     'uses localized fallback for unrecognized codes, not an English-text lookup: %j', reason => {
       expect(mcpEntryProblemMessage('fr', reason)).toBe('L’entrée du serveur ne respecte pas le schéma MCP pris en charge.');

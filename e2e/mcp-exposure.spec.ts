@@ -39,6 +39,33 @@ for (const scenario of [
   });
 }
 
+test('MCP pattern inheritance displays canonical Test exposure and writes only an exact override', async ({ page }) => {
+  const inventory = mcpStateInventory();
+  const server = inventory.servers.find(entry => entry.name === 'remote-docs')!;
+  server.exposure = 'direct';
+  server.toolExposure = { 'search_*': 'deferred', '*': 'hidden' };
+  server.testStatus = {
+    state: 'connected', testedAt: '2026-10-18T00:00:00.000Z', durationMs: 1,
+    resources: 0, resourceTemplates: 0, prompts: 0, toolCount: 2,
+    tools: [{ name: 'search_docs', readOnly: true, exposure: 'deferred' }, { name: 'mutate', readOnly: false, exposure: 'hidden' }],
+  };
+  const api = await installMockApi(page, { mcpConfig: inventory });
+  await page.goto('/settings#mcp');
+  const card = page.locator('#mcp').getByRole('article', { name: 'remote-docs: Configured', exact: true });
+  await card.getByRole('button', { name: 'Show details for Global configuration / remote-docs', exact: true }).click();
+  await card.getByText('Per-tool exposure overrides', { exact: true }).click();
+  const selected = card.getByRole('combobox', { name: 'Tool exposure for remote-docs / search_docs', exact: true });
+  await expect(selected).toHaveValue('deferred');
+  await expect(card.getByRole('combobox', { name: 'Tool exposure for remote-docs / mutate', exact: true })).toHaveValue('hidden');
+  await expect(card.getByRole('combobox', { name: 'Tool exposure for remote-docs / search_*', exact: true })).toHaveValue('deferred');
+  expect(api.requests.filter(request => request.path === '/api/mcp/test')).toEqual([]);
+  await selected.selectOption('direct');
+  await expect(selected).toHaveValue('direct'); await expect(selected).toBeFocused();
+  expect(api.requests.filter(request => request.path === '/api/mcp/actions').at(-1)?.body).toMatchObject({
+    action: 'set-exposure', scope: 'global', name: 'remote-docs', tool: 'search_docs', exposure: 'direct',
+  });
+});
+
 test('bare /mcp navigates locally rather than sending a provider prompt', async ({ page }) => {
   const api = await installMockApi(page, { sessions: [mockSession('mcp-navigation', 'MCP navigation')] });
   await page.goto('/chat/mcp-navigation?cwd=%2Fworkspace');

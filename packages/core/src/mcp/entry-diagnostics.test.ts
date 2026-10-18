@@ -21,12 +21,12 @@ const cases: Array<[McpEntryProblemReason, string, unknown, string]> = [
   ['http-fields', 'server', { url: 'https://example.test', env: {} }, 'HTTP servers cannot declare command arguments, a working directory, or process environment.'],
   ['enabled', 'server', { command: 'node', enabled: 'PRIVATE-LITERAL' }, 'Enabled must be a boolean.'],
   ['exposure', 'server', { command: 'node', exposure: 'PRIVATE-LITERAL' }, 'Exposure must be direct, codemode, deferred, or hidden.'],
-  ['tool-exposure', 'server', { command: 'node', toolExposure: { tool: 'PRIVATE-LITERAL' } }, 'Per-tool exposure must be a bounded map of exact tool names and exposure modes.'],
+  ['tool-exposure', 'server', { command: 'node', toolExposure: { tool: 'PRIVATE-LITERAL' } }, 'Per-tool exposure must be a bounded map of tool names or * patterns and exposure modes.'],
   ['oauth', 'server', { url: 'https://example.test', oauth: { extra: 'PRIVATE-LITERAL' } }, 'OAuth settings do not match the supported schema.'],
 ];
 
 describe('typed MCP entry diagnostics', () => {
-  it.each(cases)('emits %s without changing its legacy message or exposing a literal', (reason, name, value, message) => {
+  it.each(cases)('emits %s with its fixed message without exposing a literal', (reason, name, value, message) => {
     const before = JSON.stringify(value);
     const entry = describeMcpConfigEntry(name, value);
     expect(entry.valid).toBe(false);
