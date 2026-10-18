@@ -555,6 +555,12 @@ For example, add help and clear chords:
 export AI_HARNESS_KEYBINDINGS="$HOME/.ai-harness/keybindings.json"
 ```
 
+### Model Output Limits
+
+When the provider explicitly reports an output limit, `--print` preserves the available final text (possibly empty), writes `Warning: Model output limit reached; the response may be incomplete.` to stderr, and exits **1**. JSON mode keeps its JSONL records, emits the same stderr warning and exits 1. A later successful positional prompt does not erase an earlier limit. Text and measured usage remain in the session when persistence is enabled.
+
+JSON/RPC assistant messages report `stopReason: "length"`, including RPC history. RPC remains available for later commands; a successful prompt acknowledgement means accepted, not a complete answer. No automatic retry is introduced. Ordinary text mentioning “length” and truncated tool results are not model output-limit signals.
+
 ### JSON Event Mode
 
 JSON mode writes exactly one LF-delimited JSON object per stdout record and exits after all supplied prompts:

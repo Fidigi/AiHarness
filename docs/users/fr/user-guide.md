@@ -555,6 +555,12 @@ Par exemple, ajoutez des accords d’aide et d’effacement :
 export AI_HARNESS_KEYBINDINGS="$HOME/.ai-harness/keybindings.json"
 ```
 
+### Limites de sortie du modèle
+
+Quand le provider signale explicitement une limite de sortie, `--print` conserve le texte final disponible (éventuellement vide), écrit `Warning: Model output limit reached; the response may be incomplete.` sur stderr et se termine avec le code **1**. Le mode JSON conserve ses enregistrements JSONL, émet le même avertissement sur stderr et renvoie 1. Un prompt positionnel ultérieur réussi n’efface pas une limite antérieure. Le texte et l’usage mesuré restent dans la session si la persistance est activée.
+
+Les messages assistant JSON/RPC exposent `stopReason: "length"`, y compris dans l’historique RPC. RPC reste disponible pour les commandes suivantes ; un accusé de réception réussi signifie « accepté », pas « réponse complète ». Aucun retry automatique n’est ajouté. Un texte mentionnant « length » et un résultat d’outil tronqué ne signalent pas une limite de sortie du modèle.
+
 ### Mode événements JSON
 
 Le mode JSON écrit exactement un objet JSON par enregistrement stdout, délimité par LF, puis se termine après tous les prompts fournis :

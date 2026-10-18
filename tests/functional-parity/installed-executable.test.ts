@@ -357,6 +357,17 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     } finally { await rm(directory,{recursive:true,force:true}); await rm(script,{force:true}); }
   });
 
+  it.each(['print/partial-length', 'print/empty-length', 'print/normal',
+    'json/partial-length', 'json/empty-length', 'json/normal',
+    'rpc/partial-length', 'rpc/empty-length', 'rpc/normal'])('reports model output limits through the installed PATH-bin (%s)', async scenario => {
+    const worker = path.join(consumer, `length-stop-${scenario.replace('/', '-')}.mjs`);
+    await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', 'length-stop-probe.mjs'), worker);
+    const result = await run(process.execPath, [worker, scenario], consumer, { ...environment, AIH_LENGTH_COMMAND: 'ai-harness' });
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toMatchObject({ result: 'LENGTH_STOP_OK', mode: scenario.split('/')[0], kind: scenario.split('/')[1] });
+  });
+
   describe('installed PATH-bin definitive credential authority', () => {
     const literal = 'ordinary-installed-arity', secret = 'genuine-installed-arity: +/字';
     const secretVariants = [...new Set([secret, Buffer.from(secret).toString('base64'), Buffer.from(secret).toString('base64url'), Buffer.from(secret).toString('hex'), encodeURIComponent(secret)])];

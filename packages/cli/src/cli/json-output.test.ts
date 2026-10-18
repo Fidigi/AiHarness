@@ -74,6 +74,39 @@ describe('JsonEventStream', () => {
     });
   });
 
+  for (const content of ['', 'Partial']) it(`retains length completion evidence for live and persisted ${content ? 'partial' : 'empty'} messages`, async () => {
+    const records: Array<Record<string, unknown>> = [];
+    const stream = new JsonEventStream(record => { records.push(record); });
+    await stream.startAgent('inspect', undefined);
+    await stream.startTurn();
+    await stream.startAssistant('local', 'fixture');
+    await stream.textDelta(content);
+    await stream.finishAssistant({ content, stopReason: 'length',
+      usage: { promptTokens: 7, completionTokens: 3, totalTokens: 10 } });
+    await stream.endAgent();
+    const message = records.find(record => record.type === 'message_end'
+      && (record.message as { role: string }).role === 'assistant')!.message;
+    expect(message).toMatchObject({ stopReason: 'length', usage: { totalTokens: 10 } });
+    expect(records.find(record => record.type === 'turn_end')).toMatchObject({ message });
+    expect(records.find(record => record.type === 'agent_end')).toMatchObject({ messages: expect.arrayContaining([message]) });
+    expect(toJsonProtocolMessage({ id: 'partial', role: 'assistant', content,
+      timestamp: new Date(0), metadata: { stopReason: 'length' } })).toMatchObject({ stopReason: 'length' });
+    expect(toJsonProtocolMessage({ id: 'failed', role: 'assistant', content, isError: true,
+      timestamp: new Date(0), metadata: { stopReason: 'length' } })).toMatchObject({ stopReason: 'error' });
+  });
+
+  it('does not mistake ordinary text or tool-result truncation for a model output limit', async () => {
+    const records: Array<Record<string, unknown>> = [];
+    const stream = new JsonEventStream(record => { records.push(record); });
+    await stream.startAgent('inspect', undefined);
+    await stream.startTurn();
+    await stream.startAssistant('local', 'fixture');
+    await stream.finishAssistant({ content: 'length', toolCalls: [{ id: 'c', name: 'read', input: {} }] });
+    expect(records.at(-1)).toMatchObject({ message: { stopReason: 'toolUse' } });
+    expect(toJsonProtocolMessage({ id: 'normal', role: 'assistant', content: 'length',
+      timestamp: new Date(0), metadata: { truncated: true } })).toMatchObject({ stopReason: 'stop' });
+  });
+
   it('does not invent zero prices for unknown models', () => {
     const message = toJsonProtocolMessage({
       id: 'assistant-unknown',

@@ -570,6 +570,7 @@ async function main(): Promise<void> {
   let isMultiLineMode = false;
   let shuttingDown = false;
   let conversationRunning = false;
+  let outputLimitReached = false;
   let foregroundInputRunning = false;
   let activeAbortController: AbortController | null = null;
   let systemThemeProbe: SystemThemeProbe | undefined;
@@ -1688,7 +1689,10 @@ async function main(): Promise<void> {
           if (jsonOutput) void jsonOutput.events.codemodeProgress(progress).catch(error => reportError(String(error)));
           else reportOutput(`[codemode ${progress.call.id}] ${progress.call.name}: ${progress.call.state}`);
         },
-        onAssistantResponse: response => jsonOutput?.events.finishAssistant(response),
+        onAssistantResponse: response => {
+          if (printMode && response.stopReason === 'length') outputLimitReached = true;
+          return jsonOutput?.events.finishAssistant(response);
+        },
         onToolCall: call => {
           activeToolCall = call;
           activeToolOutput = '';
@@ -1876,6 +1880,10 @@ async function main(): Promise<void> {
         });
       }
       if (applicationMode === 'print') process.stdout.write(`${redactOutput(finalContent ?? '')}\n`);
+      if (outputLimitReached) {
+        process.stderr.write('Warning: Model output limit reached; the response may be incomplete.\n');
+        process.exitCode = 1;
+      }
     } catch (error) {
       process.stderr.write(`Error: ${redactOutput(error instanceof Error ? error.message : String(error))}\n`);
       process.exitCode = 1;

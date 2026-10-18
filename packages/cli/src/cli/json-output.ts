@@ -187,7 +187,8 @@ export function toJsonProtocolMessage(message: Message): JsonMessage {
       provider: message.provider ?? 'unknown',
       model: message.model ?? 'unknown',
       usage: persistedUsage(message),
-      stopReason: message.isError ? 'error' : message.toolCalls?.length ? 'toolUse' : 'stop',
+      stopReason: message.isError ? 'error' : message.metadata?.stopReason === 'length'
+        ? 'length' : message.toolCalls?.length ? 'toolUse' : 'stop',
       ...(message.isError ? { errorMessage: message.content } : {}),
       timestamp,
     };
@@ -365,7 +366,7 @@ export class JsonEventStream {
       }, response.usage));
     }
 
-    const stopReason = response.toolCalls?.length ? 'toolUse' : 'stop';
+    const stopReason = response.stopReason === 'length' ? 'length' : response.toolCalls?.length ? 'toolUse' : 'stop';
     const message = this.assistantMessage(state, response, stopReason);
     writes.push(this.emit({ type: 'message_end', message }));
     this.runMessages.push(message);
@@ -587,7 +588,7 @@ export class JsonEventStream {
   private assistantMessage(
     state: AssistantState,
     response: ChatResponse | undefined,
-    stopReason: 'pending' | 'stop' | 'toolUse' | 'error' | 'aborted',
+    stopReason: 'pending' | 'stop' | 'toolUse' | 'length' | 'error' | 'aborted',
     errorMessage?: string,
   ): JsonMessage {
     const indexedContent: Array<{ index: number; block: Record<string, unknown> }> = [];
