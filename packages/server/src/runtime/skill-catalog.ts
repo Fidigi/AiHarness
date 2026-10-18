@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
+import { lstat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type {
   SkillCatalog,
+  SkillContent,
   SkillCatalogEntry,
   SkillCatalogScope,
   SkillDiagnostic,
@@ -25,6 +27,7 @@ import {
 } from '@ai-harness/core';
 
 import { mergeResourceChanges } from './resource-batches.js';
+import { skillContentReference } from './skill-content-reference.js';
 import { readSkillMarkdown, skillInvocationMarkdown, withSkillMutation, writeSkillMarkdown } from './skill-markdown.js';
 
 const MAX_SKILLS = 500;
@@ -170,6 +173,48 @@ export class SkillCatalogService {
     let cached = this.cached(context.cwd);
     if (input.refresh || !cached || cached.projectTrusted !== context.projectTrusted) cached = await this.refresh(context);
     return this.withEnabledState(cached, input.configurationScope);
+  }
+
+  /** Explicit content read from a fresh eligible record, never a browser path.
+   * Discovery, model activation and execution retain their separate contracts. */
+  async getContent(input: { key: string; cwd?: string; projectId?: string; href?: string; from?: string }): Promise<SkillContent> {
+    const fail = (status: number, code: string, message: string): never => { throw Object.assign(new Error(message), { status, code }); };
+    const generation = this.cacheGeneration;
+    const context = await this.context(input.cwd, input.projectId);
+    const current = await this.refresh(context);
+    const record = current.records.find(candidate => candidate.key === input.key);
+    if (!record || !record.trusted) return fail(404, 'SKILL_CONTENT_UNAVAILABLE', 'Skill content is unavailable.');
+    const project = record.provenance.scope === 'project' || inside(context.cwd, record.absolutePath);
+    const authorize = async (): Promise<void> => {
+      if (project && !await this.trustManager.isTrusted(context.cwd)) return fail(409, 'PROJECT_TRUST_REQUIRED', 'Project trust required.');
+      if (generation !== this.cacheGeneration) return fail(409, 'SKILL_CONTENT_CHANGED', 'Skill content changed.');
+    };
+    await authorize();
+    let result: SkillContent;
+    try {
+      const base = path.dirname(record.absolutePath), directoryBefore = await lstat(base), mainBefore = await lstat(record.absolutePath);
+      if (!directoryBefore.isDirectory() || directoryBefore.isSymbolicLink() || !mainBefore.isFile() || mainBefore.isSymbolicLink() || mainBefore.nlink !== 1) {
+        return fail(404, 'SKILL_CONTENT_UNAVAILABLE', 'Skill content is unavailable.');
+      }
+      const main = await readSkillMarkdown(record.absolutePath), document = parseResourceMarkdown(main);
+      if (!document.frontmatter || document.attributes.name !== record.name) return fail(409, 'SKILL_CONTENT_CHANGED', 'Skill content changed.');
+      const target = input.href === undefined
+        ? { absolutePath: record.absolutePath, relativePath: path.basename(record.absolutePath), fragment: undefined }
+        : skillContentReference(record.absolutePath, input.href, input.from);
+      const markdown = target.absolutePath === record.absolutePath ? document.body : await readSkillMarkdown(target.absolutePath);
+      const [directoryAfter, mainAfter] = await Promise.all([lstat(base), lstat(record.absolutePath)]);
+      const same = (left: typeof mainBefore, right: typeof mainBefore): boolean => left.dev === right.dev && left.ino === right.ino
+        && left.size === right.size && left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs;
+      if (!same(directoryBefore, directoryAfter) || !same(mainBefore, mainAfter)) return fail(409, 'SKILL_CONTENT_CHANGED', 'Skill content changed.');
+      result = { key: record.key, relativePath: target.relativePath, markdown, ...(target.fragment ? { fragment: target.fragment } : {}) };
+    } catch (error) {
+      const code = error && typeof error === 'object' ? Object.getOwnPropertyDescriptor(error, 'code')?.value : undefined;
+      if (code === 'INVALID_SKILL_REFERENCE' || code === 'SKILL_CONTENT_CHANGED' || code === 'SKILL_CONTENT_UNAVAILABLE') throw error;
+      return fail(404, 'SKILL_CONTENT_UNAVAILABLE', 'Skill content is unavailable.');
+    }
+    await authorize();
+    if (generation !== this.cacheGeneration) return fail(409, 'SKILL_CONTENT_CHANGED', 'Skill content changed.');
+    return result;
   }
 
   async getModelInvocableSkills(input: {

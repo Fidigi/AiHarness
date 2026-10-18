@@ -244,6 +244,14 @@ export interface SkillCatalogEntry {
   };
 }
 
+/** Explicit, freshly authorized Markdown read; never a generic file capability. */
+export interface SkillContent {
+  key: string;
+  relativePath: string;
+  markdown: string;
+  fragment?: string;
+}
+
 export interface SkillDiagnostic {
   code: string;
   message: string;

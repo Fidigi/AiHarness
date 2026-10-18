@@ -1,5 +1,5 @@
 import DOMPurify from 'dompurify';
-import { Fragment, isValidElement, memo, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, isValidElement, memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
@@ -166,16 +166,25 @@ export interface MarkdownContentProps {
   keepLineBreaks?: boolean;
   /** Noninteractive text projection for navigation previews; never nests links/buttons. */
   compact?: boolean;
+  /** Optional in-pane document actions. Relative/file/hash hrefs never become routes. */
+  onReference?: (href: string) => void;
 }
 
-export default memo(function MarkdownContentRenderer({ content, keepLineBreaks = false, compact = false }: MarkdownContentProps) {
+export default memo(function MarkdownContentRenderer({ content, keepLineBreaks = false, compact = false, onReference }: MarkdownContentProps) {
+  const renderComponents = useMemo<Components>(() => onReference ? {
+    ...components,
+    a: ({ href, children }) => {
+      if (href && /^https?:\/\//i.test(href)) return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
+      return href ? <button type="button" className="markdown-reference" onClick={() => onReference(href)}>{children}</button> : <span>{children}</span>;
+    },
+  } : components, [onReference]);
   if (compact) return <span className="markdown-compact">{markdownPreviewText(content)}</span>;
   return <div className="markdown-content">
     <ReactMarkdown
       remarkPlugins={keepLineBreaks ? [...markdownRemarkPlugins, remarkKeepLineBreaks] : markdownRemarkPlugins}
       skipHtml
       rehypePlugins={[[rehypeSanitize, sanitizeSchema], [rehypeKatex, { strict: 'warn', trust: false }]]}
-      components={components}
+      components={renderComponents}
       urlTransform={url => /^file:/i.test(url) ? url : defaultUrlTransform(url)}
     >{normalizeMarkdownMath(content)}</ReactMarkdown>
   </div>;

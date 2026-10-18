@@ -51,6 +51,24 @@ export function createSkillRouter(servicesPromise: Promise<RuntimeServices>): Ro
     }
   });
 
+  router.get('/content', requireCapability('workspace:read'), async (request, response, next) => {
+    response.setHeader('Cache-Control', 'no-store');
+    try {
+      const services = await servicesPromise;
+      try { await services.configurationStore.load(); }
+      catch { response.status(409).json({ error: 'Canonical configuration is unreadable.', code: 'CONFIGURATION_UNREADABLE' }); return; }
+      const href = optionalString(request.query.href, 'href'), from = optionalString(request.query.from, 'from');
+      if ((request.query.href !== undefined && href === undefined) || (request.query.from !== undefined && from === undefined)) {
+        response.status(400).json({ error: 'Skill Markdown reference is invalid.', code: 'INVALID_SKILL_REFERENCE' }); return;
+      }
+      const content = await services.skillCatalog.getContent({
+        key: requiredString(request.query.key, 'key', 500), cwd: optionalString(request.query.cwd, 'cwd'),
+        projectId: optionalString(request.query.projectId, 'projectId', 200), href, from,
+      });
+      response.json(services.redactJson(content));
+    } catch (error) { next(error); }
+  });
+
   router.get('/registry', async (request, response, next) => {
     try {
       const services = await servicesPromise;

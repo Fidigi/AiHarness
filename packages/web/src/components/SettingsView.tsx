@@ -35,6 +35,7 @@ import {
 } from './EcosystemSettings';
 
 import { ResourceBatchReport, ResourceGroupButtons, useResourceBatches } from './ResourceBatchControls';
+import { SkillContentPane } from './SkillContentPane';
 
 const PluginSettings = lazy(async () => ({
   default: (await import('./PluginSettings')).PluginSettings,
@@ -70,6 +71,8 @@ function SettingsView({ entryRelease, entryEpoch }: {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [modelFilter, setModelFilter] = useState('');
   const [skillFilter, setSkillFilter] = useState('');
+  const [selectedSkill, setSelectedSkill] = useState<string>();
+  const skillInvoker = useRef<HTMLButtonElement | null>(null);
   const [pushStatus, setPushStatus] = useState('');
   const [preferences, setPreferences] = usePreferences();
 
@@ -100,6 +103,8 @@ function SettingsView({ entryRelease, entryEpoch }: {
     const sources = scope === 'package' || scope === 'path' ? [...new Set(candidates.map(skill => skill.source))] : [''];
     return sources.map(source => ({ scope, source, skills: candidates.filter(skill => !source || skill.source === source) }));
   }).filter(group => group.skills.length > 0);
+
+  const skillDetail = visibleSkillGroups.flatMap(group => group.skills).find(skill => skill.key === selectedSkill);
 
   const checkForUpdate = async (refresh = false) => {
     setCheckingUpdate(true);
@@ -423,27 +428,37 @@ function SettingsView({ entryRelease, entryEpoch }: {
                 rows={group.skills.map(skill => ({ key: skill.key, enabled: skill.modelInvocable }))}
                 disabled={!!skills.loading || batches.busy} save={changes => batches.save('skills', changes)} />
               {group.skills.map(skill => (
-                <label key={skill.key} className="skill-catalog-row" data-settings-selection={skill.key}>
-                  <input type="checkbox" checked={skill.modelInvocable}
-                    disabled={skills.loading || batches.busy || !skill.trusted}
-                    title={!skill.trusted ? t('settings.skills.requiresTrust') : undefined}
-                    aria-label={t('settings.skills.toggle', { skill: skill.name })}
-                    onChange={event => void batches.save('skills', [{ key: skill.key, enabled: event.target.checked }])} />
-                  <span className="skill-catalog-identity">
-                    <strong>{skill.name}</strong>
-                    <span>{skill.description}</span>
-                    <code>{skill.filePath}</code>
-                  </span>
-                  <span className="model-capabilities" aria-label={t('settings.skills.metadata')}>
-                    {skill.version && <small>v{skill.version}</small>}
-                    <small>{skill.source}</small>
-                    {!skill.trusted && <small className="unavailable">{t('settings.skills.untrusted')}</small>}
-                  </span>
-                </label>
+                <div key={skill.key} className="skill-catalog-row" data-settings-selection={skill.key}>
+                  <label>
+                    <input type="checkbox" checked={skill.modelInvocable}
+                      disabled={skills.loading || batches.busy || !skill.trusted}
+                      title={!skill.trusted ? t('settings.skills.requiresTrust') : undefined}
+                      aria-label={t('settings.skills.toggle', { skill: skill.name })}
+                      onChange={event => void batches.save('skills', [{ key: skill.key, enabled: event.target.checked }])} />
+                    <span className="skill-catalog-identity">
+                      <span>{skill.description}</span>
+                      <code>{skill.filePath}</code>
+                    </span>
+                    <span className="model-capabilities" aria-label={t('settings.skills.metadata')}>
+                      {skill.version && <small>v{skill.version}</small>}
+                      <small>{skill.source}</small>
+                      {!skill.trusted && <small className="unavailable">{t('settings.skills.untrusted')}</small>}
+                    </span>
+                  </label>
+                  <button type="button" className="skill-instructions-trigger" disabled={skills.loading || batches.busy || !skill.trusted}
+                    title={t('settings.skills.openInstructions', { skill: skill.name })}
+                    aria-label={t('settings.skills.openInstructions', { skill: skill.name })} aria-expanded={selectedSkill === skill.key}
+                    aria-controls={selectedSkill === skill.key ? 'skill-content-detail' : undefined}
+                    onClick={event => { skillInvoker.current = event.currentTarget; setSelectedSkill(skill.key); }}>{skill.name}</button>
+                </div>
               ))}
             </fieldset>
           ))}
         </div>
+        {skillDetail && skills.catalog && <SkillContentPane
+          key={JSON.stringify([skillDetail.key, skills.catalog.cwd, skills.catalog.projectId, skills.catalog.projectTrusted])}
+          skillKey={skillDetail.key} name={skillDetail.name} cwd={skills.catalog.cwd} projectId={skills.catalog.projectId}
+          onClose={() => { setSelectedSkill(undefined); if (skillInvoker.current?.isConnected) skillInvoker.current.focus(); }} />}
       </section>
 
       <ToolSettingsPanel />

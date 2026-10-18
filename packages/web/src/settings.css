@@ -18,11 +18,25 @@
 .model-catalog-groups legend span { margin-left: .5rem; font-size: .68rem; font-weight: 400; }
 .model-catalog-row, .skill-catalog-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .55rem; padding: .5rem .35rem; border-radius: 4px; }
 .model-catalog-row + .model-catalog-row, .skill-catalog-row + .skill-catalog-row { border-top: 1px solid #273958; }
+/* The peer title action shares the identity cell; the real checkbox label starts below its one-line heading. */
+.skill-catalog-row > label { display: contents; }
+.skill-catalog-row > label > input { grid-column: 1; grid-row: 1; }
+.skill-catalog-row > label > .skill-catalog-identity { grid-column: 2; grid-row: 1; padding-block-start: calc(1lh + .15rem); }
+.skill-catalog-row > label > .model-capabilities { grid-column: 3; grid-row: 1; }
 .model-catalog-identity, .skill-catalog-identity { min-width: 0; display: grid; gap: .15rem; }
 .model-catalog-identity strong, .model-catalog-identity code,
 .skill-catalog-identity strong, .skill-catalog-identity span, .skill-catalog-identity code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-catalog-identity code, .skill-catalog-identity code { color: #9eabc1; font-size: .7rem; }
 .skill-catalog-identity span { color: #b5c0d3; font-size: .78rem; }
+.skill-catalog-row > .skill-instructions-trigger { all: unset; grid-column: 2; grid-row: 1; align-self: start; min-width: 0; font-weight: 700; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skill-catalog-row > .skill-instructions-trigger:disabled { cursor: not-allowed; opacity: .6; }
+.skill-instructions-trigger:focus-visible, .skill-content-pane .markdown-reference:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.skill-content-pane { margin-top: 1rem; padding: .75rem; border: 1px solid #40527b; border-radius: 6px; min-width: 0; }
+.skill-content-pane header, .skill-content-toolbar { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
+.skill-content-pane h4 { margin: .25rem 0; overflow-wrap: anywhere; }
+.skill-content-toolbar code { min-width: 0; overflow-wrap: anywhere; }
+.skill-content-document { max-height: 60vh; overflow: auto; overflow-wrap: anywhere; }
+.skill-content-pane .markdown-reference { all: unset; color: inherit; text-decoration: underline; cursor: pointer; }
 .provider-lifecycle-list, .settings-resource-list { display: grid; gap: .55rem; margin: .75rem 0; }
 .oauth-device-flow { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem 1rem; margin: .75rem 0; padding: .7rem; border: 1px solid #536b9e; border-radius: 6px; background: #10182f; }
 .oauth-device-flow p { margin: 0; }
@@ -182,6 +196,7 @@ html[data-theme="light"] .mcp-import-note-warning { color: #7a4b08; }
   .shortcut-grid label { grid-template-columns: 1fr; }
   .shortcut-grid small { grid-column: 1; }
   .model-catalog-row, .skill-catalog-row { grid-template-columns: auto minmax(0, 1fr); }
+  .skill-catalog-row > label > .model-capabilities { grid-column: 2; grid-row: 2; }
   .settings-resource-card, .custom-resource-editor form { grid-template-columns: 1fr; }
   .settings-resource-card > div:last-child { max-width: none; justify-content: flex-start; }
   .mcp-group-actions, .mcp-row-actions { justify-content: flex-start; }
