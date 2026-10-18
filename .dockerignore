@@ -1,5 +1,8 @@
 # .dockerignore - Fichiers exclus du contexte de build Docker
 
+# Métadonnées Git : exclure le dépôt et les pointeurs de worktree.
+.git
+
 # Dépendances (sont réinstallées dans le conteneur)
 node_modules/
 **/node_modules/

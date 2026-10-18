@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { readFile, stat } from 'node:fs/promises';
+import { lstat, readFile, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -8,6 +8,10 @@ import test from 'node:test';
 
 const execute = promisify(execFile);
 const root = path.resolve(import.meta.dirname, '..');
+
+test('Docker context excludes checkout Git metadata, whether a directory or pointer file', async () => {
+  await assert.rejects(lstat(path.join(root, '.git')), { code: 'ENOENT' });
+});
 
 test('test image contains emitted entries and declarations for every process-test dependency', async () => {
   for (const file of [
