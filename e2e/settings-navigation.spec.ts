@@ -1,0 +1,349 @@
+import AxeBuilder from '@axe-core/playwright';
+import { expect, test } from './fixtures/test-budget.js';
+import { installMockApi } from './fixtures/mock-api.js';
+import { switchMcpWorkspace } from './fixtures/mcp-navigation.js';
+import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp.js';
+
+const key = 'ai-harness-settings-navigation-v1';
+test('Settings restores separate section, group, row and scope intent through real project switches and reload', async ({ page }) => {
+  const api = await installMockApi(page);
+  await page.goto('/settings?cwd=%2Fworkspace#model');
+  const catalog = page.locator('#model .model-catalog');
+  await catalog.locator('summary').click();
+  const row = catalog.locator('.model-catalog-row').first();
+  const identity = await row.getAttribute('data-settings-selection');
+  await row.getByRole('checkbox').focus();
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)!).entries[0].positions.model.selection, key)).toBe(identity);
+  await page.goto('/settings');
+  await expect(row).toBeInViewport();
+  await expect(catalog).toHaveAttribute('open', '');
+  const scope = page.locator('#tools').getByRole('combobox', { name: 'Scope', exact: true });
+  await scope.selectOption('global');
+  await row.getByRole('checkbox').focus();
+  await switchMcpWorkspace(page, '/workspace/other');
+  await expect(scope).toHaveValue('project');
+  await page.locator('#shortcuts input').first().focus();
+  await switchMcpWorkspace(page, '/workspace');
+  await expect(scope).toHaveValue('global');
+  await expect(row).toBeInViewport();
+  await page.reload();
+  await expect(row).toBeInViewport();
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), key);
+  expect(saved.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace')).toMatchObject({
+    section: 'model', positions: { model: { selection: identity } }, scopes: { tools: 'global' },
+  });
+  expect(saved.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace/other').section).toBe('shortcuts');
+  expect(api.requests.filter(request => request.method !== 'GET' && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+  // An explicit section address is an intent even without control focus.
+  await page.goto('/settings#shortcuts');
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)!).entries
+    .find((entry: { cwd: string }) => entry.cwd === '/workspace')?.section, key)).toBe('shortcuts');
+  await page.goto('/settings');
+  await expect(page.locator('#shortcuts')).toBeInViewport();
+});
+
+test('Settings focus conserves another tab’s fresh other-section position without live navigation or configuration writes', async ({ page }) => {
+  const api = await installMockApi(page);
+  await page.goto('/settings?cwd=%2Fworkspace#model');
+  const catalog = page.locator('#model .model-catalog');
+  await catalog.locator('summary').click();
+  const model = catalog.locator('.model-catalog-row').first().getByRole('checkbox');
+  await model.focus();
+  await page.locator('#tools').getByRole('combobox', { name: 'Scope', exact: true }).focus();
+  const peer = await page.context().newPage();
+  try {
+    const peerApi = await installMockApi(peer);
+    await peer.goto('/settings?cwd=%2Fworkspace#subagents');
+    const profile = peer.locator('#subagents .subagent-profile-card').first();
+    const edit = profile.getByRole('button').first();
+    await expect(edit).toBeEnabled();
+    const identity = await profile.getAttribute('data-settings-selection');
+    await edit.focus();
+    const position = () => page.evaluate(key => JSON.parse(localStorage.getItem(key)!).entries
+      .find((entry: { cwd: string }) => entry.cwd === '/workspace')?.positions.subagents, key);
+    await expect.poll(async () => (await position())?.selection).toBe(identity);
+    await expect(peer.locator('#subagents select[data-settings-focus="scope"]')).toHaveValue('project');
+    await expect.poll(position).toEqual({ group: 'project', selection: identity });
+    const remembered = await position();
+    await expect(page).toHaveURL(/#model$/u);
+    await page.bringToFront();
+    await model.focus();
+    await expect.poll(position).toEqual(remembered);
+    for (const client of [api, peerApi]) expect(client.requests.filter(request => request.method !== 'GET'
+      && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+  } finally { await peer.close(); }
+});
+
+test('No-project Settings retains global sections and falls back only unavailable project scope; forms never enter navigation storage', async ({ page }) => {
+  await installMockApi(page);
+  await page.route('**/api/workspaces/default', route => route.fulfill({ status: 404, json: { error: 'No workspace' } }));
+  await page.addInitScript(key => localStorage.setItem(key, JSON.stringify({ version: 1, entries: [
+    { cwd: null, section: 'tools', positions: {}, scopes: { tools: 'project', defaults: 'project', subagents: 'project', registry: 'project' } },
+  ] })), key);
+  await page.goto('/settings');
+  for (const section of ['tools', 'defaults', 'subagents']) {
+    const scope = page.locator(`#${section} select`).first();
+    await expect(scope).toHaveValue('global');
+    await expect(scope.locator('option[value="project"]')).toHaveJSProperty('disabled', true);
+  }
+  await page.locator('#authentication input').fill('NAVIGATION_SECRET_MUST_NOT_PERSIST');
+  await page.locator('#mcp').getByRole('button', { name: 'Refresh', exact: true }).focus();
+  const saved = await page.evaluate(key => localStorage.getItem(key), key);
+  expect(saved).not.toContain('NAVIGATION_SECRET');
+  expect(JSON.parse(saved!).entries[0].section).toBe('mcp');
+});
+
+test('Trust granted through the real MCP import UI rereads all mounted resource sections without leaving Settings', async ({ page }) => {
+  const api = await installMockApi(page, { workspaceTrusted: true, workspaceOperationTrusted: false,
+    mcpConfig: mcpFreshProjectInventory(), mcpImportPreview: mcpFreshProjectPreviewFixture() });
+  await page.goto('/settings#mcp');
+  await expect(page.locator('#plugins .plugin-card').first()).toBeVisible();
+  await expect(page.locator('#subagents .subagent-profile-card').first()).toBeVisible();
+  const count = (path: string) => api.requests.filter(request => request.method === 'GET' && request.path === path).length;
+  const paths = ['/api/plugins', '/api/subagents/settings', '/api/tools', '/api/skills', '/api/models'];
+  const before = paths.map(count);
+  const section = page.locator('#mcp');
+  await section.getByText('Paste and preview a server').click();
+  await section.getByLabel('MCP server text').fill('npx -y fresh-mcp-tools');
+  await section.getByRole('button', { name: 'Preview', exact: true }).click();
+  await section.getByRole('button', { name: 'Configure project import' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Configure MCP import' });
+  await dialog.getByLabel(/I trust this fresh project folder/u).check();
+  await dialog.getByRole('button', { name: 'Save atomically' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(section.getByRole('article', { name: 'fresh-tools: Configured', exact: true })).toBeVisible();
+  for (let n = 0; n < paths.length; n++) await expect.poll(() => count(paths[n]!)).toBeGreaterThan(before[n]!);
+  await expect(page).toHaveURL(/\/settings#mcp$/u);
+  expect(api.requests.filter(request => request.path === '/api/agent/runs' || request.path === '/api/mcp/test')).toEqual([]);
+});
+
+for (const scenario of [
+  { name: 'desktop-light', width: 1280, height: 900, theme: 'light' },
+  { name: 'desktop-dark', width: 1280, height: 900, theme: 'dark' },
+  { name: 'mobile-light', width: 390, height: 844, theme: 'light' },
+  { name: 'mobile-dark', width: 390, height: 844, theme: 'dark' },
+]) test(`Restored model navigation remains keyboard accessible and responsive: ${scenario.name}`, async ({ page }) => {
+  await page.setViewportSize({ width: scenario.width, height: scenario.height });
+  await installMockApi(page);
+  await page.addInitScript(theme => localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme, lastSettingsSection: 'model' })), scenario.theme);
+  await page.goto('/settings#model');
+  const catalog = page.locator('#model .model-catalog');
+  await catalog.locator('summary').click();
+  const row = catalog.locator('.model-catalog-row').first();
+  await row.getByRole('checkbox').focus();
+  await page.goto('/settings');
+  await expect(row).toBeInViewport();
+  const nextScope = page.locator('#defaults').getByRole('combobox', { name: 'Scope', exact: true });
+  await expect(nextScope).toBeEnabled();
+  await row.getByRole('checkbox').focus();
+  await page.keyboard.press('Tab');
+  await expect(nextScope).toBeFocused();
+  await row.getByRole('checkbox').focus();
+  expect((await new AxeBuilder({ page }).include('#model').analyze()).violations).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.locator('#model')).toHaveScreenshot(`restored-model-${scenario.name}.png`);
+});
+
+test('Focus return waits for the same fresh row after an asynchronous section reload', async ({ page }) => {
+  await installMockApi(page); await page.goto('/settings');
+  const result = await page.evaluate(async modulePath => {
+    const { bindSettingsNavigation } = await import(modulePath);
+    const root = document.createElement('div');
+    const markup = '<fieldset data-settings-group="one"><label data-settings-selection="row"><input aria-label="Owned control"></label></fieldset>';
+    root.innerHTML = `<section id="model" class="settings-section">${markup}</section>`;
+    root.style.cssText = 'position:fixed;top:0;left:0;z-index:10000;background:white'; document.body.append(root);
+    const dispose = bindSettingsNavigation(root, { section: 'model', positions: {}, scopes: {} }, { save: () => {} });
+    root.querySelector('input')!.focus();
+    root.innerHTML = '<section id="model" class="settings-section"></section>';
+    await Promise.resolve(); const fallbackReturned = document.activeElement === root.firstElementChild;
+    root.firstElementChild!.innerHTML = markup;
+    await Promise.resolve(); const lateReturned = document.activeElement === root.querySelector('input');
+    dispose(); root.remove(); return { fallbackReturned, lateReturned };
+  }, '/src/components/settings-navigation.ts');
+  expect(result).toEqual({ fallbackReturned: true, lateReturned: true });
+});
+
+test('Deferred row return yields to newer pointer/focus, modal ownership and retired owners', async ({ page }) => {
+  await installMockApi(page); await page.goto('/settings');
+  const result = await page.evaluate(async modulePath => {
+    const { bindSettingsNavigation } = await import(modulePath);
+    const results: Record<string, boolean> = {};
+    for (const kind of ['pointer', 'focus', 'modal', 'dispose', 'wheel', 'wheel-live']) {
+      const root = document.createElement('div');
+      const markup = '<fieldset data-settings-group="one"><label data-settings-selection="row"><input aria-label="Owned control"></label></fieldset>';
+      root.innerHTML = `<section id="model" class="settings-section">${markup}</section>`;
+      root.style.cssText = 'position:fixed;top:0;left:0;z-index:10000;background:white'; document.body.append(root);
+      const dispose = bindSettingsNavigation(root, { section: 'model', positions: {}, scopes: {} }, { save: () => {} });
+      root.querySelector('input')!.focus();
+      if (kind === 'wheel-live') root.querySelector('input')!.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+      root.innerHTML = '<section id="model" class="settings-section"></section>';
+      await Promise.resolve();
+      const newer = document.createElement('button'); document.body.append(newer);
+      if (kind === 'pointer') newer.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      if (kind === 'wheel') newer.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+      if (kind === 'focus') { newer.focus(); newer.remove(); }
+      if (kind === 'modal') newer.setAttribute('aria-modal', 'true');
+      if (kind === 'dispose') dispose();
+      root.firstElementChild!.innerHTML = markup;
+      await Promise.resolve(); results[kind] = document.activeElement !== root.querySelector('input');
+      dispose(); root.remove(); newer.remove();
+    }
+    return results;
+  }, '/src/components/settings-navigation.ts');
+  expect(result).toEqual({ pointer: true, focus: true, modal: true, dispose: true, wheel: true, 'wheel-live': true });
+});
+
+test.describe('Coarse Settings focus return', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+  test('returns to the owned row region without automatically focusing an editable replacement', async ({ page }) => {
+    await installMockApi(page); await page.goto('/settings');
+    const result = await page.evaluate(async modulePath => {
+      const { bindSettingsNavigation } = await import(modulePath);
+      const root = document.createElement('div');
+      const markup = '<section id="model" class="settings-section"><label data-settings-selection="row"><input aria-label="Owned editable"></label></section>';
+      root.innerHTML = markup;
+      root.style.cssText = 'position:fixed;top:0;left:0;z-index:10000;background:white'; document.body.append(root);
+      const dispose = bindSettingsNavigation(root, { section: 'model', positions: {}, scopes: {} }, { save: () => {} });
+      root.querySelector('input')!.focus(); root.innerHTML = markup;
+      await Promise.resolve();
+      const result = { coarse: matchMedia('(pointer: coarse)').matches, region: document.activeElement === root.querySelector('label'),
+        editable: document.activeElement === root.querySelector('input') };
+      dispose(); root.remove(); return result;
+    }, '/src/components/settings-navigation.ts');
+    expect(result).toEqual({ coarse: true, region: true, editable: false });
+  });
+});
+
+test('DOM navigation resolves only exact fresh unique identities and returns focus without stealing newer intent', async ({ page }) => {
+  await installMockApi(page); await page.goto('/settings');
+  const result = await page.evaluate(async modulePath => {
+    const { bindSettingsNavigation, settingsPositionTarget } = await import(modulePath);
+    const host = document.createElement('div');
+    host.innerHTML = '<section id="model" class="settings-section"><fieldset data-settings-group="one"><label data-settings-selection="row"><input aria-label="Owned control"></label></fieldset><fieldset data-settings-group="two"><label data-settings-selection="row"><input aria-label="Other control"></label></fieldset></section>';
+    host.style.cssText = 'position:fixed;top:0;left:0;z-index:10000;background:white'; document.body.append(host);
+    const target = settingsPositionTarget(host, 'model', { group: 'one', selection: 'row' });
+    const exact = target === host.querySelector('[data-settings-selection]');
+    const missingGroup = settingsPositionTarget(host, 'model', { group: 'missing', selection: 'row' }) === host.firstElementChild;
+    const ambiguous = settingsPositionTarget(host, 'model', { selection: 'row' }) === host.firstElementChild;
+    const nested = document.createElement('fieldset'); nested.setAttribute('data-settings-group', 'nested');
+    nested.innerHTML = '<label data-settings-selection="nested-row">Nested</label><label data-settings-selection="row">Other owner</label>';
+    host.querySelector('fieldset')!.append(nested);
+    const nestedNotBorrowed = settingsPositionTarget(host, 'model', { group: 'one', selection: 'nested-row' }) === host.querySelector('fieldset');
+    const nestedDuplicateExcluded = settingsPositionTarget(host, 'model', { group: 'one', selection: 'row' }) === target;
+    const dispose = bindSettingsNavigation(host, { section: 'model', positions: {}, scopes: {} }, { save: () => {} });
+    const original = host.querySelector('input')!; original.focus();
+    const replacement = original.cloneNode(true) as HTMLInputElement; original.replaceWith(replacement);
+    await Promise.resolve(); const returned = document.activeElement === replacement;
+    const newer = document.createElement('button'); document.body.append(newer);
+    const next = replacement.cloneNode(true) as HTMLInputElement; replacement.replaceWith(next); newer.focus();
+    await Promise.resolve(); const conserved = document.activeElement === newer;
+    next.focus(); dispose(); const retired = next.cloneNode(true) as HTMLInputElement; next.replaceWith(retired);
+    await Promise.resolve(); const noLateReturn = document.activeElement !== retired;
+    host.innerHTML = '<section id="tools" class="settings-section"><label>Scope<select><option value="global">Global</option></select></label></section>';
+    const disposeLabel = bindSettingsNavigation(host, { section: 'tools', positions: {}, scopes: {} }, { save: () => {} });
+    host.querySelector('select')!.focus();
+    host.innerHTML = '<section id="tools" class="settings-section"><label>Scope<select><option value="project">Project</option></select></label></section>';
+    await Promise.resolve();
+    const implicitLabelReturned = document.activeElement === host.querySelector('select');
+    const freshValueConserved = host.querySelector('select')!.value === 'project';
+    const live = host.querySelector('select')!;
+    live.disabled = true; await Promise.resolve();
+    live.disabled = false; await Promise.resolve();
+    const enabledReturn = document.activeElement === live;
+    live.disabled = true; await Promise.resolve(); newer.focus();
+    live.disabled = false; await Promise.resolve();
+    const busyNewerConserved = document.activeElement === newer;
+    disposeLabel();
+    host.innerHTML = '<section id="model" class="settings-section"><button>Open</button></section>';
+    const saves: string[] = [];
+    const disposeModal = bindSettingsNavigation(host, { section: 'model', positions: {}, scopes: {} }, { save: (section: string) => saves.push(section) });
+    const opener = host.querySelector('button')!; opener.focus();
+    const dialog = document.createElement('div'); dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true');
+    dialog.innerHTML = '<input aria-label="Modal owned input">'; host.firstElementChild!.append(dialog);
+    dialog.querySelector('input')!.focus(); dialog.remove(); await Promise.resolve();
+    const modalNotRecorded = saves.length === 1;
+    const modalNotStolen = document.activeElement === document.body;
+    if (modalNotStolen) opener.focus(); // Existing dialog return owner, not navigation.
+    const modalOwnerReturned = document.activeElement === opener;
+    host.firstElementChild!.append(dialog); dialog.querySelector('input')!.focus(); dialog.remove();
+    await Promise.resolve(); const modalGapDelegated = document.activeElement === document.body;
+    host.innerHTML = '<section id="model" class="settings-section"><button>Fresh</button></section>';
+    await Promise.resolve();
+    const retiredInvokerHandedOff = document.activeElement === host.firstElementChild;
+    host.querySelector('button')!.focus(); host.firstElementChild!.append(dialog); dialog.querySelector('input')!.focus();
+    host.innerHTML = '<section id="model" class="settings-section"><button>Newer</button></section>';
+    newer.focus(); await Promise.resolve();
+    const retiredDialogNewerConserved = document.activeElement === newer;
+    disposeModal(); newer.remove();
+    // A modal shell may commit before its own initial-focus task. Hash entry is
+    // metadata intent, never permission to focus the background in that gap.
+    host.innerHTML = '<section id="mcp" class="settings-section"><button>Background</button><div role="dialog" aria-modal="true"><input aria-label="Pending modal input"></div></section>';
+    const entrySaves: string[] = [];
+    const disposeEntry = bindSettingsNavigation(host, { section: 'model', positions: {}, scopes: {} },
+      { hash: '#mcp', save: (section: string) => entrySaves.push(section) });
+    await new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())));
+    const passiveModalEntry = document.activeElement === document.body;
+    const hashEntryRecorded = entrySaves.length === 1 && entrySaves[0] === 'mcp';
+    disposeEntry();
+    // A host's passive initialization must finish before its initial scroll.
+    // Layout listeners still own metadata, newer intent and context cleanup.
+    host.style.cssText = 'position:fixed;top:0;left:0;z-index:10000;width:240px;height:120px;overflow-y:auto;background:white';
+    const entryMarkup = '<div style="height:800px"></div><section id="model" class="settings-section"><button>Fresh entry</button></section>';
+    const frames = () => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())));
+    host.innerHTML = entryMarkup; host.scrollTop = 0;
+    let releaseEntry!: () => void;
+    const entryReady = new Promise<void>(resolve => { releaseEntry = resolve; });
+    const readySaves: string[] = [];
+    const disposeReady = bindSettingsNavigation(host, { section: 'model', positions: {}, scopes: {} },
+      { hash: '#model', entryReady, save: (section: string) => readySaves.push(section) });
+    host.append(document.createElement('span')); // Exercise the pre-ready observer path too.
+    await frames();
+    const entryWaitedForPassiveReady = host.scrollTop === 0;
+    const entryHashRecordedBeforeReady = readySaves.length === 1 && readySaves[0] === 'model';
+    releaseEntry(); await frames();
+    const entryRestoredAfterReady = host.scrollTop > 0;
+    disposeReady();
+    host.innerHTML = entryMarkup; host.scrollTop = 0;
+    let releaseDisposed!: () => void;
+    const disposedReady = new Promise<void>(resolve => { releaseDisposed = resolve; });
+    const disposeBeforeReady = bindSettingsNavigation(host, { section: 'model', positions: {}, scopes: {} },
+      { entryReady: disposedReady, save: () => {} });
+    disposeBeforeReady(); releaseDisposed(); await frames();
+    const disposedEntryRemainedIdle = host.scrollTop === 0;
+    host.innerHTML = entryMarkup; host.scrollTop = 0;
+    let releaseIntent!: () => void;
+    const intentReady = new Promise<void>(resolve => { releaseIntent = resolve; });
+    const disposeIntent = bindSettingsNavigation(host, { section: 'model', positions: {}, scopes: {} },
+      { entryReady: intentReady, save: () => {} });
+    host.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 20 }));
+    releaseIntent(); await frames();
+    const newerEntryIntentConserved = host.scrollTop === 0;
+    disposeIntent();
+    // Forward the genuine native method on this disposable fixture node only.
+    // Unrelated lazy content must not force geometry reads of a live control.
+    host.innerHTML = '<section id="model" class="settings-section"><button aria-label="Live control">Live</button><div data-unrelated></div></section>';
+    const passiveControl = host.querySelector('button')!, nativeRects = passiveControl.getClientRects;
+    let unrelatedLiveControlLayoutReads = 0;
+    passiveControl.getClientRects = () => { unrelatedLiveControlLayoutReads++; return nativeRects.call(passiveControl); };
+    const disposePassive = bindSettingsNavigation(host, { section: 'model', positions: {}, scopes: {} }, { save: () => {} });
+    let unrelatedLiveControlFocusConserved = false;
+    try {
+      await frames(); passiveControl.focus(); await frames(); unrelatedLiveControlLayoutReads = 0;
+      host.querySelector('[data-unrelated]')!.append(document.createElement('span')); await frames();
+      unrelatedLiveControlFocusConserved = document.activeElement === passiveControl;
+    } finally { disposePassive(); Reflect.deleteProperty(passiveControl, 'getClientRects'); }
+    host.remove();
+    return { exact, missingGroup, ambiguous, nestedNotBorrowed, nestedDuplicateExcluded, returned, conserved, noLateReturn,
+      implicitLabelReturned, freshValueConserved, enabledReturn, busyNewerConserved, modalNotRecorded, modalNotStolen,
+      modalOwnerReturned, modalGapDelegated, retiredInvokerHandedOff, retiredDialogNewerConserved, passiveModalEntry, hashEntryRecorded,
+      entryWaitedForPassiveReady, entryHashRecordedBeforeReady, entryRestoredAfterReady, disposedEntryRemainedIdle, newerEntryIntentConserved,
+      unrelatedLiveControlLayoutReads, unrelatedLiveControlFocusConserved };
+  }, '/src/components/settings-navigation.ts');
+  expect(result).toEqual({ exact: true, missingGroup: true, ambiguous: true, nestedNotBorrowed: true, nestedDuplicateExcluded: true,
+    returned: true, conserved: true, noLateReturn: true, implicitLabelReturned: true, freshValueConserved: true,
+    enabledReturn: true, busyNewerConserved: true, modalNotRecorded: true, modalNotStolen: true, modalOwnerReturned: true,
+    modalGapDelegated: true, retiredInvokerHandedOff: true, retiredDialogNewerConserved: true, passiveModalEntry: true, hashEntryRecorded: true,
+    entryWaitedForPassiveReady: true, entryHashRecordedBeforeReady: true, entryRestoredAfterReady: true,
+    disposedEntryRemainedIdle: true, newerEntryIntentConserved: true,
+    unrelatedLiveControlLayoutReads: 0, unrelatedLiveControlFocusConserved: true });
+});

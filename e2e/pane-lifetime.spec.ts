@@ -1,5 +1,8 @@
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
+import { switchMcpWorkspace } from './fixtures/mcp-navigation';
+import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp';
+import { selectionAnchorControl } from './fixtures/selection-anchor';
 
 const url = '/chat/pane-lifetime?cwd=%2Fworkspace';
 const pane = (page: Page) => page.getByRole('complementary', { name: 'Workspace explorer' });
@@ -10,6 +13,67 @@ async function product(page: Page) {
   })));
   return installMockApi(page, { sessions: [mockSession('pane-lifetime', 'Pane lifetime')],
     workspaceFiles: [{ path: 'src/app.ts', content: 'export const value = 1;', language: 'typescript' }] });
+}
+
+test('built Settings assets restore project-specific group, row and scope intent without submitting configuration', async ({ page }) => {
+  const api = await installMockApi(page);
+  await page.goto('/settings?cwd=%2Fworkspace#model');
+  const catalog = page.locator('#model .model-catalog');
+  await catalog.locator('summary').click();
+  const row = catalog.locator('.model-catalog-row').first();
+  const identity = await row.getAttribute('data-settings-selection');
+  await row.getByRole('checkbox').focus();
+  const scope = page.locator('#tools').getByRole('combobox', { name: 'Scope', exact: true });
+  await scope.selectOption('global');
+  await row.getByRole('checkbox').focus();
+  await switchMcpWorkspace(page, '/workspace/other');
+  await expect(scope).toHaveValue('project');
+  await page.locator('#shortcuts input').first().focus();
+  await switchMcpWorkspace(page, '/workspace');
+  await expect(scope).toHaveValue('global');
+  await expect(row).toBeInViewport();
+  await page.reload();
+  await expect(row).toBeInViewport();
+  expect(await row.getAttribute('data-settings-selection')).toBe(identity);
+  expect(api.requests.filter(request => request.method !== 'GET'
+    && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+  expect(await page.evaluate(() => performance.getEntriesByType('resource')
+    .some(entry => /\/assets\/SettingsView-[^/]+\.js$/u.test(entry.name)))).toBe(true);
+});
+
+test('built Settings assets refresh mounted sections and return focus after canonical MCP trust grant', async ({ page }) => {
+  const api = await installMockApi(page, { workspaceTrusted: true, workspaceOperationTrusted: false,
+    mcpConfig: mcpFreshProjectInventory(), mcpImportPreview: mcpFreshProjectPreviewFixture() });
+  await page.goto('/settings#mcp');
+  await expect(page.locator('#plugins .plugin-card').first()).toBeVisible();
+  await expect(page.locator('#subagents .subagent-profile-card').first()).toBeVisible();
+  const paths = ['/api/plugins', '/api/subagents/settings', '/api/tools', '/api/skills', '/api/models'];
+  const count = (path: string) => api.requests.filter(request => request.method === 'GET' && request.path === path).length;
+  const before = paths.map(count);
+  const section = page.locator('#mcp');
+  await section.getByText('Paste and preview a server').click();
+  await section.getByLabel('MCP server text').fill('npx -y fresh-mcp-tools');
+  await section.getByRole('button', { name: 'Preview', exact: true }).click();
+  await section.getByRole('button', { name: 'Configure project import' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Configure MCP import' });
+  await dialog.getByLabel(/I trust this fresh project folder/u).check();
+  await dialog.getByRole('button', { name: 'Save atomically' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(section.getByRole('article', { name: 'fresh-tools: Configured', exact: true })).toBeVisible();
+  for (let n = 0; n < paths.length; n++) await expect.poll(() => count(paths[n]!)).toBeGreaterThan(before[n]!);
+  await expect(page.locator('#mcp:focus, #mcp :focus')).toHaveCount(1);
+  await expect(page.locator('#mcp:focus, #mcp :focus')).toBeInViewport();
+  await expect(page).toHaveURL(/\/settings#mcp$/u);
+  expect(api.requests.filter(request => request.path === '/api/agent/runs' || request.path === '/api/mcp/test')).toEqual([]);
+  expect(await page.evaluate(() => performance.getEntriesByType('resource')
+    .some(entry => /\/assets\/workspace-refresh-[^/]+\.js$/u.test(entry.name)))).toBe(true);
+});
+
+for (const viewport of [{ name: 'desktop', width: 1440, height: 900 }, { name: 'mobile', width: 390, height: 844 }]) {
+  test(`built ${viewport.name} selection actions stay anchored after native viewport scroll without stealing keyboard focus`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await selectionAnchorControl(page, true);
+  });
 }
 
 test('a shortcut at the bootstrap DOM commit is registered before the passive task', async ({ page }) => {

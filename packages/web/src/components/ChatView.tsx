@@ -8,6 +8,7 @@ import type { AgentCapabilities, CommandSnapshot, ExtensionWidget, PaletteItem, 
 import type { DraftAttachment, StoredSession } from '../store/session-store';
 import { restoreWhileOwned } from './scroll-restoration';
 import { unseenMessagesAfter } from './history-reading';
+import type { CapturedSelection } from './SelectionActions';
 import { replyMessages } from './reply-messages';
 import type { TranslationFunction } from '../i18n/types';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -77,6 +78,7 @@ interface ChatViewProps {
 }
 
 const CodemodeCard = lazy(() => import('./CodemodeCard').then(module => ({ default: module.CodemodeCard })));
+const SelectionActions = lazy(() => import('./SelectionActions').catch(() => ({ default: () => null })));
 const WrittenFiles = lazy(() => import('./ProcessBlock').then(module => ({ default: module.FilesWritten })).catch(() => ({ default: () => null })));
 
 type QueueMode = 'steer' | 'follow-up';
@@ -277,7 +279,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const [automaticCompacting, setAutomaticCompacting] = useState(false);
   const [savingDefault, setSavingDefault] = useState(false);
   const [defaultWarning, setDefaultWarning] = useState(false);
-  const [selection, setSelection] = useState<{ text: string; x: number; y: number }>();
+  const [selection, setSelection] = useState<CapturedSelection>();
   const [copiedMessageId, setCopiedMessageId] = useState<string>();
   const [sessionUnavailable, setSessionUnavailable] = useState<string>();
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -2030,8 +2032,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           setSelection(undefined);
           return;
         }
-        const rect = selected.getRangeAt(0).getBoundingClientRect();
-        setSelection({ text: text.slice(0, 10_000), x: rect.left + rect.width / 2, y: rect.top });
+        setSelection({ text: text.slice(0, 10_000), range: selected.getRangeAt(0).cloneRange(),
+          view: interactionView, scope: interactionScopeRef.current });
       }}>
         {historyPage?.hasMoreBefore && currentSession.messages[0] && (
           <div className="history-page-control">
@@ -2079,13 +2081,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         </button>
       )}
 
-      {selection && (
-        <div className="selection-actions" role="toolbar" aria-label={t('chat.selectionActions')}
-          style={{ left: selection.x, top: selection.y }}>
-          <button onClick={() => quoteSelection(false)}>{t('chat.askHere')}</button>
-          <button onClick={() => quoteSelection(true)}>{t('chat.askNew')}</button>
-        </div>
-      )}
+      {selection && <Suspense fallback={null}><SelectionActions capture={selection} view={interactionView}
+        setCapture={setSelection} onQuote={quoteSelection} /></Suspense>}
 
       {commandRun && (
         <section className="command-run" aria-live="polite">

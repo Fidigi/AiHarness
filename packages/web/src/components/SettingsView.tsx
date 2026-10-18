@@ -2,8 +2,9 @@
 // Settings View Component - Provider Configuration
 // ============================================================
 
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import '../settings.css';
+import { useLocation } from 'react-router-dom';
 import { useSessionStore } from '../store/session-store';
 import { useI18n } from '../hooks/useI18n';
 import { SettingsLocaleBoundary } from './SettingsLocaleBoundary';
@@ -20,7 +21,9 @@ import {
 } from '../services/api';
 import { SubagentSettings } from './SubagentSettings';
 import { McpSettings } from './McpSettings';
-import { usePreferences } from '../store/preferences';
+import { readPreferences, usePreferences } from '../store/preferences';
+import { readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
+import { bindSettingsNavigation } from './settings-navigation';
 import { chordFromEvent, defaultKeybindings, shortcutActions, shortcutLabel } from '../services/keyboard';
 import { pushSupported, syncPushSubscription, type NotificationEvent } from '../services/push';
 import {
@@ -41,7 +44,10 @@ type SaveStatus =
   | { key: string; provider?: ProviderType }
   | { detail: string };
 
-function SettingsView() {
+function SettingsView({ entryRelease, entryEpoch }: {
+  entryRelease: { readonly current: (() => void) | null };
+  entryEpoch: string;
+}) {
   const providers = useSessionStore(state => state.providers);
   const setProvider = useSessionStore(state => state.setProvider);
   const updateApiKey = useSessionStore(state => state.updateApiKey);
@@ -107,14 +113,12 @@ function SettingsView() {
   };
 
   useEffect(() => {
-    const target = window.location.hash.slice(1) || preferences.lastSettingsSection;
-    const timer = window.setTimeout(() => {
-      const section = document.getElementById(target);
-      section?.scrollIntoView({ block: 'start' });
-      if (target === 'mcp' && window.location.hash === '#mcp') section?.focus({ preventScroll: true });
-    }, 0);
+    // Preserve the accepted startup task order in this business lifetime: entry
+    // alignment first, then deferred checking UI. The layout owner stays outside.
+    const release = entryRelease.current;
+    const timer = window.setTimeout(() => release?.(), 0);
     return () => window.clearTimeout(timer);
-  }, []); // Restore only on entry; interacting with controls must not move the page.
+  }, [entryRelease, entryEpoch]);
 
   useEffect(() => {
     // Defer the remote release check so settings and the rest of the application render first.
@@ -176,10 +180,7 @@ function SettingsView() {
   };
 
   return (
-    <div className="settings-view" onFocusCapture={event => {
-      const section = (event.target as Element).closest<HTMLElement>('.settings-section[id]');
-      if (section?.id && section.id !== preferences.lastSettingsSection) setPreferences({ lastSettingsSection: section.id });
-    }}>
+    <>
       <h2>{t('settings.title')}</h2>
 
       <section className="settings-section" id="authentication">
@@ -339,7 +340,7 @@ function SettingsView() {
             names={new Map(providers.catalog?.providers.flatMap(group => group.models.map(model => [model.key, model.name] as const)))} />
           <div className="model-catalog-groups">
             {visibleModelGroups.map(group => (
-              <fieldset key={group.provider} data-provider={group.provider}>
+              <fieldset key={group.provider} data-provider={group.provider} data-settings-group={group.provider}>
                 <legend>
                   {getTypeLabel(group.provider as ProviderType, t)}
                   <span className={group.configured ? 'status-success' : 'status-warning'}>
@@ -351,7 +352,7 @@ function SettingsView() {
                   disabled={!!providers.catalogLoading || batches.busy}
                   save={changes => batches.save('models', changes)} />
                 {group.models.map(model => (
-                  <label key={model.key} className="model-catalog-row">
+                  <label key={model.key} className="model-catalog-row" data-settings-selection={model.key}>
                     <input type="checkbox" checked={model.enabled} disabled={providers.catalogLoading || batches.busy}
                       aria-label={t('settings.modelCatalog.toggle', { model: model.name, provider: getTypeLabel(group.provider as ProviderType, t) })}
                       onChange={event => void batches.save('models', [{ key: model.key, enabled: event.target.checked }])} />
@@ -415,13 +416,14 @@ function SettingsView() {
           names={new Map(skills.catalog?.skills.map(skill => [skill.key, skill.name] as const))} />
         <div className="skill-catalog-groups">
           {visibleSkillGroups.map(group => (
-            <fieldset key={`${group.scope}:${group.source}`} data-scope={group.scope} data-source={group.source}>
+            <fieldset key={`${group.scope}:${group.source}`} data-scope={group.scope} data-source={group.source}
+              data-settings-group={JSON.stringify([group.scope, group.source])}>
               <legend>{t(`settings.skills.scope.${group.scope}`)}{group.source && ` · ${group.source}`}</legend>
               <ResourceGroupButtons group={group.source || t(`settings.skills.scope.${group.scope}`)}
                 rows={group.skills.map(skill => ({ key: skill.key, enabled: skill.modelInvocable }))}
                 disabled={!!skills.loading || batches.busy} save={changes => batches.save('skills', changes)} />
               {group.skills.map(skill => (
-                <label key={skill.key} className="skill-catalog-row">
+                <label key={skill.key} className="skill-catalog-row" data-settings-selection={skill.key}>
                   <input type="checkbox" checked={skill.modelInvocable}
                     disabled={skills.loading || batches.busy || !skill.trusted}
                     title={!skill.trusted ? t('settings.skills.requiresTrust') : undefined}
@@ -621,7 +623,7 @@ function SettingsView() {
           </a>
         </div>
       </section>
-    </div>
+    </>
   );
 }
 
@@ -707,8 +709,37 @@ function getModelOptions(
   }
 }
 
+function SettingsNavigationBoundary() {
+  const workspace = useSessionStore(state => state.workspace);
+  const root = useRef<HTMLDivElement>(null);
+  const entryRelease = useRef<(() => void) | null>(null);
+  const cwd = workspace?.cwd;
+  const { hash } = useLocation();
+  // Keep navigation/focus ownership across a trust refresh; retire all forms,
+  // pending local results and mounted sections before the replacement commits.
+  const context = JSON.stringify([workspace?.id, cwd, workspace?.trusted, workspace?.operationTrusted]);
+  useLayoutEffect(() => {
+    if (!root.current) return;
+    const entryReady = new Promise<void>(resolve => { entryRelease.current = resolve; });
+    let local = readSettingsNavigation(cwd, readPreferences().lastSettingsSection);
+    const dispose = bindSettingsNavigation(root.current, local, {
+      hash, entryReady,
+      save: (section, position) => {
+        const fresh = readSettingsNavigation(cwd);
+        local = { ...local, section, scopes: fresh.scopes,
+          positions: { ...local.positions, ...fresh.positions,
+            ...(position.group || position.selection ? { [section]: position } : {}) } };
+        writeSettingsNavigation(cwd, local);
+      },
+    });
+    return () => { entryRelease.current = null; dispose(); };
+  }, [cwd, hash]);
+  return <div className="settings-view" ref={root}><SettingsView key={context}
+    entryRelease={entryRelease} entryEpoch={JSON.stringify([cwd, hash])} /></div>;
+}
+
 function LocalizedSettingsView() {
-  return <SettingsLocaleBoundary><SettingsView /></SettingsLocaleBoundary>;
+  return <SettingsLocaleBoundary><SettingsNavigationBoundary /></SettingsLocaleBoundary>;
 }
 
 export default LocalizedSettingsView;

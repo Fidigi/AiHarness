@@ -786,15 +786,13 @@ export const useSessionStore = create<AppState>((set, get) => ({
     const workspace = get().workspace;
     if (!workspace) return;
     const sequence = ++workspaceHydrationSequence;
-    const refreshed = await validateWorkspace(workspace.cwd);
-    if (sequence !== workspaceHydrationSequence || !refreshed.success || !refreshed.data
-      || get().workspace?.cwd !== workspace.cwd) return;
-    const recent = [
-      refreshed.data,
-      ...get().recentWorkspaces.filter(item => item.cwd !== refreshed.data!.cwd),
-    ].slice(0, 8);
-    set({ workspace: refreshed.data, workspaceUnavailable: false, recentWorkspaces: recent });
-    writeWorkspaceState(refreshed.data, recent);
+    // Only Settings requests this optional reread. Keep its implementation out
+    // of the eager chat chunk, without weakening the private workspace epoch.
+    const module = await import('./workspace-refresh').catch(() => undefined);
+    if (!module) return; // Failed optional assets publish no descriptor or cached trust.
+    await module.refreshWorkspacePresentation(workspace,
+      () => sequence === workspaceHydrationSequence && get().workspace?.cwd === workspace.cwd,
+      () => { modelCatalogRequestSequence++; skillCatalogRequestSequence++; }, writeWorkspaceState);
   },
 
   setWorkspace: async workspace => {

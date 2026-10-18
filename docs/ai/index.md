@@ -81,6 +81,8 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → packages/web/src/components/{domain}.tsx
 ```
 
+**Settings navigation, scope memory or trust refresh** → Load `web-app-architecture.md` and the Web persistence rows in `project-map.md`; inspect `store/{settings-navigation,use-settings-scope,workspace-refresh}.ts`, the stable `SettingsView` boundary, `components/settings-navigation.ts`, owning unit controls, `e2e/settings-navigation.spec.ts` and built-asset `e2e/pane-lifetime.spec.ts`. Keep metadata separate from configuration/authority, conserve fresh peer positions and withdraw deferred focus on newer intent.
+
 **UI localization or diagnostics** → Load `web-app-architecture.md` + the i18n rows in `project-map.md`; use typed app codes from `packages/core/src/mcp/config-inventory.ts`, feature-local `packages/web/src/components/{mcp-entry-messages,tool-progress-messages}.ts`, the registry and Settings allocation tests. Preserve arbitrary technical details and the existing lazy/fill-only copy boundary; never classify API errors by English text.
 
 **The separate static demo or Pages artifact** → Load `static-demo.md` + the root/validation rows in `project-map.md`; use `bash demo/run-docker.sh`, not production agent APIs.
@@ -147,6 +149,7 @@ These files do NOT belong to the agent documentation system:
 | Resource group batches | Users / contributors | [FR user](../users/fr/resource-batches.md) / [EN user](../users/en/resource-batches.md); [FR contributor](../contributors/fr/resource-batches.md) / [EN contributor](../contributors/en/resource-batches.md) |
 | Session SDK | Contributors | [FR](../contributors/fr/session-sdk.md) / [EN](../contributors/en/session-sdk.md) |
 | Internationalization and lazy Settings copy | Contributors / users | [FR contributor](../contributors/fr/i18n.md) / [EN contributor](../contributors/en/i18n.md); [FR loading](../users/fr/settings-loading.md) / [EN loading](../users/en/settings-loading.md) |
+| Settings navigation | Users | [FR](../users/fr/settings-navigation.md) / [EN](../users/en/settings-navigation.md); per-folder intent, fresh fallback, trust retirement and storage limits |
 | Optional file-pane loading | Users | [FR](../users/fr/workspace-loading.md) / [EN](../users/en/workspace-loading.md) |
 | Terminal keybindings | Users | [FR](../users/fr/terminal-keybindings.md) / [EN](../users/en/terminal-keybindings.md); all actions, passive view, source/reload and schema limits |
 | Standalone authentication/export | Users / operators | [FR](../users/fr/standalone-operations.md) / [EN](../users/en/standalone-operations.md) |

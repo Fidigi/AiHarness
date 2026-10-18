@@ -16,6 +16,7 @@ import {
   type PluginMutationAction,
 } from '../services/api';
 import { useSessionStore } from '../store/session-store';
+import { useSettingsScope } from '../store/use-settings-scope';
 
 function normalizedSource(value: string): string {
   return value.trim();
@@ -53,7 +54,7 @@ export function PluginSettings() {
   const hydrateSkillCatalog = useSessionStore(state => state.hydrateSkillCatalog);
   const [catalog, setCatalog] = useState<PluginCatalog>();
   const [source, setSource] = useState('');
-  const [scope, setScope] = useState<PluginScope>('global');
+  const [scope, setScope] = useSettingsScope('plugins', 'global');
   const [filter, setFilter] = useState('');
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
@@ -320,7 +321,7 @@ export function PluginSettings() {
           const enableCount = allInGroup.filter(pkg => !pkg.enabled).length;
           const disableCount = allInGroup.filter(pkg => pkg.enabled).length;
           return (
-            <fieldset key={groupScope} data-scope={groupScope}>
+            <fieldset key={groupScope} data-scope={groupScope} data-settings-group={groupScope}>
               <legend>{t(`settings.plugins.scope.${groupScope}`)}</legend>
               <div className="plugin-group-actions" role="group"
                 aria-label={t('settings.plugins.groupActions', { scope: t(`settings.plugins.scope.${groupScope}`) })}>
@@ -341,7 +342,7 @@ export function PluginSettings() {
                 const update = updates[pkg.key];
                 const packageBusy = busy?.endsWith(pkg.key) || false;
                 return (
-                  <article className={`plugin-card status-${pkg.status}`} key={pkg.key}>
+                  <article className={`plugin-card status-${pkg.status}`} key={pkg.key} data-settings-selection={pkg.key}>
                     <header>
                       <div className="plugin-identity">
                         <div>

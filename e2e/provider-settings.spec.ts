@@ -199,7 +199,10 @@ for (const scenario of [
     await page.route('**/api/provider-registry/custom', route => route.fulfill({ contentType: 'application/json',
       headers: { 'X-AiHarness-Provider-Rename': JSON.stringify({ supported: false, mode: 'disabled', reason: 'exclusive-host-required' }) }, body: JSON.stringify([custom]) }));
     await page.reload();
-    await page.locator('#provider-lifecycle').getByText('Create or edit a compatible provider', { exact: true }).click();
+    // Restoration can already expose the selected provider's ancestor editor.
+    const editor = page.locator('#provider-lifecycle .custom-resource-editor');
+    if (await editor.getAttribute('open') === null) await editor.locator('summary').click();
+    await expect(editor).toHaveAttribute('open', '');
     await expect(card.getByRole('button', { name: 'Rename provider', exact: true })).toBeDisabled();
     await expect(card).toContainText('Default and shared hosts do not support rename');
   });

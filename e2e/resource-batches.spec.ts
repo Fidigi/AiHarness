@@ -116,7 +116,10 @@ test('does not let a retired Settings save replace a newer same-workspace catalo
     await expect(page.locator('.settings-view')).toHaveCount(0);
     await page.getByRole('button', { name: 'Settings', exact: false }).click();
     await expect(models).toBeVisible();
-    await models.locator('summary').click();
+    // A remembered fresh row may already have opened its disclosure.
+    const disclosure = models.locator('.model-catalog');
+    if (await disclosure.getAttribute('open') === null) await disclosure.locator('summary').click();
+    await expect(disclosure).toHaveAttribute('open', '');
     await models.getByRole('button', { name: 'Refresh catalogue', exact: true }).click();
     await expect(checkbox).not.toBeChecked();
     await checkbox.click();

@@ -11,6 +11,7 @@ import { ProviderRenamePanel } from './ProviderRenamePanel';
 import { isRenameableProvider, type ProviderRenameResult } from '../services/provider-lifecycle';
 import { providerSettingsMessage, type ProviderSettingsMessage } from './provider-settings-messages';
 import { useSessionStore } from '../store/session-store';
+import { useSettingsScope } from '../store/use-settings-scope';
 import { publishNotice } from '../services/notices';
 import {
   cancelProviderOAuth,
@@ -177,8 +178,8 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
   };
   return <section className="settings-section" id="provider-lifecycle">
     <h3>{t('settings.providerLifecycle')}</h3>
-    <div className="provider-lifecycle-list">
-      {statuses.filter(status => !providers.some(provider => provider.id === status.type)).map(status => <article key={status.type} className="settings-resource-card">
+    <div className="provider-lifecycle-list" data-settings-group="builtin">
+      {statuses.filter(status => !providers.some(provider => provider.id === status.type)).map(status => <article key={status.type} className="settings-resource-card" data-settings-selection={status.type}>
         <div><strong>{status.name}</strong><code>{status.type}</code></div>
         <span className={status.connected ? 'status-success' : 'status-warning'}>
           {status.connected ? t('settings.connected') : t('settings.disconnected')} · {status.method}
@@ -238,8 +239,8 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
           setEditing(undefined); setForm({ id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' });
         }}>{t('common.cancel')}</button>}</div>
       </form>
-      <div className="settings-resource-list">
-        {providers.map(provider => <article key={provider.id} className={`settings-resource-card${isRenameableProvider(provider) ? ' provider-custom-card' : ''}`}>
+      <div className="settings-resource-list" data-settings-group="custom">
+        {providers.map(provider => <article key={provider.id} className={`settings-resource-card${isRenameableProvider(provider) ? ' provider-custom-card' : ''}`} data-settings-selection={provider.id}>
           <div><strong>{provider.name}</strong><code>{provider.id}</code><small>{provider.dialect} · {provider.baseUrl}</small></div>
           {isRenameableProvider(provider) ? <ProviderRenamePanel provider={provider} reconcile={outcome => reconcile(outcome, true, provider.id)} capability={renameCapability}
             disabled={busy || Boolean(editing) || oauthFlow?.state === 'pending' || !renameCapability.supported}
@@ -334,7 +335,7 @@ export function CustomModelSettings() {
       </form>
     </details>
     <div className="settings-resource-list">
-      {models.map(model => <article key={model.key} className="settings-resource-card">
+      {models.map(model => <article key={model.key} className="settings-resource-card" data-settings-selection={model.key}>
         <div><strong>{model.name}</strong><code>{model.key}</code><small>{model.contextWindow ?? '—'} context · {model.maxOutputTokens ?? '—'} max output</small></div>
         <div>
           <button type="button" onClick={() => {
@@ -368,7 +369,7 @@ export function ToolSettingsPanel() {
   const { t } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
   const [settings, setSettings] = useState<ToolSettings>();
-  const [scope, setScope] = useState<'global' | 'project'>(workspace?.id ? 'project' : 'global');
+  const [scope, setScope] = useSettingsScope('tools', workspace?.id ? 'project' : 'global');
   const [busy, setBusy] = useState(false);
   const epoch = useRef(0);
   const projectScoped = scope === 'project';
@@ -454,7 +455,7 @@ export function SkillRegistryPanel() {
   const hydrateSkills = useSessionStore(state => state.hydrateSkillCatalog);
   const [registry, setRegistry] = useState<SkillRegistry>();
   const [query, setQuery] = useState('');
-  const [scope, setScope] = useState<'global' | 'project'>('project');
+  const [scope, setScope] = useSettingsScope('registry', 'project');
   const [busy, setBusy] = useState(false);
   const load = async (refresh = false) => {
     const result = await getSkillRegistry(query, workspace?.cwd, workspace?.id, refresh);
@@ -473,12 +474,12 @@ export function SkillRegistryPanel() {
     }
     setBusy(false);
   };
-  return <details className="skill-registry">
+  return <details className="skill-registry" data-settings-group="registry">
     <summary>{t('settings.skills.registry')}</summary>
     <div className="model-catalog-toolbar">
       <label>{t('settings.skills.registrySearch')}<input type="search" value={query} onChange={event => setQuery(event.target.value)} /></label>
       <select aria-label={t('settings.skills.installScope')} value={scope} onChange={event => setScope(event.target.value as typeof scope)}>
-        <option value="project">{t('settings.skills.scope.project')}</option><option value="global">{t('settings.skills.scope.global')}</option>
+        <option value="project" disabled={!workspace?.id}>{t('settings.skills.scope.project')}</option><option value="global">{t('settings.skills.scope.global')}</option>
       </select>
       <button type="button" disabled={busy} onClick={() => void load(true)}>{t('common.refresh')}</button>
       <button type="button" disabled={busy || !registry?.entries.some(entry => entry.installed?.scope === scope && entry.installed.updateAvailable)}
@@ -491,7 +492,7 @@ export function SkillRegistryPanel() {
     </div>
     {registry?.error && <p role="alert" className="status-warning">{registry.error}</p>}
     <div className="settings-resource-list">
-      {registry?.entries.map(entry => <article className="settings-resource-card" key={entry.id}>
+      {registry?.entries.map(entry => <article className="settings-resource-card" key={entry.id} data-settings-selection={entry.id}>
         <div><strong>{entry.name}</strong><span>{entry.description}</span><code>v{entry.version}</code></div>
         <div>
           {entry.installed && <small>{t('settings.skills.installedVersion', { version: entry.installed.version ?? '?' })}</small>}
@@ -506,7 +507,7 @@ export function SkillRegistryPanel() {
 export function DefaultModelSettings() {
   const { t } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
-  const [scope, setScope] = useState<'global' | 'project'>(workspace?.id ? 'project' : 'global');
+  const [scope, setScope] = useSettingsScope('defaults', workspace?.id ? 'project' : 'global');
   const [values, setValues] = useState({ provider: '', model: '', thinking: '', toolPreset: '' });
   const [dirty, setDirty] = useState<Array<keyof typeof values>>([]);
   const [busy, setBusy] = useState(true);

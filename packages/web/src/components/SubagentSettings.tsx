@@ -11,6 +11,7 @@ import {
   updateSubagentSettings,
 } from '../services/api';
 import { useSessionStore } from '../store/session-store';
+import { useSettingsScope } from '../store/use-settings-scope';
 
 interface EditorValue {
   /** Existing profile id; present means update mode. */
@@ -65,7 +66,7 @@ export function SubagentSettings() {
   const [editor, setEditor] = useState<EditorValue>();
   const editorRef = useRef<HTMLFormElement>(null);
   useFocusTrap(Boolean(editor), editorRef, () => setEditor(undefined));
-  const [targetScope, setTargetScope] = useState<'global' | 'project'>('project');
+  const [targetScope, setTargetScope] = useSettingsScope('subagents', 'project');
   const scope = [
     workspace?.cwd,
     targetScope === 'project' ? workspace?.id : undefined,
@@ -134,11 +135,11 @@ export function SubagentSettings() {
         <div className="subagent-engine-settings">
           <label className="subagent-scope-control">
             <span>{t('subagents.targetScope')}</span>
-            <select value={targetScope} disabled={loading} onChange={event => {
+            <select data-settings-focus="scope" value={targetScope} disabled={loading} onChange={event => {
               setEditor(undefined);
               setTargetScope(event.target.value as 'global' | 'project');
             }}>
-              <option value="project">{t('subagents.scope.project')}</option>
+              <option value="project" disabled={!workspace?.id}>{t('subagents.scope.project')}</option>
               <option value="global">{t('subagents.scope.global')}</option>
             </select>
           </label>
@@ -218,9 +219,9 @@ export function SubagentSettings() {
         </form>
       )}
 
-      <div className="subagent-profile-list">
+      <div className="subagent-profile-list" data-settings-group={targetScope}>
         {visible.map(profile => (
-          <article key={profile.id} className="subagent-profile-card" data-kind={profile.kind}>
+          <article key={profile.id} className="subagent-profile-card" data-kind={profile.kind} data-settings-selection={profile.id}>
             <header>
               <div><strong>{profile.name}</strong><small>{profile.id}</small></div>
               <span>{t(`subagents.kind.${profile.kind}`)}{profile.builtIn ? ` · ${t('subagents.builtIn')}` : ''}</span>

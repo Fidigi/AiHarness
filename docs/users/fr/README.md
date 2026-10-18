@@ -10,6 +10,7 @@
 | [Conteneurisation](./containerization.md) | Exécution du CLI et du lanceur Web avec Docker |
 | [Politique de commande des packages](./npm-command.md) | Arguments npm littéraux, confiance de la source et refus CLI/Web |
 | [Authentification/export autonomes](./standalone-operations.md) | Métadonnées passives, flux device chiffré et fichiers de session sélectionnés/approuvés |
+| [Navigation des Paramètres](./settings-navigation.md) | Mémoire par dossier des sections/groupes/éléments et portées, confiance fraîche, focus sûr et confidentialité |
 | [Chargement des textes des réglages](./settings-loading.md) | Chargement traduit, fermeture, réessai explicite et texte non envoyé |
 | [Chargement du panneau de fichiers](./workspace-loading.md) | Ressources optionnelles, intention d’ouverture, fermeture locale et réessai explicite |
 | [Répertoires liés](./linked-directories.md) | Consentement exact, confiance source indépendante, navigation limitée et révocation |
