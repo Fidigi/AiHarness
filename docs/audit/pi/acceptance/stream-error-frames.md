@@ -4,7 +4,7 @@
 >
 > Narrow A3-CLI-11 correction on parent `f213422`. User explicitly authorized resuming qualification. No whole-criterion, native-cause or release acceptance.
 
-> **2026-10-19 follow-up:** [D06](./d06-cli-failed-prefix.md) implements durable CLI print/JSON Unicode prefixes and adds native/installed reload/resume evidence. It remains REVIEW: required parity failed261/2; full was not run. RPC persistence is unchanged. The gap and all outcomes below describe this original historical candidate, not a waiver or current whole-criterion acceptance.
+> **2026-10-19 follow-up:** [D06](./d06-cli-failed-prefix.md) implements durable CLI print/JSON Unicode prefixes and adds native/installed reload/resume evidence. It remains PARTIAL: required parity failed261/2; full was not run. The authorized two-control GDB completion diagnostic passed without reproducing or explaining those failures, not as replacement qualification. RPC persistence is unchanged. The gap and all outcomes below describe this original historical candidate, not a waiver or current whole-criterion acceptance.
 
 ## Contract and boundaries
 
