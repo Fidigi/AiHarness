@@ -6,7 +6,6 @@ import {
   agentToolExposure,
   collectToolSearchLoadedNames,
   createAgentToolLoadout,
-  CODEMODE_TOOL_NAME,
   createMcpOAuthProviderFactory,
   CredentialRedactor,
   DEFAULT_CODING_TOOL_NAMES,
@@ -33,8 +32,6 @@ import {
   selectRegisteredTools,
   isDeclaredToolExposure,
   toChatToolDefinitions,
-  TOOL_SEARCH_TOOL_NAME,
-  unknownToolNames,
   type AiProvider,
   type ChatResponse,
   type Message,
@@ -50,6 +47,7 @@ import {
 } from '../providers/configured-providers.js';
 import { createCliProviderRuntime } from '../providers/provider-runtime.js';
 import { resolveOfflineMode } from '../cli/offline-mode.js';
+import { cliToolsDisabled, cliToolSelectionOptions, unknownCliToolNames } from '../cli/tool-selection.js';
 import { resolveStartupSession, resolveStartupSessionDirectory } from '../sessions/startup-session.js';
 import { ResourceManager } from '../resources/resource-manager.js';
 import { RpcExtensionUiBridge } from './rpc-extension-ui.js';
@@ -482,23 +480,24 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       startupModel,
     ));
     const registeredTools = extensionRegistry.getTools();
-    const unknownTools = unknownToolNames(registeredTools, options.tools, options.excludeTools)
-      .filter(name => !name.startsWith('mcp__') && name !== TOOL_SEARCH_TOOL_NAME && name !== CODEMODE_TOOL_NAME);
+    const unknownTools = unknownCliToolNames(registeredTools, options);
     if (unknownTools.length) throw new Error(`Unknown tool name(s): ${unknownTools.join(', ')}.`);
     const configuredDefaults = resolveAgentDefaultTools(
       settingsResolution.settings.defaultTools,
       DEFAULT_CODING_TOOL_NAMES,
     );
     const toolSelectionOptions = {
-      allowedTools: options.tools,
-      excludedTools: options.excludeTools,
+      tools: options.tools,
+      excludeTools: options.excludeTools,
+      codemodeConfigured: Boolean(settingsResolution.settings.codemode),
       defaultTools: configuredDefaults ?? DEFAULT_CODING_TOOL_NAMES,
       builtInExtensionId: 'builtin:workspace-tools',
       includeNonBuiltInByDefault: true,
       noBuiltInTools: options.noBuiltinTools,
       noTools: options.noTools,
     };
-    const selectedStaticTools = selectRegisteredTools(registeredTools, toolSelectionOptions);
+    const selectedStaticTools = selectRegisteredTools(registeredTools,
+      cliToolSelectionOptions(() => extensionRegistry.getTools(), toolSelectionOptions));
     const selectedTools = selectedStaticTools.filter(tool => isDeclaredToolExposure(agentToolExposure(tool)));
 
     const startupSession = await resolveStartupSession({
@@ -565,8 +564,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
       prepareDynamicTools: async (sessionId, signal) => {
         try {
           const session = sessionManager.get(sessionId);
-          const suppressAllTools = options.tools?.length === 0
-            || (options.noTools && options.tools === undefined);
+          const suppressAllTools = cliToolsDisabled(options);
           const prepared = session?.toolPreset === 'chat-only' || suppressAllTools
             ? mcpHost!.getPreparedTools(sessionId, 'chat-only')
             : await mcpHost!.prepareForPrompt({
@@ -590,7 +588,11 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
                 ?? Promise.resolve(prepared.discoverableTools ?? []),
               has: name => prepared.has(name),
             },
-            selection: { ...toolSelectionOptions, preset: session?.toolPreset },
+            selection: cliToolSelectionOptions(() => [
+              ...extensionRegistry.getTools(), ...prepared.tools,
+              ...(prepared.currentDiscoverableTools?.() ?? prepared.discoverableTools ?? []),
+            ], { ...toolSelectionOptions, preset: session?.toolPreset,
+              hasPotentialSearchableTools: prepared.hasPotentialDiscoverableTools }),
             initialLoadedTools: collectToolSearchLoadedNames(
               await sessionManager.getRawEntries(sessionId),
               session?.activeLeafId,

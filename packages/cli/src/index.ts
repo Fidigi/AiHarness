@@ -13,7 +13,6 @@ import {
   closeProviderNetworkDispatchers,
   collectToolSearchLoadedNames,
   createAgentToolLoadout,
-  CODEMODE_TOOL_NAME,
   createMcpOAuthProviderFactory,
   CredentialRedactor,
   DEFAULT_CODING_TOOL_NAMES,
@@ -41,8 +40,6 @@ import {
   SessionManager,
   toChatToolDefinitions,
   truncateToolTail,
-  TOOL_SEARCH_TOOL_NAME,
-  unknownToolNames,
   WorkspaceManager,
 } from '@ai-harness/core';
 import type {
@@ -51,6 +48,7 @@ import type {
   MessageContentBlock,
   PluginResourceKind,
   ResolvedAgentSettings,
+  RegisteredAgentTool,
   Session,
   ThinkingLevel,
   ToolCall,
@@ -106,6 +104,7 @@ import {
 } from './cli/args.js';
 import { resolveStartupDisplay } from './cli/startup-display.js';
 import { resolveOfflineMode } from './cli/offline-mode.js';
+import { cliToolsDisabled, cliToolSelectionOptions, unknownCliToolNames } from './cli/tool-selection.js';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -893,25 +892,27 @@ async function main(): Promise<void> {
   }
   await registerSkillTool();
 
-  const toolSelectionOptions = () => {
+  const toolSelectionOptions = (dynamicTools: () => readonly RegisteredAgentTool[] = () => [], preset?: Session['toolPreset'], hasPotentialSearchableTools = false) => {
     const configuredDefaults = resolveAgentDefaultTools(
       settingsResolution.settings.defaultTools,
       DEFAULT_CODING_TOOL_NAMES,
     );
-    return {
-      allowedTools: cliArguments.tools,
-      excludedTools: cliArguments.excludeTools,
+    return cliToolSelectionOptions(() => [...extensionRegistry.getTools(), ...dynamicTools()], {
+      tools: cliArguments.tools,
+      excludeTools: cliArguments.excludeTools,
+      codemodeConfigured: Boolean(settingsResolution.settings.codemode),
+      hasPotentialSearchableTools,
+      preset,
       defaultTools: configuredDefaults ?? DEFAULT_CODING_TOOL_NAMES,
       builtInExtensionId: 'builtin:workspace-tools',
       includeNonBuiltInByDefault: true,
       noBuiltInTools: cliArguments.noBuiltinTools,
       noTools: cliArguments.noTools,
-    };
+    });
   };
   const selectedTools = () => {
     const registered = extensionRegistry.getTools();
-    const unknown = unknownToolNames(registered, cliArguments.tools, cliArguments.excludeTools)
-      .filter(name => !name.startsWith('mcp__') && name !== TOOL_SEARCH_TOOL_NAME && name !== CODEMODE_TOOL_NAME);
+    const unknown = unknownCliToolNames(registered, cliArguments);
     if (unknown.length) throw new Error(`Unknown tool name(s): ${unknown.join(', ')}.`);
     return selectRegisteredTools(registered, toolSelectionOptions());
   };
@@ -1537,8 +1538,7 @@ async function main(): Promise<void> {
       let continueConversation = true;
       while (continueConversation) {
         const currentSession = sessionManager.get(currentSessionId);
-        const suppressAllTools = cliArguments.tools?.length === 0
-          || (cliArguments.noTools && cliArguments.tools === undefined);
+        const suppressAllTools = cliToolsDisabled(cliArguments);
         const mcpPrepared = currentSession?.toolPreset === 'chat-only' || suppressAllTools
           ? mcpHost.getPreparedTools(currentSessionId, 'chat-only')
           : await mcpHost.prepareForPrompt({
@@ -1562,10 +1562,10 @@ async function main(): Promise<void> {
               ?? Promise.resolve(mcpPrepared.discoverableTools ?? []),
             has: name => mcpPrepared.has(name),
           },
-          selection: {
-            ...toolSelectionOptions(),
-            preset: currentSession?.toolPreset,
-          },
+          selection: toolSelectionOptions(() => [
+            ...mcpPrepared.tools,
+            ...(mcpPrepared.currentDiscoverableTools?.() ?? mcpPrepared.discoverableTools ?? []),
+          ], currentSession?.toolPreset, mcpPrepared.hasPotentialDiscoverableTools),
           initialLoadedTools: collectToolSearchLoadedNames(
             await sessionManager.getRawEntries(currentSessionId),
             currentSession?.activeLeafId,

@@ -20,6 +20,13 @@ for (const mode of ['print', 'json', 'rpc', 'regular', 'fullscreen']) {
     expect(await run(mode, 'suppressed')).toEqual({ code: 0, signal: null, stdout: 'native no-MCP OK\n', stderr: '' });
   }, 45_000);
 }
+it.each([
+  ...['print', 'json', 'rpc'].flatMap(mode => ['patterns', 'modifiers'].map(scenario => [mode, scenario])),
+  ['regular', 'modifiers'], ['fullscreen', 'modifiers'],
+])('%s: concrete tool %s preserve source policy and exclusions across native reloads', async (mode, scenario) => {
+  expect(await run(mode!, scenario!)).toEqual({ code: 0, signal: null, stdout: 'native tool selection OK\n', stderr: '' });
+}, 45_000);
+
 it('control: the same actual MCP fixture starts without the flag and closes before process completion', async () => {
   expect(await run('print', 'control')).toEqual({ code: 0, signal: null, stdout: 'native no-MCP OK\n', stderr: '' });
 }, 45_000);

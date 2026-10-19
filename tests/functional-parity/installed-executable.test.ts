@@ -36,8 +36,8 @@ Options:
   -nc, --no-context-files        Disable AGENTS.md and CLAUDE.md discovery
   -a, --approve                  Trust this project for this process only
   -na, --no-approve              Refuse this project for this process only
-  -t, --tools <names>            Replace active tools with a comma-separated allowlist
-  -xt, --exclude-tools <names>   Disable comma-separated tool names after selection
+  -t, --tools <names>            Replace with names/* patterns, or adjust defaults with +name,-name
+  -xt, --exclude-tools <names>   Disable names/* patterns after selection (exclusions win)
   -nbt, --no-builtin-tools       Disable default built-ins but retain extension tools
   -nt, --no-tools                Disable all tools by default
   -c, --continue                 Continue the newest session for this workspace
@@ -370,6 +370,17 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       ['regular', 'suppressed'], ['fullscreen', 'suppressed'], ['print', 'control'],
     ]) expect(await run(process.execPath, [probe, mode!, scenario!], consumer, env, '', 45_000))
       .toEqual({ code: 0, stdout: 'native no-MCP OK\n', stderr: '' });
+  }, 90_000);
+
+  it('resolves CLI tool patterns and ordered adjustments through the installed PATH bin', async () => {
+    const probe = 'tool-selection-installed-probe.mjs';
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/no-mcp-probe.mjs'), path.join(consumer, probe));
+    const env = { ...environment, AIH_NO_MCP_COMMAND: 'ai-harness', AIH_TEST_MODULES_ROOT: installedModules };
+    for (const [mode, scenario] of [
+      ...['print', 'json', 'rpc'].flatMap(mode => ['patterns', 'modifiers'].map(scenario => [mode, scenario])),
+      ['regular', 'modifiers'], ['fullscreen', 'modifiers'],
+    ]) expect(await run(process.execPath, [probe, mode!, scenario!], consumer, env, '', 45_000))
+      .toEqual({ code: 0, stdout: 'native tool selection OK\n', stderr: '' });
   }, 90_000);
 
   it('ships native editor schemas and public declarations outside the checkout', async () => {

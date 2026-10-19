@@ -11,7 +11,8 @@ import { AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
 assert.equal(AI_HARNESS_CORE_API_VERSION, 1);
 const mode=process.argv[2],scenario=process.argv[3]??'suppressed';
 assert(['print','json','rpc','regular','fullscreen'].includes(mode));
-assert(['suppressed','control'].includes(scenario));
+assert(['suppressed','control','patterns','modifiers'].includes(scenario));
+const selectionScenario=scenario==='patterns'||scenario==='modifiers';
 const root=await mkdtemp(path.join(os.tmpdir(),'aih-no-mcp-')),cwd=path.join(root,'project'),agent=path.join(root,'agent'),trace=path.join(root,'trace.jsonl');
 const cli=process.env.AIH_NO_MCP_CLI??fileURLToPath(new URL('../../../dist/index.js',import.meta.url));
 const command=process.env.AIH_NO_MCP_COMMAND;
@@ -46,15 +47,18 @@ try{
    api.before('before:provider',data=>{record({kind:'turn',flag:api.getOption('native-probe'),tools:(data.options.tools??[]).map(tool=>tool.name).sort()});});
    api.on('agent:end',()=>{record({kind:'end'});});
   };`);
- const settings=enabled=>JSON.stringify({extensions:[`${enabled?'+':'-'}builtin:mcp`],codemode:{mode:'on'}});
+ const settings=enabled=>JSON.stringify({extensions:[`${enabled?'+':'-'}builtin:mcp`],codemode:{mode:'on'},
+  ...(scenario==='modifiers'?{defaultTools:[enabled?'ls':'find']}:{}),});
  await put(path.join(agent,'settings.json'),settings(true));
  await put(path.join(cwd,'.ai-harness/settings.json'),settings(true));
  await put(path.join(agent,'mcp.json'),JSON.stringify({version:1,mcpServers:{fixture:{command:process.execPath,args:[server]}}}));
  const args=['--offline','--approve','--no-session','--model','mock/mock-model','--no-context-files','-e',extension,'-e','builtin:mcp',
-  ...(scenario==='suppressed'?['--no-mcp']:[]),'--native-probe'];
+  ...(scenario==='suppressed'?['--no-mcp']:[]),
+  ...(scenario==='patterns'?['--tools','r*,mcp__*,tool_search,codemode,deferred_*','--exclude-tools','*ordinary']:[]),
+  ...(scenario==='modifiers'?['--tools','+grep,-read,+read,-read,+mcp__ordinary','--exclude-tools','b*,*ordinary']:[]),'--native-probe'];
  const argv=extra=>[...(command?[]:[cli]),...args,...extra];
  if(mode==='regular'||mode==='fullscreen'){
-  assert.equal(scenario,'suppressed');
+  assert(scenario==='suppressed'||scenario==='modifiers');
   // Only the test's PTY driver may use the existing explicit harness path;
   // product Core and PATH-bin resolution still belong to the installed consumer.
   const {spawn:spawnPty}=process.env.AIH_TEST_MODULES_ROOT
@@ -87,8 +91,15 @@ try{
   if(mode!=='print'){const rows=result.stdout.trim().split('\n').map(line=>JSON.parse(line));assert(rows.every(row=>typeof row.type==='string'));if(mode==='rpc')assert(rows.some(row=>row.type==='response'&&row.id==='fixture'&&row.success===true));}
  }
  const seen=await records(),turns=seen.filter(row=>row.kind==='turn');assert.equal(turns.length,mode==='regular'||mode==='fullscreen'?3:1);
- for(const turn of turns){assert.equal(turn.flag,true);for(const name of ['read','codemode','tool_search','mcp__ordinary'])assert(turn.tools.includes(name),name+' remains enabled');assert.equal(turn.tools.includes('mcp__fixture__lookup'),scenario==='control');}
- const started=seen.filter(row=>row.kind==='mcp');assert.equal(started.length,scenario==='control'?1:0);assert.equal(seen.filter(row=>row.kind==='effect').length,0);
+ for(const [index,turn] of turns.entries()){
+  assert.equal(turn.flag,true);
+  if(selectionScenario){
+   const expected=scenario==='patterns'?['read','codemode','tool_search','mcp__fixture__lookup']
+    :['grep',index===1?'find':'ls','codemode','tool_search','mcp__fixture__lookup'];
+   assert.deepEqual(turn.tools,[...expected].sort(),'concrete CLI selection after defaults/reload/exclusions');
+  }else{for(const name of ['read','codemode','tool_search','mcp__ordinary'])assert(turn.tools.includes(name),name+' remains enabled');assert.equal(turn.tools.includes('mcp__fixture__lookup'),scenario==='control');}
+ }
+ const started=seen.filter(row=>row.kind==='mcp');assert.equal(started.length,scenario==='suppressed'?0:1);assert.equal(seen.filter(row=>row.kind==='effect').length,0);
  for(const row of started)await wait(()=>{try{process.kill(row.pid,0);return false;}catch{return true;}},'native MCP child cleanup');
- console.log('native no-MCP OK');
+ console.log(selectionScenario?'native tool selection OK':'native no-MCP OK');
 }finally{if(terminal&&!exited)terminal.kill();await rm(root,{recursive:true,force:true});}
