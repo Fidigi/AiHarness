@@ -4,6 +4,8 @@
 >
 > Scope: [AUDIT-4 D06](../AUDIT-4.md#4-convention-and-delivery-queue), print/JSON failed-prefix persistence. A4-ERR remains PARTIAL. Historical [SSE failures and qualification](./stream-error-frames.md), Q01/Q02 and all previous Main outcomes are preserved.
 
+> **Later integrated follow-up (2026-10-19):** [Q03 on candidate965d09a](./q03-integrated-qualification.md) passes types and complete parity264/264, but complete full fails6,155/1 of6,156 on an unchanged strict installed SDK consumer compiler (SIGTRAP; native `unreachable code`). Its D06 native/installed scenarios pass; required green full qualification is still missing. The original D06 image/outcomes below remain historical and are not retrospectively replaced. D06 stays PARTIAL.
+
 ## Existing coverage and exact missing behavior
 
 Core already refuses explicit OpenAI-compatible SSE error frames before pending tools execute and prevents retry after visible text/reasoning. `packages/cli/src/cli/json-output.test.ts` already verifies live error records; `stream-error-process.test.ts` and the genuine installed consumer already exercise 20 print/JSON/RPC/SDK scenarios. The missing boundary was durable non-RPC CLI history: a rejected `streamProviderTurn` never returns a response for `runToolLoop` to save.
