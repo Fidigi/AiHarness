@@ -59,7 +59,7 @@ export interface CreateAgentSessionOptions {
 }
 
 export type AgentPromptOptions = Omit<StartAgentRunRequest,
-  'sessionId' | 'cwd' | 'workspaceId' | 'provider' | 'input' | 'persistSettings'>;
+  'sessionId' | 'cwd' | 'workspaceId' | 'provider' | 'input' | 'persistSettings' | 'signal'>;
 export type AgentCompactionTarget = ReturnType<SessionManager['requestCompaction']>;
 export type AgentCompactionDetails = Parameters<SessionManager['applyCompaction']>[3];
 

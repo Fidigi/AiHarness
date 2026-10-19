@@ -1,6 +1,6 @@
 # Exact displayed-entry session copies
 
-Status: **IN PROGRESS — V11 whole owning review FAILED, not whole-criterion qualification** for A3-WEB-04. No main source promotion or closure. Mandate remains5/10.
+Status: **IN PROGRESS — V14 aggregate FAILED; changed-product V15 bounded owning review passes, not whole-criterion qualification** for A3-WEB-04 (2026-10-19). No main row-source promotion or closure. Mandate remains5/10.
 
 ## Requirement and implementation boundary
 
@@ -97,4 +97,10 @@ Actual V14 types0/default270/genuine installed1pass227skipped/Webbuild0; complet
 
 `/tmp/aih-a3-row-copy-v14-failed-audit.{mjs,log,exit}`0 binds12before-after54source+SDK/1208nlink-input checks, actual immutable image `sha256:8f747e64d0f90937b9d936238454b1556862d3a661529ec413262bf61e44ae9a`,1202present+6exact exclusions/Git, both complete HTML/raw receipts/installed archive, exact two-file delta and same four PNG bytes. Main1196/no-MCP inputs remain unchanged; no Main promotion watcher or writes. All V11/V13/DateV3 and older failures remain binding, no common native cause/physical certification, mandate5/10.
 
-Still required: evidence-backed correction and fresh no-update complete owning standard/progress browser review, all whole-clause source/public/HTTP/UI audits, safe targeted main integration, independent complete types/parity/full/nine-suite E2E/production on frozen combined inputs and final actual-image/source/SDK/Git/index audit. Passing subsets never waive either V7 failure or main's separate historical failures. No release/remote/physical certification.
+## V15 combined Core/SDK candidate — bounded owning review passes
+
+New detached `/tmp/aih-a3-row-copy-v15-work` first reproduces all1203 current prestart-Main input identities after a95619c, then adds only21 non-installed V14 row paths and merges only its additive installed case into the newer229-case suite. Removing that case reproduces current Main's installed file exactly; no older Core exports, NoMCP/schema/skill/navigation/SDK sources replace newer Main work. All1219 inputs are regular single-link files;106 source/control witnesses and separate SDK README are frozen. The same four V14 PNGs and presentation setup remain unchanged, with no generation, padding, tolerance, retry or deadline changes.
+
+This is a genuinely changed Core/SDK product combination versus V14, not an unchanged retry or an asserted SIGSEGV correction. Actual originaltypes0/strict-four-new-test-types0/unit54files840pass45.21s/genuine row installed1pass229skipped21.69s/complete ORIGINAL parity3files260pass291.68s/normal Webbuild0. Whole progress25 passes12.3min and whole five-file standard210 passes24.9min; each actual raw receipt is status0/code0/signalnull. Final owning audit0 verifies all16 before-after checks,106 source/control witnesses plus separate SDK README/all1219 single-link inputs, actual image `sha256:c9af92a65661cb048fb3d090e463118ad8502b01a930c5f84eb5037ed5eed6b2`,1213present+6exact context-only exclusions/Git, both complete HTML/raw reports, installed inventory archive, exact old229 installed bodies and same four V12–V15 PNG bytes. Installed archive contains inventory only, not retained tarballs. V14/Main1203 remain unchanged; all earlier failures stay binding. No Main promotion watcher or writes; independent frozen prestart-Main complete review is separate and cannot qualify the row.
+
+Still required: all whole-clause source/public/HTTP/UI audits, safe targeted main integration, independent complete types/parity/full/nine-suite E2E/production on frozen combined inputs and final actual-image/source/SDK/Git/index audit. Passing subsets never waive V14, either V7 failure or Main's separate historical failures. No release/remote/physical certification.

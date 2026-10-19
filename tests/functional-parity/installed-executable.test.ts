@@ -277,6 +277,35 @@ beforeAll(async () => {
 afterAll(async () => { if (artifactRoot) await rm(artifactRoot, { recursive: true, force: true }); });
 
 describe('CLI-RUN-01 genuine locally packed installed executable', () => {
+  it('reserves installed Core startup and withdraws SDK pending prompts with owned declarations', async () => {
+    for (const mode of ['core', 'sdk'] as const) {
+      const probe = `prestart-${mode}-installed.mjs`;
+      await cp(path.join(checkout, `packages/core/src/agent/fixtures/prestart-${mode}-probe.mjs`), path.join(consumer, probe));
+      const result = await run(process.execPath, [probe], consumer, environment, '', 20_000);
+      expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe('');
+      expect(result.stdout.endsWith(mode === 'core' ? 'native prestart admission OK\n' : 'native SDK prestart cancellation OK\n')).toBe(true);
+      expect(result.stdout.match(new RegExp(`^NATIVE_${mode === 'core' ? '' : 'SDK_'}PRESTART_OBSERVATION `, 'gm'))).toHaveLength(mode === 'core' ? 3 : 2);
+    }
+    await writeFile(path.join(consumer, 'prestart-public.ts'), `
+      import { AI_HARNESS_CORE_API_VERSION, type StartAgentRunRequest, type BeforeAgentData,
+        type AgentPromptOptions, type CreateAgentSessionOptions } from '@ai-harness/core';
+      const major: 1 = AI_HARNESS_CORE_API_VERSION; void major;
+      const signal = new AbortController().signal;
+      const request: StartAgentRunRequest = { sessionId:'native',cwd:'.',provider:'mock',input:'native',signal }; void request;
+      const hook: BeforeAgentData = { sessionId:'native',provider:'mock',input:'native',signal }; void hook.signal?.aborted;
+      // @ts-expect-error extensions cannot assign a replacement host lifetime
+      hook.signal = signal;
+      // @ts-expect-error the facade owns each prompt lifetime through stop/dispose
+      const prompt: AgentPromptOptions = { signal }; void prompt;
+      // @ts-expect-error facade defaults cannot install an external run lifetime
+      const defaults: NonNullable<CreateAgentSessionOptions['runDefaults']> = { signal }; void defaults;
+      // @ts-expect-error a truthy object is not a native AbortSignal
+      request.signal = { aborted: false };
+    `);
+    const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'prestart-public.ts'], consumer, environment, 20_000);
+    expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  }, 45_000);
+
   it('pins native no-MCP denial across installed hosts without denying ordinary sources', async () => {
     const probe = 'no-mcp-installed-probe.mjs';
     await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/no-mcp-probe.mjs'), path.join(consumer, probe));

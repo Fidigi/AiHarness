@@ -10,6 +10,7 @@ import type { BranchSummaryEvent, BranchSummaryOutput } from '../sessions/branch
 import { copyBranchSummaryEvent, copyBranchSummaryOutput } from '../sessions/session-branch-summary.js';
 import type { AgentToolExposure, AgentToolNamespace } from '../tools/tool-selection.js';
 import type { ToolProgressInput } from '../agent/tool-progress.js';
+import { awaitAgentAdmission } from '../agent/prestart-admission.js';
 import { EventEmitter, type EventHandler, type EventMap } from '../utils/event-emitter.js';
 
 import { validateExtensionOption, type ExtensionOption, type ExtensionOptionDescriptor, type ExtensionOptionValue } from './startup-options.js';
@@ -159,6 +160,8 @@ export interface BeforeAgentData {
   sessionId: string;
   provider: string;
   input: string;
+  /** Host-owned startup lifetime; absent for legacy direct registry callers. */
+  readonly signal?: AbortSignal;
 }
 
 export interface BeforeProviderData {
@@ -501,14 +504,17 @@ export class ExtensionRegistry {
       return this.runSummaryBefore(data as BranchSummaryEvent) as unknown as Promise<BeforeHookExecution<BeforeHookMap[K]>>;
     }
     let transformed = { ...data } as BeforeHookMap[K];
-    const signal = event === 'before:model' ? (data as BeforeHookMap['before:model']).signal : undefined;
+    const agentSignal = event === 'before:agent' ? (data as BeforeHookMap['before:agent']).signal : undefined;
+    const signal = event === 'before:model' ? (data as BeforeHookMap['before:model']).signal : agentSignal;
     for (const entry of this.beforeHooks.get(event) ?? []) {
       if (signal?.aborted) return { data: transformed, cancelled: true };
       let result: BeforeHookResult<BeforeHookMap[K]>;
       try {
         const handler = entry.value as unknown as BeforeHookHandler<BeforeHookMap[K]>;
-        result = await handler(transformed);
+        if (agentSignal) transformed = { ...transformed, signal: agentSignal };
+        result = agentSignal ? await awaitAgentAdmission(() => handler(transformed), agentSignal) : await handler(transformed);
       } catch (error) {
+        if (agentSignal?.aborted) return { data: transformed, cancelled: true };
         throw new Error(
           `Extension hook "${String(event)}" failed in "${entry.owner}": ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -518,6 +524,7 @@ export class ExtensionRegistry {
         return { data: transformed, cancelled: true, reason: result.reason };
       }
       if (result) transformed = { ...transformed, ...result };
+      if (agentSignal) transformed = { ...transformed, signal: agentSignal };
     }
     return { data: transformed, cancelled: false };
   }

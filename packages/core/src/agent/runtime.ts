@@ -19,6 +19,7 @@ import {
 } from '../tools/tool-search.js';
 import { streamProviderTurn } from './provider-turn.js';
 import { captureManagerProviderBudget } from './provider-request-estimate.js';
+import { awaitAgentAdmission } from './prestart-admission.js';
 import { AgentAbortError, runToolLoop } from './tool-loop.js';
 import {
   AgentMessageQueue,
@@ -42,6 +43,8 @@ import { assertInteractionCapacity, interactionHandle, interactionTimeout } from
 export interface StartAgentRunRequest {
   sessionId: string;
   cwd: string;
+  /** Caller-owned cancellation across pending admission and the admitted run. */
+  signal?: AbortSignal;
   workspaceId?: string;
   provider: string;
   input: string;
@@ -215,6 +218,7 @@ export class AgentRuntime {
   readonly journal: AgentEventJournal;
   private readonly runs = new Map<string, ActiveRun>();
   private readonly sessionRuns = new Map<string, string>();
+  private readonly starting = new Set<string>();
   private readonly interactions = new Map<string, PendingInteraction>();
   private interactionEpoch = 0;
   private readonly sessionManager: SessionManager;
@@ -245,27 +249,25 @@ export class AgentRuntime {
   }
 
   async start(request: StartAgentRunRequest): Promise<AgentRunSnapshot> {
+    // Capture values and borrowed signal before any host await; later caller
+    // mutation cannot change the approved workspace or selected capabilities.
+    request = { ...request };
     if (!request.input.trim()) throw new Error('Le message ne peut pas être vide.');
     const session = this.sessionManager.get(request.sessionId);
     if (!session) throw new Error('Session introuvable.');
-    if (!await this.isProjectTrusted(request.cwd)) {
-      throw Object.assign(new Error('Le workspace doit être approuvé avant de lancer un agent.'), {
-        code: 'PROJECT_TRUST_REQUIRED',
-        status: 409,
-      });
-    }
-    const existingId = this.sessionRuns.get(request.sessionId);
+    const existingId = this.sessionRuns.get(session.id);
     const existing = existingId ? this.runs.get(existingId) : undefined;
-    if (existing && (!['completed', 'failed', 'stopped'].includes(existing.snapshot.phase)
-      || (existing.controller.signal.aborted && !existing.settled))) {
+    if (this.starting.has(session.id) || (existing && (
+      !['completed', 'failed', 'stopped'].includes(existing.snapshot.phase)
+      || (existing.controller.signal.aborted && !existing.settled)))) {
       throw new Error('Un agent est déjà actif pour cette session.');
     }
-
     const effectiveRequest: StartAgentRunRequest = {
       ...request,
       provider: this.redactText(request.provider),
       input: this.redactText(request.input),
-      blocks: request.blocks ? this.redactJson(request.blocks) : undefined,
+      blocks: request.blocks ? this.redactJson(structuredClone(request.blocks)) : undefined,
+      codemode: request.codemode ? structuredClone(request.codemode) : undefined,
       model: request.model ? this.redactText(request.model) : undefined,
       systemPrompt: request.systemPrompt ? this.redactText(request.systemPrompt) : undefined,
       allowedTools: request.allowedTools?.map(value => this.redactText(value)),
@@ -273,68 +275,96 @@ export class AgentRuntime {
       allowedSkills: request.allowedSkills?.map(value => this.redactText(value)),
       allowedExtensions: request.allowedExtensions?.map(value => this.redactText(value)),
     };
-    const hook = await this.extensionRegistry.runBefore('before:agent', {
-      sessionId: effectiveRequest.sessionId,
-      provider: this.redactText(effectiveRequest.provider),
-      input: effectiveRequest.input,
-    });
-    if (hook.cancelled) throw new Error(this.redactText(hook.reason || "Exécution annulée par une extension."));
-    hook.data = this.redactJson(hook.data);
-    effectiveRequest.input = hook.data.input;
-    const providerName = hook.data.provider;
-    const provider = await this.resolveProvider(providerName);
-    if (!provider?.validateConfig()) throw new Error(`Provider indisponible : ${providerName}`);
-
-    const runId = crypto.randomUUID();
     const controller = new AbortController();
-    let resolveCompletion = (): void => undefined;
-    const completion = new Promise<void>(resolve => { resolveCompletion = resolve; });
-    const snapshot: AgentRunSnapshot = {
-      id: runId,
-      sessionId: session.id,
-      workspaceId: request.workspaceId ?? session.workspaceId,
-      cwd: request.cwd,
-      provider: providerName,
-      model: effectiveRequest.model ?? session.model,
-      phase: 'queued',
-      extensionRequests: [],
-      steerQueue: [],
-      followUpQueue: [],
-      lastSequence: this.journal.lastSequence(session.id),
+    const callerSignal = request.signal;
+    const abort = (): void => controller.abort();
+    const detach = (): void => callerSignal?.removeEventListener('abort', abort);
+    const current = (): void => {
+      if (controller.signal.aborted) throw new AgentAbortError();
+      if (this.sessionManager.get(session.id) !== session) throw new Error('Session introuvable.');
     };
-    const active: ActiveRun = {
-      snapshot,
-      controller,
-      completion,
-      resolveCompletion,
-      settled: false,
-      queue: new AgentMessageQueue({
-        steeringMode: request.steeringMode,
-        followUpMode: request.followUpMode,
-      }),
-    };
-    await this.sessionManager.update(session.id, {
-      cwd: request.cwd,
-      workspaceId: request.workspaceId,
-      agentId: effectiveRequest.agentId ?? runId,
-      ...(effectiveRequest.persistSettings === false ? {} : {
-        model: effectiveRequest.model,
-        thinking: request.thinking,
-        toolPreset: request.toolPreset,
-        ...(effectiveRequest.systemPrompt !== undefined
-          ? { metadata: { ...session.metadata, systemPrompt: effectiveRequest.systemPrompt } }
-          : {}),
-      }),
-    });
-    this.runs.set(runId, active);
-    this.sessionRuns.set(session.id, runId);
-    this.publish(active, 'run.queued', { input: hook.data.input });
+    this.starting.add(session.id);
+    let admitted = false;
+    try {
+      callerSignal?.addEventListener('abort', abort, { once: true });
+      if (callerSignal?.aborted) controller.abort();
+      current();
+      const trusted = await awaitAgentAdmission(() => this.isProjectTrusted(effectiveRequest.cwd), controller.signal);
+      current();
+      if (!trusted) {
+        throw Object.assign(new Error('Le workspace doit être approuvé avant de lancer un agent.'), {
+          code: 'PROJECT_TRUST_REQUIRED', status: 409,
+        });
+      }
+      const hook = await awaitAgentAdmission(() => this.extensionRegistry.runBefore('before:agent', {
+        sessionId: effectiveRequest.sessionId,
+        provider: effectiveRequest.provider,
+        input: effectiveRequest.input,
+        signal: controller.signal,
+      }), controller.signal);
+      current();
+      if (hook.cancelled) throw new Error(this.redactText(hook.reason || "Exécution annulée par une extension."));
+      hook.data = this.redactJson(hook.data);
+      effectiveRequest.input = hook.data.input;
+      const providerName = hook.data.provider;
+      const provider = await awaitAgentAdmission(() => this.resolveProvider(providerName), controller.signal);
+      current();
+      if (!provider?.validateConfig()) throw new Error(`Provider indisponible : ${providerName}`);
+      current();
 
-    void this.execute(active, effectiveRequest, provider).finally(() => {
-      active.settled = true;
-      active.resolveCompletion();
-    });
-    return this.redactJson(cloneSnapshot(snapshot));
+      const runId = crypto.randomUUID();
+      let resolveCompletion = (): void => undefined;
+      const completion = new Promise<void>(resolve => { resolveCompletion = resolve; });
+      const snapshot: AgentRunSnapshot = {
+        id: runId,
+        sessionId: session.id,
+        workspaceId: effectiveRequest.workspaceId ?? session.workspaceId,
+        cwd: effectiveRequest.cwd,
+        provider: providerName,
+        model: effectiveRequest.model ?? session.model,
+        phase: 'queued',
+        extensionRequests: [],
+        steerQueue: [],
+        followUpQueue: [],
+        lastSequence: this.journal.lastSequence(session.id),
+      };
+      const active: ActiveRun = {
+        snapshot, controller, completion, resolveCompletion, settled: false,
+        queue: new AgentMessageQueue({
+          steeringMode: effectiveRequest.steeringMode,
+          followUpMode: effectiveRequest.followUpMode,
+        }),
+      };
+      // Once admitted to storage, an update must physically settle; cancellation
+      // prevents subsequent run/message/provider publication, not write rollback.
+      await this.sessionManager.update(session.id, {
+        cwd: effectiveRequest.cwd,
+        workspaceId: effectiveRequest.workspaceId,
+        agentId: effectiveRequest.agentId ?? runId,
+        ...(effectiveRequest.persistSettings === false ? {} : {
+          model: effectiveRequest.model,
+          thinking: effectiveRequest.thinking,
+          toolPreset: effectiveRequest.toolPreset,
+          ...(effectiveRequest.systemPrompt !== undefined
+            ? { metadata: { ...session.metadata, systemPrompt: effectiveRequest.systemPrompt } }
+            : {}),
+        }),
+      });
+      current();
+      this.runs.set(runId, active);
+      this.sessionRuns.set(session.id, runId);
+      admitted = true;
+      this.publish(active, 'run.queued', { input: hook.data.input });
+      void this.execute(active, effectiveRequest, provider).finally(() => {
+        detach();
+        active.settled = true;
+        active.resolveCompletion();
+      });
+      return this.redactJson(cloneSnapshot(snapshot));
+    } finally {
+      this.starting.delete(session.id);
+      if (!admitted) detach();
+    }
   }
 
   getRun(runId: string): AgentRunSnapshot | undefined {
@@ -499,7 +529,9 @@ export class AgentRuntime {
       let initial = true;
       let queued: QueuedAgentMessage[] = [];
       while (hasPrompt) {
+        if (run.controller.signal.aborted) throw new AgentAbortError();
         const preparedTools = await this.prepareRunTools(run, request);
+        if (run.controller.signal.aborted) throw new AgentAbortError();
         if (initial) {
           await this.persistInitial(run, request);
           initial = false;

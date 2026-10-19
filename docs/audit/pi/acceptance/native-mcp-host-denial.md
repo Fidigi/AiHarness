@@ -2,7 +2,7 @@
 
 > **Status: IN PROGRESS — narrow A3-CLI-01 implementation, not whole qualification** (2026-10-19)
 >
-> V4 isolated types/owning109/complete parity258 pass. Exactly10 source/test paths are now integrated into Main, uncommitted; fresh independent Main types0/focused27files451pass47.05s/complete parity258pass273.70s, third Main full FAILED5936pass/1failof5937/1166.09s/Make2 (unchanged SDK public review child code=null/SIGSEGV/empty stdout+stderr); all nine E2E618/normal production/five assets and exact compiled help pass, but cannot waive it; failed-evidence audit0. A3-CLI-01 remains PARTIAL and the mandate remains5/10.
+> V4 isolated types/owning109/complete parity258 pass. Exactly10 source/test paths are committed in Main a95619c; fresh independent Main types0/focused27files451pass47.05s/complete parity258pass273.70s, third Main full FAILED5936pass/1failof5937/1166.09s/Make2 (unchanged SDK public review child code=null/SIGSEGV/empty stdout+stderr); all nine E2E618/normal production/five assets and exact compiled help pass, but cannot waive it; failed-evidence audit0. A3-CLI-01 remains PARTIAL and the mandate remains5/10.
 
 ## Existing requirement and authority
 
@@ -31,6 +31,10 @@ This is only the denial clause. Whole CLI01 still needs complete replacement/adj
 | V4 |types0;owning109; complete ORIGINAL Make parity3files258pass275.26s, including228 installed | One new genuine installed case and additive exact help metadata;20sources+SDK/1196 nlink-aware inputs/actual1190present+6context exclusions/Git/six before-after checks/owning-parity audit0 |
 
 V4 actual immutable image: `sha256:6a67c0e9b65686fe8f112df962a08ba721a8118c598de668cb243e94f3e1f808`. Earlier frozen source capsules, native exits and failed audits remain under `/tmp/aih-a3-no-mcp-v{1,2,3,4}-*`; V4 source stays frozen in `/tmp/aih-a3-tool-selection-work`.
+
+## Later independent Main checkpoint
+
+The separate12-path [prestart integration](./native-prestart-admission.md) preserves this committed denial policy and all newer229 installed bodies. Fourth Main types/strict/focused991/parity259/full5966 pass, but standard E2E fails40pass/386fail/9did-not-run after Vite dev reports Segmentation fault/code139; eight siblings/production/assets/help pass. Failed-evidence audit0 verifies14checks/77sources+SDK/1203single-link inputs/actual c0c22004… test and caa2d481… production/images/Git/raw nine reports/assets. This does not waive the third full failure or close CLI01. No isolated row or targetless-inheritance source is in this checkpoint.
 
 ## Fresh independent Main review
 

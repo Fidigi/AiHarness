@@ -1,4 +1,5 @@
 import { AgentRuntime } from '../agent/runtime.js';
+import { AgentAbortError } from '../agent/tool-loop.js';
 import { AGENT_EVENT_PROTOCOL_VERSION, type AgentRunSnapshot } from '../agent/events.js';
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
 import { CredentialRedactor } from '../providers/credentials.js';
@@ -147,6 +148,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
     let tail: Promise<unknown> = Promise.resolve();
     let settlement: Promise<AgentRunSnapshot | undefined> | undefined;
     let busy = false;
+    let promptController: AbortController | undefined;
     let loaded: LoadedAgentResources | undefined;
     const subscriptions = new Set<() => void>();
     const open = (): void => { if (disposed) throw new Error('Agent session is disposed.'); };
@@ -195,19 +197,41 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
         catch (error) { throw safeError(error); }
       },
       exportSession: () => safe(serializeSession(current())),
-      prompt: (input, promptOptions = {}) => serialInput(promptOptions, async promptOptions => {
-        idle();
-        const run = await runtime.start({
-          ...defaults, ...promptOptions,
-          sessionId, cwd, provider: providerName, input, persistSettings: false,
-          model: promptOptions.model ?? current().model ?? defaults.model,
-          thinking: promptOptions.thinking ?? current().thinking ?? defaults.thinking,
-          toolPreset: promptOptions.toolPreset ?? current().toolPreset ?? defaults.toolPreset,
-        });
-        busy = true;
-        settlement = runtime.wait(run.id).finally(() => { busy = false; });
-        return safe(run);
-      }),
+      prompt: (input, promptOptions = {}) => {
+        open();
+        const capturedOptions = structuredClone(promptOptions);
+        if (promptController) {
+          const refusal = Promise.reject<AgentRunSnapshot>(safeError(new Error('Agent session is busy; await wait() before changing history/settings.')));
+          // A caller may await the first start before handling this refusal.
+          // Observe it now without changing the rejection returned to the caller.
+          void refusal.catch(() => undefined);
+          return refusal;
+        }
+        const controller = new AbortController();
+        promptController = controller;
+        const retire = (): void => {
+          if (promptController !== controller) return;
+          promptController = undefined;
+          busy = false;
+        };
+        return serial(async () => {
+          // Earlier accepted mutations keep their serial order. Once this turn
+          // begins, history/settings are busy even while trust/hooks await.
+          idle();
+          busy = true;
+          if (disposed || controller.signal.aborted) throw new AgentAbortError();
+          const run = await runtime.start({
+            ...defaults, ...capturedOptions,
+            sessionId, cwd, provider: providerName, input, persistSettings: false,
+            signal: controller.signal,
+            model: capturedOptions.model ?? current().model ?? defaults.model,
+            thinking: capturedOptions.thinking ?? current().thinking ?? defaults.thinking,
+            toolPreset: capturedOptions.toolPreset ?? current().toolPreset ?? defaults.toolPreset,
+          });
+          settlement = runtime.wait(run.id).finally(retire);
+          return safe(run);
+        }).catch(error => { retire(); throw error; });
+      },
       async promptAndWait(input, promptOptions) {
         const run = await api.prompt(input, promptOptions);
         // Use this exact run, not a later prompt that another caller could start.
@@ -221,10 +245,15 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
         // stop/dispose must still be able to cancel the run being awaited.
         return tail.catch(() => undefined).then(async () => safe(await settlement));
       },
-      stop: () => serial(async () => {
-        const run = runtime.getSessionRun(sessionId);
-        return run && !terminal(run) ? safe(runtime.stop(run.id)) : safe(run);
-      }),
+      stop: () => {
+        // Publish the queued acknowledgement before synchronous abort reentry.
+        const stopping = serial(async () => {
+          const run = runtime.getSessionRun(sessionId);
+          return run && !terminal(run) ? safe(runtime.stop(run.id)) : safe(run);
+        });
+        promptController?.abort();
+        return stopping;
+      },
       steer: (content, blocks) => safe(runtime.enqueue(active().id, 'steer', content, blocks)),
       followUp: (content, blocks) => safe(runtime.enqueue(active().id, 'follow-up', content, blocks)),
       clearQueue: kind => safe(runtime.clearQueue(active().id, kind)),
@@ -315,6 +344,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
           }
         });
         // Abort listeners may synchronously reenter dispose: publish the sole promise first.
+        promptController?.abort();
         branchLifetime.abort();
         return disposal;
       },

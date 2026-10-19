@@ -1,0 +1,41 @@
+# Native targetless project MCP controls
+
+> **Status: IN PROGRESS — isolated candidates, no Main source integration or whole A3-CLI-02 qualification** (2026-10-19)
+>
+> Main remains frozen1203 inputs with prestart work; no row or inheritance code is promoted. Mandate5/10. V1 bounded gates pass but independent dual-source generation RED remains failed; V2 repairs that witness but its owning aggregate fails. V3 adds genuine CLI/installed/HTTP coverage with product identical to V2; owning880 passes but complete parity259/1 fails an old installed NoMCP child null/SIGSEGV. No sibling pass waives any failure.
+
+## Requirement and authority boundary
+
+Pinned reference `extensions/mcp/config.ts` and `docs/mcp.md` permit a project entry without command/URL/type to override **only enabled, exposure, toolExposure** of a valid global server. This does not authorize environment/header/OAuth/cwd/argument/description changes, a new target, Pi paths/tool-prefix policy or a default-exposure migration. AiHarness retains direct by default, full-target project replacement, strict global targets and fresh persisted project trust.
+
+Detached `/tmp/aih-a3-mcp-inheritance-work` replays all1203 then-Main paths/modes/nlinks/bytes before four owned deltas: Core inventory resolver, its new native inheritance test and additive Web typed reason dictionary/reason-list entries. Newer229 installed cases, prestart/NoMCP/schema/skill/navigation/SDK bytes remain intact. Candidate files are not Main implementations.
+
+| Boundary | Candidate behavior | Remaining limit |
+|---|---|---|
+| Passive inventory | Trusted project controls merge into valid readable global configuration; optional inheritsGlobal provenance and typed fixed override-fields/orphan-override diagnostics | No body before persisted allow, secret values, command expansion, network, OAuth or process authority |
+| Runtime | Fresh native target read and trust checks; private global target/credentials retained; existing host enforces hidden/read-only and redaction | Three controls cannot redirect global credentials; no all-host/installed claim from native stdio alone |
+| Writes | Existing bounded lock/revision/fsync/atomic mode rules; explicit true/direct retained in control-only overrides; one-tool edits retain effective map; explicit project map replaces the global map | Raw project writes/undo never flatten target or credential values; orphan/invalid mutations refuse; global file unchanged |
+| Generation | V2 keys HMAC both original parsed global/local entries | V1 effective-only keys missed coincident-control source changes; its desired failure is preserved |
+| Compatibility | Global targetless entries stay invalid; own command/URL/type stays explicit intent; full project targets remain replacement; original ordered exposure matcher unchanged | No imported partial-target schema or new user/Server privilege API |
+
+## Actual chronology and failure classification
+
+| Review | Settled evidence | Interpretation |
+|---|---|---|
+| Parent | Actual immutable Main c0c22004… with only new test overlay:21cases=16fail/5controls631ms, outer/state1/nonOOM; parent audit0 | Seven extra-field and four orphan cases fail newly precise diagnostics, not11 newly demonstrated security bugs. Five other desired failures stop before later assertions. Existing trust/full-target/explicit-target controls pass |
+| V1 bounded review | Originaltypes0/new-MCP-test strict0;59files870pass50.31s; complete ORIGINAL parity259pass294.20s; normal Webbuild0 |117source/control+separate SDK/1204singlelink-input freeze; ten before-after checks/image1198+6/Git. No new genuine installed-inheritance or browser proof |
+| V1 independent public generation | Desired RED1 after three native persisted global/project configurations, public emitted Core observations and cleanup; three file generations reuse one effective-only key | Incomplete exact dual-source generation witness, not demonstrated secret retargeting, native-crash cause or whole qualification |
+| V2 | Originaltypes0/strict MCP+four prestart test sources0; new native inheritance23pass439ms; same public generation probe0/three distinct keys | Exact V1 replay first; only Core generation hashing/new test change. Old21 bodies retained; no Main writes |
+| V2 owning aggregate FAILED |58settled files=57pass/1fail;846settled cases=845pass/1fail58.63s, plus1unhandled error | Old CLI OAuth first case: Authorization URL not emitted after unchanged500×10ms helper. Separate worker SIGSEGV during starting state/session-summary-hooks termination diagnostic; that file has no settled totals here. Do not report an872-case aggregate or infer the OAuth child's signal |
+
+V2 complete ORIGINAL parity passes259 cases in298.80s and normal Web build passes; driver/review/shell remain1 because owning failed. Final V2 failed-evidence audit0 verifies all12 before-after checks,117 source/control witnesses plus separate SDK README,1204 single-link inputs, image1198+6/Git absence, all21 old native bodies and exact two V1 deltas. The public probe was separately hashed before execution; copied executed bytes match. Actual image: `sha256:e2571819279c2dc72fcbeffcd151d548016db0af6b9d79939afba7125aa9513e`. V1 failed-evidence audit0 independently verifies its ten checks and bounded passes while preserving generation RED1; actual V1 image `sha256:42f151be4038fded1c93323214506c2a4b0037768c371ec2fa3e712d983735dc`. Both frozen trees and Main1203 remain unchanged. V2's outer owning container exits1/nonOOM/error-empty; worker SIGSEGV is an inner diagnostic, not an outer native termination. No unchanged retry/deadline/assertion relaxation or causal diagnosis follows. Parent, V1 generation and V2 owning failures all remain FAILED.
+
+## V3 additional boundary coverage — parity FAILED
+
+A separate exact1204-input V2 replay adds only a five-mode public/emitted CLI fixture/process source, authenticated HTTP test and additive installed case. Product bytes remain V2; old229 installed bodies and all earlier assertions/deadlines/flags remain exact. New HTTP coverage uses real Server/bootstrap/auth/Origin/persisted trust/inventory/Test/atomic writes: three cases pass, without mocks or tool invocation during Test. Command/Core/print/JSON/RPC prove private global executable/args/environment remain global while project controls alone enable direct lookup; refresh retires stale bindings and global bytes remain unchanged.
+
+Actual originaltypes0/strict MCP+four prestart+new CLI/HTTP sources0;61owning files880pass58.17s; public generation0/three keys; genuine new installed1pass229skipped29.29s covers all five modes plus strict NodeNext/API1/provenance. Real packed Core/CLI and disabled-script probe tarballs, inventory, driver/native peer/declarations and five results are archived; Core/CLI tarball bytes match npm pack shasums.
+
+**Complete ORIGINAL parity FAILED259pass/1fail of260,300.40s/Make2**: old `pins native no-MCP denial across installed hosts without denying ordinary sources`, native child code=null/SIGSEGV, stdout/stderr empty. The old six-scenario case does not report which mode failed; do not infer a mode or native cause. New inheritance case also passes within that failed aggregate. Webbuild0 does not waive it. V3 failed-evidence audit0 verifies14checks/120sources+SDK/1207single-link inputs, actual `sha256:f820657315bab0bac7eb121f6406d8ab7ee6821439a7bbac0b3343d0e49e845a`,1201+6/Git, exact V2 product/old229 bodies/public execution/packed archive and unchanged Main/V1/V2. Driver/shell1 remains. Browser/UI proof and whole qualification remain absent; no unchanged retry or source promotion.
+
+Artifacts use `/tmp/aih-a3-mcp-inheritance-{parent,generation-recon,v1,v2,v3}-*`; original V1 and new V2 worktrees are separate and frozen. Still required: a complete qualifying aggregate, actual browser/UI inheritance coverage, final source/authority/whole-clause review, safe newer-Main integration and independent complete Docker qualification. Existing exposure-pattern historical failures and all Main/row failures remain binding; no release, physical certification or automatic commit/closure.
