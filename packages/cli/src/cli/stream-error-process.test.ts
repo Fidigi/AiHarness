@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 const probe = fileURLToPath(new URL('./fixtures/stream-error-probe.mjs', import.meta.url));
 const scenarios = ['print', 'json', 'rpc', 'sdk'].flatMap(mode =>
-  ['recover', 'exhausted', 'prefix', 'queued', 'normal'].map(kind => `${mode}/${kind}`));
+  ['recover', 'exhausted', 'prefix', 'queued', 'normal'].map(kind => `${mode}/${kind}`))
+  .concat(['print/durable-prefix', 'json/durable-prefix']);
 describe('emitted CLI and public SDK explicit SSE errors', () => {
   it.each(scenarios)('%s retains error/retry boundaries without tool effects or false success', scenario => {
     const result = spawnSync(process.execPath, [probe, scenario], {

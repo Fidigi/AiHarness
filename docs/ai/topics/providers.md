@@ -72,7 +72,7 @@ OpenAI/Azure/local streaming refuses an own truthy top-level `error` before publ
 
 Shared turns apply their existing bounded pre-output retry policy; already delivered text or reasoning prevents replay. Defaults remain three attempts in Core/SDK and four in CLI/RPC (2/4/8-second CLI delays), subject to existing host settings. This is error recognition, not a new busy/capacity classifier, backoff policy, strict-tools fallback or retry-budget change. SDK/RPC permit a later explicit prompt after failure.
 
-[WARNING] SDK history retains the interrupted prefix with error evidence. CLI JSON/RPC error records retain streamed text, but durable CLI/RPC history still loses that failed prefix; full cross-host Unicode/partial-stream retention remains unqualified.
+CLI print/JSON now await persistence of delivered, already-redacted failed text/reasoning before error settlement, with bounded `metadata.outputError` and effective provider/model. Empty/cancelled turns, pending tool calls and invented usage are not saved; failure does not trigger compaction. Print still emits no failed response on stdout; JSON keeps its error/exit framing. Reloaded JSON/RPC message projection recognizes the existing output-error marker without replacing the prefix with diagnostic text. Native and installed tests cover Unicode/UTF-8 fragmentation, redaction, one prior tool effect and explicit reload/resume without duplication/replay. SDK retention is unchanged; RPC durable-prefix retention and redactor-withheld suffixes remain outside this slice.
 
 ### Final tool-argument JSON
 
@@ -180,7 +180,7 @@ Provider OAuth remains Device Flow; it has no pasted callback endpoint. The shar
 
 ## Associated Tests
 
-- `packages/core/src/providers/stream-error-frames.test.ts`, `packages/cli/src/cli/stream-error-process.test.ts` and the installed parity consumer — real SSE errors/mixed fields/pending tools, body-free diagnostics, unchanged retry bounds, visible-prefix no-replay, zero hooks/effects and explicit SDK/RPC continuation; no durable CLI-prefix claim
+- `packages/core/src/providers/stream-error-frames.test.ts`, `packages/cli/src/cli/stream-error-process.test.ts` and the installed parity consumer — real SSE errors/mixed fields/pending tools, body-free diagnostics, unchanged retry bounds, visible-prefix no-replay, zero hooks/effects on refused calls, explicit SDK/RPC continuation and CLI print/JSON durable Unicode prefix/reload/resume; `cli/json-output.test.ts` separately guards persisted error projection
 - `packages/core/src/providers/mixed-delta-order.test.ts`, `packages/cli/src/cli/mixed-delta-process.test.ts` and the installed parity consumer — mixed-field/callback reasoning-first order, separate-event controls, awaited observers, terminal observer failure, exact final output and retained JSON/RPC/SDK framing/history
 - `packages/core/src/providers/tool-arguments{,-admission}.test.ts` — real loopback fragmented final JSON, valid/empty/primitive controls, whole-batch refusal before hooks/effects, terminal retry classification and passive nonstring decoding
 - `packages/core/src/providers/provider-websocket.integration.test.ts`, `packages/cli/src/cli/tool-json-process.test.ts` and the installed parity consumer — real cached/auto WebSocket no-replay/connection retirement, emitted print/JSON/RPC/SDK errors, no tool effects/retries, valid controls and explicit recovery through the public installed package

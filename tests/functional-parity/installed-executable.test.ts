@@ -513,7 +513,8 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     });
   }
 
-  it.each(['print', 'json', 'rpc', 'sdk'].flatMap(mode => ['recover', 'exhausted', 'prefix', 'queued', 'normal'].map(kind => `${mode}/${kind}`)))(
+  it.each(['print', 'json', 'rpc', 'sdk'].flatMap(mode => ['recover', 'exhausted', 'prefix', 'queued', 'normal'].map(kind => `${mode}/${kind}`))
+    .concat(['print/durable-prefix', 'json/durable-prefix']))(
     'preserves explicit SSE error/retry boundaries through installed public packages (%s)', async scenario => {
       const worker = path.join(consumer, `stream-error-${scenario.replace('/', '-')}.mjs`);
       await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', 'stream-error-probe.mjs'), worker);

@@ -1631,7 +1631,11 @@ async function main(): Promise<void> {
           },
         },
         onTurnStart: () => jsonOutput?.events.startTurn(),
-        streamTurn: async (messages, tools) => streamProviderTurn({
+        streamTurn: async (messages, tools) => {
+          const turnSessionId = currentSessionId;
+          let partialContent = '', partialReasoning = '';
+          let turnProvider = providerName, turnModel = providerModel;
+          return streamProviderTurn({
           provider,
           providerName,
           model: providerModel,
@@ -1651,6 +1655,8 @@ async function main(): Promise<void> {
           redactJson: value => outputCredentialRedactor.redactJson(value),
           createTextRedactor: () => outputCredentialRedactor.createStream(),
           onStart: async (effectiveProvider, effectiveModel) => {
+            turnProvider = effectiveProvider;
+            turnModel = effectiveModel;
             promptBoundary.invalidate();
             effectiveStatusModel = { provider: effectiveProvider, model: effectiveModel };
             await refreshTerminalStatus();
@@ -1661,21 +1667,37 @@ async function main(): Promise<void> {
             return jsonOutput?.events.startAssistant(effectiveProvider, effectiveModel);
           },
           onTextDelta: chunk => {
+            partialContent += chunk;
             if (!isStreaming) return;
             streamWriter?.write(chunk);
             return jsonOutput?.events.textDelta(chunk);
           },
-          onReasoningDelta: delta => (
-            isStreaming ? jsonOutput?.events.reasoningDelta(delta) : undefined
-          ),
+          onReasoningDelta: delta => {
+            partialReasoning += delta;
+            return isStreaming ? jsonOutput?.events.reasoningDelta(delta) : undefined;
+          },
           onComplete: () => {
             isStreaming = false;
             keyBindings.setStreaming(false);
             streamWriter?.finish();
           },
-          onError: error => {
+          onError: async error => {
             isStreaming = false;
             keyBindings.setStreaming(false);
+            // The shared loop cannot save a response from a rejected turn. Retain
+            // only delivered, already-redacted output; never pending tool calls,
+            // invented usage, cancelled work or an automatic compaction request.
+            if (!operationController.signal.aborted && (partialContent || partialReasoning)) {
+              await sessionManager.addMessage(turnSessionId, {
+                role: 'assistant', content: partialContent,
+                blocks: [
+                  ...(partialReasoning ? [{ type: 'reasoning' as const, text: partialReasoning }] : []),
+                  ...(partialContent ? [{ type: 'text' as const, text: partialContent }] : []),
+                ],
+                provider: turnProvider, model: turnModel,
+                metadata: { outputError: redactOutput(error instanceof Error ? error.message : String(error)).slice(0, 4_000) },
+              }, { skipAutoCompaction: true, signal: operationController.signal });
+            }
             return jsonOutput?.events.finishAssistantError(error, operationController.signal.aborted);
           },
           onRetryStart: ({ attempt, maxAttempts, delayMs, error }) => (
@@ -1684,7 +1706,8 @@ async function main(): Promise<void> {
           onRetryEnd: ({ success, attempt, finalError }) => (
             jsonOutput?.events.retryEnd(success, attempt, finalError)
           ),
-        }),
+        });
+        },
         onToolProgress: async progress => {
           if (jsonOutput) await jsonOutput.events.toolProgress(progress);
           else if (!printMode && progress.content) reportOutput(`[${progress.toolName}] ${progress.content}`);

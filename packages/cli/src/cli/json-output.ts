@@ -180,6 +180,8 @@ export function toJsonProtocolMessage(message: Message): JsonMessage {
       return [];
     });
     if (content.length === 0 && message.content) content.push({ type: 'text', text: message.content });
+    const outputError = typeof message.metadata?.outputError === 'string' ? message.metadata.outputError : undefined;
+    const failed = message.isError || outputError !== undefined;
     return {
       role: 'assistant',
       content,
@@ -187,9 +189,9 @@ export function toJsonProtocolMessage(message: Message): JsonMessage {
       provider: message.provider ?? 'unknown',
       model: message.model ?? 'unknown',
       usage: persistedUsage(message),
-      stopReason: message.isError ? 'error' : message.metadata?.stopReason === 'length'
+      stopReason: failed ? 'error' : message.metadata?.stopReason === 'length'
         ? 'length' : message.toolCalls?.length ? 'toolUse' : 'stop',
-      ...(message.isError ? { errorMessage: message.content } : {}),
+      ...(failed ? { errorMessage: outputError ?? message.content } : {}),
       timestamp,
     };
   }

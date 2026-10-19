@@ -4,6 +4,8 @@
 >
 > Narrow A3-CLI-11 correction on parent `f213422`. User explicitly authorized resuming qualification. No whole-criterion, native-cause or release acceptance.
 
+> **2026-10-19 follow-up:** [D06](./d06-cli-failed-prefix.md) implements durable CLI print/JSON Unicode prefixes and adds native/installed reload/resume evidence. It remains REVIEW: required parity failed261/2; full was not run. RPC persistence is unchanged. The gap and all outcomes below describe this original historical candidate, not a waiver or current whole-criterion acceptance.
+
 ## Contract and boundaries
 
 `packages/core/src/providers/index.ts` refuses an own truthy top-level SSE `error` before processing mixed-frame text/reasoning, usage or tool fragments and before normal completion publishes pending tool calls. OpenAI, Azure and local share this parser. The existing error callback receives only `The provider reported a streaming error.`; upstream error body/code/message are not copied into diagnostics, events or history. Absent/null/false controls keep normal completion, tools and usage. The added `OpenAiStreamChunk.error?: unknown` is private, not a public ABI change.

@@ -95,6 +95,20 @@ describe('JsonEventStream', () => {
       timestamp: new Date(0), metadata: { stopReason: 'length' } })).toMatchObject({ stopReason: 'error' });
   });
 
+  it('keeps persisted failed prefixes distinct from error text and successful replies', () => {
+    const message = { id: 'prefix', role: 'assistant' as const, content: 'Préfixe 漢字 👩🏽‍💻',
+      timestamp: new Date(0), blocks: [{ type: 'text' as const, text: 'Préfixe 漢字 👩🏽‍💻' }] };
+    expect(toJsonProtocolMessage({ ...message, metadata: { outputError: 'Streaming failed.' } })).toMatchObject({
+      content: message.blocks, stopReason: 'error', errorMessage: 'Streaming failed.',
+    });
+    expect(toJsonProtocolMessage({ ...message, isError: true })).toMatchObject({
+      stopReason: 'error', errorMessage: message.content,
+    });
+    expect(toJsonProtocolMessage({ ...message, metadata: { outputError: { untrusted: true } } })).toMatchObject({
+      stopReason: 'stop',
+    });
+  });
+
   it('does not mistake ordinary text or tool-result truncation for a model output limit', async () => {
     const records: Array<Record<string, unknown>> = [];
     const stream = new JsonEventStream(record => { records.push(record); });
@@ -124,7 +138,7 @@ describe('JsonEventStream', () => {
 
   it('encodes streaming assistant and tool lifecycle events without cumulative partials', () => {
     const records: Array<Record<string, unknown>> = [];
-    const stream = new JsonEventStream(record => records.push(record));
+    const stream = new JsonEventStream(record => { records.push(record); });
     stream.sessionHeader({ id: 'session-1', createdAt: new Date('2026-01-02T03:04:05.000Z') }, '/workspace');
     stream.startAgent('inspect', [{ type: 'text', text: 'inspect' }]);
     stream.startTurn();
@@ -190,7 +204,7 @@ describe('JsonEventStream', () => {
 
   it('encodes retry and compaction lifecycle records', () => {
     const records: Array<Record<string, unknown>> = [];
-    const stream = new JsonEventStream(record => records.push(record));
+    const stream = new JsonEventStream(record => { records.push(record); });
     stream.retryStart(1, 3, 500, new Error('overloaded'));
     stream.retryEnd(true, 2);
     stream.summarizationRetryScheduled(1, 3, 2_000, new Error('terminated'));
@@ -225,7 +239,7 @@ describe('JsonEventStream', () => {
   it('redacts untrusted provider failures in every error lifecycle record', () => {
     const records: Array<Record<string, unknown>> = [];
     const redact = (value: string): string => value.replaceAll('runtime-secret', '[REDACTED]');
-    const stream = new JsonEventStream(record => records.push(record), redact);
+    const stream = new JsonEventStream(record => { records.push(record); }, redact);
     stream.startAgent('fail', undefined);
     stream.startTurn();
     stream.startAssistant('extension', 'model');
@@ -242,7 +256,7 @@ describe('JsonEventStream', () => {
 
   it('closes a failed assistant response and settles the run', () => {
     const records: Array<Record<string, unknown>> = [];
-    const stream = new JsonEventStream(record => records.push(record));
+    const stream = new JsonEventStream(record => { records.push(record); });
     stream.startAgent('fail', undefined);
     stream.startTurn();
     stream.startAssistant('mock', 'mock-model');
