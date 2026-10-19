@@ -400,6 +400,7 @@ Keep stdout strictly JSONL, validate untrusted IDs/params, update RPC tests, aff
 
 ## Related Domains
 
+- [`editor-schemas.md`](./editor-schemas.md) — public owned settings/model editor projections, installed assets and native-authority limits
 - [`codemode.md`](./codemode.md) — shared sandbox, ceilings and branch store
 - [`themes.md`](./themes.md) — bounded theme discovery, adaptive system palette and complete shipped schema
 - [`providers.md`](./providers.md) — provider initialization and streaming

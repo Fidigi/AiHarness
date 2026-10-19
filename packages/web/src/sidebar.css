@@ -20,3 +20,17 @@ html[data-theme="light"] .directory-list button:hover { background: #e6ebf4; }
 html[data-theme="light"] .directory-truncated { color: #744d00; }
 html[data-theme="light"] .directory-create-dialog form label { color: #4c5b73; }
 html[data-theme="light"] .directory-picker footer .primary { color: #fff; background: #d63250; border-color: #d63250; }
+/* Native links retain the Sidebar's existing control presentation. */
+.sidebar-nav a.session-main { display: block; width: 100%; border: 0; border-radius: 4px; color: #ccc; background: transparent; text-align: left; text-decoration: none; font: 400 13.3333px Arial, sans-serif; cursor: pointer; }
+.sidebar-nav a.session-main:hover, .sidebar-nav a.session-new-tab:hover { background: rgba(233,69,96,.1); }
+.session-actions a.session-new-tab { align-self: center; padding: .35rem; border-radius: 4px; color: #ccc; text-decoration: none; font: 400 13.3333px Arial, sans-serif; }
+.search-results a.session-search-link { display: block; width: 100%; padding: .55rem; border: 0; border-radius: 4px; color: #ccd4e3; background: transparent; text-align: left; text-decoration: none; font: 400 13.3333px Arial, sans-serif; cursor: pointer; }
+.search-results a.session-search-link:hover, .search-results a.session-search-link:focus-visible { background: #223154; }
+.sidebar .search-results small { color: #b7c2d7; }
+a.workspace-new-tab { display: grid; place-items: center; flex: 0 0 32px; border: 1px solid #30466e; border-radius: 7px; color: #d9e3f4; background: #223154; text-decoration: none; }
+html[data-theme="light"] .sidebar-nav a.session-main, html[data-theme="light"] .session-actions a.session-new-tab { color: #26344e; }
+html[data-theme="light"] a.workspace-new-tab { color: #26344e; background: #f8f9fc; border-color: #c5cede; }
+html[data-theme="light"] .sidebar .search-results a.session-search-link { color: #26344e; }
+html[data-theme="light"] .sidebar .search-results small { color: #52627b; }
+html[data-theme="light"] .sidebar .search-results a.session-search-link:hover,
+html[data-theme="light"] .sidebar .search-results a.session-search-link:focus-visible { background: #e6ebf4; }

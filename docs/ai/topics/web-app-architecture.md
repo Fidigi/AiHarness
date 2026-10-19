@@ -41,6 +41,8 @@ HTTP and streaming contracts are defined in [`server-api.md`](./server-api.md). 
 
 The cache favors draft text over binary previews, strips provider keys, and discards/reconciles remote windows when the server revision changes.
 
+Persisted Sidebar/search rows use real `SessionLink` anchors (`components/session-links.tsx`); drafts/actions remain buttons. `sessionLinkTo`/`projectLinkTo` encode only explicit identity/cwd/message fields, never copied auth/search/hash data. Ctrl/Cmd/middle/new-tab retain browser defaults; only unmodified plain activation closes mobile navigation. `Sidebar.onSessionContextMenu` receives the actual anchor event plus readonly sessionId/cwd/rendered href, without implicit API calls or default prevention. Explicit conversation/project tab actions use isolated native links. `services/navigation-base.ts` admits only a safe same-origin Vite base path into BrowserRouter; missing requested sessions remain unavailable rather than opening a different conversation. Preserve native anchor typography/contrast and the unchanged old visual controls.
+
 `BrowserRouter useTransitions={false}` keeps location updates urgent alongside the synchronous Zustand workspace/session store. A canonical browser URL must not leave the previous React route epoch available for a file intent that a delayed navigation commit then retires. Keep the pane's complete workspace/cwd/session/navigation key and true-navigation cancellation; do not repair the writer by replaying across scopes.
 
 ## Detached Conversation Flow
@@ -152,6 +154,8 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 
 ## Associated Tests
 
+- `packages/web/src/components/{session-links,sidebar-native-links}.test.ts`, `packages/web/src/services/navigation-base.test.ts` and `packages/web/src/test-support/native-frontend-relay.test.ts` — actual-anchor callbacks, encoding/plain defaults, persisted-vs-draft roles, safe bases and seven real transport controls under canonical discovery
+- `e2e/native-session-links-live.spec.ts` —35 genuine root/subpath EN/FR responsive Light/Dark native intents, exact URL/body/search/reload/missing identity, no mutation/provider activity, axe/overflow and canonical readbacks; bounded forward-proxy fixture preserves real API Origin/auth/refusals, not backend authority
 - `packages/web/src/store/workspace-hydration.test.ts` and `e2e/workspace-defaults.spec.ts` — canonical default/relative/home persistence, legacy/malformed cache, one-request unavailable recovery, withdrawn/stale descriptors, EN/FR desktop/mobile Light/Dark axe/overflow/focus and four reviewed crops; an emitted production Server/Web journey separately proves recovery without trust or provider submission
 - `packages/web/src/store/canonical-session-sync.test.ts` — private session binding, fresh same-run/known-terminal transcript publication without setter authority, stale/foreign/deleted/generation and identity-ABA rejection
 - `.docker/e2e-suites.test.mjs`, `tests/e2e-budget.test.ts` — exhaustive owning-host dispatch, retained sibling failures/artifacts, selected demo base rebuild ordering and real quota-window scheduling; see the canonical workflow in `project-map.md`

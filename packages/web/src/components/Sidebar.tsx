@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { GitWorktree, WorkspaceDescriptor } from '@ai-harness/core';
 import '../sidebar.css';
 import type { SessionSearchResult } from '../services/api';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   autoNameSession,
   browseWorkspace,
@@ -26,12 +26,16 @@ import LanguageSelector from './LanguageSelector';
 import { linkedDirectoryMessages } from './linked-directory-messages';
 import { workspaceFeedback } from './workspace-feedback';
 import LinkedDirectoryBoundary from './LinkedDirectoryBoundary';
+import { isPlainLinkActivation, projectLinkTo, SessionLink, sessionLinkTo, type SessionContextMenuHook } from './session-links';
+import { sessionLinkMessages } from './session-link-messages';
 
 interface SidebarProps {
   isOpen: boolean;
   modal?: boolean;
   inactive?: boolean;
   onRequestClose?: () => void;
+  /** Host presentation hook only; default native context menus remain intact. */
+  onSessionContextMenu?: SessionContextMenuHook;
 }
 
 function relativeDate(value: Date, locale: string): string {
@@ -67,7 +71,7 @@ function operationTrusted(workspace: WorkspaceDescriptor): boolean {
   return workspace.operationTrusted ?? workspace.trusted;
 }
 
-function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: SidebarProps) {
+function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSessionContextMenu }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const linkedDirectoryNavigation = JSON.stringify([location.key, location.pathname, location.search, location.hash]);
@@ -85,6 +89,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
   const activeSessionId = useSessionStore(state => state.activeSessionId);
   const { t, locale } = useI18n();
   const feedback = workspaceFeedback(locale);
+  const linkMessages = sessionLinkMessages(locale);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [linkedDirectoryRequest, setLinkedDirectoryRequest] = useState<{ cwd: string; navigation: string }>();
   const linkedDirectoryOpen = Boolean(linkedDirectoryRequest && workspace?.cwd === linkedDirectoryRequest.cwd
@@ -182,7 +187,9 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
     if (id) navigate(`/chat/${encodeURIComponent(id)}${query}`);
   };
 
-  const openSession = (id: string) => navigate(`/chat/${encodeURIComponent(id)}${query}`);
+  const closeOnPlainLink = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (isPlainLinkActivation(event)) onRequestClose?.();
+  };
 
   const browse = async (target?: string) => {
     const sequence = ++browseSequence.current;
@@ -381,6 +388,9 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
             <span>{workspace?.name ?? t(workspaceUnavailable ? 'workspace.choose' : 'workspace.loading')}</span>
             <small>{workspace?.git?.branch ?? workspace?.displayPath ?? workspace?.cwd ?? ''}</small>
           </button>
+          {workspace && <Link className="workspace-new-tab" to={projectLinkTo(workspace.cwd)}
+            target="_blank" rel="noopener noreferrer" title={linkMessages.projectTab}
+            aria-label={linkMessages.projectTab}>↗</Link>}
           {workspace && fileManagerAvailable && (
             <button className="workspace-file-manager" disabled={fileManagerOpening}
               onClick={() => void openFileManager()} title={t('workspace.fileManager')}
@@ -441,7 +451,8 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
           <ul>
             {searchResults.map((result, index) => (
               <li key={`${result.sessionId}:${result.messageId ?? 'title'}:${index}`}>
-                <button onClick={() => navigate(`/chat/${encodeURIComponent(result.sessionId)}${query}${result.messageId ? `#${encodeURIComponent(result.messageId)}` : ''}`)}>
+                <SessionLink className="session-search-link" sessionId={result.sessionId} cwd={result.cwd || workspace?.cwd}
+                  messageId={result.messageId} onClick={closeOnPlainLink} onSessionContextMenu={onSessionContextMenu}>
                   <strong>{result.title || t('sidebar.untitled')}</strong>
                   <span>{highlightExcerpt(result, search.trim())}</span>
                   <small>
@@ -449,7 +460,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
                     <span aria-hidden="true"> · </span>
                     <time dateTime={result.updatedAt}>{relativeDate(new Date(result.updatedAt), locale)}</time>
                   </small>
-                </button>
+                </SessionLink>
               </li>
             ))}
           </ul>
@@ -461,6 +472,15 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
           {sessions.map(session => {
             const run = runs[session.id];
             const active = session.id === selectedSessionId;
+            const contents = <>
+              <span className="session-title">
+                {run && !['completed', 'failed', 'stopped'].includes(run.phase) && <span aria-label={t('session.running')}>●</span>}
+                {session.attention && <span aria-label={t('session.attention')}>!</span>}
+                {session.unread && <span className="session-unread" aria-label={t('session.unread')}>●</span>}
+                {session.title || t('sidebar.untitled')}
+              </span>
+              <small>{session.messagePage?.total ?? session.messages.length} · {relativeDate(session.updatedAt, locale)}</small>
+            </>;
             return (
               <li key={session.id} className={active ? 'active' : ''}>
                 {renaming === session.id ? (
@@ -478,16 +498,16 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
                   </form>
                 ) : (
                   <div className="session-row">
-                    <button className="session-main" onClick={() => openSession(session.id)}>
-                      <span className="session-title">
-                        {run && !['completed', 'failed', 'stopped'].includes(run.phase) && <span aria-label={t('session.running')}>●</span>}
-                        {session.attention && <span aria-label={t('session.attention')}>!</span>}
-                        {session.unread && <span className="session-unread" aria-label={t('session.unread')}>●</span>}
-                        {session.title || t('sidebar.untitled')}
-                      </span>
-                      <small>{session.messagePage?.total ?? session.messages.length} · {relativeDate(session.updatedAt, locale)}</small>
-                    </button>
+                    {session.draft ? <button className="session-main" onClick={() => {
+                      onRequestClose?.(); navigate(sessionLinkTo(session.id, session.cwd || workspace?.cwd));
+                    }}>{contents}</button> : <SessionLink className="session-main" sessionId={session.id} cwd={session.cwd || workspace?.cwd}
+                      aria-current={active ? 'page' : undefined} onClick={closeOnPlainLink} onSessionContextMenu={onSessionContextMenu}>
+                      {contents}
+                    </SessionLink>}
                     <div className="session-actions">
+                      {!session.draft && <SessionLink className="session-new-tab" sessionId={session.id} cwd={session.cwd || workspace?.cwd}
+                        target="_blank" rel="noopener noreferrer" aria-label={linkMessages.sessionTab}
+                        title={linkMessages.sessionTab}>↗</SessionLink>}
                       <button onClick={() => {
                         setRenaming(session.id);
                         setRenameValue(session.title || '');

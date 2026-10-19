@@ -201,7 +201,8 @@ test.describe('Régression visuelle du cycle de vie des sessions', () => {
       row = page.locator('.session-row').filter({ hasText: 'Generated conversation title' });
       await row.hover();
       await expect(row.getByRole('button', { name: 'Generate title' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Nested branch' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Nested branch' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Nested branch' })).toHaveAttribute('href', '/chat/visual-lifecycle-child?cwd=%2Fworkspace');
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);

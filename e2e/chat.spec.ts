@@ -78,7 +78,9 @@ test.describe('Conversation detached agent', () => {
     });
     await page.goto('/settings');
     await providerSection(page).locator('select').selectOption('openai');
-    await page.getByRole('button', { name: 'Conversation SSE' }).click();
+    const conversation = page.getByRole('link', { name: 'Conversation SSE' });
+    await expect(conversation).toHaveAttribute('href', '/chat/streamed-session?cwd=%2Fworkspace');
+    await conversation.click();
     const modelSaved = page.waitForResponse(response => response.request().method() === 'PATCH'
       && response.url().endsWith('/api/sessions/streamed-session'));
     await page.locator('input[list="model-suggestions"]').fill('gpt-4o');

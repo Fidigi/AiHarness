@@ -276,6 +276,35 @@ beforeAll(async () => {
 afterAll(async () => { if (artifactRoot) await rm(artifactRoot, { recursive: true, force: true }); });
 
 describe('CLI-RUN-01 genuine locally packed installed executable', () => {
+  it('ships native editor schemas and public declarations outside the checkout', async () => {
+    const cli = inventory.find(item => item.name === '@ai-harness/cli')!;
+    for (const name of ['settings', 'project-settings', 'models', 'keybindings', 'theme']) {
+      const file = `dist/schemas/${name}.schema.json`;
+      expect(cli.files.some(item => item.path === file), file).toBe(true);
+      const installed = path.join(consumer, 'node_modules', '@ai-harness', 'cli', file);
+      expect((await lstat(installed)).isSymbolicLink()).toBe(false);
+      expect(await readFile(installed)).toEqual(await readFile(path.join(build, 'packages', 'cli', file)));
+    }
+    const probe = 'editor-schema-public.mjs';
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/editor-schema-probe.mjs'), path.join(consumer, probe));
+    expect(await run(process.execPath, [probe], consumer, environment, '', 20_000))
+      .toEqual({ code: 0, stdout: 'native editor schemas OK\n', stderr: '' });
+    await writeFile(path.join(consumer, 'editor-schema-public.ts'), `
+      import { getAgentSettingsEditorSchema, getCustomModelEditorSchema, AI_HARNESS_CORE_API_VERSION, type AgentSettingsScope } from '@ai-harness/core';
+      const scope: AgentSettingsScope = 'project';
+      const global: Record<string, unknown> = getAgentSettingsEditorSchema();
+      const project: Record<string, unknown> = getAgentSettingsEditorSchema(scope);
+      const model: Record<string, unknown> = getCustomModelEditorSchema();
+      const version: 1 = AI_HARNESS_CORE_API_VERSION; void global; void project; void model; void version;
+      // @ts-expect-error session files are not an agent-settings file scope
+      getAgentSettingsEditorSchema('session');
+      // @ts-expect-error metadata schema projection does not admit provider configuration or credentials
+      getCustomModelEditorSchema({ apiKey: 'not-an-input' });
+    `);
+    const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'editor-schema-public.ts'], consumer, environment);
+    expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  }, 30_000);
+
   it('contains declarations, executable and worker artifacts and resolves PATH only inside the consumer', async () => {
     const core = inventory.find(item => item.name === '@ai-harness/core')!;
     const cli = inventory.find(item => item.name === '@ai-harness/cli')!;

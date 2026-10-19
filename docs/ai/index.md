@@ -15,6 +15,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~240 lines |
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~405 lines |
 | Terminal Themes | [`topics/themes.md`](./topics/themes.md) | ~80 lines |
+| Native Editor Schemas | [`topics/editor-schemas.md`](./topics/editor-schemas.md) | ~85 lines |
 | QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
 | Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~220 lines |
 | Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~200 lines |

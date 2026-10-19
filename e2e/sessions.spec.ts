@@ -56,9 +56,12 @@ test.describe('Sessions', () => {
     });
     await page.goto('/');
 
-    await expect(page.getByRole('button', { name: 'Première conversation' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Deuxième conversation' })).toBeVisible();
-    await page.getByRole('button', { name: 'Première conversation' }).click();
+    const first = page.getByRole('link', { name: 'Première conversation' });
+    const second = page.getByRole('link', { name: 'Deuxième conversation' });
+    await expect(first).toBeVisible(); await expect(second).toBeVisible();
+    await expect(first).toHaveAttribute('href', '/chat/session-one?cwd=%2Fworkspace');
+    await expect(second).toHaveAttribute('href', '/chat/session-two?cwd=%2Fworkspace');
+    await first.click();
     await expect(page).toHaveURL(/\/chat\/session-one/);
     await expect(page.locator('.message.user')).toContainText('Question déjà enregistrée');
     await expect(page.locator('.message.assistant')).toContainText('Réponse déjà enregistrée');
@@ -111,10 +114,11 @@ test.describe('Sessions', () => {
     await page.goto('/');
 
     await expect(page.locator('.session-row')).toHaveCount(140);
-    await expect(page.getByRole('button', { name: 'Other workspace' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Other workspace' })).toHaveCount(0);
     const navigation = page.getByRole('navigation', { name: 'Conversations' });
     await expect.poll(() => navigation.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
-    const last = page.getByRole('button', { name: 'Conversation 140' });
+    const last = page.getByRole('link', { name: 'Conversation 140' });
+    await expect(last).toHaveAttribute('href', '/chat/listed-139?cwd=%2Fworkspace');
     await last.scrollIntoViewIfNeeded();
     await last.click();
     const activeSession = page.locator('.sidebar-nav li.active');
@@ -137,7 +141,9 @@ test.describe('Sessions', () => {
     await page.getByRole('button', { name: 'Send' }).click();
     await expect.poll(() => api.requests.some(request => request.method === 'POST' && request.path === '/api/agent/runs')).toBe(true);
 
-    await page.getByRole('button', { name: 'Foreground chat' }).click();
+    const foreground = page.getByRole('link', { name: 'Foreground chat' });
+    await expect(foreground).toHaveAttribute('href', '/chat/foreground?cwd=%2Fworkspace');
+    await foreground.click();
     const backgroundRow = page.locator('.session-row').filter({ hasText: 'Background run' });
     await expect(backgroundRow.getByLabel('Agent running')).toBeVisible();
     api.setRunPhase('background', 'failed');
@@ -156,7 +162,8 @@ test.describe('Sessions', () => {
     let row = page.locator('.session-row').filter({ hasText: 'Ancien titre' });
     await row.hover();
     await row.getByRole('button', { name: 'Generate title' }).click();
-    await expect(page.getByRole('button', { name: 'Generated conversation title' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Generated conversation title' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Generated conversation title' })).toHaveAttribute('href', '/chat/managed?cwd=%2Fworkspace');
     expect(api.requests.some(request => request.method === 'POST' && request.path === '/api/sessions/managed/auto-name')).toBe(true);
 
     row = page.locator('.session-row').filter({ hasText: 'Generated conversation title' });
@@ -164,14 +171,15 @@ test.describe('Sessions', () => {
     await row.getByRole('button', { name: 'Rename conversation' }).click();
     await page.getByRole('textbox', { name: 'Rename conversation' }).fill('Nouveau titre');
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('button', { name: 'Nouveau titre' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Nouveau titre' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Nouveau titre' })).toHaveAttribute('href', '/chat/managed?cwd=%2Fworkspace');
     expect(api.requests.some(request => request.method === 'PATCH' && request.path === '/api/sessions/managed')).toBe(true);
 
     page.once('dialog', dialog => dialog.accept());
     const renamedRow = page.locator('.session-row').filter({ hasText: 'Nouveau titre' });
     await renamedRow.hover();
     await renamedRow.getByRole('button', { name: 'Delete' }).click();
-    await expect(page.getByRole('button', { name: 'Nouveau titre' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Nouveau titre' })).toHaveCount(0);
     expect(api.requests.some(request => request.method === 'DELETE' && request.path === '/api/sessions/managed')).toBe(true);
   });
 
@@ -194,9 +202,9 @@ test.describe('Sessions', () => {
     const row = page.locator('.session-row').filter({ hasText: 'Parent conversation' });
     await row.hover();
     await row.getByRole('button', { name: 'Delete conversation' }).click();
-    await expect(page.getByRole('button', { name: 'Parent conversation' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Child branch' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Nested branch' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Parent conversation' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Child branch' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Nested branch' })).toHaveCount(0);
     expect(confirmations).toHaveLength(2);
     expect(confirmations[1]).toContain('2 branch(es)');
     expect(api.requests.filter(request => request.method === 'DELETE' && request.path === '/api/sessions/branch-parent')).toHaveLength(2);
@@ -214,7 +222,9 @@ test.describe('Sessions', () => {
     await expect(results).toContainText('Une aiguille très précise');
     await expect(results).toContainText('/workspace');
     await expect(results.locator('time')).toHaveAttribute('datetime', '2025-01-01T12:00:00.000Z');
-    await results.locator('button').click();
+    const result = results.getByRole('link', { name: /Journal de travail/ });
+    await expect(result).toHaveAttribute('href', '/chat/searchable?cwd=%2Fworkspace#searchable-message-1');
+    await result.click();
     await expect(page).toHaveURL(/\/chat\/searchable.*#searchable-message-1$/);
     expect(api.requests.some(request => request.path === '/api/sessions/search')).toBe(true);
   });

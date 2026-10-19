@@ -1,0 +1,49 @@
+# Native Configuration Editor Schemas
+
+> **Status: IN PROGRESS — not whole-criterion qualification** (2026-10-18)
+>
+> A3-CLI-14 remains PARTIAL. Isolated V6 passed; targeted sources were promoted for a fresh combined main review with native session navigation. Fresh main types/focused331/complete parity257 pass; full FAILED at an unchanged navigation root-router source control. E2E618/production/assets now pass but full5914/1 remains failed; V10 root repair is targeted-promoted; corrected full5917/1 also fails an unchanged PTY readiness control; corrected E2E618/production/assets pass with failed-aggregate audit0, no failure waiver. No sixth additional closure is claimed here.
+
+## Existing requirement and authority
+
+Publish native settings/models/keybindings/themes editor schemas, conserve original assets, prove genuine outside-checkout round trips and identical startup/reload theme validation with strict variable/metadata rules. The [implementation topic](../../../ai/topics/editor-schemas.md) owns the maintained contract; this receipt records validation and its limits.
+
+There is no supported CLI `models.json` loader. `models.schema.json` describes one existing public model-registration body, not private version1 `providers.json`, credentials or `/custom/:id/import-models` live discovery. Editors gain neither execution nor persistence authority. Native settings recovery/trust/legacy migration, model membership/defaults/coercions, HTTP auth/capability/Origin and ThemeManager remain authoritative. Optional byte/UTF16 annotations are not executable validators.
+
+## Whole-clause evidence map — independent qualification still pending
+
+| Clause | Candidate witnesses | Boundary |
+|---|---|---|
+| Settings editor coverage/version/scope | Owned public `getAgentSettingsEditorSchema`, native descriptor projection;94 strict-engine/native cases, exhaustive typed inventory, project/global rules and migrations | Unicode/UTF8/URL/normalization and malformed legacy salvage are disclosed editor/native differences, not parser modifications |
+| Model metadata editor coverage | Public `getCustomModelEditorSchema`,27 actual native registration/storage controls and5 real HTTP controls | Existing provider membership/defaults/auth/Origin/persistence only; no loader/private credential format |
+| Original keybindings/themes | Two source JSON files byte-exact; all58 palette tokens conserved; unchanged original schema controls | No new dependency, palette reopening or generated-output edits |
+| Published assets/public consumers | Normal build generates three new2020-12 documents beside two originals; actual public Node loader compiles all five with existing SDK-owned Ajv8.20.0 | Root Ajv6/nonexistent import resolution is not engine execution proof |
+| Genuine installed package/declarations | New offline outside-checkout installed case checks regular asset files/exact emitted bytes, public probe and strict NodeNext declarations/API1 | Isolated single-case pass skips226 old cases; not complete parity |
+| Identical native theme startup/reload | Twelve real regular/fullscreen PTY journeys: name/appearance/variable-name/cycle/color/export, fixed diagnostics, startup dark fallback, reload last-good retention | Native validator/composition already shared; conservation evidence, not an invented theme defect |
+
+## Chronological isolated review — failures preserved
+
+| Iteration | Observed result | Interpretation |
+|---|---|---|
+| Existing-engine probe | SDK-owned Ajv8.20.0 actually loads/executes draft2020; valid/invalid controls pass | Tool probe only; no new dependency or criterion coverage |
+| V1 | Types0; five focused files110pass/94fail | First strictRequired defect: condition required steeringMode without local property declaration; later duplicate-ID errors collateral, not94 independent defects |
+| V2 | Presence conditions genuinely declare fields; strict:true unchanged. Types0/five files204pass,1.91s |1,176 frozen inputs/source+SDK checks match |
+| V3 | Types0/seven files238pass,2.92s; native model metadata/assets added | Actual image8734afa6…;15 sources+SDK/1,178 inputs match; native parser/runtime unchanged |
+| Immutable parent absence | Five expected public-API/asset failures; two original byte controls pass | API/asset absence only, not old semantic leaks |
+| V4 | Types0/nine files271pass,15.51s; installed1pass/226skipped,20.25s | Actual emitted/installed consumers;21 sources+SDK/1,180 inputs match |
+| V5 | Types0/ten files283pass,22.29s; installed1pass/226skipped,18.77s | Twelve PTY conservation journeys;22 sources+SDK/1,181 inputs match |
+| V6 | Types0/eleven files288pass,22.61s; installed1pass/226skipped,20.51s | Real HTTP/native legacy-boundary controls;24 sources+SDK/1,182 inputs match; installed evidence copied |
+
+V6 immutable type/consumer image: `sha256:35b6b0ac48a1cf3f18ff3743da246bbc8b3c5fb5130a5875801243f945b43be4`. Original native settings descriptor/loading/migration bodies, ThemeManager, CLI startup/reload composition, Server registry and security implementations remain unchanged. The four existing target files were compared with current main baseline72bd88b before promotion; nine new targets had to be absent. Removing the single added installed case reproduces the old suite byte-for-byte, preserving226 existing cases and budgets.
+
+## Fresh independent main review
+
+Combined main adds this isolated V6 candidate and the independently reviewed navigation V8 candidate, with disjoint targeted source promotions. Protected newer Core/index/installed/schema/skill paths were byte-checked; no older worktree Core index or installed suite was copied over newer main.
+
+`/tmp/aih-a3-editors-navigation-main-qualification.sh` freezes all executable/build inputs and separately hashes the included SDK README. The main source receipt covers46 source/control paths plus SDK; required gates are fresh Docker types, focused discovery, **complete** parity/full/nine-suite E2E and actual production build. Before/after checks cover every gate; actual-image path/mode/link/hash and Git-absence checks are independent witnesses, not tag-name inference. Reached main gates: types0, focused15files331/23.48s and complete parity3files257/257.01s. Complete full **376files/5,914cases pass,1file/1case fails** of377/5,915,1104.02s,Make2/runner1. The unchanged `workspace-panel-boundary.test.ts:45:19` source assertion requires the exact original root BrowserRouter declaration, changed by navigation's added basename prop. It does not alone prove a runtime urgency regression or native termination. Source/SDK/all1,191 checkout checks match after full; nine-suite E2E/production still run on frozen sources. Isolated navigation V9 preserves the old assertion through real root/prefix composition but fails the unchanged raw bundle budget; V10's genuine canonical-root fast path passes types/default54/normal Web build. V10 was subsequently two-path promoted after archiving/auditing the failed first aggregate; fresh complete main qualification remains required. This failed complete aggregate cannot be replaced by schema subsets or later full-only reruns; all closing gates/audits remain required.
+
+First main E2E/production/assets have now settled:618browser cases (nine435/69/8/11/18/43/2/24/8 raw0/0/null/no spawn error), production0; failed-aggregate audit0 verifies all12 before/after1191-input+46sources+SDK checks and archived raw reports. Actual test/parity/full/live2571e29a… and production`sha256:a57ad8563d64dbe93074172b04cac8580198bf368543ed801cb3e85ae9aa203a`: five regular single-link schema assets have equal bytes/modes, native factory equality/IDs, original two JSON/58tokens, shipped declarations/executable CLI/API1/Git absence. Production Node26.12.0/V814.6.202.34-node.39 vs test24.15.0/V813.6.233.17-node.48/Linux x64. **Full5914pass1fail remains failed; these passes do not close CLI14.** After genuine V10 root repair's guarded two-path promotion, a fresh48source/control+SDK/1192-input complete qualification is required. Artifacts `/tmp/aih-a3-editors-navigation-main-{failed-audit,assets-*,settled-suites.json,complete-e2e-artifacts}` retain prior evidence; new `/tmp/aih-a3-editors-navigation-root-main-*` is independent.
+
+Corrected main types0/focused342/parity257 pass, but complete full **377files5917pass/1file1fail of378/5918**,1151.98s,Make2/runner1: unchanged `session-navigation-pty.test.ts`, fullscreen/abort readiness helper58:64, expected empty output to contain `editor ready · Enter send` within unchanged2000ms. No underlying PTY child exit/signal/native cause is recorded. Corrected gates are now settled: E2E618 (nine435/69/8/11/18/43/2/24/8 raw0/0/null/no spawn error), production0/assets0; failed-audit0 checks all12 before/after1192-input+48sources+SDK records and archived reports. Actual test/parity/full/live2227ec7dd4d64be2aacb50d39a3ee3db547810b08c88d22631df7156918cad76; productionc92f62ec7a494523c29f744f0b0415c1f64c378778e7c431386326d3b491bf02. Five identical native factory/asset bytes/modes/IDs, original JSON/58tokens/declarations/executableCLI/API1/Git absence verified. Full5917/1 remains binding; first failed-audit attempt preceded complete report archival, retained separately, then archived actual settled reports without rerunning tests. [Separate chronology and exact boundary](./native-session-links.md#corrected-main-full-failure--separate-unchanged-pty-control). Neither aggregate is qualified; do not replace them with subsets or unchanged full-only reruns.
+
+Artifacts: `/tmp/aih-a3-editor-schema-vN-*`, `/tmp/aih-a3-editor-schema-absence.*`, `/tmp/aih-a3-editor-schema-promotion.*`, `/tmp/aih-a3-editors-navigation-main-*`. Earlier failed engine/fixtures remain intact. Independent whole-clause/image/production-asset/final staging audits remain required before DONE. No publisher/release/deployment or ten-closure completion follows from isolated passes.

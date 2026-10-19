@@ -1,0 +1,78 @@
+# Exact displayed-entry session copies
+
+Status: **IN PROGRESS — not whole-criterion qualification** for A3-WEB-04. No main source promotion or closure. Mandate remains5/10.
+
+## Requirement and implementation boundary
+
+The row action must capture the actual displayed session/workspace/journal entry before its first await, create an independent suffixed root without preparing/loading a source runtime, support a running source, and refuse canonical subagents and unsaved/missing/stale/incomplete targets. Existing cancel-only branch policy and generic-clone compatibility remain authoritative.
+
+V8 product implementation lives only in detached `/tmp/aih-a3-row-copy-work`, based on419cbe1 plus the newer combined schema/navigation candidate; corrected V9–V11 fixtures live in separate `/tmp/aih-a3-row-copy-v9-work`. Baseline exploratory commit778d33e is not a delivery. V10 genuine root composition was separately integrated without replacing newer Core/installed/schema/skill files. Main's separately frozen corrected aggregate is not this candidate.
+
+- Core `sessions/session-manager.ts`: public class method `cloneSessionAtEntry` delegates to the existing snapshot/ticket/admission/create-only copy engine. Strict exact-entry ancestry admits nonmetadata leaves, refuses incomplete/repaired tool groups and running/queued commands; unrelated legacy clone is not tightened.
+- Own-data-only options admit native source store/caller signal and captured `expectedCwd`. The latter compares the owned source, never supplies a destination, allowed root or trust decision. Optional external native-store reads do not import the source into the destination manager.
+- Default Unicode-safe suffix fits native4096-byte title bounds. Fresh IDs/root ancestry and `clonedFromSessionId`/`clonedFromEntryId` preserve provenance, not source authority.
+- Server existing authenticated clone route gains distinct `entryId` intent; rejects mixed legacy targets/request stores/malformed scope, uses native saved-source preflight/Core copy/request-disconnect signal and bounded serialization. Existing authentication/Origin/capabilities/bootstrap are not bypassed.
+- Metadata-only row summaries retain only canonical `{subagent:true}`, not arbitrary private/replay metadata. Ordinary credential initialization may independently load sessions; quiet-copy evidence normally bootstraps before seeding a foreign idle source.
+- Lazy Web target/transport/menu capture owned primitives, post only `{entryId,expectedCwd}`, validate native result provenance, retire late view ownership and keep native browser session links/context menus.
+
+## Isolated iterations and preserved failures
+
+| Review | Observed evidence | Boundary |
+|---|---|---|
+| Initial emitted generic-clone probe |2fail/1complete control | Unanswered/partial parallel groups copied by legacy clone; no exploit/provider execution/data-loss claim, nor a legacy strict-validation promise. |
+| Foundation V1 |32new+82old=114pass3.48s | Source overlay only; no prior full freeze, fresh image/type/HTTP/browser/installed qualification. Recovered sources/after hashes do not retroactively create a freeze. |
+| V2 |types0;134pass/1new fixture failure of135 | New fixture expected shell record discriminator rather than journal `command`; no product bypass. |
+| V3 |types0;6files135pass4.47s;7witness+SDK/1192input/image/Git checks0 | Narrow fixture correction before freeze;41new+94old. |
+| V4 |types0;169pass3fail of172,14.85s | Ordinary credentials bootstrap imported an allegedly foreign source; invalid new `setStore(null)` fixture failed in native redaction before finally and caused following ENOENT. Parent15/2 includes fixture/cascade, not15 causal defects. |
+| V5 |types0;9files172pass14.84s;12witness+SDK/1193input checks0 | Authenticated normal providers bootstrap before foreign seed; disabled native store restored in finally. Corrected identical parent15fail/2pass1.85s, classified below. |
+| V6 |types0;17files250pass15.78s;Web budget0;42witness+SDK/1200inputs | Captured scope/provenance/lazy target+transport/menu; no live browser qualification. |
+| V7 |types0;18files254pass;Web budget0;44witness+SDK/1201input/image/Git checks0 | Canonical child hint and native popover ownership corrections; first real9 journeys plus old202. |
+| V7 first browser |announced211; outer Playwright code null/SIGSEGV, normalized1/Make2 | No completed totals/inner failing case established. Actual type/livee813af59646b0f0c10606ea3fffe639c4b9c1ede33529013a7b99eb08169ff19 agree, all after-checks0. Cause unknown, available artifacts archived. |
+| V7 diagnostic subset |1pass/8fail,4.3min, numeric1/null/Make2 | Explicitly diagnostic only, not replacement/requalification of211 aggregate. Four menu focus/visibility failures; capture/two late cases60s timeout with closed-page cleanup; active registration503 with body unrecorded. |
+| Public smoke V1/V2 |V1 exits1 at native veto; documented V2 exits0 exact marker across6scenarios | New probe wrongly expected null; native `SessionBranchCancelledError` is correct. V2 only asserts rejects. This built-image smoke was not an installed external consumer. |
+| V8 |types0;19files260pass17.18s;new installed1pass227skipped20.57s;Web budget0 | Genuine owning-Sidebar portal, host presentation while open, native keyboard/overlay lifetime; two public source files/one new installed case.47witness+SDK/1203inputs, image/Git checks0. Browser settled209pass/2fail of211,25.6min,Make2/rawfocused1/1/null: new workspace60s/cleanup and active registration503. Failed-audit0; no qualification. |
+| V9 preparation |types0;20files266pass/4fail of270,20.86s,runner1 | Four new HTTP group cases called native fetch Response.status as a method; none reached its status assertion. Snapshot generation not reached.50witness+SDK/1204input checks0; corrected inspector verifies1198 present+6 exact context-only absences. Failed-audit0. |
+| V10 preparation |types0;20files270pass20.40s;actual1198+6 input/image checks0 | Only new4-case native .status accessor corrected; all expected201/409/source/inventory/content/input/provenance checks pass. This is not whole browser qualification. |
+| V10 new baseline generation |First invocation discovers0 (wrong grep space instead of slash); corrected invocation discovers4,4missing-snapshot failures before copy assertions,Make2/raw1/1/null | CI missing mode creates four NEW PNGs despite failures. Delta0: all1204 prior paths/modes/link identities/bytes unchanged, ONLY4 declared new PNGs. All four read/visually inspected: readable EN/FR, light/dark, native focus/no clipping; no old baseline/tolerance/flag/deadline change. Generation never proves later case flow passed. |
+| V11 fresh normal review |types0;owning20files270pass;new genuine installed1pass227skipped;normal Web build0 |54witness+SDK/1208inputs, actual1202 present+6 exact context-only absences/image/Git checks0. Existing progress whole25 is running before standard focused whole210, no snapshot-update flag. Whole independent main gates still required. |
+
+V8 actual type/live image: `sha256:b9c15abe08208e19751e053b69f7b4a8ea5a7021387e7ebd087a1a6f8b4f09da`; Node24.15.0/V8 13.6.233.17-node.48/Linux x64. Normal Web build conserves148KiB entry/159KiB eager budgets,20chunks.
+
+V8 failed-audit0 verifies all five source/SDK/1203-input after-checks, actual image/Git identity and archived numeric focused receipt/reports. First audit attempt used the wrong HTML report root; corrected focused/index.html path separately, no product test rerun. Actual workspace snapshot shows native combobox Workspace path, while the new fixture requested textbox; closed-page unroute cleanup follows60s and is not an independent native diagnosis. Active body is exactly {error:Internal server error}; source/config inspection shows its credentialful custom upstream belongs to the already encrypted tool-progress lifetime, not standard preview. That redacted body alone does not name an underlying storage error.
+
+V9 extracts a shared side-effect-free row fixture, moves only active case into existing encrypted suite (old24 cases/config byte-conserved), uses real saved leaf/input separately from volatile run.partialMessage, and fixes only new public ToolCall.input/HTTP actual appended-ID fixtures. Workspace path uses actual combobox plus unique real directory-list readiness, not sleep/retry. Existing source independence/one upstream request/continued prefix+suffix/no view steal remain required. Optional PTY assertion-message diagnostics preserve all old predicates/deadlines and do not explain main's failed5917/1. Four new menu-only screenshots are planned, no old golden/tolerance change. V9's initial all-input inspector omitted explicitly excluded LICENSE; separate harness correction0, original failure retained. Actual V9 image79b4914026d226f6654d68d391386da05f0283100b9de0e7a6932e89b0b53edc. V9 then failed the four new fetch accessor fixtures; V10 corrects that before fresh freeze, never edits frozen V8/main.
+
+V8 does not infer a unique cause for the earlier focus failures or outer SIGSEGV. The native menu no longer depends on a hover/focus-hidden or content-visibility row and remains inside its real Sidebar modal/inert/focus boundary, never `document.body`. New fixture correction uses the actual API-created view message hash rather than invalid `#view` (which genuinely caused native missing-target UI); token/hash non-propagation assertions stay. In-memory bounded request/admission counters replace unbounded observation promises without API retries, longer deadlines, 429 hiding or response fabrication. Native503 failures now retain a bounded public body; no credential/Origin repair.
+
+## Corrected V5 parent failure-by-failure classification
+
+Complete log has15 failures/2controls, not15 independent product defects. The same corrected fixture ran on unchanged legacy implementation:
+
+| Cases | Count | First observed parent failure and limit |
+|---|---:|---|
+| Quiet custom leaf |1 |201 includes later assistant beyond selected custom leaf; subsequent quiet/source-byte assertions not reached. |
+| Active source |1 |409 instead of201; legacy busy refusal, later independent-continuation assertions not reached. |
+| Missing/foreign/child |3 |201 instead of409; strict new entry intent absent, later inventory/source-byte assertions not reached. |
+| Incomplete-labeled fixture |1 |Later audit finds `addMessage()` returns Session, so `.id` is session ID rather than appended entry. This was another missing-target refusal, NOT an unfinished-group HTTP proof; fix before next freeze, retain Core43 valid-ID group evidence separately. |
+| Unsaved |1 |Already409, but old `MESSAGE_TARGET_CHANGED` instead of new `ENTRY_TARGET_UNAVAILABLE`; DTO/mode distinction, not newly prevented publication. |
+| null/empty/control/>256 entry ID, mixed index/request store |6 |201 instead of400; new intent validation absent, later inventory assertions not reached. |
+| Mixed message ID |1 |404 instead of400; existing legacy missing-message refusal, not a new access vulnerability. |
+| Bound quiet veto callback |1 |500 instead of409: callback asserts selected `event.entryId` before returning false; legacy later-leaf event triggers assertion. Not proof legacy native veto is broken, nor independently reached external-source assertion. |
+| Authentication/foreign Origin; legacy generic incomplete copy |2 |Both pass;401/403 and intentional201 compatibility controls. |
+
+Classification artifact `/tmp/aih-a3-row-copy-http-parent-v5-classification.md` uses retained log without rerunning it. Candidate policy controls and existing branch leaves, not that parent500 alone, establish native veto behavior.
+
+## Public/installed and live evidence scope
+
+- Identical V8 emitted consumers on actual immutable corrected-main parent fail6/6 in1.22s at missing `cloneSessionAtEntry` TypeError, normal child1/null. This proves API absence only, not old leak/veto semantics; `/tmp/aih-a3-row-copy-public-parent-v8.*` retains source/image/exit evidence.
+- V8 probe's group fixture used `toolCalls[].arguments`, while public `ToolCall` requires `input`; V9 corrects only that fixture before its new freeze. Never claim typed payload coverage from V8 or edit its frozen inputs.
+- Emitted public probe scenarios `memory,durable,external,policy,group,title` use actual public Core/package loader from disposable cwd, exact marker and raw child exit/signal/channels under20s/25s bounds.
+- New installed case uses existing genuine offline local pack/install/external consumer and strict NodeNext declaration checker: native store/signal/cwd/API1 accepted; arbitrary request store, numeric scope and legacy index rejected by types. Removing only the new case reproduces newer227-case schema-bearing suite byte-for-byte. No older installed suite/Core index was copied over main.
+- Nine actual UI cases cover EN/FR×light/dark×desktop/mobile, native keyboard/Escape/focus/axe/overflow, exact mutation/inventory/source bytes/reload, disabled child/empty/draft, before-await request capture versus later source append, real response delayed across same-document session/workspace navigation, and an independently running upstream source.
+- Fixture locates only its API-created probe's actual disposable native journal directory, seeds through public native managers, and explicitly admits source data before UI hydration. This admission is not evidence copy itself initializes no runtime. Transport forwarding preserves real status/body/headers/Origin/auth/CSRF, never fabricates product success.
+
+Artifacts: `/tmp/aih-a3-row-copy-vN-*`, `/tmp/aih-a3-row-copy-v7-diagnostic-*`, `/tmp/aih-a3-row-copy-public-v{1,2}-smoke.*`, `/tmp/aih-a3-row-copy-http-parent{,-v5}.*`. Counts bind actual observed discovery, not supplied filenames.
+
+V11 actual image: `sha256:eb9c6151e9bdc8f6e3ac6080f65279ec4118bbb7502198ce0e97d357ca1ee24d`. Before its freeze remove only the new Playwright case's erroneous numeric third argument; the existing owning progress file already sets unchanged60000ms. Existing24 bodies/config are byte-conserved. V10 initial generation typo/failed delta check and corrected four missing-baseline failures remain archived; do not rerun generation to manufacture green.
+
+Still required: settled V11 fresh no-update complete owning standard/progress browser review, all whole-clause source/public/HTTP/UI audits, safe targeted main integration, independent complete types/parity/full/nine-suite E2E/production on frozen combined inputs and final actual-image/source/SDK/Git/index audit. Passing subsets never waive either V7 failure or main's separate historical failures. No release/remote/physical certification.

@@ -214,6 +214,7 @@ Update registry/service/routes, `packages/web/src/services/api.ts`, Settings UI,
 
 ## Related Domains
 
+- [`editor-schemas.md`](./editor-schemas.md) — existing native model-registration metadata editor data, never private credentials or a CLI models.json loader
 - [`sessions.md`](./sessions.md) — message persistence and usage round trips
 - [`extensions.md`](./extensions.md) — provider registration and `before:provider`
 - [`server-api.md`](./server-api.md) — model and registry routes

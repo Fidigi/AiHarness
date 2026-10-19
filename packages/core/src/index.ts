@@ -86,6 +86,7 @@ export {
   clampPublishedThinkingLevel,
   inferModelCapabilities,
 } from './providers/model-metadata.js';
+export { getCustomModelEditorSchema } from './providers/model-editor-schema.js';
 export type {
   PublishedModelMetadata,
   PublishedThinkingLevel,
@@ -93,6 +94,7 @@ export type {
 } from './providers/model-metadata.js';
 export {
   loadAgentSettings,
+  getAgentSettingsEditorSchema,
   mergeAgentSettings,
   resolveAgentCompactionContextWindow,
   resolveAgentCompactionSettings,

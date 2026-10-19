@@ -297,6 +297,68 @@ const settingsSchema = object({
   warnings: object({ anthropicExtraUsage: bool }),
 });
 
+type EditorSchema = Record<string, unknown>;
+
+function editorSchema(schema: Schema): EditorSchema {
+  switch (schema.kind) {
+    case 'string': return { type: 'string', ...(schema.nonEmpty ? { minLength: 1, pattern: '\\S' } : {}),
+      ...(schema.maxLength === undefined ? {} : { maxLength: schema.maxLength, 'x-maxUtf16CodeUnits': schema.maxLength }) };
+    case 'boolean': return { type: 'boolean' };
+    case 'enum': return { enum: structuredClone(schema.values) };
+    case 'integer': return { type: 'integer', minimum: schema.minimum ?? Number.MIN_SAFE_INTEGER, maximum: schema.maximum ?? Number.MAX_SAFE_INTEGER };
+    case 'array': return { type: 'array', items: editorSchema(schema.item), ...(schema.maxItems === undefined ? {} : { maxItems: schema.maxItems }) };
+    case 'object': return { type: 'object', additionalProperties: false,
+      properties: Object.fromEntries(Object.entries(schema.fields).map(([key, value]) => [key, editorSchema(value)])),
+      ...(schema.required?.length ? { required: [...schema.required] } : {}),
+      ...(schema.maxProperties === undefined ? {} : { maxProperties: schema.maxProperties }) };
+    case 'record': return { type: 'object', additionalProperties: editorSchema(schema.value),
+      ...(schema.maxEntries === undefined ? {} : { maxProperties: schema.maxEntries }),
+      ...(schema.maxKeyLength === undefined ? {} : { propertyNames: { maxLength: schema.maxKeyLength, 'x-maxUtf16CodeUnits': schema.maxKeyLength } }) };
+    case 'union': return { anyOf: schema.variants.map(editorSchema) };
+  }
+}
+
+/** Owned editor data, not file/trust/execution authority or a replacement for
+ * recoverable native validation. Character counts cannot enforce UTF-16/bytes. */
+export function getAgentSettingsEditorSchema(scope: AgentSettingsScope = 'global'): EditorSchema {
+  if (scope !== 'global' && scope !== 'project') throw new Error('Settings editor schema scope is invalid.');
+  const fields = (settingsSchema as Extract<Schema, { kind: 'object' }>).fields;
+  const document = editorSchema(settingsSchema);
+  const properties = document.properties as Record<string, unknown>;
+  properties.queueMode = { deprecated: true, description: 'Legacy steeringMode; ignored when steeringMode is present.' };
+  properties.websockets = { deprecated: true, description: 'Legacy boolean true/false maps to websocket/sse if transport is absent; other values are ignored.' };
+  const legacySkills = editorSchema(object({ customDirectories: pathList, enableSkillCommands: bool }, ['customDirectories']));
+  // Migration discards unrelated legacy-object fields before native validation.
+  legacySkills.additionalProperties = true;
+  delete legacySkills.maxProperties;
+  const legacyFields = legacySkills.properties as Record<string, unknown>;
+  legacyFields.enableSkillCommands = {};
+  properties.skills = { anyOf: [editorSchema(pathList), { ...legacySkills, deprecated: true }] };
+  const retry = properties.retry as EditorSchema;
+  const retryProperties = retry.properties as Record<string, unknown>;
+  retryProperties.maxDelayMs = { deprecated: true, description: 'Legacy provider.maxRetryDelayMs; the modern provider value takes precedence.' };
+  retry.allOf = [{ if: { required: ['provider'], properties: { provider: { type: 'object', properties: { maxRetryDelayMs: {} }, required: ['maxRetryDelayMs'] } } },
+    then: { properties: { maxDelayMs: { type: 'number' } } },
+    else: { properties: { maxDelayMs: editorSchema(integer(0, 3_600_000)) } } }];
+  (properties.npmCommand as EditorSchema).minItems = 1;
+  const credentialCommands = properties.providerApiKeyCommands as EditorSchema;
+  (credentialCommands.propertyNames as EditorSchema).pattern = '^\\s*[A-Za-z0-9][A-Za-z0-9._-]*\\s*$';
+  // URL parsing/normalization stays native. Do not pretend this lexical aid is a
+  // URL parser, a proxy approval or permission to execute credential commands.
+  (properties.httpProxy as EditorSchema).description = 'Global-only HTTP(S) proxy URL without a fragment; native URL parsing and secret handling remain authoritative.';
+  if (scope === 'project') for (const field of GLOBAL_ONLY_FIELDS) properties[field] = false;
+  return { $schema: 'https://json-schema.org/draft/2020-12/schema',
+    $id: `urn:ai-harness:schemas:settings:${scope}:1`, title: `AiHarness ${scope} agent settings`,
+    description: 'Canonical editor shape for native settings.json, including supported legacy forms. Native loading separately enforces stable UTF-8/UTF-16 bounds, project trust, URL parsing, normalized command identifiers and recoverable diagnostics; validation never executes commands or grants access. The editor may flag malformed legacy values salvaged or discarded by migration; it never tightens native loading. Host defaults are not file values.',
+    'x-maxUtf8Bytes': DEFAULT_MAX_SETTINGS_BYTES, ...document,
+    allOf: [
+      { if: { properties: { steeringMode: {} }, required: ['steeringMode'] }, then: {}, else: { properties: { queueMode: editorSchema(fields.steeringMode!) } } },
+      { if: { properties: { enableSkillCommands: {} }, required: ['enableSkillCommands'] }, then: {}, else: { properties: { skills: { anyOf: [editorSchema(pathList),
+        { type: 'object', properties: { enableSkillCommands: { type: 'boolean' } } }] } } } },
+    ],
+  };
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
