@@ -2851,21 +2851,38 @@ export class SessionManager {
     return this.withBranchTicket(sessionId, signal, async ticket => {
       const snapshot = await ticket.waitFor(this.captureSessionCopySource(sessionId));
       if (!snapshot) return null;
-      return this.copySessionAtUserEntry(snapshot, entryId, before, newTitle, store, ticket);
+      return this.copySessionAtLeaf(snapshot, entryId, before, newTitle, store, ticket);
     });
   }
 
-  private async copySessionAtUserEntry(snapshot: SessionCopySource, entryId: string, before: boolean,
-    newTitle: string | undefined, store: JsonlSessionStore | null, ticket: SessionBranchTicket): Promise<Session | null> {
+  private async copySessionAtLeaf(snapshot: SessionCopySource, entryId: string, before: boolean,
+    newTitle: string | undefined, store: JsonlSessionStore | null, ticket: SessionBranchTicket,
+    kind: 'fork' | 'clone' = 'fork', externalSource = false): Promise<Session | null> {
     const { original, rawEntries } = snapshot;
     const graph = legacyContextEntries(rawEntries, typeof original.metadata?.legacyRootBoundaryId === 'string'
       ? original.metadata.legacyRootBoundaryId : original.metadata?.hasBranchedHistory !== true ? legacyRootBoundary(rawEntries) : undefined);
     const selected = graph.filter(entry => entry.id === entryId).at(-1);
-    if (selected?.type !== 'message' || selected.role !== 'user') return null;
+    if (!selected || selected.type === 'metadata'
+      || kind === 'fork' && (selected.type !== 'message' || selected.role !== 'user')) return null;
     const path = sessionEntryPath(graph, entryId);
     if (!path.complete) return null;
     const prefix = before ? path.entries.slice(0, -1) : path.entries;
-    if (prefix.some(entry => entry.type === 'command' && entry.status === 'running')) return null;
+    if (prefix.some(entry => entry.type === 'command' && (entry.status === 'running'
+      || kind === 'clone' && entry.status === 'queued'))) return null;
+    if (kind === 'clone') {
+      // New exact-leaf copies refuse an unfinished group instead of borrowing the
+      // model projection's partial-group repair. Legacy raw-history clone stays unchanged.
+      const messages = prefix.filter((entry): entry is MessageEntry => entry.type === 'message');
+      const complete = completeContextToolGroups(messages);
+      if (complete.length !== messages.length || messages.some((message, index) => {
+        const retained = complete[index];
+        const declared = message.toolCalls ?? message.blocks?.filter(block => block?.type === 'tool_call');
+        return message.id !== retained.id || message.role !== retained.role
+          || message.role === 'assistant' && ((declared?.length ?? 0) !== (retained.toolCalls?.length ?? 0)
+            || (message.blocks?.filter(block => block?.type === 'tool_call').length ?? 0)
+              !== (retained.blocks?.filter(block => block?.type === 'tool_call').length ?? 0));
+      })) return null;
+    }
     const compacted = prefix.some(entry => entry.type === 'compaction');
     const effectiveIds = compacted ? new Set(projectContextPath(prefix).map(entry => entry.id)) : undefined;
     const messages = prefix.flatMap(entry => {
@@ -2896,8 +2913,8 @@ export class SessionManager {
       costUsd: (total.costUsd ?? 0) + (current.costUsd ?? 0),
     }), {} as NonNullable<Session['usage']>) : undefined;
     return this.copySessionSnapshot({ ...snapshot, original: { ...original, messages, commands,
-      activeLeafId: prefix.at(-1)?.id, metadata, usage } }, newTitle, undefined, 'fork',
-    { options: {}, store }, { ticket, entryId, before });
+      activeLeafId: prefix.at(-1)?.id, metadata, usage } }, newTitle, undefined, kind,
+    { options: {}, store }, { ticket, entryId, before, externalSource });
   }
 
   /** Fork a session from the current model projection or one of its stable message IDs. */
@@ -3084,6 +3101,55 @@ export class SessionManager {
     }
     this.onSessionUpdate?.(sessionId);
     return selected;
+  }
+
+  /** Independently copy one exact durable ancestry leaf; never choose a later
+   * current message, repair an unfinished tool group or prepare a source runtime. */
+  async cloneSessionAtEntry(sessionId: string, entryId: string, newTitle?: string,
+    options: SessionBranchOptions & { sourceStore?: JsonlSessionStore; expectedCwd?: string } = {}): Promise<Session | null> {
+    if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('Session clone options are invalid.');
+    let sourceStore: JsonlSessionStore | undefined, signal: AbortSignal | undefined, expectedCwd: string | undefined;
+    for (const key of Reflect.ownKeys(options)) {
+      const property = Object.getOwnPropertyDescriptor(options, key);
+      if (!property || !('value' in property)) throw new Error('Session clone options are invalid.');
+      const value: unknown = property.value;
+      if (key === 'signal') signal = captureSessionBranchSignal(value);
+      else if (key === 'sourceStore') {
+        if (value !== undefined && !(value instanceof JsonlSessionStore)) throw new Error('Session clone options are invalid.');
+        sourceStore = value as JsonlSessionStore | undefined;
+      } else if (key === 'expectedCwd') {
+        if (value !== undefined && (typeof value !== 'string' || !isBoundedSessionString(value, 4_096))) throw new Error('Session clone options are invalid.');
+        expectedCwd = value as string | undefined;
+      } else throw new Error('Session clone options are invalid.');
+    }
+    if (!isValidSessionId(sessionId) || !isValidEntryId(entryId)) return null;
+    const store = this.store;
+    newTitle = newTitle === undefined ? undefined : this.redactText(newTitle);
+    return this.withBranchTicket(sessionId, signal, async ticket => {
+      const external = sourceStore ? await ticket.waitFor(sourceStore.getSessionSnapshot(sessionId)) : undefined;
+      const snapshot = sourceStore ? external ? { original: external.session, rawEntries: external.entries } : null
+        : await ticket.waitFor(this.captureSessionCopySource(sessionId));
+      ticket.check();
+      if (this.store !== store) throw new Error('Session changed while copying its branch.');
+      // Expected scope is only a comparison with the owned source, never a
+      // destination path, filesystem root or execution/trust grant.
+      if (!snapshot || snapshot.original.metadata?.subagent === true
+        || expectedCwd !== undefined && snapshot.original.cwd !== expectedCwd) return null;
+      let title = newTitle;
+      if (!title) {
+        const suffix = ' (clone)', maximum = 4_096 - Buffer.byteLength(suffix);
+        let prefix = '', bytes = 0;
+        for (const character of snapshot.original.title || 'Clone') {
+          const size = Buffer.byteLength(character);
+          if (bytes + size > maximum) break;
+          prefix += character; bytes += size;
+        }
+        title = prefix + suffix;
+      }
+      const source = { ...snapshot, original: { ...snapshot.original,
+        metadata: { ...snapshot.original.metadata, clonedFromEntryId: entryId } } };
+      return this.copySessionAtLeaf(source, entryId, false, title, store, ticket, 'clone', Boolean(sourceStore));
+    });
   }
 
   /** Clone a session as an independent root, optionally through one message. */

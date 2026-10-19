@@ -55,7 +55,7 @@ describe('real terminal optional branch navigation', () => {
         let output = '';
         terminal.onData(text => { output += text; }); terminal.onExit(value => { exited = value; });
         const visible = () => stripVTControlCharacters(output);
-        const ready = () => vi.waitFor(() => expect(visible()).toContain('editor ready · Enter send'), { timeout: 2_000 });
+        const ready = () => vi.waitFor(() => expect(visible(), `PTY readiness observation: ${JSON.stringify({ exited, outputBytes: Buffer.byteLength(output) })}`).toContain('editor ready · Enter send'), { timeout: 2_000 });
         await ready();
         output = '';
         terminal.write(`/navigate ${target}${scenario === 'choice' ? '' : ' --summarize'}\r`);

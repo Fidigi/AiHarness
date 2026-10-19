@@ -4,6 +4,7 @@ import { createServer, type Server } from 'node:http';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AgentRunSnapshot, Message, ToolProgressSnapshot } from '@ai-harness/core';
+import { fixture as rowCopyFixture, openMenu as openRowCopyMenu, openNavigation as openRowCopyNavigation } from './fixtures/session-row-copy';
 
 // A real on-disk extension executes in Core, behind the production Express API.
 // Only the upstream model endpoint is deterministic. No intercepted product API,
@@ -711,4 +712,51 @@ test('real automatic compaction snapshot keeps policy/cancel reachable and block
   expect(actual.session.messagePage!.total).toBe(seededTotal + 3);
   expect(actual.session.messages).toEqual(pending.session.messages);
   await expect(composer).toBeEnabled();
+});
+
+// Reuse this suite's already-declared encrypted real-upstream runtime; do not
+// repair authentication/Origin or add a master key to the standard lifetime.
+test('real active source continues independently after row copy, without a second provider request or interrupted output', async ({ page }) => {
+  const f = await rowCopyFixture(page), provider = `row-copy-${crypto.randomUUID()}`;
+  let release!: () => void, calls = 0;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const upstream = createServer(async (request, response) => {
+    if (request.url?.endsWith('/models')) { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ data: [{ id: 'row-copy-model' }] })); return; }
+    for await (const _chunk of request) { /* Consume actual provider input without response repair. */ }
+    calls++; response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    response.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: 'ACTIVE_SOURCE_PREFIX' }, finish_reason: null }] })}\n\n`);
+    await gate;
+    if (!response.destroyed) response.end(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: 'ACTIVE_SOURCE_FINISHED' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`);
+  });
+  await new Promise<void>(resolve => upstream.listen(0, '127.0.0.1', resolve));
+  const sourceState = async () => await (await page.request.get(`/api/agent/sessions/${f.source.id}/state`)).json() as {
+    run: { phase: string; partialMessage?: { content: string } }; session: { activeLeafId: string; messages: Array<{ content: string }> };
+  };
+  try {
+    const registered = await page.request.post('/api/provider-registry/custom', { data: { id: provider, name: 'Row active source', dialect: 'openai-completions',
+      baseUrl: `http://127.0.0.1:${(upstream.address() as { port: number }).port}/v1`, apiKey: 'disposable-row-copy-key' } });
+    expect(registered.status(), (await registered.text()).slice(0, 2_048)).toBe(201);
+    const started = await page.request.post('/api/agent/runs', { data: { sessionId: f.source.id, cwd: f.cwd, provider, model: 'row-copy-model', input: 'ACTIVE_SOURCE_INPUT' } }); expect(started.status()).toBe(202);
+    await expect.poll(() => calls).toBe(1);
+    await expect.poll(async () => (await sourceState()).run.partialMessage?.content, { timeout: 10_000 }).toBe('ACTIVE_SOURCE_PREFIX');
+    await page.reload(); await expect(page.getByRole('log')).toContainText('ROW_VIEW_BODY'); await openRowCopyNavigation(page);
+    const before = await sourceState(), entryId = before.session.activeLeafId, bytes = await readFile(f.file);
+    expect(before.run.phase).toBe('streaming'); expect(before.session.messages.at(-1)?.content).toBe('ACTIVE_SOURCE_INPUT');
+    expect(before.session.messages.some(message => message.content.includes('ACTIVE_SOURCE_PREFIX'))).toBe(false);
+    const { item } = await openRowCopyMenu(f, page), response = page.waitForResponse(response => new URL(response.url()).pathname === `/api/sessions/${f.source.id}/clone`);
+    await item.click(); const actual = await response; expect(actual.status()).toBe(201); const copy = await actual.json() as { id: string };
+    await expect(page).toHaveURL(new RegExp(`/chat/${copy.id}\\?cwd=`)); await expect(page.getByRole('log')).toContainText('ACTIVE_SOURCE_INPUT');
+    await expect(page.getByRole('log')).not.toContainText('ACTIVE_SOURCE_PREFIX');
+    const saved = await f.store.getSessionSnapshot(copy.id); expect(saved!.session.metadata).toMatchObject({ clonedFromSessionId: f.source.id, clonedFromEntryId: entryId });
+    expect(saved!.session.messages.at(-1)?.content).toBe('ACTIVE_SOURCE_INPUT'); expect(JSON.stringify(saved)).not.toContain('ACTIVE_SOURCE_PREFIX');
+    const stillRunning = await sourceState(); expect(stillRunning.run.phase).toBe('streaming'); expect(stillRunning.run.partialMessage?.content).toBe('ACTIVE_SOURCE_PREFIX');
+    expect(calls).toBe(1); expect(await readFile(f.file)).toEqual(bytes);
+    release(); await expect.poll(async () => (await sourceState()).run.phase, { timeout: 10_000 }).toBe('completed');
+    expect((await sourceState()).session.messages.at(-1)?.content).toBe('ACTIVE_SOURCE_PREFIXACTIVE_SOURCE_FINISHED');
+    await expect(page.getByRole('log')).not.toContainText('ACTIVE_SOURCE_FINISHED'); expect(JSON.stringify(await f.store.getSessionSnapshot(copy.id))).not.toContain('ACTIVE_SOURCE_FINISHED');
+    expect(calls).toBe(1); expect(f.quota).toEqual([]);
+  } finally {
+    release(); upstream.closeAllConnections(); await new Promise<void>(resolve => upstream.close(() => resolve()));
+    await f.cleanup(); await page.request.delete(`/api/provider-registry/custom/${provider}`);
+  }
 });

@@ -277,6 +277,28 @@ beforeAll(async () => {
 afterAll(async () => { if (artifactRoot) await rm(artifactRoot, { recursive: true, force: true }); });
 
 describe('CLI-RUN-01 genuine locally packed installed executable', () => {
+  it('uses native exact-entry row copies and declarations outside the checkout', async () => {
+    const probe = 'session-row-copy-public.mjs';
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/session-row-copy-probe.mjs'), path.join(consumer, probe));
+    expect(await run(process.execPath, [probe, 'all'], consumer, environment, '', 20_000))
+      .toEqual({ code: 0, stdout: 'session row copy OK\n', stderr: '' });
+    await writeFile(path.join(consumer, 'session-row-copy-public.ts'), `
+      import { SessionManager, JsonlSessionStore, AI_HARNESS_CORE_API_VERSION, type Session } from '@ai-harness/core';
+      const manager = new SessionManager(), store = new JsonlSessionStore('/disposable');
+      const result: Promise<Session | null> = manager.cloneSessionAtEntry('source', 'displayed-entry', undefined,
+        { sourceStore: store, expectedCwd: '/workspace', signal: new AbortController().signal });
+      const api: 1 = AI_HARNESS_CORE_API_VERSION; void result; void api;
+      // @ts-expect-error HTTP bodies cannot grant arbitrary source-store/path authority
+      manager.cloneSessionAtEntry('source', 'entry', undefined, { sourceStore: { path: '/private' } });
+      // @ts-expect-error captured source scope is a string comparison, not a numeric destination selector
+      manager.cloneSessionAtEntry('source', 'entry', undefined, { expectedCwd: 1 });
+      // @ts-expect-error exact-entry mode does not silently accept legacy message-index substitution
+      manager.cloneSessionAtEntry('source', 'entry', undefined, { messageIndex: 1 });
+    `);
+    const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'session-row-copy-public.ts'], consumer, environment);
+    expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  }, 30_000);
+
   it('reserves installed Core startup and withdraws SDK pending prompts with owned declarations', async () => {
     for (const mode of ['core', 'sdk'] as const) {
       const probe = `prestart-${mode}-installed.mjs`;

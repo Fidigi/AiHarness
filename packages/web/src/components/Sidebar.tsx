@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { GitWorktree, WorkspaceDescriptor } from '@ai-harness/core';
 import '../sidebar.css';
 import type { SessionSearchResult } from '../services/api';
@@ -28,6 +28,8 @@ import { workspaceFeedback } from './workspace-feedback';
 import LinkedDirectoryBoundary from './LinkedDirectoryBoundary';
 import { isPlainLinkActivation, projectLinkTo, SessionLink, sessionLinkTo, type SessionContextMenuHook } from './session-links';
 import { sessionLinkMessages } from './session-link-messages';
+
+const SessionRowCopyMenu = lazy(() => import('./SessionRowCopyMenu'));
 
 interface SidebarProps {
   isOpen: boolean;
@@ -516,6 +518,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
                         aria-label={t('session.autoName')}>{autoNaming === session.id ? '…' : 'AI'}</button>}
                       <button onClick={() => void remove(session.id, session.title || t('sidebar.untitled'))}
                         aria-label={t('session.delete')}>×</button>
+                      <Suspense fallback={null}><SessionRowCopyMenu session={session} inactive={inactive} onRequestClose={onRequestClose} /></Suspense>
                     </div>
                   </div>
                 )}

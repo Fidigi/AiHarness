@@ -692,7 +692,9 @@ export function createApp(config?: ServerConfig): express.Application {
           ? serializeSessionPage(session, { limit: messageLimit, includeCommands: false })
           : serializeSession(session);
         const value = paginated && messageLimit === 0
-          ? { ...serialized, metadata: undefined, commands: undefined }
+          // Preserve only the canonical non-actionable child hint for row UI;
+          // arbitrary metadata/replay/private fields remain absent in summaries.
+          ? { ...serialized, metadata: session.metadata?.subagent === true ? { subagent: true } : undefined, commands: undefined }
           : serialized;
         let encoded: string;
         try { encoded = JSON.stringify(value); }
@@ -1408,17 +1410,41 @@ export function createApp(config?: ServerConfig): express.Application {
     const lifetime = sessionCopyRequest(req, res);
     try {
       const { id } = req.params;
-      const { title: rawTitle, messageIndex, messageId } = (req.body ?? {}) as {
-        title?: string; messageIndex?: number; messageId?: string;
+      const { title: rawTitle, messageIndex, messageId, entryId, expectedCwd } = (req.body ?? {}) as {
+        title?: string; messageIndex?: number; messageId?: string; entryId?: string; expectedCwd?: string;
       };
       const title = optionalSessionString(rawTitle, 500);
       if ((rawTitle !== undefined && !title) || (messageId !== undefined
-        && (typeof messageId !== 'string' || Buffer.byteLength(messageId) > 256 || UNSAFE_SESSION_TEXT.test(messageId)))) {
+        && (typeof messageId !== 'string' || Buffer.byteLength(messageId) > 256 || UNSAFE_SESSION_TEXT.test(messageId)))
+        || (entryId !== undefined && (typeof entryId !== 'string' || !entryId || Buffer.byteLength(entryId) > 256
+          || UNSAFE_SESSION_TEXT.test(entryId) || (expectedCwd !== undefined && (typeof expectedCwd !== 'string' || !expectedCwd
+            || Buffer.byteLength(expectedCwd) > 4_096 || UNSAFE_SESSION_TEXT.test(expectedCwd)))
+          || Object.keys(req.body).some(key => key !== 'entryId' && key !== 'title' && key !== 'expectedCwd')))) {
         res.status(400).json({ error: 'Invalid clone request.' });
         return;
       }
 
-      const sm = (await servicesPromise).sessionManager;
+      const services = await servicesPromise, sm = services.sessionManager;
+      if (entryId !== undefined) {
+        // Copy exact saved identity without importing an idle source/runtime.
+        const saved = await services.sessionStore.getSessionSnapshot(id);
+        if (!saved || saved.session.metadata?.subagent === true
+          || expectedCwd !== undefined && saved.session.cwd !== expectedCwd
+          || !saved.entries.some(entry => entry.type !== 'metadata' && entry.id === entryId)) {
+          res.status(409).json({ error: 'Session entry is unavailable.', code: 'ENTRY_TARGET_UNAVAILABLE' });
+          return;
+        }
+        const copy = await sm.cloneSessionAtEntry(id, entryId, title, {
+          signal: lifetime.signal, expectedCwd, ...(sm.get(id) ? {} : { sourceStore: services.sessionStore }),
+        });
+        if (res.destroyed) return;
+        if (!copy) {
+          res.status(409).json({ error: 'Session entry is unavailable.', code: 'ENTRY_TARGET_UNAVAILABLE' });
+          return;
+        }
+        res.status(201); sendBoundedJson(res, serializeSessionPage(copy, { limit: 80 }));
+        return;
+      }
       let session: Session | null | undefined = sm.get(id);
 
       // Try loading from store if not in memory

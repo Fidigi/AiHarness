@@ -1,0 +1,9 @@
+.session-row-copy { display: flex; align-items: center; }
+.session-row:has(.session-row-copy > button[aria-expanded="true"]) .session-actions { display: flex; }
+.sidebar-nav li:has(.session-row-copy > button[aria-expanded="true"]) { content-visibility: visible; }
+.session-row-copy-menu { position: fixed; inset: auto; margin: 0; padding: .5rem; box-sizing: border-box; width: 220px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; border: 1px solid #40527b; border-radius: 6px; color: #e2e8f4; background: #16213e; box-shadow: 0 5px 18px #0006; }
+.session-row-copy-menu > button { display: block; width: 100%; white-space: normal; text-align: left; padding: .6rem; color: inherit; border: 1px solid #40527b; border-radius: 4px; background: #223154; }
+.session-row-copy-menu p { margin: .5rem 0 0; font-size: .85rem; overflow-wrap: anywhere; }
+.session-row-copy-menu button:focus-visible { outline: 2px solid #a1c5ff; outline-offset: 2px; }
+html[data-theme="light"] .session-row-copy-menu { color: #26344e; background: #f8f9fc; border-color: #a3b1c8; }
+html[data-theme="light"] .session-row-copy-menu > button { background: #e7edf7; border-color: #a3b1c8; }
