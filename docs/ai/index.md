@@ -8,7 +8,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 
 | Domain | File | Context Load |
 |---|---|---|
-| Project overview | [`project-map.md`](./project-map.md) | ~605 lines — load first for global navigation |
+| Project overview | [`project-map.md`](./project-map.md) | ~610 lines — load first for global navigation |
 | AI Providers | [`topics/providers.md`](./topics/providers.md) | ~215 lines |
 | Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~215 lines |
 | TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~65 lines |
@@ -17,12 +17,12 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Terminal Themes | [`topics/themes.md`](./topics/themes.md) | ~80 lines |
 | Native Editor Schemas | [`topics/editor-schemas.md`](./topics/editor-schemas.md) | ~85 lines |
 | QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
-| Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~235 lines |
+| Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~240 lines |
 | Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~210 lines |
 | Detached Stream Reconstruction | [`topics/detached-streams.md`](./topics/detached-streams.md) | ~90 lines |
 | Static Demonstration | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
 | Linked-Directory Consent | [topics/linked-directories.md](./topics/linked-directories.md) | ~66 lines |
-| Security & Trust | [`topics/security.md`](./topics/security.md) | ~200 lines |
+| Security & Trust | [`topics/security.md`](./topics/security.md) | ~220 lines |
 | Child Agents | [`topics/child-agents.md`](./topics/child-agents.md) | ~115 lines |
 
 ### Reference Documentation
@@ -88,9 +88,9 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 
 **The separate static demo or Pages artifact** → Load `static-demo.md` + the root/validation rows in `project-map.md`; use `bash demo/run-docker.sh`, not production agent APIs.
 
-**MCP hosting, OAuth, or discovery** → Load `security.md` + the MCP flow in `project-map.md` §4; add `server-api.md` or `cli-reference.md` for the adapter
+**MCP configuration inheritance, hosting, OAuth, or discovery** → Load `security.md` + the MCP flow in `project-map.md` §4; add `server-api.md` or `cli-reference.md` for the adapter
 ```
-→ packages/core/src/mcp/{session-host,oauth,oauth-provider-factory,oauth-flow}.ts
+→ packages/core/src/mcp/{config-inventory,session-host,oauth,oauth-provider-factory,oauth-flow}.ts
 → packages/core/src/tools/tool-search.ts
 → packages/server/src/api/mcp-routes.ts
 → packages/web/src/components/McpSettings.tsx

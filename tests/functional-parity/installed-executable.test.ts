@@ -299,6 +299,39 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
   }, 30_000);
 
+  it('inherits only project MCP controls through installed public Core and the PATH bin', async () => {
+    const probe = path.join(consumer, 'mcp-inheritance-installed.mjs');
+    const server = path.join(consumer, 'mcp-inheritance-server.mjs');
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/mcp-inheritance-probe.mjs'), probe);
+    await cp(path.join(checkout, 'packages/core/src/mcp/fixtures/test-server.mjs'), server);
+    const results: { mode: string; result: { code: number | null; stdout: string; stderr: string } }[] = [];
+    for (const mode of ['command', 'core', 'print', 'json', 'rpc']) {
+      const result = await run(process.execPath, [probe, mode], consumer, {
+        ...environment, AIH_MCP_INHERITANCE_COMMAND: 'ai-harness', AIH_MCP_INHERITANCE_SERVER: server,
+      }, '', 15_000);
+      expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe('');
+      expect(JSON.parse(result.stdout)).toEqual({ result: 'MCP_INHERITANCE_OK', mode, scope: 'project' });
+      results.push({ mode, result });
+    }
+    await writeFile(path.join(consumer, 'inheritance-public.ts'), `
+      import { AI_HARNESS_CORE_API_VERSION, inspectMcpConfig } from '@ai-harness/core';
+      const major: 1 = AI_HARNESS_CORE_API_VERSION; void major;
+      async function proof(options: Parameters<typeof inspectMcpConfig>[0]) {
+        const inventory = await inspectMcpConfig(options);
+        const inherited: true | undefined = inventory.servers[0]?.inheritsGlobal; void inherited;
+      }
+      void proof;
+    `);
+    const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'inheritance-public.ts'], consumer, environment, 20_000);
+    expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+    const evidence = process.env.AIH_INSTALLED_EVIDENCE_DIR;
+    if (evidence) {
+      for (const name of await readdir(artifactRoot)) if (name.endsWith('.tgz')) await cp(path.join(artifactRoot, name), path.join(evidence, name));
+      for (const file of [probe, server, path.join(consumer, 'inheritance-public.ts')]) await cp(file, path.join(evidence, path.basename(file)));
+      await writeFile(path.join(evidence, 'inheritance-results.json'), JSON.stringify({ results, types }, null, 2));
+    }
+  }, 45_000);
+
   it('reserves installed Core startup and withdraws SDK pending prompts with owned declarations', async () => {
     for (const mode of ['core', 'sdk'] as const) {
       const probe = `prestart-${mode}-installed.mjs`;

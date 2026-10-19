@@ -307,6 +307,9 @@ Settings › MCP -> GET /api/mcp?cwd=<selected workspace>
        |-> effective saved allow: read <cwd>/.ai-harness/mcp.json safely
        `-> no allow/refusal/store error: inspect metadata only; never open the body
   -> JSON/JSONC parse + strict shallow schema and depth/count limits
+  -> targetless project entries may override only enabled/exposure/toolExposure of a valid readable same-name global target
+  -> reject own target/type ambiguity, forbidden authority fields and orphan bases with value-free typed diagnostics
+  -> inherited exact-generation keys bind both parsed sources; runtime/Test/writes share the resolver without flattening targets/secrets
   -> redact command paths/arguments/URL credentials and paths; return names/references only
   -> retain legacy value-free diagnostics; add optional typed invalid-entry reasons, omitted for valid DTOs
   -> render global/project entries, shadowing and trust; localize app codes in EN/FR, never English API text
@@ -388,6 +391,8 @@ OAuth cancel/logout -> abort detached work / increment write generation before c
   -> persist a non-secret revocation marker; stale provider-local CAS snapshots cannot restore credentials
   -> close target process-local MCP sessions and abort outstanding passive OAuth fetches
 ```
+
+Core `mcp/config-inheritance.test.ts`, Server `api/mcp-inheritance-http.test.ts`, CLI `cli/mcp-inheritance-process.test.ts`, genuine packed consumers and `e2e/mcp-inheritance-live.spec.ts` cover fresh persisted trust, forbidden targetless fields/orphan diagnostics, exact dual-source generations, raw atomic project-only controls, real Test with zero tool effects and five public modes. Valid inherited descriptors expose only optional `inheritsGlobal:true`; explicit full targets remain replacements and the default stays direct. Preserve explicit inherited true/direct on writes and raw controls on undo; an explicit local tool map replaces its inherited map. Native browser coverage uses emitted Server/static Web with normal auth/Origin and EN/FR diagnostics, not intercepted inheritance responses.
 
 `POST /api/mcp/oauth/status` is the only credential-status read and returns booleans keyed to the revalidated scope/name/config key. The exact `GET /api/mcp` inventory path bypasses credential initialization and remains a passive file/trust read. OAuth endpoints require the administrator `configuration` capability, never return tokens/client secrets/verifiers, and return `oauth-unavailable` when the master-key-backed store is absent. Callback listeners, remote responses, request time, flow count, redirect length, credential documents and shutdown are bounded. Shared fetch deadlines remain linked through finite OAuth response bodies, including passive refresh during tool calls; cancellation closes a callback listener even when its driver ignores abort. Command-backed initial connections serialize in the host and detached flows serialize per credential identity, not in one process-wide slot. Cancellation and sign-out do not revoke an issuer-side token; operators needing remote revocation must do so at the authorization server.
 

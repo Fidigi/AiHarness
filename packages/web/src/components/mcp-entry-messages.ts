@@ -21,6 +21,8 @@ const en: Record<McpEntryProblemReason, string> = {
   exposure: 'Exposure must be direct, codemode, deferred, or hidden.',
   'tool-exposure': 'Per-tool exposure must be a bounded map of tool names or * patterns and exposure modes.',
   oauth: 'OAuth settings do not match the supported schema.',
+  'override-fields': 'A targetless project override may only set enabled, exposure, and toolExposure.',
+  'orphan-override': 'A targetless project override requires a valid readable global server with the same name.',
 };
 
 const fr: Record<McpEntryProblemReason, string> = {
@@ -44,6 +46,8 @@ const fr: Record<McpEntryProblemReason, string> = {
   exposure: 'L’exposition doit être direct, codemode, deferred ou hidden.',
   'tool-exposure': 'L’exposition par outil doit être une table bornée de noms d’outils ou de motifs * et de modes d’exposition.',
   oauth: 'Les paramètres OAuth ne respectent pas le schéma pris en charge.',
+  'override-fields': 'Une surcharge de projet sans cible ne peut définir que enabled, exposure et toolExposure.',
+  'orphan-override': 'Une surcharge de projet sans cible nécessite un serveur global valide et lisible de même nom.',
 };
 
 /** Settings-lazy app copy keyed only by typed codes, never by source English.

@@ -15,6 +15,7 @@ const reasons: McpEntryProblemReason[] = [
   'entry-shape', 'server-name', 'unsupported-properties', 'target', 'command', 'url',
   'transport', 'stdio-transport', 'http-transport', 'args', 'cwd', 'description',
   'env', 'headers', 'stdio-fields', 'http-fields', 'enabled', 'exposure', 'tool-exposure', 'oauth',
+  'override-fields', 'orphan-override',
 ];
 const source = (file: string) => readFileSync(new URL(file, import.meta.url), 'utf8');
 const placeholders = (value: string) => [...value.matchAll(/\{([\w.-]+)\}/gu)].map(match => match[1]).sort();

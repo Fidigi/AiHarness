@@ -172,7 +172,8 @@ export type McpEntryProblemReason =
   | 'entry-shape' | 'server-name' | 'unsupported-properties' | 'target'
   | 'command' | 'url' | 'transport' | 'stdio-transport' | 'http-transport'
   | 'args' | 'cwd' | 'description' | 'env' | 'headers' | 'stdio-fields'
-  | 'http-fields' | 'enabled' | 'exposure' | 'tool-exposure' | 'oauth';
+  | 'http-fields' | 'enabled' | 'exposure' | 'tool-exposure' | 'oauth'
+  | 'override-fields' | 'orphan-override';
 
 export interface McpServerInventoryEntry {
   name: string;
@@ -197,6 +198,8 @@ export interface McpServerInventoryEntry {
   masked: boolean;
   shadowedByProject: boolean;
   replacesGlobal: boolean;
+  /** A valid project control-only override borrows its target from the global entry. */
+  inheritsGlobal?: true;
   problems: string[];
   /** Optional stable localized-presentation codes aligned with value-free diagnostics. */
   problemReasons?: McpEntryProblemReason[];
@@ -873,6 +876,66 @@ export function describeMcpConfigEntry(
   return describeEntry(name, value, 'global', '').info;
 }
 
+function isProjectOverride(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && !['command', 'url', 'type'].some(key => Object.hasOwn(value, key));
+}
+
+interface ResolvedEntry extends ParsedEntry {
+  value: unknown;
+  override: boolean;
+}
+
+/** Only controls may inherit. A repository cannot redirect a global credential or process. */
+function describeEffectiveEntry(
+  name: string, value: unknown, scope: McpConfigScope, sourcePath: string,
+  globals?: ReadonlyMap<string, unknown>,
+): ResolvedEntry {
+  const override = scope === 'project' && isProjectOverride(value);
+  let effective = value;
+  let generation = value;
+  let issue: 'override-fields' | 'orphan-override' | undefined;
+  if (override) {
+    if (Object.keys(value).some(key => !['enabled', 'exposure', 'toolExposure'].includes(key))) {
+      issue = 'override-fields';
+    } else {
+      const base = globals?.get(name);
+      if (!isRecord(base) || !describeEntry(name, base, 'global', '').info.valid) issue = 'orphan-override';
+      else {
+        effective = { ...base, ...value };
+        generation = [base, value];
+      }
+    }
+  }
+  const entry = describeEntry(name, effective, scope, sourcePath);
+  if (issue) {
+    const reasons = entry.info.problemReasons ?? [];
+    const diagnostics = reasons.flatMap((reason, index) => reason === 'target' ? [] : [{ reason, message: entry.info.problems[index]! }]);
+    diagnostics.push({ reason: issue, message: issue === 'override-fields'
+      ? 'A targetless project override may only set enabled, exposure, and toolExposure.'
+      : 'A targetless project override requires a valid readable global server with the same name.' });
+    entry.info.valid = false;
+    entry.info.problemReasons = diagnostics.map(item => item.reason);
+    entry.info.problems = diagnostics.map(item => item.message);
+  } else if (override && entry.info.valid) {
+    entry.info.inheritsGlobal = true;
+    // Pin both parsed sources, not only their coincidentally equal effective controls.
+    entry.info.configKey = entryRevision(name, generation);
+  }
+  return { ...entry, value: effective, override };
+}
+
+/** A failed global read is never an inherited target or an execution authority. */
+async function readGlobalOverrideBases(agentDir: string): Promise<Map<string, unknown>> {
+  try {
+    const directory = await canonicalDirectory(agentDir);
+    const read = await readRegularFile(path.join(directory, 'mcp.json'), 'global');
+    const entries = read.text === undefined ? [] : parseConfig(read.info, read.text);
+    return new Map(read.info.problems.length === 0 ? entries : []);
+  } catch {
+    return new Map();
+  }
+}
+
 async function canonicalDirectory(input: string): Promise<string> {
   const resolved = path.resolve(input);
   try {
@@ -906,10 +969,9 @@ export async function inspectMcpConfig(
 ): Promise<McpConfigInventory> {
   const agentDir = await canonicalDirectory(options.agentDir);
   const globalRead = await readRegularFile(path.join(agentDir, 'mcp.json'), 'global');
-  const globalEntries = globalRead.text === undefined
-    ? []
-    : parseConfig(globalRead.info, globalRead.text)
-      .map(([name, value]) => describeEntry(name, value, 'global', globalRead.info.path));
+  const globalValues = globalRead.text === undefined ? [] : parseConfig(globalRead.info, globalRead.text);
+  const globalEntries = globalValues.map(([name, value]) => describeEntry(name, value, 'global', globalRead.info.path));
+  const overrideBases = new Map(globalRead.info.problems.length === 0 ? globalValues : []);
 
   let projectRead: FileReadResult | undefined;
   let projectEntries: ParsedEntry[] = [];
@@ -954,7 +1016,7 @@ export async function inspectMcpConfig(
     projectEntries = currentProjectRead.text === undefined
       ? []
       : parseConfig(currentProjectRead.info, currentProjectRead.text)
-        .map(([name, value]) => describeEntry(name, value, 'project', currentProjectRead.info.path));
+        .map(([name, value]) => describeEffectiveEntry(name, value, 'project', currentProjectRead.info.path, overrideBases));
   }
 
   const validProjectNames = new Set(projectEntries.filter(entry => entry.info.valid).map(entry => entry.rawName));
@@ -1038,11 +1100,13 @@ export async function readMcpServerTestTarget(
   const selected = entries.find(([name]) => name === options.name);
   if (!selected) throw targetError('server-not-found', 'The MCP server is not configured.');
   const [name, value] = selected;
-  const described = describeEntry(name, value, options.scope, read.info.path);
-  if (!described.info.valid || !isRecord(value)) {
+  const globals = options.scope === 'project' && isProjectOverride(value)
+    ? await readGlobalOverrideBases(agentDir) : undefined;
+  const described = describeEffectiveEntry(name, value, options.scope, read.info.path, globals);
+  if (!described.info.valid || !isRecord(described.value)) {
     throw targetError('server-invalid', 'The MCP server configuration is invalid.');
   }
-  const config = structuredClone(value) as unknown as McpServerRuntimeConfig;
+  const config = structuredClone(described.value) as unknown as McpServerRuntimeConfig;
   let cwd = projectCwd ?? defaultCwd;
   if ('command' in config && config.cwd) {
     try {
@@ -1547,7 +1611,7 @@ function classifyReadFailure(file: McpConfigFileInventory): McpConfigMutationErr
 
 async function mutateMcpConfig<T>(
   options: McpConfigMutationTarget,
-  apply: (config: MutableConfig) => { changed: boolean; value: T },
+  apply: (config: MutableConfig, describe: (name: string, value: unknown) => ResolvedEntry) => { changed: boolean; value: T },
   beforeLockedRead?: () => Promise<void>,
 ): Promise<MutationResult<T>> {
   const target = await resolveMutationPath(options);
@@ -1572,7 +1636,10 @@ async function mutateMcpConfig<T>(
       throw mutationError('stale-revision', 'The MCP configuration changed; reload it before retrying.');
     }
     const config = parseMutableConfig(read.text, read.mode);
-    const outcome = apply(config);
+    const globals = target.scope === 'project' ? await readGlobalOverrideBases(options.agentDir) : undefined;
+    const describe = (name: string, value: unknown): ResolvedEntry =>
+      describeEffectiveEntry(name, value, target.scope, target.filePath, globals);
+    const outcome = apply(config, describe);
     if (!outcome.changed) {
       return { target, revision: currentRevision, changed: false, value: outcome.value };
     }
@@ -1602,7 +1669,7 @@ export async function setMcpServersEnabled(
     names.add(name);
   }
 
-  const result = await mutateMcpConfig(options, config => {
+  const result = await mutateMcpConfig(options, (config, describe) => {
     let changed = false;
     const outcomes: McpServerMutationOutcome[] = [];
     for (const name of names) {
@@ -1611,16 +1678,18 @@ export async function setMcpServersEnabled(
         continue;
       }
       const entry = config.servers[name];
-      if (!describeEntry(name, entry, options.scope, '').info.valid || !isRecord(entry)) {
+      const resolved = describe(name, entry);
+      if (!resolved.info.valid || !isRecord(entry)) {
         outcomes.push({ name, status: 'invalid' });
         continue;
       }
-      const currentlyEnabled = entry.enabled !== false;
+      const currentlyEnabled = resolved.info.enabled;
       if (currentlyEnabled === options.enabled) {
         outcomes.push({ name, status: 'unchanged' });
         continue;
       }
-      if (options.enabled) delete entry.enabled;
+      if (resolved.override) entry.enabled = options.enabled;
+      else if (options.enabled) delete entry.enabled;
       else entry.enabled = false;
       changed = true;
       outcomes.push({ name, status: 'changed' });
@@ -1640,28 +1709,31 @@ export async function setMcpServerExposure(
     throw mutationError('invalid-request', 'The MCP server exposure is invalid.');
   }
 
-  const result = await mutateMcpConfig(options, config => {
+  const result = await mutateMcpConfig(options, (config, describe) => {
     if (!Object.hasOwn(config.servers, options.name)) {
       throw mutationError('target-not-found', 'The MCP server no longer exists.');
     }
     const entry = config.servers[options.name];
-    if (!isRecord(entry) || !describeEntry(options.name, entry, options.scope, '').info.valid) {
+    const resolved = describe(options.name, entry);
+    if (!isRecord(entry) || !resolved.info.valid) {
       throw mutationError('target-invalid', 'The MCP server entry is invalid and was not changed.');
     }
     if (options.tool !== undefined) {
-      const overrides = isRecord(entry.toolExposure) ? entry.toolExposure : {};
+      const effective = isRecord(resolved.value) ? resolved.value : {};
+      const overrides = isRecord(effective.toolExposure) ? effective.toolExposure : {};
       if (overrides[options.tool] === options.exposure) return { changed: false, value: undefined };
       entry.toolExposure = { ...overrides, [options.tool]: options.exposure };
-      if (!describeEntry(options.name, entry, options.scope, '').info.valid) {
+      if (!describe(options.name, entry).info.valid) {
         throw mutationError('invalid-request', 'The per-tool exposure limit was exceeded.');
       }
       return { changed: true, value: undefined };
     }
-    const current = isMcpExposure(entry.exposure) ? entry.exposure : 'direct';
+    const current = resolved.info.exposure;
     if (current === options.exposure) {
       return { changed: false, value: undefined };
     }
-    if (options.exposure === 'direct') delete entry.exposure;
+    if (resolved.override) entry.exposure = options.exposure;
+    else if (options.exposure === 'direct') delete entry.exposure;
     else entry.exposure = options.exposure;
     return { changed: true, value: undefined };
   });
@@ -1716,13 +1788,13 @@ export async function replaceMcpServerEntry(
     throw mutationError('invalid-request', 'The replacement MCP server is invalid.');
   }
   const entry = structuredClone(options.entry);
-  const result = await mutateMcpConfig(options, config => {
+  const result = await mutateMcpConfig(options, (config, describe) => {
     if (!Object.hasOwn(config.servers, options.targetName)) {
       throw mutationError('target-not-found', 'The MCP server no longer exists.');
     }
     const existing = config.servers[options.targetName];
     if (!isRecord(existing)
-      || !describeEntry(options.targetName, existing, options.scope, '').info.valid) {
+      || !describe(options.targetName, existing).info.valid) {
       throw mutationError('target-invalid', 'The MCP server entry is invalid and was not replaced.');
     }
     if (options.name !== options.targetName && Object.hasOwn(config.servers, options.name)) {
@@ -1747,14 +1819,14 @@ export async function removeMcpServer(
   options: McpServerRemovalMutation,
 ): Promise<McpServerRemovalResult> {
   validateMutationName(options.name);
-  const result = await mutateMcpConfig(options, config => {
+  const result = await mutateMcpConfig(options, (config, describe) => {
     if (!Object.hasOwn(config.servers, options.name)) {
       throw mutationError('target-not-found', 'The MCP server no longer exists.');
     }
     const entries = Object.entries(config.servers);
     const index = entries.findIndex(([name]) => name === options.name);
     const entry = config.servers[options.name];
-    if (!isRecord(entry) || !describeEntry(options.name, entry, options.scope, '').info.valid) {
+    if (!isRecord(entry) || !describe(options.name, entry).info.valid) {
       throw mutationError('target-invalid', 'The MCP server entry is invalid and was not removed.');
     }
     delete config.servers[options.name];
@@ -1791,7 +1863,10 @@ export async function restoreMcpServer(
     ...(record.scope === 'project' && record.cwd ? { cwd: record.cwd } : {}),
     ...(options.trustManager ? { trustManager: options.trustManager } : {}),
   };
-  const result = await mutateMcpConfig(target, config => {
+  const result = await mutateMcpConfig(target, (config, describe) => {
+    if (record.scope === 'project' && isProjectOverride(record.entry) && !describe(record.name, record.entry).info.valid) {
+      throw mutationError('target-invalid', 'The inherited MCP server is no longer available for restoration.');
+    }
     if (Object.hasOwn(config.servers, record.name)) {
       throw mutationError('target-conflict', 'The MCP server name is already configured.');
     }
