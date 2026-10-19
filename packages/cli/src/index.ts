@@ -360,6 +360,7 @@ async function main(): Promise<void> {
       name: cliArguments.name,
       extensions: cliArguments.extensions,
       noExtensions: cliArguments.noExtensions,
+      noMcp: cliArguments.noMcp,
       extensionRegistry: extensionStartup?.registry,
       extensionLoader: extensionStartup?.loader,
       skills: cliArguments.skills,

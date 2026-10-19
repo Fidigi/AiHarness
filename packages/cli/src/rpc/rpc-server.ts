@@ -100,6 +100,7 @@ export interface RpcStartupOptions {
   name?: string;
   extensions?: string[];
   noExtensions?: boolean;
+  noMcp?: boolean;
   /** Internal, already-loaded startup generation. Supply registry and loader together. */
   extensionRegistry?: ExtensionRegistry;
   extensionLoader?: ExtensionLoader;

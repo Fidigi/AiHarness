@@ -58,6 +58,7 @@ Options:
   --offline                      Skip automatic model discovery, credential commands and OAuth refresh
   -e, --extension <path|builtin:name> Load an explicit extension (repeatable)
   -ne, --no-extensions           Disable discovery and optional built-ins; explicit -e still works
+  --no-mcp                       Disable hosted MCP even when explicitly enabled
   --skill <path>                 Add a trusted skill file/directory selector (repeatable)
   --prompt-template <path>       Add a trusted prompt file/directory selector (repeatable)
   -ns, --no-skills               Disable skill discovery for this run
@@ -276,6 +277,17 @@ beforeAll(async () => {
 afterAll(async () => { if (artifactRoot) await rm(artifactRoot, { recursive: true, force: true }); });
 
 describe('CLI-RUN-01 genuine locally packed installed executable', () => {
+  it('pins native no-MCP denial across installed hosts without denying ordinary sources', async () => {
+    const probe = 'no-mcp-installed-probe.mjs';
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/no-mcp-probe.mjs'), path.join(consumer, probe));
+    const env = { ...environment, AIH_NO_MCP_COMMAND: 'ai-harness', AIH_TEST_MODULES_ROOT: installedModules };
+    for (const [mode, scenario] of [
+      ['print', 'suppressed'], ['json', 'suppressed'], ['rpc', 'suppressed'],
+      ['regular', 'suppressed'], ['fullscreen', 'suppressed'], ['print', 'control'],
+    ]) expect(await run(process.execPath, [probe, mode!, scenario!], consumer, env, '', 45_000))
+      .toEqual({ code: 0, stdout: 'native no-MCP OK\n', stderr: '' });
+  }, 90_000);
+
   it('ships native editor schemas and public declarations outside the checkout', async () => {
     const cli = inventory.find(item => item.name === '@ai-harness/cli')!;
     for (const name of ['settings', 'project-settings', 'models', 'keybindings', 'theme']) {

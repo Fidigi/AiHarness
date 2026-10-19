@@ -24,15 +24,18 @@ export class ExtensionLoader extends ExtensionModuleLoader {
 /** Keep selectors ordered until Core has discovered actual files. Built-in
  * capability switches are not executable paths and remain host-owned. */
 export function configuredBuiltinExtensions(settings: ResolvedAgentSettings, options: {
-  extensions?: readonly string[]; noExtensions?: boolean;
+  extensions?: readonly string[]; noExtensions?: boolean; noMcp?: boolean;
 }): BuiltinExtensionPolicy {
-  return resolveBuiltinExtensionPolicy({
+  const policy = resolveBuiltinExtensionPolicy({
     global: settings.globalSettings.extensions,
     project: settings.projectSettings.extensions,
     projectTrusted: settings.projectTrusted,
     noExtensions: options.noExtensions,
     explicit: options.extensions,
   });
+  // An explicit host denial wins over settings and explicit capability IDs.
+  // Other built-ins/executable extensions retain their native policy.
+  return options.noMcp === true ? Object.freeze({ ...policy, mcp: false }) : policy;
 }
 
 export function explicitExtensionFiles(entries: readonly string[] = []): string[] {

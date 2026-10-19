@@ -69,4 +69,10 @@ Fresh `/tmp/aih-a3-editors-navigation-root-main-*` freezes48source/control+SDK/1
 
 One predeclared diagnostic-only six-case invocation on the actual corrected-main image changes only the optional assertion message to expose the already-captured PTY exit/output byte count; identical `.toContain`/2000ms helper/case deadlines/flows/native flags. All6 pass3.58s, runner0, original source after-hash unchanged. This does not reproduce or explain the earlier empty-output failure, does not replace/requalify5917/1, and is not repeated for green. Artifacts `/tmp/aih-a3-session-navigation-pty-diagnostic-*`.
 
+## Fresh independent Main with hosted-MCP denial
+
+After documentation-only ebd5f7e, separately qualified narrow no-MCP V4 is exact10-path integrated uncommitted after clean1192baseline/1196candidate byte/mode/nlink guards. All227earlier installed bodies/assertions except additive implemented help metadata, newer Core exports/schema/skill/navigation remain unchanged; no isolated row-copy code/PNG/PTY diagnostic is included. V13row separately fails209/1 and blocks its22writes. [Narrow implementation receipt](./native-mcp-host-denial.md).
+
+Fresh `/tmp/aih-a3-no-mcp-main-*` freezes66source/control+SDK/1196nlink-aware inputs, with actual types0/focused27files451pass47.05s/complete ORIGINAL parity258pass273.70s; third full FAILED5936pass/1failof5937,380filespass/1fail1166.09s/Make2, unchanged SDK public review child code=null/SIGSEGV/empty stdout+stderr; all9E2E618/normalproduction/fiveassets/exactcompiledhelp pass, failed-evidence audit0 verifies12checks/66sources+SDK/1196nlinkinputs/image/Git/reports. Passing siblings cannot waive it. Required before/after/image/Git/rawreports/production/final whole-clause/index audits remain binding. New source requires a fresh complete aggregate, never an unchanged full-only rerun or waiver of5914/1,5917/1 or V4–V7. WEB05 remains PARTIAL, mandate5/10.
+
 Artifact families: `/tmp/aih-a3-navigation-vN-*`, `/tmp/aih-a3-navigation-v8-e2e-artifacts/`, `/tmp/aih-a3-navigation-promotion.*`, `/tmp/aih-a3-editors-navigation-main-*`. No release, publisher, deployment, physical-device or ten-closure completion is claimed.
