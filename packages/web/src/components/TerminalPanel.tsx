@@ -12,6 +12,10 @@ import {
 } from '../services/api';
 import { useI18n } from '../hooks/useI18n';
 import { useSessionStore } from '../store/session-store';
+import { setTerminalTheme, TERMINAL_THEMES, useTerminalTheme } from '../store/terminal-theme';
+import TerminalExtraKeys, { terminalControlMessages, useTerminalExtraKeysVisible } from './TerminalExtraKeys';
+import { applyTerminalModifiers, NO_TERMINAL_MODIFIERS, terminalExtraKeySequence, type TerminalExtraKey,
+  type TerminalModifier, type TerminalModifiers } from './terminal-extra-keys';
 
 interface StoredTerminalState {
   version: 1;
@@ -49,7 +53,29 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
   onError: (message: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const terminalRef = useRef<XtermTerminal | undefined>(undefined);
   const offsetRef = useRef(0);
+  const runningRef = useRef(snapshot.status === 'running');
+  runningRef.current = snapshot.status === 'running';
+  const readyRef = useRef(false);
+  const [inputEnabled, setInputEnabled] = useState(false);
+  const [modifiers, setModifiers] = useState<Readonly<TerminalModifiers>>(NO_TERMINAL_MODIFIERS);
+  const modifiersRef = useRef(modifiers);
+  const theme = useTerminalTheme();
+  const extraKeysVisible = useTerminalExtraKeysVisible();
+  const { locale } = useI18n();
+  const resetModifiers = () => { modifiersRef.current = NO_TERMINAL_MODIFIERS; setModifiers(NO_TERMINAL_MODIFIERS); };
+  const sender = useRef<(data: string) => void>(() => undefined);
+
+  useEffect(() => {
+    if (terminalRef.current) terminalRef.current.options.theme = { ...TERMINAL_THEMES[theme] };
+  }, [theme]);
+  useEffect(() => {
+    const enabled = readyRef.current && snapshot.status === 'running';
+    setInputEnabled(enabled);
+    if (terminalRef.current) terminalRef.current.options.disableStdin = !enabled;
+    if (!enabled || !extraKeysVisible) resetModifiers();
+  }, [snapshot.status, extraKeysVisible]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -61,10 +87,10 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
       fontFamily: '"Noto Sans Mono", "JetBrains Mono", Consolas, monospace',
       fontSize: 13,
       scrollback: 10_000,
-      theme: {
-        background: '#111827', foreground: '#e5e7eb', cursor: '#a4c2f4', selectionBackground: '#334155',
-      },
+      theme: { ...TERMINAL_THEMES[theme] },
+      disableStdin: true,
     });
+    terminalRef.current = terminal;
     terminal.open(container);
     terminal.focus();
     let disposed = false;
@@ -88,10 +114,27 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
     observer.observe(container);
     sendSize();
 
-    const input = terminal.onData(data => {
+    const mayWrite = () => !disposed && terminalRef.current === terminal && readyRef.current && runningRef.current;
+    const availability = (ready: boolean) => {
+      if (disposed) return;
+      readyRef.current = ready;
+      const enabled = ready && runningRef.current;
+      terminal.options.disableStdin = !enabled;
+      setInputEnabled(enabled);
+      if (!enabled) resetModifiers();
+    };
+    const send = (data: string) => {
+      if (!mayWrite()) return;
       void writeTerminal(snapshot.id, data).then(result => {
-        if (!result.success) onError(result.error || 'Terminal input failed');
+        if (!disposed && !result.success) onError(result.error || 'Terminal input failed');
       });
+    };
+    sender.current = send;
+    const input = terminal.onData(data => {
+      if (!mayWrite()) return;
+      const owned = modifiersRef.current;
+      resetModifiers();
+      send(applyTerminalModifiers(data, owned));
     });
     terminal.attachCustomKeyEventHandler(event => {
       if (event.type !== 'keydown' || !event.ctrlKey || !event.shiftKey) return true;
@@ -100,9 +143,12 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
         return false;
       }
       if (event.code === 'KeyV') {
+        if (!mayWrite()) return false;
+        const owned = modifiersRef.current;
+        resetModifiers();
         void navigator.clipboard?.readText().then(text => {
-          if (text) void writeTerminal(snapshot.id, text);
-        });
+          if (text && mayWrite()) send(applyTerminalModifiers(text, owned));
+        }).catch(() => { if (!disposed) onError('Terminal clipboard unavailable'); });
         return false;
       }
       return true;
@@ -113,6 +159,8 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
         try {
           for await (const record of streamTerminalEvents(snapshot.id, offsetRef.current, controller.signal)) {
             if (record.type === 'connection.ready') {
+              runningRef.current = record.snapshot.status === 'running';
+              availability(true);
               onSnapshot(record.snapshot);
               if (record.reset) {
                 terminal.reset();
@@ -125,6 +173,8 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
             } else {
               offsetRef.current = Math.max(offsetRef.current, record.event.endOffset);
               terminal.writeln(`\r\n\x1b[2m[process exited ${record.event.exitCode}]\x1b[0m`);
+              availability(false);
+              runningRef.current = false;
               onSnapshot({ ...snapshot, status: record.event.exitCode === 0 ? 'exited' : 'failed', exitCode: record.event.exitCode });
             }
           }
@@ -132,6 +182,7 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
           else break;
         } catch (error) {
           if (controller.signal.aborted) break;
+          availability(false);
           onError(error instanceof Error ? error.message : 'Terminal connection failed');
           await new Promise(resolve => setTimeout(resolve, 1_000));
         }
@@ -140,6 +191,9 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
 
     return () => {
       disposed = true;
+      readyRef.current = false;
+      terminalRef.current = undefined;
+      sender.current = () => undefined;
       controller.abort();
       observer.disconnect();
       window.clearTimeout(resizeTimer);
@@ -148,14 +202,32 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
     };
   }, [snapshot.id]); // Recreate only when switching PTY tabs.
 
-  return <div className="terminal-surface" ref={containerRef} role="application" aria-label={snapshot.name} />;
+  const pressKey = (key: TerminalExtraKey) => {
+    const terminal = terminalRef.current;
+    if (!terminal || !readyRef.current || !runningRef.current) return;
+    const owned = modifiersRef.current;
+    resetModifiers();
+    sender.current(terminalExtraKeySequence(key, owned, terminal.modes.applicationCursorKeysMode));
+  };
+  const toggleModifier = (key: TerminalModifier) => {
+    if (!readyRef.current || !runningRef.current) return;
+    modifiersRef.current = { ...modifiersRef.current, [key]: !modifiersRef.current[key] };
+    setModifiers(modifiersRef.current);
+  };
+  return <>
+    <div className="terminal-surface" data-terminal-theme={theme} ref={containerRef} role="application" aria-label={snapshot.name} />
+    {extraKeysVisible && <TerminalExtraKeys disabled={!inputEnabled} modifiers={modifiers} locale={locale}
+      onKey={pressKey} onModifier={toggleModifier} />}
+  </>;
 }
 
 export default function TerminalPanel({ initialOpen = false }: { initialOpen?: boolean }) {
   const workspace = useSessionStore(state => state.workspace);
   const workspaceOperationTrusted = Boolean(workspace
     && (workspace.operationTrusted ?? workspace.trusted));
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const terminalTheme = useTerminalTheme();
+  const controlMessages = terminalControlMessages(locale);
   const initial = useMemo(() => workspace ? readState(workspace.id) : { version: 1 as const, open: false, ids: [] }, [workspace?.id]);
   const initialOpenRef = useRef(initialOpen);
   const createOnMountRef = useRef(initialOpen);
@@ -268,6 +340,10 @@ export default function TerminalPanel({ initialOpen = false }: { initialOpen?: b
         </nav>
         <div>
           {active && <small>{active.shell} · {active.cols}×{active.rows}{active.exitCode === undefined ? '' : ` · exit ${active.exitCode}`}</small>}
+          <select className="terminal-theme" aria-label={controlMessages.theme} value={terminalTheme}
+            onChange={event => setTerminalTheme(event.target.value === 'light' ? 'light' : 'dark')}>
+            <option value="dark">{controlMessages.dark}</option><option value="light">{controlMessages.light}</option>
+          </select>
           <button onClick={() => setOpen(false)} aria-label={t('terminal.hide')}>⌄</button>
         </div>
       </header>
