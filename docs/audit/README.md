@@ -53,6 +53,9 @@ Closure is `(DONE + GAP ACCEPTED) / total`; `PARTIAL` is not closed.
 | Audit | Scope | Status |
 |---|---|---|
 | `docs/audit/documentation/AUDIT-1` | Documentation structure, accuracy, screenshots, bilingual coverage and validation | DONE |
+| `docs/audit/pi/AUDIT-4` | Current Pi/Pi Web gap families, prioritized delivery tasks and separate integrated qualification | IN PROGRESS — sole active parity tracker |
+| `docs/audit/pi/AUDIT-3` | Previous 99-entry matrix, product decisions, deliveries and all failed evidence | ARCHIVED — superseded by AUDIT-4; no functional completion |
+| `docs/audit/pi/AUDIT-2` | Original 152 criteria and 102 historical acceptances; remaining obligations preserved through AUDIT-3/4 | ARCHIVED — historical evidence |
 
 Paths are plain code text and intentionally omit `.md`, matching navigation conventions.
 

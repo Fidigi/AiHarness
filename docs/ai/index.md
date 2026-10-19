@@ -31,6 +31,8 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 |---|---|
 | [`AGENTS.md`](./AGENTS.md) | Documentation maintenance conventions for agents |
 | `docs/audit/documentation/AUDIT-1` | Documentation structure, completeness & bilingual coverage audit (DONE) |
+| `docs/audit/pi/AUDIT-4` | Active Pi/Pi Web gaps and bounded delivery queue; global qualification tracked separately |
+| `docs/audit/pi/AUDIT-3` | Archived parity criteria, decisions and historical evidence; not a second active backlog |
 
 ## 🎯 How to Use This Documentation
 
