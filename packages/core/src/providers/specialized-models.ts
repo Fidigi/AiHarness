@@ -4,8 +4,8 @@ import { calculatePublishedModelCost } from './model-metadata.js';
 
 /** AiHarness-owned SDK contract. Descriptors never contain endpoints or credentials. */
 export type SpecializedModelType = 'classifier' | 'image';
-export interface SpecializedModel { id: string; type: SpecializedModelType; provider: string; model: string; virtual?: boolean }
-export interface ClassificationRequest { model: string; input: string; labels: string[] }
+export interface SpecializedModel { id: string; type: SpecializedModelType; provider: string; model: string; virtual?: boolean; imageInput?: boolean }
+export interface ClassificationRequest { model: string; input: string; labels: string[]; images?: GeneratedImage[] }
 export interface ClassificationResult { label: string; usage?: TokenUsage }
 export interface ImageGenerationRequest { model: string; prompt: string; count?: number; size?: '256x256' | '512x512' | '1024x1024' }
 export interface GeneratedImage { mediaType: 'image/png' | 'image/jpeg' | 'image/webp'; data: string }
@@ -23,12 +23,18 @@ function text(value: unknown, maximum: number): value is string {
   return typeof value === 'string' && value.length > 0 && Buffer.byteLength(value) <= maximum;
 }
 export function validateClassificationRequest(value: unknown): asserts value is ClassificationRequest {
-  if (!object(value) || Object.keys(value).some(key => !['model', 'input', 'labels'].includes(key))
+  if (!object(value) || Object.keys(value).some(key => !['model', 'input', 'labels', 'images'].includes(key))
     || !text(value.model, 500) || !text(value.input, SPECIALIZED_MODEL_LIMITS.inputBytes)
     || !Array.isArray(value.labels) || !value.labels.length || value.labels.length > SPECIALIZED_MODEL_LIMITS.labels
     || !value.labels.every(label => text(label, 500)) || new Set(value.labels).size !== value.labels.length) {
     throw new Error('Invalid classification request.');
   }
+  if (value.images !== undefined) validateGeneratedImages(value.images, SPECIALIZED_MODEL_LIMITS.images);
+}
+function copyClassificationRequest(request: ClassificationRequest): ClassificationRequest {
+  validateClassificationRequest(request);
+  return { model: request.model, input: request.input, labels: [...request.labels],
+    ...(request.images === undefined ? {} : { images: validateGeneratedImages(request.images, SPECIALIZED_MODEL_LIMITS.images) }) };
 }
 export function validateImageGenerationRequest(value: unknown): asserts value is ImageGenerationRequest {
   if (!object(value) || Object.keys(value).some(key => !['model', 'prompt', 'count', 'size'].includes(key))
@@ -83,7 +89,8 @@ export class SpecializedModels {
         const id = this.redact(candidate.id); const model = this.redact(candidate.model);
         if (!text(id, 500) || !text(model, 500) || seen.has(id)) return [];
         seen.add(id);
-        return [{ id, type, provider, model, ...(candidate.virtual === true ? { virtual: true } : {}) }];
+        return [{ id, type, provider, model, ...(candidate.virtual === true ? { virtual: true } : {}),
+          ...(candidate.imageInput === true ? { imageInput: true } : {}) }];
       });
     } catch { throw new Error('Specialized model metadata is unavailable.'); }
   }
@@ -93,14 +100,16 @@ export class SpecializedModels {
   }
   getModelOfType(type: SpecializedModelType): SpecializedModel | undefined { return this.getAvailableOfType(type)[0]; }
   async classify(request: ClassificationRequest, options: SpecializedModelOptions = {}): Promise<ClassificationResult> {
-    validateClassificationRequest(request);
-    this.resolve('classifier', request.model);
+    request = copyClassificationRequest(request);
+    const initialModel = this.resolve('classifier', request.model);
+    if (request.images && initialModel.imageInput !== true) throw new Error('Classification model does not support image input.');
     return this.bounded(options.signal, async signal => {
       const transformed = this.before ? await this.before('classifier', request, signal) : request;
       validateClassificationRequest(transformed);
       if (signal.aborted) throw new Error('Cancelled.');
-      request = transformed;
+      request = copyClassificationRequest(transformed);
       const model = this.resolve('classifier', request.model);
+      if (request.images && model.imageInput !== true) throw new Error('Classification model does not support image input.');
       const result = await this.provider.classify({ ...request, model: model.model }, { signal });
       if (!object(result) || !request.labels.includes(result.label)) throw new Error('Invalid classification result.');
       const usage = safeUsage(result.usage);

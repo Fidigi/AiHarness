@@ -211,11 +211,13 @@ export class FullscreenInput {
         this.cursor = Math.min(this.value.length, this.cursor + 1);
         break;
       case 'home':
-        this.cursor = 0;
+        this.cursor = key.ctrl ? 0 : this.value.slice(0, this.cursor).lastIndexOf('\n') + 1;
         break;
-      case 'end':
-        this.cursor = this.value.length;
+      case 'end': {
+        const lineEnd = this.value.indexOf('\n', this.cursor);
+        this.cursor = key.ctrl || lineEnd < 0 ? this.value.length : lineEnd;
         break;
+      }
       case 'up':
         this.navigateHistory(-1);
         break;

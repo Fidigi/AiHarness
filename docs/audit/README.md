@@ -9,8 +9,7 @@ docs/audit/
 ├── README.md
 ├── AUDIT-template.md
 └── <subject>/
-    ├── AUDIT-1.md
-    └── AUDIT-2.md
+    └── AUDIT-N.md
 ```
 
 Use the next sequential `AUDIT-N.md` inside a subject directory. Local-only evidence may live in an ignored subject tree, but versioned documentation must not actively link to ignored content.
@@ -53,9 +52,7 @@ Closure is `(DONE + GAP ACCEPTED) / total`; `PARTIAL` is not closed.
 | Audit | Scope | Status |
 |---|---|---|
 | `docs/audit/documentation/AUDIT-1` | Documentation structure, accuracy, screenshots, bilingual coverage and validation | DONE |
-| `docs/audit/pi/AUDIT-4` | Current Pi/Pi Web gap families, prioritized delivery tasks and separate integrated qualification | IN PROGRESS — sole active parity tracker |
-| `docs/audit/pi/AUDIT-3` | Previous 99-entry matrix, product decisions, deliveries and all failed evidence | ARCHIVED — superseded by AUDIT-4; no functional completion |
-| `docs/audit/pi/AUDIT-2` | Original 152 criteria and 102 historical acceptances; remaining obligations preserved through AUDIT-3/4 | ARCHIVED — historical evidence |
+| `docs/audit/pi/AUDIT-5` | Pinned Pi 1.2.0 / Pi Web 0.12.2 comparison: 43 stable criteria, compatibility decisions, evidence and prioritized work packages | IN PROGRESS — sole active parity tracker |
 
 Paths are plain code text and intentionally omit `.md`, matching navigation conventions.
 

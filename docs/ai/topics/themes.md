@@ -69,7 +69,7 @@ JSON Schema is an editor aid, not filesystem or execution authority. Core separa
 
 `packages/cli/src/utils/theme-schema.test.ts` covers all 58 real token loads, literal/export grammar, legacy precedence, variables, invalid names/keys and emitted schema equality. Core `themes/theme-color-ownership.test.ts` covers prototype literals/forward references; packed PATH-bin consumers assert both schemas' inventory, nonsymlink files and byte equality outside the checkout. These tests do not certify arbitrary editors or fresh-registry installation.
 
-`themes/theme-sources.test.ts`, CLI `cli/theme-sources{,-process}.test.ts` and the actual installed-package test cover metadata/body separation, ordered sources, negative trust, identity, limits, public readonly declarations, both real PTYs, reload and headless conservation. Existing selector/module-entry tests protect the extracted engine's extension behavior. See the [acceptance record](../../audit/pi/acceptance/theme-sources.md) for exact qualified artifacts and retained failures; the [CLI reference](./cli-reference.md) describes the surrounding runtime.
+`themes/theme-sources.test.ts`, CLI `cli/theme-sources{,-process}.test.ts` and the actual installed-package test cover metadata/body separation, ordered sources, negative trust, identity, limits, public readonly declarations, both real PTYs, reload and headless conservation. Existing selector/module-entry tests protect the extracted engine's extension behavior. The [CLI reference](./cli-reference.md) describes the surrounding runtime.
 
 ## Related Domains
 
