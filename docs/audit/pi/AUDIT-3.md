@@ -619,3 +619,11 @@ Historical mandate snapshot — Baseline: `784a7ba`, **1 DONE (A3-CLI-13), 98 op
 | Date | ID(s) | Old → New | Evidence | Validation | Notes/decision |
 |---|---|---|---|---|---|
 | 2026-10-19 | Former mandate only; all 99 criterion statuses unchanged | Ten-additional-closures target → withdrawn, not completed | Explicit user request: `J'aimerai que tu oubli l'objectif de réaliser 10 taches.` | Documentation-only: `make lint-docs`, tracker consistency and scoped `git diff --check`; no product tests or implementation resumed | Stop using the former ten-closure target to select, expand or continue work. Future work must follow the user's requested scope, without an implicit replacement quota. Preserve historical results and the five product decisions in §9.3; no criterion, failed aggregate or delivery is relabeled. |
+
+### 9.14 User-Approved Working-Tree Checkpoints — 2026-10-19
+
+The user approved three separate commits to save pending work and obtain a clean Git tree, explicitly without new development or product-test reruns. This is checkpointing, not integrated or release qualification.
+
+| Date | ID(s) | Old → New | Evidence | Validation | Notes/decision |
+|---|---|---|---|---|---|
+| 2026-10-19 | A3-CLI-02 | PARTIAL → PARTIAL; historical receipt reconciled | `docs/audit/pi/acceptance/native-mcp-inheritance.md` now distinguishes isolated V1–V3/then-Main1203 and row1219 from bounded inheritance delivery a0e0834; the later browser/Main V5 receipt remains authoritative for that delivery | Documentation-only: `make lint-docs`, tracker consistency and scoped `git diff --check`; no product rerun | User authorized including this previously excluded document. Retain its chronology and all original failures; remove stale current-Main/no-integration and active-quota implications. No new implementation, acceptance or criterion closure. |
