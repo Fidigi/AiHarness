@@ -116,6 +116,17 @@
       }
     },
     {
+      "id": "rpc-invalid-startup-file",
+      "description": "rejects RPC startup files before extensions, file reads, or session admission",
+      "criteria": ["CLI-RUN-06", "CLI-AUT-02"],
+      "args": ["--mode", "rpc", "--extension", "<FIXTURES>/extensions/noisy-extension.mjs", "@must-not-open.txt"],
+      "expected": {
+        "exitCode": 2,
+        "stdout": "goldens/empty.stdout.jsonl",
+        "stderr": "goldens/rpc-invalid-startup-file.stderr.txt"
+      }
+    },
+    {
       "id": "rpc-invalid-envelope",
       "description": "returns a fixed protocol error for a request without type or method",
       "criteria": ["CLI-AUT-02"],

@@ -27,7 +27,7 @@
 ### Known limitations
 
 - Static inspection of pinned upstream source/documentation and local implementation/selected tests. Neither product was launched for interactive comparison; no side-by-side browser, terminal, live-provider or OAuth qualification was run.
-- Existing test paths below identify reusable coverage, **not passing results from this audit**. A source search finding no implementation is bounded to the inspected production packages, not every possible third-party extension.
+- Initial test paths identify reusable coverage, not passing results by themselves; only dated §6 receipts add runtime qualification for their exact scope/inputs. A source search finding no implementation is bounded to the inspected production packages, not every possible third-party extension.
 - Inspection host: Linux x64, Node `v22.19.0`. Repository test qualification must use the Docker workflow and its pinned runtime, not this host.
 - Platform-specific behavior, native dependencies, real credentials, physical mobile keyboards, Safari and public registry installation remain unqualified.
 - The initial `make lint-docs` failed with seven obsolete acceptance links. §6 preserves that historical result and records the subsequent reference cleanup; no replacement acceptance was fabricated.
@@ -38,23 +38,23 @@
 
 | Status | Count | Details |
 |---|---:|---|
-| `DONE` | 1 | Source identities and bounded audit baseline recorded; not a functional parity claim |
-| `PARTIAL` | 28 | Existing implementation/coverage, with a concrete delta or unverified acceptance boundary |
+| `DONE` | 2 | Audit provenance and selected native CLI-01 v1 delivery; not complete functional parity |
+| `PARTIAL` | 27 | Existing implementation/coverage, with a concrete delta or unverified acceptance boundary |
 | `ABSENT` | 7 | Required capability or current qualification receipt not found in the bounded inspection |
 | `TO BE DEFINED` | 7 | Product, security or compatibility decision required before implementation |
 | `BLOCKED` | 0 | No criterion assigned an external blocker/owner at this baseline |
-| `IN PROGRESS` | 0 | No implementation task is claimed as actively started by this documentation change |
+| `IN PROGRESS` | 0 | CLI-01 owning qualification completed; no other family claimed actively delivered |
 | `GAP ACCEPTED` | 0 | No final omission has been approved |
-| **Total** | **43** | **2.3% closed: (`DONE` + `GAP ACCEPTED`) / total** |
+| **Total** | **43** | **4.7% closed: (`DONE` + `GAP ACCEPTED`) / total** |
 
-**Interpretation:** this is criterion closure, not the percentage of features implemented or developer effort completed. The only closed item is audit provenance. Existing functionality is substantial; static inspection cannot certify the remaining criteria. Delivering one subtask does not close its whole family.
+**Interpretation:** this is criterion closure, not the percentage of features implemented or developer effort completed. Closed items are audit provenance and CLI-01's selected native v1 contract on its frozen inputs. Existing functionality is substantial; these results do not certify the remaining criteria, whole-platform/browser integration or unchanged upstream compatibility. Delivering one subtask does not close its whole family.
 
 ### Summary by Surface
 
 | Surface | Done | Partial | Absent | To define | Blocked | In progress | Gap accepted | Total |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | Baseline and compatibility | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 2 |
-| CLI and terminal | 0 | 3 | 0 | 1 | 0 | 0 | 0 | 4 |
+| CLI and terminal | 1 | 2 | 0 | 1 | 0 | 0 | 0 | 4 |
 | Agent execution | 0 | 4 | 0 | 0 | 0 | 0 | 0 | 4 |
 | Sessions and context | 0 | 2 | 2 | 1 | 0 | 0 | 0 | 5 |
 | Models and providers | 0 | 3 | 1 | 1 | 0 | 0 | 0 | 5 |
@@ -67,7 +67,7 @@
 
 ## 3. Traceability by Surface
 
-Priority is proposed: **P0** = decide the contract/protect persisted data and execution; **P1** = core user-visible parity; **P2** = ergonomics/platform breadth. These are not commitments. Evidence references `E01`–`E14` resolve to concrete source and coverage paths in §8. Each cell separates the observed difference from the evidence still required for closure.
+Priority is proposed: **P0** = decide the contract/protect persisted data and execution; **P1** = core user-visible parity; **P2** = ergonomics/platform breadth. These are not commitments. Evidence references `E01`–`E15` resolve to concrete source and coverage paths in §8. Each cell separates the observed difference from the evidence still required for closure.
 
 ### Baseline and compatibility
 
@@ -80,7 +80,7 @@ Priority is proposed: **P0** = decide the contract/protect persisted data and ex
 
 | ID | Status | Criterion and completion evidence |
 |---|---|---|
-| CLI-01 | PARTIAL | **P1 · Invocation, input and headless contracts.** Print/JSON/RPC, piped input, `@file`, model/tool selection, startup sessions and standalone commands already exist. Native goldens lock AiHarness behavior, not Pi wire equality; Pi's MCP selection exception and standalone auth/update command semantics differ. **Close:** versioned Pi→AiHarness command/option/output map for the selected contract, with real emitted/installed CLI and RPC scenarios, stdout/stderr separation, invalid input, cancellation and documented differences. E02/E05/E10/E14. |
+| CLI-01 | DONE | **P1 · Native invocation contract v1.** The versioned map inventories all 41 pinned Pi top-level long flags and standalone commands as native routes/translations/retained differences. Existing argv/input/session/model/tool/resource/channel goldens are reused; real emitted and installed print/JSON/RPC probes qualify first-signal 130/143, owned cleanup, complete JSONL/settlement, transport closure, durable readback and no second prompt. Strict RPC startup-file rejection precedes extension admission; unrelated input failures remain errors. Docker typecheck, 44 focused controls, 6,171 unit/process/API tests (including 272 parity tests) and production build pass for isolated `8cf75ce` plus the CLI-01 inputs in §6. No Pi argv/wire/file compatibility, other functional-family or whole-platform/platform/live-account closure is implied. E02/E05/E10/E14/E15. |
 | CLI-02 | PARTIAL | **P1 · Terminal editor and rendering.** Both terminal modes exist, but AiHarness's editor/renderer is not Pi's component system. Current editor history handling, cursor movement and slim rendering do not establish Pi's multiline word editing/undo, selection/mouse, inline images, overlays or terminal-protocol support. The pre-existing Home/End patch is unqualified. **Close:** bound the supported terminal capability matrix, then verify multiline/Unicode/IME, paste, resize, interrupt, restore and screen cleanup in real regular/fullscreen processes; record retained differences. E02/E07. |
 | CLI-03 | PARTIAL | **P2 · Keybindings, themes and effective settings.** Native configurable actions, passive hotkeys and theme loading exist. Pi has a broader named action vocabulary and theme color formats; several native settings, including `fullscreenCopyOnSelect`, are parsed without a matching host consumer in the inspected source. Parsing/schema acceptance is not implementation. **Close:** per-action/per-setting supported/unsupported map, actual dispatch and reload checks in both hosts, current theme-format validation, safe terminal probes and user documentation. E02/E08. |
 | CLI-04 | TO BE DEFINED | **P2 · Installation and service management.** Pi exposes self/package/catalog updates; Pi Web exposes `version`, `status`, `stop`, `open`, `update`. AiHarness Web's parser is startup-only; its release service checks versions, not installation. **Close:** decide which lifecycle commands to deliver or decline, including process ownership, update provenance/rollback, and remote exposure policy; add installed-command tests for the selected behavior. Do not introduce an automatic updater as a presumed parity requirement. E01/E02/E14. |
@@ -212,7 +212,7 @@ For code changes, run the owning Docker checks from `docs/ai/project-map.md`. Fo
 
 ## 5. Decisions and Accepted Gaps
 
-No functional gap has been accepted. The following are **pending decision requests**, not approvals or mandates to copy upstream behavior. Proposed decision authority: application product owner with security/API maintainers; no individual is assigned by this report.
+No functional gap has been accepted. The following are **pending decision requests**, not approvals or mandates to copy upstream behavior. Proposed decision authority: application product owner with security/API maintainers; no individual is assigned by this report. CLI-01 below selects its explicit native v1 invocation boundary only; this isolated commit does not stage the broader decision follow-up kept separately in the main working tree.
 
 | ID | Dated decision | Justification | Re-examination trigger |
 |---|---|---|---|
@@ -228,7 +228,7 @@ If an item is intentionally declined, add its final dated decision, exact behavi
 
 ## 6. Delivery Journal
 
-All entries below are a documentary baseline, not implementation receipts. Source/coverage references are expanded in §8. No old audit's `DONE` status was imported.
+Initial entries are a documentary baseline; later delivery rows carry only their recorded implementation/qualification scope. Source/coverage references are expanded in §8. No old audit's `DONE` status was imported.
 
 | Date | ID(s) | Old → New | Evidence | Validation | Notes/decision |
 |---|---|---|---|---|---|
@@ -241,12 +241,30 @@ All entries below are a documentary baseline, not implementation receipts. Sourc
 | 2026-10-19 | QUA-01 | Initial classification → `ABSENT` | E14; initial documentation check below | Before edits: `make lint-docs` exited 2 (checker reported seven broken links); `git diff --check` exited 0 | No Docker qualification run; historical acceptance files were already deleted |
 | 2026-10-19 | BASE-01, QUA-01 | No status change | This report; `docs/audit/README.md`; `docs/ai/project-map.md` | After navigation/API-map edits: `make lint-docs` exited 2 (97 Markdown files, 844 links, same seven violations); `git diff --check` exited 0. Inline Node assertions reconciled 43 unique criteria, all status/surface totals, 43 journaled IDs, 136 native and 92 upstream evidence paths; normalized before/after violation lists matched | AUDIT-5 is the sole active tracker; no deleted file restored. Both pre-existing source SHA-256 values remain unchanged. No application build/test/browser command was run |
 | 2026-10-19 | BASE-01, QUA-01 | No status change | Navigation, owning topics and this report | After requested obsolete-reference cleanup: `make lint-docs` exited 0 (97 Markdown files, 837 local links); `git diff --check` exited 0. Repository text-source scan found no remaining named references to deleted audit files | Documentary cleanup only; no criterion closure or application qualification claimed |
+| 2026-10-19 | CLI-01 | `PARTIAL` → `IN PROGRESS` | Native v1 mapping below; existing args/invocation/installed tests; new headless signal probe and RPC input guard | Pre-fix print/SIGINT failed by native signal termination; initial one-shot controls passed, RPC controls exposed intentional stdin close misreported as fatal. After corrections `make typecheck` and eight focused Docker controls exited 0 | User requested CLI-01 implementation/validation/commit; full owning gates pending, no other family closure or global qualification |
+| 2026-10-19 | CLI-01 | `IN PROGRESS` → `DONE` | E15, native contract v1, frozen manifests/context/images and retained failed attempts in `test-results/pi-audit-cli01-20261019/` | On attempt 3: typecheck 0; 44 focused controls/6 files; 272 parity tests/3 files; 6,171 unit/process/API tests/398 files; production build 0 | Selected native invocation scope only; broader decision/toolchain work remains separate, and no current whole-platform/browser receipt is transferred |
+
+### CLI-01 native invocation contract v1 delivery
+
+The user requested implementation, Docker validation and a commit for CLI-01. Its [versioned command/option/output map](../../ai/topics/cli-invocation-contract.md) uses the approved independent native CLI scope, not foreign argv/wire/file compatibility or a functional waiver. Other criteria retain their separately tracked baseline/decision/qualification scope; this isolated delivery does not adopt unrelated pending source changes.
+
+Existing args/invocation/session/model/tool/resource/standalone and genuine installed coverage already guards the normal boundaries. The identified gaps were a versioned pinned mapping, active print/JSON signal ownership, real RPC signal qualification and source-process/installed rejection of RPC startup files before extension admission. Changes reuse the existing harness and portable-probe pattern; existing goldens, assertions, deadlines, native trust/roots/redaction/budgets and Core/extension/session versions are preserved. Qualification also exposed that existing package journeys ran a private adapter via TSX instead of the delivered entry: they now invoke the real emitted CLI, retaining source-level parser/API coverage, every policy/channel/mutation assertion and deadlines. Native child errors retain their original fields and additionally report code/signal/killed metadata, without retries. The clean Docker test image now builds the real Web bundle required by the emitted Server test and checks its nonempty index alongside existing emitted inputs; no stub or product check is bypassed.
+
+Historical controls: the pre-fix emitted print/SIGINT probe failed with native signal termination (no awaited cleanup). Four initial one-shot controls then passed. Adding RPC controls exposed exit 1 with `Erreur fatale : Premature close`; signal-induced input destruction is now handled only in the input iterator, not by suppressing unrelated RPC failures. An early cleanup-handshake fixture had no referenced Node handle and exited naturally while awaiting a signal Promise; the fixture now owns a referenced, parent-bounded barrier, and production signal status is pinned immediately. These failures are retained, not counted as passing acceptance.
+
+Owning Docker checks run on an isolated checkout from `8cf75ce` plus CLI-01 changes only, without the separately pending workspace build-launcher mitigation or prior audit qualification updates. Attempt 1 recorded three installed-suite failures and native SIGSEGV/SIGTRAP child receipts around direct TypeScript declaration checks; the complete unit run was explicitly interrupted after those failures and is not passing evidence. Direct compiler calls now receive `--no-maglev` only for their exact resolved TypeScript entry, with immutable forwarded arguments, unchanged application argv/termination evidence and no retries. The newly selected empty-output negative golden also exposed a nonempty-only JSONL framing assertion: empty JSONL is now allowed, while exact channel/exit/fixture equality and all nonempty framing assertions remain unchanged. No reliable native backtrace establishes a crash cause.
+
+Attempt 2 (`final2/`, 1,253-file Git-eligible non-Markdown manifest SHA-256 `7034f00c31b088cb0df756e4b86853e54aa9b5b7a9a7d7bfd02b89b260305896`, test image `sha256:8318dddc4ede4fa07f9037915c107efd04e8d295deeb05df8a250893d3219161`) passed typecheck, 13 focused controls and 272 parity tests/3 files. Its complete unit gate exited Make 2/Vitest 1: 6,169 passed, two failed/398 files. One emitted Server test lacked the genuine Web bundle; the private source-adapter `check` subprocess failed without stderr or reported native identity, and an isolated diagnostic exited 0 without reproducing it. No specific cause or causal fix for that transient is claimed. Both failures are retained, not counted as passing or silently retried; the subsequent input revision strengthens the actual delivered CLI boundary and fixes the clean-image asset prerequisite.
+
+Attempt 3 freezes the same 1,253 source paths with only three non-documentary changes: `.docker/Dockerfile.test`, `.docker/test-build.test.mjs` and `packages/cli/src/cli/package-command.test.ts`. Manifest SHA-256 `814849487378720020e7a1f76f8ca4ead9ef01cab3500cb941a9ec2fbefb0625` is a Git-eligible source manifest, not an exact Docker-context manifest. The exact filtered COPY context has 1,237 files/links (including `packages/core/src/sdk/README.md`), manifest SHA-256 `21006b340a8980691c8da2c367b6e6a50d44a628e3f9731c050c9eac2945af3e`; every source byte/mode matches the frozen test image. Runtime: Linux x64/Debian 12, Node 24.15.0, V8 13.6.233.17-node.48, npm 12.1.0, TypeScript 5.9.3, Vite 8.3.1, Vitest 5.0.3. Test image: `sha256:f9f627e9a6cb2b7db385ca406cae336dbd7b14b24fc04ae8f154cfdf09674714`. Typecheck and 44 focused controls/6 files exit 0 (35 deliberately filtered tests); `make test-parity` exits 0 (272 tests/3 files); `make test` exits 0 (6,171 tests/398 files, including parity) and `make build-prod` exits 0. Production image: `sha256:f35f7f4ae60d4201fc1afce20fcfd657ae4c31474c7da37eb68a851c2302d66b`, Node 26.12.0/V8 14.6.202.34-node.39/npm 12.1.0, Linux x64; this is build provenance, not a separate runtime-version matrix qualification. All 1,253 non-documentary inputs remain unchanged after the gates. Logs/inputs are retained under `/tmp/aih-cli01-Uqk4tv/` and the ignored local receipt directory `test-results/pi-audit-cli01-20261019/`. There is no live-provider/physical-platform/browser qualification or transfer of a prior whole-platform receipt.
+
+**CLI-01 documentary validation:** `make lint-docs` exits 0 in both trees (98 Markdown files, 850 local links); `git diff --check` passes. Metadata checks reconcile 43 unique criteria, all status/11-surface totals, closure, CLI-01 journal and E15 paths per snapshot. All 1,253 frozen non-documentary hashes and the exact 1,237-entry COPY context remain unchanged. The main tree's earlier approvals, unrelated source/untracked launchers, other criteria and historical qualification receipt are preserved; the isolated CLI-01 commit does not stage that broader follow-up.
 
 ### Documentation validation receipt
 
 **Historical checks:** initial `make lint-docs` checked 96 Markdown files and 844 local links and found seven violations over six missing targets. After creating this report, the check covered 97 Markdown files and the same 844 links, retaining those seven failures. `git diff --check` passed. Inline Node assertions verified the criterion/status/surface totals, unique IDs, full initial journal coverage and existence of the registered native/upstream paths.
 
-**Final documentary result after reference cleanup:** at the user's request, obsolete links and named references were removed from navigation, topics and this report. `make lint-docs` now passes (97 Markdown files, 837 local links), as does `git diff --check`; the repository text-source scan finds no remaining named references to deleted audit files. Historical failed checks above remain historical, not current application qualification. No replacement acceptance was invented; QUA-01 remains `ABSENT`, and application tests/builds/visuals remain unexecuted.
+**Historical final documentary result after reference cleanup:** at the user's request, obsolete links and named references were removed from navigation, topics and this report. `make lint-docs` now passes (97 Markdown files, 837 local links), as does `git diff --check`; the repository text-source scan finds no remaining named references to deleted audit files. Historical failed checks above remain historical, not current application qualification. No replacement acceptance was invented. At that stage QUA-01 was `ABSENT` and application tests/builds/visuals were unexecuted; the later CLI-01 owning gates above have their separate frozen scope and do not close whole-platform qualification.
 
 ## 7. Glossary and Prefixes
 
@@ -273,7 +291,7 @@ All entries below are a documentary baseline, not implementation receipts. Sourc
 
 ### Baseline fingerprints
 
-These SHA-256 values identify the **pre-existing uncommitted files** observed during this audit, in addition to the Git commit in §1. Recompute on a later delivery; do not claim these bytes were tested.
+These SHA-256 values identify the **pre-existing uncommitted files** observed during this audit, in addition to the Git commit in §1. These initial fingerprints are not qualification receipts; later deliveries must identify and reconcile their own frozen inputs.
 
 | File | SHA-256 |
 |---|---|
@@ -300,6 +318,7 @@ Upstream paths are relative to the exact pinned GitHub trees in §1, **not movin
 | E12 | W: `docs/worktrees.md`, `docs/terminal.md`, `components/FileViewer.tsx`, `components/DelimitedTable.tsx`, `lib/terminal-manager.ts`, `lib/subagent-runtime.ts`, `lib/subagent-settings.ts` | A: `packages/web/src/components/WorkspacePanel.tsx`, `packages/web/src/components/TerminalPanel.tsx`, `packages/server/src/api/file-routes.ts`, `packages/server/src/runtime/terminal-runtime.ts`, `packages/server/src/runtime/subagent-service.ts`, `packages/server/src/runtime/subagent-runtime.ts`; `packages/server/src/runtime/terminal-runtime.test.ts`, `packages/server/src/runtime/subagent-runtime.test.ts`, `packages/server/src/web-server.test.ts`, `e2e/live-server.spec.ts`, `e2e/terminal-controls.spec.ts`, `e2e/workspace-asset-load.spec.ts` |
 | E13 | P: `packages/coding-agent/docs/security.md`, `docs/configuration.md`, `docs/models.md`, `docs/mcp.md` under that package. W: `lib/request-security.ts`, `lib/project-trust.ts`, `lib/web-auth.ts` | A: `packages/core/src/security/project-trust.ts`, `packages/core/src/security/workspace-manager.ts`, `packages/core/src/security/credential-store.ts`, `packages/core/src/providers/credentials.ts`, `packages/core/src/sessions/serialization.ts`, `packages/server/src/security/request-security.ts`; `packages/core/src/security/project-trust.test.ts`, `packages/core/src/sessions/provider-config-redaction.test.ts`, `packages/server/src/api/session-provider-redaction-process.test.ts`, `packages/server/src/web-server.test.ts` |
 | E14 | P: `package.json`, `packages/coding-agent/package.json`. W: `package.json`, `bin/prepare-terminal.js`, `lib/pi-packages.test.mjs`, `lib/process-lifecycle.test.mjs` | A: `Makefile`, `.docker/Dockerfile.test`, `.docker/Dockerfile.prod`, `.docker/e2e-suites.mjs`, `tests/functional-parity/fixtures/manifest.json`, `tests/functional-parity/installed-executable.test.ts`, `tests/functional-parity/installed-process.test.ts`, `.github/workflows/ci.yml`, `e2e/accessibility.spec.ts`, `e2e/performance.spec.ts`, `e2e/visual.spec.ts` |
+| E15 | P: pinned `packages/coding-agent/docs/cli.md`, `src/cli/args.ts`, `docs/rpc.md`; no new upstream version | A: `docs/ai/topics/cli-invocation-contract.md`, `packages/cli/src/index.ts`, `packages/cli/src/rpc/rpc-server.ts`, `packages/cli/src/rpc/rpc-server.test.ts`, `packages/cli/src/cli/args.test.ts`, `packages/cli/src/cli/headless-signal-process.test.ts`, `packages/cli/src/cli/fixtures/headless-signal-probe.mjs`, `tests/functional-parity/fixtures/manifest.json`, `tests/functional-parity/fixtures/goldens/rpc-invalid-startup-file.stderr.txt`, `tests/functional-parity/installed-executable.test.ts`, `tests/functional-parity/installed-process.ts`, `tests/functional-parity/installed-process.test.ts`, `packages/cli/src/cli/package-command.test.ts`, `.docker/Dockerfile.test`, `.docker/test-build.test.mjs`; CLI-01 selected native v1 map, emitted/installed real held-SSE signals and invalid RPC startup admission |
 
 ### Proposed delivery work packages
 

@@ -104,6 +104,12 @@ describe('RPC server', () => {
     })).rejects.toThrow('closed protocol output');
   });
 
+  it('preserves an unrelated premature input close as a terminal failure', async () => {
+    const failure = Object.assign(new Error('unexpected input close'), { code: 'ERR_STREAM_PREMATURE_CLOSE' });
+    const input = new Readable({ read() { this.destroy(failure); } });
+    await expect(runRpcMode({ noSession: true, input, output: () => undefined })).rejects.toBe(failure);
+  });
+
   it.each(['eof', 'startup-failure', 'output-failure'] as const)('reuses and shuts down a prepared generation on %s', async ending => {
     const registry = new ExtensionRegistry();
     let owner!: ExtensionAPI;

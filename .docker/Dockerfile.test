@@ -66,11 +66,12 @@ RUN npm ci
 
 COPY . .
 
-# Process tests consume emitted Core, CLI and Server entries, not TS aliases.
+# Process tests consume emitted Core/CLI/Server and the real Web bundle.
 # Build dependencies first; never rely on a local dist surviving COPY.
 RUN npm run build --workspace @ai-harness/core \
     && npm run build --workspace @ai-harness/cli \
-    && npm run build --workspace @ai-harness/server
+    && npm run build --workspace @ai-harness/server \
+    && npm run build --workspace @ai-harness/web
 RUN node --test .docker/test-build.test.mjs
 
 # Run against COPY's filtered context, not a later source overlay. Fail the image

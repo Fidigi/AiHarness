@@ -373,7 +373,11 @@ async function main(): Promise<void> {
       projectTrust: cliArguments.projectTrust,
         credentialRedactor: outputCredentialRedactor,
       };
-      await runRpcMode(rpcStartupOptions);
+      const interrupted = await runRpcMode(rpcStartupOptions);
+      if (interrupted) {
+        process.stderr.write('Error: Request interrupted.\n');
+        process.exitCode = interrupted === 'SIGINT' ? 130 : 143;
+      }
     } finally {
       await cleanupCliEarlyExit({ closeNetwork: closeProviderNetworkDispatchers });
     }
@@ -1897,25 +1901,48 @@ async function main(): Promise<void> {
   };
 
   if (printMode) {
+    // Own signals through provider settlement and the existing bounded cleanup,
+    // without forcing an exit across admitted journal writes or JSON flushing.
+    let interrupted: 'SIGINT' | 'SIGTERM' | undefined;
+    const stop = (signal: 'SIGINT' | 'SIGTERM'): void => {
+      interrupted ??= signal;
+      process.exitCode = interrupted === 'SIGINT' ? 130 : 143;
+      activeAbortController?.abort();
+    };
+    const interruptPrint = (): void => stop('SIGINT');
+    const terminatePrint = (): void => stop('SIGTERM');
+    process.on('SIGINT', interruptPrint);
+    process.on('SIGTERM', terminatePrint);
     try {
       await jsonOutput?.events.sessionHeader(activeSession, workspaceCwd);
       let finalContent: string | undefined;
       for (const prompt of initialPrompts) {
+        if (interrupted) break;
         finalContent = await processInput(prompt.content, {
           allowCommands: false,
           imageBlocks: prompt.images,
         });
       }
-      if (applicationMode === 'print') process.stdout.write(`${redactOutput(finalContent ?? '')}\n`);
+      if (!interrupted && applicationMode === 'print') process.stdout.write(`${redactOutput(finalContent ?? '')}\n`);
       if (outputLimitReached) {
         process.stderr.write('Warning: Model output limit reached; the response may be incomplete.\n');
         process.exitCode = 1;
       }
     } catch (error) {
-      process.stderr.write(`Error: ${redactOutput(error instanceof Error ? error.message : String(error))}\n`);
-      process.exitCode = 1;
+      if (!interrupted) {
+        process.stderr.write(`Error: ${redactOutput(error instanceof Error ? error.message : String(error))}\n`);
+        process.exitCode = 1;
+      }
     } finally {
-      await cleanupEarlyExit();
+      try { await cleanupEarlyExit(); }
+      finally {
+        process.off('SIGINT', interruptPrint);
+        process.off('SIGTERM', terminatePrint);
+        if (interrupted) {
+          process.stderr.write('Error: Request interrupted.\n');
+          process.exitCode = interrupted === 'SIGINT' ? 130 : 143;
+        }
+      }
     }
     return;
   }

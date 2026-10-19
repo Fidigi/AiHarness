@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { loadAgentSettings, ProjectTrustManager } from '@ai-harness/core';
-import { execFile } from 'node:child_process';
+import { execFile, type ExecFileOptions } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import {
   formatPackageCommandHelp,
@@ -12,6 +12,22 @@ import {
   parsePackageCommandArguments,
   resolvePackageNpmOptions,
 } from './package-command.js';
+
+const emittedCli = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
+
+async function runPackageCli(args: string[], options: ExecFileOptions): Promise<{ stdout: string; stderr: string }> {
+  try {
+    return await promisify(execFile)(process.execPath, [emittedCli, 'package', ...args], { ...options, encoding: 'utf8' });
+  } catch (error) {
+    // Preserve the original error/channels; make native termination visible even
+    // when the process died without stderr. Never retry or normalize its status.
+    if (error instanceof Error) {
+      const native = error as Error & { code?: string | number | null; signal?: string | null; killed?: boolean };
+      error.message += `\nNative child termination: ${JSON.stringify({ code: native.code ?? null, signal: native.signal ?? null, killed: native.killed ?? false })}`;
+    }
+    throw error;
+  }
+}
 
 async function commandBoundaryFixture(): Promise<{
   root: string; agent: string; local: string; wrapper: string; log: string;
@@ -42,10 +58,7 @@ else {
     await chmod(executable, 0o700);
   }
   await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ npmCommand: [wrapper] }));
-  const adapter = pathToFileURL(fileURLToPath(new URL('./package-command.ts', import.meta.url))).href;
-  const launcher = path.join(root, 'adapter.mjs');
-  await writeFile(launcher, `import { runPackageCommand } from ${JSON.stringify(adapter)}; process.exitCode = await runPackageCommand(process.argv.slice(2));`);
-  const run = (args: string[]) => promisify(execFile)(process.execPath, ['--import', import.meta.resolve('tsx'), launcher, ...args], {
+  const run = (args: string[]) => runPackageCli(args, {
     cwd: project, timeout: 10000, maxBuffer: 1024 * 1024,
     env: { ...process.env, HOME: root, AI_HARNESS_AGENT_DIR: agent, PATH: `${bin}${path.delimiter}${process.env.PATH}` },
   });
@@ -88,7 +101,7 @@ describe('package command arguments', () => {
     expect(() => parsePackageCommandArguments(['list', 'unexpected'])).toThrow(/does not accept/i);
   });
 
-  it('runs the real CLI adapter with settings-relative npm executables and trust-gated precedence', async () => {
+  it('runs the emitted CLI with settings-relative npm executables and trust-gated precedence', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-npm-'));
     try {
       const project = path.join(root, 'project');
@@ -115,10 +128,7 @@ fs.writeFileSync(path.join(dest, 'package.json'), JSON.stringify({ name: '@demo/
         await chmod(fake, 0o700);
         await writeFile(path.join(base, 'settings.json'), JSON.stringify({ npmCommand: ['./bin/npm fake', log, literal] }));
       }
-      const adapter = pathToFileURL(fileURLToPath(new URL('./package-command.ts', import.meta.url))).href;
-      const launcher = path.join(root, 'adapter.mjs');
-      await writeFile(launcher, `import { runPackageCommand } from ${JSON.stringify(adapter)}; process.exitCode = await runPackageCommand(process.argv.slice(2));`);
-      const run = (args: string[]) => promisify(execFile)(process.execPath, ['--import', import.meta.resolve('tsx'), launcher, ...args], {
+      const run = (args: string[]) => runPackageCli(args, {
         cwd: project, timeout: 10000, maxBuffer: 1024 * 1024,
         env: { ...process.env, HOME: root, AI_HARNESS_AGENT_DIR: agent, OPENAI_API_KEY: 'disposable-cli-secret' },
       });

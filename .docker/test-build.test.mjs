@@ -19,6 +19,7 @@ test('test image contains emitted entries and declarations for every process-tes
     'packages/cli/dist/index.js', 'packages/cli/dist/index.d.ts',
     'packages/server/dist/index.js', 'packages/server/dist/index.d.ts',
     'packages/server/dist/config/config-store.js', 'packages/server/dist/runtime/services.js',
+    'packages/web/dist/index.html',
   ]) {
     const target = path.join(root, file);
     assert.ok((await stat(target)).isFile(), `Missing emitted input: ${file}`);

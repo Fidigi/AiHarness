@@ -193,18 +193,26 @@ export async function handleRpcRequest(request: RpcRequest, context: RpcContext)
 }
 
 /** Read strict LF-framed JSONL without treating U+2028/U+2029 as delimiters. */
-async function* jsonLines(input: Readable): AsyncGenerator<string> {
+async function* jsonLines(input: Readable, signalShutdown: () => boolean): AsyncGenerator<string> {
   const decoder = new StringDecoder('utf8');
   let buffer = '';
-  for await (const chunk of input) {
-    buffer += typeof chunk === 'string' ? chunk : decoder.write(chunk as Buffer);
-    while (true) {
-      const newline = buffer.indexOf('\n');
-      if (newline < 0) break;
-      const line = buffer.slice(0, newline);
-      buffer = buffer.slice(newline + 1);
-      yield line.endsWith('\r') ? line.slice(0, -1) : line;
+  try {
+    for await (const chunk of input) {
+      buffer += typeof chunk === 'string' ? chunk : decoder.write(chunk as Buffer);
+      while (true) {
+        const newline = buffer.indexOf('\n');
+        if (newline < 0) break;
+        const line = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+        yield line.endsWith('\r') ? line.slice(0, -1) : line;
+      }
     }
+  } catch (error) {
+    // Only our signal-induced stdin close is normal shutdown. Do not turn an
+    // unrelated transport failure into EOF, or admit an interrupted tail line.
+    if (!(signalShutdown() && input.destroyed && error instanceof Error
+      && 'code' in error && error.code === 'ERR_STREAM_PREMATURE_CLOSE')) throw error;
+    return;
   }
   buffer += decoder.end();
   if (buffer) yield buffer.endsWith('\r') ? buffer.slice(0, -1) : buffer;
@@ -224,7 +232,7 @@ function reportSettingsDiagnostics(
  * JSONL stdin/stdout composition root for headless integrations. This module
  * owns framing and startup; RpcController owns stateful command execution.
  */
-export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void> {
+export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGINT' | 'SIGTERM' | undefined> {
   const contextReloadTrustOverride = options.projectTrust;
   const contextReloadIncludeContextFiles = !options.noContextFiles;
   const contextReloadHomeDir = os.homedir();
@@ -264,14 +272,24 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
   const extensionRegistry = options.extensionRegistry ?? new ExtensionRegistry();
   let controller: RpcController | undefined;
   let mcpHost: McpSessionHost | undefined;
-  const stopForSignal = (): void => {
+  let interrupted: 'SIGINT' | 'SIGTERM' | undefined;
+  let signalClosedInput = false;
+  const stopForSignal = (signal: 'SIGINT' | 'SIGTERM'): void => {
+    if (interrupted) return;
+    interrupted = signal;
+    process.exitCode = signal === 'SIGINT' ? 130 : 143;
     extensionUi.close();
     if (controller) void controller.close().catch(() => undefined);
-    input.destroy();
+    if (!input.destroyed) {
+      signalClosedInput = true;
+      input.destroy();
+    }
   };
+  const interrupt = (): void => stopForSignal('SIGINT');
+  const terminate = (): void => stopForSignal('SIGTERM');
   if (input === process.stdin) {
-    process.once('SIGINT', stopForSignal);
-    process.once('SIGTERM', stopForSignal);
+    process.on('SIGINT', interrupt);
+    process.on('SIGTERM', terminate);
   }
 
   let runError: unknown;
@@ -708,7 +726,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
 
     const pending = new Set<Promise<void>>();
     let taskFailure: unknown;
-    for await (const line of jsonLines(input)) {
+    for await (const line of jsonLines(input, () => signalClosedInput)) {
       if (taskFailure) throw taskFailure;
       while (pending.size >= MAX_PENDING_RPC_REQUESTS) {
         await Promise.race([...pending].map(task => task.catch(() => undefined)));
@@ -735,10 +753,6 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
     runError = error ?? new Error('RPC mode failed.');
   }
 
-  if (input === process.stdin) {
-    process.off('SIGINT', stopForSignal);
-    process.off('SIGTERM', stopForSignal);
-  }
   let cleanupError: unknown;
   try { extensionUi.close(); } catch (error) { cleanupError = error ?? new Error('RPC UI cleanup failed.'); }
   try { await controller?.close(); } catch (error) { cleanupError ??= error ?? new Error('RPC controller cleanup failed.'); }
@@ -751,7 +765,13 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
   } catch (error) {
     cleanupError ??= error ?? new Error('RPC output flush failed.');
   }
-  reservedOutput?.restore();
+  try { reservedOutput?.restore(); }
+  finally {
+    if (input === process.stdin) {
+      process.off('SIGINT', interrupt);
+      process.off('SIGTERM', terminate);
+    }
+  }
   if (runError && cleanupError && runError !== cleanupError) {
     const runMessage = runError instanceof Error ? runError.message : String(runError);
     const cleanupMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
@@ -762,4 +782,5 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<void>
   }
   if (runError) throw runError;
   if (cleanupError) throw cleanupError;
+  return interrupted;
 }

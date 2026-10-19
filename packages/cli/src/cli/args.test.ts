@@ -93,6 +93,13 @@ describe('CLI arguments', () => {
     const base = parseCliArguments([]);
     expect(resolveCliApplicationMode(base, { stdinIsTTY: true, stdoutIsTTY: true })).toBe('interactive');
     expect(resolveCliApplicationMode(base, { stdinIsTTY: false, stdoutIsTTY: true })).toBe('print');
+    expect(resolveCliApplicationMode(base, { stdinIsTTY: true, stdoutIsTTY: false })).toBe('print');
+    expect(resolveCliApplicationMode(parseCliArguments(['--mode', 'text']), {
+      stdinIsTTY: true, stdoutIsTTY: true,
+    })).toBe('interactive');
+    expect(resolveCliApplicationMode(parseCliArguments(['--mode', 'text']), {
+      stdinIsTTY: true, stdoutIsTTY: false,
+    })).toBe('print');
     expect(resolveCliApplicationMode(parseCliArguments(['--print']), {
       stdinIsTTY: true, stdoutIsTTY: true,
     })).toBe('print');

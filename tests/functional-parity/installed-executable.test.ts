@@ -7,7 +7,7 @@ import { stripVTControlCharacters } from 'node:util';
 import { spawn as spawnPty } from 'node-pty';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { fixtureRoot, loadManifest, normalizeFixture, readExpected } from './harness.js';
-import { run, type Result } from './installed-process.js';
+import { compilerNodeArgs, run, type Result } from './installed-process.js';
 
 const checkout = fileURLToPath(new URL('../..', import.meta.url));
 const require = createRequire(import.meta.url);
@@ -109,8 +109,9 @@ let inventory: Array<{ name: string; filename: string; files: Array<{ path: stri
 const dependencies = new Map<string, string>();
 
 async function succeed(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, timeout = 60_000): Promise<Result> {
-  const result = await run(command, args, cwd, env, '', timeout);
-  expect(result.code, `${command} ${args.join(' ')}\n${result.stdout}\n${result.stderr}`).toBe(0);
+  const actualArgs = compilerNodeArgs(command, args, compiler);
+  const result = await run(command, actualArgs, cwd, env, '', timeout);
+  expect(result.code, `${command} ${actualArgs.join(' ')}\n${result.stdout}\n${result.stderr}`).toBe(0);
   return result;
 }
 function outside(candidate: string, root: string): boolean {
@@ -468,6 +469,17 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       expect(await readFile(source)).toEqual(before);
     } finally { await rm(directory,{recursive:true,force:true}); await rm(script,{force:true}); }
   });
+
+  it.each(['print/SIGINT', 'print/SIGTERM', 'json/SIGINT', 'json/SIGTERM', 'rpc/SIGINT', 'rpc/SIGTERM'])(
+    'settles and cleans up an interrupted installed headless invocation (%s)', async scenario => {
+      const worker = path.join(consumer, `headless-signal-${scenario.replace('/', '-')}.mjs`);
+      await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/headless-signal-probe.mjs'), worker);
+      const result = await run(process.execPath, [worker, scenario], consumer, { ...environment, AIH_SIGNAL_COMMAND: 'ai-harness' });
+      expect(result.code, result.stderr).toBe(0);
+      expect(result.stderr).toBe('');
+      expect(JSON.parse(result.stdout)).toMatchObject({ result: 'HEADLESS_SIGNAL_OK',
+        mode: scenario.split('/')[0], signal: scenario.split('/')[1] });
+    });
 
   it.each(['print/partial-length', 'print/empty-length', 'print/normal',
     'json/partial-length', 'json/empty-length', 'json/normal',
@@ -1196,7 +1208,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
 
   it('runs installed print/JSON/RPC against the unchanged reviewed protocol goldens', async () => {
     const manifest = await loadManifest();
-    for (const id of ['cli-version', 'cli-print-input', 'json-lifecycle-purity', 'rpc-state-purity', 'rpc-legacy-chat-migration']) {
+    for (const id of ['cli-version', 'cli-print-input', 'json-lifecycle-purity', 'rpc-state-purity', 'rpc-legacy-chat-migration', 'rpc-invalid-startup-file']) {
       const scenario = manifest.processScenarios.find(item => item.id === id)!;
       const fixtures = path.join(consumer, 'fixtures');
       await cp(fixtureRoot, fixtures, { recursive: true });
@@ -1210,7 +1222,8 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       for (const channel of ['stdout', 'stderr'] as const) {
         expect(normalizeFixture(result[channel], scenario.expected[channel], workspace)).toBe(normalizeFixture(await readExpected(scenario.expected[channel]), scenario.expected[channel], workspace));
       }
-      if (scenario.expected.stdout.endsWith('.jsonl')) {
+      // A zero-record stream is valid JSONL; exact fixture equality above still applies.
+      if (scenario.expected.stdout.endsWith('.jsonl') && result.stdout.length > 0) {
         expect(result.stdout.endsWith('\n')).toBe(true);
         for (const line of result.stdout.trimEnd().split('\n')) expect(() => JSON.parse(line)).not.toThrow();
       }

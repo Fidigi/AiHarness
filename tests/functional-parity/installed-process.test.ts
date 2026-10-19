@@ -1,12 +1,21 @@
 import os from 'node:os';
 import { describe, expect, it, vi } from 'vitest';
-import { run } from './installed-process.js';
+import { compilerNodeArgs, run } from './installed-process.js';
 
 const output = 'synthetic-private-stdout';
 const diagnostic = 'synthetic-private-stderr';
 const script = (finish: string): string => `process.stdout.write(${JSON.stringify(output)}, () => process.stderr.write(${JSON.stringify(diagnostic)}, () => { ${finish} }));`;
 
 describe('installed child native termination evidence', () => {
+  it('flags only the exact TypeScript process without mutating compiler or application argv', () => {
+    const compiler = '/resolved/typescript/bin/tsc';
+    const args = Object.freeze([compiler, '--noEmit', 'consumer with spaces.ts']);
+    expect(compilerNodeArgs(process.execPath, args, compiler)).toEqual(['--no-maglev', ...args]);
+    expect(compilerNodeArgs('npm', args, compiler)).toEqual(args);
+    expect(compilerNodeArgs(process.execPath, ['consumer.mjs', '--strict'], compiler)).toEqual(['consumer.mjs', '--strict']);
+    expect(args).toEqual([compiler, '--noEmit', 'consumer with spaces.ts']);
+  });
+
   it.each([0, 7])('preserves ordinary exit %s and exact captured channels without a signal receipt', async code => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {

@@ -3,6 +3,12 @@ import { spawn } from 'node:child_process';
 // Private harness utility: captured child channels and legacy result shape stay exact.
 const byteLimit = 1024 * 1024;
 export interface Result { code: number | null; stdout: string; stderr: string }
+
+/** Scope the build-tool JIT mitigation to the exact resolved TypeScript entry. */
+export function compilerNodeArgs(command: string, args: readonly string[], compiler: string): string[] {
+  return command === process.execPath && args[0] === compiler ? ['--no-maglev', ...args] : [...args];
+}
+
 export function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, input = '', timeoutMs = 20_000): Promise<Result> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });

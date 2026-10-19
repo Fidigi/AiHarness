@@ -13,7 +13,8 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~215 lines |
 | TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~65 lines |
 | Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~245 lines |
-| CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~405 lines |
+| CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~430 lines |
+| CLI Invocation Contract | [`topics/cli-invocation-contract.md`](./topics/cli-invocation-contract.md) | ~140 lines |
 | Terminal Themes | [`topics/themes.md`](./topics/themes.md) | ~80 lines |
 | Native Editor Schemas | [`topics/editor-schemas.md`](./topics/editor-schemas.md) | ~85 lines |
 | QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
@@ -58,7 +59,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → packages/server/src/runtime/plugin-service.ts
 ```
 
-**A CLI command** → Load only `cli-reference.md` + `project-map.md` §3
+**A CLI command** → Load `cli-reference.md`, the versioned `cli-invocation-contract.md` option/channel map, and `project-map.md` §3
 ```
 → packages/cli/src/index.ts (composition root)
 → packages/cli/src/cli/{provider-auth-command,export-command}.ts (standalone operations)
