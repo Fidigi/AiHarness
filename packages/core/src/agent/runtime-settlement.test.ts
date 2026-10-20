@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MockProvider } from '../providers/index.js';
+import { MockProvider, type ChatResponse } from '../providers/index.js';
+import { streamProviderTurn } from './provider-turn.js';
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
 import { SessionManager } from '../sessions/session-manager.js';
 import type { McpSessionHost } from '../mcp/session-host.js';
@@ -38,6 +39,28 @@ describe('run settlement owns preparation and cleanup', () => {
     const before = runtime.journal.replay(session.id); await late('forbidden late output');
     expect(runtime.journal.replay(session.id)).toEqual(before); expect(session.messages.at(-1)?.content).toBe('accepted');
   });
+  for (const callback of ['complete', 'error'] as const) it(`retires retained ${callback} callbacks while accepted stream delivery is still draining`, async () => {
+    const registry = new ExtensionRegistry(), provider = new MockProvider({ type: 'mock' });
+    const returned = latch(), entered = latch(), finish = latch();
+    let complete!: (result?: ChatResponse) => void, error!: (error: Error) => void;
+    provider.streamChat = async (_messages, chunk, onComplete, onError) => {
+      complete = onComplete!; error = onError!;
+      void chunk('accepted');
+      onComplete?.({ content: 'accepted', model: 'accepted-model' });
+      returned.release();
+    };
+    const operation = streamProviderTurn({ provider, providerName: 'mock', messages: [], tools: [], extensionRegistry: registry,
+      maxRetries: 0, onTextDelta: async () => { entered.release(); await finish.promise; } });
+    try {
+      await returned.promise; await entered.promise; await tick(); // Transport returned, but accepted output still owns settlement.
+      if (callback === 'complete') complete({ content: 'forbidden', model: 'late-model',
+        toolCalls: [{ id: 'late', name: 'must-not-execute', input: {} }], usage: { promptTokens: 999, completionTokens: 999, totalTokens: 1998 } });
+      else error(new Error('forbidden late error'));
+      const result = expect(operation).resolves.toEqual({ content: 'accepted', model: 'accepted-model' });
+      finish.release(); await result;
+    } finally { finish.release(); await operation.catch(() => undefined); }
+  });
+
   for (const cleanupError of [false, true]) it(`keeps admission and terminal replay behind MCP release (failure=${cleanupError})`, async () => {
     const manager = new SessionManager(), registry = new ExtensionRegistry(), session = await manager.create({ cwd: process.cwd() });
     const preparing = latch(), preparation = latch(), cleaning = latch(), cleanup = latch();

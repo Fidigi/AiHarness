@@ -251,8 +251,8 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
         await streamChat(
           requestMessages,
           deliver,
-          result => { completedResponse = result; },
-          error => { streamError = error; },
+          result => { if (accepting && !signal?.aborted) completedResponse = result; },
+          error => { if (accepting && !signal?.aborted) streamError = error; },
           requestOptions,
         );
       } catch (error) {

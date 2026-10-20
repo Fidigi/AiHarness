@@ -209,13 +209,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
         }
         const controller = new AbortController();
         promptController = controller;
-        settlement = undefined;
         const retire = (): void => {
           if (promptController !== controller) return;
           promptController = undefined;
           busy = false;
         };
-        return serial(async () => {
+        const starting = serial(async () => {
           // Earlier accepted mutations keep their serial order. Once this turn
           // begins, history/settings are busy even while trust/hooks await.
           idle();
@@ -229,9 +228,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
             thinking: capturedOptions.thinking ?? current().thinking ?? defaults.thinking,
             toolPreset: capturedOptions.toolPreset ?? current().toolPreset ?? defaults.toolPreset,
           });
-          settlement = runtime.wait(run.id).finally(retire);
           return safe(run);
         }).catch(error => { retire(); throw error; });
+        // Bind completion at admission, including starts that publish no run.
+        settlement = starting.then(run => runtime.wait(run.id).finally(retire), () => undefined);
+        return starting;
       },
       async promptAndWait(input, promptOptions) {
         const run = await api.prompt(input, promptOptions);
@@ -244,7 +245,8 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
         open();
         // Wait behind accepted starts, but do not occupy the mutation queue:
         // stop/dispose must still be able to cancel the run being awaited.
-        return tail.catch(() => undefined).then(async () => safe(await settlement));
+        const completion = settlement;
+        return tail.catch(() => undefined).then(async () => safe(await completion));
       },
       stop: () => {
         // Publish the queued acknowledgement before synchronous abort reentry.

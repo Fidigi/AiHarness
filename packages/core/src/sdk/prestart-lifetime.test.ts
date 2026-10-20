@@ -120,8 +120,13 @@ describe('SDK pending-start lifetimes', () => {
       const entered = latch(), finish = latch();
       await f.registry.load('later-held', extension => { extension.before('before:agent', async () => { entered.resolve(); await finish.promise; }); });
       try {
+        const previousWait = f.api.wait();
         const refused = expect(f.api.prompt('withdrawn')).rejects.toMatchObject({ name: 'AbortError' });
-        await entered.promise; await f.api.stop(); await refused;
+        await entered.promise;
+        const previous = await previousWait, withdrawnWait = f.api.wait();
+        await f.api.stop(); await refused;
+        expect(previous?.id).toBe(prior.id);
+        expect(await withdrawnWait).toBeUndefined();
         expect(await f.api.wait()).toBeUndefined();
         expect(f.api.messages().filter(message => message.role === 'user').map(message => message.content)).toEqual(['completed']);
       } finally { finish.resolve(); }
