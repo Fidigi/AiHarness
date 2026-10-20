@@ -18,8 +18,13 @@ const extensionVersion: 1 = AI_HARNESS_EXTENSION_API_VERSION;
 const manager = new SessionManager();
 const context: ExtensionRuntimeContext = {
   sessionManager: manager,
+  isProjectTrusted: async cwd => cwd.length > 0,
   notify(_message, _level) {},
 };
+const freshTrust: boolean | Promise<boolean> | undefined = context.isProjectTrusted?.('/workspace');
+// @ts-expect-error Fresh authorization accepts a canonical cwd string, not a boolean grant.
+context.isProjectTrusted?.(true);
+void freshTrust;
 const factory: ExtensionFactory = api => {
   const apiVersion: 1 = api.version;
   api.registerCommand('typed_probe', {

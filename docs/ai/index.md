@@ -26,6 +26,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Static Demonstration | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
 | Linked-Directory Consent | [topics/linked-directories.md](./topics/linked-directories.md) | ~66 lines |
 | Security & Trust | [`topics/security.md`](./topics/security.md) | ~220 lines |
+| Native Security Contract | [`topics/native-security-contract.md`](./topics/native-security-contract.md) | ~100 lines |
 | Child Agents | [`topics/child-agents.md`](./topics/child-agents.md) | ~115 lines |
 
 ### Reference Documentation

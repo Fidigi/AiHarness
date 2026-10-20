@@ -183,7 +183,15 @@ export function publicRequestOrigin(request: Request | IncomingMessage): string 
 
 export function isAllowedOrigin(request: Request | IncomingMessage): boolean {
   const origin = requestOrigin(request);
-  if (!origin) return true; // Non-browser and same-origin requests commonly omit Origin.
+  if (!origin) {
+    // Same-origin browser GETs omit Origin too. Without authentication, accepting
+    // an arbitrary Host would expose loopback APIs through DNS rebinding.
+    if (process.env.AI_HARNESS_AUTH_TOKEN || process.env.AI_HARNESS_ADMIN_TOKEN) return true;
+    const host = request.headers.host;
+    if (loopbackHost(host)) return true;
+    return typeof host === 'string' && host.length <= 255 && !/[\u0000-\u0020\u007f/\\]/u.test(host)
+      && [...expectedOrigins(request)].some(value => canonicalHttpOrigin(`${new URL(value).protocol}//${host}`) === value);
+  }
   if (origin.length > 2_048 || canonicalHttpOrigin(origin) !== origin) return false;
   return expectedOrigins(request).has(origin);
 }

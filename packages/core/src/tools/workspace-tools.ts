@@ -141,10 +141,14 @@ async function workspacePath(
   return resolved;
 }
 
-function requireTrust(context: ExtensionRuntimeContext): void {
-  if (!context.projectTrusted) {
+async function requireTrust(context: ExtensionRuntimeContext, workspaceManager: WorkspaceManager, signal?: AbortSignal): Promise<void> {
+  const trusted = context.isProjectTrusted
+    ? await context.isProjectTrusted(await workspaceRoot(workspaceManager, context))
+    : context.projectTrusted;
+  if (!trusted) {
     throw new Error('Trust the active workspace before using a mutating or command tool.');
   }
+  throwIfAborted(signal);
 }
 
 function relativeDisplay(root: string, target: string): string {
@@ -506,7 +510,7 @@ export async function registerWorkspaceTools(
       additionalProperties: false,
     };
     const executeWrite: ToolExecutor = async (raw, context, signal) => {
-      requireTrust(context);
+      await requireTrust(context, workspaceManager, signal);
       const input = objectInput(raw);
       const requestedPath = stringInput(input, 'path');
       const content = stringInput(input, 'content', { max: MAX_WRITE_BYTES, allowEmpty: true });
@@ -522,7 +526,8 @@ export async function registerWorkspaceTools(
       });
       return withMutationQueue(filePath, async () => {
         throwIfAborted(signal);
-        await atomicWriteStableFile(filePath, content, { overwrite: true, maxBytes: MAX_WRITE_BYTES });
+        await atomicWriteStableFile(filePath, content, { overwrite: true, maxBytes: MAX_WRITE_BYTES,
+          beforeCommit: () => requireTrust(context, workspaceManager, signal) });
         throwIfAborted(signal);
         return { content: `Successfully wrote ${relativeDisplay(root, filePath)}.` };
       });
@@ -556,7 +561,7 @@ export async function registerWorkspaceTools(
       additionalProperties: false,
     };
     const executeEdit: ToolExecutor = async (raw, context, signal) => {
-      requireTrust(context);
+      await requireTrust(context, workspaceManager, signal);
       const input = normalizeEditInput(raw);
       const filePath = await workspacePath(workspaceManager, context, input.path, { kind: 'file' });
       const root = await workspaceRoot(workspaceManager, context);
@@ -568,7 +573,8 @@ export async function registerWorkspaceTools(
         if (Buffer.byteLength(updated, 'utf8') > MAX_WRITE_BYTES) {
           throw new Error(`Edited file exceeds the ${formatToolBytes(MAX_WRITE_BYTES)} write limit.`);
         }
-        await atomicWriteStableFile(filePath, updated, { overwrite: true, maxBytes: MAX_WRITE_BYTES });
+        await atomicWriteStableFile(filePath, updated, { overwrite: true, maxBytes: MAX_WRITE_BYTES,
+          beforeCommit: () => requireTrust(context, workspaceManager, signal) });
         throwIfAborted(signal);
         return {
           content: `Successfully replaced ${input.edits.length} block(s) in ${relativeDisplay(root, filePath)}.`,
@@ -783,7 +789,7 @@ export async function registerWorkspaceTools(
       additionalProperties: false,
     };
     const shellExecutor = (shell: 'default' | 'powershell'): ToolExecutor => async (raw, context, signal) => {
-      requireTrust(context);
+      await requireTrust(context, workspaceManager, signal);
       const input = objectInput(raw);
       const command = stringInput(input, 'command', { max: 100_000 });
       const excludedFromContext = input.excludeFromContext !== false;
@@ -799,6 +805,7 @@ export async function registerWorkspaceTools(
       const commandPrefix = typeof options.shellCommandPrefix === 'function'
         ? options.shellCommandPrefix() : options.shellCommandPrefix;
       const powershell = shell === 'powershell' || (process.platform === 'win32' && !configuredShellPath);
+      await requireTrust(context, workspaceManager, signal);
       const startedAt = Date.now();
       let result: ProcessResult;
       try {

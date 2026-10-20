@@ -450,6 +450,11 @@ async function main(): Promise<void> {
   };
   const isProjectTrusted = (): boolean => currentProjectTrust(projectTrusted);
   const mayLoadProjectResources = (): boolean => currentProjectTrust(projectResourcesTrusted);
+  const checkProjectTrust = async (cwd = workspaceCwd): Promise<boolean> => (await resolveProjectTrust({
+    cwd, trustManager, override: cliArguments.projectTrust ?? sessionProjectTrust,
+    defaultProjectTrust: settingsResolution.settings.defaultProjectTrust,
+    includeContextFiles: !cliArguments.noContextFiles,
+  })).trusted;
   const sessionDirectory = resolveStartupSessionDirectory(
     cliArguments,
     workspaceCwd,
@@ -1263,7 +1268,7 @@ async function main(): Promise<void> {
   const shellController = new InteractiveShellController(sessionManager, terminal, {
     getSessionId: () => currentSessionId,
     getCwd: () => workspaceCwd,
-    isTrusted: () => isProjectTrusted(),
+    isTrusted: () => checkProjectTrust(),
     reportError,
     redactText: redactOutput,
   }, {
@@ -1648,6 +1653,7 @@ async function main(): Promise<void> {
           cwd: workspaceCwd,
           workspaceId: workspaceDescriptor.id,
           projectTrusted: isProjectTrusted(),
+          isProjectTrusted: checkProjectTrust,
           onProcessOutput: chunk => {
             if (!activeToolCall) return;
             const safeChunk = activeToolRedactor.push(chunk);

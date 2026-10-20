@@ -18,6 +18,7 @@ async function requestWithHost(
   route: string,
   host: string,
   body?: unknown,
+  headers: Record<string, string> = {},
 ): Promise<{ status: number; body: unknown }> {
   const target = new URL(baseUrl);
   const serialized = body === undefined ? undefined : JSON.stringify(body);
@@ -28,6 +29,7 @@ async function requestWithHost(
       path: route,
       method,
       headers: {
+        ...headers,
         Host: host,
         ...(serialized ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(serialized) } : {}),
       },
@@ -241,6 +243,8 @@ describe('combined Web server', () => {
     expect(await outside.json()).toMatchObject({ code: 'outside-allowed-roots' });
     expect(openDirectory).not.toHaveBeenCalled();
 
+    // Even an explicitly admitted proxy Host cannot authorize a host file-manager launch.
+    vi.stubEnv('AI_HARNESS_ALLOWED_ORIGINS', 'http://example.test');
     const remote = await requestWithHost(baseUrl, 'GET', '/api/workspaces/file-manager', 'example.test');
     expect(remote.body).toEqual({ available: false, reason: 'remote-request' });
     const remoteOpen = await requestWithHost(
@@ -2075,6 +2079,85 @@ describe('combined Web server', () => {
     await fetch(`${baseUrl}/api/sessions/${session.id}`, { method: 'DELETE' });
   });
 
+  it('refuses a model write after persisted trust is revoked during the actual HTTP provider turn', async () => {
+    const cwd = path.join(webRoot, 'revoked-model-write'); await mkdir(cwd);
+    await writeFile(path.join(cwd, 'AGENTS.md'), 'Protected project');
+    const trustHeaders = { 'Content-Type': 'application/json' };
+    expect((await fetch(`${baseUrl}/api/workspaces/trust`, { method: 'POST', headers: trustHeaders,
+      body: JSON.stringify({ cwd, confirm: true }) })).status).toBe(200);
+    let calls = 0;
+    const stream = vi.spyOn(MockProvider.prototype, 'streamChat').mockImplementation(async (messages, _chunk, complete) => {
+      if (++calls === 1) {
+        expect((await fetch(`${baseUrl}/api/workspaces/trust`, { method: 'DELETE', headers: trustHeaders,
+          body: JSON.stringify({ cwd, confirm: true }) })).status).toBe(200);
+        complete?.({ content: '', toolCalls: [{ id: 'revoked', name: 'write', input: { path: 'unsafe.txt', content: 'unsafe' } }] });
+      } else {
+        expect(messages.some(message => message.role === 'tool' && /trust/i.test(message.content))).toBe(true);
+        complete?.({ content: 'Revocation respected' });
+      }
+    });
+    try {
+      const response = await fetch(`${baseUrl}/api/agent/runs`, { method: 'POST', headers: trustHeaders,
+        body: JSON.stringify({ cwd, provider: 'mock', input: 'Try a write' }) });
+      expect(response.status).toBe(202); const { run } = await response.json() as { run: { id: string } };
+      await vi.waitFor(async () => {
+        const snapshot = await fetch(`${baseUrl}/api/agent/runs/${run.id}`).then(result => result.json()) as { phase: string };
+        expect(snapshot.phase).toBe('completed');
+      });
+      expect(calls).toBe(2); await expect(readFile(path.join(cwd, 'unsafe.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally { stream.mockRestore(); }
+  });
+
+  it('refuses anonymous rebinding Hosts on real safe routes without trusting forwarded headers', async () => {
+    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', ''); vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', '');
+    vi.stubEnv('AI_HARNESS_ALLOWED_ORIGINS', ''); vi.stubEnv('AI_HARNESS_TRUST_PROXY', '1');
+    for (const route of ['/health', '/api/auth/status', '/api/providers', '/api/plugins']) {
+      expect((await requestWithHost(baseUrl, 'GET', route, 'rebind.attacker')).status).toBe(403);
+    }
+    const spoofed = await requestWithHost(baseUrl, 'GET', '/api/providers', 'rebind.attacker', undefined, {
+      'X-Forwarded-Host': new URL(baseUrl).host, 'X-Forwarded-Proto': 'https', 'X-Forwarded-For': '127.0.0.1' });
+    expect(spoofed.status).toBe(403);
+    expect((await fetch(`${baseUrl}/api/providers`)).status).toBe(200);
+  });
+
+  it('conserves cookie, Origin and explicit public-link policy through a real reverse proxy', async () => {
+    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'proxy-user-secret');
+    vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'proxy-admin-secret');
+    vi.stubEnv('AI_HARNESS_ALLOWED_ORIGINS', 'https://proxy.example');
+    vi.stubEnv('AI_HARNESS_PUBLIC_URL', 'https://proxy.example/base');
+    vi.stubEnv('AI_HARNESS_TRUST_PROXY', '1');
+    const proxy = createServer((request, response) => {
+      const upstream = requestHttp(new URL(request.url!, baseUrl), { method: request.method,
+        headers: { ...request.headers, host: new URL(baseUrl).host, 'x-forwarded-proto': 'https' } }, result => {
+        response.writeHead(result.statusCode!, result.headers); result.pipe(response);
+      });
+      upstream.on('error', () => { response.statusCode = 502; response.end(); }); request.pipe(upstream);
+    });
+    await new Promise<void>(resolve => proxy.listen(0, '127.0.0.1', resolve));
+    const url = `http://127.0.0.1:${(proxy.address() as { port: number }).port}`;
+    try {
+      const login = await fetch(`${url}/api/auth/login`, { method: 'POST',
+        headers: { Origin: 'https://proxy.example', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: 'proxy-admin-secret' }) });
+      expect(login.status).toBe(200);
+      const cookie = login.headers.get('set-cookie')!;
+      expect(cookie).toContain('Secure'); expect(cookie).toContain('HttpOnly'); expect(cookie).toContain('SameSite=Strict');
+      expect(cookie).not.toContain('proxy-admin-secret');
+      expect(JSON.stringify(await login.json())).not.toContain('proxy-admin-secret');
+      const headers = { Cookie: cookie.split(';')[0]!, Origin: 'https://proxy.example', 'Content-Type': 'application/json' };
+      expect((await fetch(`${url}/api/providers`, { headers })).status).toBe(200);
+      expect((await fetch(`${url}/api/providers`, { headers: { ...headers, Origin: 'https://evil.invalid' } })).status).toBe(403);
+      const created = await fetch(`${url}/api/sessions`, { method: 'POST', headers, body: JSON.stringify({ cwd: webRoot }) });
+      expect(created.status).toBe(201); const session = await created.json() as { id: string };
+      const shared = await fetch(`${url}/api/sessions/${session.id}/share`, { method: 'POST', headers, body: '{}' });
+      expect(shared.status).toBe(201);
+      expect(await shared.json()).toMatchObject({ url: expect.stringMatching(/^https:\/\/proxy\.example\/base\/share\/[a-f0-9]{32}$/u) });
+      await fetch(`${url}/api/sessions/${session.id}`, { method: 'DELETE', headers });
+      expect((await fetch(`${url}/api/auth/logout`, { method: 'POST', headers })).status).toBe(200);
+      expect((await fetch(`${url}/api/providers`, { headers })).status).toBe(401);
+    } finally { proxy.closeAllConnections(); await new Promise<void>(resolve => proxy.close(() => resolve())); }
+  });
+
   it('supports expiring HttpOnly Web sessions while retaining bearer roles', async () => {
     vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'user-token');
     vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'admin-token');
@@ -2158,6 +2241,14 @@ describe('combined Web server', () => {
     vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'admin-token');
 
     expect((await fetch(`${baseUrl}/api/providers`)).status).toBe(401);
+    for (const [headers, status] of [[{}, 401], [{ Authorization: 'Bearer admin-token', Origin: 'https://evil.invalid' }, 403]] as const) {
+      const denied = await fetch(`${baseUrl}/api/agent/sessions/missing/events`, { headers });
+      expect(denied.status).toBe(status); expect(denied.headers.get('content-type')).toContain('application/json');
+    }
+    for (const route of ['/api/plugins', '/api/files/upload']) {
+      expect((await fetch(`${baseUrl}${route}`, { method: 'POST',
+        headers: { Authorization: 'Bearer user-token', 'Content-Type': 'application/json' }, body: '{}' })).status).toBe(403);
+    }
     expect((await fetch(`${baseUrl}/api/providers`, {
       headers: { Authorization: 'Bearer user-token' },
     })).status).toBe(200);

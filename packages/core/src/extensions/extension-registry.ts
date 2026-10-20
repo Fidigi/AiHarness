@@ -97,6 +97,8 @@ export interface ExtensionRuntimeContext {
   cwd?: string;
   workspaceId?: string;
   projectTrusted?: boolean;
+  /** Host-owned fresh authorization for native mutations; boolean remains the legacy fallback. */
+  isProjectTrusted?(cwd: string): boolean | Promise<boolean>;
   notify(message: string, level?: ExtensionLogLevel): void;
   /** Host correlation/sink installed by the shared tool loop, never by guest source. */
   toolCallId?: string;

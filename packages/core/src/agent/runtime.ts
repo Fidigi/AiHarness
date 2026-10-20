@@ -965,6 +965,7 @@ export class AgentRuntime {
       cwd: run.snapshot.cwd,
       workspaceId: run.snapshot.workspaceId,
       projectTrusted: await this.isProjectTrusted(run.snapshot.cwd),
+      isProjectTrusted: cwd => this.isProjectTrusted(cwd),
       notify: (message, level = 'info') => this.publish(run, 'notice', { message, level }),
       requestInteraction: request => this.requestInteraction(run, request, interactionEpoch),
     };

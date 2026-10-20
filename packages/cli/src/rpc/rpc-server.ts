@@ -667,6 +667,11 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
         currentSessionId: '',
         cwd: canonicalCwd,
         projectTrusted,
+        isProjectTrusted: async cwd => (await resolveProjectTrust({
+          cwd, trustManager, override: contextReloadTrustOverride,
+          defaultProjectTrust: settingsResolution.settings.defaultProjectTrust,
+          includeContextFiles: contextReloadIncludeContextFiles,
+        })).trusted,
         notify: (message, level = 'info') => extensionUi.notify(message, level),
         requestInteraction: request => extensionUi.request(request),
         ui: extensionUi.ui,

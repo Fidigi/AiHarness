@@ -40,7 +40,7 @@ export interface CreateAgentSessionOptions {
   session?:
     | { kind: 'new'; options?: Omit<CreateSessionOptions, 'cwd'> }
     | { kind: 'resume'; id: string };
-  /** Fresh decision before every run/resource load; default denies all execution. */
+  /** Fresh decision for runs/resource loads/native tool mutations; default denies execution. */
   isProjectTrusted?: AgentRuntimeOptions['isProjectTrusted'];
   auth?: AgentAuthOptions;
   /** Borrowed. Never auto-load executable extensions, tools, packages or MCP. */

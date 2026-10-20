@@ -282,6 +282,13 @@ beforeAll(async () => {
 afterAll(async () => { if (artifactRoot) await rm(artifactRoot, { recursive: true, force: true }); });
 
 describe('CLI-RUN-01 genuine locally packed installed executable', () => {
+  it.each(['print', 'json', 'rpc', 'sdk'])('withdraws native workspace write authority through installed packages (%s)', async mode => {
+    const probe = `trust-revocation-${mode}.mjs`;
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/trust-revocation-probe.mjs'), path.join(consumer, probe));
+    expect(await run(process.execPath, [probe, mode, 'refuse'], consumer, { ...environment, AIH_TRUST_COMMAND: 'ai-harness' }, '', 15_000))
+      .toEqual({ code: 0, stdout: 'TRUST_REVOCATION_OK\n', stderr: '' });
+  }, 20_000);
+
   it.each(['print', 'json', 'rpc', 'sdk'])('replays native context edits and private checkpoints through installed packages (%s)', async mode => {
     const probe = `session-context-state-${mode}.mjs`;
     await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/session-context-state-probe.mjs'), path.join(consumer, probe));

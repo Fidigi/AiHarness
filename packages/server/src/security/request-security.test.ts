@@ -65,6 +65,19 @@ describe('request security', () => {
     expect(isAllowedOrigin({ headers: { host: 'localhost:3080', origin: 'https://trusted.example' } } as Request)).toBe(true);
   });
 
+  it('rejects anonymous DNS-rebinding hosts even without Origin or with spoofed proxy headers', () => {
+    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', ''); vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', '');
+    vi.stubEnv('AI_HARNESS_ALLOWED_ORIGINS', ''); vi.stubEnv('AI_HARNESS_TRUST_PROXY', '1');
+    const request = { headers: { host: 'rebind.attacker:3080', 'x-forwarded-host': 'localhost:3080',
+      'x-forwarded-proto': 'https', 'x-forwarded-for': '127.0.0.1' } } as unknown as Request;
+    expect(isAllowedOrigin(request)).toBe(false);
+    expect(isAllowedOrigin({ headers: { host: 'localhost:3080' } } as Request)).toBe(true);
+    vi.stubEnv('AI_HARNESS_ALLOWED_ORIGINS', 'https://proxy.example');
+    expect(isAllowedOrigin({ headers: { host: 'proxy.example' } } as Request)).toBe(true);
+    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'disposable-user-token');
+    expect(isAllowedOrigin(request)).toBe(true); // Non-browser authenticated clients retain their Host contract.
+  });
+
   it('rate-limits by Express client IP without path or forwarded-address bypasses', () => {
     const limiter = rateLimit({ max: 2, windowMs: 60_000 });
     const next = vi.fn() as NextFunction;

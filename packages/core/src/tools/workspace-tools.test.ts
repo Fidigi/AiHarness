@@ -95,6 +95,31 @@ describe('shared workspace tools', () => {
     expect(await readFile(path.join(root, 'duplicate.txt'), 'utf8')).toBe('same\nsame\n');
   });
 
+  it('uses fresh host trust rather than a saved true context and rechecks file publication', async () => {
+    const { root, registry, context } = await setup();
+    await writeFile(path.join(root, 'existing.txt'), 'original');
+    context.projectTrusted = true;
+    const check = vi.fn(async (cwd: string) => { expect(cwd).toBe(root); return false; });
+    Object.assign(context, { isProjectTrusted: check });
+    for (const [name, input] of [
+      ['write', { path: 'new.txt', content: 'unsafe' }],
+      ['edit', { path: 'existing.txt', edits: [{ oldText: 'original', newText: 'unsafe' }] }],
+      ['bash', { command: 'echo unsafe > command.txt' }],
+    ] as const) await expect(registry.executeTool(name, input, context)).rejects.toThrow(/trust/i);
+    expect(check).toHaveBeenCalled();
+    await expect(readFile(path.join(root, 'new.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(path.join(root, 'command.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readFile(path.join(root, 'existing.txt'), 'utf8')).toBe('original');
+    await expect(registry.executeTool('read', { path: 'existing.txt' }, context)).resolves.toMatchObject({ content: 'original' });
+    check.mockImplementationOnce(async () => true).mockImplementation(async () => false);
+    await expect(registry.executeTool('write', { path: 'existing.txt', content: 'unsafe' }, context)).rejects.toThrow(/trust/i);
+    expect(await readFile(path.join(root, 'existing.txt'), 'utf8')).toBe('original');
+    const controller = new AbortController();
+    check.mockImplementationOnce(async () => true).mockImplementation(async () => { controller.abort(); return true; });
+    await expect(registry.executeTool('write', { path: 'existing.txt', content: 'unsafe' }, context, controller.signal)).rejects.toThrow();
+    expect(await readFile(path.join(root, 'existing.txt'), 'utf8')).toBe('original');
+  });
+
   it('does not follow an escaping symlink for reads or writes', async () => {
     const { root, registry, context } = await setup();
     const outside = await mkdtemp(path.join(os.tmpdir(), 'aih-tools-outside-'));

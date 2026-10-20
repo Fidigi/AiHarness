@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { EncryptedCredentialStore } from '../security/credential-store.js';
 import {
@@ -97,7 +98,9 @@ export class ProviderCredentialError extends Error {
       | 'command-failed'
       | 'command-timeout'
       | 'refresh-failed'
-      | 'refresh-unavailable',
+      | 'refresh-unavailable'
+      | 'storage-unavailable'
+      | 'credential-changed',
     message: string,
   ) {
     super(message);
@@ -700,6 +703,7 @@ export class CredentialRedactor {
 export class ProviderCredentialService {
   private readonly volatile = new Map<string, ProviderCredential>();
   private readonly commandCache = new Map<string, string>();
+  private readonly generations = new Map<string, number>();
   private readonly namespace: string;
   readonly redactor: CredentialRedactor;
 
@@ -742,16 +746,19 @@ export class ProviderCredentialService {
   async delete(provider: string): Promise<boolean> {
     const id = providerId(provider);
     const hadMemory = this.volatile.has(id);
-    // Publish the process-local deletion only after the durable store accepted it.
-    const persisted = await this.options.store?.delete(this.storageName(id)) ?? false;
+    // Retire pending resolution before awaiting durable removal. A failed disk
+    // deletion still rejects; it must never allow an old refresh to publish late.
+    this.generations.set(id, (this.generations.get(id) ?? 0) + 1);
     this.volatile.delete(id);
     this.commandCache.delete(id);
+    const persisted = await this.options.store?.delete(this.storageName(id)) ?? false;
     return hadMemory || persisted;
   }
 
   /** Refresh one process-local descriptor after an atomic external store transaction. */
   synchronizeFromStore(provider: string): void {
     const id = providerId(provider);
+    this.generations.set(id, (this.generations.get(id) ?? 0) + 1);
     this.volatile.delete(id);
     this.commandCache.delete(id);
     const persisted = this.options.store?.get(this.storageName(id));
@@ -782,6 +789,7 @@ export class ProviderCredentialService {
 
   async resolve(provider: string, options: ResolveProviderCredentialOptions = {}): Promise<ResolvedProviderCredential | undefined> {
     const id = providerId(provider);
+    const generation = this.generations.get(id) ?? 0;
     const env = options.env ?? process.env;
     this.redactor.addEnvironment(env);
     for (const name of providerCredentialEnvironmentKeys(id)) {
@@ -815,8 +823,9 @@ export class ProviderCredentialService {
             throw new ProviderCredentialError('command-failed', 'The provider credential command failed.');
           }
           apiKey = secret(result.output.trim());
-          this.commandCache.set(id, apiKey);
           this.redactor.add(apiKey);
+          this.assertCurrent(id, generation, options.signal);
+          this.commandCache.set(id, apiKey);
         } catch (error) {
           if (error instanceof ProviderCredentialError || error instanceof ProcessAbortedError) throw error;
           throw new ProviderCredentialError('command-failed', 'The provider credential command failed.');
@@ -827,10 +836,12 @@ export class ProviderCredentialService {
     }
 
     const memory = this.volatile.get(id);
-    if (memory) return this.resolveStored(id, memory, 'memory', options);
+    if (memory) return this.resolveStored(id, memory, 'memory', options, generation);
+    await this.options.store?.load();
+    this.assertCurrent(id, generation, options.signal);
     const persisted = this.options.store?.get(this.storageName(id));
     if (!persisted) return undefined;
-    return this.resolveStored(id, parseStoredCredential(persisted), 'encrypted-store', options);
+    return this.resolveStored(id, parseStoredCredential(persisted), 'encrypted-store', options, generation, persisted);
   }
 
   /** Return one secret only for an explicit local print operation. */
@@ -848,12 +859,25 @@ export class ProviderCredentialService {
 
   private async save(provider: string, credential: ProviderCredential, persist: boolean): Promise<void> {
     this.rememberCredential(credential);
+    if (persist && !this.options.store) {
+      throw new ProviderCredentialError('storage-unavailable', 'Credential storage is unavailable.');
+    }
+    const generation = (this.generations.get(provider) ?? 0) + 1;
+    this.generations.set(provider, generation);
     if (persist && this.options.store) {
-      await this.options.store.set(this.storageName(provider), JSON.stringify(credential));
+      await this.options.store.set(this.storageName(provider), JSON.stringify({ ...credential, revision: randomUUID() }));
+      this.assertCurrent(provider, generation);
       this.volatile.delete(provider);
     } else {
       this.volatile.set(provider, structuredClone(credential));
     }
+  }
+
+  private assertCurrent(provider: string, generation: number, signal?: AbortSignal): void {
+    if ((this.generations.get(provider) ?? 0) !== generation) {
+      throw new ProviderCredentialError('credential-changed', 'The provider credential changed during resolution.');
+    }
+    if (signal?.aborted) throw signal.reason;
   }
 
   private rememberCredential(credential: ProviderCredential): void {
@@ -870,6 +894,8 @@ export class ProviderCredentialService {
     credential: ProviderCredential,
     source: 'memory' | 'encrypted-store',
     options: ResolveProviderCredentialOptions,
+    generation: number,
+    expected?: string,
   ): Promise<ResolvedProviderCredential | undefined> {
     const now = options.now ?? Date.now();
     if (credential.type !== 'oauth' || credential.expiresAt === undefined || credential.expiresAt > now + 60_000) {
@@ -880,7 +906,17 @@ export class ProviderCredentialService {
       throw new ProviderCredentialError('refresh-unavailable', 'The provider credential has expired and cannot be refreshed.');
     }
     const refreshed = await this.refresh(credential, options.oauth, options);
-    await this.save(provider, refreshed, source === 'encrypted-store');
+    this.rememberCredential(refreshed);
+    this.assertCurrent(provider, generation, options.signal);
+    if (source === 'encrypted-store') {
+      const published = await this.options.store!.compareAndSet(this.storageName(provider), expected,
+        JSON.stringify({ ...refreshed, revision: randomUUID() }));
+      if (!published) throw new ProviderCredentialError('credential-changed', 'The provider credential changed during resolution.');
+      this.assertCurrent(provider, generation, options.signal);
+    } else {
+      this.generations.set(provider, generation + 1);
+      this.volatile.set(provider, structuredClone(refreshed));
+    }
     return { credential: refreshed, descriptor: descriptor(provider, refreshed, source) };
   }
 
