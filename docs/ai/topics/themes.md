@@ -73,6 +73,7 @@ JSON Schema is an editor aid, not filesystem or execution authority. Core separa
 
 ## Related Domains
 
+- [Native terminal contract](./terminal-contract.md): supported action/settings matrix; accepted terminal protocol settings are not palette consumers.
 - [Native editor schemas](./editor-schemas.md): original byte-exact palette asset beside new settings/model projections; both native PTY startup/reload validation controls.
 - [CLI reference](./cli-reference.md): keybinding ownership, renderer/input lifecycle and installed commands.
 - [Security](./security.md): project trust, stable-file admission and privileged extension boundaries.

@@ -41,6 +41,13 @@ describe('FullscreenInput', () => {
 
     expect(controller.getValue()).toBe('abc');
     expect(ui.setInput).toHaveBeenLastCalledWith('abc', 2);
+
+    controller.handleKeypress('u', { name: 'u' });
+    controller.handleKeypress('界👩🏽‍💻', {});
+    expect(controller.getValue()).toBe('abu界👩🏽‍💻c');
+    expect(ui.setInput).toHaveBeenLastCalledWith('abu界👩🏽‍💻c', 'abu界👩🏽‍💻'.length);
+    // Every insertion/edit paints once, including the special plain-u branch.
+    expect(ui.setInput).toHaveBeenCalledTimes(6);
   });
 
   it('supports backspace, delete and ctrl+u', () => {

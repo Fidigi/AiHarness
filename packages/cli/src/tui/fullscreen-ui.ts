@@ -174,6 +174,11 @@ export class FullscreenUI extends TerminalUI {
       'Entrée : envoyer/steer · Alt+Entrée ou Ctrl+Q : follow-up · Alt+↑ : rappeler la file',
       'Escape/Ctrl+C : interrompre · ↑/↓ historique · Alt+↓ transcript · Ctrl+L rafraîchir',
       'F1 / Alt+K : actions et raccourcis · filtre + Entrée · Escape pour revenir',
+      'Alt+J : nouvelle ligne · Ctrl+←/→ ou Alt+B/F : mots · Alt+Backspace/D : supprimer un mot',
+      'Ctrl+Z / Alt+Z : annuler/rétablir le brouillon (historique borné, pas les messages envoyés)',
+      'Collage bracketed paste : inerte avant Entrée, maximum 64 Kio ; sinon saisie ordinaire.',
+      'Sélection native du terminal seulement ; pas de souris applicative, images inline ou composants Pi.',
+      '/settings distingue les préférences stockées non prises en charge du comportement actif.',
     ].join('\n'));
   }
 
@@ -319,7 +324,12 @@ export class FullscreenUI extends TerminalUI {
     const footer = this.statusVisible && this.terminalStatus
       ? statusLines(this.terminalStatus, this.editorStatus(), width, footerBudget)
         .map(line => chalk.hex(this.theme.colors.muted)(this.safeText(line))) : [];
-    const viewportHeight = Math.max(0, height - 4 - panels.length - footer.length);
+    const logicalLines = this.inputValue.split('\n');
+    const activeLine = this.inputValue.slice(0, this.inputCursor).split('\n').length - 1;
+    const editorHeight = Math.min(3, logicalLines.length, Math.max(1, height - 4 - panels.length - footer.length));
+    const editorStart = Math.max(0, Math.min(activeLine - Math.floor(editorHeight / 2), logicalLines.length - editorHeight));
+    const editorLines = logicalLines.slice(editorStart, editorStart + editorHeight);
+    const viewportHeight = Math.max(0, height - 3 - editorHeight - panels.length - footer.length);
     const separator = chalk.hex(this.theme.colors.borderMuted)('─'.repeat(width));
     const title = this.fit(` ${this.safeText(this.title).replace(/\s+/g, ' ')} · ${this.safeText(this.status).replace(/\s+/g, ' ')} `, width);
     const transcript = view
@@ -335,14 +345,20 @@ export class FullscreenUI extends TerminalUI {
 
     while (visible.length < viewportHeight) visible.unshift('');
 
-    const before = `${this.promptLabel}${this.inputValue.slice(0, this.inputCursor)}`.replace(/[\n\t]/g, ' ');
-    const after = this.inputValue.slice(this.inputCursor).replace(/[\n\t]/g, ' ');
-    // Horizontal editor window keeps the real caret visible after shrink/resize.
-    const windowBefore = tailTerminalText(before, width - 1);
-    const safeInput = clipTerminalText(windowBefore + after, width);
-    const input = chalk.hex(this.theme.colors.accent)(safeInput);
-    const cursorFromEnd = Math.max(0, terminalWidth(safeInput) - terminalWidth(windowBefore));
-    const cursorMove = cursorFromEnd > 0 ? `\u001b[${cursorFromEnd}D` : '';
+    const lineStart = this.inputValue.slice(0, this.inputCursor).lastIndexOf('\n') + 1;
+    const caret = this.inputCursor - lineStart;
+    const label = activeLine === 0 ? this.promptLabel : '… ';
+    const windowBefore = tailTerminalText((label + logicalLines[activeLine]!.slice(0, caret)).replace(/\t/g, ' '), width - 1);
+    const input = editorLines.map((line, index) => {
+      const absolute = editorStart + index;
+      const text = absolute === activeLine
+        ? windowBefore + line.slice(caret) : (absolute === 0 ? this.promptLabel : '… ') + line;
+      return chalk.hex(this.theme.colors.accent)(clipTerminalText(text.replace(/\t/g, ' '), width));
+    });
+    const below = editorStart + editorHeight - 1 - activeLine;
+    const cursorFromEnd = Math.max(0, terminalWidth(input.at(-1)!) - terminalWidth(windowBefore));
+    const cursorMove = below > 0 ? `\x1b[${below}A\x1b[${terminalWidth(windowBefore) + 1}G`
+      : cursorFromEnd > 0 ? `\x1b[${cursorFromEnd}D` : '';
     const frame = [
       chalk.bold.hex(this.theme.colors.accent)(title),
       ...panels.map(panel => this.fit(panel, width)),
@@ -350,7 +366,7 @@ export class FullscreenUI extends TerminalUI {
       ...visible.map(line => this.fit(line, width)),
       separator,
       ...footer.map(line => this.fit(line, width)),
-      input,
+      ...input,
     ].slice(-(height)).join('\n');
 
     this.output.write(`\u001b[2J\u001b[H${frame}${cursorMove}`);

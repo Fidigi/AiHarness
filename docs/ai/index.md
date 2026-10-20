@@ -18,6 +18,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Native Extension / SDK Contract | [`topics/native-extension-contract.md`](./topics/native-extension-contract.md) | ~110 lines — host/import/event/UI/package adaptation |
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~430 lines |
 | CLI Invocation Contract | [`topics/cli-invocation-contract.md`](./topics/cli-invocation-contract.md) | ~140 lines |
+| Native Terminal Contract | [`topics/terminal-contract.md`](./topics/terminal-contract.md) | ~140 lines — capabilities, 90 pinned/29 native actions, stored-only settings and PTY boundaries |
 | Terminal Themes | [`topics/themes.md`](./topics/themes.md) | ~80 lines |
 | Native Editor Schemas | [`topics/editor-schemas.md`](./topics/editor-schemas.md) | ~85 lines |
 | QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~145 lines — trusted limits, native questions/images and sandbox |
@@ -72,7 +73,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → tests/functional-parity/ (public contract probes and reviewed goldens)
 ```
 
-**Terminal keybindings or passive hotkey browsing** → Load `cli-reference.md` and the CLI rows in `project-map.md`; inspect `packages/cli/src/utils/{terminal-actions,keybinding-config,keybinding-manager,keybinding-source,keypress-gate,hotkey-view}.ts`, both input hosts, schema copy and actual emitted/packed PTY tests. Preserve reserved driver controls and draft/caret/history; never execute actions or predicates to render the view.
+**Terminal editing, keybindings or passive hotkey browsing** → Load `terminal-contract.md`, `cli-reference.md` and the CLI rows in `project-map.md`; inspect `packages/cli/src/utils/{terminal-actions,keybinding-config,keybinding-manager,keybinding-source,keypress-gate,hotkey-view}.ts`, both input hosts, schema copy and actual emitted/packed PTY tests. Preserve reserved driver controls and draft/caret/history; never execute actions or predicates to render the view.
 
 **A server API endpoint or startup lifecycle** → Load only `server-api.md` + `project-map.md` §§3–4
 ```

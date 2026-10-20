@@ -384,6 +384,13 @@ ${chalk.bold('Input')}
   ${chalk.cyan('Enter')}                         Send now, or steer an active response
   ${chalk.cyan('Alt+Enter / Ctrl+Q')}             Queue a follow-up after the active task
   ${chalk.cyan('Alt+Up')}                        Restore queued messages to the editor
+  ${chalk.cyan('Alt+J')}                         Insert a newline; Enter submits the whole draft
+  ${chalk.cyan('Ctrl+Left/Right / Alt+B/F')}      Move by whitespace-delimited word
+  ${chalk.cyan('Alt+Backspace / Alt+D')}          Delete previous/next word
+  ${chalk.cyan('Ctrl+Z / Alt+Z')}                Undo/redo draft edits (bounded, not submitted messages)
+  Bracketed paste is inert until Enter (64 KiB maximum); unbracketed input is ordinary typing.
+  Native terminal selection only; no application mouse, inline images or Pi component protocol.
+  Stored unsupported preferences are reported by /settings, not silently applied.
   ${chalk.cyan('Ctrl+G')}                        Open $VISUAL or $EDITOR
   ${chalk.cyan('Escape / Ctrl+C')}               Interrupt; queued messages return to the editor
   ${chalk.cyan('F1 / Alt+K')}                     Browse/filter all keyboard actions; Escape returns

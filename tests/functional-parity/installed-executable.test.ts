@@ -1296,22 +1296,30 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     const idle = (count: number) => vi.waitFor(async () => expect((await readFile(ends, 'utf8')).split('\n').slice(0, -1)).toHaveLength(count), { timeout: 10_000 });
     try {
       await wait('installed-keys: '); terminal.write('draft\u001b[D\u001b[D'); output = ''; terminal.write('\u001bOQ');
-      await wait('INSTALLED_KEYS_V1'); await wait('Hotkeys 22/22');
-      output = ''; terminal.write('editor.previous\r'); await wait('Hotkeys 1/22'); expect(visible()).toContain('editor.previous');
-      output = ''; terminal.write(':all\r'); await wait('Hotkeys 22/22');
-      output = ''; terminal.write('\u001b[6~'); await wait('2/3');
+      await wait('INSTALLED_KEYS_V1'); await wait('Hotkeys 29/29');
+      output = ''; terminal.write('editor.previous\r'); await wait('Hotkeys 1/29'); expect(visible()).toContain('editor.previous');
+      output = ''; terminal.write(':all\r'); await wait('Hotkeys 29/29');
+      output = ''; terminal.write('\u001b[6~'); await wait('2/4');
       await expect(readFile(editorMarker)).rejects.toMatchObject({ code: 'ENOENT' });
       await expect(readFile(capture)).rejects.toMatchObject({ code: 'ENOENT' });
       output = ''; terminal.write('\u001b'); await wait('draft');
-      output = ''; terminal.write('X\r'); await wait('[Mock AI Response]'); await idle(1);
+      output = ''; terminal.write('\x1a\x1bzX\r'); await wait('[Mock AI Response]'); await idle(1);
       // Passive view queries never become native editor history either.
       output = ''; terminal.write('\u001b[A'); await wait('draXft'); terminal.write('\u0015');
       await configure('f3', 'INSTALLED_KEYS_V2'); output = ''; terminal.write('/reload\r'); await wait('Reloaded ');
       output = ''; terminal.write('\u001bOR'); await wait('INSTALLED_KEYS_V2'); expect(visible()).not.toContain('F2');
       output = ''; terminal.write('\u001b'); await wait('installed-keys: ');
       output = ''; terminal.write('\u001bOQhello\r'); await wait('[Mock AI Response]'); await idle(2);
+      const pasted = '界 e\u0301👩🏽‍💻\ninstalled';
+      output = ''; terminal.write('\x1b[200~' + pasted + '\x1b[201~'); await wait('installed');
+      expect((await readFile(ends, 'utf8')).split('\n').slice(0, -1)).toHaveLength(2);
+      terminal.write('\x1b[H\x1b[D\x7f\x1a\x1bj\x1a');
+      terminal.resize(30, 10); terminal.resize(140, 35);
+      output = ''; terminal.write('\r'); await wait('[Mock AI Response]'); await idle(3);
       terminal.write('\u0004'); await vi.waitFor(() => expect(exited).toMatchObject({ exitCode: 0 }), { timeout: 10_000 });
-      expect((await readFile(capture, 'utf8')).split('\n').slice(0, -1).map(line => JSON.parse(line))).toEqual([['draXft'], ['draXft', 'hello']]);
+      expect(original).toContain('\x1b[?2004h'); expect(original).toContain('\x1b[?2004l');
+      if (mode === 'fullscreen') expect(original).toContain('\x1b[?1049l');
+      expect((await readFile(capture, 'utf8')).split('\n').slice(0, -1).map(line => JSON.parse(line))).toEqual([['draXft'], ['draXft', 'hello'], ['draXft', 'hello', pasted]]);
       await expect(readFile(editorMarker)).rejects.toMatchObject({ code: 'ENOENT' });
     } finally {
       try { if (!exited) { terminal.kill(); await vi.waitFor(() => expect(exited).toBeDefined(), { timeout: 5000 }); } }

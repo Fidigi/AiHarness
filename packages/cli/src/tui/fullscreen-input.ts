@@ -1,6 +1,7 @@
 import readline from 'readline';
 import type { AgentMessageQueueKind } from '@ai-harness/core';
 import type { FullscreenUI } from './fullscreen-ui.js';
+import { EditorState } from './editor-state.js';
 import { EDITOR_ACTION_KEYS, type TerminalActionId } from '../utils/terminal-actions.js';
 import {
   TerminalEscapeSequence,
@@ -34,6 +35,8 @@ interface KeypressInput {
 export class FullscreenInput {
   private value = '';
   private cursor = 0;
+  private readonly editor = new EditorState();
+  private historyDraft = '';
   private readonly history: string[] = [];
   private historyIndex = 0;
   private started = false;
@@ -96,9 +99,15 @@ export class FullscreenInput {
   getCursor(): number { return this.cursor; }
 
   replaceValue(value: string, cursor = value.length): void {
-    this.value = value;
-    this.cursor = Number.isFinite(cursor) ? Math.max(0, Math.min(value.length, cursor)) : value.length;
-    this.ui.setInput(this.value, this.cursor);
+    if (this.retired) return;
+    this.editor.replace(value, cursor);
+    this.applyDraft();
+  }
+
+  suspendDraft(): () => void {
+    this.editor.replace(this.value, this.cursor);
+    const restore = this.editor.suspend();
+    return () => { if (!this.retired) { restore(); this.applyDraft(); } };
   }
 
   cancelPendingEscape(): void { this.escapeSequence.cancel(); }
@@ -115,6 +124,8 @@ export class FullscreenInput {
     if (action === 'app.escape') { this.handlers.onEscape(); return true; }
     if (action === 'transcript.up') { this.ui.scrollUp(); return true; }
     if (action === 'transcript.down') { this.ui.scrollDown(); return true; }
+    this.editor.replace(this.value, this.cursor);
+    if (this.editor.perform(action)) { this.applyDraft(); return true; }
     const key = Object.hasOwn(EDITOR_ACTION_KEYS, action) ? EDITOR_ACTION_KEYS[action] : undefined;
     if (!key) return false;
     this.handleKeypress('', key); return true;
@@ -193,23 +204,10 @@ export class FullscreenInput {
       case 'enter':
         this.submit('steer');
         return;
-      case 'backspace':
-        if (this.cursor > 0) {
-          this.value = this.value.slice(0, this.cursor - 1) + this.value.slice(this.cursor);
-          this.cursor--;
-        }
-        break;
-      case 'delete':
-        if (this.cursor < this.value.length) {
-          this.value = this.value.slice(0, this.cursor) + this.value.slice(this.cursor + 1);
-        }
-        break;
-      case 'left':
-        this.cursor = Math.max(0, this.cursor - 1);
-        break;
-      case 'right':
-        this.cursor = Math.min(this.value.length, this.cursor + 1);
-        break;
+      case 'backspace': this.performAction(key.meta ? 'editor.deleteWordLeft' : 'editor.backspace'); return;
+      case 'delete': this.performAction('editor.delete'); return;
+      case 'left': this.performAction(key.ctrl || key.meta ? 'editor.wordLeft' : 'editor.left'); return;
+      case 'right': this.performAction(key.ctrl || key.meta ? 'editor.wordRight' : 'editor.right'); return;
       case 'home':
         this.cursor = key.ctrl ? 0 : this.value.slice(0, this.cursor).lastIndexOf('\n') + 1;
         break;
@@ -233,10 +231,11 @@ export class FullscreenInput {
           this.cursor = 0;
         } else {
           this.insert(text || 'u');
+          return;
         }
         break;
       default:
-        if (text && !key.ctrl && !key.meta && this.isPrintable(text)) this.insert(text);
+        if (text && !key.ctrl && !key.meta && this.isPrintable(text)) { this.insert(text); return; }
     }
 
     this.ui.setInput(this.value, this.cursor);
@@ -249,6 +248,8 @@ export class FullscreenInput {
       if (this.history.length > 100) this.history.shift();
     }
     this.historyIndex = this.history.length;
+    this.historyDraft = '';
+    this.editor.reset();
     this.value = '';
     this.cursor = 0;
     this.ui.setInput('', 0);
@@ -263,8 +264,9 @@ export class FullscreenInput {
 
   private navigateHistory(direction: -1 | 1): void {
     if (this.history.length === 0) return;
+    if (this.historyIndex === this.history.length) this.historyDraft = this.value;
     this.historyIndex = Math.max(0, Math.min(this.history.length, this.historyIndex + direction));
-    this.value = this.historyIndex === this.history.length ? '' : this.history[this.historyIndex];
+    this.value = this.historyIndex === this.history.length ? this.historyDraft : this.history[this.historyIndex];
     this.cursor = this.value.length;
   }
 
@@ -287,10 +289,20 @@ export class FullscreenInput {
     }
   }
 
-  private insert(text: string): void {
-    this.value = this.value.slice(0, this.cursor) + text + this.value.slice(this.cursor);
-    this.cursor += text.length;
+  insertText(text: string): void {
+    if (this.retired) return;
+    this.editor.replace(this.value, this.cursor);
+    this.editor.insert(text);
+    this.applyDraft();
   }
+
+  private applyDraft(): void {
+    const draft = this.editor.snapshot();
+    this.value = draft.value; this.cursor = draft.cursor;
+    this.ui.setInput(this.value, this.cursor);
+  }
+
+  private insert(text: string): void { this.insertText(text); }
 
   private isPrintable(text: string): boolean {
     return [...text].every(character => character >= ' ' && character !== '\u007f');

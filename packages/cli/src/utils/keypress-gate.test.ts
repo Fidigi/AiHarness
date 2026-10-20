@@ -66,6 +66,26 @@ describe('actual readline keypress interception', () => {
       expect(action).toHaveBeenCalledOnce(); expect(f.rl.line).toBe('draft');
     } finally { f.close(); }
   });
+  it('captures fragmented UTF-8 bracketed paste inertly, without dispatching embedded controls or lines', async () => {
+    const f = fixture(); const paste = vi.fn(); const line = vi.fn(); const gate = vi.fn(() => false);
+    try {
+      f.input.setPasteHandler(paste); f.input.setKeypressGate(gate); f.rl.on('line', line);
+      const bytes = Buffer.from('\x1b[200~界🙂\r\n/quit\x03\x1b]52;c;FORGED\x07\x1b[201~');
+      for (const byte of bytes) f.source.write(Buffer.from([byte]));
+      await setImmediate(); expect(paste).toHaveBeenCalledExactlyOnceWith('界🙂\n/quit');
+      expect(line).not.toHaveBeenCalled(); expect(gate).not.toHaveBeenCalled(); expect(f.rl.line).toBe('');
+    } finally { f.close(); }
+  });
+  it('rejects the whole oversized paste and discards unfinished paste at retirement', async () => {
+    const f = fixture(); const paste = vi.fn();
+    try {
+      f.input.setPasteHandler(paste);
+      f.source.write('\x1b[200~' + 'x'.repeat(65_537) + '\x1b[201~');
+      await setImmediate(); expect(paste).toHaveBeenCalledExactlyOnceWith(undefined);
+      f.source.write('\x1b[200~/quit\r'); f.input.dispose();
+      await setImmediate(); expect(paste).toHaveBeenCalledTimes(1); expect(f.rl.line).toBe('');
+    } finally { f.close(); }
+  });
   it('retains theme-response filtering before decoding/gating user keys', async () => {
     const f = fixture();
     try {

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { stripVTControlCharacters } from 'node:util';
 import { SessionManager } from '@ai-harness/core';
 import chalk from 'chalk';
 import { createTerminalStatus } from './status.js';
@@ -171,6 +172,20 @@ describe('FullscreenUI', () => {
     } finally { chalk.level = previous; }
   });
 
+  it('renders bounded real multiline editor rows around the caret and keeps them after shrink', () => {
+    const { screen, chunks } = createScreen(40, 12);
+    const ui = new FullscreenUI({ output: screen }); ui.enter();
+    ui.setInput('first\n界 e\u0301👩🏽‍💻\nthird', 2);
+    expect(chunks.at(-1)).toContain('… 界 e\u0301👩🏽‍💻');
+    expect(chunks.at(-1)).toContain('\x1b[2A');
+    for (const [columns, rows] of [[8, 6], [1, 2], [40, 12]]) {
+      screen.columns = columns; screen.rows = rows; ui.render();
+      const lines = stripVTControlCharacters(chunks.at(-1)!).split('\n');
+      expect(lines.length).toBeLessThanOrEqual(rows);
+      expect(lines.every(line => terminalWidth(line) <= columns)).toBe(true);
+    }
+    ui.leave();
+  });
   it('detects terminal support from both streams', () => {
     const input = { isTTY: true, setRawMode: vi.fn() };
     expect(FullscreenUI.isSupported(input as never, { isTTY: true })).toBe(true);

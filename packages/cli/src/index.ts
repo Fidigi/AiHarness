@@ -63,6 +63,8 @@ import { CommandHandler } from './commands/handler.js';
 import { TerminalUI } from './tui/terminal-ui.js';
 import { FullscreenUI } from './tui/fullscreen-ui.js';
 import { FullscreenInput } from './tui/fullscreen-input.js';
+import { EditorState } from './tui/editor-state.js';
+import { unsupportedCliSettings } from './tui/terminal-settings.js';
 import { KeypressFilteredInput } from './utils/keypress-gate.js';
 import { configuredThemeSelection, configuredThemeSources } from './cli/theme-sources.js';
 import {
@@ -135,6 +137,7 @@ interface InputDriver {
   getValue(): string;
   replaceValue(value: string, cursor?: number): void;
   getCursor?(): number;
+  suspendDraft?(): () => void;
   performAction?(action: TerminalActionId, event?: readline.Key): boolean | Promise<boolean>;
 }
 
@@ -173,13 +176,14 @@ function formatAgentSettingsSummary(resolved: ResolvedAgentSettings): string {
     ['compaction.keepRecentTokens', resolved.settings.compaction?.keepRecentTokens ?? 20_000, 'compaction.keepRecentTokens'],
     ['retry.enabled', resolved.settings.retry?.enabled ?? true, 'retry.enabled'],
     ['retry.maxRetries', resolved.settings.retry?.maxRetries ?? 3, 'retry.maxRetries'],
-    ['theme', resolved.settings.theme ?? 'system', 'theme'],
-    ['tuiMode', resolved.settings.tuiMode ?? 'fullscreen', 'tuiMode'],
+    ['theme (saved)', resolved.settings.theme ?? 'auto', 'theme'],
+    ['tuiMode (saved; restart)', resolved.settings.tuiMode ?? 'fullscreen', 'tuiMode'],
   ];
   return [
     `Agent settings: ${resolved.paths.global}`,
     `Project settings: ${resolved.paths.project} (${resolved.projectTrusted ? 'trusted' : 'blocked'})`,
     ...values.map(([name, value, field]) => `${name}: ${typeof value === 'string' ? value : JSON.stringify(value)} [${source(field)}]`),
+    ...unsupportedCliSettings(resolved.settings).map(field => `${field}: unsupported by CLI (stored only) [${source(field)}]`),
   ].join('\n');
 }
 
@@ -432,6 +436,11 @@ async function main(): Promise<void> {
     projectResourcesTrusted = trust.resourceTrusted;
     const resolved = await loadAgentSettings({ cwd: workspaceCwd, projectTrusted: projectResourcesTrusted });
     reportAgentSettingsDiagnostics(resolved);
+    if (applicationMode === 'interactive') {
+      for (const field of unsupportedCliSettings(resolved.settings)) {
+        process.stderr.write(`Warning: ${field} is unsupported by CLI (stored only).\n`);
+      }
+    }
     return resolved;
   };
   let settingsResolution = await resolveSettingsForTrust(true);
@@ -590,6 +599,7 @@ async function main(): Promise<void> {
   const keyBindings = new KeyBindingManager(redactOutput);
   let hotkeyView: HotkeyView | undefined;
   let hotkeyDraft = { value: '', cursor: 0 };
+  let restoreHotkeyDraft: (() => void) | undefined;
   let selectedKeybindingPath: string | undefined;
   let keybindingGeneration = 0;
   const activateSystemThemeProbe = async (): Promise<void> => {
@@ -701,9 +711,10 @@ async function main(): Promise<void> {
     if (earlyCleanupPromise) return earlyCleanupPromise;
     keybindingGeneration++;
     keyBindings.clearAll();
-    hotkeyView = undefined;
+    hotkeyView = undefined; restoreHotkeyDraft = undefined;
     const filteredInput = filteredTerminalInput;
     filteredTerminalInput = undefined;
+    if (filteredInput) process.stdout.write('\x1b[?2004l');
     const themeProbe = systemThemeProbe;
     systemThemeProbe = undefined;
     earlyCleanupPromise = cleanupCliEarlyExit({
@@ -980,7 +991,7 @@ async function main(): Promise<void> {
       enabledToolNames: () => selectedTools().map(tool => tool.name),
       modelPatterns: effectiveModelSettings.modelPatterns,
       offline,
-      settingsInfo: () => formatAgentSettingsSummary(settingsResolution),
+      settingsInfo: () => `${formatAgentSettingsSummary(settingsResolution)}\nActive theme: ${terminal.getThemeName()}\nActive terminal: ${fullscreenTerminal ? 'fullscreen' : 'regular'} (startup selection)`,
       agentSettings: () => settingsResolution.settings,
       providers: configuredProviders,
       credentialService: providerRuntime.credentials,
@@ -2005,7 +2016,9 @@ async function main(): Promise<void> {
     hotkeyView = undefined;
     if (shuttingDown) return;
     promptBoundary.invalidate();
-    inputDriver.replaceValue(hotkeyDraft.value, hotkeyDraft.cursor);
+    if (restoreHotkeyDraft) restoreHotkeyDraft();
+    else inputDriver.replaceValue(hotkeyDraft.value, hotkeyDraft.cursor);
+    restoreHotkeyDraft = undefined;
     inputDriver.setPrompt(sessionPrompt());
     inputDriver.prompt(true);
   }
@@ -2015,6 +2028,7 @@ async function main(): Promise<void> {
     promptBoundary.invalidate();
     const value = inputDriver.getValue();
     hotkeyDraft = { value, cursor: inputDriver.getCursor?.() ?? value.length };
+    restoreHotkeyDraft = inputDriver.suspendDraft?.();
     hotkeyView = new HotkeyView(() => keyBindings.getActionViews(), redactOutput);
     inputDriver.replaceValue('');
     renderHotkeys();
@@ -2062,14 +2076,19 @@ async function main(): Promise<void> {
       onDequeue: currentInput => restoreQueuedInput(currentInput),
       recordHistory: () => !hotkeyView,
       onExternalEditor: async currentInput => {
+        process.stdout.write('\x1b[?2004l');
         fullscreenTerminal.leave();
         try {
           return await editInExternalEditor(currentInput, settingsResolution.settings.externalEditor);
         } finally {
-          if (!shuttingDown) fullscreenTerminal.enter();
+          if (!shuttingDown) { fullscreenTerminal.enter(); process.stdout.write('\x1b[?2004h'); }
         }
       },
     }, keyInput);
+    keyInput.setPasteHandler(value => {
+      if (value === undefined) reportError('Paste exceeds 65536 bytes; discarded.');
+      else fullscreenInput.insertText(value);
+    });
     const releaseGate = keyInput.setKeypressGate((_text, key) => {
       const effective = fullscreenInput.keyForBindings(key);
       const modal = hotkeyViewKey(effective);
@@ -2080,12 +2099,15 @@ async function main(): Promise<void> {
       if (handled) fullscreenInput.cancelPendingEscape();
       return handled;
     });
+    const resize = (): void => fullscreenTerminal.render();
+    process.stdout.on('resize', resize);
     inputDriver = {
       prompt: () => fullscreenInput.prompt(),
-      close: () => { releaseGate(); fullscreenInput.close(); },
+      close: () => { process.stdout.off('resize', resize); releaseGate(); fullscreenInput.close(); },
       setPrompt: prompt => fullscreenInput.setPrompt(prompt),
       getValue: () => fullscreenInput.getValue(),
       getCursor: () => fullscreenInput.getCursor(),
+      suspendDraft: () => fullscreenInput.suspendDraft(),
       replaceValue: (value, cursor) => fullscreenInput.replaceValue(value, cursor),
       performAction: action => fullscreenInput.performAction(action),
     };
@@ -2101,28 +2123,46 @@ async function main(): Promise<void> {
       prompt: sessionPrompt(),
       completer: (line: string): [string[], string] => [completeCommands(line), line],
       escapeCodeTimeout: TERMINAL_ESCAPE_CODE_TIMEOUT_MS,
+      // Node 24's native history normalizes/reverses multiline entries. Own exact drafts instead.
+      historySize: 0,
     });
+    const regularHistory: string[] = [];
+    let historyIndex = 0, historyDraft = '';
+    const rememberRegularLine = (value: string): void => {
+      if (!hotkeyView && value.trim()) {
+        regularHistory.push(value); if (regularHistory.length > 100) regularHistory.shift();
+      }
+      historyIndex = regularHistory.length; historyDraft = '';
+    };
     let regularClosed = false;
     let regularEditing = false;
+    const editor = new EditorState();
     const replaceReadlineValue = (value: string, cursor = value.length): void => {
       if (regularClosed || shuttingDown) return;
       const index = Number.isFinite(cursor) ? Math.max(0, Math.min(value.length, cursor)) : value.length;
-      const prefix = value.slice(0, index).replace(/[\r\n]+/g, ' ');
-      const suffix = value.slice(index).replace(/[\r\n]+/g, ' ');
-      rl.write(null, { ctrl: true, name: 'e' });
-      rl.write(null, { ctrl: true, name: 'u' });
-      if (suffix) rl.write(suffix);
-      rl.write(null, { ctrl: true, name: 'a' });
-      if (prefix) rl.write(prefix);
+      // Node 24 exposes writable line/cursor state (typed readonly by @types/node).
+      // write(value) would submit embedded LF; publish the owned draft before the public redraw.
+      Object.assign(rl, { line: value, cursor: index });
+      rl.prompt(true);
     };
+    const insertRegularText = (text: string): void => {
+      if (regularClosed || regularEditing || shuttingDown) return;
+      editor.replace(rl.line, rl.cursor); editor.insert(text);
+      const draft = editor.snapshot(); replaceReadlineValue(draft.value, draft.cursor);
+    };
+    keyInput.setPasteHandler(value => {
+      if (value === undefined) reportError('Paste exceeds 65536 bytes; discarded.');
+      else insertRegularText(value);
+    });
     const escapeSequence = new TerminalEscapeSequence(escapeInterrupt);
     const submitRegularFollowUp = (): void => {
       const currentInput = rl.line;
+      rememberRegularLine(currentInput); editor.reset();
       replaceReadlineValue('');
       void dispatchLine(currentInput, 'follow-up')
         .catch(error => terminal.showError(error instanceof Error ? error.message : String(error)));
     };
-    const releaseGate = keyInput.setKeypressGate((_text, key) => {
+    const releaseGate = keyInput.setKeypressGate((text, key) => {
       if (regularClosed || shuttingDown) return true;
       if (key.name === 'escape' && !key.ctrl && !key.shift) {
         escapeSequence.deferEscape(); return true;
@@ -2136,7 +2176,11 @@ async function main(): Promise<void> {
         if (!rl.line) { shutdown('Au revoir ! 👋', 0); return true; }
         return false;
       }
-      return keyBindings.handleKeypress(effective, { currentInput: rl.line });
+      if (keyBindings.handleKeypress(effective, { currentInput: rl.line })) return true;
+      if (text && !key.ctrl && !key.meta && [...text].every(character => character >= ' ' && character !== '\x7f')) {
+        insertRegularText(text); return true;
+      }
+      return false;
     });
     inputDriver = {
       prompt: (preserveCursor = false) => { if (!regularClosed) rl.prompt(preserveCursor); },
@@ -2144,6 +2188,11 @@ async function main(): Promise<void> {
       setPrompt: prompt => rl.setPrompt(prompt),
       getValue: () => rl.line,
       getCursor: () => rl.cursor,
+      suspendDraft: () => {
+        editor.replace(rl.line, rl.cursor);
+        const restore = editor.suspend();
+        return () => { restore(); const draft = editor.snapshot(); replaceReadlineValue(draft.value, draft.cursor); };
+      },
       replaceValue: replaceReadlineValue,
       performAction: async (action, event) => {
         if (regularClosed || shuttingDown) return false;
@@ -2160,12 +2209,22 @@ async function main(): Promise<void> {
         }
         if (action === 'transcript.up') { terminal.scrollUp(20); rl.prompt(true); return true; }
         if (action === 'transcript.down') { terminal.scrollDown(20); rl.prompt(true); return true; }
-        if (action === 'editor.clear') { replaceReadlineValue(''); return true; }
+        if (action === 'editor.previous' || action === 'editor.next') {
+          if (historyIndex === regularHistory.length) historyDraft = rl.line;
+          historyIndex = Math.max(0, Math.min(regularHistory.length, historyIndex + (action === 'editor.previous' ? -1 : 1)));
+          replaceReadlineValue(historyIndex === regularHistory.length ? historyDraft : regularHistory[historyIndex]!);
+          return true;
+        }
+        editor.replace(rl.line, rl.cursor);
+        if (editor.perform(action)) {
+          const draft = editor.snapshot(); replaceReadlineValue(draft.value, draft.cursor); return true;
+        }
         if (action === 'input.externalEditor') {
           if (regularEditing) return false;
           regularEditing = true;
           const draft = rl.line, cursor = rl.cursor;
           replaceReadlineValue('');
+          process.stdout.write('\x1b[?2004l');
           try {
             const content = await editInExternalEditor(draft, settingsResolution.settings.externalEditor);
             if (!regularClosed && !shuttingDown) replaceReadlineValue(content ?? draft, content === undefined ? cursor : content.length);
@@ -2173,7 +2232,7 @@ async function main(): Promise<void> {
             if (!regularClosed && !shuttingDown) { replaceReadlineValue(draft, cursor); reportError(error instanceof Error ? error.message : String(error)); }
           } finally {
             regularEditing = false;
-            if (!regularClosed && !shuttingDown) rl.prompt(true);
+            if (!regularClosed && !shuttingDown) { process.stdout.write('\x1b[?2004h'); rl.prompt(true); }
           }
           return true;
         }
@@ -2184,21 +2243,19 @@ async function main(): Promise<void> {
         rl.write(null, native); return true;
       },
     };
-    let nativeHistory: string[] = [];
-    rl.on('history', (history: string[]) => {
-      if (hotkeyView) history.splice(0, history.length, ...nativeHistory);
-      else nativeHistory = [...history];
-    });
     terminal.setReadline(rl);
     if (startupDisplay.header) terminal.welcome();
 
     rl.on('SIGINT', interrupt);
     rl.on('line', input => {
+      rememberRegularLine(input); editor.reset();
       void dispatchLine(input, 'steer')
         .catch(error => terminal.showError(error instanceof Error ? error.message : String(error)));
     });
     rl.prompt();
   }
+
+  process.stdout.write('\x1b[?2004h');
 
   if (initialPrompts.length) {
     void (async () => {
@@ -2217,7 +2274,7 @@ async function main(): Promise<void> {
 }
 
 main().catch(error => {
-  if (process.stdout.isTTY) process.stdout.write('\u001b[?25h\u001b[?1049l');
+  if (process.stdout.isTTY) process.stdout.write('\u001b[?2004l\u001b[?25h\u001b[?1049l');
   console.error(chalk.red('Erreur fatale :'), outputCredentialRedactor.redact(
     error instanceof Error ? error.message : String(error),
   ));

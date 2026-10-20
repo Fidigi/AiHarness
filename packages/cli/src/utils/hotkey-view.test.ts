@@ -4,6 +4,7 @@ import { KeyBindingManager } from './keybinding-manager.js';
 import { defaultTerminalBindings, EDITOR_ACTION_KEYS, TERMINAL_ACTIONS } from './terminal-actions.js';
 import { KeyBindingConfigError, parseKeyBindingConfig } from './keybinding-config.js';
 import { terminalWidth } from '../tui/terminal-text.js';
+import { EditorState } from '../tui/editor-state.js';
 
 function fixture() {
   const manager = new KeyBindingManager(), handler = vi.fn(), predicate = vi.fn(() => true);
@@ -23,12 +24,12 @@ describe('declarative complete action inventory and passive interactive view', (
   });
   it('round-trips the complete default schema with unique action/chord IDs', () => {
     const defaults = defaultTerminalBindings();
-    expect(TERMINAL_ACTIONS).toHaveLength(22);
-    expect(new Set(TERMINAL_ACTIONS.map(action => action.id)).size).toBe(22);
+    expect(TERMINAL_ACTIONS).toHaveLength(29);
+    expect(new Set(TERMINAL_ACTIONS.map(action => action.id)).size).toBe(29);
     expect(parseKeyBindingConfig(JSON.stringify(defaults))).toEqual(defaults);
     for (const action of TERMINAL_ACTIONS) {
       expect(defaults.some(binding => binding.action === action.id)).toBe(true);
-      expect(EDITOR_ACTION_KEYS[action.id] !== undefined || ['app.help', 'app.hotkeys', 'transcript.up', 'transcript.down'].includes(action.id)).toBe(true);
+      expect(EDITOR_ACTION_KEYS[action.id] !== undefined || new EditorState().perform(action.id) || ['app.help', 'app.hotkeys', 'transcript.up', 'transcript.down'].includes(action.id)).toBe(true);
     }
   });
   it('grants no ambient exit/interrupt/output authority before a real host registers', async () => {
@@ -45,14 +46,14 @@ describe('declarative complete action inventory and passive interactive view', (
   });
   it('exposes every action across pages without executing handlers or predicates', () => {
     const { view, handler, predicate } = fixture(); const pages: string[] = [];
-    for (let index = 0; index < 3; index++) { pages.push(view.render(300).join('\n')); view.update(':next'); }
+    for (let index = 0; index < 4; index++) { pages.push(view.render(300).join('\n')); view.update(':next'); }
     for (const action of TERMINAL_ACTIONS) expect(pages.join('\n')).toContain(action.id);
     expect(handler).not.toHaveBeenCalled(); expect(predicate).not.toHaveBeenCalled();
     expect(view.update(':close')).toBe('close'); expect(handler).not.toHaveBeenCalled();
   });
   it('filters IDs, keys and descriptions, resets page and supports backward/empty-next navigation', () => {
     const { view } = fixture(); const first = view.render(300).join('\n');
-    view.update(':prev'); expect(view.render(300).join('\n')).toContain('3/3');
+    view.update(':prev'); expect(view.render(300).join('\n')).toContain('4/4');
     view.update(''); expect(view.render(300).join('\n')).toBe(first);
     view.update('external editor'); expect(view.render(300).join('\n')).toContain('input.externalEditor');
     expect(view.render(300).join('\n')).toContain('1/1');
