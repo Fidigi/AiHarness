@@ -5,7 +5,9 @@ import { describe, expect, it } from 'vitest';
 const probe = fileURLToPath(new URL('./fixtures/headless-signal-probe.mjs', import.meta.url));
 
 describe('CLI-01 emitted headless cancellation', () => {
-  it.each(['print/SIGINT', 'print/SIGTERM', 'json/SIGINT', 'json/SIGTERM', 'rpc/SIGINT', 'rpc/SIGTERM'])(
+  it.each(['print/SIGINT', 'print/SIGTERM', 'json/SIGINT', 'json/SIGTERM', 'rpc/SIGINT', 'rpc/SIGTERM',
+    'print/SIGINT/admission', 'print/SIGTERM/admission', 'json/SIGINT/admission', 'json/SIGTERM/admission',
+    'rpc/SIGINT/admission', 'rpc/SIGTERM/admission'])(
     'settles, flushes and cleans up before exiting (%s)', scenario => {
       const result = spawnSync(process.execPath, [probe, scenario], {
         encoding: 'utf8', timeout: 8_000,

@@ -3,6 +3,8 @@ import { lstat, mkdir, open } from 'node:fs/promises';
 import path from 'node:path';
 import {
   AgentMessageQueue,
+  retainAgentWork,
+  AgentAbortError,
   SessionBranchCancelledError,
   type AgentMessageQueueKind,
   type AgentQueueMode,
@@ -53,6 +55,12 @@ import { JsonEventStream, toJsonProtocolMessage } from '../cli/json-output.js';
 import { renderSessionHtml, sanitizeFilename } from '../utils/session-export.js';
 import { EXPORT_PRIVACY_WARNING } from '../security/privacy-warnings.js';
 import { parseResourceCommandLine, type ResourceManager } from '../resources/resource-manager.js';
+
+const FOREGROUND_SAFE_COMMANDS = new Set([
+  'abort', 'abort_retry', 'get_state', 'get_session_stats', 'get_entries', 'get_tree',
+  'get_messages', 'get_fork_messages', 'get_last_assistant_text', 'get_commands',
+  'get_available_thinking_levels',
+]);
 
 export interface RpcDynamicTools {
   tools: ChatToolDefinition[];
@@ -372,6 +380,9 @@ export class RpcController {
   private activeContextReload?: ActiveRun;
   private navigationRetired = false;
   private activeRun?: ActiveRun;
+  private promptAdmission?: ActiveRun;
+  private runFailure?: unknown;
+  private runAccepting = false;
   private activeBash?: ActiveBash;
   private modelCache?: {
     expiresAt: number;
@@ -521,6 +532,7 @@ export class RpcController {
   /** EOF retires even requests whose awaited admission has not resumed yet. */
   abortNavigation(): void {
     this.navigationRetired = true;
+    this.promptAdmission?.controller.abort();
     this.activeNavigation?.controller.abort();
     this.activeContextReload?.controller.abort();
     this.activeCompaction?.controller.abort();
@@ -530,7 +542,9 @@ export class RpcController {
     const navigation = this.activeNavigation;
     const contextReload = this.activeContextReload;
     const compaction = this.activeCompaction;
+    const admission = this.promptAdmission;
     this.abortNavigation();
+    if (admission) await admission.done;
     this.retryAbortController?.abort();
     this.summarizationAbortController?.abort();
     const activeBash = this.activeBash;
@@ -545,19 +559,35 @@ export class RpcController {
     if (compaction) await compaction.done;
     await this.eventTail;
     if (this.eventFailure) throw this.eventFailure;
+    if (this.runFailure) throw this.runFailure;
   }
 
   async handle(request: RpcCommandRequest): Promise<RpcCommandResponse | undefined> {
+    // Extension commands are independent host callbacks (including UI replies),
+    // not ordinary prompt admission; retain their native concurrent command path.
+    if (request.type === 'prompt' && typeof request.message === 'string' && this.isExtensionCommand(request.message)) return this.handleCommand(request);
+    if (!['prompt', 'steer', 'follow_up'].includes(request.type)) return this.handleCommand(request);
+    if (this.navigationRetired || this.promptAdmission || (this.activeRun && !this.runAccepting)) return failure(request.id, request.type,
+      'Prompt admission is closed or another foreground operation is processing.');
+    let finish!: () => void;
+    const admission = { controller: new AbortController(), done: new Promise<void>(resolve => { finish = resolve; }) };
+    this.promptAdmission = admission;
+    const releaseWork = retainAgentWork();
+    try { return await this.handleCommand(request, admission.controller.signal); }
+    finally {
+      if (this.promptAdmission === admission) this.promptAdmission = undefined;
+      finish();
+      releaseWork();
+    }
+  }
+
+  private async handleCommand(request: RpcCommandRequest, signal?: AbortSignal): Promise<RpcCommandResponse | undefined> {
     const id = typeof request.id === 'string' ? request.id : undefined;
     const command = request.type;
     try {
       if (this.eventFailure) throw this.eventFailure;
-      const foregroundSafe = [
-        'abort', 'abort_retry', 'get_state', 'get_session_stats', 'get_entries', 'get_tree',
-        'get_messages', 'get_fork_messages', 'get_last_assistant_text', 'get_commands',
-        'get_available_thinking_levels',
-      ].includes(command);
-      if (!foregroundSafe) {
+      if (!FOREGROUND_SAFE_COMMANDS.has(command)) {
+        if (this.promptAdmission && this.promptAdmission.controller.signal !== signal) throw new Error(`${command} is not available while prompt admission is processing.`);
         if (this.activeNavigation) throw new Error(`${command} is not available while navigating the session tree.`);
         if (this.activeCompaction) throw new Error(`${command} is not available while compacting the session.`);
         this.assertNoContextReload(command);
@@ -567,10 +597,12 @@ export class RpcController {
           const rawMessage = requiredString(request.message, 'message');
           const message = this.context.redactText?.(rawMessage) ?? rawMessage;
           if (await this.executeExtensionCommand(message)) {
+            if (signal?.aborted) throw new AgentAbortError();
             return success(id, command, { disposition: 'handled' });
           }
-          const prompt = await this.preparePrompt(message, request.images);
+          const prompt = await this.preparePrompt(message, request.images, signal!);
           this.assertNoContextReload(command);
+          if (this.activeRun && !this.runAccepting) throw new Error('Agent is settling; await agent_settled before prompting.');
           if (this.activeNavigation) throw new Error('prompt is not available while navigating the session tree.');
           if (this.activeRun) {
             if (request.streamingBehavior === 'steer') this.messageQueue.enqueue('steer', prompt);
@@ -579,13 +611,13 @@ export class RpcController {
             await this.emitQueueUpdate();
             return success(id, command, { disposition: 'queued' });
           }
-          this.start(prompt);
+          this.start(prompt, this.promptAdmission!.controller);
           return success(id, command, { disposition: 'started' });
         }
         case 'steer': {
           const message = requiredString(request.message, 'message');
           if (this.isExtensionCommand(message)) throw new Error('Extension commands are not allowed in steer; use prompt instead.');
-          const prompt = await this.preparePrompt(message, request.images);
+          const prompt = await this.preparePrompt(message, request.images, signal!);
           this.assertNoContextReload(command);
           this.messageQueue.enqueue('steer', prompt);
           await this.emitQueueUpdate();
@@ -594,7 +626,7 @@ export class RpcController {
         case 'follow_up': {
           const message = requiredString(request.message, 'message');
           if (this.isExtensionCommand(message)) throw new Error('Extension commands are not allowed in follow_up; use prompt instead.');
-          const prompt = await this.preparePrompt(message, request.images);
+          const prompt = await this.preparePrompt(message, request.images, signal!);
           this.assertNoContextReload(command);
           this.messageQueue.enqueue('follow-up', prompt);
           await this.emitQueueUpdate();
@@ -607,11 +639,10 @@ export class RpcController {
           navigation?.controller.abort();
           contextReload?.controller.abort();
           compaction?.controller.abort();
-          const active = this.activeRun;
-          if (active) {
-            active.controller.abort();
-            await active.done;
-          }
+          this.promptAdmission?.controller.abort();
+          // Abort acknowledges withdrawal. agent_settled/close retain physical ownership.
+          this.runAccepting = false;
+          this.activeRun?.controller.abort();
           if (navigation) await navigation.done;
           if (contextReload) await contextReload.done;
           if (compaction) await compaction.done;
@@ -1132,7 +1163,9 @@ export class RpcController {
     return message;
   }
 
-  private async preparePrompt(message: unknown, imagesValue: unknown): Promise<PreparedPrompt> {
+  private async preparePrompt(message: unknown, imagesValue: unknown, signal: AbortSignal): Promise<PreparedPrompt> {
+    if (signal.aborted) throw new AgentAbortError();
+    const sessionId = this.currentSessionId;
     const expanded = this.expandResourceCommand(requiredString(message, 'message'));
     const content = this.context.redactText?.(expanded) ?? expanded;
     const rawImages = optionalImages(imagesValue);
@@ -1145,7 +1178,11 @@ export class RpcController {
       sessionId: this.currentSessionId,
       provider: this.context.redactText?.(this.context.providerName) ?? this.context.providerName,
       input: content,
+      signal,
     });
+    if (signal.aborted) throw new AgentAbortError();
+    if (this.currentSessionId !== sessionId) throw new Error('Session changed while admitting a prompt.');
+    if (this.activeRun && !this.runAccepting) throw new Error('Agent is settling; await agent_settled before queueing.');
     if (hook.cancelled) {
       const reason = hook.reason ?? "Requête annulée par un hook d'extension.";
       throw new Error(this.context.redactText?.(reason) ?? reason);
@@ -1163,17 +1200,19 @@ export class RpcController {
     };
   }
 
-  private start(prompt: PreparedPrompt): void {
-    const controller = new AbortController();
+  private start(prompt: PreparedPrompt, controller: AbortController): void {
     let settle!: () => void;
     const done = new Promise<void>(resolve => { settle = resolve; });
     this.activeRun = { controller, done };
+    this.runAccepting = true;
+    const releaseWork = retainAgentWork();
     setImmediate(() => {
       void this.execute(prompt, controller.signal)
-        .catch(() => undefined)
+        .catch(error => { this.runFailure ??= error; })
         .finally(() => {
           this.activeRun = undefined;
           settle();
+          releaseWork();
         });
     });
   }
@@ -1181,10 +1220,13 @@ export class RpcController {
   private async execute(initialPrompt: PreparedPrompt, signal: AbortSignal): Promise<void> {
     let nextAgentPrompt: PreparedPrompt | undefined = initialPrompt;
     let activeDynamicTools: RpcDynamicTools | undefined;
+    let cleanupFailed = false;
     try {
       while (nextAgentPrompt) {
+        if (signal.aborted) throw new AgentAbortError();
         const dynamicTools = await this.context.prepareDynamicTools?.(this.currentSessionId, signal);
         activeDynamicTools = dynamicTools;
+        if (signal.aborted) throw new AgentAbortError();
         const staticTools = this.context.tools ?? this.context.extensionRegistry.getTools().map(tool => ({
           name: tool.name,
           description: tool.description,
@@ -1345,21 +1387,28 @@ export class RpcController {
           sessionId: this.currentSessionId,
           contentLength: lastContent.length,
         });
-        await this.events.endAgent();
-        await activeDynamicTools?.release?.();
+        const completedTools = activeDynamicTools;
         activeDynamicTools = undefined;
+        try { await completedTools?.release?.(); }
+        catch (error) { cleanupFailed = true; throw error; }
+        await this.events.endAgent(false);
+        if (signal.aborted) throw new AgentAbortError();
         nextAgentPrompt = this.takeNextQueued();
       }
     } catch (error) {
-      await this.events.failAgent(error, signal.aborted).catch(() => undefined);
+      this.runAccepting = false;
+      await this.events.failAgent(error, signal.aborted, false).catch(() => undefined);
       const message = error instanceof Error ? error.message : String(error);
       await this.context.extensionRegistry.emit('agent:error', {
         sessionId: this.currentSessionId,
         error: this.context.redactText?.(message) ?? message,
       });
+      if (cleanupFailed) throw error;
     } finally {
-      await activeDynamicTools?.release?.();
-      this.retryActive = false;
+      this.runAccepting = false;
+      try { await activeDynamicTools?.release?.(); }
+      finally { this.retryActive = false; }
+      if (!cleanupFailed) await this.events.settleAgent();
     }
   }
 

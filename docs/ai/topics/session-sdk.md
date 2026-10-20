@@ -29,7 +29,7 @@ The Core API-major-1 root entry exports `createAgentSession`, `createAgentResour
 
 The facade reserves one prompt lifetime synchronously, before its serial turn reaches trust, `before:agent` or provider resolution. A second start is refused; earlier accepted model/history mutations retain their queue order. Once prompt preparation starts, history/settings mutations are busy. `stop()`/`dispose()` withdraw unpublished preparation before waiting for the serial tail; an ignored privileged hook need not resolve first. Busy refusal stays rejected even if the caller handles it after the first start. Disposal publishes one promise before synchronous abort reentry and keeps borrowed resources borrowed.
 
-Lower-level `StartAgentRunRequest.signal` is a borrowed optional native signal; the facade owns its signal instead, so prompt/default options cannot supply one. Core privately reserves the session before host awaits, captures mutable request values, rechecks source identity and cancellation, and prevents late run/message/provider publication. This reservation is not a published/stoppable run or a cross-process lock. Cancellation does not physically terminate host callbacks or roll back an already-admitted metadata save: stop/dispose still await that save, and its metadata may persist without a user message or provider call. CLI/RPC direct hooks and broader typed trigger/system/queue semantics are separate.
+Lower-level `StartAgentRunRequest.signal` is a borrowed optional native signal; the facade owns its signal instead, so prompt/default options cannot supply one. Core privately reserves the session before host awaits, captures mutable request values, rechecks source identity and cancellation, and prevents late run/message/provider publication. This reservation is not a published/stoppable run or a cross-process lock. Cancellation does not physically terminate host callbacks or roll back an already-admitted metadata save: stop/dispose still await that save, and its metadata may persist without a user message or provider call. CLI/JSON/RPC/HTTP use the same [native run lifecycle](./run-lifecycle.md); broader typed trigger/system/queue semantics remain separate. A later withdrawn prompt clears the previous settlement result, so `wait()` returns `undefined` for that unpublished lifetime.
 
 Core `agent/{prestart-admission,runtime-prestart,prestart-process}.test.ts`, `sdk/prestart-lifetime.test.ts` and the genuine installed prestart/declaration case own these controls. Isolated source coverage does not establish complete application qualification.
 
@@ -58,6 +58,7 @@ Docker only, build genuine Core first, focused `npx vitest run packages/core/src
 
 ## Related topics
 
+- [Native run lifecycle](./run-lifecycle.md)
 - [Sessions](./sessions.md)
 - [Security](./security.md)
 - [Providers](./providers.md)

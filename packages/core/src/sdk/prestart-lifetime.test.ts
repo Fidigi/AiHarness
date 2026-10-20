@@ -112,6 +112,21 @@ describe('SDK pending-start lifetimes', () => {
       expect(provider.calls).toBe(0); expect(events).toEqual([]);
     } finally { store.released.resolve(); await api?.dispose(); await registry.unloadAll(); await rm(cwd, { recursive: true, force: true }); }
   });
+  it('does not reuse the previous settlement after withdrawing a later unpublished prompt', async () => {
+    const f = await setup(false);
+    try {
+      f.release.resolve(); const prior = await f.api.promptAndWait('completed');
+      expect(prior.phase).toBe('completed');
+      const entered = latch(), finish = latch();
+      await f.registry.load('later-held', extension => { extension.before('before:agent', async () => { entered.resolve(); await finish.promise; }); });
+      try {
+        const refused = expect(f.api.prompt('withdrawn')).rejects.toMatchObject({ name: 'AbortError' });
+        await entered.promise; await f.api.stop(); await refused;
+        expect(await f.api.wait()).toBeUndefined();
+        expect(f.api.messages().filter(message => message.role === 'user').map(message => message.content)).toEqual(['completed']);
+      } finally { finish.resolve(); }
+    } finally { await f.cleanup(); }
+  });
   it('publishes one disposal promise before synchronous prestart abort reentry', async () => {
     const f = await setup(true); let reentered: Promise<void> | undefined;
     await f.registry.load('reentry', extension => { extension.before('before:agent', data => { data.signal?.addEventListener('abort', () => { reentered = f.api.dispose(); }, { once: true }); }); });

@@ -474,9 +474,11 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     } finally { await rm(directory,{recursive:true,force:true}); await rm(script,{force:true}); }
   });
 
-  it.each(['print/SIGINT', 'print/SIGTERM', 'json/SIGINT', 'json/SIGTERM', 'rpc/SIGINT', 'rpc/SIGTERM'])(
+  it.each(['print/SIGINT', 'print/SIGTERM', 'json/SIGINT', 'json/SIGTERM', 'rpc/SIGINT', 'rpc/SIGTERM',
+    'print/SIGINT/admission', 'print/SIGTERM/admission', 'json/SIGINT/admission', 'json/SIGTERM/admission',
+    'rpc/SIGINT/admission', 'rpc/SIGTERM/admission'])(
     'settles and cleans up an interrupted installed headless invocation (%s)', async scenario => {
-      const worker = path.join(consumer, `headless-signal-${scenario.replace('/', '-')}.mjs`);
+      const worker = path.join(consumer, `headless-signal-${scenario.replaceAll('/', '-')}.mjs`);
       await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/headless-signal-probe.mjs'), worker);
       const result = await run(process.execPath, [worker, scenario], consumer, { ...environment, AIH_SIGNAL_COMMAND: 'ai-harness' });
       expect(result.code, result.stderr).toBe(0);
@@ -484,6 +486,14 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       expect(JSON.parse(result.stdout)).toMatchObject({ result: 'HEADLESS_SIGNAL_OK',
         mode: scenario.split('/')[0], signal: scenario.split('/')[1] });
     });
+
+  it.each(['regular', 'fullscreen'])('joins an admitted append before installed TTY shutdown (%s)', async mode => {
+    const probe = path.join(consumer, `interactive-settlement-${mode}.mjs`);
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/interactive-settlement-probe.mjs'), probe);
+    const result = await run(process.execPath, [probe, mode], consumer, { ...environment,
+      AIH_SETTLEMENT_COMMAND: 'ai-harness', AIH_TEST_PTY_MODULE: require.resolve('node-pty') });
+    expect(result).toEqual({ code: 0, stdout: 'INTERACTIVE_SETTLEMENT_OK\n', stderr: '' });
+  });
 
   it.each(['print/partial-length', 'print/empty-length', 'print/normal',
     'json/partial-length', 'json/empty-length', 'json/normal',

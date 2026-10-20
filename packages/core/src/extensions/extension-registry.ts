@@ -428,7 +428,8 @@ export class ExtensionRegistry {
     if (signal?.aborted) throw new Error(`Tool execution aborted: ${name}`);
     const hostToolCallId = context.toolCallId;
     const hostProgress = context.onProgress;
-    const hook = await this.runBefore('before:tool', { tool: name, input, context });
+    const hook = await this.runBefore('before:tool', { tool: name, input, context }, signal);
+    if (signal?.aborted) throw new Error(`Tool execution aborted: ${name}`);
     if (hook.cancelled) {
       throw new Error(hook.reason || `Tool execution cancelled by extension hook: ${name}`);
     }
@@ -439,6 +440,7 @@ export class ExtensionRegistry {
       // bounded progress sink. Nested codemode contexts have no outer call ID.
       const executionContext = { ...hook.data.context, toolCallId: hostToolCallId,
         onProgress: hostToolCallId ? hostProgress : undefined };
+      if (signal?.aborted) throw new Error(`Tool execution aborted: ${name}`);
       const result = await execute(hook.data.input, executionContext, signal);
       await this.emit('tool:result', {
         tool: name,
@@ -496,6 +498,7 @@ export class ExtensionRegistry {
   async runBefore<K extends keyof BeforeHookMap>(
     event: K,
     data: BeforeHookMap[K],
+    hostSignal?: AbortSignal,
   ): Promise<BeforeHookExecution<BeforeHookMap[K]>> {
     if (event === 'before:session:branch') {
       return this.runBranchBefore(data as SessionBranchEvent) as unknown as Promise<BeforeHookExecution<BeforeHookMap[K]>>;
@@ -505,7 +508,8 @@ export class ExtensionRegistry {
     }
     let transformed = { ...data } as BeforeHookMap[K];
     const agentSignal = event === 'before:agent' ? (data as BeforeHookMap['before:agent']).signal : undefined;
-    const signal = event === 'before:model' ? (data as BeforeHookMap['before:model']).signal : agentSignal;
+    const signal = hostSignal ?? (event === 'before:model' ? (data as BeforeHookMap['before:model']).signal
+      : event === 'before:provider' ? (data as BeforeHookMap['before:provider']).options.signal : agentSignal);
     for (const entry of this.beforeHooks.get(event) ?? []) {
       if (signal?.aborted) return { data: transformed, cancelled: true };
       let result: BeforeHookResult<BeforeHookMap[K]>;

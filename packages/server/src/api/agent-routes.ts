@@ -345,8 +345,11 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
   });
 
   router.post('/runs', operation(async (request: Request, response: Response, next): Promise<void> => {
+    const lifetime = sessionCopyRequest(request, response);
+    const current = (): void => lifetime.signal.throwIfAborted();
     try {
       const services = await servicesPromise;
+      current();
       const body = request.body as Record<string, unknown>;
       const input = stringValue(body.input, 'input')!;
       let session: Session | undefined;
@@ -371,6 +374,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
           code: 'PROJECT_TRUST_REQUIRED',
         });
       }
+      current();
       const requestedProvider = stringValue(body.provider, 'provider', { optional: true, max: 100 });
       const requestedModel = stringValue(body.model, 'model', { optional: true, max: 500 });
       const requestedThinking = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(String(body.thinking))
@@ -418,6 +422,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
           ...(requestedAutoCompaction !== undefined ? { autoCompaction: requestedAutoCompaction } : {}),
         }) ?? session;
       }
+      current();
       if (session.cwd && session.cwd !== cwd) {
         response.status(409).json({ error: 'La session appartient à un autre workspace.' });
         return;
@@ -441,7 +446,9 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       });
       const modelSupportsTools = services.modelCatalog.getCapabilities(selectedProvider, selectedModel)?.toolCalls !== false;
       const agentSettings = await loadAgentSettings({ cwd, projectTrusted: trusted });
+      current();
       const run = await services.agentRuntime.start({
+        signal: lifetime.signal,
         sessionId: session.id,
         cwd,
         workspaceId: workspace.id,
@@ -468,9 +475,14 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         steeringMode: agentSettings.settings.steeringMode,
         followUpMode: agentSettings.settings.followUpMode,
       });
+      // Ownership transfers to the detached runtime at admission. Closing the
+      // response or a later SSE subscription must not cancel the accepted run.
+      lifetime.dispose();
       response.status(202).json({ run, session: serializeSessionPage(session, { limit: 80 }), workspace });
     } catch (error) {
       next(error);
+    } finally {
+      lifetime.dispose();
     }
   }));
 

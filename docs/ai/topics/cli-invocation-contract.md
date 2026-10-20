@@ -109,11 +109,11 @@ Native-only package check/enable/disable/reload, MCP exposure/status/test and st
 | RPC stdout | Native correlated `{type:"response",command,success,data-or-error}` plus interleaved lifecycle; legacy `method/params` remains migration input. |
 | Stderr | Diagnostics, fixed warnings and redirected extension noise; registered credentials remain redacted in both channels and journals. |
 | Conversation exits | 0 success; 2 invalid argv/missing prompt/selection; 1 execution/input/output-limit failure. An error response to one RPC request need not terminate the process. |
-| Active print/JSON/RPC `SIGINT` / `SIGTERM` | First signal pins exit 130 / 143, aborts the active operation, prevents later initial prompts and emits fixed stderr `Error: Request interrupted.` + LF. Await owned cleanup/JSON flush; no forced exit across admitted writes or change to existing cleanup budgets. |
+| Active print/JSON/RPC `SIGINT` / `SIGTERM` | First signal pins exit 130 / 143, aborts the active operation, prevents later initial prompts and emits fixed stderr `Error: Request interrupted.` + LF. Await owned cleanup/JSON flush; no forced exit across admitted writes. Active owners join cleanup; underlying transport/tool budgets remain unchanged. |
 | JSON interruption | Existing aborted assistant/end/settled records remain JSONL; delivered partial text is not a successful final response or fabricated billed usage. |
 | RPC signal / EOF | Signal shutdown cancels the controller and closes stdin, settles events/cleanup and returns 130/143 without misreporting its intentional input close as fatal. EOF drains accepted work and normally exits 0. For controlled in-band cancellation use `abort` / `abort_bash`, not a successful prompt acknowledgement as settlement. |
 
-Already-written output cannot be retracted; lifecycle records describe only started runs, not an invented assistant for cancellation before prompt admission. Signal ownership for one-shot execution begins after startup admission, before header/prompts, and lasts through cleanup. Earlier OS termination, uncooperative privileged hooks, late write admission, physical descendant containment and the whole-host settlement model remain `RUN-01`; no universal rollback/forced-termination guarantee is added. A cancelled provider turn retains the admitted user message but does not invent a successful assistant journal entry. See [session ownership](./sessions.md).
+Already-written output cannot be retracted; lifecycle records describe only started runs, not an invented assistant for cancellation before prompt admission. Signal ownership for one-shot execution begins after startup admission, before header/prompts, and lasts through cleanup. The [native RUN-01 lifetime](./run-lifecycle.md) separates earlier native OS termination before an active invocation, logical retirement of privileged callbacks, admitted writes and physical containment limits; no universal rollback/forced-termination guarantee is added. A cancelled provider turn retains the admitted user message but does not invent a successful assistant journal entry. See [session ownership](./sessions.md).
 
 ## Critical Flow
 
@@ -122,8 +122,9 @@ Strict argv → explicit standalone exit **or** stream/mode selection → trust/
 ## Associated Tests
 
 - `packages/cli/src/cli/{args,invocation}.test.ts`: option/value/conflict inventory, stdin/stdout TTY selection, metadata-only help, sequential input, real regular/fullscreen PTYs and channel purity.
-- `packages/cli/src/cli/headless-signal-process.test.ts` and `fixtures/headless-signal-probe.mjs`: six emitted print/JSON/RPC signal journeys against a real held loopback SSE provider; status/signal, physical transport close, complete JSONL/settlement, opposite repeated signal during held async extension shutdown, journal readback and no second prompt.
-- `tests/functional-parity/{functional-parity,installed-executable}.test.ts`: reviewed source-process native goldens and the same six signal probes through genuine outside-checkout pack/install/PATH-bin; RPC file rejection precedes noisy extension admission in source-process and installed executions. Existing goldens are unchanged.
+- `packages/cli/src/cli/headless-signal-process.test.ts` and `fixtures/headless-signal-probe.mjs`: twelve emitted print/JSON/RPC signal journeys (held SSE and unpublished hook) against a real held loopback SSE provider; status/signal, physical transport close, complete JSONL/settlement, opposite repeated signal during held async extension shutdown, journal readback and no second prompt.
+- `packages/cli/src/cli/interactive-settlement-process.test.ts`: real regular/fullscreen PTYs hold an admitted append through SIGTERM, then require shutdown observers and fresh native readback to see it before natural process exit.
+- `tests/functional-parity/{functional-parity,installed-executable}.test.ts`: reviewed source-process native goldens and the same twelve signal probes and two held-append regular/fullscreen shutdown probes through genuine outside-checkout pack/install/PATH-bin; RPC file rejection precedes noisy extension admission in source-process and installed executions. Existing goldens are unchanged.
 - `tests/functional-parity/installed-process{,.test}.ts`: only the exact resolved TypeScript process receives explicit `--no-maglev`; compiler arguments stay immutable, application argv and native termination receipts stay unchanged, and no failed invocation is retried.
 - `packages/cli/src/{sessions/startup-session,cli/{model-list,tool-selection,package-command,mcp-command,mcp-oauth-command,provider-auth-command,export-command}}.test.ts`: selector/model/tool policies and standalone grammar, trust, storage, channels and bounded cancellation.
 - `packages/cli/src/cli/package-command.test.ts`: source parser/API checks plus real emitted CLI package journeys; policy failures retain exact channels, original native error fields and code/signal diagnostics. The Docker build control additionally requires the genuine Web bundle needed by emitted Server tests, not a stub.
@@ -134,7 +135,7 @@ Run `make typecheck`, `make test-parity`, `make test` in Docker. The CLI composi
 ## Common Changes
 
 - **Change argv or channel policy:** update `args.ts` / `index.ts`, this versioned map, exact installed help and only intentionally affected goldens; preserve strict parsing and credential redaction.
-- **Change cancellation:** update the composition-root lifetime and reuse the emitted/installed signal probe. Keep existing cleanup budgets, native JSON records and native RPC semantics; do not replace real provider/transport checks with mocked callbacks.
+- **Change cancellation:** update the composition-root lifetime and reuse the emitted/installed signal probe. Preserve underlying transport/tool budgets and native payloads; final settlement must follow owned cleanup. Do not replace real provider/transport checks with mocked callbacks.
 
 ## Related Domains
 

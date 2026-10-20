@@ -521,7 +521,8 @@ describe('RPC command controller', () => {
     });
 
     await vi.waitFor(() => expect(records.filter(record => record.type === 'turn_start')).toHaveLength(2));
-    await vi.waitFor(() => expect(records.filter(record => record.type === 'agent_settled')).toHaveLength(2));
+    await vi.waitFor(() => expect(records.filter(record => record.type === 'agent_settled')).toHaveLength(1));
+    expect(records.at(-1)?.type).toBe('agent_settled');
     expect(records.filter(record => record.type === 'agent_start')).toHaveLength(2);
     expect(records.filter(record => record.type === 'agent_end')).toHaveLength(2);
     expect(context.sessionManager.get('rpc-test-session')?.messages.map(message => message.content))

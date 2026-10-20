@@ -215,6 +215,7 @@ export type { ToolProgressInput, ToolProgressSnapshot, ToolProgressValue } from 
 export { streamProviderTurn } from './agent/provider-turn.js';
 export type { StreamProviderTurnOptions } from './agent/provider-turn.js';
 export { AgentRuntime } from './agent/runtime.js';
+export { retainAgentWork } from './agent/work-retention.js';
 export type { AgentRuntimeOptions, StartAgentRunRequest } from './agent/runtime.js';
 export { AgentMessageQueue, parseAgentQueueMode } from './agent/message-queue.js';
 export type {

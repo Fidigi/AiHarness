@@ -20,6 +20,7 @@ import {
 import { streamProviderTurn } from './provider-turn.js';
 import { captureManagerProviderBudget } from './provider-request-estimate.js';
 import { awaitAgentAdmission } from './prestart-admission.js';
+import { retainAgentWork } from './work-retention.js';
 import { AgentAbortError, runToolLoop } from './tool-loop.js';
 import {
   AgentMessageQueue,
@@ -258,8 +259,7 @@ export class AgentRuntime {
     const existingId = this.sessionRuns.get(session.id);
     const existing = existingId ? this.runs.get(existingId) : undefined;
     if (this.starting.has(session.id) || (existing && (
-      !['completed', 'failed', 'stopped'].includes(existing.snapshot.phase)
-      || (existing.controller.signal.aborted && !existing.settled)))) {
+      !existing.settled))) {
       throw new Error('Un agent est déjà actif pour cette session.');
     }
     const effectiveRequest: StartAgentRunRequest = {
@@ -284,6 +284,7 @@ export class AgentRuntime {
       if (this.sessionManager.get(session.id) !== session) throw new Error('Session introuvable.');
     };
     this.starting.add(session.id);
+    const releaseAdmission = retainAgentWork();
     let admitted = false;
     try {
       callerSignal?.addEventListener('abort', abort, { once: true });
@@ -355,13 +356,21 @@ export class AgentRuntime {
       this.sessionRuns.set(session.id, runId);
       admitted = true;
       this.publish(active, 'run.queued', { input: hook.data.input });
-      void this.execute(active, effectiveRequest, provider).finally(() => {
+      const releaseWork = retainAgentWork();
+      void this.execute(active, effectiveRequest, provider).catch(error => {
+        // Even cleanup failures belong to this run, never to an unobserved task.
+        active.snapshot.error = this.redactText(error instanceof Error ? error.message : String(error));
+        this.setPhase(active, 'failed');
+        this.publish(active, 'run.failed', { message: active.snapshot.error });
+      }).finally(() => {
         detach();
         active.settled = true;
         active.resolveCompletion();
+        releaseWork();
       });
       return this.redactJson(cloneSnapshot(snapshot));
     } finally {
+      releaseAdmission();
       this.starting.delete(session.id);
       if (!admitted) detach();
     }
@@ -520,6 +529,8 @@ export class AgentRuntime {
     request: StartAgentRunRequest,
     provider: AiProvider,
   ): Promise<void> {
+    let failure: unknown;
+    let failed = false;
     run.snapshot.startedAt = new Date().toISOString();
     this.setPhase(run, 'prompting');
     this.publish(run, 'run.started', { cwd: run.snapshot.cwd, provider: run.snapshot.provider });
@@ -550,40 +561,37 @@ export class AgentRuntime {
         }
       }
 
-      run.snapshot.completedAt = new Date().toISOString();
-      run.snapshot.extensionRequest = undefined;
-      this.cancelInteractions(run);
-      this.setPhase(run, 'completed');
-      this.publish(run, 'run.completed', { completedAt: run.snapshot.completedAt });
-      void Promise.resolve(this.onNotification?.(
-        'completion',
-        this.redactJson(cloneSnapshot(run.snapshot)),
-      )).catch(() => undefined);
     } catch (error) {
-      run.snapshot.completedAt = new Date().toISOString();
-      run.snapshot.retry = undefined;
-      run.snapshot.activeTool = undefined;
-      run.snapshot.extensionRequest = undefined;
-      this.cancelInteractions(run);
-      if (run.controller.signal.aborted || error instanceof AgentAbortError) {
-        this.setPhase(run, 'stopped');
-        this.publish(run, 'run.stopped', { completedAt: run.snapshot.completedAt });
-      } else {
-        run.snapshot.error = this.redactText(error instanceof Error ? error.message : String(error));
-        this.setPhase(run, 'failed');
-        this.publish(run, 'run.failed', { message: run.snapshot.error });
-        void Promise.resolve(this.onNotification?.(
-          'attention',
-          this.redactJson(cloneSnapshot(run.snapshot)),
-        )).catch(() => undefined);
-      }
-    } finally {
-      if (run.controller.signal.aborted) {
-        await this.mcpHost?.releaseSession(run.snapshot.sessionId);
-      } else {
-        this.mcpHost?.finishPrompt(run.snapshot.sessionId);
-      }
+      failed = true;
+      failure = error;
     }
+    // Terminal replay is a durable settlement boundary, not a stop acknowledgement.
+    // Keep same-session admission closed while owned transports are still closing.
+    let cleanupFailed = false;
+    try {
+      if (run.controller.signal.aborted) await this.mcpHost?.releaseSession(run.snapshot.sessionId);
+      else this.mcpHost?.finishPrompt(run.snapshot.sessionId);
+    } catch (error) {
+      cleanupFailed = true;
+      failure = failed && !(failure instanceof AgentAbortError)
+        ? new AggregateError([failure, error], 'Agent execution and cleanup failed.') : error;
+      failed = true;
+    }
+    run.snapshot.completedAt = new Date().toISOString();
+    run.snapshot.retry = undefined;
+    run.snapshot.activeTool = undefined;
+    run.snapshot.extensionRequest = undefined;
+    this.cancelInteractions(run);
+    const stopped = !cleanupFailed && (run.controller.signal.aborted || failure instanceof AgentAbortError);
+    const phase = stopped ? 'stopped' : failed ? 'failed' : 'completed';
+    if (failed && !stopped) run.snapshot.error = this.redactText(failure instanceof Error ? failure.message : String(failure));
+    this.setPhase(run, phase);
+    this.publish(run, `run.${phase}`, phase === 'failed'
+      ? { message: run.snapshot.error } : { completedAt: run.snapshot.completedAt });
+    // Notifications are isolated observers, not work extending the run lifetime.
+    if (phase !== 'stopped') void Promise.resolve().then(() => this.onNotification?.(
+      phase === 'completed' ? 'completion' : 'attention', this.redactJson(cloneSnapshot(run.snapshot)),
+    )).catch(() => undefined);
   }
 
   private async executePrompt(

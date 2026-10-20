@@ -1,3 +1,5 @@
+import { retainAgentWork } from '@ai-harness/core';
+
 export interface CliCloseable {
   close(): void;
 }
@@ -24,13 +26,17 @@ export interface CliEarlyExitResources {
   closeNetwork?: () => void | Promise<void>;
   additional?: readonly (() => void | Promise<void>)[];
   timeoutMs?: number;
+  /** Active run owners must join cleanup and surface failure, not time out into success. */
+  requireSettlement?: boolean;
 }
 
 /** Run all post-initialization cleanup branches without letting one failure block the others. */
 export async function cleanupCliEarlyExit(resources: CliEarlyExitResources): Promise<void> {
-  try { resources.input?.close(); } catch { /* Continue cleanup. */ }
-  try { resources.filteredInput?.dispose(); } catch { /* Continue cleanup. */ }
-  try { resources.themeProbe?.close(); } catch { /* Continue cleanup. */ }
+  const releaseWork = resources.requireSettlement ? retainAgentWork() : () => undefined;
+  const failures: unknown[] = [];
+  try { resources.input?.close(); } catch (error) { failures.push(error); }
+  try { resources.filteredInput?.dispose(); } catch (error) { failures.push(error); }
+  try { resources.themeProbe?.close(); } catch (error) { failures.push(error); }
 
   const settled = Promise.allSettled([
     Promise.resolve().then(() => resources.extensions?.shutdown()),
@@ -44,7 +50,14 @@ export async function cleanupCliEarlyExit(resources: CliEarlyExitResources): Pro
     : 5_000;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    if (timeoutMs === 0) await settled;
+    if (resources.requireSettlement) {
+      if (timeoutMs > 0) {
+        timer = setTimeout(() => failures.push(new Error('CLI cleanup deadline exceeded.')), timeoutMs);
+        timer.unref?.();
+      }
+      for (const result of await settled) if (result.status === 'rejected') failures.push(result.reason);
+      if (failures.length) throw new AggregateError(failures, 'CLI owned cleanup failed.');
+    } else if (timeoutMs === 0) await settled;
     else await Promise.race([
       settled,
       new Promise<void>(resolve => {
@@ -54,6 +67,10 @@ export async function cleanupCliEarlyExit(resources: CliEarlyExitResources): Pro
     ]);
   } finally {
     if (timer) clearTimeout(timer);
-    try { resources.jsonOutput?.restore(); } catch { /* Process teardown must continue. */ }
+    try {
+      try { resources.jsonOutput?.restore(); } catch (error) {
+        if (resources.requireSettlement) throw new AggregateError([...failures, error], 'CLI owned cleanup failed.');
+      }
+    } finally { releaseWork(); }
   }
 }

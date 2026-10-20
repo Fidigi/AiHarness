@@ -5,6 +5,7 @@
 
 import {
   AgentMessageQueue,
+  retainAgentWork,
   assertCompactionTranscript,
   getSummaryModelMessages,
   compactionMessagesFromEntries,
@@ -379,7 +380,7 @@ async function main(): Promise<void> {
         process.exitCode = interrupted === 'SIGINT' ? 130 : 143;
       }
     } finally {
-      await cleanupCliEarlyExit({ closeNetwork: closeProviderNetworkDispatchers });
+      await cleanupCliEarlyExit({ closeNetwork: closeProviderNetworkDispatchers, requireSettlement: true });
     }
     return;
   }
@@ -577,6 +578,7 @@ async function main(): Promise<void> {
   let conversationRunning = false;
   let outputLimitReached = false;
   let foregroundInputRunning = false;
+  const inputWork = new Set<Promise<void>>();
   let activeAbortController: AbortController | null = null;
   let systemThemeProbe: SystemThemeProbe | undefined;
   let filteredTerminalInput: KeypressFilteredInput | undefined;
@@ -706,6 +708,7 @@ async function main(): Promise<void> {
       extensions: extensionRegistry,
       jsonOutput,
       closeNetwork: closeProviderNetworkDispatchers,
+      requireSettlement: true,
       additional: [() => mcpHost.shutdown(), ...additional],
     });
     return earlyCleanupPromise;
@@ -1318,8 +1321,13 @@ async function main(): Promise<void> {
     shellController.abort();
     streamWriter?.cancel();
     terminal.exitMessage(message);
-    void cleanupEarlyExit([() => shellController.close()]).finally(() => {
-      if (exitCode !== undefined) process.exit(exitCode);
+    // A TTY exit owns the same durable barrier as headless execution. In
+    // particular, /quit must not force-exit across an admitted journal append.
+    void Promise.allSettled([...inputWork]).then(() => cleanupEarlyExit([() => shellController.close()])).then(() => {
+      if (exitCode !== undefined) process.exitCode = exitCode;
+    }, error => {
+      reportError(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
     });
   };
 
@@ -1363,10 +1371,24 @@ async function main(): Promise<void> {
     cancelActiveOperation();
   };
 
-  /** Process a command or conversation message. */
+  /** Reserve physical input ownership before callbacks can initiate shutdown. */
   async function processInput(
     input: string,
     options: { allowCommands?: boolean; imageBlocks?: MessageContentBlock[] } = {},
+  ): Promise<string | undefined> {
+    if (shuttingDown) return undefined;
+    let release!: () => void;
+    const done = new Promise<void>(resolve => { release = resolve; });
+    inputWork.add(done);
+    const releaseWork = retainAgentWork();
+    try { return await performInput(input, options); }
+    finally { inputWork.delete(done); release(); releaseWork(); }
+  }
+
+  /** Process a command or conversation message within its owned input lifetime. */
+  async function performInput(
+    input: string,
+    options: { allowCommands?: boolean; imageBlocks?: MessageContentBlock[] },
   ): Promise<string | undefined> {
     // Invalidate before EVERY branch/await: empty input, commands, shell and provider.
     promptBoundary.invalidate();
@@ -1487,7 +1509,9 @@ async function main(): Promise<void> {
             sessionId: currentSessionId,
             provider: redactOutput(providerName),
             input: redactOutput(queued.content),
+            signal: operationController.signal,
           });
+          if (operationController.signal.aborted) throw new Error('Request interrupted.');
           if (agentHook.cancelled) {
             throw new Error(agentHook.reason ?? "Requête annulée par un hook d'extension.");
           }
@@ -1533,6 +1557,7 @@ async function main(): Promise<void> {
       };
 
       await persistUserInput({ content: trimmed, imageBlocks: options.imageBlocks }, undefined, true);
+      if (operationController.signal.aborted) throw new Error('Request interrupted.');
       await extensionRegistry.emit('agent:start', { sessionId: currentSessionId, provider: providerName });
 
       let activeToolCall: ToolCall | undefined;
@@ -1541,6 +1566,7 @@ async function main(): Promise<void> {
       let finalContent = '';
       let continueConversation = true;
       while (continueConversation) {
+        if (operationController.signal.aborted) throw new Error('Request interrupted.');
         const currentSession = sessionManager.get(currentSessionId);
         const suppressAllTools = cliToolsDisabled(cliArguments);
         const mcpPrepared = currentSession?.toolPreset === 'chat-only' || suppressAllTools
@@ -1758,6 +1784,7 @@ async function main(): Promise<void> {
           redactText: redactOutput,
         });
 
+        if (operationController.signal.aborted) throw new Error('Request interrupted.');
         await extensionRegistry.emit('agent:end', {
           sessionId: currentSessionId,
           contentLength: finalContent.length,
@@ -1773,11 +1800,11 @@ async function main(): Promise<void> {
         }
       }
 
-      if (jsonOutput) await jsonOutput.events.endAgent();
+      if (jsonOutput) await jsonOutput.events.endAgent(false);
       return finalContent;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue.';
-      await jsonOutput?.events.failAgent(error, activeAbortController?.signal.aborted ?? false);
+      await jsonOutput?.events.failAgent(error, activeAbortController?.signal.aborted ?? false, false);
       await extensionRegistry.emit('agent:error', { sessionId: currentSessionId, error: errorMessage });
       if (printMode) throw error;
       if (!isStreaming && !activeAbortController?.signal.aborted) reportError(errorMessage);
@@ -1785,6 +1812,7 @@ async function main(): Promise<void> {
     } finally {
       if (activeAbortController?.signal.aborted) await mcpHost.releaseSession(currentSessionId);
       else mcpHost.finishPrompt(currentSessionId);
+      await jsonOutput?.events.settleAgent();
       if (!printMode && (interactiveQueue.size() > 0 || unprocessedQueuedInputs.length > 0)) {
         const restored = restoreQueuedInput(inputDriver.getValue(), unprocessedQueuedInputs);
         if (restored !== undefined) inputDriver.replaceValue(restored);
@@ -1860,6 +1888,7 @@ async function main(): Promise<void> {
   }
 
   async function dispatchLine(input: string, submission: AgentMessageQueueKind = 'steer'): Promise<void> {
+    if (shuttingDown) return;
     if (hotkeyView) {
       if (hotkeyView.update(input) === 'close') closeHotkeys();
       else renderHotkeys();
@@ -2175,5 +2204,5 @@ main().catch(error => {
   console.error(chalk.red('Erreur fatale :'), outputCredentialRedactor.redact(
     error instanceof Error ? error.message : String(error),
   ));
-  process.exitCode = 1;
+  if (process.exitCode !== 130 && process.exitCode !== 143) process.exitCode = 1;
 });

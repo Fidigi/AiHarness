@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JsonlSessionStore, SessionManager } from '@ai-harness/core';
 
-const [mode, signal] = process.argv[2].split('/');
+const [mode, signal, phase = 'provider'] = process.argv[2].split('/');
 assert.ok(['print', 'json', 'rpc'].includes(mode));
 assert.ok(['SIGINT', 'SIGTERM'].includes(signal));
 const root = await mkdtemp(path.join(os.tmpdir(), 'aih-headless-signal-'));
@@ -15,9 +15,17 @@ const cwd = path.join(root, 'workspace'), agent = path.join(root, 'agent'), sess
 await mkdir(cwd); await mkdir(agent);
 const cleanup = path.join(root, 'cleanup.txt'), extension = path.join(agent, 'observer.mjs');
 const secondSignal = signal === 'SIGINT' ? 'SIGTERM' : 'SIGINT';
-const ready = path.join(root, 'cleanup-ready');
+const ready = path.join(root, 'cleanup-ready'), admissionReady = path.join(root, 'admission-ready');
 await writeFile(extension, `import { writeFile } from 'node:fs/promises';
-export default api => api.on('system:shutdown', async () => {
+export default api => {
+  if (${JSON.stringify(phase)} === 'admission') api.before('before:agent', async data => {
+    const keepAlive = setInterval(() => {}, 1_000);
+    data.signal.addEventListener('abort', () => clearInterval(keepAlive), { once: true });
+    await writeFile(${JSON.stringify(admissionReady)}, 'ready');
+    // The privileged promise ignores abort; its host continuation must be retired.
+    await new Promise(() => {});
+  });
+  api.on('system:shutdown', async () => {
   const before = process.listenerCount(${JSON.stringify(secondSignal)});
   // A pending signal promise alone does not keep Node's event loop alive.
   // This fixture owns a referenced handle until its bounded parent releases it.
@@ -29,7 +37,7 @@ export default api => api.on('system:shutdown', async () => {
     const after = process.listenerCount(${JSON.stringify(secondSignal)});
     await writeFile(${JSON.stringify(cleanup)}, JSON.stringify({ before, after }));
   } finally { clearInterval(keepAlive); }
-});`);
+}); };`);
 let child, repetitionTimer, calls = 0, fixtureError, transportClosed = false, signalled = false, repeated = false;
 function interrupt() {
   if (signalled) return;
@@ -82,6 +90,8 @@ try {
   // The async shutdown hook is held at an actual file barrier, not a sleep.
   // Its one-shot observer also checks that the host still owns the signal.
   repetitionTimer = setInterval(() => {
+    if (phase === 'admission') void readFile(admissionReady).then(interrupt)
+      .catch(error => { if (error.code !== 'ENOENT') fixtureError ??= error; });
     void readFile(ready).then(() => {
       if (repeated) return;
       repeated = true;
@@ -102,25 +112,31 @@ try {
   assert.deepEqual(exit, { code: expectedCode, signal: null }, JSON.stringify({ exit, stdout, stderr }));
   assert.equal(stderr, 'Error: Request interrupted.\n');
   assert.equal(repeated, true);
-  assert.equal(calls, 1);
-  assert.equal(transportClosed, true);
+  assert.equal(calls, phase === 'admission' ? 0 : 1);
+  assert.equal(transportClosed, phase !== 'admission');
   const listeners = JSON.parse(await readFile(cleanup, 'utf8'));
   assert.ok(listeners.before >= 1 && listeners.after >= 1, 'owned signal handlers must survive async cleanup');
   if (mode === 'print') assert.equal(stdout, '');
   else {
     assert.equal(pending, '');
     if (mode === 'json') { assert.equal(records[0].type, 'session'); assert.equal(records[0].version, 3); }
-    else assert.ok(records.some(record => record.type === 'response' && record.id === 'start' && record.success));
+    else assert.ok(records.some(record => record.type === 'response' && record.id === 'start'
+      && record.success === (phase !== 'admission')));
+    if (phase === 'admission') {
+      assert.equal(records.some(record => record.type === 'agent_start' || record.type === 'agent_settled'), false);
+    } else {
     assert.equal(records.filter(record => record.type === 'agent_end').length, 1);
     assert.equal(records.filter(record => record.type === 'agent_settled').length, 1);
     assert.equal(records.at(-1).type, 'agent_settled');
     const assistant = records.find(record => record.type === 'message_end' && record.message.role === 'assistant');
     assert.equal(assistant.message.stopReason, 'aborted');
     assert.equal(assistant.message.content.filter(block => block.type === 'text').map(block => block.text).join(''), 'Held fragment 字🙂');
+    }
   }
   const manager = new SessionManager({ store: new JsonlSessionStore(sessions) });
   await manager.loadFromStore('signal-probe');
-  assert.deepEqual(manager.get('signal-probe').messages.map(message => [message.role, message.content]), [['user', 'First prompt.']]);
+  assert.deepEqual(manager.get('signal-probe').messages.map(message => [message.role, message.content]),
+    phase === 'admission' ? [] : [['user', 'First prompt.']]);
   console.log(JSON.stringify({ result: 'HEADLESS_SIGNAL_OK', mode, signal, exit: exit.code }));
 } finally {
   clearInterval(repetitionTimer);

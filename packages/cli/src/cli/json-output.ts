@@ -258,6 +258,7 @@ export class JsonEventStream {
   private runMessages: JsonMessage[] = [];
   private turnOpen = false;
   private runOpen = false;
+  private settlementPending = false;
 
   constructor(
     private readonly emit: (record: JsonRecord) => void | Promise<void>,
@@ -282,6 +283,7 @@ export class JsonEventStream {
     this.runMessages = [];
     this.turnOpen = false;
     this.runOpen = true;
+    this.settlementPending = true;
     return Promise.resolve(this.emit({ type: 'agent_start' }));
   }
 
@@ -457,18 +459,25 @@ export class JsonEventStream {
     return Promise.resolve(write);
   }
 
-  endAgent(): Promise<void> {
+  endAgent(settle = true): Promise<void> {
     if (!this.runOpen) return Promise.resolve();
     const writes = [
       this.endTurn(),
       this.emit({ type: 'agent_end', messages: this.runMessages, willRetry: false }),
-      this.emit({ type: 'agent_settled' }),
+      ...(settle ? [this.settleAgent()] : []),
     ];
     this.runOpen = false;
     return Promise.all(writes.map(write => Promise.resolve(write))).then(() => undefined);
   }
 
-  failAgent(error: unknown, aborted = false): Promise<void> {
+  /** Emit once for the complete host-owned lifetime, including continuations and cleanup. */
+  settleAgent(): Promise<void> {
+    if (!this.settlementPending) return Promise.resolve();
+    this.settlementPending = false;
+    return Promise.resolve(this.emit({ type: 'agent_settled' }));
+  }
+
+  failAgent(error: unknown, aborted = false, settle = true): Promise<void> {
     if (!this.runOpen) return Promise.resolve();
     const writes: Array<void | Promise<void>> = [];
     if (!this.turnOpen) writes.push(this.startTurn());
@@ -476,7 +485,7 @@ export class JsonEventStream {
       if (!this.assistant) writes.push(this.startAssistant('unknown'));
       writes.push(this.finishAssistantError(error, aborted));
     }
-    writes.push(this.endAgent());
+    writes.push(this.endAgent(settle));
     return Promise.all(writes.map(write => Promise.resolve(write))).then(() => undefined);
   }
 

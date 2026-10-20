@@ -18,6 +18,7 @@ import { assertProviderRequestBudget, captureProviderRequestBudget, ProviderRequ
   type ProviderRequestBudget } from './provider-request-estimate.js';
 import { ProviderRequestOptionsError } from './provider-request-options.js';
 import { captureProviderCallLabels, captureProviderMessages, prepareProviderPayload } from './provider-request-payload.js';
+import { AgentAbortError } from './tool-loop.js';
 
 export interface StreamProviderTurnOptions {
   provider: AiProvider;
@@ -96,6 +97,8 @@ function abortableDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
  */
 export async function streamProviderTurn(options: StreamProviderTurnOptions): Promise<ChatResponse> {
   const contextBudget = captureProviderRequestBudget(options), signal = options.signal;
+  const current = (): void => { if (signal?.aborted) throw new AgentAbortError(); };
+  current();
   const redactText = captureRedactor(options, 'redactText'), redactJson = captureRedactor(options, 'redactJson');
   const safeText = (value: string): string => redactText ? Reflect.apply(redactText, options, [value]) as string ?? value : value;
   const safeJson = <T>(value: T): T => redactJson ? Reflect.apply(redactJson, options, [value]) as T ?? value : value;
@@ -138,6 +141,7 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
       signal,
     },
   });
+  current();
   if (providerHook.cancelled) {
     throw new Error(providerHook.reason ?? "Appel provider annulé par un hook d'extension.");
   }
@@ -163,6 +167,7 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
     callLabels.model ? safeText(callLabels.model) : undefined,
   );
 
+  current();
   const maxAttempts = maxRetries + 1;
   let streamedContent = '';
   let streamedReasoning = '';
@@ -180,7 +185,10 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
       let deliveryTail: Promise<void> = Promise.resolve();
       let pendingDeliveryBytes = 0;
       let pendingDeliveryEvents = 0;
+      let accepting = true;
       const deliver = (chunk: string, event?: StreamEvent): Promise<void> => {
+        // A retained extension callback has no authority after abort/transport return.
+        if (!accepting || signal?.aborted) return Promise.resolve();
         const reasoningDelta = event?.type === 'reasoning_delta'
           && typeof (event.data as { content?: unknown } | undefined)?.content === 'string'
           ? String((event.data as { content: string }).content)
@@ -202,6 +210,7 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
         pendingDeliveryBytes += deliveryBytes;
         const operation = deliveryTail.then(async () => {
           if (deliveryFailure) throw deliveryFailure;
+          if (signal?.aborted) return;
           if (event) await options.onProviderEvent?.(safeJson(event));
           if (reasoningDelta) {
             const safeReasoning = reasoningRedactor?.push(reasoningDelta) ?? safeText(reasoningDelta);
@@ -248,8 +257,11 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
         );
       } catch (error) {
         providerFailure = error;
+      } finally {
+        accepting = false;
       }
       await deliveryTail;
+      current();
       if (providerFailure) throw providerFailure;
       if (deliveryFailure) throw deliveryFailure;
       if (streamError) throw streamError;

@@ -209,6 +209,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
         }
         const controller = new AbortController();
         promptController = controller;
+        settlement = undefined;
         const retire = (): void => {
           if (promptController !== controller) return;
           promptController = undefined;

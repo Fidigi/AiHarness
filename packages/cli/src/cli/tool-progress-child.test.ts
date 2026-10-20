@@ -98,9 +98,11 @@ async function exercise(mode: 'json' | 'print' | 'rpc', outcome: 'success' | 'fa
     if (outcome === 'cancel') {
       child.stdin.write('{"type":"abort","id":"stop"}\n');
       await vi.waitFor(async () => expect(await readFile(path.join(f.cwd, 'aborted'), 'utf8')).toBe('aborted'));
-      // RPC's existing abort response awaits actual cleanup, unlike detached HTTP acknowledgement.
-      expect(records.some(record => record.type === 'response' && record.id === 'stop')).toBe(false);
+      // RUN-01: abort acknowledges withdrawal while the real tool still owns its
+      // promise. Only final settlement may authorize durable readback/idle.
+      await vi.waitFor(() => expect(records.find(record => record.type === 'response' && record.id === 'stop')).toMatchObject({ success: true }));
       expect(records.some(record => record.type === 'agent_settled')).toBe(false);
+      expect(records.some(record => record.type === 'tool_execution_end')).toBe(false);
     }
     await writeFile(f.release, 'release');
     expect(await closed, stderr).toBe(0);
@@ -178,7 +180,7 @@ describe('real CLI arbitrary-tool incremental progress', () => {
   it.each(['json', 'rpc'] as const)('%s emits/persists exactly one failure after partial progress', async mode => {
     await exercise(mode, 'failure');
   }, 30_000);
-  it('RPC abort waits for durable settlement, then replays one cancelled result without late updates', async () => {
+  it('RPC abort acknowledges before settlement, then durably replays one cancelled result without late updates', async () => {
     await exercise('rpc', 'cancel');
   }, 30_000);
 });
