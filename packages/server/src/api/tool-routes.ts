@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { CODEMODE_REGISTRATION, TOOL_SEARCH_REGISTRATION, READ_ONLY_AGENT_TOOL_NAMES, type RegisteredAgentTool, type ToolSettings } from '@ai-harness/core';
+import { CONFIGURABLE_CODEMODE_LIMITS, CODEMODE_REGISTRATION, TOOL_SEARCH_REGISTRATION, READ_ONLY_AGENT_TOOL_NAMES, type RegisteredAgentTool, type ToolSettings } from '@ai-harness/core';
 import type { RuntimeServices } from '../runtime/services.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { requireCapability } from '../security/request-security.js';
@@ -53,6 +53,7 @@ function settings(services: RuntimeServices, projectId?: string): ToolSettings {
       enabled: effective.values.codemodeEnabled ?? false,
       mode: effective.values.codemodeMode ?? 'on',
       inlineBudget: effective.values.codemodeInlineBudget ?? 3_000,
+      limits: { ...CONFIGURABLE_CODEMODE_LIMITS, ...effective.values.codemodeLimits },
       selfTest: { state: services.codemodeSelfTest?.state ?? 'not-run', engine: 'QuickJS' },
     },
     tools: tools.map(tool => ({
@@ -95,7 +96,7 @@ export function createToolRouter(servicesPromise: Promise<RuntimeServices>): Rou
       );
       if (!request.body || Object.keys(request.body).some(key => ![
         'cwd', 'projectId', 'enabledTools', 'toolPreset', 'powershellEnabled',
-        'codemodeEnabled', 'codemodeMode', 'codemodeInlineBudget',
+        'codemodeEnabled', 'codemodeMode', 'codemodeInlineBudget', 'codemodeLimits',
       ].includes(key))) {
         response.status(400).json({ error: 'Tool settings payload is invalid.', code: 'INVALID_TOOL_SETTINGS' }); return;
       }
@@ -126,6 +127,7 @@ export function createToolRouter(servicesPromise: Promise<RuntimeServices>): Rou
         ...(request.body.codemodeEnabled !== undefined ? { codemodeEnabled: request.body.codemodeEnabled } : {}),
         ...(request.body.codemodeMode !== undefined ? { codemodeMode: request.body.codemodeMode } : {}),
         ...(request.body.codemodeInlineBudget !== undefined ? { codemodeInlineBudget: request.body.codemodeInlineBudget } : {}),
+        ...(request.body.codemodeLimits !== undefined ? { codemodeLimits: request.body.codemodeLimits } : {}),
       }, selected.projectId);
       response.json(settings(services, selected.projectId));
     } catch (error) { next(error); }

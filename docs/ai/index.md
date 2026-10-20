@@ -20,7 +20,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | CLI Invocation Contract | [`topics/cli-invocation-contract.md`](./topics/cli-invocation-contract.md) | ~140 lines |
 | Terminal Themes | [`topics/themes.md`](./topics/themes.md) | ~80 lines |
 | Native Editor Schemas | [`topics/editor-schemas.md`](./topics/editor-schemas.md) | ~85 lines |
-| QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~90 lines |
+| QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~145 lines — trusted limits, native questions/images and sandbox |
 | Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~240 lines |
 | Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~210 lines |
 | Detached Stream Reconstruction | [`topics/detached-streams.md`](./topics/detached-streams.md) | ~90 lines |
@@ -105,8 +105,10 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 **Code-mode sandbox or nested calls** → Load `codemode.md` + the code-mode flow in `project-map.md` §4
 ```
 → packages/core/src/tools/{codemode,codemode-worker,tool-search}.ts
+→ packages/core/src/config/codemode-limits.ts
+→ packages/core/src/providers/{specialized-models,classification-questions}.ts
 → packages/server/src/api/tool-routes.ts
-→ e2e/codemode.spec.ts
+→ e2e/{codemode,codemode-live}.spec.ts
 ```
 
 **Child agents** → Load only `child-agents.md` + `project-map.md` §4

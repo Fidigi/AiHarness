@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const probe = fileURLToPath(new URL('./fixtures/codemode-intrinsics-probe.mjs', import.meta.url));
 const cases = ['core', 'print', 'json', 'rpc'].flatMap(mode =>
-  ['freeze', 'globals', 'error', 'schema', 'options', 'output', ...(mode === 'core' ? ['deadline', 'abort'] : [])].map(scenario => [mode, scenario]));
+  ['freeze', 'globals', 'error', 'schema', 'options', 'output', 'configured', 'image', ...(mode === 'core' ? ['deadline', 'abort'] : [])].map(scenario => [mode, scenario]));
 describe('A3-CLI-05 public QuickJS worker/bridge compatibility', () => {
   it.each(cases)('%s/%s preserves intrinsics, data authority, bounds and channels', async (mode, scenario) => {
     const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {

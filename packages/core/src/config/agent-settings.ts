@@ -2,6 +2,7 @@ import { constants as fsConstants } from 'node:fs';
 import { lstat, open } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { CONFIGURABLE_CODEMODE_LIMITS, type ConfiguredCodemodeLimits } from './codemode-limits.js';
 import type { ThinkingBudgets, ThinkingLevel } from '../providers/index.js';
 import { getPublishedModelMetadata } from '../providers/model-metadata.js';
 import type { ResourceFileSelector } from '../resources/resource-manager.js';
@@ -80,7 +81,7 @@ export interface AgentSettings {
   treeFilterMode?: 'default' | 'no-tools' | 'user-only' | 'labeled-only' | 'all';
   defaultProjectTrust?: 'ask' | 'always' | 'never';
   defaultTools?: string[];
-  codemode?: { mode?: 'on' | 'only'; inlineBudget?: number };
+  codemode?: { mode?: 'on' | 'only'; inlineBudget?: number; limits?: ConfiguredCodemodeLimits };
   sessionDir?: string;
   compaction?: AgentCompactionSettings;
   branchSummary?: { reserveTokens?: number; skipPrompt?: boolean };
@@ -233,7 +234,9 @@ const settingsSchema = object({
   treeFilterMode: enumeration('default', 'no-tools', 'user-only', 'labeled-only', 'all'),
   defaultProjectTrust: enumeration('ask', 'always', 'never'),
   defaultTools: list(text(128, true)),
-  codemode: object({ mode: enumeration('on', 'only'), inlineBudget: integer(0, 3_000) }),
+  codemode: object({ mode: enumeration('on', 'only'), inlineBudget: integer(0, 3_000),
+    limits: object(Object.fromEntries(Object.entries(CONFIGURABLE_CODEMODE_LIMITS).map(([key, maximum]) => [key, integer(1, maximum)]))),
+  }),
   sessionDir: text(4_096, true),
   compaction: object({
     enabled: bool,

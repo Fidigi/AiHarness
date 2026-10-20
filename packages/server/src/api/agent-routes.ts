@@ -469,6 +469,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
           activation: effective.values.codemodeEnabled ? 'on' : 'automatic',
           mode: effective.values.codemodeMode ?? agentSettings.settings.codemode?.mode,
           inlineBudget: effective.values.codemodeInlineBudget ?? agentSettings.settings.codemode?.inlineBudget,
+          limits: effective.values.codemodeLimits ?? agentSettings.settings.codemode?.limits,
         },
         excludedTools: modelSupportsTools && effective.values.powershellEnabled !== true
           ? ['powershell']

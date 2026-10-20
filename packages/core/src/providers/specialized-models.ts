@@ -1,5 +1,6 @@
 import type { AiProvider } from './index.js';
 import type { TokenUsage } from '../types/index.js';
+import { copyQuestionClassificationRequest, copyQuestionAnswers, type QuestionClassificationRequest, type QuestionClassificationResult } from './classification-questions.js';
 import { calculatePublishedModelCost } from './model-metadata.js';
 
 /** AiHarness-owned SDK contract. Descriptors never contain endpoints or credentials. */
@@ -11,7 +12,7 @@ export interface ImageGenerationRequest { model: string; prompt: string; count?:
 export interface GeneratedImage { mediaType: 'image/png' | 'image/jpeg' | 'image/webp'; data: string }
 export interface ImageGenerationResult { images: GeneratedImage[]; usage?: TokenUsage }
 export interface SpecializedModelOptions { signal?: AbortSignal }
-export type SpecializedModelRequest = ClassificationRequest | ImageGenerationRequest;
+export type SpecializedModelRequest = ClassificationRequest | QuestionClassificationRequest | ImageGenerationRequest;
 export type BeforeSpecializedModel = (type: SpecializedModelType, request: SpecializedModelRequest, signal: AbortSignal) => Promise<SpecializedModelRequest>;
 export const SPECIALIZED_MODEL_LIMITS = Object.freeze({ models: 100, inputBytes: 32_768, labels: 100,
   images: 4, imageBytes: 8 * 1024 * 1024, responseBytes: 12 * 1024 * 1024, timeoutMs: 10_000 });
@@ -117,6 +118,28 @@ export class SpecializedModels {
         usage.costUsd = calculatePublishedModelCost(model.provider, model.model, usage);
       }
       return { label: this.redact(result.label), usage };
+    });
+  }
+  async classifyQuestions(request: QuestionClassificationRequest, options: SpecializedModelOptions = {}): Promise<QuestionClassificationResult> {
+    request = copyQuestionClassificationRequest(request);
+    const initial = this.resolve('classifier', request.model);
+    if (request.images && initial.imageInput !== true) throw new Error('Classification model does not support image input.');
+    return this.bounded(options.signal, async signal => {
+      const transformed = this.before ? await this.before('classifier', request, signal) : request;
+      if (signal.aborted) throw new Error('Cancelled.');
+      request = copyQuestionClassificationRequest(transformed);
+      const model = this.resolve('classifier', request.model);
+      if (request.images && model.imageInput !== true) throw new Error('Classification model does not support image input.');
+      const result = await this.provider.classifyQuestions({ ...request, model: model.model }, { signal });
+      const answers = copyQuestionAnswers(result.answers, request.questions);
+      const usage = safeUsage(result.usage);
+      if (usage && usage.costUsd === undefined && usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
+        usage.costUsd = calculatePublishedModelCost(model.provider, model.model, usage);
+      }
+      const scrub = (value: string | number | boolean) => typeof value === 'string' ? this.redact(value) : value;
+      return { answers: Object.fromEntries(Object.entries(answers).map(([id, answer]) => [this.redact(id), {
+        value: scrub(answer.value), probabilities: answer.probabilities.map(item => ({ value: scrub(item.value), probability: item.probability })),
+      }])), usage };
     });
   }
   async generateImages(request: ImageGenerationRequest, options: SpecializedModelOptions = {}): Promise<ImageGenerationResult> {

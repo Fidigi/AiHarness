@@ -649,7 +649,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     });
   }
 
-  for (const mode of ['core', 'print', 'json', 'rpc']) for (const scenario of ['freeze', 'globals', 'error', 'schema', 'options', 'output', ...(mode === 'core' ? ['deadline', 'abort'] : [])]) {
+  for (const mode of ['core', 'print', 'json', 'rpc']) for (const scenario of ['freeze', 'globals', 'error', 'schema', 'options', 'output', 'configured', 'image', ...(mode === 'core' ? ['deadline', 'abort'] : [])]) {
     it(`retains bounded QuickJS intrinsics through installed public packages (${mode}/${scenario})`, async () => {
       const worker = path.join(consumer, `codemode-intrinsics-${mode}-${scenario}.mjs`);
       await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/codemode-intrinsics-probe.mjs'), worker);
@@ -657,6 +657,37 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
         .toEqual({ code: 0, stdout: 'codemode intrinsics OK\n', stderr: '' });
     });
   }
+
+  it('compiles and executes native CODE limits and classifier images from installed public declarations', async () => {
+    const source = `import assert from 'node:assert/strict';
+      import { OpenAiProvider, SpecializedModels, resolveCodemodeLimits, validateCodemodeLimits, createAgentToolLoadout,
+        type ConfiguredCodemodeLimits, type ExtensionRuntimeContext } from '@ai-harness/core';
+      const limits: ConfiguredCodemodeLimits = { calls: 4, outputBytes: 256 };
+      assert.equal(resolveCodemodeLimits(limits).calls,4);
+      assert.throws(()=>validateCodemodeLimits({calls:65}));
+      const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j1ioAAAAASUVORK5CYII=';
+      let calls=0;
+      globalThis.fetch=async (_url,init)=>{
+        calls++;const body=JSON.parse(String(init?.body));
+        assert.equal(body.messages.at(-1).content[1].image_url.url,'data:image/png;base64,'+png);
+        const content=body.messages.at(-1).content[0].text==='{"pixel":true}'?JSON.stringify({answers:{pixel:{value:true,probabilities:[{value:true,probability:0.9},{value:false,probability:0.1}]}}}):'{"label":"yes"}';
+        return new Response(JSON.stringify({choices:[{message:{content}}],usage:{prompt_tokens:3,completion_tokens:1,total_tokens:4}}));
+      };
+      const provider=new OpenAiProvider({type:'openai',model:'gpt-4o',apiKey:'disposable-fixture'});
+      const models=new SpecializedModels(provider);
+      const result=await models.classify({model:'gpt-4o:classifier',input:'pixel?',labels:['yes','no'],images:[{mediaType:'image/png',data:png}]});
+      assert.equal(result.label,'yes');assert.equal(result.usage?.totalTokens,4);assert.equal(calls,1);
+      const questions=await models.classifyQuestions({model:'gpt-4o:classifier',state:{pixel:true},questions:{pixel:{type:'boolean',prompt:'Pixel?'}},images:[{mediaType:'image/png',data:png}]});
+      assert.equal(questions.answers.pixel?.value,true);assert.equal(questions.answers.pixel?.probabilities[0]?.probability,0.9);assert.equal(calls,2);
+      const loadout=createAgentToolLoadout({staticTools:[],codemode:{enabled:true,limits}});
+      const rendered=await loadout.executeCodemode({code:'await image('+JSON.stringify({mediaType:'image/png',data:png})+'); store("pixel",true); return "done";'},{} as ExtensionRuntimeContext,async()=>{throw Error('unexpected tool')});
+      assert.equal(rendered.isError,false);assert.equal(rendered.blocks?.[0]?.type,'image');
+      console.log('native CODE public API OK');`;
+    await writeFile(path.join(consumer, 'codemode-public.ts'), source);
+    const types = await succeed(process.execPath, [compiler, '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'codemode-public.ts'], consumer, environment);
+    expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+    expect(await run(process.execPath, ['codemode-public.js'], consumer, environment)).toEqual({ code: 0, stdout: 'native CODE public API OK\n', stderr: '' });
+  });
 
   for (const mode of ['core-branch', 'sdk-auto', 'print-auto', 'json-auto', 'rpc-manual', 'rpc-auto', 'rpc-branch', 'regular', 'fullscreen']) for (const kind of ['private', 'ordinary']) {
     it(`preserves public summary transcripts through installed packages (${mode}/${kind})`, async () => {

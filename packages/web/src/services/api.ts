@@ -2205,6 +2205,7 @@ export function getToolSettings(cwd?: string, projectId?: string): Promise<ApiRe
 export function updateToolSettings(input: {
   enabledTools: string[]; toolPreset: string; powershellEnabled: boolean; cwd?: string; projectId?: string;
   codemodeEnabled?: boolean; codemodeMode?: 'on' | 'only'; codemodeInlineBudget?: number;
+  codemodeLimits?: NonNullable<ToolSettings['codemode']>['limits'];
 }): Promise<ApiResponse<ToolSettings>> {
   return jsonApi('/tools', { method: 'PATCH', body: JSON.stringify(input) });
 }

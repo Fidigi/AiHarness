@@ -13,6 +13,7 @@ export * from './sdk/index.js';
 
 // Providers
 export * from './providers/specialized-models.js';
+export type { ClassificationQuestion, QuestionClassificationRequest, QuestionClassificationResult } from './providers/classification-questions.js';
 export {
   AiProvider,
   ProviderFactory,
@@ -92,6 +93,8 @@ export type {
   PublishedThinkingLevel,
   PricedTokenUsage,
 } from './providers/model-metadata.js';
+export { CONFIGURABLE_CODEMODE_LIMITS, validateCodemodeLimits, resolveCodemodeLimits } from './config/codemode-limits.js';
+export type { ConfiguredCodemodeLimits } from './config/codemode-limits.js';
 export {
   loadAgentSettings,
   getAgentSettingsEditorSchema,

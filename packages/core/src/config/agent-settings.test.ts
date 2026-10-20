@@ -99,6 +99,22 @@ describe('agent settings resolution', () => {
     }
   });
 
+  it('validates code-mode ceilings and deep-merges only trusted project reductions', async () => {
+    const { cwd, agentDir } = await fixture();
+    await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({
+      codemode: { limits: { timeoutMs: 1000, calls: 8, memoryBytes: 16 * 1024 * 1024 } },
+    }));
+    await writeFile(path.join(cwd, '.ai-harness', 'settings.json'), JSON.stringify({
+      codemode: { limits: { timeoutMs: 500, outputBytes: 100, calls: 65, unknown: 1 } },
+    }));
+    const untrusted = await loadAgentSettings({ cwd, agentDir, projectTrusted: false });
+    expect(untrusted.settings.codemode?.limits).toEqual({ timeoutMs: 1000, calls: 8, memoryBytes: 16 * 1024 * 1024 });
+    const trusted = await loadAgentSettings({ cwd, agentDir, projectTrusted: true });
+    expect(trusted.settings.codemode?.limits).toEqual({ timeoutMs: 500, calls: 8, outputBytes: 100, memoryBytes: 16 * 1024 * 1024 });
+    expect(trusted.diagnostics.map(item => item.setting)).toEqual(expect.arrayContaining(['codemode.limits.calls', 'codemode.limits.unknown']));
+    expect(trusted.provenance['codemode.limits.timeoutMs']?.scopes).toEqual(['project']);
+  });
+
   it('does not open or expose project settings before trust', async () => {
     const { cwd, agentDir } = await fixture();
     await writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({ theme: 'dark', sessionDir: 'global-sessions' }));

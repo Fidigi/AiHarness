@@ -218,6 +218,47 @@ describe('bounded QuickJS codemode', () => {
     expect(new Set(progress.map(event => event.call.id)).size).toBe(3);
   });
 
+  it('presents validated guest images under the shared output budget without duplicating model usage', async () => {
+    const provider = new MockProvider({ type: 'mock', model: 'virtual-chat' });
+    const generate = provider.generateImages.bind(provider);
+    vi.spyOn(provider, 'generateImages').mockImplementation(async (...args) => ({ ...await generate(...args),
+      usage: { inputTokens: 3, outputTokens: 1, totalTokens: 4, costUsd: 0.002 } }));
+    const code = 'const result = await models.generateImages({model:"mock-image",prompt:"pixel"}); await image(result.images[0]); store("shown",true); return "pixel";';
+    const result = await run(code, { context: { ...context, provider } });
+    expect(result.isError).toBe(false);
+    expect(result.blocks).toEqual([{ type: 'image', mediaType: 'image/png', url: expect.stringMatching(/^data:image\/png;base64,/) }]);
+    expect(result.details).toMatchObject({ usage: { totalTokens: 4, costUsd: 0.002 }, costComplete: true, store: { shown: true }, nestedCalls: [{ kind: 'image', state: 'completed' }] });
+    expect(result.details?.nestedCalls).toHaveLength(1);
+    const failure = await run(code, { context: { ...context, provider }, limits: { outputBytes: 100 } });
+    expect(failure.isError).toBe(true);
+    expect(failure.blocks).toBeUndefined();
+    expect(failure.details?.store).toBeUndefined();
+    expect(failure.details?.usage).toMatchObject({ totalTokens: 4, costUsd: 0.002 });
+    expect((await run('await image({mediaType:"image/svg+xml",data:"AAAA"});')).isError).toBe(true);
+  });
+
+  it.each(['unload', 'replace'])('rechecks nested authority after before:tool hooks (%s), not just before queue dispatch', async mode => {
+    const registry = new ExtensionRegistry();
+    const effect = vi.fn(() => ({ content: 'effect' }));
+    const observed: unknown[] = [];
+    await registry.load('nested-owner', api => api.registerTool({ ...read, execute: effect }));
+    await registry.load('nested-hook', api => api.before('before:tool', async data => {
+      observed.push(data.input);
+      await registry.unload('nested-owner');
+      if (mode === 'replace') await registry.load('nested-owner', api => api.registerTool({ ...read,
+        execute: () => effect() }));
+      return { input: { transformed: true } };
+    }));
+    const result = await run('store("bad",true); await tools.read({original:true});', {
+      tools: () => registry.getTools(), execute: (name, input, ctx, signal) => registry.executeTool(name, input, ctx, signal),
+    });
+    expect(observed).toEqual([{ original: true }]);
+    expect(effect).not.toHaveBeenCalled();
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('Nested tool is not enabled.');
+    expect(result.details?.store).toBeUndefined();
+  });
+
   it('settles outstanding calls as cancelled without late progress or model output', async () => {
     const provider = new MockProvider({ type: 'mock', model: 'virtual-chat' });
     vi.spyOn(provider, 'classify').mockImplementation(() => new Promise(() => {}));
@@ -291,14 +332,27 @@ describe('bounded QuickJS codemode', () => {
     const session = await manager.create();
     const registry = new ExtensionRegistry();
     const loadout = createAgentToolLoadout({ staticTools: [], codemode: { enabled: true } });
-    let round = 0;
-    await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry,
-      toolContext: { sessionManager: manager, currentSessionId: session.id, notify() {} },
-      resolveTools: () => loadout.getTools(),
-      executeTool: (name, input, ctx, signal) => loadout.executeCodemode(input, ctx, vi.fn(), signal),
-      getToolResultMetadata: (name, result) => loadout.resultMetadata(name, result),
-      streamTurn: async () => round++ === 0 ? { content: '', toolCalls: [{ id: 'script', name: 'codemode', input: { code: 'store("cursor", 7); return 42;' } }] } : { content: 'done' },
-    });
+    const script = async (code: string) => {
+      let round = 0;
+      await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry,
+        toolContext: { sessionManager: manager, currentSessionId: session.id, notify() {} },
+        resolveTools: () => loadout.getTools(),
+        executeTool: (name, input, ctx, signal) => loadout.executeCodemode(input, ctx, vi.fn(), signal),
+        getToolResultMetadata: (name, result) => loadout.resultMetadata(name, result),
+        streamTurn: async () => round++ === 0 ? { content: '', toolCalls: [{ id: 'script', name: 'codemode', input: { code } }] } : { content: 'done' },
+      });
+    };
+    await script('store("cursor", 7); return 42;');
     expect(collectCodemodeStore(await manager.getRawEntries(session.id), manager.get(session.id)?.activeLeafId)).toEqual({ cursor: 7 });
+    // The earlier ancestry fixture uses synthetic entries; exercise an actual copy
+    // and subsequent failed/successful branch publications through the hosted loop.
+    const fork = (await manager.forkSession(session.id))!;
+    expect(collectCodemodeStore(await manager.getRawEntries(fork.id), fork.activeLeafId)).toEqual({ cursor: 7 });
+    await script('if(load("cursor")!==7) throw Error("restore failed"); store("cursor",9); throw Error("rollback");');
+    expect(manager.get(session.id)?.messages.filter(message => message.role === 'tool').at(-1)?.content).toContain('rollback');
+    expect(collectCodemodeStore(await manager.getRawEntries(session.id), manager.get(session.id)?.activeLeafId)).toEqual({ cursor: 7 });
+    await script('store("cursor", undefined); return "cleared";');
+    expect(collectCodemodeStore(await manager.getRawEntries(session.id), manager.get(session.id)?.activeLeafId)).toEqual({});
+    expect(collectCodemodeStore(await manager.getRawEntries(fork.id), fork.activeLeafId)).toEqual({ cursor: 7 });
   });
 });

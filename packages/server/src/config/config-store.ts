@@ -1,6 +1,6 @@
 import { lstat, mkdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { atomicWriteStableFile, readBoundedResourceText } from '@ai-harness/core';
+import { atomicWriteStableFile, readBoundedResourceText, validateCodemodeLimits } from '@ai-harness/core';
 import path from 'node:path';
 import type {
   ConfigurationScope,
@@ -66,6 +66,9 @@ function validateValues(input: unknown): ScopedConfigurationValues {
     } else if (key === 'codemodeInlineBudget') {
       if (!Number.isSafeInteger(value) || Number(value) < 0 || Number(value) > 3_000) invalidConfiguration('Invalid codemode inline budget.');
       result.codemodeInlineBudget = Number(value);
+    } else if (key === 'codemodeLimits') {
+      try { result.codemodeLimits = validateCodemodeLimits(value); }
+      catch { invalidConfiguration('Invalid codemode limits.'); }
     } else if (ARRAY_KEYS.has(key)) {
       if (!Array.isArray(value) || value.length > 2_000 || !value.every(item => typeof item === 'string' && item.length <= 500)) {
         invalidConfiguration(`Valeur invalide pour ${rawKey}.`);
@@ -92,7 +95,7 @@ function validatePatchValues(input: unknown): Record<string, unknown> {
     if (SECRET_KEY.test(key)
       || (!STRING_KEYS.has(key as keyof ScopedConfigurationValues)
         && !ARRAY_KEYS.has(key as keyof ScopedConfigurationValues)
-        && key !== 'autoCompaction' && key !== 'powershellEnabled' && key !== 'codemodeEnabled' && key !== 'codemodeInlineBudget')) {
+        && key !== 'autoCompaction' && key !== 'powershellEnabled' && key !== 'codemodeEnabled' && key !== 'codemodeInlineBudget' && key !== 'codemodeLimits')) {
       invalidConfiguration(`Clé de configuration inconnue : ${key}.`);
     }
     result[key] = null;

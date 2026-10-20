@@ -122,6 +122,7 @@ const { parentPort, workerData } = require('node:worker_threads');
         args => call('tool', tool.name, args)])));
       globalThis.ALL_TOOLS = Object.freeze(TOOLS.map(tool => Object.freeze({ name: tool.name, description: tool.description })));
       globalThis.searchTools = (query, options = {}) => call('search', '', { query, ...options });
+      globalThis.image = value => call('image', '', value);
       globalThis.describeTool = name => call('describe', name, null);
       globalThis.describeNamespace = name => call('namespace', name, null);
       globalThis.models = Object.freeze({
@@ -129,6 +130,7 @@ const { parentPort, workerData } = require('node:worker_threads');
         getAvailableOfType: type => call('availableModels', type, null),
         getModelOfType: type => call('availableModels', type, null).then(models => models[0]),
         classify: request => call('classify', '', request),
+        classifyQuestions: request => call('classifyQuestions', '', request),
         generateImages: request => call('images', '', request),
       });
       const values = Object.assign(Object.create(null), INITIAL_STORE);

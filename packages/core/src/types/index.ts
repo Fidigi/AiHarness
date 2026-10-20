@@ -552,6 +552,7 @@ export interface ScopedConfigurationValues {
   codemodeEnabled?: boolean;
   codemodeMode?: 'on' | 'only';
   codemodeInlineBudget?: number;
+  codemodeLimits?: import('../config/codemode-limits.js').ConfiguredCodemodeLimits;
   systemPrompt?: string;
 }
 
@@ -586,6 +587,7 @@ export interface ToolSettings {
     enabled: boolean;
     mode: 'on' | 'only';
     inlineBudget: number;
+    limits?: import('../config/codemode-limits.js').ConfiguredCodemodeLimits;
     selfTest: { state: 'passed' | 'failed' | 'not-run'; engine: 'QuickJS' };
   };
   tools: ToolSettingsEntry[];

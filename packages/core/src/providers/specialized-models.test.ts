@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MockProvider, OpenAiProvider } from './index.js';
+import { MockProvider, OpenAiProvider, ProviderFactory } from './index.js';
 import { SpecializedModels, validateGeneratedImages } from './specialized-models.js';
 
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j1ioAAAAASUVORK5CYII=';
@@ -119,6 +119,78 @@ describe('credential-private specialized model SDK', () => {
     expect(received?.aborted).toBe(true);
   });
 
+  it.each([
+    ['openai', 'gpt-4o', 'openai'], ['azure', 'gpt-4o', 'openai'],
+    ['anthropic', 'claude-3-haiku-20240307', 'anthropic'],
+    ['google', 'gemini-2.0-flash', 'gemini'], ['vertex', 'gemini-2.0-flash', 'gemini'],
+    ['bedrock', 'anthropic.claude-3-haiku-20240307-v1:0', 'bedrock'],
+  ])('passes classifier text/images through the actual %s adapter payload', async (type, model, protocol) => {
+    const response = protocol === 'openai' ? { choices: [{ message: { content: '{"label":"yes"}' } }], usage: { prompt_tokens: 3, completion_tokens: 1, total_tokens: 4 } }
+      : protocol === 'anthropic' ? { content: [{ type: 'text', text: '{"label":"yes"}' }], usage: { input_tokens: 3, output_tokens: 1 } }
+      : protocol === 'gemini' ? { candidates: [{ content: { parts: [{ text: '{"label":"yes"}' }] } }], usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 1, totalTokenCount: 4 } }
+      : { output: { message: { content: [{ text: '{"label":"yes"}' }] } }, usage: { inputTokens: 3, outputTokens: 1, totalTokens: 4 } };
+    const fetcher = vi.fn(async (_url: unknown, _init?: RequestInit) => new Response(JSON.stringify(response), { headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetcher);
+    try {
+      const provider = ProviderFactory.create({ type, model, apiKey: 'disposable-key',
+        baseUrl: 'https://fixture.test/v1', accessKeyId: 'disposable-access', secretAccessKey: 'disposable-secret', projectId: 'fixture', location: 'us-central1' });
+      const bridge = new SpecializedModels(provider);
+      expect(bridge.getModelOfType('classifier')).toMatchObject({ imageInput: true, virtual: true });
+      expect(await bridge.classify({ model: `${model}:classifier`, input: 'Is this a pixel?', labels: ['yes', 'no'], images: [{ mediaType: 'image/png', data: png }] }))
+        .toMatchObject({ label: 'yes', usage: { totalTokens: 4 } });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
+      if (protocol === 'openai') expect(body.messages.at(-1).content).toEqual([
+        { type: 'text', text: 'Is this a pixel?' }, { type: 'image_url', image_url: { url: `data:image/png;base64,${png}` } },
+      ]);
+      else if (protocol === 'anthropic') expect(body.messages.at(-1).content).toEqual([
+        { type: 'text', text: 'Is this a pixel?' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: png } },
+      ]);
+      else if (protocol === 'gemini') expect(body.contents.at(-1).parts).toEqual([
+        { text: 'Is this a pixel?' }, { inlineData: { mimeType: 'image/png', data: png } },
+      ]);
+      else expect(body.messages.at(-1).content).toEqual([
+        { text: 'Is this a pixel?' }, { image: { format: 'png', source: { bytes: png } } },
+      ]);
+      expect(JSON.stringify(body)).not.toContain('disposable-key');
+      const answers = { pixel: { value: true, probabilities: [{ value: true, probability: 0.9 }, { value: false, probability: 0.1 }] } };
+      const questionResponse = JSON.parse(JSON.stringify(response));
+      const content = JSON.stringify({ answers });
+      if (protocol === 'openai') questionResponse.choices[0].message.content = content;
+      else if (protocol === 'anthropic') questionResponse.content[0].text = content;
+      else if (protocol === 'gemini') questionResponse.candidates[0].content.parts[0].text = content;
+      else questionResponse.output.message.content[0].text = content;
+      fetcher.mockResolvedValueOnce(new Response(JSON.stringify(questionResponse), { headers: { 'Content-Type': 'application/json' } }));
+      expect(await bridge.classifyQuestions({ model: `${model}:classifier`, state: { pixel: true },
+        questions: { pixel: { type: 'boolean', prompt: 'Is this a pixel?' } }, images: [{ mediaType: 'image/png', data: png }] }))
+        .toMatchObject({ answers, usage: { totalTokens: 4 } });
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      const questionBody = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body));
+      const parts = protocol === 'gemini' ? questionBody.contents.at(-1).parts : questionBody.messages.at(-1).content;
+      expect(parts[0]).toEqual(protocol === 'openai' || protocol === 'anthropic' ? { type: 'text', text: '{"pixel":true}' } : { text: '{"pixel":true}' });
+      expect(JSON.stringify(parts[1])).toContain(png);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('rechecks image capabilities and image-model availability after hooks without dispatch', async () => {
+    const provider = new OpenAiProvider({ type: 'openai', model: 'gpt-4o', apiKey: 'fixture' });
+    const classify = vi.spyOn(provider, 'classify');
+    const original = provider.getSpecializedModels.bind(provider);
+    const image = { mediaType: 'image/png' as const, data: png };
+    const bridge = new SpecializedModels(provider, undefined, async (_type, request) => {
+      vi.spyOn(provider, 'getSpecializedModels').mockReturnValue(original().map(item => ({ ...item, imageInput: false })));
+      return { ...request, images: [image] };
+    });
+    await expect(bridge.classify({ model: 'gpt-4o:classifier', input: 'pixel', labels: ['yes'] })).rejects.toThrow('operation failed');
+    expect(classify).not.toHaveBeenCalled();
+    const generate = vi.spyOn(provider, 'generateImages');
+    const revoked = new SpecializedModels(provider, undefined, async (_type, request) => {
+      vi.spyOn(provider, 'validateConfig').mockReturnValue(false); return request;
+    });
+    await expect(revoked.generateImages({ model: 'dall-e-2', prompt: 'pixel' })).rejects.toThrow('operation failed');
+    expect(generate).not.toHaveBeenCalled();
+  });
+
   it('uses the ordinary bounded network/credential path for OpenAI images, never fetches returned URLs', async () => {
     const fetcher = vi.fn(async (_url: string | URL, _init?: RequestInit) => new Response(JSON.stringify({ data: [{ b64_json: png, url: 'https://never-fetch.test/private' }] }), {
       headers: { 'Content-Type': 'application/json' },
@@ -131,6 +203,7 @@ describe('credential-private specialized model SDK', () => {
       expect(await bridge.generateImages({ model: 'dall-e-2', prompt: 'pixel', size: '256x256' })).toMatchObject({ images: [{ data: png }] });
       expect(fetcher).toHaveBeenCalledTimes(1);
       expect(fetcher.mock.calls[0]?.[0]).toBe('https://api.openai.com/v1/images/generations');
+      expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({ model: 'dall-e-2', prompt: 'pixel', n: 1, size: '256x256', response_format: 'b64_json' });
       await expect(bridge.generateImages({ model: 'dall-e-3', prompt: 'pixel', count: 2 })).rejects.toThrow();
       expect(fetcher).toHaveBeenCalledTimes(1);
     } finally { vi.unstubAllGlobals(); }

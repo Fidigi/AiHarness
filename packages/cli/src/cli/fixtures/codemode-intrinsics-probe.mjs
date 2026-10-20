@@ -4,11 +4,12 @@ import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/pro
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createAgentToolLoadout, runCodemode, SessionManager, JsonlSessionStore } from '@ai-harness/core';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
+import { createAgentToolLoadout, runCodemode, SessionManager, JsonlSessionStore, MockProvider } from '@ai-harness/core';
 
 const [mode, scenario] = process.argv.slice(2);
 assert.ok(['core','print','json','rpc'].includes(mode));
-assert.ok(['freeze','globals','error','schema','options','output',...(mode==='core'?['deadline','abort']:[])].includes(scenario));
+assert.ok(['freeze','globals','error','schema','options','output','configured','image',...(mode==='core'?['deadline','abort']:[])].includes(scenario));
 const root=await mkdtemp(path.join(os.tmpdir(),'aih-intrinsics-')), cwd=path.join(root,'work'), agent=path.join(root,'agent'), sessions=path.join(root,'sessions'), calls=path.join(root,'calls');
 const schema={type:'object',required:['path'],properties:{path:{type:'string',enum:['requested','fail'],minLength:1,maxLength:100},optional:{type:'array',maxItems:2,items:{type:'integer',minimum:0,maximum:5}}},additionalProperties:false};
 const sources={
@@ -19,11 +20,19 @@ const sources={
   schema:`return (await describeTool('lookup')).parameters;`,
   options:`await tools.lookup({path:'requested'});`,
   output:`text('x'.repeat(66000));`,
+  configured:`// @options outputBytes=999999\nstore('rollback',1); text('x'.repeat(17));`,
+  image:`const model=await models.getModelOfType('image'); const result=await models.generateImages({model:model.id,prompt:'pixel'}); await image(result.images[0]); store('safe',42); return 'document';`,
   deadline:`store('rollback',1); /(a+)+$/.test('a'.repeat(10000)+'!');`,
   abort:`store('rollback',1); await tools.lookup({path:'requested'});`,
 };
 const input={code:sources[scenario],...(scenario==='options'?{options:{timeoutMs:1}}:{})};
 let child;
+const threads=createRequire(import.meta.url)('node:worker_threads'), NativeWorker=threads.Worker, live=new Set();
+let created=0, exited=0;
+if(mode==='core') {
+  threads.Worker=class extends NativeWorker {constructor(...args){super(...args);created++;live.add(this);this.once('exit',()=>{live.delete(this);exited++;});}};
+  syncBuiltinESMExports();
+}
 try {
   await mkdir(cwd);await mkdir(agent);
   let result;
@@ -43,15 +52,18 @@ try {
       result={isError:true,content:'Invalid or disabled codemode input.'};
     } else {
       const controller=new AbortController();
-      const work=runCodemode({code:input.code,tools,execute,context:{},signal:controller.signal,...(scenario==='deadline'?{limits:{timeoutMs:200}}:{})});
+      const work=scenario==='configured'
+        ? createAgentToolLoadout({staticTools:tools(),codemode:{enabled:true,limits:{outputBytes:16}}}).executeCodemode(input,{},execute)
+        : runCodemode({code:input.code,tools,execute,context:{provider:new MockProvider({type:'mock',model:'fixture'})},signal:controller.signal,...(scenario==='deadline'?{limits:{timeoutMs:200}}:{})});
       if(scenario==='abort') {await admission;controller.abort();}
       result=await work;
       if(scenario==='abort')assert.equal(nestedSignal.aborted,true);
     }
   } else {
     const extension=path.join(root,'provider.mjs');
-    await writeFile(extension,`import { AiProvider } from ${JSON.stringify(import.meta.resolve('@ai-harness/core'))};import{appendFile}from'node:fs/promises';
-      class FixtureProvider extends AiProvider {
+    await writeFile(path.join(agent,'settings.json'),JSON.stringify({codemode:{limits:{outputBytes:scenario==='configured'?16:65536}}}));
+    await writeFile(extension,`import { MockProvider } from ${JSON.stringify(import.meta.resolve('@ai-harness/core'))};import{appendFile}from'node:fs/promises';
+      class FixtureProvider extends MockProvider {
         validateConfig(){return true;} async chat(){throw new Error('Unexpected chat');}
         async streamChat(messages,_chunk,complete,_error,options){
           if(options.tools.map(tool=>tool.name).join(',')!=='codemode')throw new Error('Unexpected direct declarations');
@@ -83,18 +95,24 @@ try {
     const messages=(await manager.getRawEntries('intrinsics')).filter(entry=>entry.type==='message'&&entry.role==='tool');
     assert.equal(messages.length,1);result={...messages[0],details:messages[0].metadata?.codemode};
   }
-  const failed=['error','options','output','deadline','abort'].includes(scenario);
+  const failed=['error','options','output','configured','deadline','abort'].includes(scenario);
   assert.equal(Boolean(result.isError),failed,JSON.stringify(result));
   if(!failed) {
     if(scenario==='schema')assert.deepEqual(JSON.parse(result.content.split('\n').slice(1).join('\n')),schema);
     else {assert.match(result.content,/\ndocument$/);assert.deepEqual(result.details.store,{safe:42});}
   } else {
     assert.equal(result.details?.store,undefined);
-    const message={error:'Controlled nested failure.',options:'Invalid or disabled codemode input.',output:'Script output limit exceeded.',deadline:'Codemode deadline exceeded.',abort:'Codemode was aborted.'}[scenario];
+    const message={error:'Controlled nested failure.',options:'Invalid or disabled codemode input.',output:'Script output limit exceeded.',configured:'Script output limit exceeded.',deadline:'Codemode deadline exceeded.',abort:'Codemode was aborted.'}[scenario];
     assert.ok(result.content.includes(message),JSON.stringify(result));
+  }
+  if(scenario==='image') {
+    assert.equal(result.blocks.filter(block=>block.type==='image').length,1);
+    assert.match(result.blocks.find(block=>block.type==='image').url,/^data:image\/png;base64,/);
+    assert.equal(result.details.nestedCalls.length,1);assert.equal(result.details.costComplete,false);
   }
   if(scenario!=='options') {assert.equal(result.details.engine,'QuickJS');assert.ok(result.details.durationMs>=0);}
   const invoked=(await readFile(calls,'utf8').catch(error=>{if(error.code==='ENOENT')return '';throw error;})).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line));
   assert.deepEqual(invoked,['freeze','globals','error','abort'].includes(scenario)?[{path:scenario==='error'?'fail':'requested'}]:[]);
+  if(mode==='core') {assert.equal(live.size,0);assert.equal(exited,created);assert.equal(created,scenario==='options'?0:1);}
   console.log('codemode intrinsics OK');
-} finally {if(child&&child.exitCode===null)child.kill('SIGKILL');await rm(root,{recursive:true,force:true});}
+} finally {threads.Worker=NativeWorker;syncBuiltinESMExports();if(child&&child.exitCode===null)child.kill('SIGKILL');await rm(root,{recursive:true,force:true});}

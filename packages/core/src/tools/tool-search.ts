@@ -1,7 +1,8 @@
 import {
   CODEMODE_REGISTRATION, CODEMODE_TOOL_NAME, collectCodemodeStore, isNestedCallable, runCodemode,
-  CODEMODE_EXTENSION_ID, CODEMODE_LIMITS, type CodemodeSettings, type HostedCodemodeTool,
+  CODEMODE_EXTENSION_ID, type CodemodeSettings, type HostedCodemodeTool,
 } from './codemode.js';
+import { resolveCodemodeLimits } from '../config/codemode-limits.js';
 import type {
   ExtensionRuntimeContext,
   ExtensionTool,
@@ -503,6 +504,7 @@ export function createAgentToolLoadout<
       || options.codemode?.enabled === true || options.codemode?.activation === 'on'
       || (options.codemode !== undefined && (Boolean(options.dynamicSource?.hasPotentialSearchableTools)
         || selectedStatic.some(tool => isSearchableToolExposure(agentToolExposure(tool))))));
+  const limits = resolveCodemodeLimits(options.codemode?.limits);
   const issuedResults = new WeakSet<ExtensionToolResult>();
   const nestedTools = (): Array<TStatic | TDynamic> => {
     const currentStatic = selectRegisteredTools(options.currentStaticTools?.() ?? options.staticTools, selection);
@@ -531,7 +533,7 @@ export function createAgentToolLoadout<
         try { schema = JSON.stringify(tool.parameters ?? {}); } catch { /* Cyclic trusted extension schema: use describeTool. */ }
         inline += `${tool.name}: ${tool.description.slice(0, 200)} ${schema}\n`.slice(0, budget - inline.length);
       }
-      codemodeTool.description = `${CODEMODE_REGISTRATION.description}\n${inline}`;
+      codemodeTool.description = `${CODEMODE_REGISTRATION.description}\nEffective host limits: ${JSON.stringify(limits)}. Scripts cannot override them.\n${inline}`;
       return [...(options.codemode?.mode === 'only' ? tools.filter(tool => !isNestedCallable(tool)) : tools), codemodeTool];
     },
     isCodemode: name => codemodeEnabled && normalizedName(name) === CODEMODE_TOOL_NAME,
@@ -539,7 +541,7 @@ export function createAgentToolLoadout<
       if (!codemodeEnabled || !isRecord(input) || typeof input.code !== 'string'
         || Object.keys(input).some(key => key !== 'code')) throw new Error('Invalid or disabled codemode input.');
       const deadline = new AbortController();
-      const timer = setTimeout(() => deadline.abort(new Error('Codemode deadline exceeded.')), CODEMODE_LIMITS.timeoutMs);
+      const timer = setTimeout(() => deadline.abort(new Error('Codemode deadline exceeded.')), limits.timeoutMs);
       const boundedSignal = signal ? AbortSignal.any([signal, deadline.signal]) : deadline.signal;
       let rejectAbort!: (error: unknown) => void;
       const cancelled = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
@@ -555,7 +557,7 @@ export function createAgentToolLoadout<
         };
         const store = await Promise.race([preparation(), cancelled]);
         const result = await runCodemode({ code: input.code, context, signal: boundedSignal, store,
-          tools: nestedTools, execute, redact: options.redactText });
+          tools: nestedTools, execute, redact: options.redactText, limits });
         issuedResults.add(result);
         return result;
       } finally {
