@@ -1,6 +1,7 @@
 import type { Message } from '../types/index.js';
 import type { BranchSummaryAccounting, BranchSummaryEntry, SessionEntry } from './session-manager.js';
 import { contextEntryMessages, sessionEntryPath } from './session-context.js';
+import { applyContextEdits } from './session-context-state.js';
 import { summaryMessageText } from './summary-model-messages.js';
 
 export interface BranchSummaryRequest {
@@ -118,9 +119,9 @@ export function prepareBranchSummary(entries: readonly SessionEntry[], from: str
   let visible = false;
   for (let index = entries.length - 1; index >= 0; index--) {
     const entry = entries[index];
-    const messages = entry.type === 'compaction'
-      ? [{ role: 'user', content: `[Context Summary]\n${entry.summary}`, toolCalls: undefined, blocks: undefined }]
-      : contextEntryMessages(entry);
+    const messages = applyContextEdits(entry.type === 'compaction'
+      ? [{ id: entry.id, type: 'message', timestamp: entry.timestamp, role: 'user', content: `[Context Summary]\n${entry.summary}` }]
+      : contextEntryMessages(entry), entries);
     if (!messages.length) continue;
     visible = true;
     const transcript = messages.map(message => {

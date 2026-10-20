@@ -6,6 +6,7 @@ import {
   getSummaryModelMessages,
   readCompactionSummary,
   copyCompactionResponse,
+  normalizeProviderUsage,
   resolveInstructionPrompt,
   type AgentEvent,
   type MessageContentBlock,
@@ -657,14 +658,19 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       const summaryResponse = redactJson(copyCompactionResponse(rawSummaryResponse));
       if (summaryResponse.usage) recordUsage(providerName, summaryResponse.model ?? requestedModel, summaryResponse.usage);
       if (!summaryResponse.content.trim()) throw new Error('Le provider a renvoyé un résumé vide.');
-      const summary = readCompactionSummary(summaryResponse).trim();
-      const afterEstimate = Math.ceil(summary.length / 4) + retainedEstimate;
+      let summary = readCompactionSummary(summaryResponse).trim();
+      let afterEstimate = Math.ceil(summary.length / 4) + retainedEstimate;
       validateBinding();
       await manager.applyCompaction(sessionId, summary, firstKeptEntryId, {
         instruction,
         tokensBefore: before,
         tokensAfter: afterEstimate,
+        provider: providerName,
+        model: summaryResponse.model ?? requestedModel,
+        usage: normalizeProviderUsage(summaryResponse.usage),
       }, { signal: lifetime.signal, source });
+      summary = typeof session.metadata?.compactionSummary === 'string' ? session.metadata.compactionSummary : summary;
+      afterEstimate = (session.metadata?.compactionStats as { tokensAfter?: number } | undefined)?.tokensAfter ?? afterEstimate;
       publish(sessionId, 'compaction.completed', {
         tokensBefore: before,
         tokensAfter: afterEstimate,

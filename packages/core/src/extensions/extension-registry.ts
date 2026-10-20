@@ -3,7 +3,8 @@ import type { BeforeSpecializedModel, SpecializedModelType, SpecializedModelRequ
 import { ProviderFactory } from '../providers/index.js';
 import { AI_HARNESS_EXTENSION_API_VERSION } from '../public-api-version.js';
 import type { CodemodeProgress, Message, ProviderConfig, Session } from '../types/index.js';
-import { SessionManager } from '../sessions/session-manager.js';
+import { SessionManager, type SessionCompactionEvent } from '../sessions/session-manager.js';
+import { copySessionCustomValue } from '../sessions/session-custom-data.js';
 import { copySessionBranchEvent } from '../sessions/session-branch-admission.js';
 import type { SessionBranchEvent } from '../sessions/session-branch-admission.js';
 import type { BranchSummaryEvent, BranchSummaryOutput } from '../sessions/branch-summarization.js';
@@ -185,6 +186,8 @@ export interface BeforeHookMap {
   'before:session:branch': SessionBranchEvent;
   /** Explicit summary work only: cancel or replace output, never rewrite its source/target. */
   'before:session:summary': BranchSummaryEvent;
+  /** Output-only final compaction replacement/veto; no cut/accounting/provider authority. */
+  'before:session:compaction': SessionCompactionEvent;
   /** Native/virtual SDK requests are not conversational provider turns. */
   'before:model': { type: SpecializedModelType; request: SpecializedModelRequest; context: ExtensionRuntimeContext; signal: AbortSignal };
 }
@@ -195,7 +198,8 @@ export interface HookCancellation {
 }
 
 export type BeforeHookResult<T> = void | false | HookCancellation
-  | (T extends SessionBranchEvent ? never : T extends BranchSummaryEvent ? BranchSummaryOutput : Partial<T>);
+  | (T extends SessionBranchEvent ? never : T extends BranchSummaryEvent ? BranchSummaryOutput
+    : T extends SessionCompactionEvent ? { summary: string } : Partial<T>);
 export type BeforeHookHandler<T> = (data: Readonly<T>) => BeforeHookResult<T> | Promise<BeforeHookResult<T>>;
 
 export interface BeforeHookExecution<T> {
@@ -204,6 +208,7 @@ export interface BeforeHookExecution<T> {
   reason?: string;
   /** Present only for before:session:summary; a detached validated override. */
   summary?: BranchSummaryOutput;
+  compactionSummary?: string;
 }
 
 export interface ExtensionInfo {
@@ -506,6 +511,9 @@ export class ExtensionRegistry {
     if (event === 'before:session:summary') {
       return this.runSummaryBefore(data as BranchSummaryEvent) as unknown as Promise<BeforeHookExecution<BeforeHookMap[K]>>;
     }
+    if (event === 'before:session:compaction') {
+      return this.runCompactionBefore(data as SessionCompactionEvent) as unknown as Promise<BeforeHookExecution<BeforeHookMap[K]>>;
+    }
     let transformed = { ...data } as BeforeHookMap[K];
     const agentSignal = event === 'before:agent' ? (data as BeforeHookMap['before:agent']).signal : undefined;
     const signal = hostSignal ?? (event === 'before:model' ? (data as BeforeHookMap['before:model']).signal
@@ -578,6 +586,35 @@ export class ExtensionRegistry {
     return { data: captured, cancelled: false, ...(summary ? { summary } : {}) };
   }
 
+  private async runCompactionBefore(data: SessionCompactionEvent): Promise<BeforeHookExecution<SessionCompactionEvent>> {
+    const values: Record<string, unknown> = {};
+    for (const key of ['sessionId', 'firstKeptEntryId', 'summary', 'maxOutputBytes', 'signal']) {
+      const property = Object.getOwnPropertyDescriptor(data, key);
+      if (!property || !('value' in property)) throw new Error('Compaction hook event is invalid.');
+      values[key] = property.value;
+    }
+    if (typeof values.sessionId !== 'string' || typeof values.firstKeptEntryId !== 'string'
+      || typeof values.summary !== 'string' || typeof values.maxOutputBytes !== 'number'
+      || !Number.isSafeInteger(values.maxOutputBytes) || values.maxOutputBytes < 1 || values.maxOutputBytes > 1024 * 1024
+      || !(values.signal instanceof AbortSignal)) throw new Error('Compaction hook event is invalid.');
+    const captured = Object.freeze(values) as unknown as SessionCompactionEvent;
+    let compactionSummary: string | undefined;
+    for (const entry of [...this.beforeHooks.get('before:session:compaction') ?? []]) {
+      if (captured.signal.aborted) return { data: captured, cancelled: true };
+      const result = await (entry.value as unknown as BeforeHookHandler<SessionCompactionEvent>)(captured);
+      if (captured.signal.aborted || result === false) return { data: captured, cancelled: true };
+      if (result === undefined) continue;
+      if (result && typeof result === 'object' && Object.hasOwn(result, 'cancel')) {
+        return { data: captured, cancelled: true, reason: this.copyBranchCancellation(result) };
+      }
+      const copied = copySessionCustomValue(result) as { summary: string };
+      if (!copied || Object.keys(copied).length !== 1 || typeof copied.summary !== 'string'
+        || !copied.summary.trim() || Buffer.byteLength(copied.summary) > captured.maxOutputBytes) throw new Error('Compaction hook result is invalid.');
+      compactionSummary = copied.summary;
+    }
+    return { data: captured, cancelled: false, compactionSummary };
+  }
+
   private connectBranchManager(manager: SessionManager): () => void {
     const detachBranch = manager.onBeforeBranch(async event => {
       const result = await this.runBefore('before:session:branch', event);
@@ -588,7 +625,13 @@ export class ExtensionRegistry {
         const result = await this.runBefore('before:session:summary', event);
         return result.cancelled ? false : result.summary;
       });
-      return () => { detachBranch(); detachSummary(); };
+      try {
+        const detachCompaction = manager.onBeforeCompaction(async event => {
+          const result = await this.runBefore('before:session:compaction', event);
+          return result.cancelled ? false : result.compactionSummary !== undefined ? { summary: result.compactionSummary } : undefined;
+        });
+        return () => { detachBranch(); detachSummary(); detachCompaction(); };
+      } catch (error) { detachSummary(); throw error; }
     } catch (error) { detachBranch(); throw error; }
   }
 
@@ -739,7 +782,7 @@ export class ExtensionRegistry {
         return unsubscribe;
       },
       before: (event, handler) => {
-        const sessionEvent = event === 'before:session:branch' || event === 'before:session:summary';
+        const sessionEvent = event === 'before:session:branch' || event === 'before:session:summary' || event === 'before:session:compaction';
         if (sessionEvent && this.loaded.get(extension.id) !== extension) {
           throw new Error('Cannot register branch hooks for an unloaded extension.');
         }

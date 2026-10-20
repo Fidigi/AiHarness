@@ -10,7 +10,8 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 |---|---|---|
 | Project overview | [`project-map.md`](./project-map.md) | ~610 lines — load first for global navigation |
 | AI Providers | [`topics/providers.md`](./topics/providers.md) | ~215 lines |
-| Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~215 lines |
+| Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~225 lines |
+| Session Context State | [`topics/session-context-state.md`](./topics/session-context-state.md) | ~100 lines |
 | TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~65 lines |
 | Native Run Lifecycle | [`topics/run-lifecycle.md`](./topics/run-lifecycle.md) | ~90 lines |
 | Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~245 lines |
@@ -46,7 +47,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 → packages/server/src/runtime/model-catalog.ts and api/proxy.ts
 ```
 
-**A session or persistence change** → Load only `sessions.md` + `project-map.md` §4
+**A session or persistence change** → Load `sessions.md` + `project-map.md` §4; add `session-context-state.md` for edits, prompt/tool provenance or compaction checkpoints
 ```
 → packages/core/src/sessions/session-manager.ts
 → packages/core/src/sessions/serialization.ts

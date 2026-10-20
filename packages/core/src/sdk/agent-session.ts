@@ -8,6 +8,7 @@ import { closeProviderNetworkDispatchers, createProviderNetworkScope, PROVIDER_N
 import { AI_HARNESS_CORE_API_VERSION } from '../public-api-version.js';
 import { WorkspaceManager } from '../security/workspace-manager.js';
 import { SessionManager } from '../sessions/session-manager.js';
+import { copyContextEdit } from '../sessions/session-context-state.js';
 import { serializeSession } from '../sessions/serialization.js';
 import type { Session } from '../types/index.js';
 import type { LoadedAgentResources } from './resource-loader.js';
@@ -285,6 +286,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
       rename: title => serial(async () => { idle(); await manager.update(sessionId, { title }); }),
       setModel: model => serial(async () => { idle(); await manager.update(sessionId, { model }); }),
       setThinking: thinking => serial(async () => { idle(); await manager.update(sessionId, { thinking }); }),
+      editContext: edit => {
+        const copied = copyContextEdit(edit);
+        return serial(async () => { idle(); await manager.appendContextEdit(sessionId, copied, { signal: branchLifetime.signal }); });
+      },
       fork: (id, forkOptions = {}) => serialInput(forkOptions, async forkOptions => {
         idle();
         const session = await manager.forkSessionAtEntry(sessionId, id, forkOptions.title,
@@ -317,7 +322,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
         runtime.publishSessionEvent(sessionId, 'compaction.started', { automatic: false });
         try {
           await manager.applyCompaction(sessionId, summary, firstKeptEntryId, details, { signal: branchLifetime.signal, source });
-          runtime.publishSessionEvent(sessionId, 'compaction.completed', { automatic: false, summaryLength: redactor.redact(summary).trim().length });
+          const appliedSummary = manager.get(sessionId)?.metadata?.compactionSummary;
+          runtime.publishSessionEvent(sessionId, 'compaction.completed', { automatic: false,
+            summaryLength: typeof appliedSummary === 'string' ? appliedSummary.length : redactor.redact(summary).trim().length });
         } catch (error) {
           runtime.publishSessionEvent(sessionId, 'compaction.failed', { automatic: false, error: redactor.redact(error instanceof Error ? error.message : 'Compaction failed.') });
           throw error;

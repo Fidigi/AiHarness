@@ -251,6 +251,24 @@ alone. Existing no-session startup precedence remains. These additive lower-leve
 APIs do not expand the SDK facade, API major1, schema2, retained-file bounds or the
 1,024-extra-entry copy limit; cross-process CAS is not provided.
 
+`await session.editContext({targetEntryId, replacement?})` is an idle-only,
+handle-lifetime-owned mutation. Omit `replacement` to omit that active entry from
+future model input, or supply text (including `''`) to replace its public content.
+It appends a branch-relative `context_edit`; it never rewrites transcript/usage.
+Inputs are detached, accessors/unknown fields refuse, text is bounded to 512 KiB,
+and compacted/foreign targets refuse. Core repairs tool groups after edits.
+Navigation, related forks and independent clones preserve/remap these entries.
+
+Lower-level `SessionManager.appendContextEdit` accepts the same edit and an
+optional `{signal}`. `recordSessionLoadout` / `getSessionLoadout` persist/rebuild
+private final-request prompt/tool/model/thinking deltas, not executable authority.
+Core provider turns record these automatically; compaction retains complete
+private loadout/file-operation checkpoints. Trusted `history()` can contain
+private instructions/schemas: it is not a browser/RPC share DTO. Native
+`onBeforeCompaction` / extension `before:session:compaction` permit only final
+`{summary}` replacement or veto; original cut/source/usage remain authoritative.
+No Pi import, historical-tool registration or implicit summary generation is added.
+
 `rename`, `setModel`, `setThinking`, `branchBefore(userEntryId)` and
 `applyCompaction(summary, firstKeptMessageId, details)` await Core persistence.
 `compactionTarget()` uses Core selection. Manual compaction requires a caller
@@ -271,7 +289,7 @@ content. External provenance and arbitrary IDs inside custom data are not
 rewritten. Related forks preserve stable message/command/custom/summary IDs and
 selected private/custom ancestry, including state outside compacted model context;
 independent clones remap those internal IDs. Both use the same bounded Core copy
-path (at most 1,024 additional custom/summary/compaction entries) and refuse live
+path (at most 1,024 additional custom/edit/loadout/summary/compaction entries) and refuse live
 command ancestors. Durable-user forks can select pre-compaction journal history;
 indexed forks still select the current message projection. Both operate only while
 idle. They participate in ordered Core branch admission through an independent
@@ -481,6 +499,23 @@ sont retirés. `fromEntryId` décrit uniquement la provenance, pas un parent. Un
 préfixe de métadonnées propre borné conserve l'ancien fond de compaction sur son
 ascendance, après navigation/rechargement/compaction et remappage du clone, jamais
 sur une nouvelle racine indépendante.
+
+`await session.editContext({targetEntryId, replacement?})` exige le repos et suit
+la durée du handle. Sans `replacement`, l’entrée active est omise du futur contexte
+modèle ; un texte, même vide, remplace son contenu public. L’entrée `context_edit`
+est relative à la branche : historique et facturation ne changent pas. Les entrées
+étrangères/compactées, accesseurs, champs inconnus et textes dépassant 512 Kio sont
+refusés. Core répare les groupes d’outils et conserve/remappe les éditions dans les
+copies. La primitive `SessionManager.appendContextEdit` accepte aussi `{signal}`.
+
+`recordSessionLoadout` / `getSessionLoadout` conservent/reconstruisent les deltas
+privés du prompt/outillage/modèle/thinking préparés au dernier instant avant appel.
+Les tours Core les enregistrent automatiquement ; la compaction garde leur
+checkpoint et les opérations déclarées des outils fichiers. `history()` est une
+lecture privilégiée pouvant contenir des instructions/schémas privés, pas un DTO
+public. `onBeforeCompaction` / `before:session:compaction` autorisent seulement le
+remplacement final `{summary}` ou le veto, sans changer source/borne/usage. Aucun
+import Pi, enregistrement d’outil historique ou appel de résumé implicite n’est ajouté.
 
 `rename`, `setModel`, `setThinking`, `branchBefore` et `applyCompaction` attendent
 la persistance Core. La compaction manuelle exige un résumé fourni et une borne

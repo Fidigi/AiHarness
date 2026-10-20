@@ -19,6 +19,7 @@ import { assertProviderRequestBudget, captureProviderRequestBudget, ProviderRequ
 import { ProviderRequestOptionsError } from './provider-request-options.js';
 import { captureProviderCallLabels, captureProviderMessages, prepareProviderPayload } from './provider-request-payload.js';
 import { AgentAbortError } from './tool-loop.js';
+import type { SessionManager } from '../sessions/session-manager.js';
 
 export interface StreamProviderTurnOptions {
   provider: AiProvider;
@@ -26,6 +27,8 @@ export interface StreamProviderTurnOptions {
   model?: string;
   /** Stable conversation identity for provider transports with bounded continuation caches. */
   sessionId?: string;
+  /** Owning hosts persist private post-hook loadout deltas before physical dispatch. */
+  sessionManager?: SessionManager;
   messages: Message[];
   tools: ChatToolDefinition[];
   systemPrompt?: string;
@@ -97,6 +100,8 @@ function abortableDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
  */
 export async function streamProviderTurn(options: StreamProviderTurnOptions): Promise<ChatResponse> {
   const contextBudget = captureProviderRequestBudget(options), signal = options.signal;
+  const sessionManager = options.sessionManager, sessionId = options.sessionId;
+  const sourceSession = sessionId ? sessionManager?.get(sessionId) : undefined;
   const current = (): void => { if (signal?.aborted) throw new AgentAbortError(); };
   current();
   const redactText = captureRedactor(options, 'redactText'), redactJson = captureRedactor(options, 'redactJson');
@@ -248,6 +253,16 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
         const requestMessages = prepared.data.messages, requestOptions = nativeOutput?.options ?? prepared.data.options;
         if (contextBudget) assertProviderRequestBudget(requestMessages, requestOptions, contextBudget,
           Math.max(prepared.requestedMaxTokens ?? 0, nativeOutput?.maxTokens ?? 0));
+        if (sessionManager && sessionId) {
+          if (!sourceSession || sessionManager.get(sessionId) !== sourceSession) throw new Error('Request session changed.');
+          await sessionManager.recordSessionLoadout(sessionId, {
+            provider: prepared.data.provider, model: requestOptions.model ?? null,
+            systemPrompt: requestOptions.systemPrompt ?? '', tools: requestOptions.tools ?? [],
+            thinking: requestOptions.thinking ?? null,
+          }, { signal });
+          current();
+          if (sessionManager.get(sessionId) !== sourceSession) throw new Error('Request session changed.');
+        }
         await streamChat(
           requestMessages,
           deliver,

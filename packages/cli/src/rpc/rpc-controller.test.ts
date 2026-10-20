@@ -438,7 +438,9 @@ describe('RPC command controller', () => {
       success: true,
       data: {
         tree: [{ entry: { message: { role: 'user' } }, children: [
-          { entry: { message: { role: 'assistant' } }, children: [] },
+          { entry: { type: 'loadout', changedFields: ['provider', 'model', 'systemPrompt', 'tools', 'thinking'] }, children: [
+            { entry: { message: { role: 'assistant' } }, children: [] },
+          ] },
         ] }],
         leafId: expect.any(String),
       },

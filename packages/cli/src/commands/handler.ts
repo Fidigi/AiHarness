@@ -19,6 +19,7 @@ import {
   getSummaryModelMessages,
   copyCompactionResponse,
   readCompactionSummary,
+  normalizeProviderUsage,
   isValidSessionId,
   resolveAgentCompactionContextWindow,
   resolveAgentCompactionSettings,
@@ -788,6 +789,7 @@ const commands: CommandEntry[] = [
       if (!sessions.length) return chalk.yellow('No active session to compact.');
       const session = (selectedSessionId && manager.get(selectedSessionId)) || sessions[0];
       const provider = ctx.provider, chat = provider?.chat.bind(provider);
+      const summaryProvider = provider?.getProviderType(), summaryModel = provider?.getConfiguredModel();
       const redactText = ctx.redactText?.bind(ctx) ?? ((value: string) => value);
       const redactJson = ctx.redactJson?.bind(ctx);
       const leaf = session.activeLeafId;
@@ -838,10 +840,12 @@ const commands: CommandEntry[] = [
         if (content && 'value' in content && content.value === '') return chalk.red('Compaction failed: no summary generated.');
         const ownedResponse = copyCompactionResponse(result);
         const summary = readCompactionSummary({ content: redactText(ownedResponse.content) });
-        await manager.applyCompaction(sessionId, summary, firstKeptId, {}, { signal, source });
+        await manager.applyCompaction(sessionId, summary, firstKeptId, { provider: summaryProvider,
+          model: ownedResponse.model ?? summaryModel, usage: normalizeProviderUsage(ownedResponse.usage) }, { signal, source });
+        const appliedSummary = typeof session.metadata?.compactionSummary === 'string' ? session.metadata.compactionSummary : summary;
         // Cancellation after final save admission must not turn durable success into failure.
         return chalk.green(`✅ Compacted ${chalk.bold(session.title || 'conversation')}\n` +
-          `   Summary: ${summary.slice(0, 100)}${summary.length > 100 ? '...' : ''}`);
+          `   Summary: ${appliedSummary.slice(0, 100)}${appliedSummary.length > 100 ? '...' : ''}`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return chalk.red(`Compaction failed: ${redactText(errorMessage)}`);

@@ -62,6 +62,47 @@ describe('real HTTP exact saved-entry copies, not generic clone tightening', () 
     } finally { load.mockRestore(); startRun.mockRestore(); chat.mockRestore(); stream.mockRestore(); }
   });
 
+  it('keeps edited model input and private historical checkpoints across actual HTTP runs, compaction, copies and DTOs', async () => {
+    const manager = services.sessionManager, session = await manager.create({ cwd: root });
+    await manager.addMessage(session.id, { role: 'user', content: 'Original user' });
+    await manager.addMessage(session.id, { role: 'assistant', content: 'ORIGINAL_HTTP_ANSWER' });
+    const target = session.activeLeafId!;
+    await manager.recordSessionLoadout(session.id, { provider: 'mock', model: 'mock-model', thinking: null,
+      systemPrompt: 'PRIVATE_HTTP_HISTORICAL_PROMPT', tools: [] });
+    await manager.appendContextEdit(session.id, { targetEntryId: target, replacement: 'HTTP_MODEL_REPLACEMENT' });
+    const copied = await request(session.id, { entryId: session.activeLeafId }); expect(copied.status).toBe(201);
+    const copy = await copied.json();
+    expect(copy.messages.at(-1).content).toBe('ORIGINAL_HTTP_ANSWER');
+    expect(JSON.stringify(copy)).not.toContain('PRIVATE_HTTP_HISTORICAL_PROMPT');
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+    expect((await fetch(`${base}/api/workspaces/trust`, { method: 'POST', headers, body: JSON.stringify({ cwd: root, confirm: true }) })).status).toBe(200);
+    const stream = vi.spyOn(MockProvider.prototype, 'streamChat').mockImplementation(async (messages, _chunk, complete, _error, options) => {
+      const payload = JSON.stringify(messages);
+      expect(payload).toContain('HTTP_MODEL_REPLACEMENT'); expect(payload).not.toContain('ORIGINAL_HTTP_ANSWER');
+      expect(JSON.stringify(options)).not.toContain('PRIVATE_HTTP_HISTORICAL_PROMPT');
+      complete?.({ content: 'Finished HTTP run', model: 'mock-model' });
+    });
+    const chat = vi.spyOn(MockProvider.prototype, 'chat').mockImplementation(async messages => {
+      expect(JSON.stringify(messages)).toContain('HTTP_MODEL_REPLACEMENT');
+      expect(JSON.stringify(messages)).not.toContain('PRIVATE_HTTP_HISTORICAL_PROMPT');
+      return { content: 'HTTP summary', model: 'mock-model', usage: { promptTokens: 11, completionTokens: 2, totalTokens: 13, costUsd: 0.02 } };
+    });
+    try {
+      const started = await fetch(`${base}/api/agent/runs`, { method: 'POST', headers,
+        body: JSON.stringify({ sessionId: copy.id, cwd: root, provider: 'mock', input: 'Continue' }) });
+      expect(started.status).toBe(202); await services.agentRuntime.wait((await started.json()).run.id);
+      expect(stream).toHaveBeenCalledOnce();
+      const compacted = await fetch(`${base}/api/agent/sessions/${copy.id}/compact`, { method: 'POST', headers, body: JSON.stringify({ provider: 'mock' }) });
+      expect(compacted.status).toBe(200); expect(JSON.stringify(await compacted.json())).not.toContain('PRIVATE_HTTP_HISTORICAL_PROMPT');
+      const compact = (await manager.getRawEntries(copy.id)).findLast(entry => entry.type === 'compaction');
+      expect(compact).toMatchObject({ provider: 'mock', model: 'mock-model', usage: { inputTokens: 11, outputTokens: 2, costUsd: 0.02 },
+        checkpoint: { loadout: { provider: 'mock' } } });
+      const reloaded = new SessionManager({ store: services.sessionStore }); await reloaded.loadFromStore(copy.id);
+      expect(reloaded.getEffectiveContext(copy.id)).toEqual(manager.getEffectiveContext(copy.id));
+      expect((await reloaded.getRawEntries(copy.id)).some(entry => entry.type === 'message' && entry.content === 'ORIGINAL_HTTP_ANSWER')).toBe(true);
+    } finally { stream.mockRestore(); chat.mockRestore(); }
+  });
+
   it('copies the exact current saved leaf during a real run without stopping/restarting/changing the source', async () => {
     const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
     expect((await fetch(`${base}/api/workspaces/trust`, { method: 'POST', headers, body: JSON.stringify({ cwd: root, confirm: true }) })).status).toBe(200);

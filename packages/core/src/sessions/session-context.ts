@@ -1,5 +1,6 @@
 import type { MessageEntry, SessionEntry } from './session-manager.js';
 import type { MessageContentBlock, Session, ToolCall } from '../types/index.js';
+import { applyContextEdits } from './session-context-state.js';
 
 export function sessionEntryParent(entry: SessionEntry): string | undefined {
   return entry.type === 'message' ? entry.parentMessageId
@@ -175,19 +176,22 @@ export function contextEntryMessages(entry: SessionEntry): MessageEntry[] {
 /** The newest compaction replaces only its prefix, not retained entries or later summaries. */
 export function projectContextPath(path: readonly SessionEntry[]): MessageEntry[] {
   const compactionIndex = path.map(entry => entry.type).lastIndexOf('compaction');
-  if (compactionIndex < 0) return completeContextToolGroups(path.flatMap(contextEntryMessages));
+  if (compactionIndex < 0) return completeContextToolGroups(applyContextEdits(path.flatMap(contextEntryMessages), path));
   const compaction = path[compactionIndex];
   if (compaction.type !== 'compaction') return [];
   const firstKept = path.findIndex(entry => entry.id === compaction.firstKeptEntryId
     || `context-${entry.id}` === compaction.firstKeptEntryId);
   // A missing retained boundary is not permission to revive the compacted prefix.
   const kept = firstKept >= 0 && firstKept < compactionIndex ? path.slice(firstKept, compactionIndex) : [];
-  return completeContextToolGroups([
+  const files = compaction.checkpoint?.fileOperations;
+  const fileContext = files ? (['read', 'written', 'edited'] as const).flatMap(kind => files[kind].length
+    ? [`${kind}: ${JSON.stringify(files[kind])}`] : []).join('\n') : '';
+  return completeContextToolGroups(applyContextEdits([
     { id: compaction.id, type: 'message', role: 'system', timestamp: compaction.timestamp,
-      content: `[Context Summary] ${compaction.summary}` },
+      content: `[Context Summary] ${compaction.summary}${fileContext ? `\n[File operations]\n${fileContext}${files?.truncated ? '\n[File list truncated]' : ''}` : ''}` },
     ...kept.flatMap(contextEntryMessages),
     ...path.slice(compactionIndex + 1).flatMap(contextEntryMessages),
-  ]);
+  ], path));
 }
 
 /** Canonical raw ancestry for model projection; private entries remain raw, never formatted here. */

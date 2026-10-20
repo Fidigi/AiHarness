@@ -282,6 +282,36 @@ beforeAll(async () => {
 afterAll(async () => { if (artifactRoot) await rm(artifactRoot, { recursive: true, force: true }); });
 
 describe('CLI-RUN-01 genuine locally packed installed executable', () => {
+  it.each(['print', 'json', 'rpc', 'sdk'])('replays native context edits and private checkpoints through installed packages (%s)', async mode => {
+    const probe = `session-context-state-${mode}.mjs`;
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/session-context-state-probe.mjs'), path.join(consumer, probe));
+    expect(await run(process.execPath, [probe, mode], consumer, { ...environment, AIH_CONTEXT_STATE_COMMAND: 'ai-harness' }, '', 15_000))
+      .toEqual({ code: 0, stdout: 'session context state OK\n', stderr: '' });
+  }, 20_000);
+
+  it('publishes owned native context-state and output-only compaction declarations', async () => {
+    await writeFile(path.join(consumer, 'context-state-public.ts'), `
+      import { SessionManager, type SessionLoadout, type SessionContextEdit, type ContextEditEntry, type LoadoutEntry,
+        type SessionCompactionEvent } from '@ai-harness/core';
+      import type { AgentSession } from '@ai-harness/core';
+      const manager = new SessionManager();
+      const edit: SessionContextEdit = { targetEntryId: 'entry', replacement: '' };
+      const append: Promise<ContextEditEntry | null> = manager.appendContextEdit('session', edit);
+      const loadout: SessionLoadout = { provider: 'mock', model: null, systemPrompt: '', tools: [], thinking: null };
+      const record: Promise<LoadoutEntry | null> = manager.recordSessionLoadout('session', loadout);
+      manager.onBeforeCompaction((event: SessionCompactionEvent) => ({ summary: event.summary }));
+      declare const sdk: AgentSession;
+      const mutation: Promise<void> = sdk.editContext(edit);
+      // @ts-expect-error A context replacement cannot invent a tool call.
+      manager.appendContextEdit('session', { targetEntryId: 'entry', toolCalls: [] });
+      // @ts-expect-error Compaction hooks cannot redirect a cut.
+      manager.onBeforeCompaction(() => ({ firstKeptEntryId: 'foreign' }));
+      void [append, record, mutation];
+    `);
+    const result = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext',
+      '--moduleResolution', 'NodeNext', '--types', 'node', 'context-state-public.ts'], consumer, environment);
+    expect(result.stdout).toBe(''); expect(result.stderr).toBe('');
+  });
   it('uses native exact-entry row copies and declarations outside the checkout', async () => {
     const probe = 'session-row-copy-public.mjs';
     await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/session-row-copy-probe.mjs'), path.join(consumer, probe));

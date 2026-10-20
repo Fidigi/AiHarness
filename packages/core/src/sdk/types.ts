@@ -9,6 +9,7 @@ import type { SerializedSession } from '../sessions/serialization.js';
 import type { AgentResourceLoader } from './resource-loader.js';
 import type { ResourceInventoryItem } from '../resources/resource-manager.js';
 import type { SessionStore } from './session-store.js';
+import type { SessionContextEdit } from '../sessions/session-context-state.js';
 
 export type AgentModel = ModelCatalogEntry;
 export type AgentCredential = ProviderCredential;
@@ -122,6 +123,8 @@ export interface AgentSession {
   rename(title: string): Promise<void>;
   setModel(model: string): Promise<void>;
   setThinking(thinking: Session['thinking']): Promise<void>;
+  /** Append a branch-relative future-context omission/replacement, never rewrite history or billing. */
+  editContext(edit: SessionContextEdit): Promise<void>;
   /** Existing copy fork: durable user entries only, optional empty prefix. */
   fork(entryId: string, options?: { title?: string; before?: boolean }): Promise<AgentSession>;
   branchBefore(entryId: string): Promise<Message>;

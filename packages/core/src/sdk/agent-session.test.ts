@@ -138,6 +138,10 @@ describe('high-level Core session SDK', () => {
     replay.events[0].type = 'notice';
     expect(sdk.events().events[0].type).not.toBe('notice');
     expect(deserializeSession(sdk.exportSession()).messages[0].timestamp).toBeInstanceOf(Date);
+    const originalMessages = sdk.messages(), originalUsage = sdk.snapshot().usage;
+    await sdk.editContext({ targetEntryId: originalMessages[0].id, replacement: 'Owned future input' });
+    expect(sdk.messages()).toEqual(originalMessages); expect(sdk.snapshot().usage).toEqual(originalUsage);
+    expect(sdk.effectiveContext()[0]).toMatchObject({ content: 'Owned future input' });
     unsubscribe(); unsubscribe();
     await sdk.rename('named');
     expect(sdk.snapshot().title).toBe('named');
@@ -162,6 +166,7 @@ describe('high-level Core session SDK', () => {
     await aborted.promise;
     await expect(sdk.rename('too early')).rejects.toThrow(/busy/);
     await expect(sdk.clone()).rejects.toThrow(/busy/);
+    await expect(sdk.editContext({ targetEntryId: sdk.messages()[0].id })).rejects.toThrow(/busy/);
     await expect(sdk.prompt('too early')).rejects.toThrow(/busy/);
     released.resolve();
     expect((await waiting)?.phase).toBe('stopped');

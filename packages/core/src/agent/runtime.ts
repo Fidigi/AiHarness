@@ -685,6 +685,7 @@ export class AgentRuntime {
           providerName: run.snapshot.provider,
           model: request.model,
           sessionId: run.snapshot.sessionId,
+          sessionManager: this.sessionManager,
           messages: currentMessages.length ? currentMessages : messages,
           contextBudget,
           tools: definitions,

@@ -30,6 +30,8 @@ import {
 import type { BranchNavigationOptions, BranchNavigationResult, BranchSummaryEvent, BranchSummaryHook, BranchSummaryOutput } from './branch-summarization.js';
 import { copyBranchSummaryAccounting, copyBranchSummaryEvent, copyBranchSummaryOutput } from './session-branch-summary.js';
 import { copySessionCustomValue } from './session-custom-data.js';
+import { collectFileOperations, copyContextEdit, copyLoadout, loadoutChanges, reconstructLoadout, validContextStateEntry } from './session-context-state.js';
+import type { SessionContextEdit, SessionLoadout, SessionCompactionCheckpoint } from './session-context-state.js';
 import { selectCompactionCut } from './compaction-cut.js';
 import { assertCompactionTranscript, copyAutomaticCompactionResult, readCompactionSummary } from './compaction-generation.js';
 import {
@@ -44,7 +46,7 @@ import type { SessionBranchHook, SessionBranchOptions, SessionBranchTicket } fro
 /** Base entry stored in the JSONL file */
 export interface SessionEntryBase {
   id: string;
-  type: 'message' | 'command' | 'compaction' | 'branch_summary' | 'custom' | 'custom_message' | 'metadata';
+  type: 'message' | 'command' | 'compaction' | 'branch_summary' | 'custom' | 'custom_message' | 'context_edit' | 'loadout' | 'metadata';
   timestamp: number; // Unix timestamp (ms)
   /** Missing on legacy entries. */
   version?: typeof SESSION_SCHEMA_VERSION;
@@ -84,12 +86,27 @@ export interface CommandEntry extends SessionEntryBase {
   downloadPath?: string;
 }
 
+/** Append-only, branch-relative model projection; never a transcript or billing mutation. */
+export interface ContextEditEntry extends SessionEntryBase, SessionContextEdit {
+  type: 'context_edit';
+  parentEntryId?: string;
+}
+
+/** Private field-replacement deltas of the final effective request loadout. */
+export interface LoadoutEntry extends SessionEntryBase {
+  type: 'loadout';
+  parentEntryId?: string;
+  changes: Partial<SessionLoadout>;
+}
+
 /** Compaction summary entry */
 export interface CompactionEntry extends SessionEntryBase {
   type: 'compaction';
   parentEntryId?: string;
   summary: string;
   firstKeptEntryId: string; // ID of the first model-visible entry kept after compaction
+  /** Private historical state, never copied into session metadata or browser DTOs. */
+  checkpoint?: SessionCompactionCheckpoint;
   tokenEstimate?: number;
   instruction?: string;
   tokensBefore?: number;
@@ -157,8 +174,8 @@ export interface SessionMetadataEntry extends SessionEntryBase {
 }
 
 export type SessionEntry = MessageEntry | CommandEntry | CompactionEntry | BranchSummaryEntry
-  | CustomSessionEntry | CustomMessageEntry | SessionMetadataEntry;
-type RestorableSessionEntry = BranchSummaryEntry | CompactionEntry | CustomSessionEntry | CustomMessageEntry;
+  | CustomSessionEntry | CustomMessageEntry | ContextEditEntry | LoadoutEntry | SessionMetadataEntry;
+type RestorableSessionEntry = BranchSummaryEntry | CompactionEntry | CustomSessionEntry | CustomMessageEntry | ContextEditEntry | LoadoutEntry;
 
 // Associate an exact, admitted load/write with its owned journal without reopening
 // a path after commit, changing public store return types or persisting a cache.
@@ -214,7 +231,11 @@ function isSessionEntry(value: unknown): value is SessionEntry {
         && (entry.provider === undefined || typeof entry.provider === 'string')
         && (entry.model === undefined || typeof entry.model === 'string')
         && (entry.usage === undefined || isPersistedUsage(entry.usage))
-        && typeof entry.summary === 'string' && typeof entry.firstKeptEntryId === 'string';
+        && typeof entry.summary === 'string' && typeof entry.firstKeptEntryId === 'string'
+        && validContextStateEntry(entry);
+    case 'context_edit':
+    case 'loadout':
+      return (entry.parentEntryId === undefined || typeof entry.parentEntryId === 'string') && validContextStateEntry(entry);
     case 'custom':
     case 'custom_message':
       return (entry.parentEntryId === undefined || typeof entry.parentEntryId === 'string')
@@ -1403,6 +1424,17 @@ export interface SessionCompactionSource { readonly sourceSessionId: string; rea
 /** Optional caller lifetime/source for explicit summary publication; admitted saves still finish. */
 export interface SessionCompactionOptions { signal?: AbortSignal; source?: SessionCompactionSource }
 
+/** Output-only admission: cannot redirect the source/cut, supply accounting or authorize model work. */
+export interface SessionCompactionEvent {
+  readonly sessionId: string;
+  readonly firstKeptEntryId: string;
+  readonly summary: string;
+  readonly maxOutputBytes: number;
+  readonly signal: AbortSignal;
+}
+export type SessionCompactionHook = (event: Readonly<SessionCompactionEvent>) => void | false | { summary: string }
+  | Promise<void | false | { summary: string }>;
+
 const compactionAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')!.get!;
 function isCompactionAborted(signal?: AbortSignal): boolean {
   if (!signal) return false;
@@ -1475,6 +1507,8 @@ export class SessionManager {
   private emitter = new EventEmitter<EventMap>();
   private readonly branchAdmissions = new SessionBranchAdmissions();
   private readonly branchSummaryHooks = new Map<symbol, BranchSummaryHook>();
+  private readonly compactionHooks = new Map<symbol, SessionCompactionHook>();
+  private compactionHookGeneration = 0;
   private readonly sessionMutationTails = new Map<string, Promise<void>>();
   private readonly autoCompactionRuns = new Map<string, Promise<boolean>>();
   private activeSessionMutations = 0;
@@ -1637,14 +1671,14 @@ export class SessionManager {
         provider: output.provider,
         model: output.model,
         usage: output.usage,
-      }, validateAdmission, admission.admit, 16_384, true);
+      }, validateAdmission, admission.admit, 16_384, true, signal);
       if (!applied) throw new Error('Compaction context or policy changed.');
       await this.emitter.emit('compaction:end', {
         sessionId,
-        summaryLength: summary.length,
+        summaryLength: String(session.metadata?.compactionSummary ?? summary).length,
         automatic: true,
         tokensBefore,
-        tokensAfter,
+        tokensAfter: (session.metadata?.compactionStats as CompactionDetails | undefined)?.tokensAfter ?? tokensAfter,
         tokensSaved: Math.max(0, tokensBefore - tokensAfter),
       });
       return true;
@@ -1700,6 +1734,13 @@ export class SessionManager {
   /** Host generation withdrawal; future operations use the current registrations. */
   retirePendingBranchOperations(): void {
     this.branchAdmissions.retire();
+    this.compactionHookGeneration++;
+  }
+
+  onBeforeCompaction(hook: SessionCompactionHook): () => void {
+    if (typeof hook !== 'function' || this.compactionHooks.size >= 128) throw new Error('Compaction hook is invalid.');
+    const key = Symbol(); this.compactionHooks.set(key, hook); this.compactionHookGeneration++;
+    return () => { if (this.compactionHooks.delete(key)) this.compactionHookGeneration++; };
   }
 
   private async withBranchTicket<T>(sourceSessionId: string, signal: AbortSignal | undefined,
@@ -1905,7 +1946,7 @@ export class SessionManager {
         }
       } else {
         if (entry.type === 'custom') copySessionCustomValue(entry.data);
-        else copySessionCustomValue(entry.details);
+        else if (entry.type === 'custom_message') copySessionCustomValue(entry.details);
         boundedSessionJson(entry, 2 * 1024 * 1024, 'Custom session entry exceeds its size limit.');
       }
       entryIds.add(entry.id);
@@ -2258,7 +2299,7 @@ export class SessionManager {
     let entries: MessageEntry[];
     if (journal && (session.metadata?.hasBranchedHistory === true || readLegacyCompactionPrefix(session.metadata) !== undefined
       || journal.some(entry => entry.type === 'compaction' || entry.type === 'branch_summary'
-        || entry.type === 'custom' || entry.type === 'custom_message'))) {
+        || entry.type === 'custom' || entry.type === 'custom_message' || entry.type === 'context_edit' || entry.type === 'loadout'))) {
       entries = structuredClone(projectSessionContext(journal, session.activeLeafId,
         session.metadata?.hasBranchedHistory === true, session.metadata?.activeLeafReset === true,
         typeof session.metadata?.legacyRootBoundaryId === 'string' ? session.metadata.legacyRootBoundaryId : undefined));
@@ -2401,7 +2442,8 @@ export class SessionManager {
       admission.check();
     };
     validate();
-    const applied = await this.applyCompactionResult(sessionId, summary, firstKeptEntryId, details, validate, admission.admit);
+    const applied = await this.applyCompactionResult(sessionId, summary, firstKeptEntryId, details, validate, admission.admit,
+      1024 * 1024, false, signal);
     // Legacy four-slot invalid boundaries remain no-ops. A captured publication must
     // report refusal, never let a generation owner publish a false completion event.
     if (!applied && source) throw new Error('Compaction boundary is not an active model entry.');
@@ -2416,9 +2458,32 @@ export class SessionManager {
     admit?: () => void,
     maxSummaryBytes = 1024 * 1024,
     preparedSummary = false,
+    signal?: AbortSignal,
   ): Promise<boolean> {
     if (!preparedSummary) summary = this.redactText(summary);
+    const originalSummaryTokens = TokenEstimator.estimateTokens(summary);
+    const hookGeneration = this.compactionHookGeneration;
+    const checkHooks = (): void => {
+      validateAdmission?.();
+      if (hookGeneration !== this.compactionHookGeneration) throw new Error('Compaction hook generation changed.');
+    };
+    for (const hook of [...this.compactionHooks.values()]) {
+      checkHooks();
+      const result = await hook(Object.freeze({ sessionId, firstKeptEntryId, summary, maxOutputBytes: maxSummaryBytes,
+        signal: signal ?? new AbortController().signal }));
+      checkHooks();
+      if (result === false) throw new DOMException('Compaction cancelled by a hook.', 'AbortError');
+      if (result !== undefined) {
+        const copied = copySessionCustomValue(result) as { summary: string };
+        if (!copied || Object.keys(copied).length !== 1 || typeof copied.summary !== 'string'
+          || !copied.summary.trim() || Buffer.byteLength(copied.summary) > maxSummaryBytes) throw new Error('Compaction hook result is invalid.');
+        summary = this.redactText(copied.summary);
+      }
+    }
     details = this.redactJson(details);
+    if (details.tokensAfter !== undefined && Number.isSafeInteger(details.tokensAfter) && details.tokensAfter >= 0) {
+      details = { ...details, tokensAfter: Math.max(0, details.tokensAfter - originalSummaryTokens + TokenEstimator.estimateTokens(summary)) };
+    }
     if (!summary.trim() || Buffer.byteLength(summary) > maxSummaryBytes || !isValidEntryId(firstKeptEntryId)
       || (details.instruction !== undefined && (typeof details.instruction !== 'string'
         || Buffer.byteLength(details.instruction) > 1024 * 1024))
@@ -2459,6 +2524,16 @@ export class SessionManager {
         validateAdmission?.();
       }
 
+      const rawPath = sessionContextPath(this.committedEntries.get(sessionId) ?? this.volatileEntries.get(sessionId) ?? [],
+        session.activeLeafId, session.metadata?.hasBranchedHistory === true, session.metadata?.activeLeafReset === true,
+        typeof session.metadata?.legacyRootBoundaryId === 'string' ? session.metadata.legacyRootBoundaryId : undefined);
+      const loadout = reconstructLoadout(rawPath);
+      const modelContext = this.getEffectiveContext(sessionId).filter((entry): entry is MessageEntry => entry.type === 'message');
+      const boundaryIndex = modelContext.findIndex(entry => entry.id === firstKeptEntryId);
+      const splitUserEntryId = boundaryIndex >= 0 && modelContext[boundaryIndex].role !== 'user'
+        ? modelContext.slice(0, boundaryIndex).reverse().find(entry => entry.role === 'user')?.id : undefined;
+      const checkpoint: SessionCompactionCheckpoint = this.redactJson({ ...(loadout ? { loadout } : {}),
+        fileOperations: collectFileOperations(rawPath), ...(splitUserEntryId ? { splitUserEntryId } : {}) });
       const updatedAt = new Date();
       const compactionEntry: CompactionEntry = {
         id: `compaction-${crypto.randomUUID()}`,
@@ -2467,10 +2542,12 @@ export class SessionManager {
         ...(session.activeLeafId ? { parentEntryId: session.activeLeafId } : {}),
         summary: summary.trim(),
         firstKeptEntryId,
+        checkpoint,
         tokenEstimate: TokenEstimator.totalMessages(messages.map(messageToEntry)),
         timestamp: updatedAt.getTime(),
         ...details,
       };
+      if (!validContextStateEntry(compactionEntry as unknown as Record<string, unknown>)) throw new Error('Compaction checkpoint is invalid.');
       const next: Session = {
         ...session,
         messages,
@@ -2487,7 +2564,7 @@ export class SessionManager {
       };
       // Structural-store preparation may await after the mutation-queue check.
       // Revalidate immediately before its captured save, not after an admitted write.
-      await this.persistSession(next, [compactionEntry], {}, () => { validateAdmission?.(); admit?.(); });
+      await this.persistSession(next, [compactionEntry], {}, () => { checkHooks(); admit?.(); });
       Object.assign(session, next);
       if (!this.usesSessionStore()) this.volatileEntries.get(sessionId)?.push(compactionEntry);
       return true;
@@ -2598,16 +2675,65 @@ export class SessionManager {
     });
   }
 
-  private async appendCustomSessionEntry<T extends CustomSessionEntry | CustomMessageEntry>(
-    sessionId: string, value: T,
+  /** Owned historical state only; it never supplies current execution authority. */
+  getSessionLoadout(sessionId: string): SessionLoadout | undefined {
+    const session = this.sessions.get(sessionId);
+    if (!session) return undefined;
+    return reconstructLoadout(sessionContextPath(this.committedEntries.get(sessionId) ?? this.volatileEntries.get(sessionId) ?? [],
+      session.activeLeafId, session.metadata?.hasBranchedHistory === true, session.metadata?.activeLeafReset === true,
+      typeof session.metadata?.legacyRootBoundaryId === 'string' ? session.metadata.legacyRootBoundaryId : undefined));
+  }
+
+  async appendContextEdit(sessionId: string, edit: SessionContextEdit, options: SessionBranchOptions = {}): Promise<ContextEditEntry | null> {
+    const copied = copyContextEdit(this.redactJson(copyContextEdit(edit)));
+    const value: ContextEditEntry = { ...copied, id: `context-edit-${crypto.randomUUID()}`,
+      type: 'context_edit', version: SESSION_SCHEMA_VERSION, timestamp: Date.now() };
+    return this.appendCustomSessionEntry(sessionId, value, () => {
+      const target = this.getEffectiveContext(sessionId).find(entry => entry.id === copied.targetEntryId
+        || (entry.type === 'message' && entry.metadata?.sourceCommandId === copied.targetEntryId));
+      // Repeated edits may restore an omitted entry on the same active path, but cannot edit a compacted prefix.
+      const session = this.sessions.get(sessionId)!;
+      const path = sessionContextPath(this.committedEntries.get(sessionId) ?? this.volatileEntries.get(sessionId) ?? [],
+        session.activeLeafId, session.metadata?.hasBranchedHistory === true, session.metadata?.activeLeafReset === true,
+        typeof session.metadata?.legacyRootBoundaryId === 'string' ? session.metadata.legacyRootBoundaryId : undefined);
+      const withoutEdits = projectContextPath(path.filter(entry => entry.type !== 'context_edit'));
+      const original = withoutEdits.find(entry => entry.id === copied.targetEntryId || entry.metadata?.sourceCommandId === copied.targetEntryId);
+      if (!target && !original) throw new Error('Context edit target is not an active model entry.');
+      // Persist a command's raw identity, not its model-only context- alias.
+      const commandId = original?.metadata?.sourceCommandId;
+      if (typeof commandId === 'string') value.targetEntryId = commandId;
+    }, options);
+  }
+
+  async recordSessionLoadout(sessionId: string, loadout: SessionLoadout, options: SessionBranchOptions = {}): Promise<LoadoutEntry | null> {
+    const copied = copyLoadout(this.redactJson(copyLoadout(loadout)));
+    const value: LoadoutEntry = { id: `loadout-${crypto.randomUUID()}`, type: 'loadout', version: SESSION_SCHEMA_VERSION,
+      timestamp: Date.now(), changes: copied };
+    return this.appendCustomSessionEntry(sessionId, value, () => {
+      value.changes = loadoutChanges(this.getSessionLoadout(sessionId), copied);
+      return Object.keys(value.changes).length ? undefined : false;
+    }, options);
+  }
+
+  private async appendCustomSessionEntry<T extends CustomSessionEntry | CustomMessageEntry | ContextEditEntry | LoadoutEntry>(
+    sessionId: string, value: T, prepare?: () => void | false, options: SessionBranchOptions = {},
   ): Promise<T | null> {
-    if (typeof value.customType !== 'string' || !value.customType || !isBoundedSessionString(value.customType, 256)) {
+    if ((value.type === 'custom' || value.type === 'custom_message')
+      && (typeof value.customType !== 'string' || !value.customType || !isBoundedSessionString(value.customType, 256))) {
       throw new Error('Custom session type is invalid.');
     }
     boundedSessionJson(value, 2 * 1024 * 1024, 'Custom session entry exceeds its size limit.');
+    const { signal } = copySessionBranchOptions(options);
+    const store = this.store, generation = this.storeGeneration;
+    const check = (): void => {
+      if (isCompactionAborted(signal)) throw new DOMException('Session context operation cancelled.', 'AbortError');
+      if (this.store !== store || this.storeGeneration !== generation) throw new Error('Session store changed.');
+    };
     const result = await this.withSessionMutation(sessionId, async () => {
+      check();
       const current = this.sessions.get(sessionId);
       if (!current) return null;
+      if (prepare?.() === false) return null;
       const entry = { ...value, ...(current.activeLeafId ? { parentEntryId: current.activeLeafId } : {}) };
       if (!this.usesSessionStore()) {
         const journal = this.volatileEntries.get(sessionId) ?? [];
@@ -2617,7 +2743,7 @@ export class SessionManager {
         boundedSessionJson([...journal, entry], MAX_SESSION_FILE_BYTES, 'Session file exceeds its size limit.');
       }
       const next: Session = { ...current, activeLeafId: entry.id, updatedAt: new Date() };
-      await this.persistSession(next, [entry]);
+      await this.persistSession(next, [entry], {}, check);
       Object.assign(current, next);
       if (!this.usesSessionStore()) this.volatileEntries.get(sessionId)?.push(entry);
       return structuredClone(entry);
@@ -2884,7 +3010,7 @@ export class SessionManager {
       })) return null;
     }
     const compacted = prefix.some(entry => entry.type === 'compaction');
-    const effectiveIds = compacted ? new Set(projectContextPath(prefix).map(entry => entry.id)) : undefined;
+    const effectiveIds = compacted ? new Set(projectContextPath(prefix.filter(entry => entry.type !== 'context_edit')).map(entry => entry.id)) : undefined;
     const messages = prefix.flatMap(entry => {
       if (entry.type !== 'message' || effectiveIds && !effectiveIds.has(entry.id)) return [];
       const message = messageFromEntry(entry);
@@ -3189,7 +3315,8 @@ export class SessionManager {
     const selectedLeaf = throughMessageIndex === undefined ? original.activeLeafId : sourceMessages.at(-1)?.id;
     if (!sessionEntryPath(graph, selectedLeaf).complete) return null;
     const sourceEntries = [...new Map(graph.filter((entry): entry is RestorableSessionEntry => entry.type === 'branch_summary'
-      || entry.type === 'compaction' || entry.type === 'custom' || entry.type === 'custom_message').map(entry => [entry.id, entry])).values()];
+      || entry.type === 'compaction' || entry.type === 'custom' || entry.type === 'custom_message'
+      || entry.type === 'context_edit' || entry.type === 'loadout').map(entry => [entry.id, entry])).values()];
     const sourceSummaries = sourceEntries.filter((entry): entry is BranchSummaryEntry => entry.type === 'branch_summary');
     const parents = new Map(graph.filter(entry => entry.type !== 'metadata').map(entry => [entry.id, sessionEntryParent(entry)]));
     for (const message of sourceMessages) parents.set(message.id, message.parentMessageId ?? parents.get(message.id));
@@ -3231,7 +3358,11 @@ export class SessionManager {
     };
     const clonedEntries: RestorableSessionEntry[] = structuredClone(retainedEntries).map(entry => {
       const base = { id: extraIds.get(entry.id)!, parentEntryId: entry.parentEntryId ? remapParent(entry.parentEntryId) : undefined };
+      if (entry.type === 'context_edit') return { ...entry, ...base,
+        targetEntryId: copiedId(entry.targetEntryId) ?? entry.targetEntryId };
       if (entry.type === 'compaction') {
+        if (entry.checkpoint?.splitUserEntryId) entry.checkpoint.splitUserEntryId = copiedId(entry.checkpoint.splitUserEntryId)
+          ?? entry.checkpoint.splitUserEntryId;
         const commandBoundary = [...commandIds].find(([source]) => entry.firstKeptEntryId === `context-${source}`)?.[1];
         return { ...entry, ...base, firstKeptEntryId: copiedId(entry.firstKeptEntryId)
           ?? (commandBoundary ? `context-${commandBoundary}` : undefined)

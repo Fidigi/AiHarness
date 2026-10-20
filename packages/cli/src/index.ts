@@ -1670,6 +1670,7 @@ async function main(): Promise<void> {
           providerName,
           model: providerModel,
           sessionId: currentSessionId,
+          sessionManager,
           messages,
           tools,
           systemPrompt: instructionSystemPrompt,

@@ -23,13 +23,14 @@ describe('A3-CLI-19 actual manual summary provider transcript', () => {
     const before=await manager.getRawEntries(session.id), calls: Message[][]=[];
     class SummaryProvider extends MockProvider {
       override validateConfig(){return true;}
-      override async chat(messages:Message[]){calls.push(structuredClone(messages));return{content:'PUBLIC_SUMMARY'};}
+      override async chat(messages:Message[]){calls.push(structuredClone(messages));return{content:'PUBLIC_SUMMARY',model:'mock-model',usage:{promptTokens:11,completionTokens:2,totalTokens:13,costUsd:0.02}};}
     }
     const provider=new SummaryProvider({type:'mock'});
     const errors=vi.fn(), output=vi.fn();
     const terminal={showError:errors,writeOutput:output} as unknown as TerminalUI;
     const handler=new CommandHandler(manager,store,terminal,undefined,undefined,{cwd:root,providers:new Map([['mock',provider]])});
     handler.getContext().currentSessionId=session.id;
+    if(kind==='ordinary')manager.onBeforeCompaction(()=>({summary:'OVERRIDE_PUBLIC_SUMMARY'}));
     await handler.execute('/compact');
     expect(errors).not.toHaveBeenCalled();expect(calls).toHaveLength(1);
     const transcript=JSON.stringify(calls[0]);
@@ -37,5 +38,8 @@ describe('A3-CLI-19 actual manual summary provider transcript', () => {
     for(const text of ['PRIVATE_THINKING','PRIVATE_SIGNATURE','PRIVATE_STATE','RETAINED_USER'])expect(transcript).not.toContain(text);
     const after=await manager.getRawEntries(session.id);
     expect(after.slice(0,before.length)).toEqual(before);expect(after.some(entry=>entry.type==='compaction')).toBe(true);
+    expect(after.findLast(entry=>entry.type==='compaction')).toMatchObject({provider:'mock',model:'mock-model',
+      summary:kind==='ordinary'?'OVERRIDE_PUBLIC_SUMMARY':'PUBLIC_SUMMARY',usage:{inputTokens:11,outputTokens:2,costUsd:0.02}});
+    if(kind==='ordinary')expect(output.mock.calls.flat().join('\n')).toContain('OVERRIDE_PUBLIC_SUMMARY');
   });
 });

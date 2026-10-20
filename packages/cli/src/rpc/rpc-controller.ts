@@ -1040,6 +1040,26 @@ export class RpcController {
             .map(message => ({ entryId: message.id, text: message.content }));
           return success(id, command, { messages });
         }
+        case 'context_edit': {
+          for (const key of Object.keys(request)) {
+            if (!['type', 'id', 'targetEntryId', 'replacement'].includes(key)) throw new Error('Unknown context_edit field.');
+          }
+          if (request.replacement !== undefined && typeof request.replacement !== 'string') throw new Error('replacement must be a string.');
+          const sourceId = this.currentSessionId, edit = {
+            targetEntryId: requiredString(request.targetEntryId, 'targetEntryId'),
+            ...(request.replacement !== undefined ? { replacement: request.replacement as string } : {}),
+          };
+          const result = await this.withBranchNavigation(command, sourceId, async signal => {
+            if (this.promptAdmission) throw new Error('context_edit is not available while prompt admission is processing.');
+            try { return await this.context.sessionManager.appendContextEdit(sourceId, edit, { signal }); }
+            catch (error) {
+              if (signal.aborted && error instanceof Error && error.name === 'AbortError') throw new SessionBranchCancelledError();
+              throw error;
+            }
+          });
+          return success(id, command, result.cancelled ? { cancelled: true }
+            : { cancelled: false, entryId: result.value?.id, leafId: this.session().activeLeafId });
+        }
         case 'get_entries': {
           let entries = await this.entries();
           const leafId = this.leafId(entries);
@@ -1310,7 +1330,8 @@ export class RpcController {
                   providerName: this.context.providerName,
                   model: this.model,
                   sessionId: this.currentSessionId,
-                  messages: this.withBashContext(messages),
+                  sessionManager: this.context.sessionManager,
+                  messages,
                   tools,
                   systemPrompt: this.context.systemPrompt,
                   thinking: coreThinkingLevel(this.thinking),
@@ -1570,7 +1591,10 @@ export class RpcController {
       }, { signal: controller.signal, source });
       // A save already admitted by Core completes even if abort/close arrives during it.
       const rpcUsage = protocolUsage(providerName, summaryResponse.model ?? model, persistedUsage);
-      const result = { summary: summaryResponse.content, firstKeptEntryId, tokensBefore, estimatedTokensAfter,
+      const published = manager.get(sourceSessionId)?.metadata;
+      const appliedSummary = typeof published?.compactionSummary === 'string' ? published.compactionSummary : summaryResponse.content;
+      const appliedTokensAfter = (published?.compactionStats as { tokensAfter?: number } | undefined)?.tokensAfter ?? estimatedTokensAfter;
+      const result = { summary: appliedSummary, firstKeptEntryId, tokensBefore, estimatedTokensAfter: appliedTokensAfter,
         ...(rpcUsage ? { usage: rpcUsage } : {}), details: {} };
       await this.events.compactionEnd('manual', { result });
       return result;
@@ -1677,19 +1701,6 @@ export class RpcController {
     return session;
   }
 
-  private withBashContext(messages: Message[]): Message[] {
-    const commands = (this.session().commands ?? [])
-      .filter(command => !command.excludedFromContext)
-      .map(command => ({
-        id: `bash-${command.id}`,
-        role: 'user' as const,
-        content: `Ran \`${command.command}\`\n\`\`\`\n${command.output ?? ''}\n\`\`\``,
-        timestamp: command.timestamp,
-        metadata: { bashCommandId: command.id },
-      }));
-    return [...messages, ...commands].sort((left, right) => left.timestamp.getTime() - right.timestamp.getTime());
-  }
-
   private rpcMessages(): Array<Record<string, unknown>> {
     const messages = this.session().messages.map(message => ({
       timestamp: message.timestamp.getTime(),
@@ -1775,6 +1786,12 @@ export class RpcController {
           ...(item.model ? { model: item.model } : {}),
           ...(item.usage ? { usage: protocolUsage(item.provider ?? '', item.model, item.usage) } : {}),
         };
+      } else if (item.type === 'context_edit' || item.type === 'loadout') {
+        entry = { type: item.type, id: item.id, parentId: item.parentEntryId ?? parentId,
+          timestamp: new Date(item.timestamp).toISOString(),
+          ...(item.type === 'context_edit' ? { targetEntryId: item.targetEntryId,
+            ...(item.replacement !== undefined ? { replacement: item.replacement } : {}) }
+            : { changedFields: Object.keys(item.changes) }) };
       } else {
         entry = {
           type: item.type, id: item.id, parentId: item.parentEntryId ?? parentId,

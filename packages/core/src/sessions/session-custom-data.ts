@@ -1,5 +1,5 @@
 /** New custom-entry inputs are own JSON data, never getters, prototypes or executable objects. */
-export function copySessionCustomValue(value: unknown): unknown {
+export function copySessionCustomValue(value: unknown, maxBytes = 1024 * 1024): unknown {
   let nodes = 0;
   let bytes = 0;
   const visiting = new Set<object>();
@@ -7,7 +7,7 @@ export function copySessionCustomValue(value: unknown): unknown {
   const copy = (item: unknown, depth: number): unknown => {
     if (++nodes > 65_536 || depth > 32) return fail();
     bytes += typeof item === 'string' ? Buffer.byteLength(item) : 8;
-    if (bytes > 1024 * 1024) return fail();
+    if (bytes > maxBytes) return fail();
     if (item === null || typeof item === 'string' || typeof item === 'boolean') return item;
     if (typeof item === 'number') return Number.isFinite(item) ? item : fail();
     if (!item || typeof item !== 'object' || visiting.has(item)) return fail();
@@ -20,7 +20,7 @@ export function copySessionCustomValue(value: unknown): unknown {
       if (array && key === 'length') continue;
       if (typeof key !== 'string') return fail();
       bytes += Buffer.byteLength(key) + 4;
-      if (bytes > 1024 * 1024) return fail();
+      if (bytes > maxBytes) return fail();
       const property = Object.getOwnPropertyDescriptor(item, key);
       if (!property || !('value' in property) || !property.enumerable) return fail();
       if (array && (!/^(?:0|[1-9]\d*)$/u.test(key) || Number(key) !== (result as unknown[]).length)) return fail();
@@ -33,6 +33,6 @@ export function copySessionCustomValue(value: unknown): unknown {
   };
   if (value === undefined) return undefined;
   const result = copy(value, 0);
-  if (Buffer.byteLength(JSON.stringify(result)) > 1024 * 1024) return fail();
+  if (Buffer.byteLength(JSON.stringify(result)) > maxBytes) return fail();
   return result;
 }
