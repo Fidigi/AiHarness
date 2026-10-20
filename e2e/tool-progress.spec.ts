@@ -3,7 +3,7 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '.
 import { createServer, type Server } from 'node:http';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { AgentRunSnapshot, Message, ToolProgressSnapshot } from '@ai-harness/core';
+import { JsonlSessionStore, getSessionAccounting, type AgentRunSnapshot, type Message, type ToolProgressSnapshot } from '@ai-harness/core';
 import { fixture as rowCopyFixture, openMenu as openRowCopyMenu, openNavigation as openRowCopyNavigation } from './fixtures/session-row-copy';
 
 // A real on-disk extension executes in Core, behind the production Express API.
@@ -12,6 +12,7 @@ import { fixture as rowCopyFixture, openMenu as openRowCopyMenu, openNavigation 
 const extension = `import { access, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 export default function(api) {
+  const batches = new Map();
   api.registerTool({ name: 'arbitrary_custom', description: 'Real generic progress probe', parameters: {
     type: 'object', properties: { token: { type: 'string' }, mode: { type: 'string' } }, required: ['token', 'mode'] },
     execute: async (input, context, signal) => {
@@ -55,11 +56,30 @@ export default function(api) {
       return { content: 'Custom tool finished' };
     }
   });
+  api.registerTool({ name: 'parallel_read', description: 'Native bounded readonly batch', readOnly: true,
+    execute: async (input, context, signal) => {
+      const batch = batches.get(input.token) ?? { active: 0, completed: 0 }; batches.set(input.token, batch); batch.active++;
+      await context.onProgress({ version: 1, content: 'Parallel ' + input.part });
+      while (!signal?.aborted) { try { await access(path.join(context.cwd, input.token + '-finish')); break; } catch {} await new Promise(r => setTimeout(r, 25)); }
+      batch.active--; batch.completed++; return { content: input.part };
+    }
+  });
+  api.registerTool({ name: 'nested_child', description: 'Native nested child', execute: async (_input, context) => {
+    await context.onProgress({ version: 1, content: 'Nested child progress' });
+    return { content: 'Nested child output', structuredContent: { value: 'disposable-generic-progress-test-key' } };
+  } });
+  api.registerTool({ name: 'nested_parent', description: 'Native serial parent', execute: async (input, context) => {
+    const batch = batches.get(input.token); if (batch.active !== 0 || batch.completed !== 2) throw new Error('Batch not joined');
+    const child = await context.executeTool('nested_child', {}); if (child.isError) throw new Error('Nested child refused');
+    return { content: 'Nested complete', structuredContent: child.structuredContent,
+      blocks: [{ type: 'image', mediaType: 'image/png', name: 'native-tool.png', url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aT6sAAAAASUVORK5CYII=' }] };
+  } });
 }`;
 let root: string;
 const probes = new WeakMap<Page, string>();
 let modelServer: Server;
 let modelPort: number;
+const modelRequests: Array<{ messages: Array<{ role: string; content?: unknown }> }> = [];
 const provider = `generic-progress-probe-${process.pid}`;
 
 test.describe.configure({ mode: 'default', timeout: 60_000 });
@@ -75,8 +95,13 @@ test.beforeAll(async ({ request }) => {
     if (req.url?.endsWith('/models')) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ data: [{ id: 'progress-model' }] })); return; }
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(Buffer.from(chunk));
-    const body = JSON.parse(Buffer.concat(chunks).toString()) as { stream?: boolean; messages: Array<{ role: string; content?: string }> };
+    const body = JSON.parse(Buffer.concat(chunks).toString()) as { stream?: boolean; messages: Array<{ role: string; content?: unknown }> };
+    modelRequests.push(body);
     if (body.stream === false) {
+      if (body.messages.some(message => typeof message.content === 'string' && message.content.includes('HTTP_RECOVERY_HISTORY'))) {
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ choices: [{ message: { content: 'HTTP summary preserves prior decisions.' } }], usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 } })); return;
+      }
       // A real Core automatic summary stays pending until product Stop cancels
       // its HTTP request. No fabricated compaction event or browser snapshot.
       while (!res.destroyed) {
@@ -86,16 +111,32 @@ test.beforeAll(async ({ request }) => {
       if (!res.destroyed) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ choices: [{ message: { content: 'Actual summary' } }] })); }
       return;
     }
-    const prompt = body.messages.filter(message => message.role === 'user').at(-1)?.content ?? '';
+    const prompt = body.messages.flatMap(message => message.role === 'user' && typeof message.content === 'string' ? [message.content] : []).at(-1) ?? '';
     const [mode, token] = prompt.split(':');
+    if (mode.startsWith('recover-')) {
+      const first = modelRequests.filter(request => request.messages.some(message => message.content === prompt)).length === 1;
+      if (first && mode === 'recover-overflow') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { code: 'context_length_exceeded', message: 'disposable-generic-progress-test-key private diagnostic' } })); return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: first ? 'Partial recovery answer.' : 'HTTP_RECOVERY_OK' }, finish_reason: first ? 'length' : 'stop' }], usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 } })}\n\ndata: [DONE]\n\n`); return;
+    }
     const toolCount = body.messages.filter(message => message.role === 'tool').length;
-    if (mode === 'length' || mode === 'emptylength' || mode === 'provider-error') {
+    if (mode === 'length' || mode === 'emptylength' || mode === 'provider-error' || mode === 'background-error' && toolCount > 0) {
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       const content = mode === 'emptylength' ? '' : mode === 'length' ? 'Partial length answer.'
         : 'Partial visible output. disposable-generic-progress-test-key ' + 'safe tail '.repeat(20);
-      res.end(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content }, finish_reason: mode === 'provider-error' ? null : 'length' }] })}\n\n`
-        + (mode === 'provider-error' ? 'data: INVALID_PROVIDER_JSON\n\n' : 'data: [DONE]\n\n'));
+      res.end(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content }, finish_reason: mode.endsWith('error') ? null : 'length' }] })}\n\n`
+        + (mode.endsWith('error') ? 'data: INVALID_PROVIDER_JSON\n\n' : 'data: [DONE]\n\n'));
       return;
+    }
+    if (mode === 'parallel') {
+      const delta = toolCount ? { content: 'Real progress probe complete' } : { tool_calls: ['one', 'two', 'parent'].map((part, index) => ({
+        index, id: `parallel-${part}`, type: 'function', function: { name: part === 'parent' ? 'nested_parent' : 'parallel_read', arguments: JSON.stringify({ token, part }) },
+      })) };
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta, finish_reason: toolCount ? 'stop' : 'tool_calls' }] })}\n\ndata: [DONE]\n\n`); return;
     }
     const calls = mode === 'siblings' ? ['host-first', 'host-sibling'] : ['host-outer'];
     const delta = toolCount > 0 ? { content: 'Real progress probe complete' } : { tool_calls: calls.map((id, index) => ({
@@ -134,17 +175,22 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
-async function begin(page: Page, mode: string) {
+async function begin(page: Page, mode: string, seed?: string) {
   const token = `probe-${Date.now()}-${mode}`;
   const created = await page.request.post('/api/sessions', { data: { cwd: root, title: 'Generic tool progress' } });
   expect(created.status()).toBe(201);
   const session = await created.json() as { id: string };
   probes.set(page, session.id);
+  // Meet the existing four-message compaction minimum before the overflow;
+  // a length response must not be what makes the seeded history eligible.
+  if (seed) for (const [role, content] of [['user', seed], ['assistant', 'Prior answer.'], ['user', 'Prior follow-up.'], ['assistant', 'Prior conclusion.']]) {
+    const added = await page.request.post(`/api/sessions/${session.id}/messages`, { data: { role, content } }); expect(added.ok()).toBe(true);
+  }
   await page.goto(`/chat/${session.id}?cwd=${encodeURIComponent(root)}`);
   await expect(page.getByRole('textbox', { name: 'Message composer', exact: true })).toBeVisible();
   await expect(page.locator('.generic-tool-progress')).toHaveCount(0);
   const started = await page.request.post('/api/agent/runs', { data: { sessionId: session.id, cwd: root,
-    provider, model: 'progress-model', input: `${mode}:${token}`, toolPreset: 'full', autoCompaction: false, maxRetries: 0 } });
+    provider, model: 'progress-model', input: `${mode}:${token}`, toolPreset: 'full', autoCompaction: mode.startsWith('recover-'), maxRetries: 0 } });
   expect(started.status(), await started.text()).toBe(202);
   const { run } = await started.json() as { run: AgentRunSnapshot };
   return { sessionId: session.id, runId: run.id, token, gate: (name: string) => writeFile(path.join(root, `${token}-${name}`), 'go') };
@@ -393,8 +439,17 @@ test('ready watermark gap: actual running GET then completed readiness restores 
   await probe.gate('latest');
   await expect(card).toContainText('plain tool text');
 
+  // Reconnect from a hydrated sibling view, not a cold bootstrap whose initial
+  // after=0 subscription can precede route metadata admission.
+  const created = await page.request.post('/api/sessions', { data: { cwd: root, title: 'Watermark sibling' } });
+  expect(created.status()).toBe(201); const sibling = await created.json() as { id: string };
+  await page.goto(`/chat/${sibling.id}?cwd=${encodeURIComponent(root)}`);
+  await openRowCopyNavigation(page);
+  const sourceLink = page.locator(`.sidebar-nav a.session-main[href*="${probe.sessionId}"]`).first();
+  await expect(sourceLink).toBeVisible();
+
   // Observe the actual response; do not construct or rewrite a transport record.
-  await page.addInitScript(() => {
+  const observeReady = () => {
     const original = window.fetch.bind(window);
     (window as unknown as { __actualReadyFrames: string[] }).__actualReadyFrames = [];
     window.fetch = async (...args) => {
@@ -420,8 +475,9 @@ test('ready watermark gap: actual running GET then completed readiness restores 
       }
       return response;
     };
-  });
-
+  };
+  await page.evaluate(observeReady);
+  await page.addInitScript(observeReady);
   let release!: () => void;
   const transportGate = new Promise<void>(resolve => { release = resolve; });
   const heldAfter: number[] = [];
@@ -433,7 +489,7 @@ test('ready watermark gap: actual running GET then completed readiness restores 
   });
   try {
     const baselineReply = page.waitForResponse(response => response.url().includes(`/api/agent/sessions/${probe.sessionId}/state?`));
-    await page.reload();
+    await sourceLink.click();
     const baseline = await (await baselineReply).json() as Awaited<ReturnType<typeof state>>;
     expect(baseline.run.phase).toBe('tool');
     expect(baseline.session.messages.filter(message => message.role === 'tool')).toHaveLength(0);
@@ -473,7 +529,7 @@ test('ready watermark gap: actual running GET then completed readiness restores 
     await expect(page.locator('.message.tool')).toHaveCount(1);
   } finally {
     release();
-    await page.unroute(events);
+    await page.unrouteAll({ behavior: 'wait' });
   }
 });
 
@@ -759,4 +815,123 @@ test('real active source continues independently after row copy, without a secon
     release(); upstream.closeAllConnections(); await new Promise<void>(resolve => upstream.close(() => resolve()));
     await f.cleanup(); await page.request.delete(`/api/provider-registry/custom/${provider}`);
   }
+});
+
+test.describe('native RUN behavior', () => {
+  test.beforeEach(async ({ request }) => {
+    // Earlier row-copy coverage intentionally changes the server's executable
+    // generation. Admit this fixture again, through the real reload endpoint.
+    const response = await request.post('/api/agent/reload', { data: { cwd: root } }); expect(response.ok()).toBe(true);
+    expect((await response.json()).errors).toEqual([]);
+    // The code-mode control also persists a narrow global tool selection.
+    // Select this fixture's native tools through the actual configuration API.
+    const selection = await request.patch('/api/tools', { data: { cwd: root,
+      enabledTools: ['arbitrary_custom', 'parallel_read', 'nested_child', 'nested_parent'], toolPreset: 'full', powershellEnabled: false, codemodeEnabled: false,
+    } });
+    expect(selection.ok(), await selection.text()).toBe(true);
+  });
+
+test('native parallel batch reconnects both tools, joins before the nested parent and renders its real image', async ({ page }) => {
+  const probe = await begin(page, 'parallel');
+  try {
+    const cards = page.getByRole('region', { name: 'Tool progress: parallel_read', exact: true });
+    await expect(cards).toHaveCount(2); await expect(cards.nth(0)).toContainText('Parallel one'); await expect(cards.nth(1)).toContainText('Parallel two');
+    expect((await state(page.request, probe.sessionId)).run.activeTools!.map(tool => tool.id)).toEqual(['parallel-one', 'parallel-two']);
+    await page.reload(); await expect(cards).toHaveCount(2); await expect(cards.nth(1)).toContainText('Parallel two');
+    await probe.gate('finish'); await expect.poll(async () => (await state(page.request, probe.sessionId)).run.phase).toBe('completed');
+    const result = await state(page.request, probe.sessionId); expect(result.run.activeTools).toBeUndefined();
+    const tools = result.session.messages.filter(message => message.role === 'tool');
+    expect(tools.map(message => message.toolCallId)).toEqual(['parallel-one', 'parallel-two', 'parallel-parent']);
+    expect(tools[2].metadata!.nestedTools).toEqual([expect.objectContaining({ name: 'nested_child', parentId: 'parallel-parent', isError: false })]);
+    const image = page.getByAltText('native-tool.png'); await image.scrollIntoViewIfNeeded();
+    await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(1);
+    const request = modelRequests.find(body => body.messages.some(message => message.content === `parallel:${probe.token}`) && body.messages.some(message => message.role === 'tool'))!;
+    expect(JSON.stringify(request)).toContain('image_url'); expect(JSON.stringify(request)).not.toContain('disposable-generic-progress-test-key');
+    await page.reload(); await expect(page.getByAltText('native-tool.png')).toBeVisible();
+  } finally { await page.request.post(`/api/agent/runs/${probe.runId}/stop`); }
+});
+
+for (const steeringMode of ['all', 'one-at-a-time']) for (const followUpMode of ['all', 'one-at-a-time']) {
+  test(`live queue ${steeringMode}/${followUpMode}: recall, clear, draft/reconnect and exactly-once provider delivery`, async ({ page }) => {
+    const settings = path.join(root, '.ai-harness', 'settings.json');
+    await writeFile(settings, JSON.stringify({ steeringMode, followUpMode }));
+    const created = await page.request.post('/api/sessions', { data: { cwd: root, title: 'Queue draft control' } });
+    expect(created.status()).toBe(201); const other = await created.json() as { id: string };
+    const probe = await begin(page, 'success');
+    try {
+      await expect(page.getByRole('region', { name: 'Tool progress: arbitrary_custom', exact: true })).toContainText('Preparing custom work');
+      const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
+      const enqueue = async () => {
+        for (const kind of ['steer', 'follow-up']) {
+          await page.getByRole('combobox', { name: 'Queue mode', exact: true }).selectOption(kind);
+          for (let i = 1; i <= 3; i++) {
+            const response = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/agent/runs/${probe.runId}/queue`);
+            await composer.fill(`${kind}-${i}`); await composer.press('Enter'); expect((await response).status()).toBe(202);
+            await expect(composer).toHaveValue('');
+          }
+        }
+      };
+      await enqueue(); const queue = page.getByRole('region', { name: 'Pending agent messages', exact: true });
+      await queue.getByRole('button', { name: 'steer-1', exact: true }).click(); await expect(composer).toHaveValue('steer-1');
+      await queue.locator('.clear-queues').click(); await expect(queue).toHaveCount(0); await expect(composer).toHaveValue('steer-1');
+      await enqueue(); await composer.fill('unsent draft survives reconnect'); await openRowCopyNavigation(page);
+      await page.locator(`.sidebar-nav a.session-main[href*="${other.id}"]`).first().click();
+      await expect(composer).toHaveValue('');
+      const connected = page.waitForRequest(request => new URL(request.url()).pathname === `/api/agent/sessions/${probe.sessionId}/events`);
+      await page.locator(`.sidebar-nav a.session-main[href*="${probe.sessionId}"]`).first().click(); await connected;
+      await expect(composer).toHaveValue('unsent draft survives reconnect'); await expect(queue.getByRole('button', { name: 'follow-up-3', exact: true })).toBeVisible();
+      await probe.gate('latest'); await probe.gate('finish');
+      await expect.poll(async () => (await state(page.request, probe.sessionId)).run.phase).toBe('completed');
+      const expected = [[`success:${probe.token}`]];
+      for (const [kind, mode] of [['steer', steeringMode], ['follow-up', followUpMode]]) for (const batch of mode === 'all' ? [[1, 2, 3]] : [[1], [2], [3]]) {
+        expected.push([...expected.at(-1)!, ...batch.map(i => `${kind}-${i}`)]);
+      }
+      const calls = modelRequests.filter(body => body.messages.some(message => message.content === `success:${probe.token}`));
+      expect(calls.map(body => body.messages.filter(message => message.role === 'user').map(message => message.content))).toEqual(expected);
+      expect((await state(page.request, probe.sessionId)).session.messages.filter(message => message.role === 'user').map(message => message.content)).toEqual(expected.at(-1));
+      await expect(queue).toHaveCount(0); await expect(composer).toHaveValue('unsent draft survives reconnect');
+    } finally { await page.request.post(`/api/agent/runs/${probe.runId}/stop`); await rm(settings, { force: true }); }
+  });
+}
+
+test('real background failure marks attention without stealing another session draft', async ({ page }) => {
+  const probe = await begin(page, 'background-error');
+  try {
+    await expect(page.getByRole('region', { name: 'Tool progress: arbitrary_custom', exact: true })).toContainText('Preparing custom work');
+    const created = await page.request.post('/api/sessions', { data: { cwd: root, title: 'BACKGROUND_DRAFT_CONTROL' } });
+    expect(created.status()).toBe(201); const other = await created.json() as { id: string };
+    await page.goto(`/chat/${other.id}?cwd=${encodeURIComponent(root)}`); await openRowCopyNavigation(page);
+    const source = page.locator('.sidebar-nav .session-row').filter({ has: page.locator(`a.session-main[href*="${probe.sessionId}"]`) });
+    await expect(source.getByLabel('Agent running')).toBeVisible();
+    const composer = page.getByRole('textbox', { name: 'Message composer', exact: true }); await composer.fill('background draft must survive');
+    await probe.gate('latest'); await probe.gate('finish');
+    await expect(source.getByLabel('Needs attention')).toBeVisible({ timeout: 10_000 }); await expect(composer).toHaveValue('background draft must survive');
+    await source.locator('a.session-main').first().click(); await expect(page.getByRole('log')).toContainText('Partial visible output.');
+    await expect(source.getByLabel('Needs attention')).toHaveCount(0);
+    await page.locator('.sidebar-nav a.session-main').filter({ hasText: 'BACKGROUND_DRAFT_CONTROL' }).click();
+    await expect(composer).toHaveValue('background draft must survive');
+  } finally { await page.request.post(`/api/agent/runs/${probe.runId}/stop`); }
+});
+
+for (const reason of ['overflow', 'length']) test(`actual HTTP ${reason} recovers once with smaller input, immutable raw history and authentic usage`, async ({ page }) => {
+  const seed = 'HTTP_RECOVERY_HISTORY ' + 'prior decision '.repeat(500);
+  const probe = await begin(page, `recover-${reason}`, seed);
+  try {
+    await expect.poll(async () => (await state(page.request, probe.sessionId)).run.phase).toBe('completed');
+    await expect(page.getByText('HTTP_RECOVERY_OK', { exact: true })).toBeVisible();
+    const calls = modelRequests.filter(request => request.messages.some(message => message.content === `recover-${reason}:${probe.token}`));
+    expect(calls).toHaveLength(2); expect(JSON.stringify(calls[1]).length).toBeLessThan(JSON.stringify(calls[0]).length);
+    expect(JSON.stringify(calls[1])).not.toContain(seed); expect(JSON.stringify(calls[1])).not.toContain('Partial recovery answer.');
+    const snapshot = await new JsonlSessionStore(path.join(process.env.AI_HARNESS_E2E_PROGRESS_DATA_DIR!, 'sessions')).getSessionSnapshot(probe.sessionId);
+    expect(snapshot).toBeDefined(); const raw = snapshot!.entries!;
+    expect(raw.some(entry => entry.type === 'message' && entry.content === seed)).toBe(true);
+    expect(raw.filter(entry => entry.type === 'compaction')).toHaveLength(1);
+    if (reason === 'length') {
+      expect(raw.some(entry => entry.type === 'message' && entry.content === 'Partial recovery answer.')).toBe(true);
+      expect(raw.some(entry => entry.type === 'context_edit')).toBe(true);
+    }
+    expect(getSessionAccounting(raw, raw.at(-1)!.id).active.usage.totalTokens).toBe(reason === 'length' ? 13 : 8);
+    expect(JSON.stringify(raw)).not.toContain('disposable-generic-progress-test-key');
+  } finally { await page.request.post(`/api/agent/runs/${probe.runId}/stop`); }
+});
 });

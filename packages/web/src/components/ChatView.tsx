@@ -436,8 +436,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
 
   useEffect(() => {
     setSessionUnavailable(undefined);
-    if (id) setActiveSession(id);
-  }, [id, setActiveSession]);
+    if (currentSession) setActiveSession(currentSession.id);
+  }, [id, currentSession?.id, setActiveSession]);
 
   useEffect(() => {
     void getAgentPalette(workspace?.cwd, workspace?.id).then(result => {
@@ -815,20 +815,21 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       }
       if (event.type === 'tool.started') {
         const tool = event.data as { id?: unknown; name?: unknown; input?: unknown; parentId?: unknown };
-        if (tool.parentId === undefined && typeof tool.id === 'string' && typeof tool.name === 'string') patchRun({
-          phase: 'tool',
-          activeTool: { id: tool.id, name: tool.name, input: tool.input, startedAt: event.timestamp },
-        });
+        if (tool.parentId === undefined && typeof tool.id === 'string' && typeof tool.name === 'string') {
+          const tools = [...runTools(getStoredRun(useSessionStore.getState().runs, id))];
+          if (!tools.some(item => item.id === tool.id) && tools.length < 4) tools.push({ id: tool.id, name: tool.name, input: tool.input, startedAt: event.timestamp });
+          patchRun({ phase: 'tool', ...toolPatch(tools) });
+        }
       }
       if (event.type === 'tool.progress') {
-        const tool = getStoredRun(useSessionStore.getState().runs, id)?.activeTool;
-        const next = applyToolProgress(applyCodemodeProgress(tool, event.data), event.data);
-        if (next !== tool) patchRun({ activeTool: next });
+        const tools = runTools(getStoredRun(useSessionStore.getState().runs, id));
+        const next = tools.map(tool => applyToolProgress(applyCodemodeProgress(tool, event.data), event.data)!);
+        if (next.some((tool, index) => tool !== tools[index])) patchRun(toolPatch(next));
       }
       if (event.type === 'tool.completed' || event.type === 'tool.failed') {
         const data = event.data as { call?: { id?: unknown }; id?: unknown; parentId?: unknown };
-        const tool = getStoredRun(useSessionStore.getState().runs, id)?.activeTool;
-        if (data.parentId === undefined && tool?.id === (data.call?.id ?? data.id)) patchRun({ activeTool: undefined });
+        if (data.parentId === undefined) patchRun(toolPatch(runTools(getStoredRun(useSessionStore.getState().runs, id))
+          .filter(tool => tool.id !== (data.call?.id ?? data.id))));
       }
       if (event.type === 'extension.ui') {
         const existing = getStoredRun(useSessionStore.getState().runs, id);
@@ -903,7 +904,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       if (event.type === 'run.failed') {
         const message = (event.data as { message?: unknown }).message;
         const detail = typeof message === 'string' ? message : t('chat.unexpectedError');
-        patchRun({ phase: 'failed', error: typeof message === 'string' ? message : undefined, retry: undefined, activeTool: undefined });
+        patchRun({ phase: 'failed', error: typeof message === 'string' ? message : undefined, retry: undefined, ...toolPatch([]) });
         setNotice(detail, 'error', { id: `run-error:${id}:${event.runId}` });
         if (preferences.sound && preferences.soundEvents.attention) playCompletionSound(preferences.soundVolume, true);
         if (preferences.notifications && preferences.notificationEvents.attention
@@ -911,8 +912,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           new Notification(useSessionStore.getState().sessions.find(session => session.id === id)?.title || 'AiHarness', { body: detail, tag: `agent:${id}:attention` });
         }
       }
-      if (event.type === 'run.completed') patchRun({ phase: 'completed', retry: undefined, activeTool: undefined });
-      if (event.type === 'run.stopped') patchRun({ phase: 'stopped', retry: undefined, activeTool: undefined });
+      if (event.type === 'run.completed' || event.type === 'run.stopped') patchRun({
+        phase: event.type === 'run.completed' ? 'completed' : 'stopped', retry: undefined, ...toolPatch([]),
+      });
       // Stamp the event after its queue/phase projection, never before it.
       // An eager version-only stamp would make this event's real membership
       // change look like a same-version forged snapshot to the store.
@@ -2118,12 +2120,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         </div>
       )}
 
-      {currentRun?.activeTool && currentRun.activeTool.name !== 'codemode' && <ToolProgressBoundary
-        key={`${currentRun.id}:${currentRun.activeTool.id}`}
-        value={currentRun.activeTool.progress} toolCallId={currentRun.activeTool.id} toolName={currentRun.activeTool.name} />}
-      {currentRun?.activeTool?.name === 'codemode' && <Suspense fallback={null}><CodemodeCard running
-        input={currentRun.activeTool.input}
-        calls={currentRun.activeTool.nestedCalls} /></Suspense>}
+      {runTools(currentRun).map(tool => tool.name !== 'codemode'
+        ? <ToolProgressBoundary key={`${currentRun!.id}:${tool.id}`} value={tool.progress} toolCallId={tool.id} toolName={tool.name} />
+        : <Suspense key={`${currentRun!.id}:${tool.id}`} fallback={null}><CodemodeCard running input={tool.input} calls={tool.nestedCalls} /></Suspense>)}
       <form onSubmit={handleSubmit} className="input-container"
         onDragOver={event => { if ([...event.dataTransfer.items].some(item => item.type.startsWith('image/'))) event.preventDefault(); }}
         onDrop={event => {
@@ -2308,6 +2307,13 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       </form>
     </div>
   );
+}
+
+function runTools(run?: AgentRunSnapshot) {
+  return run?.activeTools ?? (run?.activeTool ? [run.activeTool] : []);
+}
+function toolPatch(tools: NonNullable<AgentRunSnapshot['activeTool']>[]) {
+  return { activeTool: tools[0], activeTools: tools };
 }
 
 function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationFunction, callInput?: unknown, process?: ProcessTurn): ReactNode {

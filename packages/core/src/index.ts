@@ -218,6 +218,7 @@ export type { ToolLoopOptions, ToolExecutionResult } from './agent/tool-loop.js'
 export { TOOL_PROGRESS_VERSION, TOOL_PROGRESS_LIMITS } from './agent/tool-progress.js';
 export type { ToolProgressInput, ToolProgressSnapshot, ToolProgressValue } from './agent/tool-progress.js';
 export { streamProviderTurn } from './agent/provider-turn.js';
+export { ProviderContextOverflowError } from './providers/context-overflow.js';
 export type { StreamProviderTurnOptions } from './agent/provider-turn.js';
 export { AgentRuntime } from './agent/runtime.js';
 export { retainAgentWork } from './agent/work-retention.js';

@@ -13,6 +13,7 @@ import { calculatePublishedModelCost } from '../providers/model-metadata.js';
 import type { CredentialRedactionStream } from '../providers/credentials.js';
 import { copyThinkingBudgets } from '../providers/thinking-budgets.js';
 import { ProviderToolArgumentsError } from '../providers/tool-arguments.js';
+import { ProviderContextOverflowError } from '../providers/context-overflow.js';
 import { captureNativeOutputBudget, ProviderOutputBudgetError } from '../providers/provider-output-budget.js';
 import { assertProviderRequestBudget, captureProviderRequestBudget, ProviderRequestContextError,
   type ProviderRequestBudget } from './provider-request-estimate.js';
@@ -108,6 +109,8 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
   const safeText = (value: string): string => redactText ? Reflect.apply(redactText, options, [value]) as string ?? value : value;
   const safeJson = <T>(value: T): T => redactJson ? Reflect.apply(redactJson, options, [value]) as T ?? value : value;
   const safeError = (value: unknown): unknown => {
+    if (value instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    if (value instanceof ProviderRequestContextError) return new ProviderRequestContextError(value.kind);
     if (!redactText) return value;
     const message = safeText(value instanceof Error ? value.message : String(value));
     const error = new Error(message);
@@ -297,6 +300,7 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
       });
       const canRetry = !attemptProducedOutput
         && !(error instanceof ProviderRequestContextError)
+        && !(error instanceof ProviderContextOverflowError)
         && !(error instanceof ProviderOutputBudgetError)
         && !(error instanceof ProviderToolArgumentsError)
         && !callbackDeliveryFailed

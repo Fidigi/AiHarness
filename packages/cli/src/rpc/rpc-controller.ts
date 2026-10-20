@@ -1304,6 +1304,8 @@ export class RpcController {
               }
               return this.context.extensionRegistry.executeTool(name, input, context, executionSignal);
             },
+            canExecuteInParallel: name => staticNames.has(name.toLowerCase()) && this.context.extensionRegistry.getTools()
+              .some(tool => tool.name.toLowerCase() === name.toLowerCase() && tool.readOnly === true),
             getActivatedTools: (name, result) => dynamicTools?.getActivatedTools?.(name, result),
             getToolResultMetadata: (name, result) => dynamicTools?.getToolResultMetadata?.(name, result),
             toolContext: {
@@ -1323,6 +1325,7 @@ export class RpcController {
             },
             onTurnStart: () => this.events.startTurn(),
             streamTurn: async (messages, tools) => {
+              let partialContent = '', partialReasoning = '';
               const retryController = new AbortController();
               try {
                 return await streamProviderTurn({
@@ -1343,9 +1346,22 @@ export class RpcController {
                   redactJson: this.context.redactJson,
                   createTextRedactor: this.context.createTextRedactor,
                   onStart: (provider, model) => this.events.startAssistant(provider, model),
-                  onTextDelta: delta => this.events.textDelta(delta),
-                  onReasoningDelta: delta => this.events.reasoningDelta(delta),
-                  onError: error => this.events.finishAssistantError(error, signal.aborted),
+                  onTextDelta: delta => { partialContent += delta; return this.events.textDelta(delta); },
+                  onReasoningDelta: delta => { partialReasoning += delta; return this.events.reasoningDelta(delta); },
+                  onError: async error => {
+                    if (!signal.aborted && (partialContent || partialReasoning)) {
+                      await this.context.sessionManager.addMessage(this.currentSessionId, {
+                        role: 'assistant', content: partialContent,
+                        blocks: [
+                          ...(partialReasoning ? [{ type: 'reasoning' as const, text: partialReasoning }] : []),
+                          ...(partialContent ? [{ type: 'text' as const, text: partialContent }] : []),
+                        ], provider: this.context.providerName, model: this.model,
+                        metadata: { outputError: (this.context.redactText?.(error instanceof Error ? error.message : String(error))
+                          ?? (error instanceof Error ? error.message : String(error))).slice(0, 4_000) },
+                      }, { skipAutoCompaction: true, signal });
+                    }
+                    await this.events.finishAssistantError(error, signal.aborted);
+                  },
                   onRetryStart: ({ attempt, maxAttempts, delayMs, error }) => {
                     this.retryActive = true;
                     this.retryAbortController = retryController;

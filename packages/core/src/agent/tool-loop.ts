@@ -4,15 +4,21 @@ import type {
   ExtensionRuntimeContext,
   ExtensionToolResult,
 } from '../extensions/extension-registry.js';
-import type { CodemodeDetails, CodemodeProgress, Message, TokenUsage, ToolCall } from '../types/index.js';
+import type { CodemodeDetails, CodemodeProgress, Message, MessageContentBlock, TokenUsage, ToolCall } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import { agentToolExposure, isDeclaredToolExposure } from '../tools/tool-selection.js';
 import { toolSearchActivationMetadata } from '../tools/tool-search.js';
 import { ToolProgressChannel, type ToolProgressSnapshot } from './tool-progress.js';
+import { ProviderContextOverflowError } from '../providers/context-overflow.js';
+import { ProviderRequestContextError } from './provider-request-estimate.js';
+import { ownToolResult } from './tool-result.js';
+import { nestedToolScope } from './nested-tools.js';
 
 export interface ToolExecutionResult {
   call: ToolCall;
   content: string;
+  blocks?: Array<Extract<MessageContentBlock, { type: 'image' }>>;
+  structuredContent?: unknown;
   fullContent?: string;
   isError: boolean;
   durationMs: number;
@@ -29,7 +35,7 @@ export interface ToolLoopOptions {
   sessionId: string;
   extensionRegistry: ExtensionRegistry;
   toolContext: ExtensionRuntimeContext;
-  streamTurn(messages: Message[], tools: ChatToolDefinition[], round: number): Promise<ChatResponse>;
+  streamTurn(messages: Message[], tools: ChatToolDefinition[], round: number, recovery?: 'overflow' | 'length'): Promise<ChatResponse>;
   tools?: ChatToolDefinition[];
   /** Recompute declarations before every model call after dynamic activation. */
   resolveTools?(): ChatToolDefinition[];
@@ -40,6 +46,8 @@ export interface ToolLoopOptions {
     context: ExtensionRuntimeContext,
     signal?: AbortSignal,
   ): ExtensionToolResult | Promise<ExtensionToolResult>;
+  /** Composite hosts must classify the actual selected executor, never model-supplied metadata. */
+  canExecuteInParallel?(name: string): boolean;
   /** Accept activation names only from a host-owned tool/result pair. */
   getActivatedTools?(name: string, result: ExtensionToolResult): string[] | undefined;
   /** Additional metadata authenticated by a host-owned executor (for example codemode store). */
@@ -125,13 +133,52 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
     if (options.signal?.aborted) throw new AgentAbortError();
   };
 
+  let recoveryUsed = false;
+  let recovery: 'overflow' | 'length' | undefined;
+  const recover = async (reason: 'overflow' | 'length'): Promise<boolean> => {
+    throwIfAborted();
+    // Empty failed HTTP attempts still leave value-free durable evidence. This
+    // private journal state is not model input and carries no invented usage.
+    await options.sessionManager.appendCustomEntry(options.sessionId, 'run.context_recovery', { reason, exhausted: recoveryUsed });
+    throwIfAborted();
+    if (recoveryUsed) return false;
+    recoveryUsed = true;
+    const before = options.sessionManager.estimateContextTokens(options.sessionId);
+    const applied = await options.sessionManager.checkAndTriggerCompaction(options.sessionId, options.signal, 'overflow');
+    throwIfAborted();
+    // An admitted summary remains durable/accounted even if it did not shrink.
+    const after = options.sessionManager.estimateContextTokens(options.sessionId);
+    const useful = applied && after < before;
+    await options.sessionManager.appendCustomEntry(options.sessionId, 'run.context_recovery', { reason, applied, useful, before, after });
+    throwIfAborted();
+    return useful;
+  };
+
   for (let round = 0; round < maxToolRounds; round++) {
     throwIfAborted();
     await options.onTurnStart?.(round);
-    const tools = options.resolveTools?.() ?? defaultTools;
-    const enabledToolNames = new Set(tools.map(tool => tool.name.toLowerCase()));
+    let tools = options.resolveTools?.() ?? defaultTools;
     const startedAt = performance.now();
-    const response = await options.streamTurn(messages, tools, round);
+    let response: ChatResponse;
+    for (;;) {
+      const previousMessage = options.sessionManager.get(options.sessionId)?.messages.at(-1)?.id;
+      try { response = await options.streamTurn(messages, tools, round, recovery); break; }
+      catch (error) {
+        const overflow = error instanceof ProviderContextOverflowError
+          || (error instanceof ProviderRequestContextError && error.kind === 'overflow');
+        const failed = options.sessionManager.get(options.sessionId)?.messages.at(-1);
+        if (!overflow || !await recover('overflow')) throw error;
+        if (failed?.role === 'assistant' && failed.id !== previousMessage && failed.metadata?.outputError
+          && effectiveMessages().some(message => message.id === failed.id)) {
+          await options.sessionManager.appendContextEdit(options.sessionId, { targetEntryId: failed.id }, { signal: options.signal });
+          throwIfAborted();
+        }
+        recovery = 'overflow';
+        messages = effectiveMessages();
+        tools = options.resolveTools?.() ?? defaultTools;
+      }
+    }
+    const enabledToolNames = new Set(tools.map(tool => tool.name.toLowerCase()));
     throwIfAborted();
     if (response.usage) await options.onUsage?.(response, round);
     const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
@@ -152,9 +199,20 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
           usage: normalizeUsage(response.usage),
           ...(response.stopReason === 'length' ? { metadata: { stopReason: 'length' } } : {}),
           durationMs,
-        }, { signal: options.signal });
+        }, { signal: options.signal, ...(response.stopReason === 'length' ? { skipAutoCompaction: true } : {}) });
       }
+      const partialId = options.sessionManager.get(options.sessionId)?.messages.at(-1)?.id;
       await options.onTurnEnd?.(response, [], round);
+      if (response.stopReason === 'length' && partialId && await recover('length')) {
+        if (effectiveMessages().some(message => message.id === partialId)) {
+          await options.sessionManager.appendContextEdit(options.sessionId, { targetEntryId: partialId }, { signal: options.signal });
+        }
+        throwIfAborted();
+        recovery = 'length';
+        messages = effectiveMessages();
+        round--;
+        continue;
+      }
       await options.onFinalResponse?.(response.content, response);
       return response.content;
     }
@@ -176,7 +234,10 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
     }, { signal: options.signal });
 
     const toolResults: ToolExecutionResult[] = [];
-    for (const call of toolCalls) {
+    const execute = (name: string, input: unknown, context: ExtensionRuntimeContext) => Promise.resolve(options.executeTool
+      ? options.executeTool(name, input, context, options.signal)
+      : options.extensionRegistry.executeTool(name, input, context, options.signal));
+    const executeCall = async (call: ToolCall, parallel: boolean): Promise<ToolExecutionResult> => {
       throwIfAborted();
       await options.onToolCall?.(call);
       const toolStartedAt = performance.now();
@@ -184,9 +245,14 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       let isError = false;
       let activatedTools: string[] | undefined;
       let resultMetadata: Record<string, unknown> | undefined;
+      let blocks: Array<Extract<MessageContentBlock, { type: 'image' }>> = [];
+      let structuredContent: unknown;
+      let nested: ReturnType<typeof nestedToolScope> | undefined;
       const progressChannel = new ToolProgressChannel(call, options.onToolProgress, options.signal, options.redactText);
       try {
         const context: ExtensionRuntimeContext = { ...options.toolContext, toolCallId: call.id,
+          // The legacy raw sink/path is single-owner. Opted-in parallel tools use onProgress.
+          ...(parallel ? { onProcessOutput: undefined, processOutputPath: undefined } : {}),
           onCodemodeProgress: options.onCodemodeProgress,
           onProgress: progressChannel.report,
           beforeSpecializedModel: async (type, request, signal) => {
@@ -207,28 +273,28 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         if (!enabledToolNames.has(normalizedToolName)) {
           throw new Error(`Tool is not enabled for this run: ${call.name}`);
         }
-        const result = await (options.executeTool
-          ? options.executeTool(call.name, call.input, context, options.signal)
-          : options.extensionRegistry.executeTool(
-              call.name,
-              call.input,
-              context,
-              options.signal,
-            ));
-        content = options.redactText?.(result.content) ?? result.content;
-        isError = Boolean(result.isError);
+        nested = nestedToolScope(context, call, execute, name => (options.resolveTools?.() ?? tools)
+          .some(tool => tool.name.toLowerCase() === name.toLowerCase()), options.signal, options.redactText);
+        const result = await execute(call.name, call.input, nested.context);
+        const owned = ownToolResult(result, options.redactText);
+        content = owned.content;
+        blocks = owned.blocks.filter((block): block is Extract<MessageContentBlock, { type: 'image' }> => block.type === 'image');
+        structuredContent = owned.structuredContent;
+        isError = owned.isError;
         if (!isError) activatedTools = options.getActivatedTools?.(call.name, result);
         resultMetadata = options.getToolResultMetadata?.(call.name, result);
       } catch (error) {
         isError = true;
         const message = error instanceof Error ? error.message : String(error);
         content = options.redactText?.(message) ?? message;
-      }
+      } finally { await nested?.finish(); }
+      if (nested?.records.length) resultMetadata = { ...resultMetadata, nestedTools: structuredClone(nested.records) };
 
       const progress = await progressChannel.finish(options.signal?.aborted ? 'cancelled' : isError ? 'failed' : 'completed');
       if (progressChannel.failure) {
         isError = true;
         content = options.redactText?.('Tool progress sink failed.') ?? 'Tool progress sink failed.';
+        blocks = []; structuredContent = undefined;
         if (progress) progress.status = options.signal?.aborted ? 'cancelled' : 'failed';
       }
       // This namespace is host-owned. Progress details remain inert display data,
@@ -242,6 +308,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         isError = true;
         activatedTools = undefined;
         content = options.redactText?.('Tool execution interrupted.') ?? 'Tool execution interrupted.';
+        blocks = []; structuredContent = undefined;
         resultMetadata = { ...resultMetadata, interrupted: true };
         const codemode = resultMetadata.codemode as CodemodeDetails | undefined;
         if (codemode) {
@@ -254,31 +321,11 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       if (truncated) content = `${content.slice(0, maxToolResultLength)}\n[Résultat tronqué — sortie complète disponible]`;
       const durationMs = Math.max(0, Math.round(performance.now() - toolStartedAt));
       const usage = (resultMetadata?.codemode as CodemodeDetails | undefined)?.usage;
-      await options.sessionManager.addMessage(options.sessionId, {
-        role: 'tool',
-        content,
-        blocks: [{
-          type: 'tool_result',
-          toolCallId: call.id,
-          name: call.name,
-          content,
-          ...(truncated ? { fullContent } : {}),
-          isError,
-          truncated,
-        }],
-        toolCallId: call.id,
-        name: call.name,
-        isError,
-        durationMs,
-        ...(usage ? { usage } : {}),
-        ...((activatedTools?.length || resultMetadata) ? { metadata: {
-          ...toolSearchActivationMetadata(activatedTools ?? []), ...resultMetadata,
-        } } : {}),
-      }, { skipAutoCompaction: true });
-      if (usage) await options.onToolUsage?.(usage);
-      const toolResult: ToolExecutionResult = {
+      return {
         call,
         content,
+        ...(blocks.length ? { blocks } : {}),
+        ...(structuredContent !== undefined ? { structuredContent } : {}),
         ...(truncated ? { fullContent } : {}),
         isError,
         durationMs,
@@ -288,12 +335,46 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         ...(usage ? { usage } : {}),
         ...(progress ? { progress } : {}),
       };
-      toolResults.push(toolResult);
-      await options.onToolResult?.(toolResult);
+    };
+    const save = async (result: ToolExecutionResult): Promise<void> => {
+      await options.sessionManager.addMessage(options.sessionId, {
+        role: 'tool', content: result.content, toolCallId: result.call.id, name: result.call.name,
+        isError: result.isError, durationMs: result.durationMs,
+        blocks: [{ type: 'tool_result', toolCallId: result.call.id, name: result.call.name,
+          content: result.content, isError: result.isError, truncated: result.truncated,
+          ...(result.fullContent !== undefined ? { fullContent: result.fullContent } : {}),
+          ...(result.structuredContent !== undefined ? { structuredContent: result.structuredContent } : {}),
+        }, ...(result.blocks ?? [])],
+        ...(result.usage ? { usage: result.usage } : {}),
+        ...((result.activatedTools?.length || result.metadata) ? { metadata: {
+          ...toolSearchActivationMetadata(result.activatedTools ?? []), ...result.metadata,
+        } } : {}),
+      }, { skipAutoCompaction: true });
+      if (result.usage) await options.onToolUsage?.(result.usage);
+      toolResults.push(result);
+      await options.onToolResult?.(result);
+    };
+    const readOnly = (call: ToolCall): boolean => !['codemode', 'tool_search', 'spawn_subagent'].includes(call.name.toLowerCase())
+      && (options.canExecuteInParallel?.(call.name) ?? (!options.executeTool && options.extensionRegistry.getTools()
+        .some(tool => tool.name.toLowerCase() === call.name.toLowerCase() && tool.readOnly === true)));
+    for (let index = 0; index < toolCalls.length;) {
       throwIfAborted();
-      await options.sessionManager.checkAndTriggerCompaction(options.sessionId, options.signal);
+      const batch = [toolCalls[index++]];
+      if (readOnly(batch[0])) while (index < toolCalls.length && batch.length < 4 && readOnly(toolCalls[index])) batch.push(toolCalls[index++]);
+      // Join every admitted invocation before saving in declared order, even on stop/failure.
+      const completed = await Promise.allSettled(batch.map(call => executeCall(call, batch.length > 1)));
+      let publicationFailed = false, publicationError: unknown;
+      for (const item of completed) if (item.status === 'fulfilled') {
+        try { await save(item.value); }
+        catch (error) { if (!publicationFailed) publicationError = error; publicationFailed = true; }
+      }
+      if (publicationFailed) throw publicationError;
+      const failed = completed.find(item => item.status === 'rejected');
+      if (failed?.status === 'rejected') throw failed.reason;
+      throwIfAborted();
     }
-
+    await options.sessionManager.checkAndTriggerCompaction(options.sessionId, options.signal);
+    recovery = undefined;
     await options.onTurnEnd?.(response, toolResults, round);
     await options.beforeNextTurn?.(response, toolResults, round);
     throwIfAborted();

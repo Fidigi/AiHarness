@@ -105,6 +105,25 @@ function createController(responses = ['RPC response']): {
 }
 
 describe('RPC command controller', () => {
+  it('durably retains failed provider text/reasoning without inventing usage or retrying visible output', async () => {
+    const { controller, context, records } = createController();
+    context.redactText = text => text.replaceAll('disposable-private', '[REDACTED]');
+    const stream = vi.spyOn(context.provider, 'streamChat').mockImplementation(async (_messages, chunk) => {
+      await chunk('', { type: 'reasoning_delta', data: { content: 'reasoning disposable-private' } });
+      await chunk('visible disposable-private');
+      throw new Error('failed disposable-private');
+    });
+    await controller.initialize();
+    await expect(controller.handle({ type: 'prompt', message: 'initial' })).resolves.toMatchObject({ success: true });
+    await vi.waitFor(() => expect(records.some(record => record.type === 'agent_settled')).toBe(true));
+    const raw = await context.sessionManager.getRawEntries(context.sessionId);
+    expect(raw.filter(entry => entry.type === 'message' && entry.role === 'assistant')).toEqual([
+      expect.objectContaining({ content: 'visible [REDACTED]', metadata: { outputError: 'failed [REDACTED]' },
+        blocks: [{ type: 'reasoning', text: 'reasoning [REDACTED]' }, { type: 'text', text: 'visible [REDACTED]' }] }),
+    ]);
+    expect(JSON.stringify(raw)).not.toContain('disposable-private'); expect(stream).toHaveBeenCalledOnce();
+  });
+
   it('refreshes compaction policy on model selection, scoped cycling and saved-session switching', async () => {
     const { controller, context } = createController();
     context.agentSettings = () => ({ compaction: {

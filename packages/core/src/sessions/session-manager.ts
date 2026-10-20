@@ -1588,11 +1588,11 @@ export class SessionManager {
   }
 
   /** Check if a session needs compaction and trigger it automatically. */
-  async checkAndTriggerCompaction(sessionId: string, signal?: AbortSignal): Promise<boolean> {
+  async checkAndTriggerCompaction(sessionId: string, signal?: AbortSignal, reason: 'threshold' | 'overflow' = 'threshold'): Promise<boolean> {
     const active = this.autoCompactionRuns.get(sessionId);
     if (active) return active;
     // Admit before invoking policy or lifecycle observers, which may reenter this method.
-    const run = Promise.resolve().then(() => this.checkAndTriggerCompactionUnlocked(sessionId, signal));
+    const run = Promise.resolve().then(() => this.checkAndTriggerCompactionUnlocked(sessionId, signal, reason));
     this.autoCompactionRuns.set(sessionId, run);
     try { return await run; }
     finally {
@@ -1600,7 +1600,7 @@ export class SessionManager {
     }
   }
 
-  private async checkAndTriggerCompactionUnlocked(sessionId: string, signal?: AbortSignal): Promise<boolean> {
+  private async checkAndTriggerCompactionUnlocked(sessionId: string, signal?: AbortSignal, reason: 'threshold' | 'overflow' = 'threshold'): Promise<boolean> {
     const session = this.sessions.get(sessionId);
     const settings = ownedCompactionSettings(this.compactionSettings);
     const contextWindow = this.compactionContextWindow;
@@ -1631,10 +1631,10 @@ export class SessionManager {
       if (policy && !await policy(session)) return false;
       admission.check();
       if (isCompactionAborted(signal) || !isCurrent()) return false;
-      if (contextWindow !== undefined
+      if (reason === 'threshold' && contextWindow !== undefined
         && this.estimateContextTokens(sessionId) <= contextWindow - settings.reserveTokens) return false;
 
-      const result = this.requestCompaction(sessionId);
+      const result = this.requestCompaction(sessionId, reason);
       if (!result) return false;
       const firstKeptMessage = result.keptEntries.find(entry => entry.type === 'message');
       if (!firstKeptMessage) return false;
@@ -2360,7 +2360,7 @@ export class SessionManager {
   }
 
   /** Request compaction for a session (returns the entries to be compacted) */
-  requestCompaction(sessionId: string): { toCompact: SessionEntry[]; keptEntries: SessionEntry[] } | null {
+  requestCompaction(sessionId: string, reason: 'threshold' | 'overflow' = 'threshold'): { toCompact: SessionEntry[]; keptEntries: SessionEntry[] } | null {
     const session = this.sessions.get(sessionId);
     if (!session || !this.compactionSettings.enabled) return null;
 
@@ -2372,7 +2372,7 @@ export class SessionManager {
       throw new Error('Compaction cut policy is invalid.');
     }
     const cut = selectCompactionCut(entries, entries.map(entry => TokenEstimator.estimateMessageEntry(entry)),
-      Math.max(1, keep.value), 'threshold');
+      Math.max(1, keep.value), reason);
     // Preserve the existing mutable two-array callback/public return shape.
     return cut ? { toCompact: cut.toCompact, keptEntries: cut.keptEntries } : null;
   }

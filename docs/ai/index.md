@@ -13,7 +13,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~225 lines |
 | Session Context State | [`topics/session-context-state.md`](./topics/session-context-state.md) | ~100 lines |
 | TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~65 lines |
-| Native Run Lifecycle | [`topics/run-lifecycle.md`](./topics/run-lifecycle.md) | ~90 lines |
+| Native Run Lifecycle | [`topics/run-lifecycle.md`](./topics/run-lifecycle.md) | ~130 lines — lifetime, queues, bounded recovery and parallel/nested/rich results |
 | Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~245 lines |
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~430 lines |
 | CLI Invocation Contract | [`topics/cli-invocation-contract.md`](./topics/cli-invocation-contract.md) | ~140 lines |

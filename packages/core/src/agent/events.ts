@@ -103,6 +103,8 @@ export interface AgentRunSnapshot {
   error?: string;
   retry?: AgentRetrySnapshot;
   activeTool?: ActiveToolSnapshot;
+  /** Complete admitted parallel batch; activeTool projects its first remaining member. */
+  activeTools?: ActiveToolSnapshot[];
   /** Compatibility projection: first entry of extensionRequests. */
   extensionRequest?: ExtensionInteractionSnapshot;
   /** Complete bounded admission-ordered queue for reconnect; events carry only one changed request/ID. */

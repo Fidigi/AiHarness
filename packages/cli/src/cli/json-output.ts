@@ -197,7 +197,8 @@ export function toJsonProtocolMessage(message: Message): JsonMessage {
   }
   if (message.role === 'tool') {
     const resultBlock = message.blocks?.find(block => block.type === 'tool_result');
-    const content = [{ type: 'text', text: resultBlock?.content ?? message.content }];
+    const content = [{ type: 'text', text: resultBlock?.content ?? message.content },
+      ...(message.blocks ?? []).flatMap(block => block.type === 'image' ? [imageContent(block)!].filter(Boolean) : [])];
     return {
       role: 'toolResult',
       toolCallId: message.toolCallId ?? resultBlock?.toolCallId ?? message.id,
@@ -205,6 +206,7 @@ export function toJsonProtocolMessage(message: Message): JsonMessage {
       content,
       details: {
         ...(message.metadata ?? {}),
+        ...(resultBlock?.structuredContent !== undefined ? { structuredContent: resultBlock.structuredContent } : {}),
         ...(message.durationMs !== undefined ? { durationMs: message.durationMs } : {}),
         ...(resultBlock?.truncated !== undefined ? { truncated: resultBlock.truncated } : {}),
       },
@@ -225,11 +227,13 @@ function toolResultContent(result: ToolExecutionResult): {
   executionResult: Record<string, unknown>;
   message: JsonMessage;
 } {
-  const content = [{ type: 'text', text: result.content }];
+  const content = [{ type: 'text', text: result.content },
+    ...(result.blocks ?? []).flatMap(block => [imageContent(block)!].filter(Boolean))];
   const details = {
     durationMs: result.durationMs,
     truncated: result.truncated,
     ...(result.metadata ?? {}),
+    ...(result.structuredContent !== undefined ? { structuredContent: result.structuredContent } : {}),
     ...(result.usage ? { usage: result.usage } : {}),
   };
   return {

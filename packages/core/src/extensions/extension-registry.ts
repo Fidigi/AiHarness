@@ -2,7 +2,7 @@ import type { AiProvider, ChatOptions } from '../providers/index.js';
 import type { BeforeSpecializedModel, SpecializedModelType, SpecializedModelRequest } from '../providers/specialized-models.js';
 import { ProviderFactory } from '../providers/index.js';
 import { AI_HARNESS_EXTENSION_API_VERSION } from '../public-api-version.js';
-import type { CodemodeProgress, Message, ProviderConfig, Session } from '../types/index.js';
+import type { CodemodeProgress, Message, MessageContentBlock, ProviderConfig, Session } from '../types/index.js';
 import { SessionManager, type SessionCompactionEvent } from '../sessions/session-manager.js';
 import { copySessionCustomValue } from '../sessions/session-custom-data.js';
 import { copySessionBranchEvent } from '../sessions/session-branch-admission.js';
@@ -105,6 +105,8 @@ export interface ExtensionRuntimeContext {
   onCodemodeProgress?(progress: CodemodeProgress): void;
   /** Bounded display-only snapshots. Await to apply downstream backpressure. */
   onProgress?(progress: ToolProgressInput): Promise<void>;
+  /** Host-authorized, cancellation-bound nested tools. No model/guest-supplied authority. */
+  executeTool?(name: string, input: unknown): Promise<ExtensionToolResult>;
   beforeSpecializedModel?: BeforeSpecializedModel;
   /** Optional raw subprocess output sink; awaiting it applies downstream backpressure. */
   onProcessOutput?(chunk: string): void | Promise<void>;
@@ -121,8 +123,17 @@ export interface ExtensionCommand {
   handler(args: string, context: ExtensionRuntimeContext): void | string | Promise<void | string>;
 }
 
+const toolAdmissions = new WeakMap<ExtensionRuntimeContext, () => void>();
+/** Internal host binding, deliberately not a transformable context field or root export. */
+export function bindHostToolAdmission(context: ExtensionRuntimeContext, validate: () => void): void {
+  toolAdmissions.set(context, validate);
+}
+
 export interface ExtensionToolResult<TDetails = unknown> {
   content: string;
+  /** Additive bounded JSON result, also supplied to text-only models as JSON text. */
+  structuredContent?: unknown;
+  blocks?: Array<Extract<MessageContentBlock, { type: 'text' | 'image' }>>;
   details?: TDetails;
   isError?: boolean;
 }
@@ -135,6 +146,8 @@ export interface ExtensionTool<TInput = Record<string, unknown>, TDetails = unkn
   exposure?: AgentToolExposure;
   /** Optional metadata used by deferred ranking and future nested runtimes. */
   namespace?: AgentToolNamespace;
+  /** Trusted registration opt-in to bounded parallel batches; omitted means serial. */
+  readOnly?: boolean;
   execute(
     input: TInput,
     context: ExtensionRuntimeContext,
@@ -435,6 +448,8 @@ export class ExtensionRegistry {
     if (signal?.aborted) throw new Error(`Tool execution aborted: ${name}`);
     const hostToolCallId = context.toolCallId;
     const hostProgress = context.onProgress;
+    const hostExecuteTool = context.executeTool;
+    const admission = toolAdmissions.get(context);
     const hook = await this.runBefore('before:tool', { tool: name, input, context }, signal);
     if (signal?.aborted) throw new Error(`Tool execution aborted: ${name}`);
     if (hook.cancelled) {
@@ -445,8 +460,9 @@ export class ExtensionRegistry {
     try {
       // Hooks may transform inputs/context, not replace host correlation or the
       // bounded progress sink. Nested codemode contexts have no outer call ID.
+      admission?.();
       const executionContext = { ...hook.data.context, toolCallId: hostToolCallId,
-        onProgress: hostToolCallId ? hostProgress : undefined };
+        onProgress: hostToolCallId ? hostProgress : undefined, executeTool: hostExecuteTool };
       if (signal?.aborted) throw new Error(`Tool execution aborted: ${name}`);
       const result = await execute(hook.data.input, executionContext, signal);
       await this.emit('tool:result', {

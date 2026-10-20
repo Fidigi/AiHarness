@@ -205,6 +205,32 @@ async function setup(provider: AiProvider, onUsage?: AgentRuntimeOptions['onUsag
 }
 
 describe('AgentRuntime', () => {
+  it('reconnects every parallel tool with independent host-correlated progress and clears the batch on settlement', async () => {
+    const provider = new MockProvider({ type: 'mock' });
+    vi.spyOn(provider, 'streamChat').mockImplementation(async (messages, _chunk, complete) => {
+      complete?.(messages.some(message => message.role === 'tool') ? { content: 'done' } : {
+        content: '', toolCalls: ['a', 'b'].map(name => ({ id: `parallel-${name}`, name, input: {} })),
+      });
+    });
+    const { runtime, sessionManager, session, extensionRegistry } = await setup(provider);
+    let release!: () => void; const hold = new Promise<void>(resolve => { release = resolve; });
+    await extensionRegistry.load('parallel', api => { for (const name of ['a', 'b']) api.registerTool({
+      name, description: name, readOnly: true, execute: async (_input, context) => {
+        await context.onProgress!({ version: 1, content: `${name} is running` }); await hold; return { content: name };
+      },
+    }); });
+    const run = await runtime.start({ sessionId: session.id, cwd: process.cwd(), provider: 'mock', input: 'parallel' });
+    try {
+      await vi.waitFor(() => expect(runtime.snapshot(session.id).run?.activeTools?.map(tool => tool.progress?.content))
+        .toEqual(['a is running', 'b is running']));
+      const snapshot = runtime.snapshot(session.id); snapshot.run!.activeTools![0].name = 'forged';
+      expect(runtime.snapshot(session.id).run!.activeTool!.name).toBe('a');
+      release(); expect((await runtime.wait(run.id))!.phase).toBe('completed');
+      expect(runtime.snapshot(session.id).run!.activeTools).toBeUndefined();
+      expect(sessionManager.get(session.id)!.messages.filter(message => message.role === 'tool').map(message => message.name)).toEqual(['a', 'b']);
+    } finally { release(); await runtime.wait(run.id); }
+  });
+
   it('replays nested model progress under the outer tool and accounts usage once in persisted results', async () => {
     const provider = new MockProvider({ type: 'mock', model: 'virtual-chat' });
     let release!: () => void;

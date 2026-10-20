@@ -4,14 +4,15 @@
 
 ## Overview
 
-RUN-01 defines one native lifetime model for interactive/print/JSON CLI, JSONL RPC, the Core SDK and detached HTTP runs. Wire formats remain native: Pi's events and Pi Web's run protocol are not compatibility targets. A cancellation acknowledgement is not durable settlement.
+RUN-01–RUN-04 define one native lifetime, queue, recovery and tool-result model for interactive/print/JSON CLI, JSONL RPC, the Core SDK and detached HTTP runs. Wire formats remain native: Pi's events and Pi Web's run protocol are not compatibility targets. A cancellation acknowledgement is not durable settlement.
 
 ## Main Entry Points
 
 | Repository path | Ownership |
 |---|---|
 | `packages/core/src/agent/{runtime,prestart-admission,work-retention}.ts` | Session reservation, captured caller signal, unpublished retirement, detached run completion |
-| `packages/core/src/agent/{tool-loop,provider-turn}.ts` | Awaited provider/retry/tool work, guarded callbacks, durable interrupted-tool records |
+| `packages/core/src/agent/{tool-loop,provider-turn,nested-tools,tool-result}.ts` | Awaited provider/retry/parallel/nested work, owned rich results, durable interrupted-tool records |
+| `packages/core/src/providers/context-overflow.ts` | Bounded value-free structured HTTP overflow classification |
 | `packages/core/src/extensions/extension-registry.ts` | Ordered hooks, original host cancellation, no later hook/tool admission after withdrawal |
 | `packages/core/src/sdk/agent-session.ts` | Per-handle prompt reservation, stop acknowledgement, wait/dispose and borrowed ownership |
 | `packages/cli/src/index.ts` | Interactive and print/JSON input lifetime, queues, signals and owned MCP cleanup |
@@ -54,6 +55,44 @@ Once work is admitted, non-cooperative provider/tool/hook/preparation promises c
 
 Core records an owned-cleanup failure as `failed`, not successful/stopped settlement, and observes its detached task. RPC propagates cleanup/output failure through close; no successful settlement is emitted before failed release. Notifications are isolated observers, not extension-driven continuation authority. Native steering/follow-up continuations and retries admitted by the host are inside the run; arbitrary detached callbacks are not.
 
+### Queue delivery and attention
+
+Core owns bounded steering/follow-up queues and both `all` / `one-at-a-time` modes. Steering precedes follow-up. `all` consumes one entire current batch; `one-at-a-time` consumes one item per admitted boundary. Initial/queued turns already own their scheduler-selected batch: do not dequeue again on round zero. A post-tool turn may admit steering; a network retry or context-recovery attempt does not admit another batch. Clear and stale/terminal replies grant no new run authority.
+
+CLI and detached runtime retain distinct user entries within an all-mode batch. RPC conserves its existing native combined user message, joining batch text with two newlines and combining blocks. This is delivery-policy equivalence, not identical histories or Pi wire compatibility. SDK `steer()` / `followUp()` use the same scheduler with explicit run-default modes; they register no tools or summary provider implicitly.
+
+Browser queue recall edits the session-owned draft without silently delivering it. Clear removes pending items, not an unsent draft. View switching closes/reopens the genuine session stream and rehydrates canonical queues; remote-session unsent drafts remain view-local, **not cold-reload durable**. Bind the active conversation again when its route-matching metadata arrives after workspace/cache hydration, so a cached selection cannot make another visible conversation's completion look foreground. Background failures mark attention; opening that conversation clears the mark without changing another draft. Preserve the existing sequenced/correlation guards for late responses and replacement runs.
+
+### Bounded useful context recovery
+
+- One recovery budget belongs to a complete `runToolLoop`, not each provider attempt. Recognize `ProviderRequestContextError.kind === 'overflow'`, the native `ProviderContextOverflowError`, and a tool-free `stopReason: 'length'` response. Ordinary transient retries remain separate and refuse replay after visible output.
+- HTTP classification reads at most 64 KiB of failed 400/413 bodies and admits only exact structured context codes or Anthropic's structured `invalid_request_error` / `prompt is too long:` prefix. Cancel the body; never return remote diagnostic prose. Other vendor phrases/statuses are not universal overflow detection.
+- Request automatic compaction with reason `overflow`, bypassing only the threshold. Preserve enablement, host/session policy, source/generation, signal, the four-message compaction minimum, complete-tool cuts and summary accounting. SDK callers must explicitly supply a summary callback; existing policy still controls admission.
+- Retry only after an applied compaction reduces Core's estimated context. Refresh effective messages and current declarations. These estimates are not exact vendor tokenization or a guarantee that the next request fits.
+- Persist accepted length/failed visible text/reasoning and authentic usage first. After useful compaction, append an omission only if that failed assistant entry remains in effective context. Never rewrite raw history or bills. Private value-free `run.context_recovery` entries record reason, exhaustion and measured outcome; they do not authorize model input, execution or usage.
+- A disabled/ineffective/repeated overflow fails without blind replay. Disabled/ineffective/exhausted length recovery retains the native visible length outcome; it is not invented success at full length. Print/JSON keep output-limit failure sticky across positional prompts, but a recovered intermediate length attempt is not a final failure. Cancellation never starts a replacement request. No extra steering is consumed by repair.
+
+### Parallel, nested and rich tool results
+
+`ExtensionTool.readOnly: true` is explicit **trusted host classification**, not a purity proof or a model/MCP metadata claim. Run at most four adjacent classified calls together. Unclassified/mutating tools and `codemode`, `tool_search`, `spawn_subagent` are serial barriers. Composite hosts classify the actual selected executor, not a coincident static name. Join every admitted promise before declared-order result publication and before compaction/next dispatch. A result observer failure must not discard another completed batch member. Each live tool has correlated progress; `activeTool` remains the first-member compatibility projection and additive `activeTools` represents the batch. Clear terminal cards on settlement.
+
+The host may issue optional `context.executeTool(name, input)` **during a real invocation only**. It preserves signal, ID, parent and progress across hook context replacement and privately rechecks current selection after hooks. Nested siblings are serial/depth-first; ignored promises are joined; retired callbacks reject without dispatch. Root/ancestor recursion along the issued invocation lineage and nested control tools above are refused. Inputs are descriptor-safe owned JSON captured at call admission. No callback or result details grant billing, activation or branch-store authority. Existing code-mode guest isolation/store/model helpers remain separate; this is not a new guest ABI or a Node sandbox.
+
+| Native admission limit | Bound |
+|---|---|
+| Nested depth / accepted calls | Four child levels / 64 per outer invocation |
+| Nested input | 64 KiB owned JSON |
+| Nested result ledger | 384 KiB ordinary aggregate; reserve refusal/correlation headers within 512 KiB |
+| Structured result | 256 KiB owned JSON, including after redaction |
+| Result blocks | At most 64 text/image blocks |
+| Accepted content + blocks | 4 MiB; oversized/invalid results fail closed, not an unbounded full-output promise |
+
+`ExtensionToolResult.content` remains required compatible text. Optional `structuredContent` is inert JSON, copied without producer accessors/toJSON; redact raw strings/keys before JSON escaping and credential-shaped primitives before publication. Include its JSON text before ordinary truncation and expose it in native tool-result blocks/JSON details. Fold text blocks into compatible text. Images must be bounded inline base64 data URLs with matching declared PNG/JPEG/GIF/WebP MIME types and admitted plain fields; no remote fetch/SVG authority or pixel-content redaction is implied. Text-only consumers receive compatible text, not terminal image rendering.
+
+Own/redact results before nesting, persistence and model projection. Nested records retain real IDs/parents, outcomes/duration, results and bounded correlated progress, not authenticated usage. Arbitrary `usage` in details/progress/structured JSON stays display data. Preserve existing authenticated outer provider/code-mode accounting exactly once. Retain accepted truncated full text through the existing native full-output path; rejected oversized nested output is an error, not downloadable original content. Parallel/nested contexts do not share the legacy single-process raw output sink/path.
+
+OpenAI chat, Responses, Anthropic, Gemini and Bedrock project tool images as separate attributed user attachments **after the complete contiguous result batch**, never between call/result pairs and never as persisted synthetic messages. Native JSON/RPC carries image data and structured details; Web reuses its ordinary image renderer. Historical metadata and display blocks still grant no execution authority. MCP's existing tool-result normalization and code-mode's text-oriented guest bridge are not a claim of Pi result/renderer compatibility.
+
 ## Critical Flows
 
 - **Stop during admission:** reserve → await trust/hook/provider → cancel → retire unpublished continuation → no run/prompt/provider publication; a previously admitted metadata save still finishes.
@@ -73,6 +112,9 @@ Reuse the existing families; do not build a second test framework or replace rea
 | CLI `rpc/{run-lifetime,rpc-controller,rpc-server,rpc-extension-ui-process}.test.ts` | Prompt/steer/follow-up × abort/EOF/close, busy refusal, held cleanup, one final continuation settlement, normal EOF and real command/UI dispatch |
 | CLI `cli/{headless-signal-process,interactive-settlement-process,tool-progress-child,lifecycle}.test.ts`, `tests/functional-parity/installed-executable.test.ts` | Real emitted and outside-checkout installed print/JSON/RPC × both signals, held admission and SSE transport, repeated signals during async shutdown, exact channels/exits and durable readback; real regular/fullscreen PTY shutdown joins a held append before the shutdown observer reads the journal; strict cleanup records deadline failure and still joins physical completion. Real arbitrary-tool cancellation observes RPC abort acknowledgement while held, then joins exactly one interrupted result, final settlement and fresh-process journal replay |
 | Server `api/{run-admission-http,session-live-mutations,interaction-queue-http,http-compaction-lifecycle}.test.ts` | Actual HTTP disconnection at trust/hook/storage, detached response ownership, stop's nonterminal acknowledgement and durable writes |
+| Core `agent/{runtime-queue-delivery,context-recovery,tool-results,runtime}.test.ts`, `providers/{context-overflow,index,length-stop}.test.ts` | All queue modes and held retry/recovery boundaries; useful/disabled/repeated/cancelled recovery and raw/accounting conservation; joins, current selection, hooks, inert/redacted results and five adapter projections |
+| CLI `cli/run-contract-process.test.ts`, `rpc/rpc-controller.test.ts`, installed executable tests | Actual print/JSON/RPC/SDK rich/nested/parallel/recovery paths, regular/fullscreen/RPC/SDK queue schedules, failed RPC text/reasoning and outside-checkout packages/declarations |
+| `e2e/tool-progress.spec.ts` with `e2e/tool-progress.config.ts` | Built Web plus genuine Express/upstream/extension: parallel reconnect, image rendering/reload, queue recall/clear/view/draft journeys, background attention and HTTP recovery/native journal/accounting; no mocked product state |
 | `e2e/{live-server,queue-reconciliation}.spec.ts` | Separate browser/server persistence smoke and browser detached-protocol reconciliation; intercepted protocol evidence is not a live provider/transport qualification |
 
 ## Common Changes

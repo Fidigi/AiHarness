@@ -5,6 +5,7 @@
 import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   OpenAiProvider,
+  type AiProvider,
   OpenAiResponsesProvider,
   getOpenAiResponsesTransportStats,
   resetOpenAiResponsesTransportStats,
@@ -537,6 +538,33 @@ describe('multimodal provider adapters', () => {
       { type: 'image', mediaType: 'image/png', name: 'pixel.png', size: 3, url: 'data:image/png;base64,AQID' },
     ],
   };
+
+  it.each(['openai', 'responses', 'anthropic', 'gemini', 'bedrock'])('projects %s tool images after the complete result batch without mutating history', async name => {
+    const factories: Record<string, () => AiProvider> = {
+      openai: () => new OpenAiProvider({ type: 'openai', apiKey: 'key' }),
+      responses: () => new OpenAiResponsesProvider({ type: 'openai', apiKey: 'key', transport: 'sse' }),
+      anthropic: () => new AnthropicProvider({ type: 'anthropic', apiKey: 'key' }),
+      gemini: () => new GeminiProvider({ type: 'google', apiKey: 'key' }),
+      bedrock: () => new BedrockProvider({ type: 'bedrock', accessKeyId: 'fixture', secretAccessKey: 'fixture', region: 'us-east-1', model: 'fixture' }),
+    };
+    const messages: Message[] = [{ ...createMessage('assistant', ''), toolCalls: ['a', 'b'].map(id => ({ id: `tool-${id}`, name: 'read', input: {} })) },
+      { ...imageMessage, role: 'tool', id: 'result-a', toolCallId: 'tool-a', name: 'read', content: 'Image result' },
+      { id: 'result-b', role: 'tool', content: 'Second result', timestamp: new Date(), toolCallId: 'tool-b', name: 'read',
+        blocks: [{ type: 'image', mediaType: 'image/png', name: 'other.png', size: 3, url: 'data:image/png;base64,BAMH' }] }];
+    const original = JSON.stringify(messages);
+    global.fetch = vi.fn().mockResolvedValue(new Response(name === 'responses'
+      ? 'data: {"type":"response.output_text.delta","delta":"ok"}\n\ndata: {"type":"response.completed","response":{"id":"tool-image"}}\n\n'
+      : JSON.stringify({
+      choices: [{ message: { content: 'ok' } }], content: [{ type: 'text', text: 'ok' }], output_text: 'ok',
+      output: name === 'bedrock' ? { message: { content: [{ text: 'ok' }] } } : [],
+      candidates: [{ content: { parts: [{ text: 'ok' }] } }],
+    }), { status: 200, headers: { 'Content-Type': name === 'responses' ? 'text/event-stream' : 'application/json' } }));
+    await factories[name]().chat(messages);
+    const body = String((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
+    expect(body).toContain('Second result'); expect(body).toContain('Tool images for tool-a');
+    for (const image of ['AQID', 'BAMH']) { expect(body).toContain(image); expect(body.indexOf(image)).toBeGreaterThan(body.indexOf('Second result')); }
+    expect(JSON.stringify(messages)).toBe(original);
+  });
 
   it('maps image blocks to OpenAI image_url content', async () => {
     global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({

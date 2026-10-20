@@ -1642,6 +1642,8 @@ async function main(): Promise<void> {
         tools: toChatToolDefinitions(toolLoadout.getTools()),
         resolveTools: () => toChatToolDefinitions(toolLoadout.getTools()),
         executeTool: executeSelectedTool,
+        canExecuteInParallel: name => !toolLoadout.isDynamicTool(name) && extensionRegistry.getTools()
+          .some(tool => tool.name.toLowerCase() === name.toLowerCase() && tool.readOnly === true),
         getActivatedTools: (name, result) => toolLoadout.activatedTools(name, result),
         getToolResultMetadata: (name, result) => toolLoadout.resultMetadata(name, result),
         toolContext: {
@@ -1753,10 +1755,7 @@ async function main(): Promise<void> {
           if (jsonOutput) void jsonOutput.events.codemodeProgress(progress).catch(error => reportError(String(error)));
           else reportOutput(`[codemode ${progress.call.id}] ${progress.call.name}: ${progress.call.state}`);
         },
-        onAssistantResponse: response => {
-          if (printMode && response.stopReason === 'length') outputLimitReached = true;
-          return jsonOutput?.events.finishAssistant(response);
-        },
+        onAssistantResponse: response => jsonOutput?.events.finishAssistant(response),
         onToolCall: call => {
           activeToolCall = call;
           activeToolOutput = '';
@@ -1784,7 +1783,8 @@ async function main(): Promise<void> {
           beforeNextTurn: async () => {
             await persistQueuedBatch('steer', interactiveQueue.take('steer'));
           },
-          onFinalResponse: content => {
+          onFinalResponse: (content, response) => {
+            if (printMode && response.stopReason === 'length') outputLimitReached = true;
             if (!printMode && content) terminal.addTranscriptEntry({ type: 'assistant', content });
           },
           signal: operationController.signal,

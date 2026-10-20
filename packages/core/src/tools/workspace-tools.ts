@@ -494,7 +494,7 @@ export async function registerWorkspaceTools(
       };
     };
     api.registerTool({
-      name: 'read',
+      name: 'read', readOnly: true,
       description: `Read a text file. Output is truncated to ${DEFAULT_TOOL_MAX_LINES} lines or ${formatToolBytes(DEFAULT_TOOL_MAX_BYTES)}. Use offset/limit to continue.`,
       parameters: readParameters,
       execute: executeRead,
@@ -623,7 +623,7 @@ export async function registerWorkspaceTools(
       };
     };
     api.registerTool({
-      name: 'ls',
+      name: 'ls', readOnly: true,
       description: `List a directory alphabetically, including dotfiles. Output is bounded to 500 entries or ${formatToolBytes(DEFAULT_TOOL_MAX_BYTES)} by default.`,
       parameters: lsParameters,
       execute: executeLs,
@@ -667,7 +667,7 @@ export async function registerWorkspaceTools(
       };
     };
     api.registerTool({
-      name: 'find',
+      name: 'find', readOnly: true,
       description: `Find files by glob pattern. Git repositories respect .gitignore. Results are bounded to 1000 paths or ${formatToolBytes(DEFAULT_TOOL_MAX_BYTES)} by default.`,
       parameters: findParameters,
       execute: executeFind,
@@ -772,7 +772,7 @@ export async function registerWorkspaceTools(
       }
     };
     api.registerTool({
-      name: 'grep',
+      name: 'grep', readOnly: true,
       description: `Search text files with a regex or literal string. Git repositories respect .gitignore. Results are bounded to 100 matches or ${formatToolBytes(DEFAULT_TOOL_MAX_BYTES)} by default.`,
       parameters: grepParameters,
       execute: executeGrep,

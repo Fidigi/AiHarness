@@ -45,6 +45,8 @@ export type MessageContentBlock =
       toolCallId: string;
       name?: string;
       content: string;
+      /** Bounded inert native structured result; plain-text compatibility remains in content. */
+      structuredContent?: unknown;
       /** Complete result retained when `content` was bounded for the model context. */
       fullContent?: string;
       isError?: boolean;

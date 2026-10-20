@@ -134,7 +134,7 @@ export interface ProviderRequestBudget {
 
 /** A local admission refusal is not a failed provider attempt and must not be retried unchanged. */
 export class ProviderRequestContextError extends Error {
-  constructor(kind: 'invalid' | 'overflow' | 'unmeasurable' | 'stale') {
+  constructor(readonly kind: 'invalid' | 'overflow' | 'unmeasurable' | 'stale') {
     super(kind === 'invalid' ? 'Provider request context budget is invalid.'
       : kind === 'overflow' ? 'Provider request exceeds the owned context budget.'
       : kind === 'stale' ? 'Provider request context budget changed.'

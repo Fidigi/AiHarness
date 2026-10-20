@@ -282,6 +282,40 @@ beforeAll(async () => {
 afterAll(async () => { if (artifactRoot) await rm(artifactRoot, { recursive: true, force: true }); });
 
 describe('CLI-RUN-01 genuine locally packed installed executable', () => {
+  it.each([
+    ...['print', 'json', 'rpc', 'sdk'].flatMap(mode => ['tools', 'overflow', 'length'].map(scenario => `${mode}/${scenario}`)),
+    ...['rpc', 'sdk', 'regular', 'fullscreen'].map(mode => `${mode}/queues`),
+  ])('owns native run delivery/recovery/results outside the checkout (%s)', async entry => {
+    const [mode, scenario] = entry.split('/'); const probe = `run-contract-${mode}-${scenario}.mjs`;
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/run-contract-probe.mjs'), path.join(consumer, probe));
+    expect(await run(process.execPath, [probe, mode!, scenario!, 'one-at-a-time', 'all'], consumer,
+      { ...environment, AIH_RUN_COMMAND: 'ai-harness', AIH_TEST_MODULES_ROOT: installedModules }, '', 20_000))
+      .toEqual({ code: 0, stdout: 'RUN_CONTRACT_OK\n', stderr: '' });
+  }, 25_000);
+
+  it('publishes native bounded recovery, nested/rich results and parallel snapshot declarations', async () => {
+    await writeFile(path.join(consumer, 'run-public.ts'), `
+      import { ProviderContextOverflowError, type ExtensionRuntimeContext, type ExtensionTool,
+        type ExtensionToolResult, type AgentRunSnapshot, type Message } from '@ai-harness/core';
+      async function nested(context: ExtensionRuntimeContext): Promise<ExtensionToolResult | undefined> {
+        return context.executeTool?.('read', { path: 'file.txt' });
+      }
+      const tool: ExtensionTool = { name: 'readonly', description: '', readOnly: true, execute: () => ({
+        content: 'compatible text', structuredContent: { value: 1 }, blocks: [
+          { type: 'text', text: 'text' }, { type: 'image', name: 'pixel.png', mediaType: 'image/png', size: 3, url: 'data:image/png;base64,AQID' },
+        ],
+      }) };
+      function snapshots(snapshot: AgentRunSnapshot) { return snapshot.activeTools?.map(tool => [tool.id, tool.progress]); }
+      const result: Message['blocks'] = [{ type: 'tool_result', toolCallId: 'id', name: 'readonly', content: 'text', structuredContent: { value: 1 } }];
+      // @ts-expect-error Read-only admission is a host boolean, not model JSON metadata.
+      const untrusted: ExtensionTool['readOnly'] = 'true';
+      void [nested, tool, snapshots, result, untrusted, new ProviderContextOverflowError()];
+    `);
+    const result = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext',
+      '--moduleResolution', 'NodeNext', '--types', 'node', 'run-public.ts'], consumer, environment);
+    expect(result.stdout).toBe(''); expect(result.stderr).toBe('');
+  });
+
   it.each(['print', 'json', 'rpc', 'sdk'])('withdraws native workspace write authority through installed packages (%s)', async mode => {
     const probe = `trust-revocation-${mode}.mjs`;
     await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/trust-revocation-probe.mjs'), path.join(consumer, probe));

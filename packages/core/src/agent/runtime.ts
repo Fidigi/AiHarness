@@ -104,6 +104,7 @@ interface PendingInteraction {
 
 interface PreparedRunTools {
   definitions(): ChatToolDefinition[];
+  canExecuteInParallel(name: string): boolean;
   execute(
     name: string,
     input: unknown,
@@ -518,6 +519,7 @@ export class AgentRuntime {
     this.cancelInteractions(run);
     run.snapshot.retry = undefined;
     run.snapshot.activeTool = undefined;
+    if (run.snapshot.activeTools) run.snapshot.activeTools = undefined;
     run.snapshot.extensionRequest = undefined;
     // Report the cancellation acknowledgement without marking replay/state as
     // terminal before durable interrupted-tool accounting has settled.
@@ -580,6 +582,7 @@ export class AgentRuntime {
     run.snapshot.completedAt = new Date().toISOString();
     run.snapshot.retry = undefined;
     run.snapshot.activeTool = undefined;
+    if (run.snapshot.activeTools) run.snapshot.activeTools = undefined;
     run.snapshot.extensionRequest = undefined;
     this.cancelInteractions(run);
     const stopped = !cleanupFailed && (run.controller.signal.aborted || failure instanceof AgentAbortError);
@@ -609,6 +612,7 @@ export class AgentRuntime {
       provider: run.snapshot.provider,
       tools: preparedTools.definitions(),
       resolveTools: () => preparedTools.definitions(),
+      canExecuteInParallel: name => preparedTools.canExecuteInParallel(name),
       executeTool: (name, input, context, signal) => preparedTools.execute(
         name, input, context, signal,
       ),
@@ -619,17 +623,14 @@ export class AgentRuntime {
       redactText: this.redactText,
       onTurnStart: () => this.setPhase(run, 'prompting'),
       onToolCall: call => {
-        run.snapshot.activeTool = {
-          id: call.id,
-          name: call.name,
-          input: structuredClone(call.input),
-          startedAt: new Date().toISOString(),
-        };
+        const tool = { id: call.id, name: call.name, input: structuredClone(call.input), startedAt: new Date().toISOString() };
+        if (run.snapshot.activeTool) run.snapshot.activeTools = [...(run.snapshot.activeTools ?? [run.snapshot.activeTool]), tool];
+        run.snapshot.activeTool = run.snapshot.activeTools?.[0] ?? tool;
         this.setPhase(run, 'tool');
         this.publish(run, 'tool.started', call);
       },
       onToolProgress: progress => {
-        const tool = run.snapshot.activeTool;
+        const tool = run.snapshot.activeTools?.find(tool => tool.id === progress.toolCallId) ?? run.snapshot.activeTool;
         if (!tool || tool.id !== progress.toolCallId || run.controller.signal.aborted) return;
         tool.progress = structuredClone(progress);
         this.publish(run, 'tool.progress', { kind: 'tool', ...progress });
@@ -650,7 +651,11 @@ export class AgentRuntime {
           cacheReadTokens: usage.cacheReadTokens, cacheWriteTokens: usage.cacheWriteTokens, costUsd: usage.costUsd });
       },
       onToolResult: result => {
-        run.snapshot.activeTool = undefined;
+        if (run.snapshot.activeTools) {
+          run.snapshot.activeTools = run.snapshot.activeTools.filter(tool => tool.id !== result.call.id);
+          run.snapshot.activeTool = run.snapshot.activeTools[0];
+          if (!run.snapshot.activeTools.length) run.snapshot.activeTools = undefined;
+        } else if (run.snapshot.activeTool?.id === result.call.id) run.snapshot.activeTool = undefined;
         this.publish(run, result.isError ? 'tool.failed' : 'tool.completed', result);
       },
       onUsage: response => {
@@ -659,6 +664,7 @@ export class AgentRuntime {
         if (costUsd !== undefined) response.usage.costUsd = costUsd;
       },
       onFinalResponse: (content, response) => {
+        if (response.stopReason === 'length') return; // Already checkpointed before possible recovery.
         this.publish(run, 'message.completed', {
           messageId: latestMessageId,
           content,
@@ -668,8 +674,10 @@ export class AgentRuntime {
           ...(response.stopReason === 'length' ? { stopReason: 'length' } : {}),
         });
       },
-      streamTurn: async (messages, definitions) => {
-        await this.flushSteering(run, request);
+      streamTurn: async (messages, definitions, round, recovery) => {
+        // Initial/queued prompts already own their batch. Only a new post-tool
+        // turn admits steering; retries/recovery never consume another batch.
+        if (round > 0 && !recovery) await this.flushSteering(run, request);
         const currentMessages = this.effectiveMessages(run.snapshot.sessionId);
         const session = this.sessionManager.get(run.snapshot.sessionId);
         if (!session) throw new Error('Session introuvable.');
@@ -753,9 +761,10 @@ export class AgentRuntime {
         });
         // Complete checkpoints permit slow transports to replace only this
         // message's queued text/reasoning deltas, including intermediate tool turns.
-        if (response.toolCalls?.length) this.publish(run, 'message.completed', {
+        if (response.toolCalls?.length || response.stopReason === 'length') this.publish(run, 'message.completed', {
           messageId, content: response.content, reasoning: response.reasoning,
           model: response.model, usage: response.usage,
+          ...(response.stopReason === 'length' ? { stopReason: 'length' } : {}),
         });
         run.snapshot.partialMessage = undefined;
         run.snapshot.retry = undefined;
@@ -943,6 +952,8 @@ export class AgentRuntime {
     };
     return {
       definitions: () => toChatToolDefinitions(loadout.getTools()),
+      canExecuteInParallel: name => !loadout.isDynamicTool(name) && this.extensionRegistry.getTools()
+        .some(tool => tool.name.toLowerCase() === name.toLowerCase() && tool.readOnly === true),
       execute,
       resultMetadata: (name, result) => loadout.resultMetadata(name, result),
       activatedTools: (name, result) => loadout.activatedTools(name, result),

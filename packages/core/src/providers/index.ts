@@ -8,6 +8,7 @@ import type { Message, ProviderConfig, ToolCall, TokenUsage } from '../types/ind
 import { ProviderType } from '../types/index.js';
 import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
 import { parseProviderToolArguments } from './tool-arguments.js';
+import { rejectProviderHttpResponse } from './context-overflow.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, prepareAnthropicOutputBudget } from './anthropic-thinking.js';
 import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
@@ -45,6 +46,23 @@ export type StreamChunkCallback = (chunk: string, event?: StreamEvent) => void |
 
 function messageImages(message: Message): Array<Extract<NonNullable<Message['blocks']>[number], { type: 'image' }>> {
   return (message.blocks ?? []).filter((block): block is Extract<NonNullable<Message['blocks']>[number], { type: 'image' }> => block.type === 'image');
+}
+
+// Native tool images become an attributed user attachment after the complete result batch.
+// No synthetic entry is persisted and no tool-call/result pair is split.
+function toolImageMessages(messages: Message[]): Message[] {
+  if (!messages.some(message => message.role === 'tool' && messageImages(message).length)) return messages;
+  const result: Message[] = [];
+  const pending: Message[] = [];
+  const flush = () => { result.push(...pending); pending.length = 0; };
+  for (const message of messages) {
+    if (message.role !== 'tool') flush();
+    result.push(message);
+    const images = message.role === 'tool' ? messageImages(message) : [];
+    if (images.length) pending.push({ id: `tool-images:${message.id}`, role: 'user',
+      content: `Tool images for ${message.toolCallId ?? message.id}`, blocks: images, timestamp: message.timestamp });
+  }
+  flush(); return result;
 }
 
 function parseDataImage(url: string): { mediaType: string; data: string } | undefined {
@@ -564,6 +582,7 @@ export class OpenAiProvider extends AiProvider {
   }
 
   private buildMessages(messages: Message[]): Array<Record<string, unknown>> {
+    messages = toolImageMessages(messages);
     return messages.map(message => {
       if (message.role === 'tool') {
         return {
@@ -647,7 +666,7 @@ export class OpenAiProvider extends AiProvider {
       signal: options?.signal,
     });
 
-    if (!response.ok) rejectProviderResponse(response, `OpenAI API error (${response.status}).`);
+    if (!response.ok) await rejectProviderHttpResponse(response, `OpenAI API error (${response.status}).`);
 
     const data = await readProviderJson<OpenAiResponse>(response);
     const choice = data.choices?.[0];
@@ -714,7 +733,7 @@ export class OpenAiProvider extends AiProvider {
         signal: options?.signal,
       });
 
-      if (!response.ok) rejectProviderResponse(response, `OpenAI API error (${response.status}).`);
+      if (!response.ok) await rejectProviderHttpResponse(response, `OpenAI API error (${response.status}).`);
       if (!response.body) throw new Error('OpenAI streaming response has no body');
 
       let fullContent = '';
@@ -1524,6 +1543,7 @@ export class OpenAiResponsesProvider extends AiProvider {
   }
 
   private requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
+    messages = toolImageMessages(messages);
     const input: ResponsesInput = [];
     for (const message of messages) {
       if (message.role === 'tool') {
@@ -1544,7 +1564,11 @@ export class OpenAiResponsesProvider extends AiProvider {
         });
         continue;
       }
-      input.push({ role: message.role, content: message.content });
+      const images = message.role === 'user' ? messageImages(message) : [];
+      input.push({ role: message.role, content: images.length ? [
+        ...(message.content ? [{ type: 'input_text', text: message.content }] : []),
+        ...images.map(image => ({ type: 'input_image', image_url: image.url })),
+      ] : message.content });
     }
     return {
       model: options?.model ?? this.getConfiguredModel() ?? 'gpt-4o',
@@ -1674,7 +1698,7 @@ export class OpenAiResponsesProvider extends AiProvider {
       body: serializeProviderBody(body),
       signal: options?.signal,
     });
-    if (!response.ok) rejectProviderResponse(response, `OpenAI Responses API error (${response.status}).`);
+    if (!response.ok) await rejectProviderHttpResponse(response, `OpenAI Responses API error (${response.status}).`);
     if (!response.body) throw new Error('OpenAI Responses streaming response has no body.');
     const state: ResponsesAccumulator = {
       content: '', reasoning: '', tools: new Map(), outputBytes: 0, events: 0, completed: false, started: false,
@@ -1854,6 +1878,7 @@ export class GeminiProvider extends AiProvider {
   }
 
   private buildBody(messages: Message[], options?: ChatOptions): Record<string, unknown> {
+    messages = toolImageMessages(messages);
     const systemText = [
       options?.systemPrompt,
       ...messages.filter(message => message.role === 'system').map(message => message.content),
@@ -1965,7 +1990,7 @@ export class GeminiProvider extends AiProvider {
       body: serializeProviderBody(this.buildBody(messages, options)),
       signal: options?.signal,
     });
-    if (!response.ok) rejectProviderResponse(response, `Gemini API error (${response.status}).`);
+    if (!response.ok) await rejectProviderHttpResponse(response, `Gemini API error (${response.status}).`);
     return this.normalize(await readProviderJson<GeminiResponse>(response));
   }
 
@@ -1984,7 +2009,7 @@ export class GeminiProvider extends AiProvider {
         body: serializeProviderBody(this.buildBody(messages, options)),
         signal: options?.signal,
       });
-      if (!response.ok) rejectProviderResponse(response, `Gemini API error (${response.status}).`);
+      if (!response.ok) await rejectProviderHttpResponse(response, `Gemini API error (${response.status}).`);
       if (!response.body) throw new Error('Gemini streaming response has no body');
 
       const reader = response.body.getReader();
@@ -2115,6 +2140,7 @@ export class BedrockProvider extends AiProvider {
   }
 
   private requestBody(messages: Message[], options?: ChatOptions): Record<string, unknown> {
+    messages = toolImageMessages(messages);
     const system = [options?.systemPrompt, ...messages.filter(message => message.role === 'system').map(message => message.content)]
       .filter(Boolean).map(text => ({ text }));
     const mapped = messages.filter(message => message.role !== 'system').map(message => {
@@ -2129,6 +2155,10 @@ export class BedrockProvider extends AiProvider {
         role: message.role === 'assistant' ? 'assistant' : 'user',
         content: [
           ...(message.content ? [{ text: message.content }] : []),
+          ...messageImages(message).flatMap(image => {
+            const data = parseDataImage(image.url);
+            return data ? [{ image: { format: data.mediaType.split('/')[1], source: { bytes: data.data } } }] : [];
+          }),
           ...(message.toolCalls ?? []).map(call => ({ toolUse: {
             toolUseId: call.id, name: call.name, input: call.input,
           } })),
@@ -2182,7 +2212,7 @@ export class BedrockProvider extends AiProvider {
     const response = await this.request(url, {
       method: 'POST', headers: await this.signedHeaders(url, body), body, signal: options?.signal,
     });
-    if (!response.ok) rejectProviderResponse(response, `Bedrock API error (${response.status}).`);
+    if (!response.ok) await rejectProviderHttpResponse(response, `Bedrock API error (${response.status}).`);
     const data = await readProviderJson<BedrockResponse>(response);
     const token = (value: unknown): number => (
       typeof value === 'number' && Number.isFinite(value) && value > 0
@@ -2273,6 +2303,7 @@ export class AnthropicProvider extends AiProvider {
   }
 
   private buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    messages = toolImageMessages(messages);
     return messages.filter(message => message.role !== 'system').map(message => {
       if (message.role === 'tool') {
         return {
@@ -2360,7 +2391,7 @@ export class AnthropicProvider extends AiProvider {
       signal: options?.signal,
     });
 
-    if (!response.ok) rejectProviderResponse(response, `Anthropic API error (${response.status}).`);
+    if (!response.ok) await rejectProviderHttpResponse(response, `Anthropic API error (${response.status}).`);
 
     const data = await readProviderJson<AnthropicResponse>(response);
     const token = (value: unknown): number => (
@@ -2458,7 +2489,7 @@ export class AnthropicProvider extends AiProvider {
         signal: options?.signal,
       });
 
-      if (!response.ok) rejectProviderResponse(response, `Anthropic API error (${response.status}).`);
+      if (!response.ok) await rejectProviderHttpResponse(response, `Anthropic API error (${response.status}).`);
 
       let fullContent = '';
       let fullReasoning = '';
