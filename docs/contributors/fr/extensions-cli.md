@@ -174,6 +174,8 @@ export default function exampleExtension(api) {
 
 ## API disponible
 
+Le [contrat natif extensions/SDK v1](../../ai/topics/native-extension-contract.md) décrit les imports/événements/résultats/UI par hôte, l’adaptation des packages/ressources et les contrats Pi non pris en charge. `on`/`before` refuse les noms inconnus ; une API capturée d’une génération déchargée refuse les enregistrements tardifs. L’import public est `@ai-harness/core`, sans alias Pi/privé/TUI.
+
 Chaque factory reçoit `api.version`. La version `1` est aussi exportée sous le nom `AI_HARNESS_EXTENSION_API_VERSION` par `@ai-harness/core` ; une extension doit refuser une version majeure non prise en charge avant d’enregistrer son comportement.
 
 - `version` : version majeure courante du contrat d’extension propre à AiHarness.
@@ -232,6 +234,18 @@ api.before('before:provider', data => ({
   options: { ...data.options, temperature: 0.2 },
 }));
 ```
+
+### Hooks actionnables de sortie et de fin
+
+La boucle commune CLI/JSON/RPC/SDK/Web accepte `before:message` retournant `{content}`, `before:tool:result` retournant un `{result}` public externe, puis `before:turn:end` / `before:agent:settle` retournant `{continuation:{type,content}}`. Dernière continuation définie retenue ; null l’efface. Ces noms natifs ne sont pas des alias de `turn_end`/`agent_before_settle`. Les transformations de contexte restent dans `before:provider`.
+
+```ts
+api.before('before:agent:settle', event => event.round === 0
+  ? { continuation: { type: 'review:check', content: 'Vérifier la réponse une fois.' } }
+  : undefined);
+```
+
+Les continuations ajoutent des messages personnalisés natifs visibles au modèle, sans faux messages utilisateur, sous le même budget de tours et signal d’annulation. Les sorties publiques sont copiées, les callbacks ordonnés et l’autorité hôte conservée ; clés inconnues/accesseurs/sorties invalides échouent fermés. Veto/erreur conserve la consommation authentique terminée sans donner d’autorité arbitraire sur détails/store/usage ou appels d’outils en attente. Annuler/décharger retire l’autorité tardive, sans tuer Node ni annuler une écriture admise. Le texte déjà diffusé peut précéder son remplacement final : utilisez le redactor pour les secrets. Le contrat lié précise les bornes et UI non prises en charge par hôte.
 
 ### Hooks ordonnés de branche et résumé
 

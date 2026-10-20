@@ -9,6 +9,9 @@ export type {
   ExtensionModuleLoadResult,
 } from './module-loader.js';
 export type {
+  AgentRunTrigger,
+  ExtensionCustomTrigger,
+  ExtensionTurnEvent,
   BeforeAgentData,
   BeforeHookExecution,
   BeforeHookHandler,

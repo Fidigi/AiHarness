@@ -12,9 +12,10 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | AI Providers | [`topics/providers.md`](./topics/providers.md) | ~215 lines |
 | Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~225 lines |
 | Session Context State | [`topics/session-context-state.md`](./topics/session-context-state.md) | ~100 lines |
-| TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~65 lines |
+| TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~75 lines |
 | Native Run Lifecycle | [`topics/run-lifecycle.md`](./topics/run-lifecycle.md) | ~130 lines — lifetime, queues, bounded recovery and parallel/nested/rich results |
-| Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~245 lines |
+| Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~250 lines |
+| Native Extension / SDK Contract | [`topics/native-extension-contract.md`](./topics/native-extension-contract.md) | ~110 lines — host/import/event/UI/package adaptation |
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~430 lines |
 | CLI Invocation Contract | [`topics/cli-invocation-contract.md`](./topics/cli-invocation-contract.md) | ~140 lines |
 | Terminal Themes | [`topics/themes.md`](./topics/themes.md) | ~80 lines |

@@ -34,6 +34,8 @@ Core PluginService -> install/locked state/filtered inventory/bounded batch stat
 
 ## Extension Contracts
 
+The [native extension/SDK support map](./native-extension-contract.md) specifies imports, events, results, UI availability by host, package adaptation and unsupported foreign contracts. Native output/turn/settlement hooks use the shared loop; unknown `on`/`before` names and retained registration APIs after unload are refused.
+
 `ExtensionAPI` is an AiHarness-owned versioned contract. Core exports `AI_HARNESS_EXTENSION_API_VERSION` (`1`) and supplies the same literal as `api.version` before an extension registers behavior.
 
 | Registration | Contract |
@@ -44,7 +46,7 @@ Core PluginService -> install/locked state/filtered inventory/bounded batch stat
 | `registerTool` | Model/manual tool with JSON schema, AbortSignal and structured result |
 | `registerProvider` | Runtime `AiProvider` factory and optional defaults |
 | `registerUI` | Plain-text `header`/`status` terminal component |
-| `before` | Agent/provider/tool/model transform/cancellation; ordered cancel-only `before:session:branch` and explicit output-only `before:session:summary` |
+| `before` | Agent/provider/tool/model transforms; bounded message/result replacement, actionable turn/settlement continuations; ordered branch/summary/compaction admission |
 | `on` | Session/message/compaction lifecycle listener |
 
 A registered tool can set `exposure` to `direct`/`model-only` for immediate declaration, `deferred` for schema-free discovery followed by next-turn declaration through `tool_search`, `codemode` for searchable but permanently script-only exposure, or `hidden` to remain unavailable to model dispatch. Optional namespace metadata enriches ranking and the bounded [QuickJS namespace helpers](./codemode.md). Exposure does not grant trust, authorization, or sandboxing: normal selection policy, declaration checks, hooks, cancellation, and runtime guards still apply, and static selected tools win dynamic name collisions.
@@ -80,6 +82,10 @@ Interactive `/reload` refreshes executable factories, not the journal; restore c
 `before:session:summary` runs only for explicitly authorized navigation summaries. Its frozen `BranchSummaryEvent` adds bounded model-visible transcript, source/from/target IDs and token/output budgets. Return undefined, cancellation, or own `{summary,provider?,model?,usage?}`. Outputs/accounting are detached and descriptor-validated; the last defined override wins, later veto cancels, fallback runs only without an override. No source/target rewrite or implicit model authority. Private data/details stay excluded; hidden-display custom content remains model-visible. Legacy per-call summarizers keep the original caller signal; global callbacks get the owned generation signal.
 
 `attachSessionManager` supplies both bridges; `attachSessionBranchHooks` borrows an independent reference-counted lease without moving lifecycle ownership. Limits: 128 managers, 256 leases/manager, 256 callbacks per extension hook kind; Core has 128 neutral callbacks and 256 pending admissions. Registration/removal/unload/rebind/shutdown withdraw unpublished work before awaited cleanup, including ignored callbacks; stale unsubscribes are inert and capacity refusal preserves accepted bindings. SDK disposal releases only its lease. Already-admitted writes finish; no rollback/CAS or sandbox is promised.
+
+### Output hooks and typed continuations
+
+`before:message` replaces only final assistant `content`; `before:tool:result` replaces only the top-level public result, never authenticated details/usage/store/activation. `before:turn:end` and `before:agent:settle` can return bounded `{continuation:{type,content}}`, or null to clear a prior continuation. They run in order with copied payloads, pinned signals and generation retirement, within the existing round budget. Explicit runtime/SDK custom starts use native `custom_message` rather than fake user entries. Completed provider/tool work remains accounted even on veto; streamed raw text is not retroactively hidden. See the [semantic map and limits](./native-extension-contract.md#semantic-event-map).
 
 ### RPC UI adapter
 
@@ -195,6 +201,7 @@ Initial focus is admitted before the renderer exists and checked again at its fi
 - `packages/server/src/api/session-notice-process.test.ts` — public Core/real built Server process coverage for completed/failed/stopped session-command notice correlation, active correlation and captured tool callbacks over HTTP/SSE; not browser queue delivery
 - Core `extensions/{session-branch-hooks,session-summary-hooks}.test.ts`, `sessions/{session-branch-admission,session-branch-hooks,session-summary-hooks}.test.ts` and `sdk/session-branch-hooks.test.ts` — ordered admission/override validation, ignored callbacks, bounded leases/generations/reentrancy, borrowed lifecycle and durable publication ownership
 - CLI `rpc/{session-branch-lifecycle,session-branch-ui,session-summary-hooks}.test.ts`, `cli/session-branch-terminal-process.test.ts` and installed executable consumers — actual RPC/terminal publication versus cancellation, explicit global overrides and startup veto
+- Core `extensions/execution-hooks.test.ts`, `sdk/execution-hooks.test.ts`, actual CLI `cli/extension-execution-process.test.ts`, installed consumers and Server `api/extension-execution-http.test.ts` — ordered owned transformations, typed custom continuation, budget/veto/error/abort/generation/reentrancy and authentic accounting across hosts
 - `packages/core/src/extensions/extension-registry.test.ts` — API version, ownership, hooks, tools, providers, UI and atomic replacement
 - `packages/core/src/agent/runtime-interaction-queue.test.ts` and `runtime-interaction-process.test.ts` — order, updates, exactly-once settlement, bounds, signal/deadline and original subprocess controls
 - `packages/server/src/api/{interaction-queue-http,queue-reconciliation-http,queue-generation-http,queue-generation-process}.test.ts` — latest-schema HTTP validation, stop accounting before terminal replay, same-cwd preservation and revocation while the run remains active

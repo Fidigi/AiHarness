@@ -44,7 +44,7 @@ import {
   type AgentSession, type AgentProvider, type AgentProviderConfig,
   type CreateAgentSessionOptions, type SessionStore, type AgentCredential,
   type AgentAuthDescriptor, type AgentModel, type AgentResourceLoader,
-  type AgentEvent, type AgentPromptOptions,
+  type AgentEvent, type AgentPromptOptions, ExtensionRegistry, type AgentRunTrigger,
 } from '@ai-harness/core';
 const version: 1 = AI_HARNESS_CORE_API_VERSION;
 declare const provider: AiProvider;
@@ -69,6 +69,22 @@ const protocol: 1 = sdk.capabilities.eventProtocolVersion;
 const prompt: AgentPromptOptions = { model: model.id, thinking: 'high', blocks: [{ type: 'text', text: 'input' }] };
 await sdk.prompt('input', prompt);
 await sdk.wait();
+const trigger: AgentRunTrigger = { kind: 'custom', type: 'review:check' };
+await sdk.promptAndWait('review context', { trigger });
+const extensions = new ExtensionRegistry();
+await extensions.load('review', api => {
+  api.before('before:message', data => ({ content: data.content.toUpperCase() }));
+  api.before('before:tool:result', () => ({ result: { content: 'owned', structuredContent: { valid: true } } }));
+  api.before('before:turn:end', data => data.trigger.kind === 'user'
+    ? { continuation: { type: 'review:check', content: 'Check again' } } : undefined);
+  api.before('before:agent:settle', () => ({ continuation: null }));
+  // @ts-expect-error foreign Pi event names are not native lifecycle listeners
+  api.on('turn_end', () => undefined);
+  // @ts-expect-error hooks cannot replace authentic provider usage
+  api.before('before:message', () => ({ usage: { totalTokens: 999 } }));
+});
+// @ts-expect-error custom triggers require a type, not a foreign source shortcut
+await sdk.prompt('review', { trigger: { kind: 'custom' } });
 await sdk.stop();
 sdk.steer('input'); sdk.followUp('later'); sdk.clearQueue('steer');
 sdk.respondToInteraction('request-id', { cancelled: false, value: true });
@@ -157,7 +173,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import {
   AI_HARNESS_CORE_API_VERSION, createAgentSession, createAgentResourceLoader,
-  AiProvider, JsonlSessionStore, deserializeSession,
+  AiProvider, JsonlSessionStore, deserializeSession, ExtensionRegistry,
 } from '@ai-harness/core';
 assert.equal(AI_HARNESS_CORE_API_VERSION, 1);
 assert.ok(import.meta.resolve('@ai-harness/core').startsWith(new URL('./node_modules/@ai-harness/core/', import.meta.url).href));
@@ -218,7 +234,25 @@ assert.deepEqual(resources.resources(), []);
 assert.deepEqual(await resources.reloadResources(), []);
 await resources.dispose();
 assert.ok(!(await readdir(cwd)).includes('.ai-harness'));
-console.log('SDK public consumer: memory, custom store, resume, events, redaction, usage, fork/clone, resources OK');
+const extensions = new ExtensionRegistry();
+const triggerKinds = [];
+await extensions.load('review', api => {
+  api.before('before:agent', data => { triggerKinds.push(data.trigger.kind); });
+  api.before('before:message', data => ({ content: 'owned:' + data.content }));
+  api.before('before:agent:settle', data => data.round === 0
+    ? { continuation: { type: 'review:next', content: 'public continuation' } } : undefined);
+});
+const reviewed = await createAgentSession({ ...options, extensionRegistry: extensions });
+assert.equal((await reviewed.promptAndWait('public custom context', { trigger: { kind: 'custom', type: 'automation:review' } })).phase, 'completed');
+assert.deepEqual(triggerKinds, ['custom']);
+assert.equal(reviewed.messages().filter(message => message.role === 'user').length, 0);
+assert.equal(reviewed.messages().at(-1).content, 'owned:consumer:[REDACTED]');
+assert.equal((await reviewed.history()).filter(entry => entry.type === 'custom_message').length, 2);
+assert.equal(reviewed.snapshot().usage.totalTokens, 6);
+await reviewed.dispose();
+assert.equal(extensions.list().length, 1);
+await extensions.unloadAll();
+console.log('SDK public consumer: memory, custom store, resume, events, redaction, usage, fork/clone, resources, typed triggers and continuation hooks OK');
 `;
 
 const reviewRuntime = `

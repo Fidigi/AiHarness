@@ -16,7 +16,7 @@
 
 Le serveur Web expose une interface pour les extensions déclaratives : widgets texte, notices de statut et requêtes interactives (`confirm`, `input`, `select`, `editor`, `custom`). Contrairement aux extensions CLI qui s'exécutent dans le processus Node, l'interface Web ne reçoit **que des métadonnées nettoyées** — jamais le code source d'une extension.
 
-Pour les extensions exécutables du CLI, consultez [extensions-cli.md](./extensions-cli.md).
+Pour les extensions exécutables du CLI, consultez [extensions-cli.md](./extensions-cli.md). Les hooks serveur utilisent la même boucle native sortie/tour/pré-settlement et ses continuations ; le navigateur reste un renderer inerte de DTO/formulaires. La [matrice native d’adaptation par hôte](../../ai/topics/native-extension-contract.md) distingue imports, commandes, ressources, UI réservée au RPC et contrats Pi/React arbitraires non pris en charge.
 
 ## Chargement et reload atomique
 

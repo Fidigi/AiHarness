@@ -2648,7 +2648,7 @@ export class SessionManager {
 
   /** Display is a UI preference only; every custom_message contributes its content to context. */
   async appendCustomMessage(sessionId: string, customType: string, content: string,
-    options: { display?: boolean; details?: unknown } = {}): Promise<CustomMessageEntry | null> {
+    options: { display?: boolean; details?: unknown } = {}, admission: SessionBranchOptions = {}): Promise<CustomMessageEntry | null> {
     if (typeof customType !== 'string' || !customType || !isBoundedSessionString(customType, 256)) {
       throw new Error('Custom session type is invalid.');
     }
@@ -2672,7 +2672,7 @@ export class SessionManager {
       timestamp: Date.now(), customType: this.redactText(customType), content: safeContent,
       display: copiedOptions.display !== false,
       ...(copiedOptions.details !== undefined ? { details: this.redactJson(copiedOptions.details) } : {}),
-    });
+    }, undefined, admission);
   }
 
   /** Owned historical state only; it never supplies current execution authority. */

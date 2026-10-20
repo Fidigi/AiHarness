@@ -174,6 +174,8 @@ export default function exampleExtension(api) {
 
 ## Available API
 
+Use the [native extension/embedding contract v1](../../ai/topics/native-extension-contract.md) for the complete imports/events/results/UI host matrix, package/resource adaptation and unsupported Pi contracts. Runtime `on`/`before` refuses unknown event names; registration APIs captured from an unloaded generation refuse late registrations. The public root is `@ai-harness/core`, not a Pi/private/TUI peer alias.
+
 Every factory receives `api.version`. Version `1` is also exported as `AI_HARNESS_EXTENSION_API_VERSION` from `@ai-harness/core`; extensions should reject an unsupported major before registering behavior.
 
 - `version`: current major version of the AiHarness-owned extension contract.
@@ -232,6 +234,18 @@ api.before('before:provider', data => ({
   options: { ...data.options, temperature: 0.2 },
 }));
 ```
+
+### Actionable output and settlement hooks
+
+The shared CLI/JSON/RPC/SDK/Web loop supports `before:message` returning `{content}`, `before:tool:result` returning a public top-level `{result}`, and `before:turn:end` / `before:agent:settle` returning `{continuation:{type,content}}`. The last defined continuation wins; null clears it. These are native names, not `turn_end`/`agent_before_settle` aliases. Context transformations remain `before:provider`.
+
+```ts
+api.before('before:agent:settle', event => event.round === 0
+  ? { continuation: { type: 'review:check', content: 'Check the answer once.' } }
+  : undefined);
+```
+
+Continuations append native model-visible custom messages, retain the existing round budget and cancellation, and never masquerade as user messages. Hooks run in order with copied public output and pinned authority; unknown fields/accessors/invalid output fail closed. Veto/error conserves completed authentic accounting; no arbitrary result details/store/usage or pending tool authority can be forged. Callback retirement on abort/unload is not Node termination or storage rollback. Already streamed text can precede its final replacement; use credential redaction for secrets. See the linked contract for exact boundaries and per-host unsupported UI.
 
 ### Ordered branch and summary hooks
 

@@ -20,6 +20,29 @@ async function fixture(tools: ExtensionTool[], calls = tools.map(tool => tool.na
 }
 
 describe('native tool result and nested execution contract', () => {
+  it('vetoes public results without granting codemode store authority or losing completed usage', async () => {
+    const f = await fixture([{ name: 'probe', description: '', execute: () => ({ content: 'original' }) }]);
+    await f.registry.load('veto', api => { api.before('before:tool:result', () => false); });
+    await f.run({ getToolResultMetadata: () => ({ codemode: { usage: { totalTokens: 7 }, store: { counter: 1 } } }) });
+    expect(f.results()[0].isError).toBe(true);
+    expect(f.results()[0].metadata?.codemode).toEqual({ usage: { totalTokens: 7 } });
+    expect(f.results()[0].usage?.totalTokens).toBe(7);
+  });
+
+  it('conserves provider usage on message veto and never executes its pending tool calls', async () => {
+    const execute = vi.fn(() => ({ content: 'unreachable' }));
+    const f = await fixture([{ name: 'probe', description: '', execute }]);
+    f.turn.mockReset().mockResolvedValue({ content: 'billed', toolCalls: [{ id: 'pending', name: 'probe', input: {} }],
+      usage: { promptTokens: 2, completionTokens: 1, totalTokens: 3 } });
+    await f.registry.load('veto', api => { api.before('before:message', () => false); });
+    await expect(f.run()).rejects.toThrow('Extension message cancelled.');
+    expect(execute).not.toHaveBeenCalled();
+    expect(f.manager.get(f.session.id)?.usage.totalTokens).toBe(3);
+    expect(f.manager.get(f.session.id)?.messages.at(-1)).toMatchObject({ role: 'assistant', content: 'billed',
+      metadata: { outputError: 'Extension message publication refused.' } });
+    expect(f.manager.get(f.session.id)?.messages.at(-1)?.toolCalls).toBeUndefined();
+  });
+
   it('joins readonly batches in declared order before starting a mutator', async () => {
     const a = gate(), b = gate(), started: string[] = [];
     const f = await fixture([

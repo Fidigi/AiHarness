@@ -13,6 +13,7 @@ import { ProviderContextOverflowError } from '../providers/context-overflow.js';
 import { ProviderRequestContextError } from './provider-request-estimate.js';
 import { ownToolResult } from './tool-result.js';
 import { nestedToolScope } from './nested-tools.js';
+import { copyAgentRunTrigger, copyExtensionResult, type AgentRunTrigger, type ExtensionCustomTrigger } from '../extensions/execution-hooks.js';
 
 export interface ToolExecutionResult {
   call: ToolCall;
@@ -68,6 +69,7 @@ export interface ToolLoopOptions {
   maxToolResultLength?: number;
   signal?: AbortSignal;
   provider?: string;
+  trigger?: AgentRunTrigger;
   /** Process-local scrubber applied before extension/tool output is persisted or emitted. */
   redactText?(value: string): string;
 }
@@ -128,6 +130,27 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       metadata: entry.metadata,
     }));
   let messages = effectiveMessages();
+  let trigger = copyAgentRunTrigger(options.trigger);
+  const hookSignal = options.signal ?? new AbortController().signal;
+  const endTurn = async (round: number, toolCount: number, settle: boolean): Promise<ExtensionCustomTrigger | null | undefined> => {
+    const event = { sessionId: options.sessionId, round, toolCount, trigger,
+      context: options.toolContext, signal: hookSignal };
+    const turn = await options.extensionRegistry.runBefore('before:turn:end', event);
+    if (turn.cancelled) throw new Error('Extension turn cancelled.');
+    if (!settle) return turn.data.continuation;
+    const final = await options.extensionRegistry.runBefore('before:agent:settle', { ...event, continuation: turn.data.continuation });
+    if (final.cancelled) throw new Error('Extension settlement cancelled.');
+    return final.data.continuation;
+  };
+  const continueWith = async (continuation: ExtensionCustomTrigger, round: number): Promise<void> => {
+    throwIfAborted();
+    if (round + 1 >= maxToolRounds) throw new Error(`Limite de ${maxToolRounds} tours d'outils atteinte.`);
+    await options.sessionManager.appendCustomMessage(options.sessionId, continuation.type, continuation.content,
+      { display: true }, { signal: options.signal });
+    throwIfAborted();
+    trigger = { kind: 'custom', type: continuation.type };
+    messages = effectiveMessages();
+  };
 
   const throwIfAborted = (): void => {
     if (options.signal?.aborted) throw new AgentAbortError();
@@ -182,11 +205,28 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
     throwIfAborted();
     if (response.usage) await options.onUsage?.(response, round);
     const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
+    const originalContent = response.content;
+    try {
+      const messageHook = await options.extensionRegistry.runBefore('before:message', {
+        sessionId: options.sessionId, content: response.content, signal: hookSignal,
+      });
+      if (messageHook.cancelled) throw new Error('Extension message cancelled.');
+      response = { ...response, content: options.redactText?.(messageHook.data.content) ?? messageHook.data.content };
+    } catch (error) {
+      // A completed provider call is billed work even when its output hook fails
+      // or is retired. Conserve authentic evidence, never execute pending calls.
+      await options.sessionManager.addMessage(options.sessionId, {
+        role: 'assistant', content: response.content, provider: options.provider, model: response.model,
+        usage: normalizeUsage(response.usage), durationMs,
+        metadata: { outputError: 'Extension message publication refused.' },
+      }, { skipAutoCompaction: true });
+      throw error;
+    }
     await options.onAssistantResponse?.(response, round, durationMs);
     const toolCalls = response.toolCalls ?? [];
 
     if (toolCalls.length === 0) {
-      if (response.content || response.reasoning || response.stopReason === 'length') {
+      if (response.content || originalContent || response.reasoning || response.stopReason === 'length') {
         await options.sessionManager.addMessage(options.sessionId, {
           role: 'assistant',
           content: response.content,
@@ -214,6 +254,12 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         continue;
       }
       await options.onFinalResponse?.(response.content, response);
+      const continuation = await endTurn(round, 0, true);
+      throwIfAborted();
+      if (continuation) {
+        await continueWith(continuation, round);
+        continue;
+      }
       return response.content;
     }
 
@@ -276,18 +322,27 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         nested = nestedToolScope(context, call, execute, name => (options.resolveTools?.() ?? tools)
           .some(tool => tool.name.toLowerCase() === name.toLowerCase()), options.signal, options.redactText);
         const result = await execute(call.name, call.input, nested.context);
-        const owned = ownToolResult(result, options.redactText);
+        // Extract host-authenticated metadata from the original identity only.
+        resultMetadata = options.getToolResultMetadata?.(call.name, result);
+        const resultHook = await options.extensionRegistry.runBefore('before:tool:result', {
+          sessionId: options.sessionId, tool: call.name, result: copyExtensionResult(result), signal: hookSignal,
+        });
+        if (resultHook.cancelled) throw new Error('Extension tool result cancelled.');
+        const owned = ownToolResult(resultHook.data.result, options.redactText);
         content = owned.content;
         blocks = owned.blocks.filter((block): block is Extract<MessageContentBlock, { type: 'image' }> => block.type === 'image');
         structuredContent = owned.structuredContent;
         isError = owned.isError;
         if (!isError) activatedTools = options.getActivatedTools?.(call.name, result);
-        resultMetadata = options.getToolResultMetadata?.(call.name, result);
       } catch (error) {
         isError = true;
         const message = error instanceof Error ? error.message : String(error);
         content = options.redactText?.(message) ?? message;
       } finally { await nested?.finish(); }
+      if (isError && resultMetadata?.codemode) {
+        const { store: _store, ...details } = resultMetadata.codemode as CodemodeDetails;
+        resultMetadata = { ...resultMetadata, codemode: details };
+      }
       if (nested?.records.length) resultMetadata = { ...resultMetadata, nestedTools: structuredClone(nested.records) };
 
       const progress = await progressChannel.finish(options.signal?.aborted ? 'cancelled' : isError ? 'failed' : 'completed');
@@ -376,6 +431,9 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
     await options.sessionManager.checkAndTriggerCompaction(options.sessionId, options.signal);
     recovery = undefined;
     await options.onTurnEnd?.(response, toolResults, round);
+    const continuation = await endTurn(round, toolResults.length, false);
+    throwIfAborted();
+    if (continuation) await continueWith(continuation, round);
     await options.beforeNextTurn?.(response, toolResults, round);
     throwIfAborted();
     messages = effectiveMessages();

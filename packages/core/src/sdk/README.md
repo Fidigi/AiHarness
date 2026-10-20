@@ -303,6 +303,18 @@ not another host's lifecycle or summary binding. Labels, arbitrary payload-ID
 rewriting and cross-process coordination remain separate. Related handles share
 one runtime/manager/provider group.
 
+### Native extension and Pi adaptation
+
+This SDK uses the [native host/import/event/result/UI/package map](../../../../docs/ai/topics/native-extension-contract.md), not Pi signatures or automatic configured persistence. Supply `extensionRegistry` explicitly; its shared-loop hooks include `before:message` (text only), `before:tool:result` (public top-level result only), `before:turn:end` and `before:agent:settle` (bounded custom continuation). Context transformation remains `before:provider`; private state uses the selected manager ancestry. Unknown foreign event names and retired registration APIs refuse.
+
+```ts
+await session.promptAndWait('Scheduled review context', {
+  trigger: { kind: 'custom', type: 'automation:review' },
+});
+```
+
+Default prompts are user-triggered. Explicit custom starts accept text only and append native model-visible `custom_message`, not a fabricated user message. A turn/settlement hook may return `{continuation:{type,content}}`; last defined wins, null clears, and continuations share `maxToolRounds` with tools. Stop/dispose retires pending hook authority, not privileged Node code. Message veto/error conserves completed provider usage without executing pending tool calls; output replacement is not a streaming secret filter. All existing ownership, queue, copy, supplied-summary compaction and explicit resource methods retain their contracts. No executable/auth/MCP discovery or Pi methods are synthesized.
+
 ### Ownership, persistence and limitations
 
 Inspect frozen `capabilities` and `ownership`. The SDK owns its manager, runtime,
@@ -437,6 +449,8 @@ les résultats/consommations interrompus comme durables. `wait()` n'empêche pas
 refusés jusqu'au règlement durable. Les erreurs d'exécution donnent un snapshot
 `failed` ; les erreurs de démarrage/confiance/stockage peuvent rejeter l'appel.
 `steer`, `followUp`, `clearQueue` et `respondToInteraction` reprennent Core.
+
+L’adaptation suit le [contrat natif par hôte](../../../../docs/ai/topics/native-extension-contract.md), pas les signatures Pi. Un registre fourni explicitement peut utiliser `before:message` (texte seul), `before:tool:result` (résultat public externe), `before:turn:end` et `before:agent:settle`. Les deux derniers retournent éventuellement `{continuation:{type,content}}` ; dernière valeur définie retenue, null pour effacer, avec le même budget `maxToolRounds`. `promptAndWait(texte,{trigger:{kind:'custom',type:'automation:review'}})` accepte du texte seul et ajoute un `custom_message` visible au modèle, pas un faux message utilisateur. Par défaut le déclencheur reste utilisateur. Un veto/échec conserve l’usage fournisseur terminé sans lancer ses appels d’outils en attente ; les deltas déjà affichés ne sont pas effacés. Stop/dispose retire l’autorité des callbacks tardifs, sans sandbox Node. Les noms d’événements étrangers et API d’enregistrement retirées sont refusés ; aucune découverte exécutable/auth/MCP implicite n’est ajoutée.
 
 `subscribe` et `events(after)` exposent le journal séquencé Core v1, données
 `unknown`, replay borné et indicateur `reset`. Une erreur d'observateur ne casse

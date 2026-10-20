@@ -38,6 +38,7 @@ import {
   type QueuedAgentMessage,
 } from './events.js';
 
+import { copyAgentRunTrigger, type AgentRunTrigger } from '../extensions/execution-hooks.js';
 import type { CodemodeSettings } from '../tools/codemode.js';
 import { assertInteractionCapacity, interactionHandle, interactionTimeout } from './interaction-handle.js';
 
@@ -49,6 +50,8 @@ export interface StartAgentRunRequest {
   workspaceId?: string;
   provider: string;
   input: string;
+  /** Explicit model-visible custom context instead of a user journal message. */
+  trigger?: AgentRunTrigger;
   blocks?: MessageContentBlock[];
   model?: string;
   thinking?: Session['thinking'];
@@ -265,6 +268,7 @@ export class AgentRuntime {
     }
     const effectiveRequest: StartAgentRunRequest = {
       ...request,
+      trigger: copyAgentRunTrigger(request.trigger),
       provider: this.redactText(request.provider),
       input: this.redactText(request.input),
       blocks: request.blocks ? this.redactJson(structuredClone(request.blocks)) : undefined,
@@ -276,6 +280,9 @@ export class AgentRuntime {
       allowedSkills: request.allowedSkills?.map(value => this.redactText(value)),
       allowedExtensions: request.allowedExtensions?.map(value => this.redactText(value)),
     };
+    if (effectiveRequest.trigger?.kind === 'custom' && effectiveRequest.blocks?.length) {
+      throw new Error('Custom triggers accept text only.');
+    }
     const controller = new AbortController();
     const callerSignal = request.signal;
     const abort = (): void => controller.abort();
@@ -302,6 +309,7 @@ export class AgentRuntime {
         sessionId: effectiveRequest.sessionId,
         provider: effectiveRequest.provider,
         input: effectiveRequest.input,
+        trigger: Object.freeze({ ...effectiveRequest.trigger! }),
         signal: controller.signal,
       }), controller.signal);
       current();
@@ -550,6 +558,7 @@ export class AgentRuntime {
           initial = false;
         } else {
           await this.persistQueued(run, request, queued);
+          request = { ...request, trigger: { kind: 'user' } };
           queued = [];
         }
         await this.executePrompt(run, request, provider, preparedTools);
@@ -610,6 +619,7 @@ export class AgentRuntime {
       extensionRegistry: this.extensionRegistry,
       toolContext: await this.toolContext(run, provider, request),
       provider: run.snapshot.provider,
+      trigger: request.trigger,
       tools: preparedTools.definitions(),
       resolveTools: () => preparedTools.definitions(),
       canExecuteInParallel: name => preparedTools.canExecuteInParallel(name),
@@ -622,6 +632,13 @@ export class AgentRuntime {
       signal: run.controller.signal,
       redactText: this.redactText,
       onTurnStart: () => this.setPhase(run, 'prompting'),
+      onAssistantResponse: response => {
+        if (response.toolCalls?.length || response.stopReason === 'length') this.publish(run, 'message.completed', {
+          messageId: latestMessageId, content: response.content, reasoning: response.reasoning,
+          model: response.model, usage: response.usage,
+          ...(response.stopReason === 'length' ? { stopReason: 'length' } : {}),
+        });
+      },
       onToolCall: call => {
         const tool = { id: call.id, name: call.name, input: structuredClone(call.input), startedAt: new Date().toISOString() };
         if (run.snapshot.activeTool) run.snapshot.activeTools = [...(run.snapshot.activeTools ?? [run.snapshot.activeTool]), tool];
@@ -759,13 +776,7 @@ export class AgentRuntime {
             run.snapshot.partialMessage = undefined;
           },
         });
-        // Complete checkpoints permit slow transports to replace only this
-        // message's queued text/reasoning deltas, including intermediate tool turns.
-        if (response.toolCalls?.length || response.stopReason === 'length') this.publish(run, 'message.completed', {
-          messageId, content: response.content, reasoning: response.reasoning,
-          model: response.model, usage: response.usage,
-          ...(response.stopReason === 'length' ? { stopReason: 'length' } : {}),
-        });
+        // The shared loop publishes authoritative checkpoints after output hooks.
         run.snapshot.partialMessage = undefined;
         run.snapshot.retry = undefined;
         return response;
@@ -778,6 +789,11 @@ export class AgentRuntime {
   }
 
   private async persistInitial(run: ActiveRun, request: StartAgentRunRequest): Promise<void> {
+    if (request.trigger?.kind === 'custom') {
+      await this.sessionManager.appendCustomMessage(run.snapshot.sessionId, request.trigger.type, request.input,
+        { display: true }, { signal: run.controller.signal });
+      return;
+    }
     await this.sessionManager.addMessage(run.snapshot.sessionId, {
       role: 'user',
       content: request.input,

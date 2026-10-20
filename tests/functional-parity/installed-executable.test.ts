@@ -282,6 +282,14 @@ beforeAll(async () => {
 afterAll(async () => { if (artifactRoot) await rm(artifactRoot, { recursive: true, force: true }); });
 
 describe('CLI-RUN-01 genuine locally packed installed executable', () => {
+  it.each(['print', 'json', 'rpc', 'regular', 'fullscreen'])('owns native extension execution hooks outside the checkout (%s)', async mode => {
+    const probe = `extension-execution-${mode}.mjs`;
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/extension-execution-probe.mjs'), path.join(consumer, probe));
+    expect(await run(process.execPath, [probe, mode], consumer,
+      { ...environment, AIH_EXT_COMMAND: 'ai-harness', AIH_TEST_MODULES_ROOT: installedModules }, '', 20_000))
+      .toEqual({ code: 0, stdout: 'EXTENSION_EXECUTION_OK\n', stderr: '' });
+  }, 25_000);
+
   it.each([
     ...['print', 'json', 'rpc', 'sdk'].flatMap(mode => ['tools', 'overflow', 'length'].map(scenario => `${mode}/${scenario}`)),
     ...['rpc', 'sdk', 'regular', 'fullscreen'].map(mode => `${mode}/queues`),

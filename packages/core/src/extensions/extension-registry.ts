@@ -12,6 +12,8 @@ import { copyBranchSummaryEvent, copyBranchSummaryOutput } from '../sessions/ses
 import type { AgentToolExposure, AgentToolNamespace } from '../tools/tool-selection.js';
 import type { ToolProgressInput } from '../agent/tool-progress.js';
 import { awaitAgentAdmission } from '../agent/prestart-admission.js';
+import { copyExecutionHookPatch, copyExtensionResult, isExecutionHook, type AgentRunTrigger, type ExtensionCustomTrigger, type ExecutionHookName } from './execution-hooks.js';
+export type { AgentRunTrigger, ExtensionCustomTrigger } from './execution-hooks.js';
 import { EventEmitter, type EventHandler, type EventMap } from '../utils/event-emitter.js';
 
 import { validateExtensionOption, type ExtensionOption, type ExtensionOptionDescriptor, type ExtensionOptionValue } from './startup-options.js';
@@ -178,6 +180,8 @@ export interface BeforeAgentData {
   input: string;
   /** Host-owned startup lifetime; absent for legacy direct registry callers. */
   readonly signal?: AbortSignal;
+  /** Absent for legacy callers; equivalent to a user trigger. */
+  readonly trigger?: AgentRunTrigger;
 }
 
 export interface BeforeProviderData {
@@ -193,7 +197,24 @@ export interface BeforeToolData {
   context: ExtensionRuntimeContext;
 }
 
+export interface ExtensionTurnEvent {
+  readonly sessionId: string;
+  readonly round: number;
+  readonly trigger: AgentRunTrigger;
+  readonly toolCount: number;
+  readonly context: ExtensionRuntimeContext;
+  readonly signal: AbortSignal;
+  /** Last defined continuation wins; null explicitly clears it. */
+  continuation?: ExtensionCustomTrigger | null;
+}
+
 export interface BeforeHookMap {
+  /** Final assistant text only: never usage, reasoning, model or tool-call authority. */
+  'before:message': { readonly sessionId?: string; content: string; readonly signal: AbortSignal };
+  /** Public top-level tool result only; host metadata and completed effects are conserved. */
+  'before:tool:result': { readonly sessionId: string; readonly tool: string; result: ExtensionToolResult; readonly signal: AbortSignal };
+  'before:turn:end': ExtensionTurnEvent;
+  'before:agent:settle': ExtensionTurnEvent;
   'before:agent': BeforeAgentData;
   'before:provider': BeforeProviderData;
   'before:tool': BeforeToolData;
@@ -213,7 +234,10 @@ export interface HookCancellation {
 }
 
 export type BeforeHookResult<T> = void | false | HookCancellation
-  | (T extends SessionBranchEvent ? never : T extends BranchSummaryEvent ? BranchSummaryOutput
+  | (T extends ExtensionTurnEvent ? { continuation: ExtensionCustomTrigger | null }
+    : T extends BeforeHookMap['before:message'] ? { content: string }
+    : T extends BeforeHookMap['before:tool:result'] ? { result: Omit<ExtensionToolResult, 'details'> }
+    : T extends SessionBranchEvent ? never : T extends BranchSummaryEvent ? BranchSummaryOutput
     : T extends SessionCompactionEvent ? { summary: string } : Partial<T>);
 export type BeforeHookHandler<T> = (data: Readonly<T>) => BeforeHookResult<T> | Promise<BeforeHookResult<T>>;
 
@@ -268,6 +292,19 @@ type StoredBeforeHook = BeforeHookHandler<BeforeHookMap[keyof BeforeHookMap]>;
 type SessionEvent = 'session:create' | 'session:delete' | 'session:update' | 'session:switch'
   | 'message:add' | 'message:clear' | 'compaction:start' | 'compaction:end' | 'compaction:error';
 
+const LIFECYCLE_EVENTS: Record<keyof EventMap, true> = {
+  'session:create': true, 'session:delete': true, 'session:update': true, 'session:switch': true,
+  'message:add': true, 'message:clear': true, 'compaction:start': true, 'compaction:end': true, 'compaction:error': true,
+  'agent:start': true, 'agent:end': true, 'agent:error': true,
+  'provider:call:start': true, 'provider:call:end': true, 'provider:call:error': true,
+  'tool:call': true, 'tool:result': true, 'tool:error': true, 'system:ready': true, 'system:shutdown': true,
+};
+const BEFORE_EVENTS: Record<keyof BeforeHookMap, true> = {
+  'before:agent': true, 'before:provider': true, 'before:tool': true, 'before:model': true,
+  'before:session:branch': true, 'before:session:summary': true, 'before:session:compaction': true,
+  'before:message': true, 'before:tool:result': true, 'before:turn:end': true, 'before:agent:settle': true,
+};
+
 const SESSION_EVENTS: SessionEvent[] = [
   'session:create',
   'session:delete',
@@ -297,6 +334,7 @@ export class ExtensionRegistry {
   private shuttingDown = false;
   private readonly branchManagers = new Map<SessionManager, { references: number; detach: () => void }>();
   private reloadHandler?: () => Promise<void>;
+  private executionHookLifetime = new AbortController();
 
   async load(id: string, factory: ExtensionFactory): Promise<void> {
     const normalizedId = id.trim();
@@ -319,8 +357,9 @@ export class ExtensionRegistry {
   async unload(id: string): Promise<boolean> {
     const extension = this.loaded.get(id);
     if (!extension) return false;
-    this.refreshBranchBindings();
     this.loaded.delete(id);
+    this.refreshBranchBindings();
+    this.retireExecutionHooks();
 
     for (const cleanup of [...extension.cleanups].reverse()) {
       try {
@@ -523,6 +562,9 @@ export class ExtensionRegistry {
     data: BeforeHookMap[K],
     hostSignal?: AbortSignal,
   ): Promise<BeforeHookExecution<BeforeHookMap[K]>> {
+    if (isExecutionHook(event)) {
+      return this.runExecutionBefore(event, data as BeforeHookMap[ExecutionHookName]) as unknown as Promise<BeforeHookExecution<BeforeHookMap[K]>>;
+    }
     if (event === 'before:session:branch') {
       return this.runBranchBefore(data as SessionBranchEvent) as unknown as Promise<BeforeHookExecution<BeforeHookMap[K]>>;
     }
@@ -557,6 +599,38 @@ export class ExtensionRegistry {
       if (agentSignal) transformed = { ...transformed, signal: agentSignal };
     }
     return { data: transformed, cancelled: false };
+  }
+
+  private retireExecutionHooks(): void {
+    const previous = this.executionHookLifetime;
+    this.executionHookLifetime = new AbortController();
+    previous.abort();
+  }
+
+  private async runExecutionBefore(event: ExecutionHookName, data: BeforeHookMap[ExecutionHookName]): Promise<BeforeHookExecution<BeforeHookMap[ExecutionHookName]>> {
+    const signal = AbortSignal.any([data.signal, this.executionHookLifetime.signal]);
+    let transformed = { ...data };
+    for (const entry of [...this.beforeHooks.get(event) ?? []]) {
+      if (signal.aborted) return { data: transformed, cancelled: true };
+      try {
+        // Per-handler copies prevent mutation without an explicit validated return.
+        let view = { ...transformed, signal };
+        if ('result' in view) view = { ...view, result: copyExtensionResult(view.result) };
+        if ('trigger' in view) view = { ...view, trigger: { ...view.trigger } };
+        if ('continuation' in view && view.continuation) view = { ...view, continuation: { ...view.continuation } };
+        const result = await awaitAgentAdmission(() => (entry.value as unknown as BeforeHookHandler<BeforeHookMap[ExecutionHookName]>)(Object.freeze(view)), signal);
+        if (signal.aborted || result === false) return { data: transformed, cancelled: true };
+        if (result === undefined) continue;
+        if (result && typeof result === 'object' && Object.hasOwn(result, 'cancel')) {
+          return { data: transformed, cancelled: true, reason: this.copyBranchCancellation(result) };
+        }
+        transformed = { ...transformed, ...copyExecutionHookPatch(event, result) };
+      } catch {
+        if (signal.aborted) return { data: transformed, cancelled: true };
+        throw new Error('Extension execution hook failed.');
+      }
+    }
+    return { data: transformed, cancelled: signal.aborted };
   }
 
   private async runBranchBefore(data: SessionBranchEvent): Promise<BeforeHookExecution<SessionBranchEvent>> {
@@ -736,6 +810,9 @@ export class ExtensionRegistry {
   }
 
   private createApi(extension: LoadedExtension): ExtensionAPI {
+    const active = (): void => {
+      if (this.loaded.get(extension.id) !== extension) throw new Error('Extension registration has been retired.');
+    };
     return {
       version: AI_HARNESS_EXTENSION_API_VERSION,
       registerOption: (name, metadata) => {
@@ -766,18 +843,21 @@ export class ExtensionRegistry {
         return Object.hasOwn(this.startupOptionValues, name) ? this.startupOptionValues[name] : entry.value.default;
       },
       registerCommand: (name, command) => {
+        active();
         const normalized = this.normalizeName(name);
         this.assertAvailable(this.commands, normalized, 'command');
         this.commands.set(normalized, { owner: extension.id, value: command });
         extension.cleanups.push(() => this.removeOwned(this.commands, normalized, extension.id));
       },
       registerTool: tool => {
+        active();
         const normalized = this.normalizeName(tool.name);
         this.assertAvailable(this.tools, normalized, 'tool');
         this.tools.set(normalized, { owner: extension.id, value: { ...tool, name: normalized } });
         extension.cleanups.push(() => this.removeOwned(this.tools, normalized, extension.id));
       },
       registerProvider: (type, provider) => {
+        active();
         const normalized = this.normalizeName(type);
         this.assertAvailable(this.providers, normalized, 'provider');
         const unregister = ProviderFactory.register(normalized, provider.create);
@@ -788,12 +868,15 @@ export class ExtensionRegistry {
         });
       },
       registerUI: component => {
+        active();
         const normalized = this.normalizeName(component.name);
         this.assertAvailable(this.uiComponents, normalized, 'UI component');
         this.uiComponents.set(normalized, { owner: extension.id, value: { ...component, name: normalized } });
         extension.cleanups.push(() => this.removeOwned(this.uiComponents, normalized, extension.id));
       },
       on: (event, handler) => {
+        active();
+        if (!Object.hasOwn(LIFECYCLE_EVENTS, event)) throw new Error('Unsupported native lifecycle event.');
         this.lifecycle.on(event, handler);
         const unsubscribe = () => this.lifecycle.off(event, handler);
         extension.cleanups.push(unsubscribe);
@@ -804,8 +887,10 @@ export class ExtensionRegistry {
         if (sessionEvent && this.loaded.get(extension.id) !== extension) {
           throw new Error('Cannot register branch hooks for an unloaded extension.');
         }
+        active();
+        if (!Object.hasOwn(BEFORE_EVENTS, event)) throw new Error('Unsupported native execution hook.');
         const hooks = this.beforeHooks.get(event) ?? [];
-        if (sessionEvent && hooks.length >= 256) throw new Error('Session branch extension hook limit reached.');
+        if ((sessionEvent || isExecutionHook(event)) && hooks.length >= 256) throw new Error('Session branch extension hook limit reached.');
         const entry: Owned<StoredBeforeHook> = {
           owner: extension.id,
           value: handler as unknown as StoredBeforeHook,
@@ -820,8 +905,10 @@ export class ExtensionRegistry {
           if (current.length) this.beforeHooks.set(event, current);
           else this.beforeHooks.delete(event);
           if (sessionEvent) this.refreshBranchBindings();
+          if (isExecutionHook(event)) this.retireExecutionHooks();
         };
         extension.cleanups.push(unsubscribe);
+        if (isExecutionHook(event)) this.retireExecutionHooks();
         return unsubscribe;
       },
       events: this.events,

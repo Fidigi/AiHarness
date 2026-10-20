@@ -436,6 +436,10 @@ POST /api/plugins/reload [sessionId]
 
 Keep package administration explicit: a read must never install, update, contact npm/Git, or execute code. Core owns source policy, state, filters, inventory, checks/updates and locking; CLI and Server own only command/HTTP presentation and runtime generation composition. State and managed files must roll back together. Project resources stay hidden/inactive until trust, scans never follow symlinks, extension modules are capped at 5 MiB, and diagnostics exclude resource bodies, command output and credentials. On workspace change, a failed Server candidate clears handlers from the old cwd rather than leaking them.
 
+### Extension action hooks
+
+Core `extensions/execution-hooks.ts`, registry and shared tool loop own bounded final text/public top-level result replacement plus ordered turn-end/pre-settlement custom continuations. Runtime/SDK custom starts persist native `custom_message`, never fake user entries. All work retains the existing round budget and host cancellation; authenticated usage/store/activation is not transformable, stale generations cannot publish, and foreign event names/retired registration APIs refuse. See the [native extension/embedding map](./topics/native-extension-contract.md) for per-host UI/import/resource support and actual process/installed/HTTP controls. The explicit SDK still performs no automatic executable/auth/MCP discovery.
+
 ### Extension interaction
 
 ```text
@@ -529,6 +533,7 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 | `docs/ai/topics/session-sdk.md` | English | Agents | Versioned | High-level Core SDK ownership, lifecycle, safe copies and genuine public package/declaration proof |
 | `docs/ai/topics/run-lifecycle.md` | English | Agents | Versioned | Native RUN-01 admission, cancellation acknowledgement, durable settlement and physical limits across hosts |
 | `docs/ai/topics/extensions.md` | English | Agents | Versioned | JavaScript/TypeScript extensions, packages, reload and declarative interactions |
+| `docs/ai/topics/native-extension-contract.md` | English | Agents | Versioned | Native EXT host/import/event/result/UI/package/SDK adaptation map, typed triggers and bounded action hooks |
 | `docs/ai/topics/codemode.md` | English | Agents | Versioned | QuickJS isolation, budgets, nested authorization, branch store, settings and explicit limitations |
 | `docs/ai/topics/cli-reference.md` | English | Agents | Versioned | Package/auth/export standalone commands, regular/fullscreen/print CLI, JSON events and JSONL RPC |
 | `docs/ai/topics/cli-invocation-contract.md` | English | Agents | Versioned | CLI-01 v1 pinned Pi/native option mapping, input/channel/exit policy and emitted/installed cancellation acceptance |

@@ -16,7 +16,7 @@
 
 The Web server exposes an interface for declarative extensions: text widgets, status notices and interactive requests (confirm, input, select, editor, custom). Unlike CLI extensions that execute in the Node process, the Web interface receives **only cleaned metadata** — never the source code of an extension.
 
-For executable CLI extensions, see [extensions-cli.md](./extensions-cli.md).
+For executable CLI extensions, see [extensions-cli.md](./extensions-cli.md). Server hooks use the same native output/turn/settlement loop and custom continuations; the browser remains an inert DTO/form renderer. The [native host support/adaptation map](../../ai/topics/native-extension-contract.md) explicitly distinguishes imports, commands, resources, RPC-only UI and unavailable Pi/custom React contracts.
 
 ## Loading and Atomic Reload
 

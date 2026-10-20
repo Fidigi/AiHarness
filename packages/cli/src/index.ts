@@ -1635,6 +1635,7 @@ async function main(): Promise<void> {
           }
           return extensionRegistry.executeTool(name, input, context, signal);
         };
+        let streamedAssistantContent = '';
         finalContent = await runToolLoop({
         sessionManager,
         sessionId: currentSessionId,
@@ -1672,6 +1673,7 @@ async function main(): Promise<void> {
         streamTurn: async (messages, tools) => {
           const turnSessionId = currentSessionId;
           let partialContent = '', partialReasoning = '';
+          streamedAssistantContent = '';
           let turnProvider = providerName, turnModel = providerModel;
           return streamProviderTurn({
           provider,
@@ -1707,6 +1709,7 @@ async function main(): Promise<void> {
           },
           onTextDelta: chunk => {
             partialContent += chunk;
+            streamedAssistantContent = partialContent;
             if (!isStreaming) return;
             streamWriter?.write(chunk);
             return jsonOutput?.events.textDelta(chunk);
@@ -1755,7 +1758,14 @@ async function main(): Promise<void> {
           if (jsonOutput) void jsonOutput.events.codemodeProgress(progress).catch(error => reportError(String(error)));
           else reportOutput(`[codemode ${progress.call.id}] ${progress.call.name}: ${progress.call.state}`);
         },
-        onAssistantResponse: response => jsonOutput?.events.finishAssistant(response),
+        onAssistantResponse: response => {
+          // Regular output cannot rewrite previously streamed lines. Show the
+          // accepted final replacement explicitly; fullscreen redraws history.
+          if (!printMode && !fullscreenTerminal && response.content !== streamedAssistantContent) {
+            terminal.displayAssistantMessage(response.content);
+          }
+          return jsonOutput?.events.finishAssistant(response);
+        },
         onToolCall: call => {
           activeToolCall = call;
           activeToolOutput = '';
