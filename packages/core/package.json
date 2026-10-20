@@ -16,8 +16,8 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "build": "node ../../scripts/run-typescript.mjs",
+    "typecheck": "node ../../scripts/run-typescript.mjs --noEmit",
     "clean": "rm -rf dist",
     "test": "vitest run",
     "test:watch": "vitest"

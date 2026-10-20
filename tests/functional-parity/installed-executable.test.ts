@@ -185,6 +185,9 @@ beforeAll(async () => {
   const installScript = `node -e ${JSON.stringify(`require('node:fs').writeFileSync(${JSON.stringify(scriptMarker)}, 'unsafe')`)}`;
   await writeFile(path.join(artifactRoot, 'script-probe', 'package.json'), JSON.stringify({ name: 'aih-disabled-install-script-probe', version: '1.0.0', scripts: { preinstall: installScript, postinstall: installScript } }));
   await cp(path.join(checkout, 'tsconfig.json'), path.join(build, 'tsconfig.json'));
+  // Rebuild the real sources with their required compiler launcher outside the checkout.
+  await mkdir(path.join(build, 'scripts'));
+  await cp(path.join(checkout, 'scripts', 'run-typescript.mjs'), path.join(build, 'scripts', 'run-typescript.mjs'));
   for (const name of ['core', 'cli']) {
     const target = path.join(build, 'packages', name);
     await cp(path.join(checkout, 'packages', name), target, {
@@ -197,6 +200,7 @@ beforeAll(async () => {
     }
   }
   await copyDependency('@types/node', installedModules, build);
+  await copyDependency('typescript', installedModules, build);
   await mkdir(path.join(build, 'node_modules', '@ai-harness'), { recursive: true });
   // Build workspace link only. The consumer below never receives this link.
   await symlink(path.join(build, 'packages', 'core'), path.join(build, 'node_modules', '@ai-harness', 'core'));

@@ -25,7 +25,7 @@
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write \"**/*.{ts,tsx,json,yml}\"",
     "typecheck": "npm run build --workspace @ai-harness/core && npm run typecheck --workspaces --if-present && npm run typecheck:parity",
-    "typecheck:parity": "tsc --noEmit -p tests/functional-parity/tsconfig.json",
+    "typecheck:parity": "node scripts/run-typescript.mjs --noEmit -p tests/functional-parity/tsconfig.json",
     "clean": "npm run clean --workspaces --if-present && rm -rf node_modules dist .turbo"
   },
   "devDependencies": {

@@ -58,5 +58,6 @@ docs/
 LICENSE
 CHANGELOG.md
 
-# Scripts internes non nécessaires au build
-scripts/
+# Scripts internes exclus, sauf le lanceur TypeScript utilisé par les workspaces.
+scripts/*
+!scripts/run-typescript.mjs
