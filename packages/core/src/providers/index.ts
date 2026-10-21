@@ -8,6 +8,7 @@ import type { Message, ProviderConfig, ToolCall, TokenUsage } from '../types/ind
 import { ProviderType } from '../types/index.js';
 import { getPublishedModelMetadata } from './model-metadata.js';
 import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
+import { azureIdentifier, normalizeAzureResponsesBaseUrl, usesAzureResponses } from './azure-config.js';
 import { parseProviderToolArguments } from './tool-arguments.js';
 import { rejectProviderHttpResponse } from './context-overflow.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
@@ -464,7 +465,7 @@ export class ProviderFactory {
       case 'google':
         return new GeminiProvider(config);
       case 'azure':
-        return new OpenAiProvider(config);
+        return usesAzureResponses(config) ? new AzureResponsesProvider(config) : new OpenAiProvider(config);
       case 'vertex':
         return new VertexGeminiProvider(config);
       case 'bedrock':
@@ -1540,7 +1541,7 @@ export class OpenAiResponsesProvider extends AiProvider {
       }
       const body = this.requestBody(messages, options);
       serializeProviderBody(body);
-      const transport = this.config.transport ?? 'auto';
+      const transport = this.responseTransport();
       const identity = this.transportIdentity(options?.sessionId);
       if (options?.sessionId) rememberResponsesIdentity(options.sessionId, identity);
       const stats = options?.sessionId ? responsesTransportStats(options.sessionId) : undefined;
@@ -1577,7 +1578,11 @@ export class OpenAiResponsesProvider extends AiProvider {
     }
   }
 
-  private requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
+  protected responseTransport(): ProviderConfig['transport'] { return this.config.transport ?? 'auto'; }
+
+  protected responseUrl(): string { return `${this.baseUrl}/responses`; }
+
+  protected requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
     messages = toolImageMessages(messages);
     const input: ResponsesInput = [];
     for (const message of messages) {
@@ -1727,7 +1732,7 @@ export class OpenAiResponsesProvider extends AiProvider {
     onChunk: StreamChunkCallback,
     options?: ChatOptions,
   ): Promise<ChatResponse> {
-    const response = await this.request(`${this.baseUrl}/responses`, {
+    const response = await this.request(this.responseUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...this.headers(false, options?.sessionId) },
       body: serializeProviderBody(body),
@@ -1780,7 +1785,7 @@ export class OpenAiResponsesProvider extends AiProvider {
       void reader.cancel('provider-stream-finished').catch(() => undefined);
       try { reader.releaseLock(); } catch { /* A hostile pending read may retain the lock. */ }
     }
-    if (!state.completed && !state.content && !state.tools.size) {
+    if (!state.completed && (this.config.type === 'azure' || !state.content && !state.tools.size)) {
       throw new ResponsesProtocolError('incomplete_sse_response');
     }
     return finalizeResponses(state);
@@ -1821,7 +1826,7 @@ export class OpenAiResponsesProvider extends AiProvider {
     }
   }
 
-  private headers(websocket: boolean, sessionId?: string): Record<string, string> {
+  protected headers(websocket: boolean, sessionId?: string): Record<string, string> {
     const providerSessionId = sessionId
       ? (/^[A-Za-z0-9._:-]{1,200}$/.test(sessionId)
           ? sessionId
@@ -1848,6 +1853,59 @@ export class OpenAiResponsesProvider extends AiProvider {
         Object.entries(this.customHeaders).sort(([left], [right]) => left.localeCompare(right)),
       )}`)
       .digest('hex');
+  }
+}
+
+export class AzureResponsesProvider extends OpenAiResponsesProvider {
+  private readonly deployments: ReadonlyMap<string, string>;
+
+  constructor(config: ProviderConfig) {
+    super({ ...config, baseUrl: normalizeAzureResponsesBaseUrl(config.baseUrl) });
+    if (config.apiVersion !== undefined) azureIdentifier(config.apiVersion);
+    if (config.deployment !== undefined) azureIdentifier(config.deployment);
+    const map = config.azureDeploymentMap;
+    if (map !== undefined && (!map || typeof map !== 'object' || Array.isArray(map) || Object.keys(map).length > 256)) {
+      throw new Error('Invalid Azure Responses configuration.');
+    }
+    this.deployments = new Map(Object.entries(map ?? {}).map(([model, deployment]) => [azureIdentifier(model), azureIdentifier(deployment)]));
+  }
+
+  override validateConfig(): boolean { return Boolean(this.config.apiKey) && super.validateConfig(); }
+
+  override async streamChat(
+    messages: Message[], onChunk: StreamChunkCallback,
+    onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions,
+  ): Promise<void> {
+    await super.streamChat(messages, onChunk,
+      response => onComplete?.(response ? { ...response, provider: 'azure' } : response),
+      error => onError?.(options?.signal?.aborted ? new Error('The provider request was cancelled.') : error), options);
+  }
+
+  // Azure deployments are operator-owned; generic OpenAI discovery is not an availability check.
+  override async getAvailableModels(): Promise<string[]> { return []; }
+
+  // Azure's Responses contract is SSE, not OpenAI's session WebSocket protocol.
+  protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
+
+  protected override responseUrl(): string {
+    const url = new URL(super.responseUrl());
+    url.searchParams.set('api-version', String(this.config.apiVersion ?? 'v1'));
+    return url.toString();
+  }
+
+  protected override headers(websocket: boolean, sessionId?: string): Record<string, string> {
+    const headers = super.headers(websocket, sessionId);
+    for (const name of Object.keys(headers)) {
+      if (['authorization', 'api-key'].includes(name.toLowerCase())) delete headers[name];
+    }
+    return { ...headers, 'api-key': String(this.config.apiKey) };
+  }
+
+  protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
+    const body = super.requestBody(messages, options);
+    body.model = typeof this.config.deployment === 'string' ? this.config.deployment
+      : this.deployments.get(body.model) ?? body.model;
+    return body;
   }
 }
 

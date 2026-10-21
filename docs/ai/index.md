@@ -9,7 +9,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Domain | File | Context Load |
 |---|---|---|
 | Project overview | [`project-map.md`](./project-map.md) | ~610 lines — load first for global navigation |
-| AI Providers | [`topics/providers.md`](./topics/providers.md) | ~225 lines |
+| AI Providers | [`topics/providers.md`](./topics/providers.md) | ~240 lines — native Azure Responses selection and shared environment/deployment composition |
 | Model Dispatch Policies | [`topics/model-dispatch-policies.md`](./topics/model-dispatch-policies.md) | ~90 lines — virtual routing, physical provenance, billable warming and historical notices |
 | Pinned Provider / Configuration Matrix | [`topics/provider-matrix.md`](./topics/provider-matrix.md) | ~110 lines — 42 factory identities, API/auth gaps and numeric host composition |
 | Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~225 lines |

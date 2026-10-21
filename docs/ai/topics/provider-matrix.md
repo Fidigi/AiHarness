@@ -19,7 +19,7 @@ Native column: **subset** means an existing built-in, never complete catalogue/a
 | amazon-bedrock | 193 | B | AWS bearer, profile, keys, ECS/web identity | `bedrock` subset: SigV4 environment keys; wider credential chain missing |
 | ant-ling | 3 | C | API key | Custom candidate |
 | anthropic | 17 | A | API key, auth bearer, workload federation, Claude subscription OAuth | `anthropic` subset; issuer/subscription/federation parity missing |
-| azure | 45 | AZ, C | API key | `azure` completions subset; dedicated Responses parity missing |
+| azure | 45 | AZ, C | API key | `azure` completions plus native Azure SSE Responses request path; pinned catalogue/profile/live-resource qualification still missing |
 | baseten | 22 | C | API key | Custom candidate |
 | cerebras | 2 | C | API key | Custom candidate |
 | cloudflare-ai-gateway | 57 | A, C, R | Cloudflare gateway token/account/gateway configuration | Custom candidate; gateway-specific resolution missing |
@@ -58,6 +58,8 @@ Native column: **subset** means an existing built-in, never complete catalogue/a
 | xiaomi | 6 | C | API key | Custom candidate |
 | zai-coding-cn | 4 | C | Regional coding-plan API key | Custom candidate; plan qualification missing |
 | zai | 7 | C | Coding API key | Custom candidate; plan qualification missing |
+
+Azure's explicit native Responses selection, endpoint/deployment environment map and local Core/emitted CLI/HTTP/installed boundaries are documented in [providers](./providers.md#azure-responses). It does not certify all 45 pinned entries, vendor deployment availability or heuristic RPC dialect descriptors.
 
 Native `local` and `mock` are additional native paths, not substitutions for missing upstream issuers. A generic operator-configured Device Flow is not a tested implementation of one of these subscription protocols. OAuth is not permission to purchase a subscription, start a login, send prompts or use a paid account automatically.
 

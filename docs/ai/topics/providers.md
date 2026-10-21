@@ -23,6 +23,7 @@ CLI/Web runtime -> streamChat -> normalized response and usage
 | File | Responsibility |
 |---|---|
 | `packages/core/src/providers/index.ts` | `AiProvider`, factory, built-ins, bounded payloads/streams, OpenAI Responses SSE/WebSocket transport, discovery, retry and usage normalization |
+| `packages/core/src/providers/azure-config.ts` | Shared explicit Azure endpoint/protocol/environment composition and bounded deployment mapping; `AzureResponsesProvider` lives in `index.ts` |
 | `packages/core/src/providers/anthropic-thinking.ts` | Shared native defaults and per-call numeric/adaptive request policy for the explicitly qualified published Anthropic profile |
 | `packages/core/src/providers/provider-output-budget.ts` | Internal first-party output-policy registration and descriptor-only configured-model capture; no mandatory provider capability |
 | `packages/core/src/agent/provider-request-{estimate,options,payload}.ts` | Bounded canonical request estimate, passive known option slots and owned post-hook/redactor payload copies |
@@ -61,6 +62,16 @@ Published non-secret metadata lives in Core so CLI and Web use the same descript
 CLI and RPC layer explicit flags over agent settings `defaultProvider`, `defaultModel`, `enabledModels`, `defaultThinkingLevel`, and exact `modelThinkingLevels["provider/model"]`. A saved default inside the enabled scope is preferred; scope suffixes and explicit flags remain stronger, and the final level is capability-clamped. Agent-level retry settings configure shared turn retries. Core applies `transport`, `httpProxy`, `httpIdleTimeoutMs`, `websocketConnectTimeoutMs`, and bounded `retry.provider` timeouts/retries to built-in and extension/custom provider adapters. Network errors are stable and never include the request URL, remote body/headers, or proxy credentials.
 
 Credential resolution order is environment, trusted `providerApiKeyCommands`, process memory, then encrypted storage. Command output is bounded, cached only in the process, and immediately registered with the shared redactor. OAuth endpoints and responses are bounded and HTTPS-only; refreshed access/refresh tokens replace the encrypted record without crossing descriptor boundaries. The redactor covers raw, URI, base64/base64url, hex and JSON-escaped variants, recursively bounds JSON traversal, and supplies independent stateful streams for chunked channels.
+
+### Azure Responses
+
+`ProviderFactory.create({ type: 'azure', azureApi: 'responses', ... })` and public `AzureResponsesProvider` use Azure SSE Responses with authoritative `api-key` authentication, not bearer auth or speculative OpenAI WebSockets. The native `/openai/v1` (optionally `/responses`) endpoint also selects Responses. Unversioned `AZURE_OPENAI_ENDPOINT` and absent `azureApi` preserve legacy deployment-based Chat Completions; explicit `azureApi: 'completions'` keeps that choice.
+
+CLI and Server share public `azureEnvironmentConfig(env, apiKey?)`: `AZURE_OPENAI_BASE_URL` wins over `AZURE_OPENAI_RESOURCE_NAME`, then legacy `AZURE_OPENAI_ENDPOINT`. Base/resource variables select Responses, normalize root or `/openai` to `/openai/v1`, and append `/responses?api-version=v1` (or explicit `AZURE_OPENAI_API_VERSION`). URL credentials/query/fragment, legacy deployment URLs and non-HTTP(S) schemes refuse with value-free diagnostics. Loopback HTTP is admitted only through explicit Core/environment configuration; existing HTTP credential configuration still requires HTTPS for Azure.
+
+`AZURE_OPENAI_MODEL` selects the logical catalogue model; optional `AZURE_OPENAI_DEPLOYMENT_NAME_MAP` maps up to 256 comma-separated `model=deployment` pairs. Core accepts the typed `azureDeploymentMap`. Explicit `deployment`/`AZURE_OPENAI_DEPLOYMENT` wins, then the exact map, then the requested model ID; mapping never mutates the configured model. Server credential initialization/rotation retains environment endpoint/version/mapping. Responses preserve genuine upstream deployment/model and Azure attribution, tool replay, streamed arguments and cache-aware usage. Cancellation reports a fixed message; truncated Azure SSE cannot complete successfully. Generic model discovery returns no deployment claims.
+
+This is a locally qualified native request path, not a complete Azure catalogue, issuer availability, durable Web endpoint configuration, signed replay/profile or RPC descriptor-dialect certificate. Existing heuristic catalogue descriptors are not effective transport evidence. The full pinned scope remains open in [the matrix](./provider-matrix.md).
 
 ### Mixed reasoning/text deltas
 
@@ -181,6 +192,8 @@ Provider OAuth remains Device Flow; it has no pasted callback endpoint. The shar
 5. Test streaming completion, cancellation, malformed remote data, secrets, and usage.
 
 ## Associated Tests
+
+- `packages/core/src/providers/azure-responses.test.ts` — Azure endpoint/auth/deployment/environment admission, SSE tools/usage, truncation, cancellation and body-free failures; `packages/cli/src/cli/azure-responses-process.test.ts` — actual emitted print/JSON/RPC and durable physical usage; `packages/server/src/api/azure-responses-http.test.ts` — real environment initialization/key rotation and detached HTTP history/privacy; the installed Azure consumer in `tests/functional-parity/installed-executable.test.ts` separately checks public declarations/runtime
 
 - `packages/core/src/providers/stream-error-frames.test.ts`, `packages/cli/src/cli/stream-error-process.test.ts` and the installed parity consumer — real SSE errors/mixed fields/pending tools, body-free diagnostics, unchanged retry bounds, visible-prefix no-replay, zero hooks/effects on refused calls, explicit SDK/RPC continuation and CLI print/JSON durable Unicode prefix/reload/resume; `cli/json-output.test.ts` separately guards persisted error projection
 - `packages/core/src/providers/mixed-delta-order.test.ts`, `packages/cli/src/cli/mixed-delta-process.test.ts` and the installed parity consumer — mixed-field/callback reasoning-first order, separate-event controls, awaited observers, terminal observer failure, exact final output and retained JSON/RPC/SDK framing/history

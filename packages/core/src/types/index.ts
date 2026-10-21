@@ -111,6 +111,9 @@ export interface ProviderConfig {
   apiKey?: string;
   model?: string;
   baseUrl?: string;
+  /** Explicit Azure protocol; absent preserves legacy endpoints and recognizes /openai/v1. */
+  azureApi?: 'completions' | 'responses';
+  azureDeploymentMap?: Readonly<Record<string, string>>;
   /** Shared network settings resolved from agent settings. */
   transport?: 'auto' | 'sse' | 'websocket' | 'websocket-cached';
   httpProxy?: string;

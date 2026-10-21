@@ -1560,3 +1560,45 @@ it('validates installed public provider discovery declarations and keyless based
       binRealpath: await realpath(path.join(consumer, 'node_modules', '.bin', 'ai-harness')) }, null, 2));
   }
 }, 60_000);
+
+it('dispatches Azure Responses through installed public declarations and runtime', async () => {
+  await writeFile(path.join(consumer, 'azure-public.ts'), `
+    import { AzureResponsesProvider, ProviderFactory, azureEnvironmentConfig, type ProviderConfig, type AiProvider } from '@ai-harness/core';
+    const config: ProviderConfig = { type: 'azure', azureApi: 'responses', apiKey: 'disposable', baseUrl: 'https://tenant.openai.azure.com', azureDeploymentMap: { logical: 'physical' } };
+    const provider: AiProvider = new AzureResponsesProvider(config);
+    ProviderFactory.create(azureEnvironmentConfig({ AZURE_OPENAI_RESOURCE_NAME: 'tenant' }, 'disposable')!);
+    // @ts-expect-error only the two native Azure protocols are admitted
+    const invalid: ProviderConfig = { type: 'azure', azureApi: 'unknown' };
+    void provider; void invalid;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'azure-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'azure-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { AzureResponsesProvider, ProviderFactory, azureEnvironmentConfig, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [];
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      calls.push({ url: request.url, key: request.headers['api-key'], authorization: request.headers.authorization, body: JSON.parse(text) });
+      response.setHeader('content-type', 'text/event-stream');
+      response.end('data: ' + JSON.stringify({ type: 'response.output_text.delta', delta: 'installed Azure' }) + '\\n\\n' + 'data: ' + JSON.stringify({ type: 'response.completed', response: { id: 'r', model: 'physical', usage: { input_tokens: 4, output_tokens: 1 } } }) + '\\n\\n');
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = ProviderFactory.create(azureEnvironmentConfig({ AZURE_OPENAI_BASE_URL: 'http://127.0.0.1:' + server.address().port,
+        AZURE_OPENAI_MODEL: 'logical', AZURE_OPENAI_DEPLOYMENT_NAME_MAP: 'logical=physical' }, 'disposable-installed-key'));
+      assert.ok(provider instanceof AzureResponsesProvider);
+      const result = await provider.chat([{ id: 'u', role: 'user', content: 'hello', timestamp: new Date() }]);
+      assert.equal(result.content, 'installed Azure'); assert.equal(result.usage.totalTokens, 5);
+      assert.equal(calls.length, 1); assert.equal(calls[0].url, '/openai/v1/responses?api-version=v1');
+      assert.equal(calls[0].key, 'disposable-installed-key'); assert.equal(calls[0].authorization, undefined);
+      assert.equal(calls[0].body.model, 'physical'); assert.equal(provider.getConfiguredModel(), 'logical');
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed Azure Responses OK');
+  `);
+  expect(await run(process.execPath, ['azure-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed Azure Responses OK\n', stderr: '' });
+}, 60_000);

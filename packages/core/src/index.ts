@@ -12,6 +12,7 @@ export * from './types/resource-batches.js';
 export * from './sdk/index.js';
 
 // Providers
+export { azureEnvironmentConfig } from './providers/azure-config.js';
 export * from './providers/specialized-models.js';
 export type { ClassificationQuestion, QuestionClassificationRequest, QuestionClassificationResult } from './providers/classification-questions.js';
 export {
@@ -19,6 +20,7 @@ export {
   ProviderFactory,
   OpenAiProvider,
   OpenAiResponsesProvider,
+  AzureResponsesProvider,
   getOpenAiResponsesTransportStats,
   resetOpenAiResponsesTransportStats,
   AnthropicProvider,

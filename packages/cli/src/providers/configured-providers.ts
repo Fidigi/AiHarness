@@ -1,4 +1,5 @@
 import {
+  azureEnvironmentConfig,
   buildProviderModelCatalog,
   collectProviderModelCatalog,
   flattenModelCatalog,
@@ -138,17 +139,8 @@ export function createConfiguredProviders(
   attempt(providers, 'google', googleKey
     ? { ...network, type: 'google', apiKey: googleKey, model: env.GEMINI_MODEL || 'gemini-2.0-flash' }
     : undefined);
-  attempt(providers, 'azure', azureKey && env.AZURE_OPENAI_ENDPOINT
-    ? {
-        ...network,
-        type: 'azure',
-        apiKey: azureKey,
-        baseUrl: env.AZURE_OPENAI_ENDPOINT,
-        deployment: env.AZURE_OPENAI_DEPLOYMENT,
-        model: env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o',
-        apiVersion: env.AZURE_OPENAI_API_VERSION,
-      }
-    : undefined);
+  const azure = azureEnvironmentConfig(env, azureKey);
+  attempt(providers, 'azure', azure ? { ...network, ...azure } : undefined);
   attempt(providers, 'vertex', vertexKey && env.GOOGLE_CLOUD_PROJECT
     ? {
         ...network,

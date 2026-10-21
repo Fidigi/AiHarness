@@ -8,6 +8,7 @@ import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import {
   AnthropicProvider as CoreAnthropicProvider,
+  azureEnvironmentConfig,
   atomicWriteStableFile,
   assertCompactionTranscript,
   getSummaryModelMessages,
@@ -24,6 +25,7 @@ import {
   OpenAiProvider as CoreOpenAiProvider,
   PROVIDER_NETWORK_SCOPE,
   ProviderType,
+  ProviderFactory,
   readBoundedResourceText,
   VertexGeminiProvider,
 } from '@ai-harness/core';
@@ -457,15 +459,9 @@ export class AiProxyServer {
       this.agentProviders.set('google', provider);
     }
 
-    if (process.env.AZURE_OPENAI_API_KEY && process.env.AZURE_OPENAI_ENDPOINT) {
-      const provider = new CoreOpenAiProvider({
-        ...network,
-        type: ProviderType.AZURE,
-        apiKey: process.env.AZURE_OPENAI_API_KEY,
-        baseUrl: process.env.AZURE_OPENAI_ENDPOINT,
-        deployment: process.env.AZURE_OPENAI_DEPLOYMENT,
-        model: process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o',
-      });
+    const azure = azureEnvironmentConfig(process.env);
+    if (azure) {
+      const provider = ProviderFactory.create({ ...network, ...azure });
       this.azureProxy = new CoreProviderProxy(provider);
       this.agentProviders.set('azure', provider);
     }
@@ -540,8 +536,12 @@ export class AiProxyServer {
       });
       this.googleProxy = new CoreProviderProxy(provider);
     } else if (type === 'azure') {
-      provider = new CoreOpenAiProvider({
-        ...network, type: ProviderType.AZURE, apiKey, baseUrl, model: model || 'gpt-4o', deployment: model,
+      const azure = baseUrl ? undefined : azureEnvironmentConfig(process.env, apiKey);
+      provider = ProviderFactory.create({
+        ...network, ...azure, type: ProviderType.AZURE, apiKey,
+        ...(baseUrl ? { baseUrl } : {}),
+        model: model || azure?.model || 'gpt-4o',
+        ...(model ? { deployment: model } : {}),
       });
       this.azureProxy = new CoreProviderProxy(provider);
     } else if (type === 'vertex') {
