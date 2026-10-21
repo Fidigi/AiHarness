@@ -1442,11 +1442,63 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
   }, 60_000);
 });
 
+it('routes selectable models and derives non-context warming notices through genuinely installed public contracts', async () => {
+  await writeFile(path.join(consumer, 'dispatch-public.ts'), `
+    import { ExtensionRegistry, type VirtualModelDefinition, type CacheTranscriptNotice, type ScopedConfigurationValues } from '@ai-harness/core';
+    const definition: VirtualModelDefinition = { provider: 'router', id: 'auto', route: request => ({ provider: 'mock', id: 'physical', state: request.state }) };
+    const registry = new ExtensionRegistry(); await registry.load('owner', api => { api.registerVirtualModel(definition); });
+    const preference: ScopedConfigurationValues = { showCacheMissNotices: false };
+    const notice: CacheTranscriptNotice = { id: 'n', afterEntryId: 'm', kind: 'cache_warm' };
+    // @ts-expect-error routing requires a physical provider-qualified result
+    const invalid: VirtualModelDefinition = { provider: 'router', id: 'bad', route: () => ({ model: 'missing-provider' }) };
+    void preference; void notice; void invalid;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'dispatch-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'dispatch-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { AgentRuntime, ExtensionRegistry, SessionManager, MockProvider, getCacheTranscriptNotices, getSessionAccounting } from '@ai-harness/core';
+    const manager = new SessionManager(), registry = new ExtensionRegistry(), physical = new MockProvider({ type: 'mock', model: 'physical' });
+    const requests = []; let calls = 0;
+    physical.streamChat = async (_messages, _chunk, complete, _error, options) => {
+      calls++; assert.equal(options.model, 'physical');
+      complete({ content: 'installed physical', model: 'physical', usage: { promptTokens: 2, completionTokens: 1, totalTokens: 3 } });
+    };
+    await registry.load('owner', api => { api.registerVirtualModel({ provider: 'router', id: 'auto', route(request) {
+      requests.push(request); return { provider: 'mock', id: 'physical', state: { phase: 'installed' } };
+    } }); });
+    const session = await manager.create({ cwd: process.cwd() });
+    const runtime = new AgentRuntime({ sessionManager: manager, extensionRegistry: registry, resolveProvider: name => name === 'mock' ? physical : undefined, isProjectTrusted: () => true });
+    const run = await runtime.start({ sessionId: session.id, cwd: process.cwd(), provider: 'router', model: 'auto', input: 'route', cacheWarming: 'off' });
+    assert.equal((await runtime.wait(run.id)).phase, 'completed'); assert.equal(calls, 1);
+    assert.equal(session.messages.at(-1).provider, 'mock'); assert.equal(session.messages.at(-1).metadata.selection.provider, 'router');
+    assert.equal(requests[0].reason, 'user');
+    await registry.chat(registry.getVirtualProvider('router'), session.messages, { model: 'auto' }, name => name === 'mock' ? physical : undefined);
+    assert.equal(requests.at(-1).reason, 'direct'); assert.equal(requests.at(-1).state, undefined);
+    await manager.recordProviderUsage(session.id, { provider: 'mock', model: 'physical', usage: { inputTokens: 10, outputTokens: 1, costUsd: 0.001 } }, session.activeLeafId);
+    const entries = await manager.getActiveBranchEntries(session.id), notices = getCacheTranscriptNotices(entries);
+    assert.equal(notices.length, 1); assert.equal(notices[0].kind, 'cache_warm'); assert.equal(notices[0].costUsd, 0.001);
+    assert.equal(getSessionAccounting(entries, session.activeLeafId).active.requests, 2);
+    assert.ok(!JSON.stringify(manager.getEffectiveContext(session.id)).includes('provider.cache_warm'));
+    await registry.unload('owner');
+    console.log('installed routing and cache notices OK');
+  `);
+  expect(await run(process.execPath, ['dispatch-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed routing and cache notices OK\n', stderr: '' });
+}, 60_000);
+
 // Provider addition: original installed executable/declaration/PATH probes above
 // remain intact. This case consumes only freshly packed, actually installed Core.
 it('validates installed public provider discovery declarations and keyless based-path runtime', async () => {
   await writeFile(path.join(consumer, 'provider-public.ts'), `
-    import { OpenAiProvider, AnthropicProvider, AiProvider } from '@ai-harness/core';
+    import { OpenAiProvider, AnthropicProvider, AiProvider, copyThinkingBudgets,
+      type ThinkingBudgets, type StartAgentRunRequest, type ScopedConfigurationValues } from '@ai-harness/core';
+    const budgets: ThinkingBudgets = Object.freeze({ low: 2000 });
+    const request: StartAgentRunRequest = { sessionId: 'declaration-only', provider: 'mock', cwd: '.', input: 'budget', thinkingBudgets: budgets };
+    const scoped: ScopedConfigurationValues = { thinkingBudgets: copyThinkingBudgets(budgets) };
+    // @ts-expect-error only the four numeric levels are part of the scoped contract
+    const invalid: ScopedConfigurationValues = { thinkingBudgets: { max: 2000 } };
+    void request; void scoped; void invalid;
     const provider: AiProvider = new OpenAiProvider({ type: 'openai', baseUrl: 'http://127.0.0.1:1/gateway/v1/chat/completions' });
     const eligible: boolean = provider.canDiscoverModels();
     const anthropic: boolean = new AnthropicProvider({ type: 'anthropic', baseUrl: 'http://127.0.0.1:1/proxy/v1/messages' }).canDiscoverModels();
@@ -1458,7 +1510,26 @@ it('validates installed public provider discovery declarations and keyless based
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
-    import { OpenAiProvider, AnthropicProvider } from '@ai-harness/core';
+    import { OpenAiProvider, AnthropicProvider, MockProvider, copyThinkingBudgets,
+      AgentRuntime, SessionManager, ExtensionRegistry } from '@ai-harness/core';
+    const budgets = Object.freeze({ low: 2000 });
+    assert.deepEqual(copyThinkingBudgets(budgets), budgets);
+    assert.notEqual(copyThinkingBudgets(budgets), budgets);
+    let getterCalls = 0;
+    assert.throws(() => copyThinkingBudgets(Object.defineProperty({}, 'low', { get() { getterCalls++; return 2000; } })), /Thinking budgets/);
+    assert.equal(getterCalls, 0);
+    const manager = new SessionManager(); const registry = new ExtensionRegistry();
+    const session = await manager.create({ cwd: process.cwd() }); const mock = new MockProvider({ type: 'mock' });
+    let calls = 0;
+    mock.streamChat = async (_messages, _chunk, complete, _error, options) => {
+      calls++; assert.deepEqual(options.thinkingBudgets, budgets); assert.notEqual(options.thinkingBudgets, budgets);
+      complete?.({ content: 'owned installed budgets' });
+    };
+    const runtime = new AgentRuntime({ sessionManager: manager, extensionRegistry: registry,
+      resolveProvider: () => mock, isProjectTrusted: () => true });
+    const run = await runtime.start({ sessionId: session.id, cwd: process.cwd(), provider: 'mock', input: 'budget', thinking: 'low', thinkingBudgets: budgets });
+    assert.equal((await runtime.wait(run.id)).phase, 'completed'); assert.equal(calls, 1);
+    assert.ok(!JSON.stringify(session.messages).includes('thinkingBudgets'));
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
     const paths = [];
     const server = createServer((req, res) => { paths.push(req.url); assert.equal(req.headers.authorization, undefined); assert.equal(req.headers['x-api-key'], undefined); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ data: [{ id: 'public-model' }] })); });

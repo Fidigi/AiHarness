@@ -168,9 +168,13 @@ export interface SessionMessagePageInfo {
 }
 
 /** Session JSON contract. Dates are ISO strings until the store hydrates them. */
-export type ApiSession = SerializedSession & { messagePage?: SessionMessagePageInfo };
+export interface CacheNoticeProjection {
+  cacheNotices?: import('@ai-harness/core').CacheTranscriptNotice[];
+  showCacheMissNotices?: boolean;
+}
+export type ApiSession = SerializedSession & CacheNoticeProjection & { messagePage?: SessionMessagePageInfo };
 
-export interface SessionMessagePage extends SessionMessagePageInfo {
+export interface SessionMessagePage extends SessionMessagePageInfo, CacheNoticeProjection {
   messages: SerializedSession['messages'];
   /** Compatibility with the first server-side pagination response. */
   hasMore?: boolean;

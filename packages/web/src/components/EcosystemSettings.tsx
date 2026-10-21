@@ -8,8 +8,10 @@ import type {
 } from '@ai-harness/core';
 import { useI18n } from '../hooks/useI18n';
 import { ProviderRenamePanel } from './ProviderRenamePanel';
+import { CacheNoticeSettings } from './CacheNoticeSettings';
 import { isRenameableProvider, type ProviderRenameResult } from '../services/provider-lifecycle';
 import { providerSettingsMessage, type ProviderSettingsMessage } from './provider-settings-messages';
+import { reasoningSettingsMessage } from './reasoning-settings-messages';
 import { useSessionStore } from '../store/session-store';
 import { useSettingsScope } from '../store/use-settings-scope';
 import { publishNotice } from '../services/notices';
@@ -178,6 +180,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
   };
   return <section className="settings-section" id="provider-lifecycle">
     <h3>{t('settings.providerLifecycle')}</h3>
+    <CacheNoticeSettings />
     <div className="provider-lifecycle-list" data-settings-group="builtin">
       {statuses.filter(status => !providers.some(provider => provider.id === status.type)).map(status => <article key={status.type} className="settings-resource-card" data-settings-selection={status.type}>
         <div><strong>{status.name}</strong><code>{status.type}</code></div>
@@ -505,10 +508,10 @@ export function SkillRegistryPanel() {
 }
 
 export function DefaultModelSettings() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
   const [scope, setScope] = useSettingsScope('defaults', workspace?.id ? 'project' : 'global');
-  const [values, setValues] = useState({ provider: '', model: '', thinking: '', toolPreset: '' });
+  const [values, setValues] = useState({ provider: '', model: '', thinking: '', thinkingBudgets: '', toolPreset: '' });
   const [dirty, setDirty] = useState<Array<keyof typeof values>>([]);
   const [busy, setBusy] = useState(true);
   const [ready, setReady] = useState(false);
@@ -534,6 +537,7 @@ export function DefaultModelSettings() {
         provider: typeof configured.data.values.provider === 'string' ? configured.data.values.provider : '',
         model: typeof configured.data.values.model === 'string' ? configured.data.values.model : '',
         thinking: typeof configured.data.values.thinking === 'string' ? configured.data.values.thinking : '',
+        thinkingBudgets: configured.data.values.thinkingBudgets === undefined ? '' : JSON.stringify(configured.data.values.thinkingBudgets),
         toolPreset: typeof configured.data.values.toolPreset === 'string' ? configured.data.values.toolPreset : '',
       });
       setEffective(resolved.data);
@@ -550,7 +554,7 @@ export function DefaultModelSettings() {
         model: String(effective.values.model ?? '—'),
         preset: String(effective.values.toolPreset ?? 'default'),
       })}
-      {' · '}{['provider', 'model', 'thinking', 'toolPreset'].map(key => `${key}: ${effective.provenance[key as keyof typeof effective.provenance]?.source ?? 'built-in'}`).join(' · ')}
+      {' · '}{['provider', 'model', 'thinking', 'thinkingBudgets', 'toolPreset'].map(key => `${key}: ${effective.provenance[key as keyof typeof effective.provenance]?.source ?? 'built-in'}`).join(' · ')}
     </p>}
     {scope === 'project' && Object.values(values).some(value => !value) && <p className="status-warning">{t('settings.defaults.inheritanceWarning')}</p>}
     {overrideWarning && <p role="status" className="status-warning">{t('settings.defaults.overrideWarning')}</p>}
@@ -569,6 +573,11 @@ export function DefaultModelSettings() {
       <option value="">{t('chat.setting.auto')} · {String(effective?.values.thinking ?? 'off')}</option>
       {['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map(level => <option key={level}>{level}</option>)}
     </select></label>
+    <label>{reasoningSettingsMessage(locale, 'label')}<input value={values.thinkingBudgets}
+      style={{ color: 'inherit', backgroundColor: 'transparent' }} maxLength={256} placeholder={JSON.stringify(effective?.values.thinkingBudgets ?? {})}
+      disabled={busy || !ready || environmentLocked('thinkingBudgets')} aria-describedby="thinking-budgets-help"
+      onChange={event => change('thinkingBudgets', event.target.value)} /></label>
+    <p id="thinking-budgets-help" className="settings-help">{reasoningSettingsMessage(locale, 'help')}</p>
     <label>{t('settings.tools.defaultPreset')}<select value={values.toolPreset} disabled={busy || !ready || environmentLocked('toolPreset')}
       onChange={event => change('toolPreset', event.target.value)}>
       <option value="">{t('chat.setting.auto')} · {String(effective?.values.toolPreset ?? 'default')}</option>
@@ -578,8 +587,12 @@ export function DefaultModelSettings() {
       setBusy(true);
       try {
         const changed = dirty.filter(key => !environmentLocked(key));
-        const result = await updateConfigurationScope(scope,
-          Object.fromEntries(changed.map(key => [key, values[key] || null])), scopeId);
+        let patch: Record<string, unknown>;
+        try {
+          patch = Object.fromEntries(changed.map(key => [key, key === 'thinkingBudgets'
+            ? values[key].trim() ? JSON.parse(values[key]) as unknown : null : values[key] || null]));
+        } catch { error(reasoningSettingsMessage(locale, 'invalid')); return; }
+        const result = await updateConfigurationScope(scope, patch, scopeId);
         if (!result.success) { error(result.error); return; }
         setDirty([]);
         const resolved = await getEffectiveConfiguration(workspace?.id);

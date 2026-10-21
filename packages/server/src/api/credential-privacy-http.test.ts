@@ -49,9 +49,10 @@ it('scrubs a genuinely configured provider credential through streaming, childre
       expect(result).not.toContain(secret); expect(JSON.parse(result)).toMatchObject({ status: 'completed' });
     });
     for (const id of [run.sessionId, child.childSessionId]) {
-      for (const route of [`/api/sessions/${id}`, `/api/sessions/${id}/export?format=json`, `/api/sessions/${id}/export?format=markdown`]) {
+      for (const route of [`/api/sessions/${id}`, `/api/agent/sessions/${id}/state`, `/api/sessions/${id}/export?format=json`, `/api/sessions/${id}/export?format=markdown`]) {
         const result = await fetch(`${base}${route}`); expect(result.status).toBe(200);
         const text = await result.text(); expect(text).not.toContain(secret); expect(text).toContain('[REDACTED]');
+        if (id === child.childSessionId && route === `/api/sessions/${id}`) expect(JSON.parse(text).cacheNotices).toEqual([]);
         expect(text).toContain('Public prefix'); expect(text).toContain('public suffix');
       }
       const file = await readFile(path.join(dataDir, 'sessions', `${id}.jsonl`), 'utf8');

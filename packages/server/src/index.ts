@@ -45,6 +45,7 @@ import { createTerminalRouter } from './api/terminal-routes.js';
 import {
   MAX_MESSAGE_PAGE_SIZE,
   serializeSessionPage,
+  sessionCacheNotices,
 } from './api/session-pagination.js';
 import {
   authenticationMiddleware,
@@ -849,12 +850,13 @@ export function createApp(config?: ServerConfig): express.Application {
   /** GET /api/sessions/:id/messages - Load a bounded history page by stable message cursor. */
   asyncGet('/api/sessions/:id/messages', async (req: Request, res: Response, next): Promise<void> => {
     try {
-      const sm = (await servicesPromise).sessionManager;
+      const { sessionManager: sm, configurationStore } = await servicesPromise;
       const session = sm.get(req.params.id) ?? await sm.loadFromStore(req.params.id);
       if (!session) {
         res.status(404).json({ error: 'Session not found' });
         return;
       }
+      await configurationStore.load();
       const before = optionalSessionString(req.query.before, 256);
       const around = optionalSessionString(req.query.around, 256);
       const limit = req.query.limit === undefined
@@ -873,6 +875,8 @@ export function createApp(config?: ServerConfig): express.Application {
       sendBoundedJson(res, {
         messages: serialized.messages,
         ...serialized.messagePage,
+        ...await sessionCacheNotices(sm, session.id, serialized.messages.map(message => message.id),
+          configurationStore.get('global').showCacheMissNotices !== false),
         // Retained for clients of the first paged-route revision.
         hasMore: serialized.messagePage.hasMoreBefore,
       });
@@ -1023,7 +1027,7 @@ export function createApp(config?: ServerConfig): express.Application {
   asyncGet('/api/sessions/:id', async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const sm = (await servicesPromise).sessionManager;
+      const { sessionManager: sm, configurationStore } = await servicesPromise;
       let session: Session | null | undefined = sm.get(id);
 
       // Try loading from store if not in memory
@@ -1045,12 +1049,17 @@ export function createApp(config?: ServerConfig): express.Application {
         res.status(400).json({ error: 'Invalid session pagination.' });
         return;
       }
-      sendBoundedJson(res, paginated
+      await configurationStore.load();
+      const serialized = paginated
         ? serializeSessionPage(session, {
             limit: messageLimit,
             includeCommands: includeCommands !== 'false',
           })
-        : serializeSession(session));
+        : serializeSession(session);
+      sendBoundedJson(res, { ...serialized,
+        ...await sessionCacheNotices(sm, session.id, serialized.messages.map(message => message.id),
+          configurationStore.get('global').showCacheMissNotices !== false),
+      });
     } catch {
       console.error('[Server] Failed to get a session.');
       if (!res.headersSent) {

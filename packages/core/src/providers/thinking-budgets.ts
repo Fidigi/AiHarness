@@ -5,7 +5,7 @@ export type ThinkingBudgets = Readonly<Partial<Record<'minimal' | 'low' | 'mediu
 const LEVELS = new Set(['minimal', 'low', 'medium', 'high']);
 
 /** Copy only inert, own, safe nonnegative integer fields. Never invoke getters. */
-export function copyThinkingBudgets(value: ThinkingBudgets | undefined): ThinkingBudgets | undefined {
+export function copyThinkingBudgets(value: unknown): ThinkingBudgets | undefined {
   if (value === undefined) return undefined;
   try {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error();

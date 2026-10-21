@@ -1,6 +1,9 @@
-import type { AiProvider, ChatOptions } from '../providers/index.js';
+import type { AiProvider, ChatOptions, ChatResponse } from '../providers/index.js';
+import { streamProviderTurn } from '../agent/provider-turn.js';
 import type { BeforeSpecializedModel, SpecializedModelType, SpecializedModelRequest } from '../providers/specialized-models.js';
 import { ProviderFactory } from '../providers/index.js';
+import { VirtualModelRegistry, VirtualSelectionProvider, type VirtualModelDefinition } from '../providers/virtual-models.js';
+import type { CacheWarmer, CacheWarmingDecision } from '../providers/cache-warmer.js';
 import { AI_HARNESS_EXTENSION_API_VERSION } from '../public-api-version.js';
 import type { CodemodeProgress, Message, MessageContentBlock, ProviderConfig, Session } from '../types/index.js';
 import { SessionManager, type SessionCompactionEvent } from '../sessions/session-manager.js';
@@ -209,6 +212,8 @@ export interface ExtensionTurnEvent {
 }
 
 export interface BeforeHookMap {
+  /** Only action is consumed; economics, request identity and signal remain host-owned. */
+  'before:cache:warm': CacheWarmingDecision & { readonly signal: AbortSignal };
   /** Final assistant text only: never usage, reasoning, model or tool-call authority. */
   'before:message': { readonly sessionId?: string; content: string; readonly signal: AbortSignal };
   /** Public top-level tool result only; host metadata and completed effects are conserved. */
@@ -269,6 +274,7 @@ export interface ExtensionAPI {
   registerCommand(name: string, command: ExtensionCommand): void;
   registerTool(tool: ExtensionTool): void;
   registerProvider(type: string, provider: ExtensionProvider): void;
+  registerVirtualModel(definition: VirtualModelDefinition): () => void;
   registerUI(component: ExtensionUIComponent): void;
   on<K extends keyof EventMap>(event: K, handler: EventHandler<EventMap[K]>): () => void;
   before<K extends keyof BeforeHookMap>(event: K, handler: BeforeHookHandler<BeforeHookMap[K]>): () => void;
@@ -300,7 +306,7 @@ const LIFECYCLE_EVENTS: Record<keyof EventMap, true> = {
   'tool:call': true, 'tool:result': true, 'tool:error': true, 'system:ready': true, 'system:shutdown': true,
 };
 const BEFORE_EVENTS: Record<keyof BeforeHookMap, true> = {
-  'before:agent': true, 'before:provider': true, 'before:tool': true, 'before:model': true,
+  'before:agent': true, 'before:provider': true, 'before:tool': true, 'before:model': true, 'before:cache:warm': true,
   'before:session:branch': true, 'before:session:summary': true, 'before:session:compaction': true,
   'before:message': true, 'before:tool:result': true, 'before:turn:end': true, 'before:agent:settle': true,
 };
@@ -319,6 +325,36 @@ const SESSION_EVENTS: SessionEvent[] = [
 
 /** Runtime registry for extension commands, tools, providers and lifecycle hooks. */
 export class ExtensionRegistry {
+  readonly virtualModels = new VirtualModelRegistry();
+  private readonly providerCaches = new Set<CacheWarmer>();
+  trackProviderCache(warmer: CacheWarmer): void { this.providerCaches.add(warmer); }
+  private readonly virtualProviders = new Map<string, VirtualSelectionProvider>();
+
+  getVirtualProvider(name: string): AiProvider | undefined {
+    if (!this.virtualModels.list().some(model => model.provider === name)) return undefined;
+    let provider = this.virtualProviders.get(name);
+    if (!provider) { provider = new VirtualSelectionProvider(this.virtualModels, name); this.virtualProviders.set(name, provider); }
+    return provider;
+  }
+
+  /** Explicit tool-free/direct calls also route, without branch-state or warming authority. */
+  async chat(provider: AiProvider, messages: Message[], options: ChatOptions = {},
+    resolveProvider?: (name: string) => AiProvider | undefined | Promise<AiProvider | undefined>): Promise<ChatResponse> {
+    const providerName = provider.getProviderType(), model = options.model ?? provider.getConfiguredModel();
+    if (!this.virtualModels.get(providerName, model)) return provider.chat(messages, options);
+    return streamProviderTurn({ ...options, provider, providerName, model, messages, tools: options.tools ?? [],
+      extensionRegistry: this, resolveProvider, routeReason: 'direct', maxRetries: 0 });
+  }
+
+  /** Add selection-only providers without replacing physical provider instances/credentials. */
+  addVirtualProviders(providers: Map<string, AiProvider>): void {
+    for (const [name, provider] of providers) {
+      if (provider instanceof VirtualSelectionProvider && !this.getVirtualProvider(name)) providers.delete(name);
+    }
+    for (const model of this.virtualModels.list()) {
+      if (!providers.has(model.provider)) providers.set(model.provider, this.getVirtualProvider(model.provider)!);
+    }
+  }
   private readonly startupOptions = new Map<string, Owned<ExtensionOption>>();
   private startupOptionValues: Readonly<Record<string, ExtensionOptionValue>> = Object.freeze({});
   private readonly commands = new Map<string, Owned<ExtensionCommand>>();
@@ -358,6 +394,7 @@ export class ExtensionRegistry {
     const extension = this.loaded.get(id);
     if (!extension) return false;
     this.loaded.delete(id);
+    for (const warmer of this.providerCaches) warmer.cancel('extension generation changed');
     this.refreshBranchBindings();
     this.retireExecutionHooks();
 
@@ -801,6 +838,8 @@ export class ExtensionRegistry {
       const bindings = [...this.branchManagers.values()];
       this.branchManagers.clear();
       for (const binding of bindings) binding.detach();
+      await Promise.all([...this.providerCaches].map(warmer => warmer.dispose()));
+      this.providerCaches.clear();
       await this.emit('system:shutdown');
       this.detachSessionEvents?.();
       this.detachSessionEvents = undefined;
@@ -866,6 +905,12 @@ export class ExtensionRegistry {
           this.removeOwned(this.providers, normalized, extension.id);
           unregister();
         });
+      },
+      registerVirtualModel: definition => {
+        active();
+        const dispose = this.virtualModels.register(definition);
+        extension.cleanups.push(dispose);
+        return dispose;
       },
       registerUI: component => {
         active();

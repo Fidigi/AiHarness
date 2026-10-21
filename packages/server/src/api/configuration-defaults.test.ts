@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { MockProvider } from '@ai-harness/core';
@@ -44,6 +44,55 @@ describe('independent new-session defaults', () => {
       await services.agentRuntime.wait(body.run.id);
       expect(stream.mock.calls[0]?.[4]).toMatchObject({ model: 'mock-model', thinking: 'high' });
     } finally { stream.mockRestore(); }
+  });
+
+  it('transmits scoped numeric reasoning budgets to detached runs without accepting prompt-body overrides', async () => {
+    const patch = async (scope: string, values: unknown, scopeId?: string) => {
+      const response = await request('/api/configuration/scope', 'PATCH', { scope, scopeId, values });
+      expect(response.status).toBe(200);
+    };
+    const stream = vi.spyOn(MockProvider.prototype, 'streamChat').mockImplementation(async (_messages, _chunk, complete) => complete?.({ content: 'Budget fixture' }));
+    let sessionId: string | undefined;
+    const run = async (expected: unknown) => {
+      const started = await request('/api/agent/runs', 'POST', { cwd: root, sessionId, input: 'Scoped reasoning',
+        thinkingBudgets: { high: 999999 } });
+      expect(started.status).toBe(202);
+      const body = await started.json() as { run: { id: string }; session: { id: string } };
+      sessionId = body.session.id;
+      expect((await services.agentRuntime.wait(body.run.id))?.phase).toBe('completed');
+      expect(stream.mock.calls.at(-1)?.[4]?.thinkingBudgets).toEqual(expected);
+    };
+    try {
+      await patch('global', { thinkingBudgets: { low: 1000, high: 8000 } });
+      await patch('project', { thinkingBudgets: { high: 2500 } }, projectId);
+      for (const invalid of [{ high: -1 }, { max: 1 }, { high: '1000' }]) {
+        expect((await request('/api/configuration/scope', 'PATCH', {
+          scope: 'project', scopeId: projectId, values: { thinkingBudgets: invalid },
+        })).status).toBe(400);
+      }
+      await run({ high: 2500 });
+      await patch('session', { thinkingBudgets: {} }, sessionId);
+      await run({});
+      await patch('session', { thinkingBudgets: null }, sessionId);
+      await run({ high: 2500 });
+      await patch('project', { thinkingBudgets: null }, projectId);
+      await run({ low: 1000, high: 8000 });
+      await mkdir(path.join(root, '.ai-harness'), { recursive: true });
+      await writeFile(path.join(root, '.ai-harness', 'settings.json'), JSON.stringify({ thinkingBudgets: { low: 3000 } }));
+      await patch('global', { thinkingBudgets: null });
+      await run({ low: 3000 });
+      await patch('global', { thinkingBudgets: {} });
+      await run({});
+      await patch('global', { thinkingBudgets: null });
+      await run({ low: 3000 });
+      expect(stream).toHaveBeenCalledTimes(7);
+    } finally {
+      stream.mockRestore();
+      await rm(path.join(root, '.ai-harness', 'settings.json'), { force: true });
+      await patch('global', { thinkingBudgets: null });
+      await patch('project', { thinkingBudgets: null }, projectId);
+      if (sessionId) await patch('session', { thinkingBudgets: null }, sessionId);
+    }
   });
 
   it('rejects invalid levels, hidden fields and scope selectors without changing another key', async () => {

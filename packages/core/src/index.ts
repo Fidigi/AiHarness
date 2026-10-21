@@ -76,6 +76,13 @@ export type {
   ThinkingLevel,
   ThinkingBudgets,
 } from './providers/index.js';
+export { copyThinkingBudgets } from './providers/thinking-budgets.js';
+export { VirtualModelRegistry, VirtualModelRoutingError } from './providers/virtual-models.js';
+export type { VirtualModelDefinition, VirtualModelRequest, VirtualModelContext, VirtualModelReason, PhysicalModelSelection } from './providers/virtual-models.js';
+export { CacheWarmer, getCacheWarmingDelayMs, evaluateCacheWarming, getSessionCacheWarmer, getSessionCacheWarmingStatus, disposeSessionCacheWarmers } from './providers/cache-warmer.js';
+export type { CacheWarmingMode, CacheWarmingDecision, CacheWarmingStatus, CacheWarmRequest } from './providers/cache-warmer.js';
+export { getCacheWarmUsage, getCacheTranscriptNotices } from './providers/cache-notices.js';
+export type { CacheWarmUsage, CacheTranscriptNotice } from './providers/cache-notices.js';
 export {
   PUBLISHED_MODEL_METADATA_VERSION,
   PUBLISHED_THINKING_LEVELS,

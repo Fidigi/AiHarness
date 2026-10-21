@@ -144,7 +144,7 @@ describe('credential-private specialized model SDK', () => {
         { type: 'text', text: 'Is this a pixel?' }, { type: 'image_url', image_url: { url: `data:image/png;base64,${png}` } },
       ]);
       else if (protocol === 'anthropic') expect(body.messages.at(-1).content).toEqual([
-        { type: 'text', text: 'Is this a pixel?' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: png } },
+        { type: 'text', text: 'Is this a pixel?' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: png }, cache_control: { type: 'ephemeral' } },
       ]);
       else if (protocol === 'gemini') expect(body.contents.at(-1).parts).toEqual([
         { text: 'Is this a pixel?' }, { inlineData: { mimeType: 'image/png', data: png } },

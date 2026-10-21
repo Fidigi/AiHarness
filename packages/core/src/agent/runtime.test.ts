@@ -205,6 +205,46 @@ async function setup(provider: AiProvider, onUsage?: AgentRuntimeOptions['onUsag
 }
 
 describe('AgentRuntime', () => {
+  it('owns numeric reasoning budgets before admission and supplies fresh per-turn hook copies', async () => {
+    const provider = new MockProvider({ type: 'mock' });
+    const captured: unknown[] = [];
+    const stream = vi.spyOn(provider, 'streamChat').mockImplementation(async (messages, _chunk, complete, _error, options) => {
+      captured.push(options?.thinkingBudgets);
+      complete?.(messages.some(message => message.role === 'tool') ? { content: 'done' }
+        : { content: '', toolCalls: [{ id: 'budget-tool', name: 'next', input: {} }] });
+    });
+    const { runtime, sessionManager, session, extensionRegistry } = await setup(provider);
+    const hookBudgets: unknown[] = [];
+    await extensionRegistry.load('budgets', api => {
+      api.registerTool({ name: 'next', description: 'Continue', readOnly: true, execute: () => ({ content: 'ok' }) });
+      api.before('before:provider', data => {
+        hookBudgets.push(structuredClone(data.options.thinkingBudgets));
+        Reflect.set(data.options.thinkingBudgets!, 'low', 2100);
+      });
+    });
+    const budgets = { low: 2000 };
+    const pending = runtime.start({ sessionId: session.id, cwd: process.cwd(), provider: 'mock',
+      input: 'numeric budget', thinking: 'low', thinkingBudgets: budgets });
+    budgets.low = 9000;
+    const run = await pending;
+    expect((await runtime.wait(run.id))?.phase).toBe('completed');
+    expect(hookBudgets).toEqual([{ low: 2000 }, { low: 2000 }]);
+    expect(captured).toEqual([{ low: 2100 }, { low: 2100 }]);
+    expect(captured[0]).not.toBe(captured[1]);
+    expect(budgets).toEqual({ low: 9000 });
+    expect(JSON.stringify(session.messages)).not.toContain('thinkingBudgets');
+    const before = await sessionManager.getRawEntries(session.id);
+    const getter = vi.fn(() => 1000);
+    const accessor = Object.defineProperty({}, 'low', { get: getter, enumerable: true });
+    for (const invalid of [{ low: -1 }, { high: 1.5 }, { max: 1 }, accessor]) {
+      await expect(runtime.start({ sessionId: session.id, cwd: process.cwd(), provider: 'mock', input: 'refused',
+        thinkingBudgets: invalid as NonNullable<ChatOptions['thinkingBudgets']> })).rejects.toThrow('Thinking budgets');
+    }
+    expect(getter).not.toHaveBeenCalled();
+    expect(stream).toHaveBeenCalledTimes(2);
+    expect(await sessionManager.getRawEntries(session.id)).toEqual(before);
+  });
+
   it('reconnects every parallel tool with independent host-correlated progress and clears the batch on settlement', async () => {
     const provider = new MockProvider({ type: 'mock' });
     vi.spyOn(provider, 'streamChat').mockImplementation(async (messages, _chunk, complete) => {

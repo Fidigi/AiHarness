@@ -586,7 +586,7 @@ describe('multimodal provider adapters', () => {
     const request = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit;
     expect(JSON.parse(String(request.body)).messages[0].content).toEqual([
       { type: 'text', text: 'Describe this image' },
-      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AQID' } },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AQID' }, cache_control: { type: 'ephemeral' } },
     ]);
   });
 

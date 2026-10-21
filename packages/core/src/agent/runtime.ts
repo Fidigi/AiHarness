@@ -1,4 +1,5 @@
-import type { AiProvider, ChatResponse, ChatToolDefinition } from '../providers/index.js';
+import type { AiProvider, ChatResponse, ChatToolDefinition, ThinkingBudgets } from '../providers/index.js';
+import { copyThinkingBudgets } from '../providers/thinking-budgets.js';
 import type { CredentialRedactionStream } from '../providers/credentials.js';
 import type {
   ExtensionInteractionRequest,
@@ -55,6 +56,9 @@ export interface StartAgentRunRequest {
   blocks?: MessageContentBlock[];
   model?: string;
   thinking?: Session['thinking'];
+  /** Trusted numeric-dialect overrides, copied at admission and never persisted as message context. */
+  thinkingBudgets?: ThinkingBudgets;
+  cacheWarming?: import('../providers/cache-warmer.js').CacheWarmingMode;
   toolPreset?: Session['toolPreset'];
   /** False when the transport already persisted explicit settings and only passes effective values. */
   persistSettings?: boolean;
@@ -269,6 +273,7 @@ export class AgentRuntime {
     const effectiveRequest: StartAgentRunRequest = {
       ...request,
       trigger: copyAgentRunTrigger(request.trigger),
+      thinkingBudgets: copyThinkingBudgets(request.thinkingBudgets),
       provider: this.redactText(request.provider),
       input: this.redactText(request.input),
       blocks: request.blocks ? this.redactJson(structuredClone(request.blocks)) : undefined,
@@ -317,7 +322,8 @@ export class AgentRuntime {
       hook.data = this.redactJson(hook.data);
       effectiveRequest.input = hook.data.input;
       const providerName = hook.data.provider;
-      const provider = await awaitAgentAdmission(() => this.resolveProvider(providerName), controller.signal);
+      const provider = await awaitAgentAdmission(async () => await this.resolveProvider(providerName)
+        ?? this.extensionRegistry.getVirtualProvider(providerName), controller.signal);
       current();
       if (!provider?.validateConfig()) throw new Error(`Provider indisponible : ${providerName}`);
       current();
@@ -677,7 +683,7 @@ export class AgentRuntime {
       },
       onUsage: response => {
         if (!response.usage) return;
-        const costUsd = this.onUsage?.(run.snapshot.provider, response.model ?? request.model, response.usage);
+        const costUsd = this.onUsage?.(response.provider ?? run.snapshot.provider, response.model ?? request.model, response.usage);
         if (costUsd !== undefined) response.usage.costUsd = costUsd;
       },
       onFinalResponse: (content, response) => {
@@ -716,6 +722,10 @@ export class AgentRuntime {
           tools: definitions,
           systemPrompt: request.systemPrompt,
           thinking,
+          thinkingBudgets: request.thinkingBudgets,
+          cacheWarming: request.cacheWarming,
+          resolveProvider: name => this.resolveProvider(name),
+          routeReason: recovery ? 'retry' : currentMessages.at(-1)?.role === 'user' ? 'user' : 'continuation',
           signal: run.controller.signal,
           extensionRegistry: this.extensionRegistry,
           maxRetries: request.maxRetries ?? 2,
@@ -743,6 +753,12 @@ export class AgentRuntime {
             reasoning += delta;
             run.snapshot.partialMessage = { id: messageId, content, reasoning };
             this.publish(run, 'reasoning.delta', { content: delta, messageId });
+          },
+          onCacheWarmUsage: (usage, provider, model) => {
+            const cost = this.onUsage?.(provider, model, { promptTokens: usage.inputTokens ?? 0,
+              completionTokens: usage.outputTokens ?? 0, totalTokens: usage.totalTokens ?? 0,
+              cacheReadTokens: usage.cacheReadTokens, cacheWriteTokens: usage.cacheWriteTokens, costUsd: usage.costUsd });
+            if (cost !== undefined) usage.costUsd = cost;
           },
           onProviderEvent: event => {
             if (event.type === 'tool_call') this.publish(run, 'tool.progress', event.data);

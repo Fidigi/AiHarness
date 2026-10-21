@@ -15,7 +15,7 @@ import {
 import type { RuntimeServices } from '../runtime/services.js';
 import type { CommandEvent } from '../runtime/command-runtime.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
-import { serializeSessionPage } from './session-pagination.js';
+import { serializeSessionPage, sessionCacheNotices } from './session-pagination.js';
 import { requireCapability } from '../security/request-security.js';
 import { SseChannel } from './sse-channel.js';
 import { agentEventPolicy } from './agent-event-policy.js';
@@ -458,6 +458,8 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         blocks: userBlocks(body.blocks),
         model: selectedModel,
         thinking: effective.values.thinking,
+        thinkingBudgets: effective.values.thinkingBudgets ?? agentSettings.settings.thinkingBudgets,
+        cacheWarming: agentSettings.settings.cacheWarming,
         toolPreset: effective.values.toolPreset,
         persistSettings: false,
         systemPrompt: instructions.systemPrompt,
@@ -569,12 +571,18 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         response.status(400).json({ error: 'includeCommands invalide.' });
         return;
       }
+      await services.configurationStore.load();
+      const snapshot = services.agentRuntime.snapshot(session.id);
+      const serialized = serializeSessionPage(session, {
+        limit: integerValue(request.query.messageLimit, 80, 0, 250),
+        includeCommands: includeCommands !== 'false',
+      });
       response.json({
-        ...services.agentRuntime.snapshot(session.id),
-        session: serializeSessionPage(session, {
-          limit: integerValue(request.query.messageLimit, 80, 0, 250),
-          includeCommands: includeCommands !== 'false',
-        }),
+        ...snapshot,
+        session: { ...serialized,
+          ...await sessionCacheNotices(services.sessionManager, session.id, serialized.messages.map(message => message.id),
+            services.configurationStore.get('global').showCacheMissNotices !== false),
+        },
       });
     } catch (error) {
       next(error);
@@ -633,7 +641,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
       const instruction = redactText(rawInstruction);
       const provider = services.resolveProvider(providerName);
       if (!provider) throw Object.assign(new Error(`Provider inconnu : ${providerName}`), { status: 400 });
-      const chat = provider.chat.bind(provider);
+      const chat: typeof provider.chat = (messages, options) => services.extensionRegistry.chat(provider, messages, options, services.resolveProvider);
       const rawModel = typeof request.body?.model === 'string' ? request.body.model : effective.values.model;
       const requestedModel = rawModel ? redactText(rawModel) : undefined;
       const summaryMessages = redactJson(getSummaryModelMessages(preparation.toCompact));
@@ -657,7 +665,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         throw new Error('Le provider a renvoyé un résumé vide.');
       }
       const summaryResponse = redactJson(copyCompactionResponse(rawSummaryResponse));
-      if (summaryResponse.usage) recordUsage(providerName, summaryResponse.model ?? requestedModel, summaryResponse.usage);
+      if (summaryResponse.usage) recordUsage(summaryResponse.provider ?? providerName, summaryResponse.model ?? requestedModel, summaryResponse.usage);
       if (!summaryResponse.content.trim()) throw new Error('Le provider a renvoyé un résumé vide.');
       let summary = readCompactionSummary(summaryResponse).trim();
       let afterEstimate = Math.ceil(summary.length / 4) + retainedEstimate;
@@ -666,7 +674,7 @@ export function createAgentRouter(servicesPromise: Promise<RuntimeServices>): Ro
         instruction,
         tokensBefore: before,
         tokensAfter: afterEstimate,
-        provider: providerName,
+        provider: summaryResponse.provider ?? providerName,
         model: summaryResponse.model ?? requestedModel,
         usage: normalizeProviderUsage(summaryResponse.usage),
       }, { signal: lifetime.signal, source });

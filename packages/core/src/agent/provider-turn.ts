@@ -8,7 +8,7 @@ import {
   type ThinkingBudgets,
 } from '../providers/index.js';
 import type { ExtensionRegistry } from '../extensions/extension-registry.js';
-import type { Message } from '../types/index.js';
+import type { Message, TokenUsage } from '../types/index.js';
 import { calculatePublishedModelCost } from '../providers/model-metadata.js';
 import type { CredentialRedactionStream } from '../providers/credentials.js';
 import { copyThinkingBudgets } from '../providers/thinking-budgets.js';
@@ -21,11 +21,19 @@ import { ProviderRequestOptionsError } from './provider-request-options.js';
 import { captureProviderCallLabels, captureProviderMessages, prepareProviderPayload } from './provider-request-payload.js';
 import { AgentAbortError } from './tool-loop.js';
 import type { SessionManager } from '../sessions/session-manager.js';
+import { VirtualModelRoutingError, type VirtualModelReason, type VirtualModelRequest } from '../providers/virtual-models.js';
+import { getPublishedModelMetadata } from '../providers/model-metadata.js';
+import { getSessionCacheWarmer, type CacheWarmingMode } from '../providers/cache-warmer.js';
 
 export interface StreamProviderTurnOptions {
   provider: AiProvider;
   providerName: string;
   model?: string;
+  maxTokens?: number;
+  resolveProvider?(name: string): AiProvider | undefined | Promise<AiProvider | undefined>;
+  routeReason?: VirtualModelReason;
+  cacheWarming?: CacheWarmingMode;
+  cacheRetention?: 'none' | 'short' | 'long';
   /** Stable conversation identity for provider transports with bounded continuation caches. */
   sessionId?: string;
   /** Owning hosts persist private post-hook loadout deltas before physical dispatch. */
@@ -46,6 +54,7 @@ export interface StreamProviderTurnOptions {
   onReasoningDelta?(delta: string): void | Promise<void>;
   onProviderEvent?(event: StreamEvent): void | Promise<void>;
   onComplete?(response: ChatResponse): void | Promise<void>;
+  onCacheWarmUsage?(usage: TokenUsage, provider: string, model: string): void | Promise<void>;
   onError?(error: unknown): void | Promise<void>;
   onRetryStart?(details: { attempt: number; maxAttempts: number; delayMs: number; error: unknown }): void | Promise<void>;
   onRetryEnd?(details: { success: boolean; attempt: number; finalError?: unknown }): void | Promise<void>;
@@ -100,6 +109,104 @@ function abortableDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
  * preserving streamed text/reasoning deltas for any frontend adapter.
  */
 export async function streamProviderTurn(options: StreamProviderTurnOptions): Promise<ChatResponse> {
+  const models = options.extensionRegistry.virtualModels;
+  const hasVirtual = models.list().some(model => model.provider === options.providerName);
+  if (hasVirtual && !options.model) captureNativeOutputBudget(options.provider);
+  const definition = hasVirtual ? models.get(options.providerName, options.model ?? options.provider.getConfiguredModel()) : undefined;
+  if (!definition) {
+    if (options.sessionManager && options.sessionId && options.sessionManager.get(options.sessionId)) {
+      options.sessionManager.setCompactionContextWindow(options.sessionManager.getCompactionContextWindow(), options.sessionId);
+    }
+    return streamPhysicalProviderTurn(options);
+  }
+  let failed: VirtualModelRequest['failed'];
+  const maxRetries = options.maxRetries ?? 2;
+  if (!Number.isSafeInteger(maxRetries) || maxRetries < 0 || maxRetries > 10) throw new VirtualModelRoutingError();
+  for (let attempt = 0; ; attempt++) {
+    let producedOutput = false;
+    const resolved = await models.resolve({ definition, messages: options.messages, thinking: options.thinking,
+      reason: attempt ? 'retry' : options.routeReason ?? (options.sessionManager ? (options.messages.at(-1)?.role === 'user' ? 'user' : 'continuation') : 'direct'),
+      failed, signal: options.signal, sessionId: options.sessionId, sessionManager: options.sessionManager,
+      context: { resolveProvider: name => options.resolveProvider ? options.resolveProvider(name)
+        : name === options.providerName ? options.provider : undefined },
+    });
+    const { provider, selection } = resolved;
+    const metadata = getPublishedModelMetadata(selection.provider, selection.id);
+    const manager = options.sessionManager;
+    let messages = captureProviderMessages(options.messages);
+    let contextBudget = options.contextBudget;
+    if (metadata?.contextWindow) {
+      const window = Math.min(metadata.contextWindow, options.contextBudget?.contextWindow ?? Infinity);
+      if (manager && options.sessionId) manager.setCompactionContextWindow(window, options.sessionId);
+      contextBudget = { contextWindow: window,
+        reserveTokens: manager?.getCompactionSettings().reserveTokens ?? options.contextBudget?.reserveTokens ?? 0 };
+      try { assertProviderRequestBudget(messages, { systemPrompt: options.systemPrompt, tools: options.tools }, contextBudget); }
+      catch (error) {
+        if (!(error instanceof ProviderRequestContextError) || error.kind !== 'overflow' || !manager || !options.sessionId
+          || !await manager.checkAndTriggerCompaction(options.sessionId, options.signal, 'overflow')) throw error;
+        messages = manager.getEffectiveContext(options.sessionId).flatMap(entry => entry.type === 'message'
+          ? [{ ...entry, timestamp: new Date(entry.timestamp) }] : []);
+      }
+    } else if (manager && options.sessionId) {
+      manager.setCompactionContextWindow(options.contextBudget?.contextWindow, options.sessionId);
+    }
+    if (metadata?.capabilities.imageInput === false) messages = messages.map(message => message.blocks?.some(block => block.type === 'image')
+      ? { ...message, content: `${message.content}\n[Image omitted: physical model does not support images.]`,
+          blocks: message.blocks.filter(block => block.type !== 'image') } : message);
+    const dispatchSession = options.sessionId ? manager?.get(options.sessionId) : undefined;
+    const dispatchLeaf = dispatchSession?.activeLeafId;
+    const dispatchContext = manager && options.sessionId ? JSON.stringify(manager.getEffectiveContext(options.sessionId)) : undefined;
+    let accepted: ChatResponse | undefined;
+    try {
+      const response = await streamPhysicalProviderTurn({ ...options, provider, providerName: selection.provider,
+        model: selection.id, thinking: selection.thinkingLevel, messages, contextBudget, maxRetries: 0,
+        cacheWarming: 'off',
+        onComplete: undefined, onError: undefined,
+        validateDispatch: async model => {
+          const currentProvider = options.resolveProvider ? await options.resolveProvider(selection.provider)
+            : selection.provider === options.providerName ? options.provider : undefined;
+          if (currentProvider !== provider || !provider.validateConfig()) throw new VirtualModelRoutingError();
+          if (manager && options.sessionId) {
+            const ancestry = await manager.getActiveBranchEntries(options.sessionId);
+            if (manager.get(options.sessionId) !== dispatchSession || ancestry.at(-1)?.id !== dispatchSession?.activeLeafId
+              || dispatchLeaf && !ancestry.some(entry => entry.id === dispatchLeaf)
+              || JSON.stringify(manager.getEffectiveContext(options.sessionId)) !== dispatchContext) throw new VirtualModelRoutingError();
+          }
+          if (models.get(definition.provider, definition.id) !== definition || models.get(selection.provider, model)
+            || model !== selection.id) throw new VirtualModelRoutingError();
+        },
+        onTextDelta: delta => { producedOutput = true; return options.onTextDelta?.(delta); },
+        onReasoningDelta: delta => { producedOutput = true; return options.onReasoningDelta?.(delta); },
+        onProviderEvent: event => { if (event.type === 'tool_call') producedOutput = true; return options.onProviderEvent?.(event); },
+      });
+      accepted = { ...response, provider: selection.provider, model: response.model ?? selection.id,
+        thinkingLevel: selection.thinkingLevel,
+        selection: { provider: definition.provider, id: definition.id, thinkingLevel: options.thinking ?? 'off' as ThinkingLevel } };
+    } catch (error) {
+      if (producedOutput || options.signal?.aborted || options.retrySignal?.aborted || attempt >= maxRetries
+        || error instanceof ProviderRequestContextError || error instanceof ProviderContextOverflowError
+        || error instanceof ProviderToolArgumentsError || error instanceof ProviderOutputBudgetError || error instanceof VirtualModelRoutingError) {
+        if (attempt) await options.onRetryEnd?.({ success: false, attempt: attempt + 1, finalError: error });
+        await options.onError?.(error); throw error;
+      }
+      failed = { ...selection, error: options.redactText?.(error instanceof Error ? error.message : String(error))
+        ?? 'Provider request failed.' };
+      const delayMs = Math.min(options.retryMaxDelayMs ?? 5_000, (options.retryDelayMs ?? 500) * 2 ** attempt);
+      await options.onRetryStart?.({ attempt: attempt + 1, maxAttempts: maxRetries + 1, delayMs, error });
+      await abortableDelay(delayMs, options.signal && options.retrySignal
+        ? AbortSignal.any([options.signal, options.retrySignal]) : options.signal ?? options.retrySignal);
+    }
+    if (accepted) {
+      if (attempt) await options.onRetryEnd?.({ success: true, attempt: attempt + 1 });
+      await options.onComplete?.(accepted);
+      return accepted;
+    }
+  }
+}
+
+async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
+  validateDispatch?(model?: string): Promise<void>;
+}): Promise<ChatResponse> {
   const contextBudget = captureProviderRequestBudget(options), signal = options.signal;
   const sessionManager = options.sessionManager, sessionId = options.sessionId;
   const sourceSession = sessionId ? sessionManager?.get(sessionId) : undefined;
@@ -143,9 +250,11 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
       model: options.model ? safeText(options.model) : undefined,
       sessionId: options.sessionId ? safeText(options.sessionId) : undefined,
       systemPrompt: options.systemPrompt ? safeText(options.systemPrompt) : undefined,
+      ...(options.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}),
       tools: options.tools,
       thinking: options.thinking,
       ...(options.thinkingBudgets !== undefined ? { thinkingBudgets: copyThinkingBudgets(options.thinkingBudgets) } : {}),
+      ...(options.cacheRetention !== undefined ? { cacheRetention: options.cacheRetention } : {}),
       signal,
     },
   });
@@ -265,6 +374,33 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
           }, { signal });
           current();
           if (sessionManager.get(sessionId) !== sourceSession) throw new Error('Request session changed.');
+        }
+        await options.validateDispatch?.(requestOptions.model);
+        current();
+        if (sessionManager && sessionId && sourceSession) {
+          const warmer = getSessionCacheWarmer(sessionManager, sessionId, async (decision, warmSignal) => {
+            const result = await options.extensionRegistry.runBefore('before:cache:warm', { ...decision, signal: warmSignal }, warmSignal);
+            return result.cancelled ? 'stop' : result.data.action === 'warm' ? 'warm' : 'stop';
+          }, options.onCacheWarmUsage);
+          options.extensionRegistry.trackProviderCache(warmer);
+          warmer.setMode(options.cacheWarming ?? 'streaming');
+          const metadata = getPublishedModelMetadata(prepared.data.provider, requestOptions.model ?? '');
+          const retention = requestOptions.cacheRetention ?? 'short';
+          const ttl = retention === 'none' ? undefined : metadata?.promptCache?.[retention];
+          const sameSelection = prepared.data.provider === options.providerName
+            && options.model !== undefined && requestOptions.model === options.model;
+          const replayable = sameSelection && (prepared.data.provider !== 'anthropic' || !requestOptions.thinking || requestOptions.thinking === 'off'
+            || requestOptions.model === 'claude-sonnet-4-6');
+          if (ttl && metadata?.pricing && replayable) {
+            const ids = sourceSession.messages.map(message => message.id);
+            const selectedModel = sourceSession.model;
+            warmer.start({ provider, providerName: prepared.data.provider, model: requestOptions.model!,
+              messages: requestMessages, options: requestOptions, ttlSeconds: ttl, pricing: metadata.pricing,
+              isAuthorized: async () => (!options.resolveProvider || await options.resolveProvider(prepared.data.provider) === provider) && provider.validateConfig(),
+              isCurrent: () => sessionManager.get(sessionId) === sourceSession && sourceSession.model === selectedModel
+                && ids.every((id, index) => sourceSession.messages[index]?.id === id),
+            });
+          } else warmer.cancel('cache lifetime unavailable or unsafe replay');
         }
         await streamChat(
           requestMessages,

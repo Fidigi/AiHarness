@@ -14,6 +14,7 @@ import {
   flattenModelCatalog,
   getSupportedThinkingLevels,
   getSessionAccounting,
+  getSessionCacheWarmingStatus,
   prepareCompactionContext,
   assertCompactionTranscript,
   getSummaryModelMessages,
@@ -195,6 +196,12 @@ export interface CommandWorkspaceContext {
   redactJson?: <T>(value: T) => T;
 }
 
+function commandChat(ctx: CommandContext, provider: AiProvider): AiProvider['chat'] {
+  return (messages, options) => ctx.extensionRegistry
+    ? ctx.extensionRegistry.chat(provider, messages, options, name => ctx.providers.get(name))
+    : provider.chat(messages, options);
+}
+
 function safeText(ctx: CommandContext, value: string): string {
   return ctx.redactText?.(value) ?? value;
 }
@@ -338,12 +345,14 @@ function syncExtensionProviders(ctx: CommandContext): void {
     }
   }
 
+  ctx.extensionRegistry?.addVirtualProviders(ctx.providers);
   const activeType = ctx.provider?.getProviderType();
   if (activeType && !ctx.providers.has(activeType)) ctx.provider = ctx.providers.get('mock');
 }
 
 async function availableCommandModels(ctx: CommandContext): Promise<ModelCatalogEntry[]> {
   return flattenModelCatalog(await collectProviderModelCatalog(ctx.providers, {
+    virtualModels: ctx.extensionRegistry?.virtualModels,
     discover: ctx.offline !== true,
     timeoutMs: 2_000,
     retries: 0,
@@ -398,12 +407,12 @@ async function selectCommandModel(
   if (thinkingLevel) {
     ctx.thinkingLevel = clampPublishedThinkingLevel(
       thinkingLevel,
-      getSupportedThinkingLevels(model.provider, model.id),
+      getSupportedThinkingLevels(model.provider, model.id, ctx.extensionRegistry?.virtualModels),
     );
   } else {
     ctx.thinkingLevel = clampPublishedThinkingLevel(
       ctx.thinkingLevel,
-      getSupportedThinkingLevels(model.provider, model.id),
+      getSupportedThinkingLevels(model.provider, model.id, ctx.extensionRegistry?.virtualModels),
     );
   }
 }
@@ -774,6 +783,7 @@ const commands: CommandEntry[] = [
       const available = getSupportedThinkingLevels(
         ctx.provider?.getProviderType() ?? 'unknown',
         ctx.provider?.getConfiguredModel(),
+        ctx.extensionRegistry?.virtualModels,
       );
       ctx.thinkingLevel = clampPublishedThinkingLevel(level, available);
       return chalk.green(`Niveau de raisonnement défini sur ${ctx.thinkingLevel}.`);
@@ -788,7 +798,7 @@ const commands: CommandEntry[] = [
       const sessions = manager.list();
       if (!sessions.length) return chalk.yellow('No active session to compact.');
       const session = (selectedSessionId && manager.get(selectedSessionId)) || sessions[0];
-      const provider = ctx.provider, chat = provider?.chat.bind(provider);
+      const provider = ctx.provider, chat = provider && commandChat(ctx, provider);
       const summaryProvider = provider?.getProviderType(), summaryModel = provider?.getConfiguredModel();
       const redactText = ctx.redactText?.bind(ctx) ?? ((value: string) => value);
       const redactJson = ctx.redactJson?.bind(ctx);
@@ -840,7 +850,7 @@ const commands: CommandEntry[] = [
         if (content && 'value' in content && content.value === '') return chalk.red('Compaction failed: no summary generated.');
         const ownedResponse = copyCompactionResponse(result);
         const summary = readCompactionSummary({ content: redactText(ownedResponse.content) });
-        await manager.applyCompaction(sessionId, summary, firstKeptId, { provider: summaryProvider,
+        await manager.applyCompaction(sessionId, summary, firstKeptId, { provider: ownedResponse.provider ?? summaryProvider,
           model: ownedResponse.model ?? summaryModel, usage: normalizeProviderUsage(ownedResponse.usage) }, { signal, source });
         const appliedSummary = typeof session.metadata?.compactionSummary === 'string' ? session.metadata.compactionSummary : summary;
         // Cancellation after final save admission must not turn durable success into failure.
@@ -866,7 +876,7 @@ const commands: CommandEntry[] = [
       if (!session) return chalk.red('Aucune branche active à résumer.');
       if (!ctx.provider?.validateConfig()) return chalk.red('Aucun provider configuré pour générer le résumé.');
       const instructionArgs = explicitSession ? args.slice(1) : args;
-      const result = await ctx.provider.chat(session.messages.map(message => ({ ...message })), {
+      const result = await commandChat(ctx, ctx.provider)(session.messages.map(message => ({ ...message })), {
         systemPrompt: instructionArgs.join(' ') || 'Résume cette branche de conversation en préservant les décisions, résultats et contexte utiles.',
       });
       if (!result.content.trim()) return chalk.red('Le provider n’a produit aucun résumé.');
@@ -908,7 +918,7 @@ const commands: CommandEntry[] = [
       summarize ??= false;
       if (customInstructions !== undefined && !summarize) return chalk.red('--instructions requires --summarize.');
       if (summarize && !ctx.provider) return chalk.red('No configured provider for branch summarization.');
-      const summaryProvider = summarize ? createProviderBranchSummarizer(ctx.provider!) : undefined;
+      const summaryProvider = summarize ? createProviderBranchSummarizer(ctx.provider!, undefined, commandChat(ctx, ctx.provider!)) : undefined;
       const result = await ctx.sessionManager.navigateTree(session.id, args[0], {
         summarize, ...summaryProvider, ...(summarize ? { reserveTokens: settings?.reserveTokens } : {}),
         customInstructions, signal: ctx.signal,
@@ -1194,6 +1204,9 @@ const commands: CommandEntry[] = [
         output += `   Full history (all branches): ${counts(accounting.history)}\n`;
         output += `   History accounting: ${usageText(accounting.history)}\n`;
         output += `   Context (est.): ${contextTokens === null ? 'unknown' : `~${contextTokens.toLocaleString()} tokens`} (effective model context, not accounting totals)\n`;
+        const warming = getSessionCacheWarmingStatus(ctx.sessionManager, session.id);
+        output += `   Cache warming: ${ctx.agentSettings?.().cacheWarming ?? 'streaming'} / ${warming.state}${warming.reason ? ` (${warming.reason})` : ''}${warming.extensionOverride ? ' [extension override]' : ''}\n`;
+        if (warming.decision) output += `   Expected cache savings: $${warming.decision.expectedSavings.toFixed(5)}\n`;
         output += `   Created: ${new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
         output += `   Updated: ${chalk.dim(new Date(session.updatedAt).toLocaleString('fr-FR'))}\n\n`;
       }

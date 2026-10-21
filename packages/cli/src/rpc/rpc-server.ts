@@ -480,13 +480,14 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       network: providerRuntime.network,
       extensionProviders: extensionRegistry.getProviderDefinitions(),
     });
+    extensionRegistry.addVirtualProviders(providers);
     const effectiveModels = applyAgentModelSettings({
       provider: options.provider,
       model: options.model,
       models: options.models,
       apiKey: options.apiKey,
     }, settingsResolution.settings);
-    const startup = await resolveStartupProvider(providers, { ...effectiveModels.selection, offline });
+    const startup = await resolveStartupProvider(providers, { ...effectiveModels.selection, offline }, process.env, extensionRegistry.virtualModels);
     startup.scopeDiagnostics?.forEach(() => process.stderr.write('Warning: A model scope entry could not be resolved.\n'));
     const startupModel = startup.model ?? startup.provider.getConfiguredModel();
     const startupThinking = options.thinking

@@ -2,7 +2,7 @@ import type { AgentSettings } from '@ai-harness/core';
 
 /** Accepted storage fields without a CLI consumer. Never present them as effective behavior. */
 export const UNSUPPORTED_CLI_SETTINGS = [
-  'lastChangelogVersion', 'hideThinkingBlock', 'showCacheMissNotices', 'cacheWarming',
+  'lastChangelogVersion', 'hideThinkingBlock',
   'doubleEscapeAction', 'treeFilterMode', 'fullscreenExitOutput', 'fullscreenScrollbar',
   'fullscreenCopyOnSelect', 'fullscreenWheelScrollLines', 'editorPaddingX', 'outputPad',
   'autocompleteMaxVisible', 'showHardwareCursor', 'terminal', 'images', 'markdown',

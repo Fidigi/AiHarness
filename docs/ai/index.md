@@ -9,7 +9,9 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Domain | File | Context Load |
 |---|---|---|
 | Project overview | [`project-map.md`](./project-map.md) | ~610 lines — load first for global navigation |
-| AI Providers | [`topics/providers.md`](./topics/providers.md) | ~215 lines |
+| AI Providers | [`topics/providers.md`](./topics/providers.md) | ~225 lines |
+| Model Dispatch Policies | [`topics/model-dispatch-policies.md`](./topics/model-dispatch-policies.md) | ~90 lines — virtual routing, physical provenance, billable warming and historical notices |
+| Pinned Provider / Configuration Matrix | [`topics/provider-matrix.md`](./topics/provider-matrix.md) | ~110 lines — 42 factory identities, API/auth gaps and numeric host composition |
 | Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~225 lines |
 | Session Context State | [`topics/session-context-state.md`](./topics/session-context-state.md) | ~100 lines |
 | TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~75 lines |
@@ -43,7 +45,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 
 ### For an Agent Working On...
 
-**An AI provider** → Load only `providers.md` + the relevant package rows in `project-map.md` §3
+**An AI provider** → Load `providers.md` + the relevant package rows in `project-map.md` §3; add `model-dispatch-policies.md` for virtual selection, direct summary routing, cache economics or durable warming usage
 ```
 → packages/core/src/providers/index.ts
 → packages/core/src/types/index.ts (shared contracts)

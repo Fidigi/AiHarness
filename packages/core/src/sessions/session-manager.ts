@@ -407,6 +407,21 @@ function normalizedSessionUsage(value: Message['usage']): Message['usage'] {
   return normalized;
 }
 
+function cumulativeSessionUsage(previous: Message['usage'], usage: NonNullable<Message['usage']>): NonNullable<Message['usage']> {
+  const before = previous ?? {};
+  const cost = usage.costUsd === undefined || previous !== undefined && before.costUsd === undefined
+    ? undefined : (before.costUsd ?? 0) + usage.costUsd;
+  return {
+    inputTokens: saturatedUsageAdd(before.inputTokens, usage.inputTokens),
+    outputTokens: saturatedUsageAdd(before.outputTokens, usage.outputTokens),
+    cacheReadTokens: saturatedUsageAdd(before.cacheReadTokens, usage.cacheReadTokens),
+    cacheWriteTokens: saturatedUsageAdd(before.cacheWriteTokens, usage.cacheWriteTokens),
+    totalTokens: saturatedUsageAdd(before.totalTokens, usage.totalTokens ?? saturatedUsageAdd(usage.inputTokens,
+      saturatedUsageAdd(usage.outputTokens, saturatedUsageAdd(usage.cacheReadTokens, usage.cacheWriteTokens)))),
+    ...(cost === undefined ? {} : { costUsd: Math.min(Number.MAX_SAFE_INTEGER, cost) }),
+  };
+}
+
 function saturatedUsageAdd(left: number | undefined, right: number | undefined): number {
   return Math.min(Number.MAX_SAFE_INTEGER, (left ?? 0) + (right ?? 0));
 }
@@ -1498,6 +1513,7 @@ export class SessionManager {
   private readonly compactionSources = new WeakMap<SessionCompactionSource, SessionPublicationAdmission & { sourceSessionId: string }>();
   private compactionSettings: CompactionSettings = DEFAULT_COMPACTION_SETTINGS;
   private compactionContextWindow?: number;
+  private readonly sessionCompactionWindows = new Map<string, number | undefined>();
   private autoCompactionCallback?: AutoCompactionCallback;
   private autoCompactionPolicy?: AutoCompactionPolicy;
   private readonly redactText: (value: string) => string;
@@ -1568,14 +1584,20 @@ export class SessionManager {
   }
 
   /** Supply the active model's token limit; undefined preserves legacy host policy. */
-  setCompactionContextWindow(contextWindow?: number): void {
+  setCompactionContextWindow(contextWindow?: number, sessionId?: string): void {
     if (contextWindow !== undefined && (!Number.isSafeInteger(contextWindow) || contextWindow <= 0)) {
       throw new Error('Compaction context window is invalid.');
     }
-    this.compactionContextWindow = contextWindow;
+    if (sessionId !== undefined) {
+      if (!this.sessions.has(sessionId)) throw new Error('Compaction session is unavailable.');
+      this.sessionCompactionWindows.set(sessionId, contextWindow);
+    } else this.compactionContextWindow = contextWindow;
   }
 
-  getCompactionContextWindow(): number | undefined { return this.compactionContextWindow; }
+  getCompactionContextWindow(sessionId?: string): number | undefined {
+    return sessionId !== undefined && this.sessionCompactionWindows.has(sessionId)
+      ? this.sessionCompactionWindows.get(sessionId) : this.compactionContextWindow;
+  }
 
   /** Set the callback function for auto-compaction summarization */
   setAutoCompactionCallback(callback: AutoCompactionCallback): void {
@@ -1603,7 +1625,7 @@ export class SessionManager {
   private async checkAndTriggerCompactionUnlocked(sessionId: string, signal?: AbortSignal, reason: 'threshold' | 'overflow' = 'threshold'): Promise<boolean> {
     const session = this.sessions.get(sessionId);
     const settings = ownedCompactionSettings(this.compactionSettings);
-    const contextWindow = this.compactionContextWindow;
+    const contextWindow = this.getCompactionContextWindow(sessionId);
     const store = this.store;
     const storeGeneration = this.storeGeneration;
     const summarize = this.autoCompactionCallback;
@@ -1624,7 +1646,7 @@ export class SessionManager {
           && current.enabled
           && current.reserveTokens === settings.reserveTokens
           && current.keepRecentTokens === settings.keepRecentTokens
-          && this.compactionContextWindow === contextWindow
+          && this.getCompactionContextWindow(sessionId) === contextWindow
           && this.autoCompactionCallback === summarize
           && this.autoCompactionPolicy === policy;
       };
@@ -2048,25 +2070,7 @@ export class SessionManager {
         delete metadata.activeLeafReset;
         next.metadata = metadata;
       }
-      if (message.usage) {
-        const hadPreviousUsage = current.usage !== undefined;
-        const previous = current.usage ?? {};
-        const cumulativeCost = message.usage.costUsd === undefined
-          || (hadPreviousUsage && previous.costUsd === undefined)
-          ? undefined
-          : (previous.costUsd ?? 0) + message.usage.costUsd;
-        next.usage = {
-          inputTokens: saturatedUsageAdd(previous.inputTokens, message.usage.inputTokens),
-          outputTokens: saturatedUsageAdd(previous.outputTokens, message.usage.outputTokens),
-          cacheReadTokens: saturatedUsageAdd(previous.cacheReadTokens, message.usage.cacheReadTokens),
-          cacheWriteTokens: saturatedUsageAdd(previous.cacheWriteTokens, message.usage.cacheWriteTokens),
-          totalTokens: saturatedUsageAdd(previous.totalTokens, message.usage.totalTokens
-            ?? saturatedUsageAdd(message.usage.inputTokens,
-              saturatedUsageAdd(message.usage.outputTokens,
-                saturatedUsageAdd(message.usage.cacheReadTokens, message.usage.cacheWriteTokens)))),
-          ...(cumulativeCost === undefined ? {} : { costUsd: Math.min(Number.MAX_SAFE_INTEGER, cumulativeCost) }),
-        };
-      }
+      if (message.usage) next.usage = cumulativeSessionUsage(current.usage, message.usage);
       if (!current.title && message.role === 'user') {
         next.title = generatedSessionTitle(message.content);
       }
@@ -2235,6 +2239,7 @@ export class SessionManager {
       if (!this.sessions.has(id)) return false;
       await this.persistDelete(id);
       this.sessions.delete(id);
+      this.sessionCompactionWindows.delete(id);
       this.volatileEntries.delete(id);
       this.committedEntries.delete(id);
       return true;
@@ -2635,15 +2640,58 @@ export class SessionManager {
   }
 
   /** Append private, parented extension state without making it a model message. */
-  async appendCustomEntry(sessionId: string, customType: string, data?: unknown): Promise<CustomSessionEntry | null> {
+  async appendCustomEntry(sessionId: string, customType: string, data?: unknown,
+    options: SessionBranchOptions & { expectedLeafId?: string | null } = {}): Promise<CustomSessionEntry | null> {
     if (typeof customType !== 'string' || !customType || !isBoundedSessionString(customType, 256)) {
       throw new Error('Custom session type is invalid.');
     }
     const copied = this.redactJson(copySessionCustomValue(data));
+    const leafProperty = Object.getOwnPropertyDescriptor(options, 'expectedLeafId');
+    if (leafProperty && (!('value' in leafProperty) || leafProperty.value !== null && typeof leafProperty.value !== 'string')) {
+      throw new Error('Custom session source is invalid.');
+    }
+    const admission = Object.create(null) as SessionBranchOptions;
+    for (const key of Reflect.ownKeys(options)) {
+      if (key === 'expectedLeafId') continue;
+      const property = Object.getOwnPropertyDescriptor(options, key);
+      if (property) Object.defineProperty(admission, key, property);
+    }
     return this.appendCustomSessionEntry(sessionId, {
       id: `custom-${crypto.randomUUID()}`, type: 'custom', version: SESSION_SCHEMA_VERSION,
       timestamp: Date.now(), customType: this.redactText(customType), ...(copied !== undefined ? { data: copied } : {}),
+    }, () => {
+      if (leafProperty && (this.sessions.get(sessionId)?.activeLeafId ?? null) !== leafProperty.value) {
+        throw new Error('Custom session source changed.');
+      }
+    }, admission);
+  }
+
+  /** Completed non-context provider work follows its original branch, without moving a newer leaf. */
+  async recordProviderUsage(sessionId: string, data: { provider: string; model: string; usage: NonNullable<Message['usage']>; extensionOverride?: boolean },
+    parentEntryId: string, expectedSession = this.sessions.get(sessionId)): Promise<void> {
+    const copied = this.redactJson(copySessionCustomValue(data)) as typeof data;
+    if (!copied || typeof copied.provider !== 'string' || !isBoundedSessionString(copied.provider, 128)
+      || typeof copied.model !== 'string' || !isBoundedSessionString(copied.model, 500)
+      || !isPersistedUsage(copied.usage) || !isValidEntryId(parentEntryId)) throw new Error('Provider usage is invalid.');
+    const store = this.store, generation = this.storeGeneration;
+    await this.withSessionMutation(sessionId, async () => {
+      const current = this.sessions.get(sessionId);
+      if (!current || current !== expectedSession || this.store !== store || this.storeGeneration !== generation) throw new Error('Provider usage session changed.');
+      const entries = this.committedEntries.get(sessionId) ?? this.volatileEntries.get(sessionId) ?? [];
+      if (!entries.some(entry => entry.id === parentEntryId)) throw new Error('Provider usage source changed.');
+      const entry: CustomSessionEntry = { id: `usage-${crypto.randomUUID()}`, type: 'custom',
+        version: SESSION_SCHEMA_VERSION, timestamp: Date.now(), parentEntryId,
+        customType: 'provider.cache_warm', data: copied };
+      const next: Session = { ...current, updatedAt: new Date(),
+        usage: cumulativeSessionUsage(current.usage, copied.usage),
+        ...(current.activeLeafId === parentEntryId ? { activeLeafId: entry.id } : {}) };
+      await this.persistSession(next, [entry], {}, () => {
+        if (this.store !== store || this.storeGeneration !== generation) throw new Error('Session store changed.');
+      });
+      Object.assign(current, next);
+      if (!this.usesSessionStore()) this.volatileEntries.get(sessionId)?.push(entry);
     });
+    this.onSessionUpdate?.(sessionId);
   }
 
   /** Display is a UI preference only; every custom_message contributes its content to context. */

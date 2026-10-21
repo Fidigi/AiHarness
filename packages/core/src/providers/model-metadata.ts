@@ -16,6 +16,8 @@ export interface PublishedModelMetadata {
   contextWindow?: number;
   maxOutputTokens?: number;
   pricing?: ModelPricing;
+  /** Conservative provider prompt-cache lifetimes, in seconds. Missing means no warming. */
+  promptCache?: { short?: number; long?: number };
   /** Per-level overrides; a null map explicitly marks thinking as unsupported. */
   thinkingLevelMap?: Partial<Record<PublishedThinkingLevel, string | null>> | null;
 }
@@ -32,11 +34,11 @@ const VISION_TOOLS: ModelCapabilities = { reasoning: false, imageInput: true, to
 const REASONING_VISION_TOOLS: ModelCapabilities = { reasoning: true, imageInput: true, toolCalls: true };
 
 /** Versioned non-secret metadata shared by CLI and Web catalogues. */
-export const PUBLISHED_MODEL_METADATA_VERSION = 3 as const;
+export const PUBLISHED_MODEL_METADATA_VERSION = 4 as const;
 
 const PUBLISHED_MODELS: Readonly<Record<string, readonly PublishedModelMetadata[]>> = {
   openai: [
-    { id: 'gpt-4o', name: 'GPT-4o', capabilities: VISION_TOOLS, contextWindow: 128_000, maxOutputTokens: 16_384, pricing: { inputPerMillion: 2.5, outputPerMillion: 10, cacheReadPerMillion: 1.25 }, thinkingLevelMap: null },
+    { id: 'gpt-4o', name: 'GPT-4o', capabilities: VISION_TOOLS, contextWindow: 128_000, maxOutputTokens: 16_384, promptCache: { short: 300 }, pricing: { inputPerMillion: 2.5, outputPerMillion: 10, cacheReadPerMillion: 1.25 }, thinkingLevelMap: null },
     { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 10, outputPerMillion: 30 } },
     { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', capabilities: TEXT_TOOLS, pricing: { inputPerMillion: 0.5, outputPerMillion: 1.5 } },
     { id: 'gpt-4.1', name: 'GPT-4.1', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 2, outputPerMillion: 8, cacheReadPerMillion: 0.5 } },
@@ -49,7 +51,7 @@ const PUBLISHED_MODELS: Readonly<Record<string, readonly PublishedModelMetadata[
     { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 0.25, outputPerMillion: 1.25 } },
     { id: 'claude-3-7-sonnet-latest', name: 'Claude 3.7 Sonnet', capabilities: REASONING_VISION_TOOLS, pricing: { inputPerMillion: 3, outputPerMillion: 15, cacheReadPerMillion: 0.3, cacheWritePerMillion: 3.75 } },
     { id: 'claude-3-5-haiku-latest', name: 'Claude 3.5 Haiku', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 0.8, outputPerMillion: 4, cacheReadPerMillion: 0.08, cacheWritePerMillion: 1 } },
-    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', capabilities: REASONING_VISION_TOOLS, contextWindow: 1_000_000, maxOutputTokens: 128_000, pricing: { inputPerMillion: 3, outputPerMillion: 15, cacheReadPerMillion: 0.3, cacheWritePerMillion: 3.75 }, thinkingLevelMap: { max: 'max' } },
+    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', capabilities: REASONING_VISION_TOOLS, contextWindow: 1_000_000, maxOutputTokens: 128_000, promptCache: { short: 300 }, pricing: { inputPerMillion: 3, outputPerMillion: 15, cacheReadPerMillion: 0.3, cacheWritePerMillion: 3.75 }, thinkingLevelMap: { max: 'max' } },
   ],
   google: [
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', capabilities: REASONING_VISION_TOOLS, pricing: { inputPerMillion: 1.25, outputPerMillion: 10, cacheReadPerMillion: 0.125 } },
@@ -79,6 +81,7 @@ function cloneMetadata(model: PublishedModelMetadata): PublishedModelMetadata {
     ...model,
     capabilities: { ...model.capabilities },
     ...(model.pricing ? { pricing: { ...model.pricing } } : {}),
+    ...(model.promptCache ? { promptCache: { ...model.promptCache } } : {}),
     ...(model.thinkingLevelMap === undefined
       ? {}
       : { thinkingLevelMap: model.thinkingLevelMap === null ? null : { ...model.thinkingLevelMap } }),
@@ -120,7 +123,10 @@ export function calculatePublishedModelCost(
 export function getSupportedThinkingLevels(
   provider: string,
   model: string | undefined,
+  virtualModels?: { get(provider: string, id: string | undefined): { thinkingLevels?: readonly PublishedThinkingLevel[] } | undefined },
 ): PublishedThinkingLevel[] {
+  const virtual = virtualModels?.get(provider, model);
+  if (virtual) return [...virtual.thinkingLevels ?? ['off']];
   if (!model) return [...PUBLISHED_THINKING_LEVELS];
   const metadata = getPublishedModelMetadata(provider, model);
   if (metadata?.thinkingLevelMap === null) return ['off'];

@@ -105,7 +105,8 @@ The following inventory covers every canonical `AgentSettings` top-level field; 
 | `fullscreenExitOutput`, `fullscreenScrollbar`, `fullscreenCopyOnSelect`, `fullscreenWheelScrollLines` | Unsupported stored-only; no implied mouse/selection/exit-transcript implementation |
 | `editorPaddingX`, `outputPad`, `autocompleteMaxVisible`, `showHardwareCursor` | Unsupported stored-only; native fixed layout/cursor behavior remains |
 | `terminal` (showImages, imageWidthCells, clearOnShrink, showTerminalProgress, hyperlinks, images, trueColor), `images` (autoResize, blockImages), `markdown` (codeBlockIndent, mermaid) | Unsupported stored-only groups; no protocol negotiation/rendering/image blocking authority |
-| `cacheWarming`, `showCacheMissNotices` | Unsupported stored-only in CLI; no background billing; MOD-05 remains separate |
+| `cacheWarming` | Consumed per provider turn; default `streaming`, optional `off`/`idle`, potentially billable economic/time-bounded replay; see [dispatch policies](./model-dispatch-policies.md) |
+| `showCacheMissNotices` | Consumed for bounded active-branch historical cache notices at startup and idle prompt boundaries in both hosts; reload affects subsequent presentation, never erases regular scrollback or disables billable warming |
 | `lastChangelogVersion`, `collapseChangelog`, `enableInstallTelemetry`, `enableAnalytics`, `trackingId`, `deviceId`, `warnings.anthropicExtraUsage` | Unsupported stored-only; no implied update, telemetry or billing-warning implementation |
 
 Pinned Pi `src/core/settings-schema.ts` uses these same presentation-field names; common spelling does not transfer defaults, transport timeouts, privilege or executable authority. Its `queueMode`/`websockets` legacy intent has the documented native migrations; `$schema` is editor metadata, not behavior. Pi's `"disabled"` timeout literal is not native validation, and native bounds/global-only rules and package/resource dialects still apply. No Pi settings-file import is added.
@@ -121,6 +122,7 @@ Each configured unsupported top-level field produces a fixed value-free warning 
 
 ## Associated tests
 
+- `packages/cli/src/tui/terminal-settings.test.ts`: implemented warming/notice modes are not stored-only warnings; `cli/cache-notices-process.test.ts` verifies actual regular/fullscreen historical visibility without provider work.
 - `packages/cli/src/tui/editor-state.test.ts`: grapheme deletion/movement, word/newline/undo/redo/caret and bounds; `fullscreen-input.test.ts` and `utils/terminal-actions.test.ts`: host actions, history, cancellation and retirement.
 - `packages/cli/src/utils/keypress-gate.test.ts`: actual readline no-dispatch fragmented UTF-8/control paste, whole oversized rejection, unfinished retirement and ordinary theme filtering.
 - `packages/cli/src/tui/fullscreen-ui.test.ts`: actual multiline frames, narrow/short resize/cell bounds, streams/panels and cleanup; `terminal-text.test.ts`: control filtering and huge grapheme width controls.

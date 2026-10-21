@@ -1,4 +1,5 @@
 import type { AiProvider } from './index.js';
+import type { VirtualModelRegistry } from './virtual-models.js';
 import {
   getPublishedModelMetadata,
   getPublishedModels,
@@ -62,6 +63,7 @@ export interface CollectModelCatalogOptions extends ModelDiscoveryOptions {
   /** False uses only published/configured metadata, without discovery callbacks. */
   discover?: boolean;
   includePublishedProviders?: boolean;
+  virtualModels?: VirtualModelRegistry;
 }
 
 export interface ProtocolModelDescriptor extends Record<string, unknown> {
@@ -253,7 +255,8 @@ export async function collectProviderModelCatalog(
       if (!known.has(provider.toLowerCase())) states.push({ provider, configured: false, discoveredModels: [] });
     }
   }
-  return buildProviderModelCatalog(states);
+  const catalog = buildProviderModelCatalog(states);
+  return options.virtualModels?.overlayCatalog(catalog) ?? catalog;
 }
 
 export function flattenModelCatalog(catalog: readonly ProviderModelCatalog[]): ModelCatalogEntry[] {

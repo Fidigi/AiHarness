@@ -6,7 +6,8 @@ import { getPublishedModels } from './model-metadata.js';
 const adaptive = 'claude-sonnet-4-6';
 const classic = 'claude-3-7-sonnet-latest';
 type Body = { model: string; stream: boolean; thinking?: { type: string; budget_tokens?: number };
-  output_config?: { effort: string }; max_tokens: number; temperature?: number; system?: string; tools?: unknown[] };
+  output_config?: { effort: string }; max_tokens: number; temperature?: number; system?: string; tools?: unknown[];
+  messages: Array<{ role: string; content: unknown }> };
 const servers: Server[] = [];
 afterEach(async () => {
   await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()); })));
@@ -61,6 +62,14 @@ describe('published Anthropic adaptive request dialect', () => {
       }
     });
   }
+  it.each([undefined, 'none', 'short', 'long'] as const)('projects %s cache retention on the actual chat and stream wire', async retention => {
+    const test = await fixture();
+    for (const stream of [false, true]) await test.call(stream, { cacheRetention: retention, maxTokens: 1, thinking: 'off' });
+    for (const body of test.bodies) expect(body.messages.at(-1)?.content).toEqual(retention === 'none' ? 'probe' : [{
+      type: 'text', text: 'probe', cache_control: { type: 'ephemeral', ...(retention === 'long' ? { ttl: '1h' } : {}) },
+    }]);
+  });
+
   it('retains legacy per-level output defaults instead of reducing adaptive output to 1024', async () => {
     const test = await fixture();
     for (const [thinking, maximum] of [['minimal', 2048], ['low', 2048], ['medium', 5120], ['high', 9216], ['xhigh', 17408], ['max', 33792]] as const) {

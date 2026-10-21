@@ -5,7 +5,7 @@ import { ProviderRequestContextError } from './provider-request-estimate.js';
 import type { ChatOptions } from '../providers/index.js';
 
 const names = ['model', 'temperature', 'maxTokens', 'systemPrompt', 'tools', 'maxRetries',
-  'thinking', 'thinkingBudgets', 'sessionId'] as const;
+  'thinking', 'thinkingBudgets', 'sessionId', 'cacheRetention'] as const;
 
 describe('preparation-only passive top-level provider options', () => {
   for (const key of names) for (const placement of ['own', 'inherited']) it(`refuses ${placement} ${key} getter without execution`, () => {
@@ -78,7 +78,8 @@ describe('preparation-only passive top-level provider options', () => {
   });
   it('does not run unsafe scalar serializers/coercion methods', () => {
     const serializer = vi.fn(() => 64), maxTokens = { toJSON: serializer, valueOf: serializer, toString: serializer };
-    expect(() => capture({ maxTokens })).toThrow(ProviderRequestOptionsError); expect(() => output({ maxTokens })).toThrow(ProviderRequestOptionsError); expect(serializer).not.toHaveBeenCalled();
+    expect(() => capture({ maxTokens })).toThrow(ProviderRequestOptionsError); expect(() => output({ maxTokens })).toThrow(ProviderRequestOptionsError);
+    expect(() => capture({ cacheRetention: maxTokens })).toThrow(ProviderRequestOptionsError); expect(serializer).not.toHaveBeenCalled();
   });
   it('normalizes hostile descriptor inspection into a nonretryable local refusal without leaking its payload', () => {
     const source = new Proxy({}, { getOwnPropertyDescriptor: () => { throw new Error('PRIVATE_TRAP_PAYLOAD'); } });

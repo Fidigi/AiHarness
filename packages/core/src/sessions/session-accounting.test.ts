@@ -139,6 +139,31 @@ describe.each([false, true])('summary accounting persistence (durable=%s)', dura
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
+  it('preserves attributed cache-warm usage across clone and durable reload without model messages', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'aih-cache-accounting-'));
+    try {
+      const store = new JsonlSessionStore(directory, durable);
+      const manager = new SessionManager(durable ? { store } : {});
+      const session = await manager.create();
+      await manager.addMessage(session.id, { role: 'user', content: 'Root' });
+      await manager.recordProviderUsage(session.id, { provider: 'mock', model: 'physical', usage }, session.activeLeafId!);
+      const clone = await manager.cloneSession(session.id);
+      const { costUsd, ...tokens } = usage;
+      for (const current of [session, clone!]) {
+        expect(current.usage).toMatchObject(usage);
+        expect(manager.getEffectiveContext(current.id).filter(entry => entry.type === 'message').map(message => message.content)).toEqual(['Root']);
+        expect(getSessionAccounting(await manager.getRawEntries(current.id), current.activeLeafId).active).toMatchObject({
+          requests: 1, assistantMessages: 0, knownCostUsd: costUsd, usage: tokens });
+      }
+      if (durable) {
+        const reloaded = new SessionManager({ store }); await reloaded.loadAllSessions();
+        expect(reloaded.get(session.id)?.usage).toMatchObject(usage);
+        expect(getSessionAccounting(await reloaded.getRawEntries(session.id), reloaded.get(session.id)?.activeLeafId).active)
+          .toMatchObject({ requests: 1, knownCostUsd: costUsd, usage: tokens });
+      }
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
   it('keeps old summaries readable but unpriced instead of manufacturing zero costs', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'aih-summary-legacy-'));
     try {

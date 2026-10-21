@@ -1,6 +1,7 @@
 import { calculatePublishedModelCost, getPublishedProviders } from '../providers/model-metadata.js';
 import type { TokenUsage } from '../types/index.js';
 import type { SessionEntry } from './session-manager.js';
+import { getCacheWarmUsage } from '../providers/cache-notices.js';
 
 export interface SessionUsageAccounting {
   requests: number;
@@ -46,10 +47,12 @@ function aggregate(entries: readonly SessionEntry[]): SessionUsageAccounting {
     // never sum nestedCalls/progress/details or user/system/metadata usage.
     const incompleteNested = entry.type === 'message' && entry.role === 'tool' && entry.name === 'codemode'
       && (entry.metadata?.codemode as { costComplete?: unknown } | undefined)?.costComplete === false;
-    if (entry.type !== 'compaction' && entry.type !== 'branch_summary' && !(entry.type === 'message'
+    const warmed = getCacheWarmUsage(entry);
+    if (!warmed && entry.type !== 'compaction' && entry.type !== 'branch_summary' && !(entry.type === 'message'
       && (entry.role === 'assistant' || (entry.role === 'tool' && (entry.usage || incompleteNested))))) continue;
     result.requests++;
-    const usage = entry.usage;
+    const attributed = warmed ?? (entry as Extract<SessionEntry, { type: 'message' | 'compaction' | 'branch_summary' }>);
+    const usage = attributed.usage;
     for (const key of counters) {
       if (valid(usage?.[key])) {
         const sum = (result.usage[key] ?? 0) + usage![key]!;
@@ -68,9 +71,9 @@ function aggregate(entries: readonly SessionEntry[]): SessionUsageAccounting {
     // Missing cache counters retain the published calculator's existing zero
     // policy; the separate partial marker exposes incomplete measurements.
     const cost = valid(usage?.costUsd) ? usage.costUsd
-      : usage && valid(usage.inputTokens) && valid(usage.outputTokens) && entry.provider && entry.model
-        && publishedProviders.has(entry.provider)
-        ? calculatePublishedModelCost(entry.provider, entry.model, usage) : undefined;
+      : usage && valid(usage.inputTokens) && valid(usage.outputTokens) && attributed.provider && attributed.model
+        && publishedProviders.has(attributed.provider)
+        ? calculatePublishedModelCost(attributed.provider, attributed.model, usage) : undefined;
     const boundedCost = valid(cost) && cost <= Number.MAX_SAFE_INTEGER && known + cost <= Number.MAX_SAFE_INTEGER;
     if (boundedCost) { known += cost; priced++; }
     if (!boundedCost || incompleteNested) unpriced++;

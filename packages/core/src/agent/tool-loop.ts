@@ -1,4 +1,5 @@
 import type { ChatResponse, ChatToolDefinition } from '../providers/index.js';
+import { settleSessionCacheWarmer } from '../providers/cache-warmer.js';
 import type {
   ExtensionRegistry,
   ExtensionRuntimeContext,
@@ -177,6 +178,8 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
     return useful;
   };
 
+  let succeeded = false;
+  try {
   for (let round = 0; round < maxToolRounds; round++) {
     throwIfAborted();
     await options.onTurnStart?.(round);
@@ -216,7 +219,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       // A completed provider call is billed work even when its output hook fails
       // or is retired. Conserve authentic evidence, never execute pending calls.
       await options.sessionManager.addMessage(options.sessionId, {
-        role: 'assistant', content: response.content, provider: options.provider, model: response.model,
+        role: 'assistant', content: response.content, provider: response.provider ?? options.provider, model: response.model,
         usage: normalizeUsage(response.usage), durationMs,
         metadata: { outputError: 'Extension message publication refused.' },
       }, { skipAutoCompaction: true });
@@ -234,10 +237,13 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
             ...(response.reasoning ? [{ type: 'reasoning' as const, text: response.reasoning }] : []),
             ...(response.content ? [{ type: 'text' as const, text: response.content }] : []),
           ],
-          provider: options.provider,
+          provider: response.provider ?? options.provider,
           model: response.model,
           usage: normalizeUsage(response.usage),
-          ...(response.stopReason === 'length' ? { metadata: { stopReason: 'length' } } : {}),
+          ...((response.stopReason === 'length' || response.selection) ? { metadata: {
+            ...(response.stopReason === 'length' ? { stopReason: 'length' } : {}),
+            ...(response.selection ? { selection: response.selection, thinkingLevel: response.thinkingLevel } : {}),
+          } } : {}),
           durationMs,
         }, { signal: options.signal, ...(response.stopReason === 'length' ? { skipAutoCompaction: true } : {}) });
       }
@@ -260,6 +266,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         await continueWith(continuation, round);
         continue;
       }
+      succeeded = true;
       return response.content;
     }
 
@@ -272,10 +279,13 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         ...toolCalls.map(call => ({ type: 'tool_call' as const, ...call })),
       ],
       toolCalls,
-      provider: options.provider,
+      provider: response.provider ?? options.provider,
       model: response.model,
       usage: normalizeUsage(response.usage),
-      ...(response.stopReason === 'length' ? { metadata: { stopReason: 'length' } } : {}),
+      ...((response.stopReason === 'length' || response.selection) ? { metadata: {
+        ...(response.stopReason === 'length' ? { stopReason: 'length' } : {}),
+        ...(response.selection ? { selection: response.selection, thinkingLevel: response.thinkingLevel } : {}),
+      } } : {}),
       durationMs,
     }, { signal: options.signal });
 
@@ -440,4 +450,5 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
   }
 
   throw new Error(`Limite de ${maxToolRounds} tours d'outils atteinte.`);
+  } finally { await settleSessionCacheWarmer(options.sessionManager, options.sessionId, succeeded); }
 }

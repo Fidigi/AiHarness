@@ -211,6 +211,10 @@ async function readProviderJson<T>(response: Response): Promise<T> {
 
 export interface ChatResponse {
   content: string;
+  /** Physical dispatch identity, distinct from a virtual selection. */
+  provider?: string;
+  thinkingLevel?: ThinkingLevel;
+  selection?: { provider: string; id: string; thinkingLevel: ThinkingLevel };
   /** Explicit provider length exhaustion; never inferred from prose or missing output. */
   stopReason?: 'length';
   /** Provider-supplied visible reasoning summary/process text, when available. */
@@ -435,6 +439,8 @@ export interface ChatOptions {
   thinking?: ThinkingLevel;
   /** Optional token budgets for numeric reasoning dialects, not effort-only APIs. */
   thinkingBudgets?: ThinkingBudgets;
+  /** Provider prompt-cache retention; absence uses the provider default. */
+  cacheRetention?: 'none' | 'short' | 'long';
   /** Cancels the active provider request. */
   signal?: AbortSignal;
   /** Stable process-local conversation identity used only by compatible cached transports. */
@@ -2300,6 +2306,20 @@ export class BedrockProvider extends AiProvider {
 // Anthropic Provider (real implementation)
 // ===================================================================
 
+function applyAnthropicPromptCache(body: Record<string, unknown>, retention: ChatOptions['cacheRetention'] = 'short'): void {
+  if (retention === 'none') return;
+  const control = { type: 'ephemeral', ...(retention === 'long' ? { ttl: '1h' } : {}) };
+  // A single last-message breakpoint covers the same entire prefix on replay.
+  const messages = body.messages as Array<{ content: unknown }>;
+  const last = messages.at(-1);
+  if (!last) return;
+  if (typeof last.content === 'string' && last.content) last.content = [{ type: 'text', text: last.content, cache_control: control }];
+  else if (Array.isArray(last.content) && last.content.length) {
+    last.content = last.content.map((block: Record<string, unknown>, index: number) =>
+      index === (last.content as unknown[]).length - 1 ? { ...block, cache_control: control } : block);
+  }
+}
+
 export class AnthropicProvider extends AiProvider {
   private readonly baseUrl: string;
   static readonly DEFAULT_BASE_URL = 'https://api.anthropic.com';
@@ -2408,6 +2428,7 @@ export class AnthropicProvider extends AiProvider {
       }));
     }
 
+    applyAnthropicPromptCache(body, options?.cacheRetention);
     const response = await this.request(`${this.baseUrl}/v1/messages`, {
       method: 'POST',
       headers: {
@@ -2505,6 +2526,7 @@ export class AnthropicProvider extends AiProvider {
       }));
     }
 
+    applyAnthropicPromptCache(body, options?.cacheRetention);
     try {
       const response = await this.request(url, {
         method: 'POST',

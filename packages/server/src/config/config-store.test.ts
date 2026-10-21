@@ -40,6 +40,53 @@ describe('ConfigurationStore', () => {
     });
   });
 
+  it('validates and owns scoped numeric reasoning maps with whole-object precedence and null reset', async () => {
+    const file = await storePath();
+    const store = new ConfigurationStore(file);
+    await store.load();
+    const low = { low: 2000, high: 6000 };
+    await store.patch('global', { thinkingBudgets: low });
+    low.low = 9000;
+    await store.patch('project', { thinkingBudgets: { high: 7000 } }, 'project-1');
+    await store.patch('session', { thinkingBudgets: {} }, 'session-1');
+    expect(store.get('global').thinkingBudgets).toEqual({ low: 2000, high: 6000 });
+    expect(store.effective({ projectId: 'project-1' })).toMatchObject({
+      values: { thinkingBudgets: { high: 7000 } },
+      provenance: { thinkingBudgets: { scope: 'project', source: 'project-1' } },
+    });
+    expect(store.effective({ projectId: 'project-1', sessionId: 'session-1' }).values.thinkingBudgets).toEqual({});
+    await store.patch('session', { thinkingBudgets: null }, 'session-1');
+    expect(store.effective({ projectId: 'project-1', sessionId: 'session-1' }).values.thinkingBudgets).toEqual({ high: 7000 });
+    const before = await readFile(file, 'utf8');
+    for (const invalid of [undefined, null, [], { low: -1 }, { low: 1.5 }, { high: Infinity }, { max: 1 }, { low: '1000' }]) {
+      expect(() => validateConfigurationValues({ thinkingBudgets: invalid })).toThrow('Invalid thinking budgets.');
+    }
+    let reads = 0;
+    const getter = Object.defineProperty({}, 'low', { get: () => { reads++; return 1000; } });
+    expect(() => validateConfigurationValues({ thinkingBudgets: getter })).toThrow('Invalid thinking budgets.');
+    expect(reads).toBe(0);
+    await expect(store.patch('global', { thinkingBudgets: { low: -1 } })).rejects.toMatchObject({ status: 400 });
+    expect(await readFile(file, 'utf8')).toBe(before);
+    const reloaded = new ConfigurationStore(file); await reloaded.load();
+    expect(reloaded.get('project', 'project-1')).toEqual({ thinkingBudgets: { high: 7000 } });
+  });
+
+  it('persists global-only cache visibility without accepting nonboolean or lower-scope overrides', async () => {
+    const file = await storePath(), store = new ConfigurationStore(file);
+    await store.load();
+    await store.patch('global', { showCacheMissNotices: false });
+    for (const scope of ['project', 'session'] as const) {
+      await expect(store.patch(scope, { showCacheMissNotices: true }, 'scope')).rejects.toMatchObject({ status: 400 });
+      await expect(store.patch(scope, { showCacheMissNotices: null }, 'scope')).rejects.toMatchObject({ status: 400 });
+      await expect(store.replace(scope, { showCacheMissNotices: false }, 'scope')).rejects.toMatchObject({ status: 400 });
+    }
+    await expect(store.patch('global', { showCacheMissNotices: 'off' })).rejects.toMatchObject({ status: 400 });
+    const reloaded = new ConfigurationStore(file); await reloaded.load();
+    expect(reloaded.get('global').showCacheMissNotices).toBe(false);
+    await reloaded.patch('global', { showCacheMissNotices: null });
+    expect(reloaded.get('global').showCacheMissNotices).toBeUndefined();
+  });
+
   it('removes an explicit value with null so the lower scope is inherited', async () => {
     const store = new ConfigurationStore(await storePath());
     await store.load();

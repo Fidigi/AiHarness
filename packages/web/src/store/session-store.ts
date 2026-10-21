@@ -29,6 +29,7 @@ import {
 } from '../services/api.js';
 import type {
   ApiSession,
+  CacheNoticeProjection,
   SessionMessagePage,
   SessionMessagePageInfo,
 } from '../services/api.js';
@@ -50,7 +51,7 @@ export interface StoredMessagePage extends SessionMessagePageInfo {
   loadedRanges: LoadedMessageRange[];
 }
 
-export interface StoredSession extends Session {
+export interface StoredSession extends Session, CacheNoticeProjection {
   draft?: boolean;
   unread?: boolean;
   attention?: boolean;
@@ -368,7 +369,7 @@ function indexedMessages(session: StoredSession): Map<number, Message> {
 function mergeMessageWindow(
   session: StoredSession,
   rawMessages: SessionMessagePage['messages'],
-  page: SessionMessagePageInfo,
+  page: SessionMessagePageInfo & CacheNoticeProjection,
 ): StoredSession {
   const hydrated = cloneDto(rawMessages).map(message => ({ ...message, timestamp: asDate(message.timestamp) }));
   const reset = !session.messagePage || page.total < session.messagePage.total;
@@ -397,6 +398,10 @@ function mergeMessageWindow(
   return {
     ...session,
     messages: entries.map(([, message]) => message),
+    cacheNotices: page.showCacheMissNotices === false ? [] : [
+      ...(reset ? [] : (session.cacheNotices ?? []).filter(notice => !hydrated.some(message => message.id === notice.afterEntryId))),
+      ...(page.cacheNotices ?? []),
+    ].filter(notice => entries.some(([, message]) => message.id === notice.afterEntryId)),
     messagePage: storedPage({
       ...page,
       start: firstIndex,
@@ -447,7 +452,10 @@ function mergeStoredSession(previous: StoredSession | undefined, remote: ApiSess
     ...base,
     messages: previous.messages,
     messagePage: previous.messagePage,
-  }, remote.messages, incoming.messagePage);
+    cacheNotices: previous.cacheNotices,
+  }, remote.messages, { ...incoming.messagePage,
+    cacheNotices: incoming.cacheNotices, showCacheMissNotices: incoming.showCacheMissNotices,
+  });
 }
 
 function workspaceDraftId(): string {

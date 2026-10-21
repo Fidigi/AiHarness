@@ -5,6 +5,7 @@ import {
   inferModelCapabilities,
   type PublishedModelMetadata,
   type AiProvider,
+  type VirtualModelRegistry,
 } from '@ai-harness/core';
 import type {
   ModelCapabilities,
@@ -32,6 +33,7 @@ export class ModelCatalogService {
     private readonly proxy: AiProxyServer,
     private readonly customModels: () => CustomModelDefinition[] = () => [],
     private readonly cacheTtlMs = 5 * 60_000,
+    private readonly virtualModels?: () => VirtualModelRegistry,
   ) {}
 
   async getCatalog(refresh = false): Promise<ProviderModelCatalog[]> {
@@ -107,12 +109,13 @@ export class ModelCatalogService {
     for (const model of this.customModels()) {
       if (!providerStates.has(model.provider)) providerStates.set(model.provider, this.proxy.isConfigured(model.provider));
     }
-    return buildProviderModelCatalog([...providerStates].map(([provider, configured]) => ({
+    const catalog = buildProviderModelCatalog([...providerStates].map(([provider, configured]) => ({
       provider,
       configured,
       configuredModel: this.proxy.getAgentProvider(provider)?.getConfiguredModel(),
       discoveredModels: this.discoverySources.get(provider) === this.proxy.getAgentProvider(provider)
         ? this.discovered.get(provider) : undefined,
     })), this.customModels());
+    return this.virtualModels?.().overlayCatalog(catalog) ?? catalog;
   }
 }

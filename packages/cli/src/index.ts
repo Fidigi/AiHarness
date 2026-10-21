@@ -65,6 +65,7 @@ import { FullscreenUI } from './tui/fullscreen-ui.js';
 import { FullscreenInput } from './tui/fullscreen-input.js';
 import { EditorState } from './tui/editor-state.js';
 import { unsupportedCliSettings } from './tui/terminal-settings.js';
+import { cliCacheNotices } from './tui/cache-notices.js';
 import { KeypressFilteredInput } from './utils/keypress-gate.js';
 import { configuredThemeSelection, configuredThemeSources } from './cli/theme-sources.js';
 import {
@@ -849,7 +850,7 @@ async function main(): Promise<void> {
       models: cliArguments.models,
       apiKey: cliArguments.apiKey,
     }, settingsResolution.settings);
-    const refreshedStartup = await resolveStartupProvider(configuredProviders, { ...refreshedModelSettings.selection, offline });
+    const refreshedStartup = await resolveStartupProvider(configuredProviders, { ...refreshedModelSettings.selection, offline }, process.env, extensionRegistry.virtualModels);
     refreshedStartup.scopeDiagnostics?.forEach(() => process.stderr.write('Warning: A model scope entry could not be resolved.\n'));
     commandContext.provider = refreshedStartup.provider;
     commandContext.modelPatterns = refreshedModelSettings.modelPatterns;
@@ -859,7 +860,7 @@ async function main(): Promise<void> {
         ?? refreshedStartup.thinkingLevel
         ?? resolveAgentThinkingLevel(settingsResolution.settings, refreshedStartup.providerName, refreshedModel)
         ?? commandContext.thinkingLevel,
-      getSupportedThinkingLevels(refreshedStartup.providerName, refreshedModel),
+      getSupportedThinkingLevels(refreshedStartup.providerName, refreshedModel, extensionRegistry.virtualModels),
     );
     sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
       settingsResolution.settings,
@@ -1052,7 +1053,7 @@ async function main(): Promise<void> {
   );
   let ctx = commandHandler.getContext();
   try {
-    const startup = await resolveStartupProvider(ctx.providers, { ...effectiveModelSettings.selection, offline });
+    const startup = await resolveStartupProvider(ctx.providers, { ...effectiveModelSettings.selection, offline }, process.env, extensionRegistry.virtualModels);
     startup.scopeDiagnostics?.forEach(() => process.stderr.write('Warning: A model scope entry could not be resolved.\n'));
     ctx.provider = startup.provider;
     const startupModel = startup.model ?? startup.provider.getConfiguredModel();
@@ -1062,7 +1063,7 @@ async function main(): Promise<void> {
       ?? ctx.thinkingLevel;
     ctx.thinkingLevel = clampPublishedThinkingLevel(
       requestedThinking,
-      getSupportedThinkingLevels(startup.providerName, startupModel),
+      getSupportedThinkingLevels(startup.providerName, startupModel, extensionRegistry.virtualModels),
     );
     sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
       settingsResolution.settings,
@@ -1191,7 +1192,8 @@ async function main(): Promise<void> {
     assertCompactionTranscript(toCompact);
     const messages = getSummaryModelMessages(compactionMessagesFromEntries(toCompact));
     assertCompactionTranscript(messages);
-    const chat = provider.chat.bind(provider), providerName = provider.getProviderType(), model = provider.getConfiguredModel();
+    const chat: AiProvider['chat'] = (messages, options) => extensionRegistry.chat(provider, messages, options, name => ctx.providers.get(name));
+    const providerName = provider.getProviderType(), model = provider.getConfiguredModel();
     const thinking = ctx.thinkingLevel;
     const rawResponse = await chat(messages, {
       thinking,
@@ -1206,7 +1208,7 @@ async function main(): Promise<void> {
     const response = copyCompactionResponse(rawResponse);
     return {
       summary: response.content,
-      provider: providerName,
+      provider: response.provider ?? providerName,
       model: response.model ?? model,
       usage: normalizeProviderUsage(response.usage),
     };
@@ -1260,12 +1262,17 @@ async function main(): Promise<void> {
   await extensionRegistry.emit('system:ready');
 
   // Seed the TUI viewport with the active persisted conversation and shell history.
+  const startupCacheNotices = printMode ? [] : await cliCacheNotices(sessionManager, currentSessionId,
+    settingsResolution.settings.showCacheMissNotices !== false);
+  const shownCacheNotices = new Set(startupCacheNotices.map(notice => `${currentSessionId}:${notice.id}`));
   const startupHistory = [
-    ...(sessionManager.get(currentSessionId)?.messages ?? []).map(message => ({
+    ...(sessionManager.get(currentSessionId)?.messages ?? []).flatMap(message => [{
       type: message.role === 'user' || message.role === 'assistant' ? message.role : 'system' as const,
       content: redactOutput(message.content),
       timestamp: message.timestamp,
-    })),
+    }, ...startupCacheNotices.filter(notice => notice.afterEntryId === message.id).map(notice => ({
+      type: 'system' as const, content: notice.content, timestamp: message.timestamp,
+    }))]),
     ...(sessionManager.get(currentSessionId)?.commands ?? []).map(command => ({
       type: 'command' as const,
       content: redactOutput(`$ ${command.command}\n${command.output ?? ''}\n[${command.status}${command.exitCode === undefined ? '' : ` · exit ${command.exitCode}`}]`),
@@ -1299,7 +1306,19 @@ async function main(): Promise<void> {
   const promptBoundary = new PromptBoundaryRefresh();
   const refreshPrompt = (): void => {
     const sessionId = currentSessionId;
-    void promptBoundary.refresh(sessionId, refreshTerminalStatus,
+    void promptBoundary.refresh(sessionId, async () => {
+      await refreshTerminalStatus();
+      const notices = await cliCacheNotices(sessionManager, sessionId, settingsResolution.settings.showCacheMissNotices !== false);
+      if (sessionId !== currentSessionId || shuttingDown || conversationRunning || isStreaming) return;
+      for (const notice of notices) {
+        const key = `${sessionId}:${notice.id}`;
+        if (shownCacheNotices.has(key)) continue;
+        shownCacheNotices.add(key);
+        terminal.addTranscriptEntry({ type: 'system', content: notice.content });
+        if (!fullscreenTerminal) terminal.writeOutput(notice.content);
+      }
+      while (shownCacheNotices.size > 1000) shownCacheNotices.delete(shownCacheNotices.values().next().value!);
+    },
       id => id === currentSessionId && !printMode && !shuttingDown && !conversationRunning && !isStreaming,
       () => {
         terminal.displayStatus();
@@ -1697,6 +1716,8 @@ async function main(): Promise<void> {
           systemPrompt: instructionSystemPrompt,
           thinking: ctx.thinkingLevel,
           thinkingBudgets: settingsResolution.settings.thinkingBudgets,
+          cacheWarming: settingsResolution.settings.cacheWarming,
+          resolveProvider: name => ctx.providers.get(name),
           signal: operationController.signal,
           extensionRegistry,
           maxRetries: settingsResolution.settings.retry?.enabled === false

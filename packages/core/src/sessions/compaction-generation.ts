@@ -23,7 +23,8 @@ export function copyCompactionResponse(response: ChatResponse): ChatResponse {
     if (!('value' in property)) return fail();
     return property.value;
   };
-  const model = own(response, 'model'), rawUsage = own(response, 'usage');
+  const model = own(response, 'model'), provider = own(response, 'provider'), rawUsage = own(response, 'usage');
+  if (provider !== undefined && (typeof provider !== 'string' || !provider.trim() || Buffer.byteLength(provider) > 128)) return fail();
   if (model !== undefined && (typeof model !== 'string' || !model.trim() || Buffer.byteLength(model) > 4096)) return fail();
   let usage: ChatResponse['usage'];
   if (rawUsage !== undefined) {
@@ -37,7 +38,8 @@ export function copyCompactionResponse(response: ChatResponse): ChatResponse {
       }
     }
   }
-  return { content, ...(typeof model === 'string' ? { model } : {}), ...(usage ? { usage } : {}) };
+  return { content, ...(typeof provider === 'string' ? { provider } : {}),
+    ...(typeof model === 'string' ? { model } : {}), ...(usage ? { usage } : {}) };
 }
 
 /** Internal legacy result adapter: ignored fields never gain serialization authority. */

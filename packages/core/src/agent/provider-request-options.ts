@@ -11,7 +11,7 @@ export class ProviderRequestOptionsError extends ProviderRequestContextError {
 }
 
 const names = ['model', 'temperature', 'maxTokens', 'systemPrompt', 'tools', 'maxRetries',
-  'thinking', 'thinkingBudgets', 'sessionId'] as const;
+  'thinking', 'thinkingBudgets', 'sessionId', 'cacheRetention'] as const;
 const known = new Set<PropertyKey>([...names, 'signal']);
 const fail = (): never => { throw new ProviderRequestOptionsError(); };
 
@@ -46,6 +46,7 @@ function captureSlots(value: unknown, signal?: AbortSignal): ChatOptions {
       if (key === 'tools' && !Array.isArray(item)) return fail();
       if (key === 'thinking' && (typeof item !== 'string'
         || !['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(item))) return fail();
+      if (key === 'cacheRetention' && (typeof item !== 'string' || !['none', 'short', 'long'].includes(item))) return fail();
       // Numeric dialects validate recognized nested budgets when actually used;
       // effort-only/off modes must not accidentally evaluate unused legacy fields.
       if (key === 'thinkingBudgets' && (!item || typeof item !== 'object' || Array.isArray(item))) return fail();

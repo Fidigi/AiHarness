@@ -194,7 +194,7 @@ export async function createRuntimeServices(
   await providerRegistry.load();
   // Provider secrets discovered from encrypted storage now participate in legacy-session scrubbing.
   await sessionManager.loadAllSessions();
-  const modelCatalog = new ModelCatalogService(proxy, () => providerRegistry.getModels());
+  const modelCatalog = new ModelCatalogService(proxy, () => providerRegistry.getModels(), undefined, () => extensionRegistry.virtualModels);
   await proxy.initializeUsage(
     path.join(dataDir, 'usage-metrics.json'),
     (provider, model) => modelCatalog.getPricing(provider, model),
@@ -468,28 +468,28 @@ export async function createRuntimeServices(
       ?? session?.providerConfig?.type
       ?? effective.values.provider
       ?? 'mock');
-    const provider = proxy.getAgentProvider(providerName);
+    const provider = proxy.getAgentProvider(providerName) ?? extensionRegistry.getVirtualProvider(providerName);
     if (!provider) throw new Error(`Provider unavailable: ${providerName}`);
     const requestedModel = effective.values.model ?? activeRun?.model;
     assertCompactionTranscript(toCompact);
     const messages = getSummaryModelMessages(compactionMessagesFromEntries(toCompact));
     assertCompactionTranscript(messages);
-    const chat = provider.chat.bind(provider), recordUsage = proxy.recordUsage.bind(proxy);
-    const rawResponse = await chat(messages, {
+    const recordUsage = proxy.recordUsage.bind(proxy);
+    const rawResponse = await extensionRegistry.chat(provider, messages, {
       model: requestedModel,
       systemPrompt: 'Summarize this conversation while preserving decisions and unresolved tasks.',
       tools: [], maxTokens: 4096,
       signal,
-    });
+    }, name => proxy.getAgentProvider(name));
     const content = Object.getOwnPropertyDescriptor(rawResponse, 'content');
     if (content && 'value' in content && typeof content.value === 'string' && !content.value.trim()) {
       throw new Error('Automatic compaction produced an empty summary.');
     }
     const response = copyCompactionResponse(rawResponse);
-    if (response.usage) recordUsage(providerName, response.model ?? requestedModel, response.usage);
+    if (response.usage) recordUsage(response.provider ?? providerName, response.model ?? requestedModel, response.usage);
     return {
       summary: response.content,
-      provider: providerName,
+      provider: response.provider ?? providerName,
       model: response.model ?? requestedModel,
       usage: normalizeProviderUsage(response.usage),
     };
@@ -539,7 +539,7 @@ export async function createRuntimeServices(
     subagentRuntime,
     terminalRuntime,
     reloadResources,
-    resolveProvider: provider => proxy.getAgentProvider(provider),
+    resolveProvider: provider => proxy.getAgentProvider(provider) ?? extensionRegistry.getVirtualProvider(provider),
     recordUsage: (provider, model, usage) => proxy.recordUsage(provider, model, usage),
     redactText: value => proxy.redactText(value),
     redactJson: value => proxy.redactJson(value),

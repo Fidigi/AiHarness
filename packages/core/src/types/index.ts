@@ -189,7 +189,7 @@ export interface CustomModelDefinition {
   updatedAt: string;
 }
 
-export type ModelCatalogSource = 'published' | 'configured' | 'discovered' | 'custom';
+export type ModelCatalogSource = 'published' | 'configured' | 'discovered' | 'custom' | 'virtual';
 
 /** A non-secret model descriptor returned by the server catalogue. */
 export interface ModelCatalogEntry {
@@ -542,8 +542,11 @@ export interface ScopedConfigurationValues {
   provider?: string;
   model?: string;
   thinking?: Session['thinking'];
+  thinkingBudgets?: import('../providers/thinking-budgets.js').ThinkingBudgets;
   toolPreset?: Session['toolPreset'];
   autoCompaction?: boolean;
+  /** Global Web presentation only; never disables billable cache warming. */
+  showCacheMissNotices?: boolean;
   enabledModels?: string[];
   enabledSkills?: string[];
   enabledPlugins?: string[];

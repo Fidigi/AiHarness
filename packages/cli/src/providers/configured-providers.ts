@@ -14,6 +14,7 @@ import {
   type ExtensionProvider,
   type ThinkingLevel,
   type ModelScopeDiagnostic,
+  type VirtualModelRegistry,
 } from '@ai-harness/core';
 
 export interface StartupProviderSelection {
@@ -195,6 +196,7 @@ export async function resolveStartupProvider(
   providers: Map<string, AiProvider>,
   selection: StartupProviderSelection,
   env: NodeJS.ProcessEnv = process.env,
+  virtualModels?: VirtualModelRegistry,
 ): Promise<ResolvedStartupProvider> {
   const requestedProvider = selection.provider?.trim().toLowerCase();
   const requestedModel = selection.model?.trim();
@@ -212,7 +214,7 @@ export async function resolveStartupProvider(
   let scopeDiagnostics: ModelScopeDiagnostic[] = [];
 
   if (requestedModel || selection.models?.length) {
-    const catalog = flattenModelCatalog(requestedModel
+    const catalog = flattenModelCatalog((catalog => virtualModels?.overlayCatalog(catalog) ?? catalog)(requestedModel
       ? buildProviderModelCatalog([
           ...[...providers].map(([provider, instance]) => ({
             provider,
@@ -228,7 +230,7 @@ export async function resolveStartupProvider(
           discover: selection.offline !== true,
           timeoutMs: 2_000,
           retries: 0,
-        }));
+        })));
     const providerNames = new Map(catalog.map(item => [item.provider.toLowerCase(), item.provider]));
     const candidates = requestedProvider
       ? catalog.filter(item => item.provider.toLowerCase() === requestedProvider)

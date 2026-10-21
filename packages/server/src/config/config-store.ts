@@ -1,6 +1,6 @@
 import { lstat, mkdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { atomicWriteStableFile, readBoundedResourceText, validateCodemodeLimits } from '@ai-harness/core';
+import { atomicWriteStableFile, copyThinkingBudgets, readBoundedResourceText, validateCodemodeLimits } from '@ai-harness/core';
 import path from 'node:path';
 import type {
   ConfigurationScope,
@@ -69,12 +69,18 @@ function validateValues(input: unknown): ScopedConfigurationValues {
     } else if (key === 'codemodeLimits') {
       try { result.codemodeLimits = validateCodemodeLimits(value); }
       catch { invalidConfiguration('Invalid codemode limits.'); }
+    } else if (key === 'thinkingBudgets') {
+      try {
+        const budgets = copyThinkingBudgets(value);
+        if (budgets === undefined) invalidConfiguration('Invalid thinking budgets.');
+        result.thinkingBudgets = budgets;
+      } catch { invalidConfiguration('Invalid thinking budgets.'); }
     } else if (ARRAY_KEYS.has(key)) {
       if (!Array.isArray(value) || value.length > 2_000 || !value.every(item => typeof item === 'string' && item.length <= 500)) {
         invalidConfiguration(`Valeur invalide pour ${rawKey}.`);
       }
       Object.assign(result, { [key]: [...new Set(value)] });
-    } else if (key === 'autoCompaction' || key === 'powershellEnabled' || key === 'codemodeEnabled') {
+    } else if (key === 'autoCompaction' || key === 'powershellEnabled' || key === 'codemodeEnabled' || key === 'showCacheMissNotices') {
       if (typeof value !== 'boolean') invalidConfiguration(`Valeur invalide pour ${key}.`);
       Object.assign(result, { [key]: value });
     } else {
@@ -95,7 +101,7 @@ function validatePatchValues(input: unknown): Record<string, unknown> {
     if (SECRET_KEY.test(key)
       || (!STRING_KEYS.has(key as keyof ScopedConfigurationValues)
         && !ARRAY_KEYS.has(key as keyof ScopedConfigurationValues)
-        && key !== 'autoCompaction' && key !== 'powershellEnabled' && key !== 'codemodeEnabled' && key !== 'codemodeInlineBudget' && key !== 'codemodeLimits')) {
+        && key !== 'autoCompaction' && key !== 'powershellEnabled' && key !== 'codemodeEnabled' && key !== 'codemodeInlineBudget' && key !== 'codemodeLimits' && key !== 'thinkingBudgets' && key !== 'showCacheMissNotices')) {
       invalidConfiguration(`Clé de configuration inconnue : ${key}.`);
     }
     result[key] = null;
@@ -296,7 +302,9 @@ export class ConfigurationStore {
         }
         return Object.fromEntries(Object.entries(input).map(([id, values]) => {
           this.validateScope('project', id);
-          return [id, validateValues(values)];
+          const validated = validateValues(values);
+          if (validated.showCacheMissNotices !== undefined) invalidConfiguration('Cache notice visibility is global-only.');
+          return [id, validated];
         }));
       };
       return { source, data: { version: 1, global: validateValues(parsed.global ?? {}),
@@ -329,6 +337,7 @@ export class ConfigurationStore {
     this.assertLoaded();
     const patch = validatePatchValues(values);
     this.validateScope(scope, scopeId);
+    if (scope !== 'global' && 'showCacheMissNotices' in patch) invalidConfiguration('Cache notice visibility is global-only.');
     return this.mutate(scope, scopeId, target => {
       for (const [key, value] of Object.entries(patch)) {
         if (value === null) delete (target as Record<string, unknown>)[key];
@@ -417,6 +426,7 @@ export class ConfigurationStore {
         : (scope === 'project' ? snapshot.projects[id!] : snapshot.sessions[id!]) ?? {};
       const target = validateValues(update(structuredClone(previous),
         structuredClone(scope === 'global' ? {} : snapshot.global)));
+      if (scope !== 'global' && target.showCacheMissNotices !== undefined) invalidConfiguration('Cache notice visibility is global-only.');
       if (JSON.stringify(target) === JSON.stringify(previous)) {
         this.data = snapshot;
         return structuredClone(target);

@@ -319,8 +319,8 @@ function protocolUsage(
   };
 }
 
-function supportedThinkingLevels(provider: string, model: string | undefined): RpcThinkingLevel[] {
-  return getSupportedThinkingLevels(provider, model);
+function supportedThinkingLevels(provider: string, model: string | undefined, registry: ExtensionRegistry): RpcThinkingLevel[] {
+  return getSupportedThinkingLevels(provider, model, registry.virtualModels);
 }
 
 function clampThinkingLevel(
@@ -420,7 +420,7 @@ export class RpcController {
     if (!session) {
       this.thinking = clampThinkingLevel(
         this.thinking,
-        supportedThinkingLevels(this.context.providerName, this.model),
+        supportedThinkingLevels(this.context.providerName, this.model, this.context.extensionRegistry),
       );
       await this.context.sessionManager.create({
         id: this.currentSessionId,
@@ -432,7 +432,7 @@ export class RpcController {
       this.model = this.model ?? session.model;
       this.thinking = clampThinkingLevel(
         rpcThinkingLevel(session.thinking ?? this.thinking),
-        supportedThinkingLevels(this.context.providerName, this.model),
+        supportedThinkingLevels(this.context.providerName, this.model, this.context.extensionRegistry),
       );
     }
 
@@ -441,7 +441,7 @@ export class RpcController {
       assertCompactionTranscript(toCompact);
       const messages = getSummaryModelMessages(compactionMessagesFromEntries(toCompact));
       assertCompactionTranscript(messages);
-      const provider = this.context.provider, chat = provider.chat.bind(provider);
+      const provider = this.context.provider, chat = this.directChat(provider);
       const providerName = this.context.providerName, model = this.model, thinking = coreThinkingLevel(this.thinking);
       const rawResponse = await this.summarizeWithRetry('threshold', retrySignal => chat([
         ...messages,
@@ -465,7 +465,7 @@ export class RpcController {
       const response = copyCompactionResponse(rawResponse);
       return {
         summary: response.content,
-        provider: providerName,
+        provider: response.provider ?? providerName,
         model: response.model ?? model,
         usage: normalizeProviderUsage(response.usage),
       };
@@ -986,7 +986,7 @@ export class RpcController {
           this.activeNavigation = navigation;
           try {
             const summaryProvider = request.summarize === true
-              ? createProviderBranchSummarizer(this.context.provider, this.model) : undefined;
+              ? createProviderBranchSummarizer(this.context.provider, this.model, this.directChat(this.context.provider)) : undefined;
             const result = await this.context.sessionManager.navigateTree(this.currentSessionId, entryId, {
               summarize: request.summarize === true, ...summaryProvider,
               ...(request.summarize === true
@@ -1339,6 +1339,8 @@ export class RpcController {
                   systemPrompt: this.context.systemPrompt,
                   thinking: coreThinkingLevel(this.thinking),
                   thinkingBudgets: this.context.agentSettings?.().thinkingBudgets,
+                  cacheWarming: this.context.agentSettings?.().cacheWarming,
+                  resolveProvider: name => this.context.providers?.get(name),
                   signal,
                   retrySignal: retryController.signal,
                   extensionRegistry: this.context.extensionRegistry,
@@ -1544,6 +1546,10 @@ export class RpcController {
     return completed.result;
   }
 
+  private directChat(provider: AiProvider): AiProvider['chat'] {
+    return (messages, options) => this.context.extensionRegistry.chat(provider, messages, options, name => this.context.providers?.get(name));
+  }
+
   private async compact(customInstructions?: string): Promise<Record<string, unknown>> {
     // Admit synchronously before observers/provider callbacks can reenter the controller.
     if (this.navigationRetired) throw new DOMException('Compaction cancelled', 'AbortError');
@@ -1555,7 +1561,7 @@ export class RpcController {
     const source = manager.captureCompactionSource(sourceSessionId);
     if (!source) throw new Error('Compaction context or policy changed.');
     const leaf = session.activeLeafId, provider = this.context.provider, providerName = this.context.providerName, model = this.model, thinking = this.thinking;
-    const chat = provider.chat.bind(provider);
+    const chat = this.directChat(provider);
     const redactText = this.context.redactText?.bind(this.context), redactJson = this.context.redactJson?.bind(this.context);
     const sourceMessages = session.messages.map(cloneMessage);
     if (sourceMessages.length < 3) throw new Error(`Not enough messages to compact (${sourceMessages.length}/3 minimum).`);
@@ -1602,7 +1608,7 @@ export class RpcController {
       const persistedUsage = normalizeProviderUsage(summaryResponse.usage);
       validate();
       await manager.applyCompaction(sourceSessionId, summaryResponse.content, firstKeptEntryId, {
-        instruction, tokensBefore, tokensAfter: estimatedTokensAfter, provider: providerName,
+        instruction, tokensBefore, tokensAfter: estimatedTokensAfter, provider: summaryResponse.provider ?? providerName,
         model: summaryResponse.model ?? model, ...(persistedUsage ? { usage: persistedUsage } : {}),
       }, { signal: controller.signal, source });
       // A save already admitted by Core completes even if abort/close arrives during it.
@@ -1843,7 +1849,7 @@ export class RpcController {
   }
 
   private availableThinkingLevels(): RpcThinkingLevel[] {
-    return supportedThinkingLevels(this.context.providerName, this.model);
+    return supportedThinkingLevels(this.context.providerName, this.model, this.context.extensionRegistry);
   }
 
   private configuredProvider(name: string): AiProvider | undefined {
@@ -1898,7 +1904,7 @@ export class RpcController {
         discoveredModels,
       };
     }));
-    return buildProviderModelCatalog(states).flatMap(provider => (
+    return this.context.extensionRegistry.virtualModels.overlayCatalog(buildProviderModelCatalog(states)).flatMap(provider => (
       provider.models.map(model => toProtocolModelDescriptor(model))
     ));
   }
@@ -1922,7 +1928,7 @@ export class RpcController {
     const previousThinking = this.thinking;
     this.thinking = clampThinkingLevel(
       this.thinking,
-      supportedThinkingLevels(providerName, modelId),
+      supportedThinkingLevels(providerName, modelId, this.context.extensionRegistry),
     );
     await this.context.sessionManager.update(this.currentSessionId, {
       model: modelId,

@@ -2,7 +2,7 @@ import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, 
 import { useEscapeLayer } from '../hooks/useEscapeLayer';
 import type { CSSProperties, FormEvent, KeyboardEvent, ReactNode } from 'react';
 import { parseShellCommandInput } from '@ai-harness/core/shell-input';
-import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, Message, ModelCatalog, ProviderType, Session, TokenUsage } from '@ai-harness/core';
+import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, Message, ModelCatalog, ProviderType, Session } from '@ai-harness/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { AgentCapabilities, CommandSnapshot, ExtensionWidget, PaletteItem, SessionInfo } from '../services/api';
 import type { DraftAttachment, StoredSession } from '../store/session-store';
@@ -77,6 +77,8 @@ interface ChatViewProps {
   onStreamingUpdate?: (content: string) => void;
 }
 
+const CacheNotices = lazy(() => import('./CacheNotices'));
+const MessageUsage = lazy(() => import('./CacheNotices').then(module => ({ default: module.MessageUsage })));
 const CodemodeCard = lazy(() => import('./CodemodeCard').then(module => ({ default: module.CodemodeCard })));
 const SelectionActions = lazy(() => import('./SelectionActions').catch(() => ({ default: () => null })));
 const WrittenFiles = lazy(() => import('./ProcessBlock').then(module => ({ default: module.FilesWritten })).catch(() => ({ default: () => null })));
@@ -1804,9 +1806,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     </aside>}
     {message.role === 'assistant' && typeof message.metadata?.outputError === 'string' && <p className="notice error reply-evidence" role="note">{message.metadata.outputError}</p>}
     <footer className="message-meta">
-      <time dateTime={message.timestamp.toISOString()}>{message.timestamp.toLocaleTimeString()}</time>
-      {message.model && <span>{message.model}</span>}
-      {message.usage && <span title={messageUsageDetails(message.usage)}>{messageUsageSummary(message.usage)}</span>}
+      <Suspense fallback={null}><MessageUsage message={message} /></Suspense>
       <button onClick={() => void copyMessage(message)} aria-live="polite">
         {copiedMessageId === message.id ? t('chat.copied') : t('chat.copy')}
       </button>
@@ -1817,6 +1817,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         </>
       )}
     </footer>
+    {!!currentSession.cacheNotices?.length && <Suspense fallback={null}>
+      <CacheNotices notices={currentSession.cacheNotices!} messageId={message.id} locale={locale} />
+    </Suspense>}
   </article>;
   };
 
@@ -2397,22 +2400,6 @@ function playCompletionSound(volume = 0.25, attention = false): void {
     oscillator.stop(context.currentTime + .18);
     oscillator.addEventListener('ended', () => void context.close());
   } catch { /* Audio is best effort and may require a user gesture. */ }
-}
-
-function messageUsageSummary(usage: TokenUsage): string {
-  const hasTokens = usage.totalTokens !== undefined || usage.inputTokens !== undefined || usage.outputTokens !== undefined;
-  const tokens = usage.totalTokens ?? (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
-  return [hasTokens ? `${tokens.toLocaleString()} tokens` : '', usage.costUsd !== undefined ? `$${usage.costUsd.toFixed(4)}` : '']
-    .filter(Boolean).join(' · ');
-}
-
-function messageUsageDetails(usage: TokenUsage): string {
-  return [
-    usage.inputTokens !== undefined ? `${usage.inputTokens.toLocaleString()} input` : '',
-    usage.outputTokens !== undefined ? `${usage.outputTokens.toLocaleString()} output` : '',
-    usage.cacheReadTokens !== undefined ? `${usage.cacheReadTokens.toLocaleString()} cache read` : '',
-    usage.cacheWriteTokens !== undefined ? `${usage.cacheWriteTokens.toLocaleString()} cache write` : '',
-  ].filter(Boolean).join(' · ');
 }
 
 function formatDuration(durationMs: number): string {
