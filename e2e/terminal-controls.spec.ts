@@ -86,7 +86,7 @@ test.describe('native terminal touch controls', () => {
     await expect(keys.getByRole('button', { name: 'CTRL', exact: true })).toBeDisabled();
     f.release(); await expect(keys.getByRole('button', { name: 'CTRL', exact: true })).toBeEnabled();
     await keys.getByRole('button', { name: 'CTRL', exact: true }).tap(); f.disconnect(true);
-    await expect(panel.getByRole('alert')).toContainText('Controlled terminal disconnect');
+    await expect(panel.getByRole('alert')).toContainText('Terminal connection unavailable');
     await expect(keys.getByRole('button', { name: 'CTRL', exact: true })).toBeDisabled();
     await expect(keys.getByRole('button', { name: 'CTRL', exact: true })).toHaveAttribute('aria-pressed', 'false');
     await panel.locator('.xterm-helper-textarea').focus(); await page.keyboard.type('x'); expect(f.input).toEqual([]);

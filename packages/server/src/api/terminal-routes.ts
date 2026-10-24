@@ -27,6 +27,7 @@ async function requireTrustedTerminal(services: RuntimeServices, terminalId: str
 
 export function createTerminalRouter(servicesPromise: Promise<RuntimeServices>): Router {
   const router = Router();
+  router.use((_request, response, next) => { response.setHeader('Cache-Control', 'no-store'); next(); });
 
   router.get('/', async (request, response, next) => {
     try {
@@ -110,11 +111,11 @@ export function createTerminalRouter(servicesPromise: Promise<RuntimeServices>):
     try {
       const services = await servicesPromise;
       const terminalId = request.params.terminalId;
-      const snapshot = await requireTrustedTerminal(services, terminalId);
+      await requireTrustedTerminal(services, terminalId);
       const after = integer(request.query.after ?? request.headers['last-event-id'], 0);
       response.status(200);
       response.setHeader('Content-Type', 'text/event-stream');
-      response.setHeader('Cache-Control', 'no-cache, no-transform');
+      response.setHeader('Cache-Control', 'no-store, no-transform');
       response.setHeader('Connection', 'keep-alive');
       response.setHeader('X-Accel-Buffering', 'no');
       response.flushHeaders?.();
@@ -136,10 +137,11 @@ export function createTerminalRouter(servicesPromise: Promise<RuntimeServices>):
         channel.send(event.type, services.redactJson(event), event.endOffset);
         if (event.type === 'exit') channel.close();
       };
-      const unsubscribe = services.terminalRuntime.subscribe(terminalId, emit);
+      const unsubscribe = services.terminalRuntime.subscribe(terminalId, emit, () => channel.close());
       const replay = services.terminalRuntime.replay(terminalId, after);
+      sent = replay.reset ? replay.oldestOffset : after;
       channel.send('connection.ready', services.redactJson({
-        snapshot,
+        snapshot: services.terminalRuntime.get(terminalId),
         reset: replay.reset,
         oldestOffset: replay.oldestOffset,
         lastOffset: replay.lastOffset,

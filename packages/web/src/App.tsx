@@ -170,7 +170,8 @@ function App() {
     window.addEventListener('aih-open-terminal', requestTerminal);
     if (workspace) {
       try {
-        const stored = JSON.parse(sessionStorage.getItem(`ai-harness-terminals-v1:${workspace.id}`) || 'null') as {
+        const raw = sessionStorage.getItem(`ai-harness-terminals-v1:${workspace.id}`);
+        const stored = JSON.parse(raw && raw.length <= 32_768 ? raw : 'null') as {
           version?: number; open?: boolean; ids?: unknown;
         } | null;
         setTerminalWorkspaceId(stored?.version === 1 && stored.open === true && Array.isArray(stored.ids)

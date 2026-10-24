@@ -80,6 +80,7 @@ interface TerminalRecord {
   events: TerminalEvent[];
   bufferedBytes: number;
   listeners: Set<(event: TerminalEvent) => void>;
+  removalListeners: Set<() => void>;
   disposables: Array<{ dispose(): void }>;
   redaction?: TerminalOutputRedactionStream;
 }
@@ -183,6 +184,7 @@ export class TerminalRuntime {
       events: [],
       bufferedBytes: 0,
       listeners: new Set(),
+      removalListeners: new Set(),
       disposables: [],
       redaction: this.options.createRedactionStream?.(),
     };
@@ -243,7 +245,10 @@ export class TerminalRuntime {
     this.flushOutput(record);
     for (const disposable of record.disposables) disposable.dispose();
     record.listeners.clear();
-    return this.terminals.delete(id);
+    this.terminals.delete(id);
+    for (const close of record.removalListeners) close();
+    record.removalListeners.clear();
+    return true;
   }
 
   replay(id: string, after = 0): TerminalReplay {
@@ -253,15 +258,21 @@ export class TerminalRuntime {
       throw Object.assign(new Error('Offset terminal invalide.'), { status: 400 });
     }
     const oldestOffset = record.events[0]?.offset ?? record.snapshot.lastOffset;
+    // Only complete event boundaries are resumable. Never slice a UTF-8
+    // character or interpret an old UTF-16/future cursor as a native byte ID.
+    const reset = after < oldestOffset || after > record.snapshot.lastOffset
+      || record.events.some(event => event.offset < after && after < event.endOffset);
+    const cursor = reset ? oldestOffset : after;
     return {
-      events: record.events.filter(event => event.endOffset > after).map(event => ({ ...event })),
-      reset: after > 0 && after < oldestOffset,
+      events: record.events.filter(event => event.endOffset > cursor
+        || (event.type === 'exit' && event.endOffset === cursor)).map(event => ({ ...event })),
+      reset,
       oldestOffset,
       lastOffset: record.snapshot.lastOffset,
     };
   }
 
-  subscribe(id: string, listener: (event: TerminalEvent) => void): () => void {
+  subscribe(id: string, listener: (event: TerminalEvent) => void, onRemoved?: () => void): () => void {
     const record = this.terminals.get(id);
     if (!record) throw Object.assign(new Error('Terminal introuvable.'), { status: 404 });
     const maxListeners = this.boundedOption(this.options.maxListenersPerTerminal, 64, 1, 1_024);
@@ -269,7 +280,8 @@ export class TerminalRuntime {
       throw Object.assign(new Error('Trop d’abonnés pour ce terminal.'), { status: 429 });
     }
     record.listeners.add(listener);
-    return () => record.listeners.delete(listener);
+    if (onRemoved) record.removalListeners.add(onRemoved);
+    return () => { record.listeners.delete(listener); if (onRemoved) record.removalListeners.delete(onRemoved); };
   }
 
   shutdown(): void {
@@ -283,6 +295,17 @@ export class TerminalRuntime {
 
   private appendSafeOutput(record: TerminalRecord, data: string): void {
     if (!data) return;
+    // Keep every SSE event bounded, including control-heavy output; do not
+    // split a surrogate pair at a publication boundary.
+    for (let start = 0; start < data.length;) {
+      let end = Math.min(data.length, start + 16_384);
+      if (end < data.length && /[\uD800-\uDBFF]/u.test(data[end - 1]!)) end--;
+      this.appendChunk(record, data.slice(start, end));
+      start = end;
+    }
+  }
+
+  private appendChunk(record: TerminalRecord, data: string): void {
     const size = Buffer.byteLength(data, 'utf8');
     const event: TerminalOutputEvent = {
       type: 'output',
@@ -323,7 +346,7 @@ export class TerminalRuntime {
     record.events.push(event);
     record.bufferedBytes += bytes;
     const maxBytes = this.boundedOption(this.options.maxReplayBytes, 2 * 1024 * 1024, 1, 64 * 1024 * 1024);
-    while (record.events.length > 0 && record.bufferedBytes > maxBytes) {
+    while (record.events.length > 0 && (record.bufferedBytes > maxBytes || record.events.length > 4_096)) {
       const removed = record.events.shift()!;
       if (removed.type === 'output') record.bufferedBytes -= Buffer.byteLength(removed.data, 'utf8');
     }

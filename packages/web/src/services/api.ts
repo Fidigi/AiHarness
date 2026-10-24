@@ -680,7 +680,7 @@ async function readChatStreamChunk(
   finally { if (timer) clearTimeout(timer); }
 }
 
-async function* boundedSseRecords(response: Response): AsyncGenerator<{ event: string; data: string }, void> {
+export async function* boundedSseRecords(response: Response): AsyncGenerator<{ event: string; data: string }, void> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No event stream');
   const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -1769,9 +1769,9 @@ export type TerminalStreamRecord =
   | { type: 'connection.ready'; snapshot: TerminalSnapshot; reset: boolean; oldestOffset: number; lastOffset: number }
   | { type: 'event'; event: TerminalEvent };
 
-export async function listTerminals(cwd: string): Promise<ApiResponse<TerminalSnapshot[]>> {
+export async function listTerminals(cwd: string, signal?: AbortSignal): Promise<ApiResponse<TerminalSnapshot[]>> {
   try {
-    const response = await apiFetch(`${API_BASE}/terminals?cwd=${encodeURIComponent(cwd)}`);
+    const response = await apiFetch(`${API_BASE}/terminals?cwd=${encodeURIComponent(cwd)}`, { signal });
     const data = await response.json().catch(() => []) as TerminalSnapshot[] & { error?: string };
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
     return { success: true, data };
@@ -1785,9 +1785,10 @@ export async function createTerminal(input: {
   name?: string;
   cols?: number;
   rows?: number;
-}): Promise<ApiResponse<TerminalSnapshot>> {
+}, signal?: AbortSignal): Promise<ApiResponse<TerminalSnapshot>> {
   try {
     const response = await apiFetch(`${API_BASE}/terminals`, {
+      signal,
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
@@ -1800,10 +1801,10 @@ export async function createTerminal(input: {
   }
 }
 
-export async function writeTerminal(terminalId: string, data: string): Promise<ApiResponse<TerminalSnapshot>> {
+export async function writeTerminal(terminalId: string, data: string, signal?: AbortSignal): Promise<ApiResponse<TerminalSnapshot>> {
   try {
     const response = await apiFetch(`${API_BASE}/terminals/${encodeURIComponent(terminalId)}/input`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }),
+      signal, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }),
     });
     const payload = await response.json().catch(() => ({})) as TerminalSnapshot & { error?: string };
     if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
@@ -1813,10 +1814,10 @@ export async function writeTerminal(terminalId: string, data: string): Promise<A
   }
 }
 
-export async function resizeTerminal(terminalId: string, cols: number, rows: number): Promise<ApiResponse<TerminalSnapshot>> {
+export async function resizeTerminal(terminalId: string, cols: number, rows: number, signal?: AbortSignal): Promise<ApiResponse<TerminalSnapshot>> {
   try {
     const response = await apiFetch(`${API_BASE}/terminals/${encodeURIComponent(terminalId)}/resize`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cols, rows }),
+      signal, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cols, rows }),
     });
     const payload = await response.json().catch(() => ({})) as TerminalSnapshot & { error?: string };
     if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
@@ -1826,9 +1827,9 @@ export async function resizeTerminal(terminalId: string, cols: number, rows: num
   }
 }
 
-export async function closeTerminal(terminalId: string): Promise<ApiResponse<TerminalSnapshot>> {
+export async function closeTerminal(terminalId: string, signal?: AbortSignal): Promise<ApiResponse<TerminalSnapshot>> {
   try {
-    const response = await apiFetch(`${API_BASE}/terminals/${encodeURIComponent(terminalId)}`, { method: 'DELETE' });
+    const response = await apiFetch(`${API_BASE}/terminals/${encodeURIComponent(terminalId)}`, { method: 'DELETE', signal });
     const payload = await response.json().catch(() => ({})) as TerminalSnapshot & { error?: string };
     if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
     return { success: true, data: payload };
@@ -1842,24 +1843,8 @@ export async function* streamTerminalEvents(
   after = 0,
   signal?: AbortSignal,
 ): AsyncGenerator<TerminalStreamRecord, void> {
-  const response = await apiFetch(
-    `${API_BASE}/terminals/${encodeURIComponent(terminalId)}/events?after=${after}`,
-    { headers: { Accept: 'text/event-stream' }, signal },
-  );
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({})) as { error?: string };
-    throw new Error(payload.error || `HTTP ${response.status}`);
-  }
-  for await (const record of boundedSseRecords(response)) {
-    const data: unknown = JSON.parse(record.data);
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Terminal event stream was invalid.');
-    if (record.event === 'connection.ready' && 'snapshot' in data) {
-      const ready = data as { snapshot: TerminalSnapshot; reset: boolean; oldestOffset: number; lastOffset: number };
-      yield { type: 'connection.ready', ...ready };
-    } else if ('terminalId' in data) {
-      yield { type: 'event', event: data as TerminalEvent };
-    }
-  }
+  const { readTerminalEvents } = await import('./terminal-replay');
+  yield* readTerminalEvents(terminalId, after, signal);
 }
 
 // ===================================================================

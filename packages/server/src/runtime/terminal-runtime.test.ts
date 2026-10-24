@@ -119,6 +119,51 @@ describe('TerminalRuntime', () => {
     expect(runtime.replay(created.id, 1).reset).toBe(true);
   });
 
+  it('resets expired cold, interior Unicode and future cursors to complete retained events', () => {
+    const { runtime, terminals } = fixture({ maxReplayBytes: 8 });
+    const { id } = runtime.create({ cwd: '/workspace' });
+    terminals[0]!.emitData('discarded'); terminals[0]!.emitData('é😀');
+    for (const after of [0, 1, 10, 11, 100]) {
+      expect(runtime.replay(id, after)).toMatchObject({ reset: true, oldestOffset: 9,
+        events: [expect.objectContaining({ offset: 9, endOffset: 15, data: 'é😀' })] });
+    }
+    expect(runtime.replay(id, 9).reset).toBe(false);
+    expect(runtime.replay(id, 15)).toMatchObject({ reset: false, events: [] });
+    terminals[0]!.emitExit(0);
+    expect(runtime.replay(id, 15).events).toEqual([expect.objectContaining({ type: 'exit', endOffset: 15 })]);
+  });
+
+  it('bounds tiny-event history and large control/Unicode chunks without breaking byte offsets', () => {
+    const { runtime, terminals } = fixture(); const { id } = runtime.create({ cwd: '/workspace' });
+    for (let i = 0; i < 4_100; i++) terminals[0]!.emitData('x');
+    expect(runtime.replay(id, 0)).toMatchObject({ reset: true, oldestOffset: 4 });
+    expect(runtime.replay(id, 0).events).toHaveLength(4_096);
+    const large = '\x1b'.repeat(16_383) + '😀é'.repeat(20_000);
+    const offset = runtime.get(id)!.lastOffset;
+    terminals[0]!.emitData(large);
+    const events = runtime.replay(id, offset).events;
+    expect(events.flatMap(event => event.type === 'output' ? [event.data] : []).join('')).toBe(large);
+    let cursor = offset;
+    for (const event of events) {
+      expect(event.offset).toBe(cursor);
+      if (event.type === 'output') {
+        expect(event.endOffset - cursor).toBe(Buffer.byteLength(event.data));
+        expect(JSON.stringify(event).length).toBeLessThan(128_000);
+        expect(event.data).not.toContain('\uFFFD');
+      }
+      cursor = event.endOffset;
+    }
+  });
+
+  it('closes removed leases once and does not notify already released subscribers', () => {
+    const { runtime } = fixture(); const { id } = runtime.create({ cwd: '/workspace' });
+    const removed = vi.fn(), retired = vi.fn();
+    runtime.subscribe(id, vi.fn(), removed);
+    runtime.subscribe(id, vi.fn(), retired)();
+    runtime.remove(id); runtime.remove(id); runtime.shutdown();
+    expect(removed).toHaveBeenCalledOnce(); expect(retired).not.toHaveBeenCalled();
+  });
+
   it('evicts a single output chunk larger than the replay budget', () => {
     const { runtime, terminals } = fixture({ maxReplayBytes: 8 });
     const created = runtime.create({ cwd: '/workspace' });

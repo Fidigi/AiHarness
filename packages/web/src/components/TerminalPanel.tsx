@@ -11,6 +11,8 @@ import {
   type TerminalSnapshot,
 } from '../services/api';
 import { useI18n } from '../hooks/useI18n';
+import { TerminalStreamError } from '../services/terminal-replay';
+import { terminalLifecycleMessages } from './terminal-lifecycle-messages';
 import { useSessionStore } from '../store/session-store';
 import { setTerminalTheme, TERMINAL_THEMES, useTerminalTheme } from '../store/terminal-theme';
 import TerminalExtraKeys, { terminalControlMessages, useTerminalExtraKeysVisible } from './TerminalExtraKeys';
@@ -30,13 +32,15 @@ function storageKey(workspaceId: string): string {
 
 function readState(workspaceId: string): StoredTerminalState {
   try {
-    const parsed = JSON.parse(window.sessionStorage.getItem(storageKey(workspaceId)) || 'null') as Partial<StoredTerminalState> | null;
+    const raw = window.sessionStorage.getItem(storageKey(workspaceId));
+    if (raw && raw.length > 32_768) return { version: 1, open: false, ids: [] };
+    const parsed = JSON.parse(raw || 'null') as Partial<StoredTerminalState> | null;
     if (parsed?.version === 1 && Array.isArray(parsed.ids)) {
       return {
         version: 1,
         open: parsed.open === true,
         activeId: typeof parsed.activeId === 'string' && parsed.activeId.length <= 200 ? parsed.activeId : undefined,
-        ids: parsed.ids.filter((id): id is string => typeof id === 'string' && id.length <= 200).slice(0, 12),
+        ids: [...new Set(parsed.ids.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 200))].slice(0, 12),
       };
     }
   } catch { /* Per-tab persistence is optional. */ }
@@ -64,6 +68,8 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
   const theme = useTerminalTheme();
   const extraKeysVisible = useTerminalExtraKeysVisible();
   const { locale } = useI18n();
+  const messages = useRef(terminalLifecycleMessages(locale));
+  messages.current = terminalLifecycleMessages(locale);
   const resetModifiers = () => { modifiersRef.current = NO_TERMINAL_MODIFIERS; setModifiers(NO_TERMINAL_MODIFIERS); };
   const sender = useRef<(data: string) => void>(() => undefined);
 
@@ -94,6 +100,7 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
     terminal.open(container);
     terminal.focus();
     let disposed = false;
+    let latestSnapshot = snapshot;
     let resizeTimer = 0;
     const controller = new AbortController();
 
@@ -105,8 +112,11 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
       if (terminal.cols !== cols || terminal.rows !== rows) terminal.resize(cols, rows);
       window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
-        void resizeTerminal(snapshot.id, cols, rows).then(result => {
-          if (result.success && result.data) onSnapshot(result.data);
+        if (disposed || !runningRef.current) return;
+        void resizeTerminal(snapshot.id, cols, rows, controller.signal).then(result => {
+          if (!disposed && runningRef.current && result.success && result.data?.status === 'running') {
+            latestSnapshot = result.data; onSnapshot(result.data);
+          }
         });
       }, 120);
     };
@@ -123,11 +133,32 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
       setInputEnabled(enabled);
       if (!enabled) resetModifiers();
     };
+    const pending: string[] = [];
+    let queuedBytes = 0, sending = false;
     const send = (data: string) => {
-      if (!mayWrite()) return;
-      void writeTerminal(snapshot.id, data).then(result => {
-        if (!disposed && !result.success) onError(result.error || 'Terminal input failed');
-      });
+      if (!mayWrite() || !data) return;
+      const size = new TextEncoder().encode(data).byteLength;
+      if (size > 65_536 || queuedBytes + size > 262_144 || pending.length >= 64) {
+        onError(messages.current.limit); return;
+      }
+      pending.push(data); queuedBytes += size;
+      if (sending) return;
+      sending = true;
+      void (async () => {
+        try {
+          while (pending.length && mayWrite()) {
+            const value = pending[0];
+            const result = await writeTerminal(snapshot.id, value, controller.signal);
+            if (disposed) return;
+            if (!result.success) {
+              // An uncertain write may already be durable in the PTY. Never
+              // resend it or continue queued commands after that uncertainty.
+              availability(false); controller.abort(); onError(messages.current.input); return;
+            }
+            pending.shift(); queuedBytes -= new TextEncoder().encode(value).byteLength;
+          }
+        } finally { pending.length = 0; queuedBytes = 0; sending = false; }
+      })();
     };
     sender.current = send;
     const input = terminal.onData(data => {
@@ -143,58 +174,90 @@ function TerminalSurface({ snapshot, onSnapshot, onError }: {
         return false;
       }
       if (event.code === 'KeyV') {
+        event.preventDefault();
         if (!mayWrite()) return false;
         const owned = modifiersRef.current;
         resetModifiers();
         void navigator.clipboard?.readText().then(text => {
-          if (text && mayWrite()) send(applyTerminalModifiers(text, owned));
+          if (text && mayWrite()) terminal.paste(applyTerminalModifiers(text, owned));
         }).catch(() => { if (!disposed) onError('Terminal clipboard unavailable'); });
         return false;
       }
       return true;
     });
 
+    let streamController: AbortController | undefined;
+    const online = () => streamController?.abort();
+    const offline = () => {
+      if (!disposed && !controller.signal.aborted && runningRef.current) {
+        availability(false); onError(messages.current.connection);
+      }
+    };
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
     void (async () => {
       while (!disposed && !controller.signal.aborted) {
+        const connection = new AbortController();
+        streamController = connection;
+        const cancel = () => connection.abort();
+        controller.signal.addEventListener('abort', cancel, { once: true });
         try {
-          for await (const record of streamTerminalEvents(snapshot.id, offsetRef.current, controller.signal)) {
+          for await (const record of streamTerminalEvents(snapshot.id, offsetRef.current, connection.signal)) {
+            if (disposed || controller.signal.aborted || connection.signal.aborted) break;
             if (record.type === 'connection.ready') {
+              if (!record.reset && (offsetRef.current < record.oldestOffset || offsetRef.current > record.lastOffset)) throw new TerminalStreamError();
+              latestSnapshot = record.snapshot;
               runningRef.current = record.snapshot.status === 'running';
-              availability(true);
+              availability(true); onError('');
               onSnapshot(record.snapshot);
               if (record.reset) {
                 terminal.reset();
-                terminal.writeln('\r\n\x1b[33m[Output replay was truncated]\x1b[0m');
+                terminal.writeln(`\r\n\x1b[33m[${messages.current.truncated}]\x1b[0m`);
                 offsetRef.current = record.oldestOffset;
               }
             } else if (record.event.type === 'output') {
+              if (record.event.endOffset <= offsetRef.current) continue;
+              if (record.event.offset !== offsetRef.current) throw new TerminalStreamError();
               terminal.write(record.event.data);
-              offsetRef.current = Math.max(offsetRef.current, record.event.endOffset);
+              offsetRef.current = record.event.endOffset;
             } else {
               offsetRef.current = Math.max(offsetRef.current, record.event.endOffset);
               terminal.writeln(`\r\n\x1b[2m[process exited ${record.event.exitCode}]\x1b[0m`);
               availability(false);
               runningRef.current = false;
-              onSnapshot({ ...snapshot, status: record.event.exitCode === 0 ? 'exited' : 'failed', exitCode: record.event.exitCode });
+              onSnapshot({ ...latestSnapshot, lastOffset: offsetRef.current, status: record.event.exitCode === 0 ? 'exited' : 'failed',
+                exitCode: record.event.exitCode, signal: record.event.signal });
             }
           }
-          if (!disposed && snapshot.status === 'running') await new Promise(resolve => setTimeout(resolve, 250));
+          if (!disposed && runningRef.current) await new Promise(resolve => setTimeout(resolve, 250));
           else break;
         } catch (error) {
           if (controller.signal.aborted) break;
+          if (connection.signal.aborted) continue;
           availability(false);
-          onError(error instanceof Error ? error.message : 'Terminal connection failed');
+          if (error instanceof TerminalStreamError && [403, 404, 409].includes(error.status ?? 0)) {
+            runningRef.current = false;
+            onSnapshot({ ...latestSnapshot, status: 'failed' });
+            onError(messages.current.expired); break;
+          }
+          onError(messages.current.connection);
           await new Promise(resolve => setTimeout(resolve, 1_000));
+        } finally {
+          controller.signal.removeEventListener('abort', cancel);
+          if (streamController === connection) streamController = undefined;
         }
       }
     })();
 
     return () => {
       disposed = true;
+      pending.length = 0;
       readyRef.current = false;
       terminalRef.current = undefined;
       sender.current = () => undefined;
       controller.abort();
+      window.removeEventListener('online', online);
+      window.removeEventListener('offline', offline);
       observer.disconnect();
       window.clearTimeout(resizeTimer);
       input.dispose();
@@ -230,49 +293,62 @@ export default function TerminalPanel({ initialOpen = false }: { initialOpen?: b
   const controlMessages = terminalControlMessages(locale);
   const initial = useMemo(() => workspace ? readState(workspace.id) : { version: 1 as const, open: false, ids: [] }, [workspace?.id]);
   const initialOpenRef = useRef(initialOpen);
-  const createOnMountRef = useRef(initialOpen);
+  const createOnMountRef = useRef(initialOpen && !initial.open);
   const [open, setOpen] = useState(initialOpen || initial.open);
   const [terminals, setTerminals] = useState<TerminalSnapshot[]>([]);
   const [activeId, setActiveId] = useState<string | undefined>(initial.activeId);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const scope = useRef<AbortController | undefined>(undefined);
+  const hydrated = useRef(false);
   const active = terminals.find(terminal => terminal.id === activeId) ?? terminals[0];
 
   useEffect(() => {
+    const controller = new AbortController();
+    scope.current = controller;
+    hydrated.current = false; setLoading(true); setCreating(false);
     if (!workspace || !workspaceOperationTrusted) {
+      setLoading(false);
       setTerminals([]);
       setError('');
       return;
     }
     const stored = readState(workspace.id);
     setOpen(initialOpenRef.current || stored.open);
-    initialOpenRef.current = false;
     setTerminals([]);
     setActiveId(stored.activeId);
     setError('');
     let current = true;
     void (async () => {
-      const result = await listTerminals(workspace.cwd);
+      const result = await listTerminals(workspace.cwd, controller.signal);
       if (!current) return;
+      initialOpenRef.current = false;
       if (!result.success || !result.data) {
+        setLoading(false);
         setTerminals([]);
         setError(result.error || t('terminal.loadFailed'));
         return;
       }
-      const byId = new Map(result.data.map(item => [item.id, item]));
+      const eligible = result.data.filter(item => item.cwd === workspace.cwd);
+      const byId = new Map(eligible.map(item => [item.id, item]));
       const restored = stored.ids.map(id => byId.get(id)).filter((item): item is TerminalSnapshot => Boolean(item));
-      const remainingRunning = result.data.filter(item => item.status === 'running' && !stored.ids.includes(item.id));
+      const remainingRunning = eligible.filter(item => item.status === 'running' && !stored.ids.includes(item.id));
       const next = [...restored, ...remainingRunning];
-      if (next.length === 0 && createOnMountRef.current) {
-        createOnMountRef.current = false;
-        const created = await createTerminal({ cwd: workspace.cwd, name: `${t('terminal.title')} 1` });
+      const shouldCreate = createOnMountRef.current;
+      createOnMountRef.current = false;
+      if (next.length === 0 && stored.ids.length > 0) setError(terminalLifecycleMessages(locale).expired);
+      if (next.length === 0 && shouldCreate) {
+        const created = await createTerminal({ cwd: workspace.cwd, name: `${t('terminal.title')} 1` }, controller.signal);
         if (!current) return;
         if (created.success && created.data) next.push(created.data);
         else setError(created.error || t('terminal.createFailed'));
       }
+      hydrated.current = true; setLoading(false);
       setTerminals(next);
       setActiveId(id => id && next.some(item => item.id === id) ? id : next[0]?.id);
     })();
-    return () => { current = false; };
+    return () => { current = false; controller.abort(); };
   }, [workspace?.cwd, workspace?.id, workspaceOperationTrusted, t]);
 
   useEffect(() => {
@@ -287,26 +363,33 @@ export default function TerminalPanel({ initialOpen = false }: { initialOpen?: b
   }, []);
 
   useEffect(() => {
-    if (!workspace || !workspaceOperationTrusted) return;
+    if (!workspace || !workspaceOperationTrusted || !hydrated.current) return;
     writeState(workspace.id, { version: 1, open, activeId: active?.id, ids: terminals.map(item => item.id) });
   }, [active?.id, open, terminals, workspace, workspaceOperationTrusted]);
 
   const add = async () => {
-    if (!workspace || !workspaceOperationTrusted) return;
-    setError('');
-    const result = await createTerminal({ cwd: workspace.cwd, name: `${t('terminal.title')} ${terminals.length + 1}` });
+    const controller = scope.current;
+    if (!workspace || !workspaceOperationTrusted || loading || creating || !controller || controller.signal.aborted) return;
+    setError(''); setCreating(true);
+    const result = await createTerminal({ cwd: workspace.cwd, name: `${t('terminal.title')} ${terminals.length + 1}` }, controller.signal);
+    if (controller !== scope.current || controller.signal.aborted) return;
+    setCreating(false);
     if (!result.success || !result.data) {
       setError(result.error || t('terminal.createFailed'));
       return;
     }
-    setTerminals(items => [...items, result.data!]);
+    hydrated.current = true;
+    setTerminals(items => [...items.filter(item => item.id !== result.data!.id), result.data!]);
     setActiveId(result.data.id);
     setOpen(true);
   };
 
   const close = async (terminal: TerminalSnapshot) => {
     if (terminal.status === 'running' && !window.confirm(t('terminal.closeConfirmation', { name: terminal.name }))) return;
-    const result = await closeTerminal(terminal.id);
+    const controller = scope.current;
+    if (!controller || controller.signal.aborted) return;
+    const result = await closeTerminal(terminal.id, controller.signal);
+    if (controller !== scope.current || controller.signal.aborted) return;
     if (!result.success) {
       setError(result.error || t('terminal.closeFailed'));
       return;
@@ -317,7 +400,7 @@ export default function TerminalPanel({ initialOpen = false }: { initialOpen?: b
 
   if (!workspace || !workspaceOperationTrusted) return null;
   if (!open) {
-    return <button className="terminal-launcher" onClick={() => {
+    return <button className="terminal-launcher" disabled={loading || creating} onClick={() => {
       if (terminals.length) setOpen(true);
       else void add();
     }} aria-label={t('terminal.open')}>⌘</button>;
@@ -336,7 +419,7 @@ export default function TerminalPanel({ initialOpen = false }: { initialOpen?: b
               <button onClick={() => void close(terminal)} aria-label={t('terminal.close', { name: terminal.name })}>×</button>
             </div>
           ))}
-          <button className="terminal-add" onClick={() => void add()} aria-label={t('terminal.new')}>+</button>
+          <button className="terminal-add" disabled={loading || creating} onClick={() => void add()} aria-label={t('terminal.new')}>+</button>
         </nav>
         <div>
           {active && <small>{active.shell} · {active.cols}×{active.rows}{active.exitCode === undefined ? '' : ` · exit ${active.exitCode}`}</small>}
@@ -349,9 +432,10 @@ export default function TerminalPanel({ initialOpen = false }: { initialOpen?: b
       </header>
       {error && <p className="terminal-error" role="alert">{error}</p>}
       {active ? <TerminalSurface key={active.id} snapshot={active}
-        onSnapshot={next => setTerminals(items => items.map(item => item.id === next.id ? next : item))}
+        onSnapshot={next => setTerminals(items => items.map(item => item.id !== next.id ? item
+          : item.status !== 'running' && next.status === 'running' ? item : { ...next, lastOffset: Math.max(item.lastOffset, next.lastOffset) }))}
         onError={setError} />
-        : <div className="terminal-empty"><p>{t('terminal.empty')}</p><button onClick={() => void add()}>{t('terminal.new')}</button></div>}
+        : <div className="terminal-empty"><p>{t('terminal.empty')}</p><button disabled={loading || creating} onClick={() => void add()}>{t('terminal.new')}</button></div>}
     </section>
   );
 }

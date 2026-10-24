@@ -1607,8 +1607,10 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
       const terminal = terminals.get(decodeURIComponent(terminalEvents[1]!));
       if (!terminal) { await fulfillJson(route, { error: 'Terminal not found' }, 404); return; }
       let records = `event: connection.ready\ndata: ${JSON.stringify({ snapshot: terminal, reset: false, oldestOffset: 0, lastOffset: terminal.lastOffset })}\n\n`;
-      if (terminal.output) {
-        records += `id: ${terminal.lastOffset}\nevent: output\ndata: ${JSON.stringify({ type: 'output', terminalId: terminal.id, offset: 0, endOffset: terminal.lastOffset, data: terminal.output, timestamp: DEFAULT_DATE })}\n\n`;
+      const bytes = Buffer.from(terminal.output);
+      const offset = Math.min(bytes.length, Number(url.searchParams.get('after') ?? 0));
+      if (offset < bytes.length) {
+        records += `id: ${terminal.lastOffset}\nevent: output\ndata: ${JSON.stringify({ type: 'output', terminalId: terminal.id, offset, endOffset: terminal.lastOffset, data: bytes.subarray(offset).toString(), timestamp: DEFAULT_DATE })}\n\n`;
       }
       await route.fulfill({ status: 200, contentType: 'text/event-stream', body: records }); return;
     }
