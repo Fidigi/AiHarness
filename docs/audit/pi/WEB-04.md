@@ -1,0 +1,37 @@
+# WEB-04 — Native files, previews and worktrees contract
+
+Scope: [AUDIT-5](./AUDIT-5.md), WEB-04. The approved native layout adds read-only PDF, text-only DOCX, bounded CSV/TSV tables and workspace-isolated file tabs. It is not a general file editor, Pi protocol/file compatibility or whole-platform qualification.
+
+## Format and layout decisions
+
+| Surface | Native contract and limits |
+|---|---|
+| PDF | Authenticated bytes, at most 2 MiB, `%PDF-` signature; PDF.js canvas plus optional inert page text. At most 100 pages, 2,000,000 canvas pixels, 1,400 × 1,800 dimensions, 200,000 text characters/page, 12-second opening and eight-second page deadlines. No annotation/form/link layer, script execution, XFA, external resource URLs or embedded attachment opening. Malformed/encrypted/unsupported documents may refuse preview; explicit download remains separate |
+| DOCX | At most 2 MiB input and actual inflated main XML; at most 512 ZIP entries, 100× compression ratio, 64 XML levels, 50,000 elements and 200,000 text characters. Read only `word/document.xml` in memory, never extract files or follow relationships. Strict names, duplicate/encrypted/unsupported main entries, entities/DOCTYPE and invalid XML refuse. Only literal Word text, paragraph/tab/break whitespace renders; formatting, images, macros, fields, external relationships and embedded objects are not executed |
+| CSV/TSV | Existing redacted text source; literal quoting/delimiters, CRLF and quoted newlines. At most 2 MiB input, 500 rows, 64 columns, 20,000 cells and 16,384 characters/cell. First row supplies column headings; no formulas, HTML, links, sorting, spreadsheet execution or type inference. Invalid/oversized tables fail explicitly; source and download remain available |
+| Existing formats | Source, Markdown/frontmatter, images, audio, video and Git diffs retain native behavior. Unsupported binary types show unavailable preview; no fake Office/HTML converter. Binary/oversized copy is disabled |
+| File tabs | At most eight full-path identities, retaining source/preview/diff selection. Arrow/Home/End navigation, Delete and explicit active-tab close; a ninth file is refused before reading. Same basenames remain distinct. Closing active selects a neighbor. Tabs contain metadata only: selecting one rereads canonical bytes, not an inactive document cache |
+| Layout lifetime | Tabs and owned reads/watchers/uploads retire on pane close, route/session/workspace replacement and observed trust withdrawal. Resize listeners dispose on retirement. No file-tab/body persistence or cross-workspace restoration. Document transport aborts with a 15-second deadline; PDF worker/render tasks are destroyed/cancelled on retirement |
+
+## Authority, downloads and collisions
+
+`packages/server/src/api/file-routes.ts` owns `/api/files/preview`; the Web service sends only encoded cwd/path selectors to this fixed same-origin authenticated route. Existing capability/Origin, canonical allowed-root, fresh trust, no-symlink/hard-link and stable-handle protections apply before the bounded read. Preview and download share the four-slot concurrency limit; release is once-only on response completion/close. DOCX text is credential-redacted after XML decoding; known-sensitive PDF bytes refuse rather than rewrite a corrupt PDF. This does not detect every credential representation inside arbitrary binary documents.
+
+File read/preview/download responses use `no-store` and `nosniff`; the existing metadata-only watcher retains its SSE cache policy. PDF bytes are attachment data consumed by the owned canvas worker, never an inline browser plugin/iframe. Client streaming bounds do not trust `Content-Length`, and parser/server details never enter new preview diagnostics. Explicit download uses the existing authenticated attachment route and its 64 MiB bound; it is not proof that an external application will safely open the result.
+
+Uploads retain explicit Reject / Keep both / Overwrite policy and stable atomic writes. Preview selection never implies overwrite consent. Worktree creation and selection retain separate fresh project trust; after trust, Sidebar rereads the canonical descriptor to restore Git metadata intentionally absent before trust. Dirty removal first refuses without force and asks separately before an explicit forced retry. File tabs do not confer Git, trust or linked-directory consent authority.
+
+## Requirement-to-evidence map
+
+| WEB-04 requirement | Owning evidence |
+|---|---|
+| Safe bounded parsing | `packages/server/src/api/docx-preview.test.ts`: literal text, entities/DOCTYPE, invalid/duplicate/missing members, forged inflated size, input/entry/text/depth/ratio refusal. `packages/web/src/components/delimited-preview.test.ts`: quoting, newline, invalid and all table bounds |
+| Authenticated preview and download | `packages/server/src/api/file-preview-http.test.ts`: actual Server auth/user/admin/Origin/trust, traversal, symbolic/hard links, size/format refusal, credential redaction/refusal and exact attachment bytes. Existing `packages/server/src/web-server.test.ts` owns stable source/download/upload/Git/watch/worktree HTTP regressions |
+| Real browser flow | `e2e/file-previews-live.spec.ts`: actual emitted Server/static Web, normal auth/Origin and disposable Git repository; EN/FR, desktop/mobile, Light/Dark PDF canvas/page text, inert DOCX/CSV/TSV, malformed recovery, fresh tab read, exact download, collision reject/rename conservation, real diff, axe/overflow and four captures |
+| Real Git/worktree/trust | The English desktop live journey creates a real worktree, proves preview refusal before trust, accepts trust, switches both ways with empty tabs, preserves independent source bytes, declines dirty force removal then explicitly accepts it. Existing `e2e/workspaces.spec.ts` independently covers browse/create/file manager and request-level force classification |
+| View ownership and tab ergonomics | `e2e/file-tabs.spec.ts`: eight-tab admission before read, keyboard/focus, duplicate basenames, bounded table fallback, held content/document replies after close/reopen cannot recreate tabs or overwrite a newer file. `services/document-preview.test.ts` proves fixed destination/auth/signal, actual streamed-byte bounds/cancellation and bounded inert DTOs |
+| Existing optional surface boundaries | `e2e/files.spec.ts`, `e2e/workspace-asset-load.spec.ts`, `e2e/workspace-defaults.spec.ts` retain native source/media/Markdown/Git/upload and lazy-pane/workspace lifetime controls; actual executed cases are recorded in AUDIT-5, not inferred from this inventory |
+
+## Qualification limits
+
+Docker command outcomes, reviewed screenshots, retained failed attempts and exact source hashes belong to the dated AUDIT-5 journal and local receipt. Scoped native Chromium success is not side-by-side Pi Web comparison, vendor/service qualification, fuzz certification, physical mobile/Safari/Windows testing, PDF fidelity for every font/image/encryption variant, or QUA-01 closure.

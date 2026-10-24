@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import type { FileUploadProgress, WorkspaceFileContent, WorkspaceFileEntry, GitStatusFile } from '../services/api';
 import {
@@ -16,9 +16,13 @@ import MarkdownContent from './MarkdownContent';
 import { linkedDirectoryMessages } from './linked-directory-messages';
 import LinkedDirectoryBoundary from './LinkedDirectoryBoundary';
 import { useLocation } from 'react-router-dom';
+import DocumentPreview from './DocumentPreview';
+import { parseDelimited, DelimitedPreviewError } from './delimited-preview';
+import { filePreviewMessages } from './file-preview-messages';
 
 type Tab = 'files' | 'changes';
 type ViewerTab = 'source' | 'preview' | 'diff';
+type OpenFile = { path: string; mode: ViewerTab };
 
 function quoteMention(path: string): string {
   return path.includes(' ') ? `@"${path}"` : `@${path}`;
@@ -95,6 +99,15 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   const [showHidden, setShowHidden] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<WorkspaceFileContent>();
+  const [openedFiles, setOpenedFiles] = useState<OpenFile[]>([]);
+  const tabsRef = useRef<OpenFile[]>([]);
+  const publishTabs = (files: OpenFile[]) => { tabsRef.current = files; setOpenedFiles(files); };
+  const [activePath, setActivePath] = useState('');
+  const panelRef = useRef<HTMLElement>(null);
+  const [reading, setReading] = useState(false);
+  const readEpoch = useRef(0);
+  const tabId = useId();
+  const copy = filePreviewMessages(locale);
   const [viewerTab, setViewerTab] = useState<ViewerTab>('source');
   const [diff, setDiff] = useState('');
   const [diffBinary, setDiffBinary] = useState(false);
@@ -108,6 +121,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   const uploadAbortRef = useRef<AbortController | undefined>(undefined);
   const openFileAbortRef = useRef<AbortController | undefined>(undefined);
   const refreshAbortRef = useRef<AbortController | undefined>(undefined);
+  const resizeCleanupRef = useRef<(() => void) | undefined>(undefined);
   const workspaceOperationTrusted = Boolean(workspace
     && (workspace.operationTrusted ?? workspace.trusted));
 
@@ -137,6 +151,8 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     refreshAbortRef.current?.abort();
     setUploadProgress(undefined);
     setLinkedDirectoryRequest(undefined);
+    readEpoch.current++;
+    publishTabs([]); setActivePath(''); setReading(false);
     setSelected(undefined);
     setEntries([]);
     setChanges([]);
@@ -147,6 +163,8 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     setError('');
     void refresh();
     return () => {
+      readEpoch.current++;
+      resizeCleanupRef.current?.();
       uploadAbortRef.current?.abort();
       openFileAbortRef.current?.abort();
       refreshAbortRef.current?.abort();
@@ -177,24 +195,33 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     const result = await uploadFiles(workspace.cwd, '.', files, {
       collision,
       signal: controller.signal,
-      onProgress: setUploadProgress,
+      onProgress: progress => { if (!controller.signal.aborted && uploadAbortRef.current === controller) setUploadProgress(progress); },
     });
-    if (uploadAbortRef.current === controller) uploadAbortRef.current = undefined;
+    if (controller.signal.aborted || uploadAbortRef.current !== controller) return;
     if (result.success) await refresh();
     else if (!controller.signal.aborted) setError(result.error || t('files.uploadFailed'));
     window.setTimeout(() => {
-      if (!uploadAbortRef.current) setUploadProgress(undefined);
+      if (!controller.signal.aborted && uploadAbortRef.current === controller) {
+        uploadAbortRef.current = undefined; setUploadProgress(undefined);
+      }
     }, 1_200);
   };
 
-  const openFile = async (rawPath: string, targetTab: ViewerTab = 'source', requestedLine?: number, linkOrigin?: HTMLButtonElement) => {
-    if (!workspace || !workspaceOperationTrusted) return;
+  const openFile = async (rawPath: string, requestedTab?: ViewerTab, requestedLine?: number, linkOrigin?: HTMLButtonElement) => {
+    if (!workspace || !workspaceOperationTrusted || rawPath.length > 4096) return;
     // New explicit read admission retires old metadata before any response/import await.
     if (linkOrigin) setLinkedDirectoryRequest(undefined);
     setError('');
     const match = rawPath.match(/^(.*?)(?:#L(\d+))?$/i);
     const filePath = match?.[1] || rawPath;
     const line = requestedLine ?? (match?.[2] ? Number(match[2]) : undefined);
+    const previous = tabsRef.current.find(file => file.path === filePath);
+    if (!previous && tabsRef.current.length >= 8) { setError(copy.limit); return; }
+    const targetTab = requestedTab ?? previous?.mode ?? 'source';
+    publishTabs(previous ? tabsRef.current.map(file => file.path === filePath ? { ...file, mode: targetTab } : file)
+      : [...tabsRef.current, { path: filePath, mode: targetTab }]);
+    const generation = ++readEpoch.current;
+    setActivePath(filePath); setSelected(undefined); setDiff(''); setDiffBinary(false); setReading(true);
     openFileAbortRef.current?.abort();
     const controller = new AbortController();
     openFileAbortRef.current = controller;
@@ -204,14 +231,18 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
       getFileContent(workspace.cwd, filePath, controller.signal),
       targetTab === 'diff' ? getFileDiff(workspace.cwd, filePath, controller.signal) : Promise.resolve(undefined),
     ]);
-    if (controller.signal.aborted || openFileAbortRef.current !== controller) return;
+    if (controller.signal.aborted || openFileAbortRef.current !== controller || generation !== readEpoch.current) return;
     openFileAbortRef.current = undefined;
+    setReading(false);
     if (diffResult) {
       setDiff(diffResult.success && diffResult.data ? diffResult.data.diff : diffResult.error || '');
       setDiffBinary(Boolean(diffResult.success && diffResult.data?.binary));
     }
     if (content.data && (content.success || content.data.tooLarge)) {
       setSelected(content.data);
+      setActivePath(content.data.path);
+      publishTabs(tabsRef.current.map(file => file.path === filePath ? { ...file, path: content.data!.path } : file)
+        .filter((file, index, files) => files.findIndex(other => other.path === file.path) === index));
     } else if (targetTab === 'diff' && diffResult?.success) {
       // Deleted and oversized files can still have a useful Git diff even when source content is unavailable.
       setSelected({
@@ -229,8 +260,31 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
         openLinkedDirectory(filePath.includes('/') ? filePath.slice(0, filePath.lastIndexOf('/')) : '.');
         return;
       }
-      setError(content.error || t('files.openFailed'));
+      setError(copy.readFailed);
     }
+  };
+
+  const closeFile = (filePath: string) => {
+    const index = tabsRef.current.findIndex(file => file.path === filePath);
+    const remaining = tabsRef.current.filter(file => file.path !== filePath);
+    publishTabs(remaining);
+    if (activePath === filePath) {
+      readEpoch.current++; openFileAbortRef.current?.abort();
+      setSelected(undefined); setReading(false); setActivePath(''); setError('');
+      const next = remaining[Math.max(0, index - 1)];
+      if (next) void openFile(next.path);
+    }
+    const generation = readEpoch.current;
+    window.requestAnimationFrame(() => {
+      if (generation !== readEpoch.current || document.activeElement !== document.body) return;
+      const target = panelRef.current?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')
+        ?? panelRef.current?.querySelector<HTMLButtonElement>('.panel-tabs button');
+      target?.focus();
+    });
+  };
+  const selectMode = (mode: ViewerTab) => {
+    setViewerTab(mode);
+    publishTabs(tabsRef.current.map(file => file.path === activePath ? { ...file, mode } : file));
   };
 
   useEffect(() => {
@@ -249,10 +303,12 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     if (!selected || !workspace || !workspaceOperationTrusted) return;
     const controller = new AbortController();
     let current = true;
+    const generation = readEpoch.current;
     void (async () => {
       try {
         for await (const event of streamFileChanges(workspace.cwd, selected.path, controller.signal)) {
-          if (!current || event.type === 'connection.ready') continue;
+          if (!current || generation !== readEpoch.current) return;
+          if (event.type === 'connection.ready') continue;
           if (event.type === 'file.unavailable') {
             setError(t('files.watchUnavailable'));
             break;
@@ -261,17 +317,17 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
             getFileContent(workspace.cwd, selected.path, controller.signal),
             getFileDiff(workspace.cwd, selected.path, controller.signal),
           ]);
-          if (!current) return;
+          if (!current || generation !== readEpoch.current) return;
           if (content.success && content.data) setSelected(content.data);
-          else setError(content.error || t('files.openFailed'));
+          else { setSelected(undefined); setError(copy.readFailed); }
           if (nextDiff.success && nextDiff.data) {
             setDiff(nextDiff.data.diff);
             setDiffBinary(nextDiff.data.binary);
           }
           await refresh();
         }
-      } catch (watchError) {
-        if (!controller.signal.aborted) setError(watchError instanceof Error ? watchError.message : t('files.watchUnavailable'));
+      } catch {
+        if (!controller.signal.aborted && generation === readEpoch.current) setError(t('files.watchUnavailable'));
       }
     })();
     return () => {
@@ -282,7 +338,8 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
 
   useEffect(() => {
     if (!selected || !targetLine) return;
-    window.setTimeout(() => document.getElementById(`source-line-${targetLine}`)?.scrollIntoView({ block: 'center' }), 0);
+    const timer = window.setTimeout(() => document.getElementById(`source-line-${targetLine}`)?.scrollIntoView({ block: 'center' }), 0);
+    return () => window.clearTimeout(timer);
   }, [selected, targetLine, viewerTab]);
 
   const mention = (filePath: string) => {
@@ -303,13 +360,18 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
 
   const beginResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
+    resizeCleanupRef.current?.();
     const move = (pointer: PointerEvent) => setViewerWidth(Math.max(300, Math.min(1200, window.innerWidth - pointer.clientX)));
     const finish = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      resizeCleanupRef.current = undefined;
     };
+    resizeCleanupRef.current = finish;
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', finish, { once: true });
+    window.addEventListener('pointercancel', finish, { once: true });
   };
 
   const downloadUrl = useMemo(() => workspace && selected
@@ -320,7 +382,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   if (collapsed) return <aside className="workspace-panel collapsed"><button onClick={() => setCollapsed(false)} aria-label={t('files.expand')}>‹</button></aside>;
 
   return (
-    <aside className={`workspace-panel ${isOpen ? 'panel-open' : ''} ${selected ? 'viewer-open' : ''} ${viewerExpanded ? 'viewer-expanded' : ''}`}
+    <aside ref={panelRef} className={`workspace-panel ${isOpen ? 'panel-open' : ''} ${selected ? 'viewer-open' : ''} ${viewerExpanded ? 'viewer-expanded' : ''}`}
       style={selected ? { flexBasis: `${viewerWidth}px`, width: `${viewerWidth}px` } : undefined}
       aria-label={t('files.explorer')}>
       {selected && <div className="panel-resizer" role="separator" aria-orientation="vertical"
@@ -408,32 +470,53 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
         </>
       )}
 
-      {selected && (
-        <section className="file-viewer">
+      {openedFiles.length > 0 && <div className="open-file-tabs">
+        <div role="tablist" aria-label={copy.tabs}>
+        {openedFiles.map((file, index) => <button key={file.path} role="tab" id={`${tabId}-${index}`} aria-selected={activePath === file.path}
+            aria-controls={`${tabId}-panel`} tabIndex={activePath === file.path ? 0 : -1}
+            title={file.path} onClick={() => void openFile(file.path)} onKeyDown={event => {
+              if (event.key === 'Delete') { event.preventDefault(); closeFile(file.path); return; }
+              const next = event.key === 'ArrowRight' ? (index + 1) % openedFiles.length
+                : event.key === 'ArrowLeft' ? (index + openedFiles.length - 1) % openedFiles.length
+                  : event.key === 'Home' ? 0 : event.key === 'End' ? openedFiles.length - 1 : undefined;
+              if (next === undefined) return;
+              event.preventDefault(); document.getElementById(`${tabId}-${next}`)?.focus();
+              void openFile(openedFiles[next].path);
+            }}>{file.path}</button>)}
+        </div>
+        <button aria-label={`${copy.close} ${activePath}`} onClick={() => closeFile(activePath)}>×</button>
+      </div>}
+      {!selected && activePath && <section role="tabpanel" id={`${tabId}-panel`}
+        aria-labelledby={`${tabId}-${openedFiles.findIndex(file => file.path === activePath)}`}>
+        {reading && <p className="panel-empty" role="status">{copy.loading}</p>}
+      </section>}
+      {selected && workspaceOperationTrusted && (
+        <section className="file-viewer" role="tabpanel" id={`${tabId}-panel`}
+          aria-labelledby={`${tabId}-${openedFiles.findIndex(file => file.path === activePath)}`}>
           <header>
             <strong title={selected.path}>{selected.name}</strong>
             <div>
               <button onClick={() => setViewerExpanded(value => !value)} aria-pressed={viewerExpanded}
                 aria-label={viewerExpanded ? t('files.restore') : t('files.maximize')}>{viewerExpanded ? '↙' : '↗'}</button>
-              <button onClick={() => setSelected(undefined)} aria-label={t('common.close')}>×</button>
+              <button onClick={() => closeFile(selected.path)} aria-label={t('common.close')}>×</button>
             </div>
           </header>
           <div className="viewer-meta">{selected.language} · {selected.lineCount ?? '—'} {t('files.lines')} · {formatBytes(selected.size)}</div>
           <nav>
-            <button className={viewerTab === 'source' ? 'active' : ''} onClick={() => setViewerTab('source')}>{t('files.source')}</button>
-            <button className={viewerTab === 'preview' ? 'active' : ''} onClick={() => setViewerTab('preview')}>{t('files.preview')}</button>
+            <button className={viewerTab === 'source' ? 'active' : ''} onClick={() => selectMode('source')}>{t('files.source')}</button>
+            <button className={viewerTab === 'preview' ? 'active' : ''} onClick={() => selectMode('preview')}>{t('files.preview')}</button>
             <button className={viewerTab === 'diff' ? 'active' : ''} onClick={() => void openFile(selected.path, 'diff')}>{t('files.diff')}</button>
           </nav>
           <div className="viewer-content">
             {viewerTab === 'diff' ? diffBinary ? <p className="panel-empty">{t('files.binaryDiff')}</p> : <DiffView diff={diff} />
               : selected.tooLarge ? <p className="panel-empty">{t('files.tooLarge')}</p>
-                : viewerTab === 'preview' ? <FilePreview file={selected} downloadUrl={downloadUrl} />
+                : viewerTab === 'preview' ? <FilePreview key={JSON.stringify([selected.path, selected.modifiedAt, selected.size])} file={selected} cwd={workspace.cwd} downloadUrl={downloadUrl} />
                   : selected.binary ? <p className="panel-empty">{t('files.binary')}</p>
                     : <SourceView content={selected.content ?? ''} language={selected.language} targetLine={targetLine} />}
           </div>
           <footer>
             <button onClick={() => mention(selected.path)}>@ {t('files.mention')}</button>
-            <button onClick={() => void navigator.clipboard?.writeText(selected.content ?? '')}>{t('chat.copy')}</button>
+            <button disabled={selected.binary || selected.tooLarge} onClick={() => void navigator.clipboard?.writeText(selected.content ?? '')}>{t('chat.copy')}</button>
             <a href={downloadUrl} download>{t('files.download')}</a>
           </footer>
         </section>
@@ -460,7 +543,21 @@ function DiffView({ diff }: { diff: string }) {
   ))}</pre>;
 }
 
-function FilePreview({ file, downloadUrl }: { file: WorkspaceFileContent; downloadUrl: string }) {
+function FilePreview({ file, cwd, downloadUrl }: { file: WorkspaceFileContent; cwd: string; downloadUrl: string }) {
+  const { locale } = useI18n();
+  const copy = filePreviewMessages(locale);
+  if (/\.(pdf|docx)$/i.test(file.path)) return <DocumentPreview cwd={cwd} path={file.path} />;
+  if (/\.(csv|tsv)$/i.test(file.path) && !file.binary) {
+    try {
+      const rows = parseDelimited(file.content ?? '', /\.tsv$/i.test(file.path) ? '\t' : ',');
+      if (!rows.length) return <p className="panel-empty">{copy.empty}</p>;
+      const columns = Math.max(...rows.map(row => row.length));
+      return <div className="delimited-preview"><table aria-label={copy.table}>
+        <thead><tr>{Array.from({ length: columns }, (_, index) => <th scope="col" key={index}>{rows[0][index] || `#${index + 1}`}</th>)}</tr></thead>
+        <tbody>{rows.slice(1).map((row, index) => <tr key={index}>{Array.from({ length: columns }, (_, column) => <td key={column}>{row[column] ?? ''}</td>)}</tr>)}</tbody>
+      </table></div>;
+    } catch (error) { return <p className="panel-error" role="alert">{error instanceof DelimitedPreviewError && error.reason === 'limit' ? copy.tableLimit : copy.tableInvalid}</p>; }
+  }
   if (/\.(png|jpe?g|gif|webp|svg)$/i.test(file.path)) return <img src={downloadUrl} alt={file.name} />;
   if (/\.(mp3|wav|ogg|m4a)$/i.test(file.path)) return <audio src={downloadUrl} controls />;
   if (/\.(mp4|webm|mov)$/i.test(file.path)) return <video src={downloadUrl} controls />;

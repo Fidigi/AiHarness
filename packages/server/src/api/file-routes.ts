@@ -16,6 +16,7 @@ import {
 import type { RuntimeServices } from '../runtime/services.js';
 import { requireCapability } from '../security/request-security.js';
 import { SseChannel } from './sse-channel.js';
+import { docxPreview, DocumentPreviewError } from './docx-preview.js';
 
 const execFileAsync = promisify(execFile);
 const MAX_SOURCE_BYTES = 2 * 1024 * 1024;
@@ -280,6 +281,10 @@ async function writeStableUpload(destination: string, bytes: Buffer, overwrite: 
 
 export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Router {
   const router = Router();
+  router.use((_request, response, next) => {
+    response.set('Cache-Control', 'no-store').set('X-Content-Type-Options', 'nosniff');
+    next();
+  });
   let activeWatchers = 0;
   let activeDownloads = 0;
 
@@ -365,6 +370,43 @@ export function createFileRouter(servicesPromise: Promise<RuntimeServices>): Rou
         content,
       });
     } catch (error) { next(error); }
+  });
+
+  router.get('/preview', async (request, response, next) => {
+    try {
+      const services = await servicesPromise;
+      const { target } = await workspaceRequest(services, request, 'file');
+      const extension = path.extname(target).toLowerCase();
+      if (extension !== '.pdf' && extension !== '.docx') {
+        response.status(415).json({ code: 'FILE_PREVIEW_UNSUPPORTED', error: 'Unsupported document preview.' });
+        return;
+      }
+      if (activeDownloads >= MAX_CONCURRENT_DOWNLOADS) {
+        response.status(429).json({ code: 'FILE_PREVIEW_LIMIT', error: 'Too many document reads.' });
+        return;
+      }
+      activeDownloads++;
+      let released = false;
+      const release = () => { if (!released) { released = true; activeDownloads--; } };
+      response.once('finish', release); response.once('close', release);
+      const { bytes } = await readStableDownload(target, MAX_SOURCE_BYTES);
+      if (extension === '.docx') {
+        response.json({ kind: 'docx', text: services.redactText(await docxPreview(bytes)) });
+      } else if (bytes.subarray(0, 5).toString('ascii') !== '%PDF-') {
+        throw new DocumentPreviewError('FILE_PREVIEW_INVALID');
+      } else if (containsKnownCredential(services, bytes)) {
+        response.status(409).json({ code: 'CREDENTIAL_REDACTION_REQUIRED', error: 'Sensitive document read refused.' });
+      } else {
+        // Authenticated bytes, not a navigable HTML/PDF plugin surface. Only
+        // the client canvas renderer consumes this endpoint; no inline iframe.
+        response.type('application/pdf').set('Content-Disposition', 'attachment').send(bytes);
+      }
+    } catch (error) {
+      if (error instanceof DocumentPreviewError || (error as { status?: number })?.status === 413) {
+        const code = error instanceof DocumentPreviewError ? error.code : 'FILE_PREVIEW_LIMIT';
+        response.status(code === 'FILE_PREVIEW_LIMIT' ? 413 : 422).json({ code, error: 'Document preview unavailable.' });
+      } else next(error);
+    }
   });
 
   router.get('/download', async (request, response, next) => {

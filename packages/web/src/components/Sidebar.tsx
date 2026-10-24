@@ -257,7 +257,14 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
       setError(trust.error || t('workspace.trustFailed'));
       return;
     }
-    await activateWorkspace({ ...pendingWorkspace, trusted: true, operationTrusted: true });
+    // The pre-trust descriptor deliberately omits Git metadata. Reread it
+    // instead of inventing a trusted descriptor that loses worktree navigation.
+    const refreshed = await validateWorkspace(pendingWorkspace.cwd);
+    if (!refreshed.success || !refreshed.data || !operationTrusted(refreshed.data)) {
+      setError(refreshed.error || t('workspace.trustFailed'));
+      return;
+    }
+    await activateWorkspace(refreshed.data);
   };
 
   const switchWorktree = async (cwd: string) => {
