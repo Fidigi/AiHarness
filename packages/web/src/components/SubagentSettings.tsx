@@ -57,6 +57,13 @@ function list(value: string): string[] {
 }
 
 export function SubagentSettings() {
+  const [targetScope, setTargetScope] = useSettingsScope('subagents', 'project');
+  return <ScopedSubagentSettings key={targetScope} targetScope={targetScope} setTargetScope={setTargetScope} />;
+}
+
+function ScopedSubagentSettings({ targetScope, setTargetScope }: {
+  targetScope: 'global' | 'project'; setTargetScope(scope: 'global' | 'project'): void;
+}) {
   const { t } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
   const [configuration, setConfiguration] = useState<SubagentConfiguration>();
@@ -66,7 +73,6 @@ export function SubagentSettings() {
   const [editor, setEditor] = useState<EditorValue>();
   const editorRef = useRef<HTMLFormElement>(null);
   useFocusTrap(Boolean(editor), editorRef, () => setEditor(undefined));
-  const [targetScope, setTargetScope] = useSettingsScope('subagents', 'project');
   const scope = [
     workspace?.cwd,
     targetScope === 'project' ? workspace?.id : undefined,
@@ -238,7 +244,7 @@ export function SubagentSettings() {
                 aria-label={t('subagents.toggleProfile', { profile: profile.name })}
                 onChange={event => void apply(updateSubagentProfile(profile.id, { enabled: event.target.checked }, ...scope))} />
                 {t('subagents.profileEnabled')}</label>
-              <button type="button" onClick={() => setEditor(editorValue(profile))}>{t('common.edit')}</button>
+              <button type="button" disabled={loading} onClick={() => setEditor(editorValue(profile))}>{t('common.edit')}</button>
               <button type="button" disabled={loading}
                 onClick={() => void apply(duplicateSubagentProfile(profile.id, ...scope))}>{t('subagents.duplicate')}</button>
               {!profile.builtIn && <button type="button" disabled={loading}

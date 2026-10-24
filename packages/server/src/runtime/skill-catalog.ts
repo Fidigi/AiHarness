@@ -229,7 +229,7 @@ export class SkillCatalogService {
       : existing;
     const catalog = this.withEnabledState(cached);
     const enabled = new Set(catalog.skills.filter(skill => skill.modelInvocable).map(skill => skill.key));
-    const allowed = input.allowedSkills?.length ? new Set(input.allowedSkills) : undefined;
+    const allowed = input.allowedSkills === undefined ? undefined : new Set(input.allowedSkills);
     return cached.records
       .filter(record => enabled.has(record.key)
         && (!allowed || allowed.has(record.key) || allowed.has(record.name)))

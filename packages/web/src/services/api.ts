@@ -2340,7 +2340,10 @@ export async function updateSubagentProfile(
 ): Promise<ApiResponse<SubagentConfiguration>> {
   return subagentRequest<SubagentConfiguration>(`/subagents/profiles/${encodeURIComponent(profileId)}`, {
     method: 'PATCH',
-    body: JSON.stringify({ profile, cwd, projectId, scope: scope ?? (projectId ? 'project' : 'global') }),
+    body: JSON.stringify({ profile: { ...profile,
+      ...(Object.hasOwn(profile, 'model') ? { model: profile.model ?? null } : {}),
+      ...(Object.hasOwn(profile, 'thinking') ? { thinking: profile.thinking ?? null } : {}),
+    }, cwd, projectId, scope: scope ?? (projectId ? 'project' : 'global') }),
   });
 }
 
@@ -2368,9 +2371,9 @@ export async function deleteSubagentProfile(
   });
 }
 
-export async function listSubagentRuns(parentSessionId?: string): Promise<ApiResponse<SubagentRunSnapshot[]>> {
+export async function listSubagentRuns(parentSessionId?: string, signal?: AbortSignal): Promise<ApiResponse<SubagentRunSnapshot[]>> {
   const query = parentSessionId ? `?parentSessionId=${encodeURIComponent(parentSessionId)}` : '';
-  return subagentRequest<SubagentRunSnapshot[]>(`/subagents/runs${query}`);
+  return subagentRequest<SubagentRunSnapshot[]>(`/subagents/runs${query}`, { signal });
 }
 
 export async function startSubagentRun(input: {
@@ -2386,12 +2389,12 @@ export async function startSubagentRun(input: {
   });
 }
 
-export async function stopSubagentRun(runId: string): Promise<ApiResponse<SubagentRunSnapshot>> {
-  return subagentRequest<SubagentRunSnapshot>(`/subagents/runs/${encodeURIComponent(runId)}/stop`, { method: 'POST' });
+export async function stopSubagentRun(runId: string, signal?: AbortSignal): Promise<ApiResponse<SubagentRunSnapshot>> {
+  return subagentRequest<SubagentRunSnapshot>(`/subagents/runs/${encodeURIComponent(runId)}/stop`, { method: 'POST', signal });
 }
 
-export async function acknowledgeSubagentRun(runId: string): Promise<ApiResponse<SubagentRunSnapshot>> {
-  return subagentRequest<SubagentRunSnapshot>(`/subagents/runs/${encodeURIComponent(runId)}/acknowledge`, { method: 'POST' });
+export async function acknowledgeSubagentRun(runId: string, signal?: AbortSignal): Promise<ApiResponse<SubagentRunSnapshot>> {
+  return subagentRequest<SubagentRunSnapshot>(`/subagents/runs/${encodeURIComponent(runId)}/acknowledge`, { method: 'POST', signal });
 }
 
 /** Check if the backend server is running */

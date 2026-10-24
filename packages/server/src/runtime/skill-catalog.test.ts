@@ -84,6 +84,8 @@ describe('SkillCatalogService', () => {
     await expect(service.resolveModelInvocableSkill('path-review', {
       cwd: project, projectId: configured.projectId, allowedSkills: ['project-review'],
     })).resolves.toBeUndefined();
+    await expect(service.getModelInvocableSkills({ cwd: project, allowedSkills: [] })).resolves.toEqual([]);
+    await expect(service.resolveModelInvocableSkill('project-review', { cwd: project, allowedSkills: [] })).resolves.toBeUndefined();
   });
 
   it('keeps duplicate names addressable and resolves them by project scope precedence', async () => {

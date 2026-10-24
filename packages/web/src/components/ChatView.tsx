@@ -17,7 +17,6 @@ import { registerFeatureLocaleMessages } from '../i18n/registry';
 import { canSyncCanonicalSession, captureCanonicalRunGuard, captureInteractionReplyGuard, interactionReplyComparison, getSessionRecord, getRunAuthority, getStoredRun, useSessionStore, type RunRequestGuard } from '../store/session-store';
 import { usePreferences } from '../store/preferences';
 import MarkdownContent from './MarkdownContent';
-import { SubagentPanel } from './SubagentPanel';
 import { applyCodemodeProgress, codemodeDetails } from './codemode-state';
 import { applyToolProgress } from './tool-progress-state';
 import ToolProgressBoundary from './ToolProgressBoundary';
@@ -77,6 +76,12 @@ interface ChatViewProps {
   onStreamingUpdate?: (content: string) => void;
 }
 
+function SubagentUnavailable() {
+  const { t } = useI18n();
+  return <span role="alert">{t('subagents.statusUnavailable')}</span>;
+}
+const SubagentPanel = lazy(() => import('./SubagentPanel').then(module => ({ default: module.SubagentPanel }))
+  .catch(() => ({ default: SubagentUnavailable })));
 const CacheNotices = lazy(() => import('./CacheNotices'));
 const MessageUsage = lazy(() => import('./CacheNotices').then(module => ({ default: module.MessageUsage })));
 const CodemodeCard = lazy(() => import('./CodemodeCard').then(module => ({ default: module.CodemodeCard })));
@@ -1880,11 +1885,11 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
               onClick={() => nextSession && navigateToSession(nextSession.id)} aria-label={t('session.next')}>→</button>
           </div>}
           <span className={`agent-phase ${active ? 'active' : ''}`} role="status">{status}</span>
-          {!currentSession.draft && <SubagentPanel
+          {!currentSession.draft && <Suspense fallback={null}><SubagentPanel
             parentSessionId={currentSession.metadata?.subagent === true && currentSession.parentId
               ? currentSession.parentId
               : currentSession.id}
-            parentLinkId={currentSession.metadata?.subagent === true ? currentSession.parentId : undefined} />}
+            parentLinkId={currentSession.metadata?.subagent === true ? currentSession.parentId : undefined} /></Suspense>}
           {!currentSession.draft && <button className="toolbar-button" onClick={() => void toggleBranches()}>{t('session.branches')}</button>}
           {!currentSession.draft && <button className="toolbar-button" onClick={() => void toggleCapabilities()}>{t('chat.context')}</button>}
           {!currentSession.draft && <button className="toolbar-button" onClick={() => void toggleInfo()}>{t('session.info')}</button>}

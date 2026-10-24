@@ -93,8 +93,12 @@ export interface AgentRuntimeOptions {
   mcpHost?: McpSessionHost;
 }
 
+type AgentDelegationPolicy = Pick<StartAgentRunRequest,
+  'model' | 'thinking' | 'toolPreset' | 'allowedTools' | 'excludedTools' | 'allowedSkills' | 'allowedExtensions' | 'codemode'>;
+
 interface ActiveRun {
   snapshot: AgentRunSnapshot;
+  delegationPolicy: AgentDelegationPolicy;
   controller: AbortController;
   completion: Promise<void>;
   resolveCompletion(): void;
@@ -346,6 +350,12 @@ export class AgentRuntime {
       };
       const active: ActiveRun = {
         snapshot, controller, completion, resolveCompletion, settled: false,
+        delegationPolicy: structuredClone({
+          model: snapshot.model, thinking: effectiveRequest.thinking,
+          toolPreset: effectiveRequest.toolPreset, allowedTools: effectiveRequest.allowedTools,
+          excludedTools: effectiveRequest.excludedTools, allowedSkills: effectiveRequest.allowedSkills,
+          allowedExtensions: effectiveRequest.allowedExtensions, codemode: effectiveRequest.codemode,
+        }),
         queue: new AgentMessageQueue({
           steeringMode: effectiveRequest.steeringMode,
           followUpMode: effectiveRequest.followUpMode,
@@ -399,6 +409,13 @@ export class AgentRuntime {
   getSessionRun(sessionId: string): AgentRunSnapshot | undefined {
     const runId = this.sessionRuns.get(sessionId);
     return runId ? this.getRun(runId) : undefined;
+  }
+
+  /** Owned selection for host delegation; never grants authority from persisted metadata. */
+  getSessionDelegationPolicy(sessionId: string): AgentDelegationPolicy | undefined {
+    const id = this.sessionRuns.get(sessionId);
+    const run = id ? this.runs.get(id) : undefined;
+    return run ? structuredClone(run.delegationPolicy) : undefined;
   }
 
   listRunning(): AgentRunSnapshot[] {

@@ -61,6 +61,9 @@ describe('SubagentService', () => {
       { cwd: project, projectId: workspaceId }, 'security-review', { maxTurns: 7, enabled: false },
     );
     expect(updated.profiles.find(profile => profile.id === 'security-review')).toMatchObject({ maxTurns: 7, enabled: false });
+    const cleared = await service.updateProfile({ cwd: project, projectId: workspaceId }, 'security-review',
+      { model: null, thinking: null } as unknown as Parameters<SubagentService['updateProfile']>[2]);
+    expect(cleared.profiles.find(profile => profile.id === 'security-review')?.thinking).toBeUndefined();
     const duplicated = await service.duplicateProfile({ cwd: project, projectId: workspaceId }, 'security-review');
     const copy = duplicated.profiles.find(profile => profile.name === 'Security review copy');
     expect(copy).toMatchObject({ kind: 'custom', builtIn: false });
@@ -75,8 +78,20 @@ describe('SubagentService', () => {
       .resolves.toMatchObject({ maxConcurrency: 2, scope: 'project' });
   });
 
+  it('does not publish settings when atomic persistence refuses the write', async () => {
+    const { service, filePath, project } = await fixture();
+    await mkdir(filePath);
+    await expect(service.updateSettings({ cwd: project }, { engineEnabled: false })).rejects.toBeDefined();
+    expect(await service.getConfiguration({ cwd: project })).toMatchObject({ engineEnabled: true, source: 'built-in' });
+    await rm(filePath, { recursive: true });
+    expect(await service.updateSettings({ cwd: project }, { maxConcurrency: 1 })).toMatchObject({ engineEnabled: true, maxConcurrency: 1 });
+  });
+
   it('rejects workspace mismatches and invalid profile policies', async () => {
     const { project, service } = await fixture();
+    for (const profile of [undefined, [], { enabled: 'false' }, { background: 1 }]) {
+      await expect(service.createProfile({ cwd: project }, profile as never)).rejects.toMatchObject({ code: 'INVALID_SUBAGENT_PROFILE' });
+    }
     await expect(service.getConfiguration({ cwd: project, projectId: 'wrong' }))
       .rejects.toMatchObject({ code: 'WORKSPACE_MISMATCH' });
     await expect(service.createProfile({ cwd: project }, {

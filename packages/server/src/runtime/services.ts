@@ -341,6 +341,7 @@ export async function createRuntimeServices(
           task: values.task,
           provider: context.providerName,
           parentToolPreset: context.toolPreset,
+          signal,
           ...(typeof values.background === 'boolean' ? { background: values.background } : {}),
         };
         const run = await providerAdministration.withOperation(() => subagentRuntime.start(childInput));
@@ -352,6 +353,7 @@ export async function createRuntimeServices(
           try { subagentRuntime.stop(run.id); } catch { /* Child already completed. */ }
         };
         signal?.addEventListener('abort', stop, { once: true });
+        if (signal?.aborted) stop();
         try {
           const completed = await subagentRuntime.wait(run.id);
           if (!completed || completed.status !== 'completed') return {

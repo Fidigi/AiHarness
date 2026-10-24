@@ -39,6 +39,8 @@ import {
   updateEnabledModels,
   updateEnabledSkills,
   updateSubagentSettings,
+  updateSubagentProfile,
+  acknowledgeSubagentRun,
   streamChat,
   uploadFiles,
 } from './api';
@@ -644,6 +646,20 @@ describe('Web API service', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/subagents/runs?parentSessionId=parent-1', {
       headers: {}, credentials: 'same-origin',
     });
+  });
+
+  it('clears only explicitly supplied profile overrides and forwards child-control cancellation', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await updateSubagentProfile('general', { model: undefined, thinking: undefined });
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body).profile).toEqual({ model: null, thinking: null });
+    await updateSubagentProfile('general', { enabled: false });
+    expect(JSON.parse(fetchMock.mock.calls[1]![1].body).profile).toEqual({ enabled: false });
+    const controller = new AbortController();
+    await listSubagentRuns('parent', controller.signal);
+    await stopSubagentRun('child', controller.signal);
+    await acknowledgeSubagentRun('child', controller.signal);
+    for (const call of fetchMock.mock.calls.slice(2)) expect(call[1].signal).toBe(controller.signal);
   });
 
   it('checks the public server health route', async () => {

@@ -33,6 +33,7 @@ function context(query: Record<string, unknown>, body?: Record<string, unknown>)
 
 export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>): Router {
   const router = Router();
+  router.use((_request, response, next) => { response.setHeader('Cache-Control', 'no-store'); next(); });
   const operation = (handler: Parameters<typeof providerOperation>[1]) => providerOperation(servicesPromise, handler);
 
   router.get('/settings', async (request, response, next) => {
@@ -145,6 +146,16 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
         task: requiredString(request.body?.task, 'task'),
         provider: requiredString(request.body?.provider, 'provider', 100),
         parentToolPreset: effective.values.toolPreset,
+        parentPolicy: {
+          allowedTools: effective.values.enabledTools,
+          excludedTools: effective.values.powershellEnabled === true ? [] : ['powershell'],
+          codemode: {
+            enabled: services.codemodeSelfTest?.state === 'passed' ? undefined : false,
+            activation: effective.values.codemodeEnabled ? 'on' : 'automatic',
+            mode: effective.values.codemodeMode, inlineBudget: effective.values.codemodeInlineBudget,
+            limits: effective.values.codemodeLimits,
+          },
+        },
         ...(typeof request.body?.background === 'boolean' ? { background: request.body.background } : {}),
       });
       response.status(202).json(run);

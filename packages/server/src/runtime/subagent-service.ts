@@ -28,6 +28,8 @@ export interface SubagentContextInput {
   cwd?: string;
   projectId?: string;
   scope?: 'global' | 'project';
+  /** Internal execution admission, not a browser-provided trust assertion. */
+  requireTrusted?: boolean;
 }
 
 export type SubagentProfileInput = Omit<SubagentProfile, 'id' | 'builtIn'> & { id?: string };
@@ -123,6 +125,14 @@ function stringList(value: unknown, field: string): string[] {
 }
 
 function validateProfile(input: Partial<SubagentProfile>, options: { id?: string; builtIn?: boolean } = {}): SubagentProfile {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw Object.assign(
+    new Error('Invalid native subagent profile.'), { status: 400, code: 'INVALID_SUBAGENT_PROFILE' },
+  );
+  for (const field of ['enabled', 'inheritContext', 'background'] as const) {
+    if (input[field] !== undefined && typeof input[field] !== 'boolean') throw Object.assign(
+      new Error('Invalid native subagent flag.'), { status: 400, code: 'INVALID_SUBAGENT_PROFILE' },
+    );
+  }
   const kind = input.kind ?? 'custom';
   if (!(['explore', 'general', 'plan', 'custom'] as SubagentProfileKind[]).includes(kind)) {
     throw Object.assign(new Error('Type de profil invalide.'), { status: 400, code: 'INVALID_SUBAGENT_PROFILE' });
@@ -252,7 +262,11 @@ export class SubagentService {
       const index = configuration.profiles.findIndex(item => item.id === profileId);
       if (index < 0) throw Object.assign(new Error('Profil introuvable.'), { status: 404 });
       const current = configuration.profiles[index]!;
-      const updated = validateProfile(this.redactJson({ ...current, ...profile, id: current.id }), {
+      const merged = { ...current, ...profile, id: current.id };
+      // Explicit JSON null clears an optional override; omission keeps it.
+      if (merged.model === null) merged.model = undefined;
+      if (merged.thinking === null) merged.thinking = undefined;
+      const updated = validateProfile(this.redactJson(merged), {
         id: current.id,
         builtIn: current.builtIn,
       });
@@ -285,9 +299,11 @@ export class SubagentService {
         : this.file.global ?? defaultStoredConfiguration();
       const changed = change(cloneStored(inherited));
       changed.updatedAt = new Date().toISOString();
-      if (context.scope === 'project') this.file.projects[context.projectId!] = changed;
-      else this.file.global = changed;
-      await this.persist();
+      const next = structuredClone(this.file);
+      if (context.scope === 'project') next.projects[context.projectId!] = changed;
+      else next.global = changed;
+      await this.persist(next);
+      this.file = next;
       result = await this.getConfiguration({
         cwd: context.cwd,
         projectId: context.projectId,
@@ -310,7 +326,11 @@ export class SubagentService {
       input.cwd ?? await this.workspaceManager.getDefaultCwd(),
       { kind: 'directory' },
     );
-    const descriptor = await this.workspaceManager.describe(cwd, await this.trustManager.isTrusted(cwd));
+    const trusted = await this.trustManager.isTrusted(cwd);
+    if (input.requireTrusted && !trusted) throw Object.assign(
+      new Error('Workspace trust is required.'), { status: 409, code: 'PROJECT_TRUST_REQUIRED' },
+    );
+    const descriptor = await this.workspaceManager.describe(cwd, trusted);
     if (input.projectId && input.projectId !== descriptor.id) throw Object.assign(
       new Error('Workspace identifier does not match cwd.'),
       { status: 400, code: 'WORKSPACE_MISMATCH' },
@@ -336,10 +356,10 @@ export class SubagentService {
     };
   }
 
-  private async persist(): Promise<void> {
+  private async persist(file: SubagentConfigurationFile): Promise<void> {
     await mkdir(path.dirname(this.filePath), { recursive: true });
     const temporary = `${this.filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
-    await writeFile(temporary, `${JSON.stringify(this.redactJson(this.file), null, 2)}\n`, { mode: 0o600 });
+    await writeFile(temporary, `${JSON.stringify(this.redactJson(file), null, 2)}\n`, { mode: 0o600 });
     await rename(temporary, this.filePath);
   }
 }
