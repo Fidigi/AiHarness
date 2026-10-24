@@ -1,5 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { GitWorktree, WorkspaceDescriptor } from '@ai-harness/core';
+import { useSidebarOrganisation } from '../hooks/useSidebarOrganisation';
+import { organisedSessions, organisationMessages, sidebarFamilyId } from './sidebar-organisation';
+import SidebarProjects from './SidebarProjects';
 import '../sidebar.css';
 import type { SessionSearchResult } from '../services/api';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -127,6 +130,19 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
 
   const query = useMemo(() => workspace ? `?cwd=${encodeURIComponent(workspace.cwd)}` : '', [workspace]);
   const selectedSessionId = sessionIdFromPathname(location.pathname) ?? activeSessionId;
+  const organisation = useSidebarOrganisation(!inactive && (!modal || isOpen));
+  const organisationCopy = organisationMessages(locale);
+  const [manageFamilies, setManageFamilies] = useState(false);
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const [selectedFamilies, setSelectedFamilies] = useState<string[]>([]);
+  useEffect(() => { setSelectedFamilies([]); }, [workspace?.cwd, organisation.state?.revision]);
+  const visibleSessions = organisedSessions(sessions, runs, organisation.state, includeArchived, selectedSessionId ?? undefined);
+  const familyState = new Map(organisation.state?.families.map(item => [item.id, item]));
+  const projects = [...new Set([
+    ...(organisation.state?.projects.map(item => item.cwd) ?? []),
+    ...(workspace ? [workspace.cwd] : []), ...recentWorkspaces.map(item => item.cwd),
+  ])].slice(0, 256).map(cwd => ({ cwd, name: organisation.state?.projects.find(item => item.cwd === cwd)?.name
+    ?? [workspace, ...recentWorkspaces].find(item => item?.cwd === cwd)?.name ?? cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd }));
   useEscapeLayer(Boolean(renaming), 'menu', () => { setRenaming(undefined); }, sidebarRef);
   useFocusTrap(modal && !pendingWorkspace && !pickerOpen && !linkedDirectoryOpen, sidebarRef, () => onRequestClose?.());
   useFocusTrap(Boolean(pendingWorkspace), trustDialogRef, () => setPendingWorkspace(undefined));
@@ -387,7 +403,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
             setPickerOpen(true);
             void browse(workspace?.cwd);
           }} title={workspace?.cwd}>
-            <span>{workspace?.name ?? t(workspaceUnavailable ? 'workspace.choose' : 'workspace.loading')}</span>
+            <span>{projects.find(item => item.cwd === workspace?.cwd)?.name ?? workspace?.name ?? t(workspaceUnavailable ? 'workspace.choose' : 'workspace.loading')}</span>
             <small>{workspace?.git?.branch ?? workspace?.displayPath ?? workspace?.cwd ?? ''}</small>
           </button>
           {workspace && <Link className="workspace-new-tab" to={projectLinkTo(workspace.cwd)}
@@ -469,13 +485,34 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
         </div>
       )}
 
+      <details className="sidebar-organisation">
+        <summary>{organisationCopy.title}</summary>
+        <label><input type="checkbox" checked={manageFamilies} onChange={event => { setManageFamilies(event.target.checked); setSelectedFamilies([]); }} />{organisationCopy.manage}</label>
+        <label><input type="checkbox" checked={includeArchived} onChange={event => setIncludeArchived(event.target.checked)} />{organisationCopy.show}</label>
+        <div className="organisation-actions">
+          {(['pin', 'unpin', 'archive', 'restore'] as const).map(action => <button key={action}
+            disabled={!organisation.state || organisation.busy || !selectedFamilies.length || !!organisation.error}
+            onClick={() => void organisation.mutate({ kind: 'families', ids: selectedFamilies,
+              ...(['pin', 'unpin'].includes(action) ? { pinned: action === 'pin' } : { archived: action === 'archive' }) })}>
+            {organisationCopy[action]}</button>)}
+        </div>
+        <small aria-live="polite">{selectedFamilies.length} {organisationCopy.selected}</small>
+        <button disabled={organisation.busy} onClick={() => void organisation.refresh()}>{organisationCopy.reload}</button>
+        {organisation.undoToken && <button disabled={organisation.busy} onClick={() => void organisation.mutate()}>{organisationCopy.undo}</button>}
+        {organisation.error && <p role="alert">{organisationCopy[organisation.error]}</p>}
+        <SidebarProjects projects={projects} locale={locale} disabled={!organisation.state || organisation.busy || !!organisation.error}
+          onChange={change => void organisation.mutate(change)} onRequestClose={onRequestClose} />
+      </details>
+
       <nav className="sidebar-nav" aria-label={t('sidebar.sessions')}>
         <ul>
-          {sessions.map(session => {
+          {visibleSessions.map(session => {
             const run = runs[session.id];
             const active = session.id === selectedSessionId;
             const contents = <>
               <span className="session-title">
+                {familyState.get(sidebarFamilyId(session))?.pinned && <span aria-label={organisationCopy.pinned}>★</span>}
+                {familyState.get(sidebarFamilyId(session))?.archived && <span aria-label={organisationCopy.archived}>▤</span>}
                 {run && !['completed', 'failed', 'stopped'].includes(run.phase) && <span aria-label={t('session.running')}>●</span>}
                 {session.attention && <span aria-label={t('session.attention')}>!</span>}
                 {session.unread && <span className="session-unread" aria-label={t('session.unread')}>●</span>}
@@ -500,6 +537,14 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
                   </form>
                 ) : (
                   <div className="session-row">
+                    {manageFamilies && !session.draft && <input type="checkbox" className="family-selector"
+                      aria-label={`${organisationCopy.select}: ${session.title || t('sidebar.untitled')}`}
+                      checked={selectedFamilies.includes(sidebarFamilyId(session))}
+                      disabled={organisation.busy || (!selectedFamilies.includes(sidebarFamilyId(session)) && selectedFamilies.length >= 100)}
+                      onChange={event => {
+                        const id = sidebarFamilyId(session);
+                        setSelectedFamilies(current => event.target.checked ? [...current, id] : current.filter(item => item !== id));
+                      }} />}
                     {session.draft ? <button className="session-main" onClick={() => {
                       onRequestClose?.(); navigate(sessionLinkTo(session.id, session.cwd || workspace?.cwd));
                     }}>{contents}</button> : <SessionLink className="session-main" sessionId={session.id} cwd={session.cwd || workspace?.cwd}
@@ -569,14 +614,14 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
               <input data-autofocus value={pathInput} onChange={event => setPathInput(event.target.value)}
                 aria-label={t('workspace.path')} placeholder="~/project" list="recent-workspaces" />
               <datalist id="recent-workspaces">
-                {recentWorkspaces.map(item => <option key={item.id} value={item.cwd}>{item.name}</option>)}
+                {projects.map(item => <option key={item.cwd} value={item.cwd}>{item.name}</option>)}
               </datalist>
               <button type="submit">{t('workspace.browse')}</button>
             </form>
-            {recentWorkspaces.length > 0 && (
+            {projects.length > 0 && (
               <div className="recent-workspaces" aria-label={t('workspace.recent')}>
-                {recentWorkspaces.map(item => (
-                  <button key={item.id} onClick={() => void browse(item.cwd)}>{item.name}<small>{item.displayPath ?? item.cwd}</small></button>
+                {projects.map(item => (
+                  <button key={item.cwd} onClick={() => void browse(item.cwd)}>{item.name}<small>{item.cwd}</small></button>
                 ))}
               </div>
             )}

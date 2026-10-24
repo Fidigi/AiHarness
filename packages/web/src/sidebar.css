@@ -1,3 +1,16 @@
+.sidebar-organisation { margin: .4rem .65rem; padding: .4rem; border: 1px solid #52668f; border-radius: 5px; font-size: .8rem; }
+.sidebar-organisation summary { cursor: pointer; padding: .35rem 0; }
+.sidebar-organisation label { display: flex; align-items: center; gap: .35rem; padding: .3rem 0; }
+.sidebar-organisation button { min-height: 32px; padding: .3rem .45rem; border: 1px solid #52668f; border-radius: 4px; color: inherit; background: transparent; cursor: pointer; }
+.sidebar-organisation button:disabled { opacity: .5; cursor: default; }
+.organisation-actions { display: flex; flex-wrap: wrap; gap: .25rem; margin-bottom: .4rem; }
+.sidebar-projects ul { list-style: none; padding: 0; max-height: 28vh; overflow: auto; }
+.sidebar-projects li { padding: .4rem 0; border-bottom: 1px solid #52668f; }
+.sidebar-projects a { display: block; color: inherit; overflow-wrap: anywhere; padding: .3rem; }
+.sidebar-projects form { display: flex; flex-wrap: wrap; gap: .25rem; }
+.sidebar-projects input { width: 100%; min-width: 0; padding: .3rem; }
+.sidebar .family-selector { flex: 0 0 24px; min-height: 32px; align-self: center; }
+@media (pointer: coarse) { .sidebar-organisation button, .sidebar-organisation summary { min-height: 44px; } .sidebar .family-selector { min-height: 44px; } }
 .workspace-linked-directories { width: 100%; margin-top: .45rem; padding: .4rem; border: 1px solid #52668f; border-radius: 5px; color: #d9e3f4; background: #223154; text-align: left; cursor: pointer; }
 html[data-theme="light"] .workspace-linked-directories { color: #26344e; background: #f8f9fc; border-color: #9eabc1; }
 .workspace-control { display: flex; align-items: stretch; gap: .35rem; }

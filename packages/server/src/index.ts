@@ -41,6 +41,7 @@ import { createPushRouter } from './api/push-routes.js';
 import { createSkillRouter } from './api/skill-routes.js';
 import { createSubagentRouter } from './api/subagent-routes.js';
 import { createToolRouter } from './api/tool-routes.js';
+import { createSidebarRouter } from './api/sidebar-routes.js';
 import { createTerminalRouter } from './api/terminal-routes.js';
 import {
   MAX_MESSAGE_PAGE_SIZE,
@@ -591,8 +592,9 @@ export function createApp(config?: ServerConfig): express.Application {
     next();
   });
   app.use('/api', async (request, _response, next) => {
-    // Inventory is a passive file/trust read. It must not create or open the credential store.
-    if (request.method === 'GET' && request.path === '/mcp') {
+    // Inventory and independent sidebar presentation never initialize credentials.
+    if ((request.method === 'GET' && request.path === '/mcp')
+      || /^\/sessions\/ui-state\/?$/i.test(request.path)) {
       next();
       return;
     }
@@ -662,6 +664,8 @@ export function createApp(config?: ServerConfig): express.Application {
   // ===================================================================
   // Session Management Routes
   // ===================================================================
+
+  app.use('/api/sessions/ui-state', createSidebarRouter(servicesPromise, path.join(dataDir, 'sidebar-state.json')));
 
   /** GET /api/sessions - List sessions, optionally as metadata-only summaries. */
   asyncGet('/api/sessions', async (req: Request, res: Response): Promise<void> => {

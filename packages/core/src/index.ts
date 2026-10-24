@@ -318,6 +318,8 @@ export type {
   WorkspacePathKind,
 } from './security/index.js';
 
+export type { SidebarState, SidebarChange, SidebarMutationResult } from './types/sidebar-state.js';
+
 // Opt-in ownership receipts for guarded rollback; not an OS atomic compare-and-swap.
 export {
   atomicWriteStableFileWithReceipt,
