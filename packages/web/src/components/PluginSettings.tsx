@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   PluginCatalog,
   PluginPackageInfo,
@@ -17,6 +17,7 @@ import {
 } from '../services/api';
 import { useSessionStore } from '../store/session-store';
 import { useSettingsScope } from '../store/use-settings-scope';
+import { settingsAdminMessage } from './settings-admin-messages';
 
 function normalizedSource(value: string): string {
   return value.trim();
@@ -45,7 +46,8 @@ function packageSummary(pkg: PluginPackageInfo): string {
 }
 
 export function PluginSettings() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const epoch = useRef(0);
   const workspace = useSessionStore(state => state.workspace);
   const activeSessionId = useSessionStore(state => {
     const session = state.sessions.find(item => item.id === state.activeSessionId);
@@ -73,15 +75,18 @@ export function PluginSettings() {
     || pkg.description?.toLocaleLowerCase().includes(normalizedFilter)), [catalog?.packages, normalizedFilter]);
 
   const load = async (refresh = false) => {
+    const generation = epoch.current;
     setBusy(refresh ? 'refresh' : 'load');
     setError(undefined);
     const result = await getPluginCatalog(context.cwd, context.projectId, refresh);
+    if (generation !== epoch.current) return;
     if (result.success && result.data) setCatalog(result.data);
-    else setError(result.error || t('settings.plugins.loadFailed'));
+    else { setCatalog(undefined); setError(t('settings.plugins.loadFailed')); }
     setBusy(undefined);
   };
 
   useEffect(() => {
+    ++epoch.current;
     setCatalog(undefined);
     setUpdates({});
     setError(undefined);
@@ -90,14 +95,25 @@ export function PluginSettings() {
     setBatchFailures([]);
     setReloadPending(false);
     void load();
-  }, [workspace?.id]);
+    return () => { ++epoch.current; };
+  }, [workspace?.id, workspace?.cwd]);
+
+  const reconcileFailure = async (generation: number) => {
+    const canonical = await getPluginCatalog(context.cwd, context.projectId, true);
+    if (generation !== epoch.current) return;
+    const readable = canonical.success && canonical.data;
+    setCatalog(readable || undefined);
+    setError(settingsAdminMessage(locale, readable ? 'saveFailed' : 'readbackFailed'));
+    setReloadPending(true);
+    if (readable) await hydrateSkillCatalog(true);
+  };
 
   const runAction = async (
     action: PluginMutationAction,
     pkg?: PluginPackageInfo,
   ) => {
     const actionKey = `${action}:${pkg?.key ?? 'all'}`;
-    const previousCatalog = catalog;
+    const generation = epoch.current;
     setBusy(actionKey);
     setError(undefined);
     setMessage(undefined);
@@ -117,6 +133,7 @@ export function PluginSettings() {
       ...context,
       ...(pkg ? { key: pkg.key, scope: pkg.scope } : {}),
     });
+    if (generation !== epoch.current) return;
     if (result.success && result.data) {
       setCatalog(result.data);
       if (action === 'remove' || action === 'update') {
@@ -129,17 +146,15 @@ export function PluginSettings() {
       }
       setMessage(t(`settings.plugins.action.${action}`));
       await hydrateSkillCatalog(true);
-    } else {
-      if (pkg && (action === 'enable' || action === 'disable')) setCatalog(previousCatalog);
-      setError(result.error || t('settings.plugins.actionFailed'));
-    }
-    setBusy(undefined);
+    } else await reconcileFailure(generation);
+    if (generation === epoch.current) setBusy(undefined);
   };
 
   const runGroupAction = async (groupScope: PluginScope, enabled: boolean, packages: PluginPackageInfo[]) => {
     const targets = packages.filter(pkg => pkg.enabled !== enabled);
     if (targets.length === 0) return;
     const actionKey = `batch:${groupScope}:${enabled ? 'enable' : 'disable'}`;
+    const generation = epoch.current;
     setBusy(actionKey);
     setError(undefined);
     setMessage(undefined);
@@ -149,6 +164,7 @@ export function PluginSettings() {
       ...context,
       changes: targets.map(pkg => ({ key: pkg.key, scope: pkg.scope, enabled })),
     });
+    if (generation !== epoch.current) return;
     if (result.success && result.data) {
       const changed = result.data.outcomes.filter(outcome => outcome.state === 'changed').length;
       const unchanged = result.data.outcomes.filter(outcome => outcome.state === 'unchanged').length;
@@ -165,15 +181,14 @@ export function PluginSettings() {
       })));
       setReloadPending(current => current || result.data!.reloadRequired);
       if (changed > 0) await hydrateSkillCatalog(true);
-    } else {
-      setError(result.error || t('settings.plugins.actionFailed'));
-    }
-    setBusy(undefined);
+    } else await reconcileFailure(generation);
+    if (generation === epoch.current) setBusy(undefined);
   };
 
   const install = async () => {
     const normalized = normalizedSource(source);
-    if (!normalized) return;
+    if (!normalized || !catalog) return;
+    const generation = epoch.current;
     setSource(normalized);
     setBusy('install');
     setError(undefined);
@@ -181,16 +196,18 @@ export function PluginSettings() {
     setMessageWarning(false);
     setBatchFailures([]);
     const result = await mutatePlugin({ action: 'install', source: normalized, scope, ...context });
+    if (generation !== epoch.current) return;
     if (result.success && result.data) {
       setCatalog(result.data);
       setSource('');
       setMessage(t('settings.plugins.action.install'));
       await hydrateSkillCatalog(true);
-    } else setError(result.error || t('settings.plugins.actionFailed'));
-    setBusy(undefined);
+    } else await reconcileFailure(generation);
+    if (generation === epoch.current) setBusy(undefined);
   };
 
   const check = async (pkg?: PluginPackageInfo) => {
+    const generation = epoch.current;
     setBusy(`check:${pkg?.key ?? 'all'}`);
     setError(undefined);
     setMessage(undefined);
@@ -200,6 +217,7 @@ export function PluginSettings() {
       ...context,
       ...(pkg ? { key: pkg.key, scope: pkg.scope } : {}),
     });
+    if (generation !== epoch.current) return;
     if (result.success && result.data) {
       setUpdates(current => ({
         ...current,
@@ -211,19 +229,21 @@ export function PluginSettings() {
   };
 
   const reload = async () => {
+    const generation = epoch.current;
     setBusy('reload');
     setError(undefined);
     setMessage(undefined);
     setMessageWarning(false);
     setBatchFailures([]);
     const result = await reloadPluginResources({ ...context, ...(activeSessionId ? { sessionId: activeSessionId } : {}) });
+    if (generation !== epoch.current) return;
     if (result.success && result.data) {
       setCatalog(result.data.catalog);
       setMessage(result.data.reload.message);
       setReloadPending(false);
       await hydrateSkillCatalog(true);
-    } else setError(result.error || t('settings.plugins.reloadFailed'));
-    setBusy(undefined);
+    } else await reconcileFailure(generation);
+    if (generation === epoch.current) setBusy(undefined);
   };
 
   return (
@@ -265,7 +285,7 @@ export function PluginSettings() {
             </option>
           </select>
         </label>
-        <button type="button" className="primary" disabled={Boolean(busy) || !source.trim()} onClick={() => void install()}>
+        <button type="button" className="primary" disabled={Boolean(busy) || !catalog || !source.trim()} onClick={() => void install()}>
           {busy === 'install' ? t('settings.plugins.installing') : t('settings.plugins.install')}
         </button>
         <small>{t('settings.plugins.sourceHint')}</small>
@@ -289,7 +309,7 @@ export function PluginSettings() {
                 : t('settings.plugins.updateAll', { count: availableUpdates.length })}
             </button>
           )}
-          <button type="button" disabled={Boolean(busy)} onClick={() => void reload()}>
+          <button type="button" disabled={Boolean(busy) || !catalog} onClick={() => void reload()}>
             {busy === 'reload' ? t('settings.plugins.reloading') : t('settings.plugins.reload')}
           </button>
           <button type="button" disabled={Boolean(busy)} onClick={() => void load(true)}>
@@ -316,23 +336,24 @@ export function PluginSettings() {
       <div className="plugin-groups">
         {(['project', 'global'] as PluginScope[]).map(groupScope => {
           const group = visiblePackages.filter(pkg => pkg.scope === groupScope);
-          const allInGroup = (catalog?.packages ?? []).filter(pkg => pkg.scope === groupScope);
           if (group.length === 0) return null;
-          const enableCount = allInGroup.filter(pkg => !pkg.enabled).length;
-          const disableCount = allInGroup.filter(pkg => pkg.enabled).length;
+          const enableCount = group.filter(pkg => !pkg.enabled).length;
+          const disableCount = group.filter(pkg => pkg.enabled).length;
           return (
             <fieldset key={groupScope} data-scope={groupScope} data-settings-group={groupScope}>
               <legend>{t(`settings.plugins.scope.${groupScope}`)}</legend>
               <div className="plugin-group-actions" role="group"
                 aria-label={t('settings.plugins.groupActions', { scope: t(`settings.plugins.scope.${groupScope}`) })}>
                 <button type="button" disabled={Boolean(busy) || enableCount === 0}
-                  onClick={() => void runGroupAction(groupScope, true, allInGroup)}>
+                  title={settingsAdminMessage(locale, 'filteredHelp')}
+                  onClick={() => void runGroupAction(groupScope, true, group)}>
                   {busy === `batch:${groupScope}:enable`
                     ? t('common.loading')
                     : t('settings.plugins.enableAll', { count: enableCount })}
                 </button>
                 <button type="button" disabled={Boolean(busy) || disableCount === 0}
-                  onClick={() => void runGroupAction(groupScope, false, allInGroup)}>
+                  title={settingsAdminMessage(locale, 'filteredHelp')}
+                  onClick={() => void runGroupAction(groupScope, false, group)}>
                   {busy === `batch:${groupScope}:disable`
                     ? t('common.loading')
                     : t('settings.plugins.disableAll', { count: disableCount })}

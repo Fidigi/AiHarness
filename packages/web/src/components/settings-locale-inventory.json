@@ -1894,7 +1894,7 @@
         {
           "path": "packages/web/src/components/PluginSettings.tsx",
           "line": 79,
-          "source": "    else setError(result.error || t('settings.plugins.loadFailed'));"
+          "source": "    else { setCatalog(undefined); setError(t('settings.plugins.loadFailed')); }"
         }
       ]
     },
@@ -2155,23 +2155,7 @@
       "key": "settings.plugins.actionFailed",
       "enLine": "    'settings.plugins.actionFailed': 'The plugin action failed.',\n",
       "frLine": "    'settings.plugins.actionFailed': 'L’action sur le plugin a échoué.',\n",
-      "consumers": [
-        {
-          "path": "packages/web/src/components/PluginSettings.tsx",
-          "line": 133,
-          "source": "      setError(result.error || t('settings.plugins.actionFailed'));"
-        },
-        {
-          "path": "packages/web/src/components/PluginSettings.tsx",
-          "line": 168,
-          "source": "      setError(result.error || t('settings.plugins.actionFailed'));"
-        },
-        {
-          "path": "packages/web/src/components/PluginSettings.tsx",
-          "line": 188,
-          "source": "    } else setError(result.error || t('settings.plugins.actionFailed'));"
-        }
-      ]
+      "consumers": []
     },
     {
       "key": "settings.plugins.checkComplete",
@@ -2201,13 +2185,7 @@
       "key": "settings.plugins.reloadFailed",
       "enLine": "    'settings.plugins.reloadFailed': 'Resource reload failed; the previous generation remains active.',\n",
       "frLine": "    'settings.plugins.reloadFailed': 'Le rechargement a échoué ; la génération précédente reste active.',\n",
-      "consumers": [
-        {
-          "path": "packages/web/src/components/PluginSettings.tsx",
-          "line": 224,
-          "source": "    } else setError(result.error || t('settings.plugins.reloadFailed'));"
-        }
-      ]
+      "consumers": []
     },
     {
       "key": "settings.plugins.empty",

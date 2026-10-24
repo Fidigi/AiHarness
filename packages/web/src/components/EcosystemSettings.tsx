@@ -12,6 +12,7 @@ import { CacheNoticeSettings } from './CacheNoticeSettings';
 import { isRenameableProvider, type ProviderRenameResult } from '../services/provider-lifecycle';
 import { providerSettingsMessage, type ProviderSettingsMessage } from './provider-settings-messages';
 import { reasoningSettingsMessage } from './reasoning-settings-messages';
+import { settingsAdminMessage, type SettingsAdminMessage } from './settings-admin-messages';
 import { useSessionStore } from '../store/session-store';
 import { useSettingsScope } from '../store/use-settings-scope';
 import { publishNotice } from '../services/notices';
@@ -516,33 +517,46 @@ export function DefaultModelSettings() {
   const [busy, setBusy] = useState(true);
   const [ready, setReady] = useState(false);
   const [overrideWarning, setOverrideWarning] = useState(false);
+  const [feedback, setFeedback] = useState<SettingsAdminMessage>();
+  const epoch = useRef(0);
   const change = (key: keyof typeof values, value: string) => {
     setValues(current => ({ ...current, [key]: value }));
     setDirty(current => [...new Set([...current, key])]);
   };
   const [effective, setEffective] = useState<Awaited<ReturnType<typeof getEffectiveConfiguration>>['data']>();
   const scopeId = scope === 'project' ? workspace?.id : undefined;
-  useEffect(() => {
-    let cancelled = false;
-    setBusy(true); setReady(false); setDirty([]); setOverrideWarning(false);
-    if (scope === 'project' && !scopeId) { setScope('global'); return; }
-    void Promise.all([getConfigurationScope(scope, scopeId), getEffectiveConfiguration(workspace?.id)]).then(([configured, resolved]) => {
-      if (cancelled) return;
-      setBusy(false);
-      if (!configured.success || !configured.data || !resolved.success || !resolved.data) {
-        error(configured.error || resolved.error); return;
-      }
-      setReady(true);
-      setValues({
-        provider: typeof configured.data.values.provider === 'string' ? configured.data.values.provider : '',
-        model: typeof configured.data.values.model === 'string' ? configured.data.values.model : '',
-        thinking: typeof configured.data.values.thinking === 'string' ? configured.data.values.thinking : '',
-        thinkingBudgets: configured.data.values.thinkingBudgets === undefined ? '' : JSON.stringify(configured.data.values.thinkingBudgets),
-        toolPreset: typeof configured.data.values.toolPreset === 'string' ? configured.data.values.toolPreset : '',
-      });
-      setEffective(resolved.data);
+  const readSaved = async (generation: number) => {
+    const [configured, resolved] = await Promise.all([
+      getConfigurationScope(scope, scopeId), getEffectiveConfiguration(workspace?.id),
+    ]);
+    if (generation !== epoch.current) return;
+    if (!configured.success || !configured.data || !resolved.success || !resolved.data) {
+      setReady(false); setEffective(undefined); return;
+    }
+    setValues({
+      provider: typeof configured.data.values.provider === 'string' ? configured.data.values.provider : '',
+      model: typeof configured.data.values.model === 'string' ? configured.data.values.model : '',
+      thinking: typeof configured.data.values.thinking === 'string' ? configured.data.values.thinking : '',
+      thinkingBudgets: configured.data.values.thinkingBudgets === undefined ? '' : JSON.stringify(configured.data.values.thinkingBudgets),
+      toolPreset: typeof configured.data.values.toolPreset === 'string' ? configured.data.values.toolPreset : '',
     });
-    return () => { cancelled = true; };
+    setDirty([]); setReady(true); setEffective(resolved.data);
+    return resolved.data;
+  };
+  const reload = async () => {
+    const generation = epoch.current;
+    setBusy(true); setReady(false); setOverrideWarning(false); setFeedback(undefined);
+    const resolved = await readSaved(generation);
+    if (generation !== epoch.current) return;
+    if (!resolved) setFeedback('readFailed');
+    setBusy(false);
+  };
+  useEffect(() => {
+    ++epoch.current;
+    setDirty([]); setEffective(undefined);
+    if (scope === 'project' && !scopeId) { setScope('global'); return; }
+    void reload();
+    return () => { ++epoch.current; };
   }, [scope, scopeId, workspace?.id]);
   const environmentLocked = (key: keyof typeof values) => effective?.provenance[key]?.scope === 'environment';
   return <section className="settings-section" id="defaults">
@@ -558,7 +572,8 @@ export function DefaultModelSettings() {
     </p>}
     {scope === 'project' && Object.values(values).some(value => !value) && <p className="status-warning">{t('settings.defaults.inheritanceWarning')}</p>}
     {overrideWarning && <p role="status" className="status-warning">{t('settings.defaults.overrideWarning')}</p>}
-    {!ready && !busy && <p role="alert">{t('settings.defaults.failed')}</p>}
+    {feedback && <p role="alert">{settingsAdminMessage(locale, feedback)}</p>}
+    {!ready && !busy && <button type="button" onClick={() => void reload()}>{settingsAdminMessage(locale, 'refresh')}</button>}
     <label>{t('settings.scope')}<select value={scope} disabled={busy} onChange={event => setScope(event.target.value as typeof scope)}>
       <option value="global">{t('chat.scope.global')}</option><option value="project" disabled={!workspace?.id}>{t('chat.scope.project')}</option>
     </select></label>
@@ -584,7 +599,8 @@ export function DefaultModelSettings() {
       {['configured', 'chat-only', 'read-only', 'default', 'full'].map(preset => <option key={preset}>{preset}</option>)}
     </select></label>
     <button type="button" disabled={busy || !ready || !dirty.length || scope === 'project' && !scopeId} onClick={async () => {
-      setBusy(true);
+      const generation = epoch.current;
+      setBusy(true); setFeedback(undefined); setOverrideWarning(false);
       try {
         const changed = dirty.filter(key => !environmentLocked(key));
         let patch: Record<string, unknown>;
@@ -593,16 +609,17 @@ export function DefaultModelSettings() {
             ? values[key].trim() ? JSON.parse(values[key]) as unknown : null : values[key] || null]));
         } catch { error(reasoningSettingsMessage(locale, 'invalid')); return; }
         const result = await updateConfigurationScope(scope, patch, scopeId);
-        if (!result.success) { error(result.error); return; }
-        setDirty([]);
-        const resolved = await getEffectiveConfiguration(workspace?.id);
-        if (resolved.success && resolved.data) {
-          setEffective(resolved.data);
-          const overridden = scope === 'global' && changed.some(key => ['project', 'environment'].includes(resolved.data!.provenance[key]?.scope ?? ''));
-          setOverrideWarning(overridden);
-          publishNotice(t(overridden ? 'settings.defaults.overrideWarning' : 'settings.defaults.saved'), { level: overridden ? 'warning' : 'success' });
-        } else error(resolved.error);
-      } finally { setBusy(false); }
+        if (generation !== epoch.current) return;
+        // A failed response may follow a durable write. Never infer rollback or
+        // report success until both saved values and provenance are readable.
+        const resolved = await readSaved(generation);
+        if (generation !== epoch.current) return;
+        if (!resolved) { setFeedback('readbackFailed'); return; }
+        if (!result.success) { setFeedback('saveFailed'); return; }
+        const overridden = scope === 'global' && changed.some(key => ['project', 'environment'].includes(resolved.provenance[key]?.scope ?? ''));
+        setOverrideWarning(overridden);
+        publishNotice(t(overridden ? 'settings.defaults.overrideWarning' : 'settings.defaults.saved'), { level: overridden ? 'warning' : 'success' });
+      } finally { if (generation === epoch.current) setBusy(false); }
     }}>{t('common.save')}</button>
   </section>;
 }

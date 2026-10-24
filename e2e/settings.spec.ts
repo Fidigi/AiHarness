@@ -113,7 +113,7 @@ test.describe('Settings and authentication', () => {
 
     await section.getByText('Create or edit a compatible provider').click();
     const editor = section.locator('.custom-resource-editor');
-    await editor.getByLabel('ID').fill('acme');
+    await editor.getByLabel('ID', { exact: true }).fill('acme');
     await editor.getByLabel('Name').fill('Acme Gateway');
     await editor.getByLabel('Base URL').fill('https://models.acme.test/v1');
     await editor.getByLabel('API dialect').selectOption('openai-completions');
