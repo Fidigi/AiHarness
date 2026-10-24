@@ -211,10 +211,20 @@ async function accessible(page: Page, card: Locator, width: number) {
   expect(await page.evaluate(() => (window as unknown as { __progressExecuted?: number }).__progressExecuted)).toBeUndefined();
   await expect(card.locator('img, script, input, textarea, iframe')).toHaveCount(0);
 }
+async function positionCapture(card: Locator) {
+  const page = card.page(), log = page.locator('.messages-container');
+  // Retire saved-scroll settling with user intent, then use one complete origin.
+  await log.hover({ position: { x: 5, y: 5 } });
+  await page.mouse.wheel(0, 10_000);
+  await log.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect.poll(() => log.evaluate(element => Math.abs(element.scrollHeight - element.scrollTop - element.clientHeight))).toBeLessThan(1);
+  await card.evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await expect(card).toBeInViewport({ ratio: 1 });
+}
 async function capture(card: Locator, name: string) {
   // Assert real host duration separately; its wall-clock value is inherently variable.
   await expect(card.locator('small')).toContainText(/Host duration: \d+\.\d{2}s/);
-  await card.scrollIntoViewIfNeeded();
+  await positionCapture(card);
   await expect(card).toHaveScreenshot(name, { animations: 'disabled', caret: 'hide', mask: [card.locator('small')] });
 }
 
@@ -353,7 +363,7 @@ for (const scenario of [
     await expect(card).toContainText('échec');
     await accessible(page, card, scenario.width);
     await expect(card.locator('small')).toContainText(/Durée mesurée par l’hôte: \d+\.\d{2}s/);
-    await card.scrollIntoViewIfNeeded();
+    await positionCapture(card);
     await expect(card).toHaveScreenshot(`generic-progress-failed-fr-${scenario.name}.png`, {
       animations: 'disabled', caret: 'hide', mask: [card.locator('small')],
     });
@@ -449,12 +459,12 @@ test('ready watermark gap: actual running GET then completed readiness restores 
   await expect(sourceLink).toBeVisible();
 
   // Observe the actual response; do not construct or rewrite a transport record.
-  const observeReady = () => {
+  const observeReady = (sessionId: string) => {
     const original = window.fetch.bind(window);
     (window as unknown as { __actualReadyFrames: string[] }).__actualReadyFrames = [];
     window.fetch = async (...args) => {
       const response = await original(...args);
-      if (response.url.includes('/api/agent/sessions/') && response.url.includes('/events?') && response.body) {
+      if (response.url.includes(`/api/agent/sessions/${sessionId}/events?`) && response.body) {
         const reader = response.clone().body!.getReader();
         void (async () => {
           const decoder = new TextDecoder();
@@ -476,8 +486,8 @@ test('ready watermark gap: actual running GET then completed readiness restores 
       return response;
     };
   };
-  await page.evaluate(observeReady);
-  await page.addInitScript(observeReady);
+  await page.evaluate(observeReady, probe.sessionId);
+  await page.addInitScript(observeReady, probe.sessionId);
   let release!: () => void;
   const transportGate = new Promise<void>(resolve => { release = resolve; });
   const heldAfter: number[] = [];

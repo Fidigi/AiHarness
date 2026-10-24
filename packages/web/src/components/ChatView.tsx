@@ -285,6 +285,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const [copiedMessageId, setCopiedMessageId] = useState<string>();
   const [sessionUnavailable, setSessionUnavailable] = useState<string>();
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [connectionEpoch, reconnect] = useState(0);
   const [minimapOpen, setMinimapOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const interactionLifetime = useRef(new InteractionViewLifetime());
@@ -420,6 +421,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const effectiveRefreshVersion = useRef(0);
   const composingRef = useRef(false);
   const lastCompositionEndRef = useRef(0);
+  const scrollRestoration = useRef<(() => void) | undefined>(undefined);
   const streamContent = useRef(new Map<string, string>());
   const streamReasoning = useRef(new Map<string, string>());
   const mentionMatch = input.match(/(^|\s)@(?:"([^"]*)|([^\s"]*))$/);
@@ -549,13 +551,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     nearBottomRef.current = startsNearBottom;
     previousMessageCount.current = currentSession?.messages.length ?? 0;
     readingTail.current = lastMessageId;
-    pendingScrollAnchor.current = undefined;
     requestedHistoryTarget.current = undefined;
     requestedScrollTarget.current = undefined;
-    lastScrolledTarget.current = undefined;
     setNearBottom(startsNearBottom);
     setUnseenMessages(0);
-    setLoadingHistory(false);
     setMinimapOpen(false);
     return () => {
       if (scrollSaveTimer.current !== undefined) {
@@ -568,6 +567,14 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       }
     };
   }, [currentSession?.id, workspace?.cwd]);
+
+  useLayoutEffect(() => {
+    pendingScrollAnchor.current = undefined;
+    lastScrolledTarget.current = undefined;
+    if (targetMessageId) pendingSessionScroll.current = undefined;
+    setLoadingHistory(false);
+    return () => scrollRestoration.current?.();
+  }, [interactionView]);
 
   useEffect(() => {
     const sessionId = currentSession?.id;
@@ -584,8 +591,11 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     return () => window.removeEventListener('pagehide', save);
   }, [currentSession?.id, workspace?.cwd]);
 
-  const scrollRestoration = useRef<(() => void) | undefined>(undefined);
-  useLayoutEffect(() => () => { scrollRestoration.current?.(); }, [currentSession?.id, workspace?.cwd, targetMessageId]);
+  useEffect(() => {
+    const resume = () => reconnect(epoch => epoch + 1);
+    window.addEventListener('online', resume);
+    return () => window.removeEventListener('online', resume);
+  }, []);
 
   useLayoutEffect(() => {
     let disposeRestoration: (() => void) | undefined;
@@ -651,7 +661,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       }
     } else if (preserved) {
       // Keep the anchor until the requested page actually changes the message window.
-    } else if (targetMessageId) {
+    } else if (container && targetMessageId) {
       const targetKey = `${currentSession?.id ?? ''}:${targetMessageId}`;
       const target = document.getElementById(targetMessageId);
       if (target && lastScrolledTarget.current !== targetKey) {
@@ -661,7 +671,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         const index = currentSession?.messages.findIndex(message => message.id === targetMessageId) ?? -1;
         if (index >= 0) {
           messageVirtualizer.scrollToIndex(index, { align: 'center' });
-          window.requestAnimationFrame(() => {
+          scrollRestoration.current?.();
+          scrollRestoration.current = restoreWhileOwned(container, () => {
+            if (interactionAddressRef.current !== interactionView) return;
             document.getElementById(targetMessageId)?.scrollIntoView({ block: 'center' });
             lastScrolledTarget.current = targetKey;
           });
@@ -679,37 +691,38 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       scrollRestoration.current?.();
       scrollRestoration.current = disposeRestoration;
     }
-  }, [currentSession?.messages, messageVirtualizer, nearBottom, targetMessageId, targetMessageLoaded, virtualized]);
+  }, [currentSession?.messages, interactionView, messageVirtualizer, nearBottom, targetMessageId, targetMessageLoaded, virtualized]);
 
   useEffect(() => {
     if (!id || id.startsWith('draft:') || !targetMessageId || targetMessageLoaded) return;
-    const requestKey = `${id}:${targetMessageId}`;
+    const requestKey = `${interactionView}:${targetMessageId}`;
     if (requestedHistoryTarget.current === requestKey) return;
     requestedHistoryTarget.current = requestKey;
     const controller = new AbortController();
     setLoadingHistory(true);
     void getSessionMessages(id, { around: targetMessageId, limit: 80, signal: controller.signal }).then(result => {
+      if (controller.signal.aborted || interactionAddressRef.current !== interactionView) return;
       if (result.success && result.data) mergeMessagePage(id, result.data);
-      else if (!controller.signal.aborted) {
+      else {
         requestedHistoryTarget.current = undefined;
         setNotice(result.error || t('chat.historyLoadFailed'));
       }
-      if (!controller.signal.aborted) setLoadingHistory(false);
+      setLoadingHistory(false);
     });
     return () => controller.abort();
-  }, [id, mergeMessagePage, t, targetMessageId, targetMessageLoaded]);
+  }, [id, interactionView, mergeMessagePage, t, targetMessageId, targetMessageLoaded]);
 
   useEffect(() => {
     const saved = pendingSessionScroll.current;
     const anchorId = saved?.anchorId;
     if (!id || id.startsWith('draft:') || !anchorId
       || currentSession?.messages.some(message => message.id === anchorId)) return;
-    const requestKey = `${id}:${anchorId}`;
+    const requestKey = `${interactionView}:${anchorId}`;
     if (requestedScrollTarget.current === requestKey) return;
     requestedScrollTarget.current = requestKey;
     const controller = new AbortController();
     void getSessionMessages(id, { around: anchorId, limit: 80, signal: controller.signal }).then(result => {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || interactionAddressRef.current !== interactionView) return;
       if (result.success && result.data) mergeMessagePage(id, result.data);
       else {
         pendingSessionScroll.current = { ...saved, anchorId: undefined, anchorOffset: undefined };
@@ -720,31 +733,65 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       controller.abort();
       if (requestedScrollTarget.current === requestKey) requestedScrollTarget.current = undefined;
     };
-  }, [currentSession?.messages, id, mergeMessagePage, t]);
+  }, [currentSession?.messages, id, interactionView, mergeMessagePage, t]);
 
   useEffect(() => {
     // Do not start a disposable unknown-cwd stream before workspace bootstrap.
     // Its first frames cannot belong to the later admitted workspace lifetime.
     if (!workspace?.id || !workspace.cwd || !id || id.startsWith('draft:')) return;
     const controller = new AbortController();
-    let mounted = true;
-    let sequence = 0;
+    let sequence = 0, terminalSequence = 0;
+    const ownsView = () => !controller.signal.aborted && interactionAddressRef.current === interactionView;
+    const restorePartial = (run?: AgentRunSnapshot) => {
+      const partial = run?.partialMessage;
+      if (!partial) return;
+      streamContent.current.set(partial.id, partial.content);
+      streamReasoning.current.set(partial.id, partial.reasoning ?? '');
+      upsertAssistantMessage(id, partial.id, partial.content, partial.reasoning);
+    };
+    let frame = 0;
+    const showMessage = (messageId: string) => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        if (!ownsView() || !isActivePhase(getStoredRun(useSessionStore.getState().runs, id)?.phase)) return;
+        const content = streamContent.current.get(messageId) ?? '';
+        upsertAssistantMessage(id, messageId, content, streamReasoning.current.get(messageId));
+        onStreamingUpdate?.(content);
+      });
+    };
 
+    const syncCanonical = () => {
+      const guard = captureCanonicalRunGuard(useSessionStore.getState(), id);
+      void getAgentState(id).then(state => {
+        if (state.success && state.data && ownsView()) {
+          const accepted = acceptInteractionSnapshot(state.data, guard);
+          if (accepted) sequence = Math.max(sequence, state.data.lastSequence);
+          if (accepted || canSyncCanonicalSession(useSessionStore.getState(), id, state.data, guard, interactionWatermark.current.sequence)) {
+            syncSession(state.data.session);
+          }
+        }
+      });
+    };
     const applyEvent = async (event: AgentEvent): Promise<void> => {
-      if (!mounted || controller.signal.aborted || event.sessionId !== id
-        || !Number.isSafeInteger(event.sequence) || event.sequence < 0
-        || event.sequence <= Math.max(sequence, interactionWatermark.current.sequence, getStoredRun(useSessionStore.getState().runs, id)?.lastSequence ?? 0)) return;
       const state = useSessionStore.getState();
+      const run = getStoredRun(state.runs, id);
+      const terminalEvent = ['run.completed', 'run.failed', 'run.stopped'].includes(event.type);
+      const terminalCompletion = terminalEvent && event.runId === run?.id && run?.phase === event.type.slice(4);
+      const watermark = Math.max(sequence, interactionWatermark.current.sequence, terminalCompletion ? 0 : run?.lastSequence ?? 0);
+      // Canonical discovery can acknowledge this version before its actual final
+      // frame arrives. Re-read once, without replaying phase/notification effects.
+      const lateTerminal = terminalCompletion && event.sequence <= watermark && event.sequence > terminalSequence;
+      if (!ownsView() || event.sessionId !== id
+        || !Number.isSafeInteger(event.sequence) || event.sequence < 0
+        || (event.sequence <= watermark && !lateTerminal)) return;
       const authority = getRunAuthority(state.runAuthorities, id);
       // Event correlation must be admitted before consuming sequence/presentation state.
       // Discovery/connection.ready, not an arbitrary foreign event, admits a new run.
       const sessionEvent = event.type === 'notice' || event.type.startsWith('compaction.') || event.type.startsWith('subagent.');
       // Core publishes terminal run.phase before its corresponding settlement
       // event. Admit that exact final event, not late tool/UI/notice callbacks.
-      const terminalCompletion = ['run.completed', 'run.failed', 'run.stopped'].includes(event.type)
-        && getStoredRun(state.runs, id)?.phase === event.type.slice(4);
       if (authority?.deleted) return;
-      if (event.runId && getStoredRun(state.runs, id)?.id !== event.runId) {
+      if (event.runId && run?.id !== event.runId) {
         // A run started outside this browser can finish before the running-list
         // poll ever sees it. Its lifecycle frame is only a discovery hint: do
         // not consume its version or payload, and require fresh canonical state
@@ -752,7 +799,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         if (event.type === 'run.started' && !authority?.retired.includes(event.runId)) {
           const discoveryGuard = captureCanonicalRunGuard(state, id);
           const discovered = await getAgentState(id);
-          if (!mounted || controller.signal.aborted) return;
+          if (!ownsView()) return;
           if (discovered.success && discovered.data?.run?.id === event.runId) {
             const accepted = acceptInteractionSnapshot(discovered.data, discoveryGuard);
             if (accepted) sequence = Math.max(sequence, discovered.data.lastSequence);
@@ -765,7 +812,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       }
       if ((!event.runId && !sessionEvent) || (event.runId && ((authority?.terminal && !terminalCompletion)
         || authority?.retired.includes(event.runId)))) return;
+      if (lateTerminal) { terminalSequence = event.sequence; syncCanonical(); return; }
       sequence = event.sequence;
+      if (terminalEvent) terminalSequence = sequence;
       interactionWatermark.current.sequence = sequence;
       const runId = event.runId;
       const patchRun = (changes: Partial<AgentRunSnapshot>): void => {
@@ -792,21 +841,20 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         const chunk = typeof eventData.content === 'string' ? eventData.content : '';
         const content = `${streamContent.current.get(messageId) ?? ''}${chunk}`;
         streamContent.current.set(messageId, content);
-        upsertAssistantMessage(id, messageId, content, streamReasoning.current.get(messageId));
-        onStreamingUpdate?.(content);
+        showMessage(messageId);
       }
       if (event.type === 'reasoning.delta' && messageId) {
         const chunk = typeof eventData.content === 'string' ? eventData.content : '';
         const reasoning = `${streamReasoning.current.get(messageId) ?? ''}${chunk}`;
         streamReasoning.current.set(messageId, reasoning);
-        upsertAssistantMessage(id, messageId, streamContent.current.get(messageId) ?? '', reasoning);
+        showMessage(messageId);
       }
       if (event.type === 'message.completed' && typeof eventData.messageId === 'string' && messageId && typeof eventData.content === 'string') {
         const complete = event.data as { content: string; reasoning?: unknown };
         const reasoning = typeof complete.reasoning === 'string' ? complete.reasoning : '';
         streamContent.current.set(messageId, complete.content);
         streamReasoning.current.set(messageId, reasoning);
-        upsertAssistantMessage(id, messageId, complete.content, reasoning);
+        showMessage(messageId);
       }
       if (event.type === 'retry.scheduled') {
         const retry = event.data as AgentRunSnapshot['retry'];
@@ -922,27 +970,17 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       // change look like a same-version forged snapshot to the store.
       patchRun({});
       if (['run.completed', 'run.failed', 'run.stopped', 'tool.completed', 'tool.failed', 'compaction.completed', 'compaction.failed'].includes(event.type)) {
-        const before = useSessionStore.getState();
-        const guard = captureCanonicalRunGuard(before, id);
-        void getAgentState(id).then(state => {
-          if (state.success && state.data && mounted && !controller.signal.aborted) {
-            const accepted = acceptInteractionSnapshot(state.data, guard);
-            if (accepted) sequence = Math.max(sequence, state.data.lastSequence);
-            if (accepted || canSyncCanonicalSession(useSessionStore.getState(), id, state.data, guard, interactionWatermark.current.sequence)) {
-              syncSession(state.data.session);
-            }
-          }
-        });
+        syncCanonical();
       }
     };
 
     void (async () => {
-      while (mounted && !controller.signal.aborted) {
+      while (ownsView()) {
         try {
           const before = useSessionStore.getState();
           const guard = captureCanonicalRunGuard(before, id);
           const state = await getAgentState(id);
-          if (!mounted || controller.signal.aborted) break;
+          if (!ownsView()) break;
           if (!state.success || !state.data) {
             if (/\b404\b|not found|introuvable/i.test(state.error ?? '')) {
               removeSession(id);
@@ -957,17 +995,11 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           const transcriptAccepted = accepted || canSyncCanonicalSession(useSessionStore.getState(), id, state.data, guard, interactionWatermark.current.sequence);
           if (transcriptAccepted) syncSession(state.data.session);
           const canonicalSequence = transcriptAccepted ? state.data.lastSequence : -1;
-          if (accepted && state.data.run) {
-            if (state.data.run.partialMessage) {
-              streamContent.current.set(state.data.run.partialMessage.id, state.data.run.partialMessage.content);
-              streamReasoning.current.set(state.data.run.partialMessage.id, state.data.run.partialMessage.reasoning ?? '');
-              upsertAssistantMessage(id, state.data.run.partialMessage.id, state.data.run.partialMessage.content, state.data.run.partialMessage.reasoning);
-            }
-          }
+          if (accepted) restorePartial(state.data.run);
           const beforeStream = useSessionStore.getState();
           const streamGuard = captureCanonicalRunGuard(beforeStream, id);
           for await (const record of streamAgentEvents(id, sequence, controller.signal)) {
-            if (!mounted || controller.signal.aborted) break;
+            if (!ownsView()) break;
             if (record.type === 'connection.ready') {
               const readyAccepted = acceptInteractionSnapshot(record.snapshot, streamGuard);
               if (readyAccepted) sequence = Math.max(sequence, record.snapshot.lastSequence);
@@ -977,7 +1009,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
               if (record.reset || record.snapshot.lastSequence > canonicalSequence) {
                 const resumedGuard = captureCanonicalRunGuard(useSessionStore.getState(), id);
                 const resumed = await getAgentState(id);
-                if (!mounted || controller.signal.aborted) break;
+                if (!ownsView()) break;
                 if (!resumed.success || !resumed.data) throw new Error(resumed.error || t('chat.unexpectedError'));
                 const resumedAccepted = acceptInteractionSnapshot(resumed.data, resumedGuard);
                 if (resumedAccepted) {
@@ -988,17 +1020,13 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
                   syncSession(resumed.data.session);
                 }
               }
-              if (snapshot?.run?.partialMessage) {
-                streamContent.current.set(snapshot.run.partialMessage.id, snapshot.run.partialMessage.content);
-                streamReasoning.current.set(snapshot.run.partialMessage.id, snapshot.run.partialMessage.reasoning ?? '');
-                upsertAssistantMessage(id, snapshot.run.partialMessage.id, snapshot.run.partialMessage.content, snapshot.run.partialMessage.reasoning);
-              }
+              restorePartial(snapshot?.run);
             } else await applyEvent(record.event);
           }
           // A real SSE response stays open. Avoid a hot reconnect loop when a proxy closes it cleanly.
-          if (mounted && !controller.signal.aborted) await new Promise(resolve => setTimeout(resolve, 100));
+          if (ownsView()) await new Promise(resolve => setTimeout(resolve, 100));
         } catch (error) {
-          if (controller.signal.aborted) break;
+          if (!ownsView()) break;
           const message = error instanceof Error ? error.message : t('chat.unexpectedError');
           if (/\b404\b|not found|introuvable/i.test(message)) {
             removeSession(id);
@@ -1012,10 +1040,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     })();
 
     return () => {
-      mounted = false;
       controller.abort();
+      window.cancelAnimationFrame(frame);
     };
-  }, [id, interactionView, navigate, onStreamingUpdate, preferences.notificationEvents, preferences.notifications, preferences.sound, preferences.soundEvents, preferences.soundVolume, removeSession, setRun, syncSession, t, upsertAssistantMessage, workspace?.cwd]);
+  }, [connectionEpoch, id, interactionView, navigate, onStreamingUpdate, preferences.notificationEvents, preferences.notifications, preferences.sound, preferences.soundEvents, preferences.soundVolume, removeSession, setRun, syncSession, t, upsertAssistantMessage, workspace?.cwd]);
 
   const active = isActivePhase(currentRun?.phase);
   const modelLocked = effectiveConfiguration?.provenance.model?.scope === 'environment';
@@ -1684,6 +1712,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     }
     setLoadingHistory(true);
     const result = await getSessionMessages(id, { before: beforeMessageId, limit: 80 });
+    if (interactionAddressRef.current !== interactionView) return;
     if (result.success && result.data) mergeMessagePage(id, result.data);
     else {
       pendingScrollAnchor.current = undefined;
@@ -1696,7 +1725,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     scrollRestoration.current?.();
     lastScrolledTarget.current = undefined;
     navigate(`${location.pathname}${location.search}#${encodeURIComponent(messageId)}`, { replace: true });
-    window.setTimeout(() => document.getElementById(messageId)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 0);
+    // The target layout effect owns materialization and scrolling in the new view.
   };
 
   const scrollToBottom = () => {
@@ -2080,11 +2109,6 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         ))}
         <div ref={messagesEndRef} />
       </div>
-      {!nearBottom && (
-        <button className="scroll-bottom" onClick={scrollToBottom} aria-label={t('chat.backToBottom')}>
-          ↓ {t('chat.backToBottom')}{unseenMessages ? ` (${unseenMessages})` : ''}
-        </button>
-      )}
 
       {selection && <Suspense fallback={null}><SelectionActions capture={selection} view={interactionView}
         setCapture={setSelection} onQuote={quoteSelection} /></Suspense>}
@@ -2135,6 +2159,11 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             void attachImages(files);
           }
         }}>
+        {!nearBottom && (
+          <button type="button" className="scroll-bottom" onClick={scrollToBottom} aria-label={t('chat.backToBottom')}>
+            ↓ {t('chat.backToBottom')}{unseenMessages ? ` (${unseenMessages})` : ''}
+          </button>
+        )}
         {paletteResults.length > 0 && (
           <div className="command-palette" role="listbox" aria-label={t('chat.commandPalette')}>
             {paletteResults.map((item, index) => (

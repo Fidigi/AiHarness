@@ -6,10 +6,10 @@ export * from '@playwright/test';
  * original assertions/timeouts and zero retries; never mask a 429 within a case.
  * Static hosts and authenticated deployments without anonymous protected reads
  * have no applicable protected-read quota header. */
-async function reserveReadBudget(request: APIRequestContext): Promise<void> {
+export async function reserveReadBudget(request: APIRequestContext, baseURL = ''): Promise<void> {
   const observations: Array<{ headers: Record<string, string>; reserve: number }> = [];
   for (const [endpoint, reserve] of [['/api/agent/running', 200], ['/api/auth/status', 60]] as const) {
-    const response = await request.get(endpoint);
+    const response = await request.get(`${baseURL}${endpoint}`);
     observations.push({ headers: response.headers(), reserve });
   }
   const delay = quotaDelayMs(observations, Date.now());

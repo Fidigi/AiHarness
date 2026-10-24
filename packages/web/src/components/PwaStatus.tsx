@@ -26,7 +26,11 @@ export default function PwaStatus() {
 
     let updateTimer: number | undefined;
     let reloading = false;
+    let controlled = Boolean(navigator.serviceWorker?.controller);
     const handleControllerChange = () => {
+      // First installation claims this page; it must not discard reading/input
+      // intent (or reload an offline tab). Only a replacement needs a reload.
+      if (!controlled) { controlled = true; return; }
       if (reloading) return;
       reloading = true;
       window.location.reload();

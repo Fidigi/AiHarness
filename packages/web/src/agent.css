@@ -250,7 +250,7 @@ html[data-theme="light"] .reply-evidence.error { color: #87253a; border-color: #
 .command-palette span, .command-palette small { overflow: hidden; color: #93a1bd; text-overflow: ellipsis; white-space: nowrap; }
 .file-palette button { grid-template-columns: minmax(0, 1fr) auto; }
 .file-palette strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.scroll-bottom { position: absolute; z-index: 7; right: 1.25rem; bottom: 152px; min-height: 40px; padding: .45rem .7rem; border: 1px solid #52668f; border-radius: 999px; color: #eef2fa; background: #223154; box-shadow: 0 5px 18px #0007; cursor: pointer; }
+.input-container .scroll-bottom { align-self: flex-end; min-height: 40px; padding: .45rem .7rem; border: 1px solid #52668f; border-radius: 999px; color: #eef2fa; background: #223154; box-shadow: 0 5px 18px #0007; cursor: pointer; }
 .history-page-control, .history-gap { display: flex; align-items: center; justify-content: center; gap: .6rem; margin: 0 auto 1.25rem; color: #8493b0; font-size: .75rem; }
 .history-page-control button, .history-gap button { min-height: 36px; padding: .35rem .7rem; border: 1px solid #40527b; border-radius: 999px; color: #b9c5dc; background: #16213e; cursor: pointer; }
 .history-page-control button:disabled, .history-gap button:disabled { opacity: .55; cursor: wait; }
@@ -303,6 +303,7 @@ html[data-theme="light"] .reply-evidence.error { color: #87253a; border-color: #
 html[data-theme="light"] body, html[data-theme="light"] .main-content { color: #172033; background: #f5f7fb; }
 html[data-theme="light"] .sidebar, html[data-theme="light"] .chat-toolbar, html[data-theme="light"] .input-container,
 html[data-theme="light"] .settings-section, html[data-theme="light"] .workspace-panel { background: #fff; }
+html[data-theme="light"] .message.tool .message-content { color: #eef2fa; }
 html[data-theme="light"] .message.assistant .message-content, html[data-theme="light"] .input-container textarea,
 html[data-theme="light"] .composer-controls input, html[data-theme="light"] .composer-controls select { color: #172033; background: #f8f9fc; }
 html[data-theme="light"] .composer-setting-scopes { color: #59677e; }
@@ -316,6 +317,7 @@ html[data-theme="light"] .message-meta { color: #52627b; }
 html[data-theme="light"] .message-meta button { color: #33435d; }
 html[data-theme="light"] .markdown-content a { color: #244d8f; }
 html[data-theme="light"] .message.user .markdown-content a { color: #fff; }
+html[data-theme="light"] .markdown-content th { color: #172033; background: #e6ebf5; }
 html[data-theme="light"] .workspace-button, html[data-theme="light"] .language-selector select,
 html[data-theme="light"] .worktree-switcher select, html[data-theme="light"] .session-search input {
   color: #26344e; background: #f8f9fc; border-color: #c5cede;
