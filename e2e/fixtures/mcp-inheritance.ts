@@ -64,6 +64,12 @@ export async function nativeMcpInheritance(request: APIRequestContext) {
     };
     return { base, cwd, log, starts, globalFile, projectFile, globalBytes, localBytes, controls, inventory, close,
       async local() { return JSON.parse(await readFile(projectFile, 'utf8')) as unknown; },
+      async setOmittedExposure() {
+        const global = JSON.parse(globalBytes);
+        delete global.mcpServers.shared.exposure; delete global.mcpServers.shared.toolExposure;
+        await writeFile(globalFile, JSON.stringify(global));
+        await writeFile(projectFile, JSON.stringify({ version: 1, mcpServers: { shared: { enabled: true } } }));
+      },
       async setInvalid() { await writeFile(projectFile, JSON.stringify({ mcpServers: { shared: { env: { TOKEN: 'PRIVATE_PROJECT_REDIRECT' } } } })); },
       async setOrphan() { await writeFile(projectFile, localBytes); await writeFile(globalFile, '{"mcpServers":{}}'); },
     };

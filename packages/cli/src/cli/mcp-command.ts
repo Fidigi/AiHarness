@@ -52,6 +52,13 @@ Commands:
   logout <name>                       Remove local OAuth credentials (no remote revocation)
   remove <name>                       Remove a server
 
+Exposure policy:
+  Missing exposure defaults to direct. codemode is script-only; deferred requires
+  tool_search activation for a later model turn; hidden is never model-callable.
+  --tool matches original remote names: exact first, then first matching * rule.
+  All modes retain native allowlists, exclusions and read-only checks; --tools
+  does not bypass them. Explicit Test lists capabilities without invoking tools.
+
 Options:
   --scope <global|project>            Configuration scope (default: global)
   --project | --global                Scope aliases

@@ -3,8 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { ExtensionRegistry } from '../extensions/extension-registry.js';
 import { ProjectTrustManager } from '../security/project-trust.js';
 import { SessionManager } from '../sessions/session-manager.js';
+import { createAgentToolLoadout } from '../tools/tool-search.js';
 import { inspectMcpConfig, readMcpServerTestTarget, type McpConfigScope, type McpExposure } from './config-inventory.js';
 import { McpSessionHost } from './session-host.js';
 import { McpServerTester } from './server-test.js';
@@ -13,14 +15,14 @@ const fixture = fileURLToPath(new URL('./fixtures/test-server.mjs', import.meta.
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 
-async function setup(scope: McpConfigScope, toolExposure: Record<string, McpExposure>, exposure: McpExposure = 'hidden') {
+async function setup(scope: McpConfigScope, toolExposure: Record<string, McpExposure>, exposure: McpExposure | null = 'hidden') {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-pattern-')); roots.push(root);
   const agentDir = path.join(root, 'agent'), cwd = path.join(root, 'project'), log = path.join(root, 'calls.jsonl');
   await Promise.all([mkdir(agentDir), mkdir(path.join(cwd, '.ai-harness'), { recursive: true })]);
   const trustManager = new ProjectTrustManager(path.join(agentDir, 'trust.json')); await trustManager.load();
   const configPath = path.join(scope === 'global' ? agentDir : path.join(cwd, '.ai-harness'), 'mcp.json');
   const save = async (overrides: Record<string, McpExposure>) => writeFile(configPath, JSON.stringify({ version: 1,
-    mcpServers: { fixture: { command: process.execPath, args: [fixture], env: { MCP_TEST_CALL_LOG: log }, exposure, toolExposure: overrides } },
+    mcpServers: { fixture: { command: process.execPath, args: [fixture], env: { MCP_TEST_CALL_LOG: log }, exposure: exposure ?? undefined, toolExposure: overrides } },
   }));
   await save(toolExposure);
   const calls = async (): Promise<string[]> => {
@@ -33,6 +35,49 @@ async function setup(scope: McpConfigScope, toolExposure: Record<string, McpExpo
 }
 
 describe('real stdio MCP pattern exposure', () => {
+  it.each([null, 'direct', 'codemode', 'deferred', 'hidden'] as const)('keeps native selection above %s exposure, including forged restored activation', async mode => {
+    const w = await setup('global', {}, mode);
+    const lookup = 'mcp__fixture__lookup', mutate = 'mcp__fixture__mutate';
+    try {
+      const prepared = await w.host.prepareForPrompt({ sessionId: 'selection', cwd: w.cwd });
+      const source = { directTools: prepared.tools, hasPotentialSearchableTools: prepared.hasPotentialDiscoverableTools ?? false,
+        currentSearchableTools: () => prepared.currentDiscoverableTools?.() ?? [],
+        waitForSearchableTools: (signal?: AbortSignal) => prepared.waitForDiscoverableTools?.(signal) ?? Promise.resolve([]),
+        has: (name: string) => prepared.has(name) };
+      await source.waitForSearchableTools();
+      const loadout = createAgentToolLoadout({ staticTools: [], dynamicSource: source,
+        selection: { allowedTools: ['tool_search', 'codemode', lookup, mutate], excludedTools: [mutate] },
+        initialLoadedTools: [mutate], codemode: { enabled: true } });
+      const direct = mode === null || mode === 'direct';
+      expect(prepared.tools.map(tool => tool.name)).toEqual(direct ? [lookup, mutate] : []);
+      if (mode === 'codemode' || mode === 'deferred') {
+        expect((await loadout.executeToolSearch({ query: 'documentation state' }, w.context)).details).toEqual({ loaded: [lookup] });
+      }
+      const names = loadout.getTools().map(tool => tool.name);
+      expect(names.includes(lookup)).toBe(direct || mode === 'deferred');
+      expect(names).not.toContain(mutate);
+      expect(loadout.getTools().find(tool => tool.name === 'codemode')?.description).not.toContain(mutate);
+      const registry = new ExtensionRegistry();
+      const result = await loadout.executeCodemode({ code: `text(await tools.${lookup}({})); text(typeof tools.${mutate});` },
+        w.context, (name, input, context, signal) => registry.executeHostedTool(name, input, context,
+          (hostInput, hostContext, hostSignal) => prepared.execute(name, hostInput, hostContext, hostSignal), signal));
+      expect(Boolean(result.isError)).toBe(mode === 'hidden');
+      if (mode !== 'hidden') expect(result.content).toContain('undefined');
+      expect(await w.calls()).toEqual(mode === 'hidden' ? [] : ['lookup']);
+      const unselected = createAgentToolLoadout({ staticTools: [], dynamicSource: source,
+        selection: { allowedTools: ['tool_search', 'codemode'] }, initialLoadedTools: [lookup], codemode: { enabled: true } });
+      expect(unselected.getTools().some(tool => tool.name === lookup || tool.name === mutate)).toBe(false);
+      expect((await unselected.executeCodemode({ code: `await tools.${lookup}({})` }, w.context,
+        (name, input, context, signal) => prepared.execute(name, input, context, signal))).isError).toBe(true);
+      expect(await w.calls()).toEqual(mode === 'hidden' ? [] : ['lookup']);
+      const disabled = createAgentToolLoadout({ staticTools: [], dynamicSource: source, selection: { allowedTools: [] },
+        initialLoadedTools: [lookup, mutate], codemode: { enabled: true } });
+      expect(disabled.getTools()).toEqual([]);
+      await expect(disabled.executeCodemode({ code: `await tools.${lookup}({})` }, w.context,
+        (name, input, context, signal) => prepared.execute(name, input, context, signal))).rejects.toThrow('disabled');
+      expect(await w.calls()).toEqual(mode === 'hidden' ? [] : ['lookup']);
+    } finally { await w.host.shutdown(); }
+  });
   it.each(['global', 'project'] as const)('shares original-name policy across Test, prompt/discovery and fresh reload (%s)', async scope => {
     const w = await setup(scope, { 'look*': 'deferred', '*': 'hidden' });
     const tester = new McpServerTester();

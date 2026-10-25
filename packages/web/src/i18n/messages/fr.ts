@@ -389,6 +389,7 @@ export const frLocale: LocalePlugin = {
     'settings.mcp.oauth.failure.connection-failed': 'La connexion MCP protégée a échoué.',
     'settings.mcp.oauth.failure.credential-write-rejected': 'La mise à jour chiffrée des credentials a été refusée.',
     'settings.mcp.oauth.failure.verification-failed': 'La connexion MCP authentifiée n’a pas pu être vérifiée.',
+    'settings.mcp.exposureHelp': 'Sans exposition définie, les outils sont directs. Le mode Code est réservé aux scripts ; les outils différés nécessitent tool_search avant un tour ultérieur du modèle ; les outils cachés ne sont pas appelables par le modèle. Les listes autorisées, exclusions et contrôles de lecture seule restent prioritaires. Les surcharges visent les noms distants : nom exact, puis premier motif * correspondant.',
     'settings.mcp.exposure.direct': 'outils directs',
     'settings.mcp.exposure.codemode': 'mode Code',
     'settings.mcp.exposure.deferred': 'outils différés',

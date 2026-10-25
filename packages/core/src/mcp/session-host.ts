@@ -801,11 +801,12 @@ export class McpSessionHost {
         ? `${candidate.base.slice(0, MCP_TOOL_NAME_MAX - suffix.length)}${suffix}`
         : candidate.base;
       if (bindings.has(name)) continue;
-      bindings.set(name, {
+      const binding: BoundTool = {
         record: candidate.record,
         remote: candidate.remote,
         requireReadOnly: preset === 'read-only',
-      });
+      };
+      bindings.set(name, binding);
       const tool: HostedMcpTool = {
         name,
         description: `[MCP ${candidate.record.target.name}] ${candidate.remote.description}`,
@@ -828,7 +829,8 @@ export class McpSessionHost {
           server: candidate.record.target.name,
           tool: candidate.remote.name,
         },
-        execute: (input, context, signal) => this.executeBinding(name, bindings, input, context, signal),
+        // A stable executor retains only its own binding, not an entire old snapshot.
+        execute: (input, context, signal) => this.executeBinding(name, new Map([[name, binding]]), input, context, signal),
       };
       if (tool.exposure === 'direct') tools.push(tool);
       else discoverableTools.push(tool);
@@ -843,12 +845,26 @@ export class McpSessionHost {
         .some(mode => mode === 'codemode' || mode === 'deferred')
         && (record.state === 'connecting' || record.state === 'connected'));
     const knownBindings = new Map(initial.bindings);
+    const stableTools = new Map([...initial.tools, ...initial.discoverableTools].map(tool =>
+      [tool.name, { binding: initial.bindings.get(tool.name)!, tool }] as const));
     const current = (): PreparedToolSnapshot => {
       const snapshot = this.buildToolSnapshot(session, preset);
       for (const [name, binding] of snapshot.bindings) {
         if (knownBindings.has(name)) continue;
         if (knownBindings.size < MCP_RUNTIME_BINDING_HISTORY_MAX) knownBindings.set(name, binding);
         else snapshot.bindings.delete(name);
+      }
+      // Nested before-hook admission compares executor identity. A metadata read
+      // must not replace it, but a new remote descriptor/connection must.
+      for (const tool of [...snapshot.tools, ...snapshot.discoverableTools]) {
+        const binding = snapshot.bindings.get(tool.name);
+        if (!binding) continue;
+        const previous = stableTools.get(tool.name);
+        if (previous?.binding.record === binding.record && previous.binding.remote === binding.remote) {
+          tool.execute = previous.tool.execute;
+        } else {
+          stableTools.set(tool.name, { binding, tool });
+        }
       }
       return {
         ...snapshot,

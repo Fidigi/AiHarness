@@ -208,6 +208,9 @@ describe('TerminalUI', () => {
       
       // Should contain help text with commands listed
       expect(mockWrite.mock.calls.length + console.log.mock.calls.length).toBeGreaterThan(0);
+      const help = console.log.mock.calls.flat().join('\n');
+      expect(help).toContain('missing exposure = direct');
+      expect(help).toContain('allowlists, exclusions and read-only checks still apply');
     });
   });
 

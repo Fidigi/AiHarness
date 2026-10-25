@@ -17,6 +17,13 @@ afterEach(async () => {
 });
 
 describe('top-level MCP command', () => {
+  it('documents native exposure defaults and authorization without inspecting configuration', async () => {
+    const output: string[] = [];
+    expect(await runMcpCommand(['--help'], { cwd: '/missing-mcp-help-workspace', stdout: value => output.push(value) })).toBe(0);
+    expect(output.join('')).toContain('Missing exposure defaults to direct.');
+    expect(output.join('')).toContain('hidden is never model-callable.');
+    expect(output.join('')).toContain('allowlists, exclusions and read-only checks');
+  });
   it('imports complete configuration with confirmations and returns failure for needs-auth', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'ai-harness-cli-mcp-vocabulary-'));
     roots.push(root);

@@ -63,6 +63,16 @@ describe('FullscreenUI', () => {
     expect(chunks.at(-1)).not.toContain('Assistant: Bonjour');
   });
 
+  it('renders native MCP defaults and retained authorization in help', () => {
+    const { screen, chunks } = createScreen(200, 40);
+    const ui = new FullscreenUI({ output: screen });
+    ui.enter(); ui.showHelp();
+    const help = stripVTControlCharacters(chunks.at(-1)!);
+    expect(help).toContain('exposition absente = direct');
+    expect(help).toContain('listes autorisées, exclusions et lecture seule restent prioritaires');
+    ui.leave();
+  });
+
   it('routes command output into the viewport', () => {
     const { screen, chunks } = createScreen();
     const ui = new FullscreenUI({ output: screen });

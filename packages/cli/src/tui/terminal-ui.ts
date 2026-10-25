@@ -368,6 +368,9 @@ ${chalk.bold('Files, resources and sharing')}
 
 ${chalk.bold('Extensions and application')}
   ${chalk.cyan('/extensions')}                   List loaded extensions
+  ${chalk.cyan('/mcp [status|tools|exposure|test]')} Inspect/manage MCP (status is passive)
+  MCP: missing exposure = direct; codemode is script-only; deferred needs tool_search.
+  Hidden is not model-callable; allowlists, exclusions and read-only checks still apply.
   ${chalk.cyan('/tools')}                        List built-in and extension tools
   ${chalk.cyan('/tool <name> [json]')}           Run a registered tool
   ${chalk.cyan('/trust [status|allow|allow-parent|refuse|forget|list]')} Manage project trust decisions

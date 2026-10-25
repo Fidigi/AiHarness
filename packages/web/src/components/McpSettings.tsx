@@ -320,6 +320,8 @@ function ServerCard({
         <select value={server.exposure} disabled={disabled}
           data-mcp-exposure-key={editKey(server.scope, server.name)}
           aria-label={t('settings.mcp.exposureNamed', { name: server.name })}
+          aria-description={t('settings.mcp.exposureHelp')}
+          title={t('settings.mcp.exposureHelp')}
           onChange={event => onExposureChange(event.currentTarget.value as McpExposure)}>
           {(['direct', 'codemode', 'deferred', 'hidden'] as const).map(exposure => (
             <option value={exposure} key={exposure}>{t(`settings.mcp.exposure.${exposure}`)}</option>
@@ -371,6 +373,8 @@ function ServerCard({
           <select disabled={disabled} value={mcpToolExposureValue(server, name)}
             data-mcp-exposure-key={editKey(server.scope, `${server.name}\0${name}`)}
             aria-label={t('settings.mcp.exposureNamed', { name: `${server.name} / ${name}` })}
+            aria-description={t('settings.mcp.exposureHelp')}
+            title={t('settings.mcp.exposureHelp')}
             onChange={event => onExposureChange(event.currentTarget.value as McpExposure, name)}>
             {(['direct', 'codemode', 'deferred', 'hidden'] as const).map(exposure => <option key={exposure} value={exposure}>{t(`settings.mcp.exposure.${exposure}`)}</option>)}
           </select>

@@ -7,7 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { closeProviderNetworkDispatchers, McpSessionHost, ProjectTrustManager, SessionManager } from '@ai-harness/core';
 
-const [mode, scope] = process.argv[2].split('/');
+const [mode, scope, policy = 'exact'] = process.argv[2].split('/');
+assert.ok(['exact', 'missing', 'excluded', 'codemode', 'deferred', 'hidden'].includes(policy));
 assert.ok(['command', 'core', 'print', 'json', 'rpc'].includes(mode));
 assert.ok(['global', 'project'].includes(scope));
 const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mcp-pattern-public-'));
@@ -17,15 +18,16 @@ const trust = new ProjectTrustManager(path.join(agent, 'trust.json')); await tru
 const fixture = process.env.AIH_MCP_PATTERN_SERVER || fileURLToPath(new URL('../../../../core/src/mcp/fixtures/test-server.mjs', import.meta.url));
 const configPath = path.join(scope === 'global' ? agent : path.join(cwd, '.ai-harness'), 'mcp.json');
 const save = toolExposure => writeFile(configPath, JSON.stringify({ version: 1, mcpServers: { fixture: {
-  command: process.execPath, args: [fixture], env: { MCP_TEST_CALL_LOG: log }, exposure: 'direct', toolExposure,
+  command: process.execPath, args: [fixture], env: { MCP_TEST_CALL_LOG: log },
+  ...(['missing', 'excluded'].includes(policy) ? {} : { exposure: ['codemode', 'deferred', 'hidden'].includes(policy) ? policy : 'direct' }), toolExposure,
 } } }));
 const calls = async () => {
   try { return (await readFile(log, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line)); }
   catch (error) { if (error.code === 'ENOENT') return []; throw error; }
 };
-const tool = 'mcp__fixture__lookup';
+const tool = 'mcp__fixture__lookup', mutate = 'mcp__fixture__mutate';
 let child, host, server, fixtureError;
-const declarations = [], allDeclarations = [];
+const declarations = [], allDeclarations = [], toolResults = [];
 async function cli(args, rpc = false) {
   child = spawn(process.env.AIH_MCP_PATTERN_COMMAND || process.execPath, process.env.AIH_MCP_PATTERN_COMMAND
     ? args : [fileURLToPath(new URL('../../../dist/index.js', import.meta.url)), ...args], {
@@ -51,7 +53,7 @@ async function cli(args, rpc = false) {
   assert.equal(stderr, ''); return stdout;
 }
 try {
-  await save(mode === 'command' ? {} : { '*': 'hidden', lookup: 'direct' });
+  await save(mode === 'command' || policy !== 'exact' ? {} : { '*': 'hidden', lookup: 'direct' });
   if (mode === 'command') {
     const change = async (name, exposure) => JSON.parse(await cli(['mcp', 'exposure', 'fixture', exposure, '--tool', name, '--scope', scope, '--json']));
     assert.equal((await change('*', 'hidden')).changed, true);
@@ -76,16 +78,28 @@ try {
     await assert.rejects(prepared.execute(tool, {}, context), /not connected/);
     await next.execute(tool, {}, context); assert.deepEqual(await calls(), ['lookup', 'lookup']);
   } else {
+    const call = (name, args = {}) => ({ name, args });
+    const plan = policy === 'missing' ? [[call(tool), call(mutate)]]
+      : policy === 'excluded' ? [[call(tool), call(mutate)]]
+      : policy === 'hidden' ? [[call(tool)]]
+      : policy === 'codemode' ? [[call('tool_search', { query: 'documentation state' })],
+        [call('codemode', { code: `text(await tools.${tool}({})); text(typeof tools.${mutate});` })]]
+      : policy === 'deferred' ? [[call('tool_search', { query: 'documentation state' }), call(tool)], [call(tool)]]
+      : [[call(tool, { topic: 'docs' })]];
     server = createServer(async (request, response) => {
       try {
         let wire = ''; for await (const chunk of request) { wire += chunk; assert.ok(wire.length < 100_000); }
         const body = JSON.parse(wire); assert.equal(body.stream, true); assert.equal(request.url, '/chat/completions');
         const names = (body.tools ?? []).map(entry => entry.function.name); allDeclarations.push(names);
         declarations.push(names.filter(name => name.startsWith('mcp__')));
-        const final = body.messages.some(message => message.role === 'tool');
+        toolResults.push(body.messages.filter(message => message.role === 'tool'));
+        const phase = allDeclarations.length - 1;
+        const requested = plan[phase];
+        const final = !requested;
         response.writeHead(200, { 'Content-Type': 'text/event-stream' });
         response.end('data: ' + JSON.stringify({ choices: [{ delta: final ? { content: 'Exposure OK' } : {
-          tool_calls: [{ index: 0, id: 'lookup-call', type: 'function', function: { name: tool, arguments: '{"topic":"docs"}' } }],
+          tool_calls: requested.map((entry, index) => ({ index, id: `call-${phase}-${index}`, type: 'function',
+            function: { name: entry.name, arguments: JSON.stringify(entry.args) } })),
         }, finish_reason: final ? 'stop' : 'tool_calls' }] }) + '\n\ndata: [DONE]\n\n');
       } catch (failure) { fixtureError = failure; response.writeHead(500); response.end(); }
     });
@@ -94,22 +108,32 @@ try {
     await writeFile(extension, `import { OpenAiProvider } from ${JSON.stringify(import.meta.resolve('@ai-harness/core'))};
       export default api => api.registerProvider('mcp-pattern-fixture', { defaultConfig: { model: 'fixture' },
         create: config => new OpenAiProvider({ ...config, type: 'openai', baseUrl: 'http://127.0.0.1:${server.address().port}', apiKey: 'disposable', model: 'fixture' }) });`);
-    const stdout = await cli(['--offline', '--approve', '--no-extensions', '-e', 'builtin:mcp', '-e', extension, '--no-context-files',
+    const controls = ['codemode', 'deferred'].includes(policy) ? ['-e', 'builtin:tool-search', '-e', 'builtin:codemode'] : [];
+    const selection = policy === 'exact' || policy === 'missing' ? [] : ['--tools',
+      [...(policy === 'codemode' ? ['codemode'] : []), ...(['codemode', 'deferred'].includes(policy) ? ['tool_search'] : []), 'mcp__fixture__*'].join(','),
+      '--exclude-tools', mutate];
+    const stdout = await cli(['--offline', '--approve', '--no-extensions', '-e', 'builtin:mcp', ...controls, '-e', extension, '--no-context-files', ...selection,
       '--model', 'mcp-pattern-fixture/fixture', '--session-dir', path.join(root, 'sessions'), '--session-id', 'mcp-pattern',
       ...(mode === 'print' ? ['-p'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['Read fixture'])], mode === 'rpc');
-    assert.equal(fixtureError, undefined); assert.deepEqual(await calls(), ['lookup']);
-    assert.deepEqual(declarations, [[tool], [tool]], JSON.stringify({ allDeclarations }));
+    assert.equal(fixtureError, undefined);
+    assert.deepEqual(await calls(), policy === 'missing' ? ['lookup', 'mutate'] : policy === 'hidden' ? [] : ['lookup'],
+      JSON.stringify({ allDeclarations, toolResults }));
+    const expected = policy === 'missing' ? [[tool, mutate], [tool, mutate]]
+      : policy === 'hidden' ? [[], []] : policy === 'codemode' ? [[], [], []]
+      : policy === 'deferred' ? [[], [tool], [tool]] : [[tool], [tool]];
+    assert.deepEqual(declarations, expected, JSON.stringify({ allDeclarations }));
+    if (['codemode', 'deferred'].includes(policy)) assert.ok(allDeclarations[0].includes('tool_search'));
     if (mode === 'print') assert.equal(stdout, 'Exposure OK\n');
     else {
       const records = stdout.trim().split('\n').map(line => JSON.parse(line));
       if (mode === 'json') assert.equal(records[0].version, 3);
       assert.equal(records.filter(record => record.type === 'agent_settled').length, 1);
-      assert.equal(records.filter(record => record.type === 'tool_execution_start').length, 1);
+      if (policy === 'exact') assert.equal(records.filter(record => record.type === 'tool_execution_start').length, 1);
       assert.equal(records.filter(record => record.type === 'auto_retry_start').length, 0);
       assert.equal(records.filter(record => record.type === 'message_end' && record.message.role === 'assistant').at(-1).message.stopReason, 'stop');
     }
   }
-  console.log(JSON.stringify({ result: 'MCP_PATTERN_OK', mode, scope }));
+  console.log(JSON.stringify({ result: 'MCP_PATTERN_OK', mode, scope, ...(policy === 'exact' ? {} : { policy }) }));
 } finally {
   if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
   await host?.shutdown(); await closeProviderNetworkDispatchers();

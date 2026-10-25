@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ExtensionRuntimeContext } from '../extensions/extension-registry.js';
+import { ExtensionRegistry, type ExtensionRuntimeContext } from '../extensions/extension-registry.js';
 import { ProjectTrustManager } from '../security/project-trust.js';
 import { SessionManager } from '../sessions/session-manager.js';
 import { inspectMcpConfig } from './config-inventory.js';
@@ -165,6 +165,60 @@ describe('McpSessionHost', () => {
     const result = await prepared.execute('mcp__docs__lookup', {}, context);
     expect(result.content).toBe('docs:ok');
     await host.shutdown();
+  });
+
+  it('filters late metadata through hidden/read-only/exclusion policy before search, restore or nested execution', async () => {
+    const { agentDir, project, trust } = await workspace();
+    await writeConfig(agentDir, { docs: { command: 'node', exposure: 'deferred', toolExposure: { private: 'hidden' } } });
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const callTool = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'allowed' }] }));
+    let update: Parameters<McpHostConnect>[2]['callbacks']['onToolsChanged'] = () => undefined;
+    const connect: McpHostConnect = async (_target, _signal, options) => {
+      update = options.callbacks.onToolsChanged;
+      await gate;
+      return { tools: ['lookup', 'mutate', 'excluded', 'private'].map(name => ({ name, remoteName: name,
+        description: 'Late documentation lookup', parameters: { type: 'object' }, readOnly: name !== 'mutate' })),
+      redact: value => value, callTool, close: async () => undefined };
+    };
+    const host = new McpSessionHost({ agentDir, trustManager: trust, connect });
+    const lookup = 'mcp__docs__lookup';
+    try {
+      const prepared = await host.prepareForPrompt({ sessionId: 'late-policy', cwd: project, preset: 'read-only' });
+      const source = { directTools: prepared.tools, hasPotentialSearchableTools: prepared.hasPotentialDiscoverableTools ?? false,
+        currentSearchableTools: () => prepared.currentDiscoverableTools?.() ?? [],
+        waitForSearchableTools: (signal?: AbortSignal) => prepared.waitForDiscoverableTools?.(signal) ?? Promise.resolve([]),
+        has: (name: string) => prepared.has(name) };
+      const blocked = ['mcp__docs__mutate', 'mcp__docs__excluded', 'mcp__docs__private'];
+      const loadout = createAgentToolLoadout({ staticTools: [], dynamicSource: source, initialLoadedTools: blocked,
+        selection: { preset: 'read-only', allowedTools: ['tool_search', 'codemode', lookup, ...blocked], excludedTools: [blocked[1]!] },
+        codemode: { enabled: true } });
+      expect(loadout.getTools().map(tool => tool.name)).toEqual(['tool_search', 'codemode']);
+      const search = loadout.executeToolSearch({ query: 'documentation' }, context);
+      release();
+      expect((await search).details).toEqual({ loaded: [lookup] });
+      const first = source.currentSearchableTools().find(tool => tool.name === lookup)!;
+      expect(source.currentSearchableTools().find(tool => tool.name === lookup)?.execute).toBe(first.execute);
+      const declarations = loadout.getTools();
+      for (const name of blocked) {
+        expect(declarations.map(tool => tool.name)).not.toContain(name);
+        expect(declarations.find(tool => tool.name === 'codemode')?.description).not.toContain(name);
+      }
+      const registry = new ExtensionRegistry();
+      const execute = (name: string, input: unknown, ctx: ExtensionRuntimeContext, signal?: AbortSignal) => registry.executeHostedTool(name, input, ctx,
+        (hostInput, hostContext, hostSignal) => prepared.execute(name, hostInput, hostContext, hostSignal), signal);
+      const result = await loadout.executeCodemode({ code: `text(await tools.${lookup}({})); ${blocked.map(name => `text(typeof tools.${name});`).join(' ')}` },
+        context, execute);
+      expect(result.isError).toBeFalsy(); expect(result.content).toContain('undefined');
+      expect(callTool.mock.calls).toHaveLength(1);
+      await registry.load('replace-mcp-before-call', api => api.before('before:tool', () => {
+        update([{ name: 'lookup', remoteName: 'lookup', description: 'Replacement', parameters: { type: 'object' }, readOnly: true }]);
+      }));
+      const replaced = await loadout.executeCodemode({ code: `await tools.${lookup}({})` }, context, execute);
+      expect(replaced.isError).toBe(true); expect(replaced.content).toContain('Nested tool is not enabled');
+      expect(source.currentSearchableTools().find(tool => tool.name === lookup)?.execute).not.toBe(first.execute);
+      expect(callTool.mock.calls).toHaveLength(1);
+    } finally { release(); await host.shutdown(); }
   });
 
   it('never connects wholly hidden servers and applies remote-name overrides before declarations or discovery', async () => {

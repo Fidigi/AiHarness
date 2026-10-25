@@ -71,6 +71,28 @@ for (const locale of ['en', 'fr'] as const) {
         await expect(page.locator('body')).not.toContainText('GLOBAL_INHERITANCE_BROWSER_PRIVATE');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         const axe = await new AxeBuilder({ page }).include('#mcp').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze(); expect(axe.violations).toEqual([]);
+        // Missing exposure in both files is native direct, never a silent codemode migration.
+        await f.setOmittedExposure(); await page.reload();
+        const defaultCard = await showDetails(page, locale);
+        const exposure = defaultCard.getByRole('combobox', { name: `${messages.exposure} shared`, exact: true });
+        await expect(exposure).toHaveValue('direct');
+        await expect(exposure).toHaveAccessibleDescription(locale === 'en'
+          ? /Missing exposure defaults to direct.*allowlists, exclusions and read-only checks/
+          : /Sans exposition définie.*listes autorisées, exclusions et contrôles de lecture seule/);
+        const baseline = JSON.parse(await readFile(f.globalFile, 'utf8'));
+        expect(baseline.mcpServers.shared).not.toHaveProperty('exposure');
+        for (const mode of ['codemode', 'deferred', 'hidden', 'direct']) {
+          const saving = page.waitForResponse(response => response.url() === f.base + '/api/mcp/actions' && response.request().method() === 'POST');
+          await exposure.selectOption(mode); const saved = await saving;
+          expect(saved.status()).toBe(200);
+          expect(saved.request().postDataJSON()).toMatchObject({ action: 'set-exposure', scope: 'project', name: 'shared', exposure: mode });
+          await expect(exposure).toHaveValue(mode);
+          expect(await f.local()).toEqual({ version: 1, mcpServers: { shared: { enabled: true, exposure: mode } } });
+        }
+        expect(JSON.parse(await readFile(f.globalFile, 'utf8'))).toEqual(baseline);
+        expect(await readFile(f.starts, 'utf8')).toBe(startupBytes);
+        await expect(access(f.log)).rejects.toMatchObject({ code: 'ENOENT' });
+        await page.reload(); await expect((await showDetails(page, locale)).getByRole('combobox', { name: `${messages.exposure} shared`, exact: true })).toHaveValue('direct');
       } finally { try { if (!page.isClosed()) await page.goto('about:blank'); } finally { await f.close(); } }
     });
 

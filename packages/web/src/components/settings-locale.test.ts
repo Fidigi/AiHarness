@@ -9,6 +9,11 @@ import { settingsLocaleBoundaryMessage } from './settings-locale-boundary-messag
 
 const source = (relative: string) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 const entryLines = (text: string) => text.match(/^ {4}'[^']+': .*\n/gm) ?? [];
+// Explicit post-inventory addition; every historical literal remains unchanged.
+const mcpExposureHelp = {
+  en: "    'settings.mcp.exposureHelp': 'Missing exposure defaults to direct. Code mode is script-only; deferred tools need tool_search before a later model turn; hidden tools are not model-callable. All modes retain allowlists, exclusions and read-only checks. Overrides match original remote names: exact first, then the first matching * pattern.',\n",
+  fr: "    'settings.mcp.exposureHelp': 'Sans exposition définie, les outils sont directs. Le mode Code est réservé aux scripts ; les outils différés nécessitent tool_search avant un tour ultérieur du modèle ; les outils cachés ne sont pas appelables par le modèle. Les listes autorisées, exclusions et contrôles de lecture seule restent prioritaires. Les surcharges visent les noms distants : nom exact, puis premier motif * correspondant.',\n",
+};
 
 describe('Settings locale allocation', () => {
   it('relocates all projected inventoried EN/FR literals byte-for-byte and changes no retained key/value', () => {
@@ -18,8 +23,10 @@ describe('Settings locale allocation', () => {
       const lazy = entryLines(source(`./settings-locale-${locale}.ts`));
       const moved = inventory.moved.map(entry => entry[locale === 'en' ? 'enLine' : 'frLine']);
       expect(lazy).toEqual(moved);
-      expect([...eager, ...lazy].sort()).toEqual([...inventory.original[locale].lines].sort());
-      expect(eager).toEqual(inventory.original[locale].lines.filter(line => !moved.includes(line)));
+      const projected = inventory.original[locale].lines.flatMap(line =>
+        line.startsWith("    'settings.mcp.exposureLabel':") ? [mcpExposureHelp[locale], line] : [line]);
+      expect([...eager, ...lazy].sort()).toEqual([...projected].sort());
+      expect(eager).toEqual(projected.filter(line => !moved.includes(line)));
     }
   });
 
