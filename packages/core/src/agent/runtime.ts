@@ -19,6 +19,7 @@ import {
   createAgentToolLoadout,
 } from '../tools/tool-search.js';
 import { streamProviderTurn } from './provider-turn.js';
+import { resolveVirtualModelFallback } from '../providers/virtual-models.js';
 import { captureManagerProviderBudget } from './provider-request-estimate.js';
 import { awaitAgentAdmission } from './prestart-admission.js';
 import { retainAgentWork } from './work-retention.js';
@@ -326,8 +327,11 @@ export class AgentRuntime {
       hook.data = this.redactJson(hook.data);
       effectiveRequest.input = hook.data.input;
       const providerName = hook.data.provider;
+      effectiveRequest.model ??= session.model;
       const provider = await awaitAgentAdmission(async () => await this.resolveProvider(providerName)
-        ?? this.extensionRegistry.getVirtualProvider(providerName), controller.signal);
+        ?? this.extensionRegistry.getVirtualProvider(providerName)
+        ?? (await resolveVirtualModelFallback(this.sessionManager, session.id, this.extensionRegistry.virtualModels,
+          this.resolveProvider, { provider: providerName, id: effectiveRequest.model }, controller.signal))?.provider, controller.signal);
       current();
       if (!provider?.validateConfig()) throw new Error(`Provider indisponible : ${providerName}`);
       current();
@@ -726,7 +730,7 @@ export class AgentRuntime {
         let messageId = '';
         let content = '';
         let reasoning = '';
-        let providerModel: string | undefined;
+        let providerModel: string | undefined, physicalProvider = run.snapshot.provider;
         const contextBudget = captureManagerProviderBudget(this.sessionManager);
         const response = await streamProviderTurn({
           provider,
@@ -751,8 +755,8 @@ export class AgentRuntime {
           redactText: this.redactText,
           redactJson: this.redactJson,
           createTextRedactor: this.createTextRedactor,
-          onStart: (_provider, model) => {
-            providerModel = model;
+          onStart: (providerName, model) => {
+            physicalProvider = providerName; providerModel = model;
             this.setPhase(run, 'streaming');
             run.snapshot.retry = undefined;
             run.snapshot.error = undefined;
@@ -802,7 +806,7 @@ export class AgentRuntime {
                   ...(partial.reasoning ? [{ type: 'reasoning' as const, text: partial.reasoning }] : []),
                   ...(partial.content ? [{ type: 'text' as const, text: partial.content }] : []),
                 ],
-                provider: run.snapshot.provider, model: providerModel,
+                provider: physicalProvider, model: providerModel,
                 metadata: { outputError: this.redactText(error instanceof Error ? error.message : String(error)).slice(0, 4_000) },
               }, { skipAutoCompaction: true });
             }

@@ -103,6 +103,17 @@ for (const [locale, theme, width] of [['en', 'light', 1280], ['fr', 'dark', 390]
       expect(wire.messages.at(-1)).toMatchObject({ provider: 'physical-proof', model: 'physical-proof', metadata: { selection: { provider: 'browser-router', id: 'auto' } } });
       expect(JSON.stringify(wire)).not.toContain('PRIVATE_ROUTER_PROOF');
       expect(calls).toBe(1); expect(routes).toBe(1);
+      await services.extensionRegistry.unload('browser-router');
+      await page.getByRole('textbox', { name: locale === 'fr' ? 'Zone de rédaction' : 'Message composer' }).fill('Continue without the router');
+      await page.getByRole('button', { name: locale === 'fr' ? 'Envoyer' : 'Send', exact: true }).click();
+      await expect(page.locator('.message.assistant')).toHaveCount(2);
+      await expect(page.locator('.message.assistant').last()).toContainText('Physical browser response.');
+      await page.reload(); await expect(page.locator('.message.assistant')).toHaveCount(2);
+      const resumed = await page.request.get(`${base}/api/sessions/${id}`).then(response => response.json());
+      expect(resumed.messages.at(-1)).toMatchObject({ provider: 'physical-proof', model: 'physical-proof',
+        metadata: { selection: { provider: 'browser-router', id: 'auto' } } });
+      expect(JSON.stringify(resumed)).not.toContain('PRIVATE_ROUTER_PROOF');
+      expect(calls).toBe(2); expect(routes).toBe(1);
     } finally {
       await page.goto('about:blank').catch(() => undefined); await stop();
       names.forEach((name, index) => { if (before[index] === undefined) delete process.env[name]; else process.env[name] = before[index]; });

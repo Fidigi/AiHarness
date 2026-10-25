@@ -52,6 +52,40 @@ export class VirtualModelRoutingError extends Error {
   constructor() { super('Virtual model routing failed.'); this.name = 'VirtualModelRoutingError'; }
 }
 
+/** Resume only witnessed successful physical work on the active branch; never guess credentials or a model. */
+export async function resolveVirtualModelFallback(
+  manager: SessionManager, sessionId: string, models: VirtualModelRegistry,
+  resolveProvider: VirtualModelContext['resolveProvider'],
+  requested?: { provider: string; id?: string }, signal?: AbortSignal,
+): Promise<{ provider: AiProvider; selection: PhysicalModelSelection; virtual: PhysicalModelSelection } | undefined> {
+  const session = manager.get(sessionId), leaf = session?.activeLeafId;
+  if (!session) return undefined;
+  const entries = await manager.getActiveBranchEntries(sessionId);
+  signal?.throwIfAborted();
+  const message = [...entries].reverse().find(entry => entry.type === 'message' && entry.role === 'assistant'
+    && !entry.metadata?.outputError);
+  if (message?.type !== 'message') return undefined;
+  const virtual = message.metadata?.selection as PhysicalModelSelection | undefined;
+  if (!virtual || !isValidModelId(virtual.provider) || !isValidModelId(virtual.id)
+    || requested && (requested.provider !== virtual.provider || requested.id !== undefined && requested.id !== virtual.id)
+    || requested?.id === undefined && session.model !== undefined && session.model !== virtual.id
+    || models.get(virtual.provider, virtual.id)) return undefined;
+  if (!isValidModelId(message.provider) || !isValidModelId(message.model)
+    || message.provider === virtual.provider && message.model === virtual.id
+    || models.get(message.provider, message.model)) throw new VirtualModelRoutingError();
+  const provider = await awaitAgentAdmission(() => resolveProvider(message.provider!), signal ?? new AbortController().signal);
+  signal?.throwIfAborted();
+  if (manager.get(sessionId) !== session || session.activeLeafId !== leaf
+    || models.get(virtual.provider, virtual.id) || !provider?.validateConfig()) throw new VirtualModelRoutingError();
+  const thinking = message.metadata?.thinkingLevel;
+  const thinkingLevel = typeof thinking === 'string' && ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(thinking)
+    ? thinking as ThinkingLevel : 'off';
+  return { provider, virtual: { provider: virtual.provider, id: virtual.id }, selection: {
+    provider: message.provider, id: message.model,
+    thinkingLevel: clampPublishedThinkingLevel(thinkingLevel, getSupportedThinkingLevels(message.provider, message.model, undefined, provider)),
+  } };
+}
+
 /** Native registrations belong to an extension generation, never the global ProviderFactory. */
 export class VirtualModelRegistry {
   private readonly models = new Map<string, VirtualModelDefinition>();
@@ -156,8 +190,8 @@ export class VirtualModelRegistry {
     const provider = await awaitAgentAdmission(() => options.context.resolveProvider(selection.provider), signal);
     current();
     if (!provider?.validateConfig()) throw new VirtualModelRoutingError();
-    selection.thinkingLevel = clampPublishedThinkingLevel(selection.thinkingLevel ?? 'off', getSupportedThinkingLevels(selection.provider, selection.id));
-    if (options.reason !== 'direct' && session && manager && rawState?.value !== undefined && rawState.value !== request.state) {
+    selection.thinkingLevel = clampPublishedThinkingLevel(selection.thinkingLevel ?? 'off', getSupportedThinkingLevels(selection.provider, selection.id, undefined, provider));
+    if (options.reason !== 'direct' && session && manager && rawState?.value !== undefined) {
       const copied = copySessionCustomValue(rawState.value, 64 * 1024);
       await manager.appendCustomEntry(session.id, 'provider.router_state', { key, state: copied }, { signal, expectedLeafId: leaf ?? null });
       signal.throwIfAborted();

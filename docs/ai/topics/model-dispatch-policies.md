@@ -4,13 +4,14 @@
 
 ## Overview
 
-Core separates selectable virtual chat models from their physical provider requests and owns a session-local prompt-cache warmer. These are native APIs following the approved Pi 1.2.0 policy, not a Pi extension ABI or full provider-parity certificate. MOD-04/MOD-05 acceptance remains open in `docs/audit/pi/AUDIT-5.md`.
+Core separates selectable virtual chat models from their physical provider requests and owns a session-local prompt-cache warmer. These are native APIs following the approved Pi 1.2.0 policy, not a Pi extension ABI or full provider-parity certificate. MOD-04 native routing delivery is tracked separately from open MOD-05 and whole-platform qualification in `docs/audit/pi/AUDIT-5.md`.
 
 ## Main Entry Points
 
 | File | Responsibility |
 |---|---|
-| `packages/core/src/providers/virtual-models.ts` | Validated model definitions, selectable catalogue overlays, physical resolution and branch router state |
+| `packages/core/src/providers/virtual-models.ts` | Validated definitions, catalogue overlays, physical resolution, branch state and witnessed missing-router fallback |
+| `packages/core/src/providers/provider-model-metadata.ts` | Sanitized optional adapter-owned physical declarations; undeclared sources retain legacy published lookup |
 | `packages/core/src/agent/provider-turn.ts` | Virtual versus physical dispatch, retry reasons, physical limits and cache eligibility |
 | `packages/core/src/providers/cache-warmer.ts` | Timing, economics, replay, cancellation and durable usage |
 | `packages/core/src/providers/cache-notices.ts` | Stable derived warming/miss notices, independent of visibility or billable work |
@@ -30,11 +31,17 @@ Core separates selectable virtual chat models from their physical provider reque
 
 `VirtualModelRegistry` overlays catalogue entries with source `virtual`. Selection-only provider instances cannot physically chat. `ExtensionRegistry.chat` explicitly routes direct summary work without reading or writing branch state. Shared ordinary turns preserve the virtual selection in `ChatResponse.selection`, but `provider`, `model`, `thinkingLevel` and persisted assistant accounting identify physical work.
 
-Router state uses bounded `provider.router_state` custom entries keyed to the virtual provider/model; it is not model input. Read active ancestry, not arbitrary full history. Registration replacement/disposal retires an exact generation. Revalidate generation, active ancestry/context, physical provider instance and nonrecursive selection after awaited before-hooks/authorization and before dispatch; stale routing admission is terminal, not a reason to replay old input. Custom-type names are conventions, not isolation from privileged extensions.
+Router state uses bounded `provider.router_state` custom entries keyed to the virtual provider/model; it is not model input. Read active ancestry, not arbitrary full history. Returning the copied state persists it even when the router edited that copy in place. Registration replacement/disposal retires an exact generation. Revalidate generation, active ancestry/context, physical provider instance and nonrecursive selection after awaited before-hooks/authorization and before dispatch; stale routing admission is terminal, not a reason to replay old input. Custom-type names are conventions, not isolation from privileged extensions.
 
-Known physical context limits constrain the declared selection and cannot expand an explicit host context ceiling. Session-specific compaction limits do not replace another session's manager default. Compact before dispatch when a useful admitted cut is available. Reasoning clamps against physical capabilities. Known text-only physical models receive image-omission placeholders without rewriting stored messages. A post-hook model redirection from a routed physical ID refuses rather than silently borrowing its limits. Unknown physical metadata is not vendor/media admission.
+Resolve physical metadata from the actual adapter's optional `getPublishedModels()` declaration, not an operator alias. An absent declaration retains legacy lookup; an empty/invalid authoritative declaration cannot borrow another catalogue. Known physical context limits constrain the virtual declaration and explicit host ceiling. Session-specific limits never replace another session's default; useful compaction precedes dispatch. Clamp explicit/virtual output caps to the physical maximum while preserving omitted native defaults. Physical thinking, text-only image omission and tool-definition exclusion apply again after hooks, without rewriting history. A post-hook physical model redirection refuses. Unknown metadata is not vendor/media admission.
 
-[IMPORTANT] Resume fallback when a router is missing, complete child-agent/legacy-chat composition and signed reasoning replay are not established. Installed public routing and real HTTP/browser physical-provenance controls are named below; execution receipts remain separate in AUDIT-5.
+On a physical provider/model change, keep public assistant text/images/tool calls but remove foreign reasoning and private metadata/replay. Same-physical input remains intact for the owning adapter's native replay policy. Routing never manufactures signed/encrypted reasoning or credentials. Native transport/default/media/replay support remains owned by the physical adapter and its MOD-01/MOD-03 qualification, not by the router's declaration.
+
+`resolveVirtualModelFallback` uses only the latest successful assistant on owned active ancestry whose saved `metadata.selection` matches the requested virtual selection. If that router is missing, resolve the witnessed physical provider/model through current host instances; recheck branch, registration, credential availability and cancellation after awaits. Failed output, other selections/branches, recursion and unavailable credentials never grant fallback. CLI/RPC implicit startup and terminal session switches warn; startup and both terminal/RPC switches save the physical selection. Recovery overrides an unavailable saved default but never an explicit startup model/provider. Detached/SDK prompts retain logical provenance while dispatching physically; absent request models use the session model, or the witnessed logical default when no model was saved. Web restores the latest successful assistant's logical provider when its saved selection matches the current model, including after router unload; an environment-locked provider or changed model remains authoritative.
+
+Child agents reuse the same loop with fresh child-local state, never the parent's private router state. Server legacy SSE aliases, direct JSON adapter calls and tool-free summaries route through the same registry without session-state/warming authority. Their usage and optional terminal provider/model identify physical work; ordinary non-routed legacy framing is unchanged. Completed transports and visible output cannot trigger another routed paid attempt. Failed visible Core/RPC output is stored under its physical identity.
+
+[IMPORTANT] Fallback never loads missing extension code, discovers models or selects another account. Installed and real HTTP/browser controls below establish native routing boundaries only; exact execution receipts and independent provider/platform gaps remain in AUDIT-5.
 
 ### Prompt cache policy
 
@@ -66,10 +73,12 @@ Web's independent administrator-owned `config.json` global boolean defaults to t
 ## Associated Tests
 
 - `packages/core/src/providers/virtual-models.test.ts`: provenance, branch state, navigation/compaction/copies, generation retirement, credential/recursion refusal, retry, direct summaries, physical compaction and catalogues.
-- `packages/cli/src/cli/virtual-model-process.test.ts`: actual emitted print/JSON/RPC startup, physical transport and durable selection/state.
+- `packages/core/src/providers/virtual-model-admission.test.ts`: post-hook physical metadata/output/media/tools/replay, in-place private state, stale/credential/branch/cancel fallback refusals, real OpenAI/Anthropic wire and failed/completed transport authority.
+- `packages/cli/src/cli/virtual-model-process.test.ts`, `virtual-model-resume-process.test.ts`, `packages/cli/src/commands/handler.test.ts`: emitted print/JSON/RPC routing, missing-router resume over an unavailable saved default, terminal session switching, saved physical selection and a subsequent restart.
+- `packages/server/src/api/virtual-model-http.test.ts`: authenticated legacy SSE/summary and JSON adapter routing, delegated child-state separation, detached missing-router resume, privacy and physical usage attribution.
 - `tests/functional-parity/installed-executable.test.ts`: genuinely packed/installed virtual declarations, physical runtime identity, direct-state exclusion and non-context warming/accounting.
 - `packages/server/src/api/cache-notices-http.test.ts`, `packages/web/src/store/session-store.integration.test.ts`: real authenticated branch/page/clone/snapshot/privacy/global-only controls and deduplicated page/hide/replacement projection.
-- `packages/cli/src/tui/cache-notices.test.ts`, `packages/cli/src/cli/cache-notices-process.test.ts`, `e2e/model-cache-live.spec.ts`: both emitted terminal renderers, real static Web/API routing/history, reload/network reconnect/branches/global hiding and unchanged request counts in EN/light desktop and FR/dark mobile.
+- `packages/cli/src/tui/cache-notices.test.ts`, `packages/cli/src/cli/cache-notices-process.test.ts`, `e2e/model-cache-live.spec.ts`: both emitted terminal renderers, real static Web/API routing/history, reload/network reconnect/branches/global hiding, real routed browser continuation after unload and unchanged passive request counts in EN/light desktop and FR/dark mobile.
 - `packages/core/src/providers/cache-warmer.test.ts`: economics, owned replay, deadlines/horizons, modes, authorization, cancellation, usage observers and abandoned branches.
 - `packages/core/src/providers/cache-notices.test.ts`: significant miss derivation, stable replay and passive usage validation.
 - `packages/core/src/sessions/session-accounting.test.ts`: non-message usage totals, memory/durable reload and independent clone without model-context pollution.

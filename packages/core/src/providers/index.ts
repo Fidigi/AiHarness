@@ -6,7 +6,7 @@
 
 import type { Message, ProviderConfig, ToolCall, TokenUsage } from '../types/index.js';
 import { ProviderType } from '../types/index.js';
-import { getPublishedModelMetadata } from './model-metadata.js';
+import { getPublishedModelMetadata, type PublishedModelMetadata } from './model-metadata.js';
 import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
 import { azureIdentifier, normalizeAzureResponsesBaseUrl, usesAzureResponses } from './azure-config.js';
 import { parseProviderToolArguments } from './tool-arguments.js';
@@ -358,6 +358,12 @@ export abstract class AiProvider {
   getProviderType(): string {
     return String(this.config.type);
   }
+
+  /** Optional owned static conversation metadata; undefined preserves the legacy published table. */
+  getPublishedModels?(): readonly PublishedModelMetadata[] | undefined { return undefined; }
+
+  /** Optional non-secret, per-model API binding; provider IDs are not dialects. */
+  getModelApi?(_model?: string): string | undefined { return undefined; }
 
   /** Expose only the configured model identifier; provider credentials stay private. */
   getConfiguredModel(): string | undefined {

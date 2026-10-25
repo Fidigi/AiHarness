@@ -21,7 +21,9 @@ import { ProviderRequestOptionsError } from './provider-request-options.js';
 import { captureProviderCallLabels, captureProviderMessages, prepareProviderPayload } from './provider-request-payload.js';
 import { AgentAbortError } from './tool-loop.js';
 import type { SessionManager } from '../sessions/session-manager.js';
-import { VirtualModelRoutingError, type VirtualModelReason, type VirtualModelRequest } from '../providers/virtual-models.js';
+import { resolveVirtualModelFallback, VirtualModelRoutingError, type VirtualModelReason, type VirtualModelRequest } from '../providers/virtual-models.js';
+import { getProviderPublishedModel } from '../providers/provider-model-metadata.js';
+import { clampPublishedThinkingLevel, getSupportedThinkingLevels } from '../providers/model-metadata.js';
 import { getPublishedModelMetadata } from '../providers/model-metadata.js';
 import { getSessionCacheWarmer, type CacheWarmingMode } from '../providers/cache-warmer.js';
 
@@ -30,6 +32,7 @@ export interface StreamProviderTurnOptions {
   providerName: string;
   model?: string;
   maxTokens?: number;
+  temperature?: number;
   resolveProvider?(name: string): AiProvider | undefined | Promise<AiProvider | undefined>;
   routeReason?: VirtualModelReason;
   cacheWarming?: CacheWarmingMode;
@@ -113,34 +116,55 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
   const hasVirtual = models.list().some(model => model.provider === options.providerName);
   if (hasVirtual && !options.model) captureNativeOutputBudget(options.provider);
   const definition = hasVirtual ? models.get(options.providerName, options.model ?? options.provider.getConfiguredModel()) : undefined;
-  if (!definition) {
+  const resumed = !definition && options.sessionManager && options.sessionId && options.resolveProvider
+    ? await resolveVirtualModelFallback(options.sessionManager, options.sessionId, models, options.resolveProvider,
+      { provider: options.providerName, id: options.model }, options.signal) : undefined;
+  if (!definition && !resumed) {
     if (options.sessionManager && options.sessionId && options.sessionManager.get(options.sessionId)) {
       options.sessionManager.setCompactionContextWindow(options.sessionManager.getCompactionContextWindow(), options.sessionId);
     }
     return streamPhysicalProviderTurn(options);
   }
+  const virtual = definition ?? resumed!.virtual;
   let failed: VirtualModelRequest['failed'];
   const maxRetries = options.maxRetries ?? 2;
   if (!Number.isSafeInteger(maxRetries) || maxRetries < 0 || maxRetries > 10) throw new VirtualModelRoutingError();
   for (let attempt = 0; ; attempt++) {
     let producedOutput = false;
-    const resolved = await models.resolve({ definition, messages: options.messages, thinking: options.thinking,
+    const resolved = resumed ?? await models.resolve({ definition: definition!, messages: options.messages, thinking: options.thinking,
       reason: attempt ? 'retry' : options.routeReason ?? (options.sessionManager ? (options.messages.at(-1)?.role === 'user' ? 'user' : 'continuation') : 'direct'),
       failed, signal: options.signal, sessionId: options.sessionId, sessionManager: options.sessionManager,
       context: { resolveProvider: name => options.resolveProvider ? options.resolveProvider(name)
         : name === options.providerName ? options.provider : undefined },
     });
     const { provider, selection } = resolved;
-    const metadata = getPublishedModelMetadata(selection.provider, selection.id);
+    const metadata = getProviderPublishedModel(selection.provider, selection.id, provider);
+    const project = (input: Message[]): Message[] => input.map(message => {
+      let projected = message;
+      // Private replay belongs to the exact physical source, not the virtual alias.
+      if (message.role === 'assistant' && (message.provider !== selection.provider || message.model !== selection.id)) {
+        projected = { id: message.id, timestamp: message.timestamp, role: message.role, content: message.content,
+          ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
+          ...(message.blocks ? { blocks: message.blocks.filter(block => block.type !== 'reasoning') } : {}) };
+      }
+      if (metadata?.capabilities.imageInput === false && projected.blocks?.some(block => block.type === 'image')) {
+        projected = { ...projected, content: `${projected.content}\n[Image omitted: physical model does not support images.]`,
+          blocks: projected.blocks.filter(block => block.type !== 'image') };
+      }
+      return projected;
+    });
+    const outputLimit = Math.min(metadata?.maxOutputTokens ?? Infinity, definition?.maxOutputTokens ?? Infinity);
     const manager = options.sessionManager;
-    let messages = captureProviderMessages(options.messages);
+    let messages = project(captureProviderMessages(options.messages));
     let contextBudget = options.contextBudget;
-    if (metadata?.contextWindow) {
-      const window = Math.min(metadata.contextWindow, options.contextBudget?.contextWindow ?? Infinity);
+    const physicalWindow = metadata?.contextWindow ?? definition?.contextWindow;
+    if (physicalWindow) {
+      const window = Math.min(physicalWindow, definition?.contextWindow ?? Infinity, options.contextBudget?.contextWindow ?? Infinity);
       if (manager && options.sessionId) manager.setCompactionContextWindow(window, options.sessionId);
       contextBudget = { contextWindow: window,
         reserveTokens: manager?.getCompactionSettings().reserveTokens ?? options.contextBudget?.reserveTokens ?? 0 };
-      try { assertProviderRequestBudget(messages, { systemPrompt: options.systemPrompt, tools: options.tools }, contextBudget); }
+      try { assertProviderRequestBudget(messages, { systemPrompt: options.systemPrompt,
+        tools: metadata?.capabilities.toolCalls === false ? [] : options.tools }, contextBudget); }
       catch (error) {
         if (!(error instanceof ProviderRequestContextError) || error.kind !== 'overflow' || !manager || !options.sessionId
           || !await manager.checkAndTriggerCompaction(options.sessionId, options.signal, 'overflow')) throw error;
@@ -150,9 +174,7 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
     } else if (manager && options.sessionId) {
       manager.setCompactionContextWindow(options.contextBudget?.contextWindow, options.sessionId);
     }
-    if (metadata?.capabilities.imageInput === false) messages = messages.map(message => message.blocks?.some(block => block.type === 'image')
-      ? { ...message, content: `${message.content}\n[Image omitted: physical model does not support images.]`,
-          blocks: message.blocks.filter(block => block.type !== 'image') } : message);
+    messages = project(messages);
     const dispatchSession = options.sessionId ? manager?.get(options.sessionId) : undefined;
     const dispatchLeaf = dispatchSession?.activeLeafId;
     const dispatchContext = manager && options.sessionId ? JSON.stringify(manager.getEffectiveContext(options.sessionId)) : undefined;
@@ -162,6 +184,14 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
         model: selection.id, thinking: selection.thinkingLevel, messages, contextBudget, maxRetries: 0,
         cacheWarming: 'off',
         onComplete: undefined, onError: undefined,
+        onTransportComplete: () => { producedOutput = true; },
+        tools: metadata?.capabilities.toolCalls === false ? [] : options.tools,
+        prepareDispatch: (input, request) => ({ messages: project(input), options: { ...request,
+          ...(metadata?.capabilities.toolCalls === false ? { tools: [] } : {}),
+          thinking: clampPublishedThinkingLevel(request.thinking ?? 'off', getSupportedThinkingLevels(selection.provider, selection.id, undefined, provider)),
+          ...(Number.isFinite(outputLimit) && (request.maxTokens !== undefined || definition?.maxOutputTokens !== undefined)
+            ? { maxTokens: Math.min(request.maxTokens ?? outputLimit, outputLimit) } : {}),
+        } }),
         validateDispatch: async model => {
           const currentProvider = options.resolveProvider ? await options.resolveProvider(selection.provider)
             : selection.provider === options.providerName ? options.provider : undefined;
@@ -172,7 +202,7 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
               || dispatchLeaf && !ancestry.some(entry => entry.id === dispatchLeaf)
               || JSON.stringify(manager.getEffectiveContext(options.sessionId)) !== dispatchContext) throw new VirtualModelRoutingError();
           }
-          if (models.get(definition.provider, definition.id) !== definition || models.get(selection.provider, model)
+          if (models.get(virtual.provider, virtual.id) !== definition || models.get(selection.provider, model)
             || model !== selection.id) throw new VirtualModelRoutingError();
         },
         onTextDelta: delta => { producedOutput = true; return options.onTextDelta?.(delta); },
@@ -181,7 +211,7 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
       });
       accepted = { ...response, provider: selection.provider, model: response.model ?? selection.id,
         thinkingLevel: selection.thinkingLevel,
-        selection: { provider: definition.provider, id: definition.id, thinkingLevel: options.thinking ?? 'off' as ThinkingLevel } };
+        selection: { provider: virtual.provider, id: virtual.id, thinkingLevel: options.thinking ?? 'off' as ThinkingLevel } };
     } catch (error) {
       if (producedOutput || options.signal?.aborted || options.retrySignal?.aborted || attempt >= maxRetries
         || error instanceof ProviderRequestContextError || error instanceof ProviderContextOverflowError
@@ -206,6 +236,10 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
 
 async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
   validateDispatch?(model?: string): Promise<void>;
+  onTransportComplete?(): void;
+  prepareDispatch?(messages: Message[], options: import('../providers/index.js').ChatOptions): {
+    messages: Message[]; options: import('../providers/index.js').ChatOptions;
+  };
 }): Promise<ChatResponse> {
   const contextBudget = captureProviderRequestBudget(options), signal = options.signal;
   const sessionManager = options.sessionManager, sessionId = options.sessionId;
@@ -218,6 +252,11 @@ async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
   const safeError = (value: unknown): unknown => {
     if (value instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
     if (value instanceof ProviderRequestContextError) return new ProviderRequestContextError(value.kind);
+    if (value instanceof VirtualModelRoutingError) return new VirtualModelRoutingError();
+    if (value instanceof ProviderToolArgumentsError) return new ProviderToolArgumentsError();
+    if (value instanceof ProviderOutputBudgetError) return new ProviderOutputBudgetError(
+      value.message === new ProviderOutputBudgetError('thinking').message ? 'thinking' : undefined,
+    );
     if (!redactText) return value;
     const message = safeText(value instanceof Error ? value.message : String(value));
     const error = new Error(message);
@@ -251,6 +290,7 @@ async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
       sessionId: options.sessionId ? safeText(options.sessionId) : undefined,
       systemPrompt: options.systemPrompt ? safeText(options.systemPrompt) : undefined,
       ...(options.maxTokens !== undefined ? { maxTokens: options.maxTokens } : {}),
+      ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
       tools: options.tools,
       thinking: options.thinking,
       ...(options.thinkingBudgets !== undefined ? { thinkingBudgets: copyThinkingBudgets(options.thinkingBudgets) } : {}),
@@ -361,8 +401,10 @@ async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
       let providerFailure: unknown;
       try {
         const prepared = prepare(safeJson);
-        const nativeOutput = nativeOutputPolicy?.(prepared.data.options);
-        const requestMessages = prepared.data.messages, requestOptions = nativeOutput?.options ?? prepared.data.options;
+        const projected = options.prepareDispatch?.(prepared.data.messages, prepared.data.options)
+          ?? { messages: prepared.data.messages, options: prepared.data.options };
+        const nativeOutput = nativeOutputPolicy?.(projected.options);
+        const requestMessages = projected.messages, requestOptions = nativeOutput?.options ?? projected.options;
         if (contextBudget) assertProviderRequestBudget(requestMessages, requestOptions, contextBudget,
           Math.max(prepared.requestedMaxTokens ?? 0, nativeOutput?.maxTokens ?? 0));
         if (sessionManager && sessionId) {
@@ -405,7 +447,7 @@ async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
         await streamChat(
           requestMessages,
           deliver,
-          result => { if (accepting && !signal?.aborted) completedResponse = result; },
+          result => { if (accepting && !signal?.aborted) { completedResponse = result; options.onTransportComplete?.(); } },
           error => { if (accepting && !signal?.aborted) streamError = error; },
           requestOptions,
         );

@@ -26,6 +26,7 @@ import {
   PROVIDER_NETWORK_SCOPE,
   ProviderType,
   ProviderFactory,
+  streamProviderTurn,
   readBoundedResourceText,
   VertexGeminiProvider,
 } from '@ai-harness/core';
@@ -33,6 +34,7 @@ import type {
   AgentProviderNetworkSettings,
   AiProvider,
   ChatOptions,
+  ExtensionRegistry,
   Message,
   ModelPricing,
   ProviderConfig,
@@ -202,14 +204,16 @@ function providerNetworkConfig(
 
 interface ProxyChatResult {
   content: string;
+  provider?: string;
   model?: string;
   usage?: Record<string, number>;
   /** Internal completion evidence; never part of ordinary legacy chat output. */
   compactionSummaryValid?: boolean;
 }
 
+type ProxyStreamChunk = { content: string; usage?: Record<string, number>; provider?: string; model?: string };
 interface ProviderProxy {
-  stream(messages: Message[], options?: ChatOptions): AsyncGenerator<{ content: string; usage?: Record<string, number> }, void, unknown>;
+  stream(messages: Message[], options?: ChatOptions): AsyncGenerator<ProxyStreamChunk, void, unknown>;
   chat(messages: Message[], options?: ChatOptions): Promise<ProxyChatResult>;
 }
 
@@ -217,6 +221,7 @@ class CoreProviderProxy implements ProviderProxy {
   constructor(
     private readonly provider: AiProvider,
     private readonly legacyUsage = false,
+    private readonly routing?: { registry: ExtensionRegistry; resolve(name: string): AiProvider | undefined },
   ) {}
 
   private usage(value: Awaited<ReturnType<AiProvider['chat']>>['usage']): Record<string, number> | undefined {
@@ -242,9 +247,11 @@ class CoreProviderProxy implements ProviderProxy {
   }
 
   async chat(messages: Message[], options?: ChatOptions): Promise<ProxyChatResult> {
-    const result = await this.provider.chat(messages, options);
+    const result = this.routing
+      ? await this.routing.registry.chat(this.provider, messages, options, name => this.routing!.resolve(name))
+      : await this.provider.chat(messages, options);
     if (!result || typeof result !== 'object') throw new Error('Provider response was invalid.');
-    const own = (key: 'content' | 'model' | 'usage'): unknown => {
+    const own = (key: 'content' | 'model' | 'usage' | 'provider'): unknown => {
       try {
         const descriptor = Object.getOwnPropertyDescriptor(result, key);
         return descriptor && 'value' in descriptor ? descriptor.value : undefined;
@@ -258,16 +265,18 @@ class CoreProviderProxy implements ProviderProxy {
       throw new Error('Provider response was invalid.');
     }
     const usage = this.usage(own('usage') as Awaited<ReturnType<AiProvider['chat']>>['usage']);
+    const physicalProvider = own('provider');
     let compactionSummaryValid = true;
     try { copyCompactionResponse(result); } catch { compactionSummaryValid = false; }
-    return { content, ...(model === undefined ? {} : { model }), ...(usage ? { usage } : {}), compactionSummaryValid };
+    return { content, ...(this.routing && typeof physicalProvider === 'string' ? { provider: physicalProvider } : {}),
+      ...(model === undefined ? {} : { model }), ...(usage ? { usage } : {}), compactionSummaryValid };
   }
 
   async *stream(
     messages: Message[],
     options?: ChatOptions,
-  ): AsyncGenerator<{ content: string; usage?: Record<string, number> }, void, unknown> {
-    const queue: Array<{ content: string; usage?: Record<string, number>; bytes: number }> = [];
+  ): AsyncGenerator<ProxyStreamChunk, void, unknown> {
+    const queue: Array<ProxyStreamChunk & { bytes: number }> = [];
     const controller = new AbortController();
     const signal = options?.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
     let queuedBytes = 0;
@@ -275,7 +284,7 @@ class CoreProviderProxy implements ProviderProxy {
     let finished = false;
     let failure: Error | undefined;
     const notify = (): void => { wake?.(); wake = undefined; };
-    const enqueue = (item: { content: string; usage?: Record<string, number> }): void => {
+    const enqueue = (item: ProxyStreamChunk): void => {
       if (finished) return;
       if (typeof item.content !== 'string') {
         failure = new Error('Provider stream was invalid.');
@@ -297,7 +306,16 @@ class CoreProviderProxy implements ProviderProxy {
       notify();
     };
 
-    void this.provider.streamChat(
+    const streamChat: AiProvider['streamChat'] = this.routing
+      ? async (input, chunk, complete, _error, request) => {
+        const result = await streamProviderTurn({ ...request, provider: this.provider,
+          providerName: this.provider.getProviderType(), model: request?.model ?? this.provider.getConfiguredModel(),
+          messages: input, tools: request?.tools ?? [], routeReason: 'direct',
+          extensionRegistry: this.routing!.registry, resolveProvider: name => this.routing!.resolve(name),
+          onTextDelta: text => chunk(text), maxRetries: 0 });
+        complete?.(result);
+      } : this.provider.streamChat.bind(this.provider);
+    void streamChat(
       messages,
       content => {
         if (typeof content !== 'string') enqueue({ content: content as string });
@@ -315,7 +333,8 @@ class CoreProviderProxy implements ProviderProxy {
         }
         const usage = failure ? undefined
           : this.usage(rawUsage as Awaited<ReturnType<AiProvider['chat']>>['usage']);
-        if (usage) enqueue({ content: '', usage });
+        if (usage || this.routing) enqueue({ content: '', ...(usage ? { usage } : {}),
+          ...(this.routing ? { provider: response?.provider, model: response?.model } : {}) });
         finished = true;
         notify();
       },
@@ -339,6 +358,7 @@ class CoreProviderProxy implements ProviderProxy {
           yield {
             content: item.content,
             ...(item.usage ? { usage: item.usage } : {}),
+            ...(item.provider ? { provider: item.provider, model: item.model } : {}),
           };
         } else {
           await new Promise<void>(resolve => { wake = resolve; });
@@ -771,6 +791,7 @@ export class AiProxyServer {
 
   /** Check if a provider is configured */
   isConfigured(type: string): boolean {
+    if (this.virtualRegistry?.getVirtualProvider(type)) return true;
     switch (type.toLowerCase()) {
       case 'openai': return !!this.openaiProxy;
       case 'anthropic': return !!this.anthropicProxy;
@@ -811,8 +832,8 @@ export class AiProxyServer {
     options?: ProxyChatOptions,
     onChunk?: (chunk: { content: string; usage?: Record<string, number> }) => void,
     forCompaction = false,
-  ): Promise<{ content: string; model?: string; usage?: Record<string, number> }> {
-    const provider = this.getProxy(providerType);
+  ): Promise<{ content: string; provider?: string; model?: string; usage?: Record<string, number> }> {
+    const provider = this.getProxy(providerType, options?.model);
 
     if (!provider) {
       throw new Error(`Provider "${providerType}" is not configured. Set API key via environment variable or /api/config endpoint.`);
@@ -829,7 +850,9 @@ export class AiProxyServer {
       const contentParts: string[] = [];
       let fullContentBytes = 0;
       let streamEvents = 0;
+      let physical: { provider?: string; model?: string } = {};
       for await (const chunk of stream) {
+        if (chunk.provider) physical = { provider: chunk.provider, model: chunk.model };
         if (++streamEvents > MAX_PROXY_STREAM_EVENTS || typeof chunk.content !== 'string') {
           throw new Error('Provider response is invalid.');
         }
@@ -848,20 +871,21 @@ export class AiProxyServer {
         onChunk({ content: finalContent });
       }
 
-      if (finalUsage) this.recordProxyUsage(providerType, safeOptions?.model, finalUsage);
-      return this.redactJson({ content: contentParts.join(''), model: safeOptions?.model, usage: finalUsage });
+      if (finalUsage) this.recordProxyUsage(physical.provider ?? providerType, physical.model ?? safeOptions?.model, finalUsage);
+      return this.redactJson({ content: contentParts.join(''), model: safeOptions?.model, usage: finalUsage, ...physical });
     }
 
     // Non-streaming mode
     const rawResult = await provider.chat(safeMessages, safeOptions);
     const compactionSummaryValid = rawResult.compactionSummaryValid;
     const result = this.redactJson(rawResult);
-    if (result.usage) this.recordProxyUsage(providerType, result.model ?? safeOptions?.model, result.usage);
+    if (result.usage) this.recordProxyUsage(result.provider ?? providerType, result.model ?? safeOptions?.model, result.usage);
     if (forCompaction) {
       if (compactionSummaryValid === false) throw new Error('Compaction did not produce a complete bounded text summary.');
       readCompactionSummary(result);
     }
-    return { content: result.content, ...(result.model === undefined ? {} : { model: result.model }), ...(result.usage ? { usage: result.usage } : {}) };
+    return { content: result.content, ...(result.provider ? { provider: result.provider } : {}),
+      ...(result.model === undefined ? {} : { model: result.model }), ...(result.usage ? { usage: result.usage } : {}) };
   }
 
   private recordProxyUsage(provider: string, model: string | undefined, usage: Record<string, number>): void {
@@ -881,7 +905,7 @@ export class AiProxyServer {
     messages: Message[],
     options?: ProxyChatOptions,
   ): Promise<{ stream: ReadableStream<Uint8Array>; error?: Error }> {
-    const proxy = this.getProxy(providerType);
+    const proxy = this.getProxy(providerType, options?.model);
 
     if (!proxy) {
       return {
@@ -891,7 +915,7 @@ export class AiProxyServer {
 
     try {
       const operation = new AbortController();
-      let chatStream: AsyncGenerator<{ content: string; usage?: Record<string, number> }, void, unknown> | undefined;
+      let chatStream: AsyncGenerator<ProxyStreamChunk, void, unknown> | undefined;
       let cancelled = false;
       let resumeDemand: (() => void) | undefined;
       const stream = new ReadableStream<Uint8Array>({
@@ -902,6 +926,7 @@ export class AiProxyServer {
           let fullContentJsonBytes = 0;
           let streamEvents = 0;
           let finalUsage: Record<string, number> | undefined;
+          let physical: { provider?: string; model?: string } = {};
           const contentRedactor = this.redactor.createStream();
           const waitForDemand = async (): Promise<void> => {
             while (!cancelled && (controller.desiredSize ?? 0) <= 0) {
@@ -924,6 +949,7 @@ export class AiProxyServer {
             chatStream = proxy.stream(safeMessages, { ...safeOptions, signal });
             for await (const chunk of chatStream) {
               if (cancelled) break;
+              if (chunk.provider) physical = { provider: chunk.provider, model: chunk.model };
               if (++streamEvents > MAX_PROXY_STREAM_EVENTS) {
                 throw new Error('The provider response exceeded its event limit.');
               }
@@ -951,9 +977,9 @@ export class AiProxyServer {
               await enqueue('text_delta', { content: finalContent });
             }
             if (!cancelled) {
-              if (finalUsage) this.recordProxyUsage(providerType, safeOptions?.model, finalUsage);
+              if (finalUsage) this.recordProxyUsage(physical.provider ?? providerType, physical.model ?? safeOptions?.model, finalUsage);
               await enqueue('message_end', {
-                content: contentParts.join(''),
+                content: contentParts.join(''), ...physical,
                 ...(finalUsage ? { usage: finalUsage } : {}),
               });
             }
@@ -988,7 +1014,14 @@ export class AiProxyServer {
     }
   }
 
-  private getProxy(type: string): ProviderProxy | null {
+  private virtualRegistry?: ExtensionRegistry;
+  setVirtualModelRegistry(registry: ExtensionRegistry): void { this.virtualRegistry = registry; }
+
+  private getProxy(type: string, model?: string): ProviderProxy | null {
+    const virtual = this.virtualRegistry?.getVirtualProvider(type);
+    if (virtual && this.virtualRegistry?.virtualModels.get(type, model ?? virtual.getConfiguredModel())) {
+      return new CoreProviderProxy(virtual, false, { registry: this.virtualRegistry, resolve: name => this.getAgentProvider(name) });
+    }
     switch (type.toLowerCase()) {
       case 'openai': return this.openaiProxy ?? null;
       case 'anthropic': return this.anthropicProxy ?? null;

@@ -232,6 +232,20 @@ describe('CommandHandler', () => {
       }
     });
 
+    it('restores a missing virtual router to its witnessed physical provider before switching', async () => {
+      const registry = new ExtensionRegistry();
+      const context = handler.getContext(); context.extensionRegistry = registry;
+      const physical = new MockProvider({ type: 'mock', model: 'native' });
+      context.providers.set('physical', physical);
+      const session = await manager.create({ model: 'auto' });
+      await manager.addMessage(session.id, { role: 'assistant', content: 'saved', provider: 'physical', model: 'native',
+        metadata: { selection: { provider: 'router', id: 'auto' } } });
+      await handler.execute(`/switch ${session.id}`);
+      expect(context.provider).toBe(physical);
+      expect(context.currentSessionId).toBe(session.id);
+      expect(session).toMatchObject({ model: 'native', providerConfig: { type: 'physical' } });
+    });
+
     it('should switch by numeric index', async () => {
       // Create sessions and use index 1 (first in list = most recent)
       const beforeCount = manager.list().length;

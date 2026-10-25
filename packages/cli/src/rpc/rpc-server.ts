@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { resolveVirtualModelFallback } from '@ai-harness/core';
 import os from 'node:os';
 import { StringDecoder } from 'node:string_decoder';
 import type { Readable } from 'node:stream';
@@ -491,10 +492,27 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       models: options.models,
       apiKey: options.apiKey,
     }, settingsResolution.settings);
+    const startupSession = await resolveStartupSession({
+      sessionManager, args: { continueSession: options.continueSession ?? false, resume: false,
+        session: options.session, sessionId: options.sessionId, fork: options.fork, sessionDir: sessionDirectory,
+        name: options.name, noSession: options.noSession ?? false }, cwd: canonicalCwd, interactive: false,
+    });
+    let resumedThinking: ThinkingLevel | undefined;
+    if (!options.model && !options.provider) {
+      const fallback = await resolveVirtualModelFallback(sessionManager, startupSession.id, extensionRegistry.virtualModels, name => providers.get(name));
+      if (fallback) {
+        await sessionManager.update(startupSession.id, { model: fallback.selection.id, providerConfig: { type: fallback.selection.provider } });
+        resumedThinking = fallback.selection.thinkingLevel;
+        process.stderr.write('Warning: Saved virtual router unavailable; resuming its last physical model.\n');
+      }
+      if (startupSession.model && startupSession.providerConfig?.type) effectiveModels.selection = {
+        ...effectiveModels.selection, provider: startupSession.providerConfig.type, model: startupSession.model,
+      };
+    }
     const startup = await resolveStartupProvider(providers, { ...effectiveModels.selection, offline }, process.env, extensionRegistry.virtualModels);
     startup.scopeDiagnostics?.forEach(() => process.stderr.write('Warning: A model scope entry could not be resolved.\n'));
     const startupModel = startup.model ?? startup.provider.getConfiguredModel();
-    const startupThinking = options.thinking
+    const startupThinking = options.thinking ?? resumedThinking
       ?? startup.thinkingLevel
       ?? resolveAgentThinkingLevel(settingsResolution.settings, startup.providerName, startupModel);
     sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
@@ -522,22 +540,6 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
     const selectedStaticTools = selectRegisteredTools(registeredTools,
       cliToolSelectionOptions(() => extensionRegistry.getTools(), toolSelectionOptions));
     const selectedTools = selectedStaticTools.filter(tool => isDeclaredToolExposure(agentToolExposure(tool)));
-
-    const startupSession = await resolveStartupSession({
-      sessionManager,
-      args: {
-        continueSession: options.continueSession ?? false,
-        resume: false,
-        session: options.session,
-        sessionId: options.sessionId,
-        fork: options.fork,
-        sessionDir: sessionDirectory,
-        name: options.name,
-        noSession: options.noSession ?? false,
-      },
-      cwd: canonicalCwd,
-      interactive: false,
-    });
 
     const customContext: RpcContext = {
       sessionManager,

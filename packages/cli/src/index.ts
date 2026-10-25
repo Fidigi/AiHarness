@@ -86,6 +86,7 @@ import { PromptBoundaryRefresh } from './tui/status-prompt-refresh.js';
 import { terminalText } from './tui/terminal-text.js';
 import { editInExternalEditor } from './utils/system-integration.js';
 import { runRpcMode } from './rpc/rpc-server.js';
+import { resolveVirtualModelFallback } from '@ai-harness/core';
 import {
   ProjectTrustManager,
   promptForProjectTrust,
@@ -1064,7 +1065,25 @@ async function main(): Promise<void> {
     },
   );
   let ctx = commandHandler.getContext();
+  let startupSession: Session | undefined;
+  const selectStartupSession = () => resolveStartupSession({ sessionManager, args: cliArguments, cwd: workspaceCwd,
+    workspaceId: workspaceDescriptor.id, interactive: applicationMode === 'interactive', chooseSession: chooseStartupSession });
   try {
+    if (cliArguments.session || cliArguments.continueSession || cliArguments.resume || cliArguments.fork) {
+      startupSession = await selectStartupSession();
+      if (!cliArguments.model && !cliArguments.provider) {
+        const fallback = await resolveVirtualModelFallback(sessionManager, startupSession.id, extensionRegistry.virtualModels, name => ctx.providers.get(name));
+        if (fallback) {
+          await sessionManager.update(startupSession.id, { model: fallback.selection.id, providerConfig: { type: fallback.selection.provider } });
+          ctx.thinkingLevel = fallback.selection.thinkingLevel ?? 'off';
+          process.stderr.write('Warning: Saved virtual router unavailable; resuming its last physical model.\n');
+        }
+        if (startupSession.model && startupSession.providerConfig?.type) {
+          effectiveModelSettings.selection = { ...effectiveModelSettings.selection,
+            provider: startupSession.providerConfig.type, model: startupSession.model };
+        }
+      }
+    }
     const startup = await resolveStartupProvider(ctx.providers, { ...effectiveModelSettings.selection, offline }, process.env, extensionRegistry.virtualModels);
     startup.scopeDiagnostics?.forEach(() => process.stderr.write('Warning: A model scope entry could not be resolved.\n'));
     ctx.provider = startup.provider;
@@ -1084,8 +1103,12 @@ async function main(): Promise<void> {
     ));
     sessionManager.setCompactionContextWindow(resolveAgentCompactionContextWindow(startup.providerName, startupModel));
   } catch (error) {
-    reportError(error instanceof Error ? error.message : String(error));
-    process.exitCode = 2;
+    if (!(error instanceof StartupSessionSelectionCancelledError)) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (fullscreenTerminal && !fullscreenTerminal.isActive()) process.stderr.write(`Error: ${redactOutput(message)}\n`);
+      else reportError(message);
+      process.exitCode = 2;
+    }
     await cleanupEarlyExit();
     return;
   }
@@ -1144,16 +1167,8 @@ async function main(): Promise<void> {
   }
   await reloadKeybindings();
 
-  let startupSession: Session;
   try {
-    startupSession = await resolveStartupSession({
-      sessionManager,
-      args: cliArguments,
-      cwd: workspaceCwd,
-      workspaceId: workspaceDescriptor.id,
-      interactive: applicationMode === 'interactive',
-      chooseSession: chooseStartupSession,
-    });
+    startupSession ??= await selectStartupSession();
   } catch (error) {
     if (!(error instanceof StartupSessionSelectionCancelledError)) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1543,7 +1558,9 @@ async function main(): Promise<void> {
       conversationRunning = true;
       const operationController = new AbortController();
       activeAbortController = operationController;
-      const providerName = String((provider as unknown as { config?: { type?: string } }).config?.type ?? 'unknown');
+      const savedProviderName = sessionManager.get(currentSessionId)?.providerConfig?.type;
+      const providerName = savedProviderName && ctx.providers.get(savedProviderName) === provider
+        ? savedProviderName : provider.getProviderType();
       const providerModel = (provider as unknown as { config?: { model?: string } }).config?.model;
 
       const persistUserInput = async (
@@ -1679,6 +1696,7 @@ async function main(): Promise<void> {
         };
         let streamedAssistantContent = '';
         finalContent = await runToolLoop({
+        ...(savedProviderName && ctx.providers.get(savedProviderName) === provider ? { provider: providerName } : {}),
         sessionManager,
         sessionId: currentSessionId,
         extensionRegistry,

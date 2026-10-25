@@ -159,6 +159,7 @@ export async function createRuntimeServices(
   });
   proxy.setNetworkSettings(resolveAgentProviderNetworkSettings(providerSettings.settings));
   const extensionRegistry = new ExtensionRegistry();
+  proxy.setVirtualModelRegistry(extensionRegistry);
   const mcpHost = new McpSessionHost({
     registeredServers: extensionRegistry.mcpServers,
     agentDir: dataDir,

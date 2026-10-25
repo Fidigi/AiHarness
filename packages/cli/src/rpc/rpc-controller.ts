@@ -1,6 +1,7 @@
 import { constants as fsConstants } from 'node:fs';
 import { lstat, mkdir, open } from 'node:fs/promises';
 import path from 'node:path';
+import { resolveVirtualModelFallback } from '@ai-harness/core';
 import {
   AgentMessageQueue,
   retainAgentWork,
@@ -950,22 +951,27 @@ export class RpcController {
           const sessionId = path.basename(requested).replace(/\.jsonl$/i, '');
           const session = this.context.sessionManager.get(sessionId) ?? await this.context.sessionManager.loadFromStore(sessionId);
           if (!session) throw new Error(`Session not found: ${requested}`);
+          const fallback = await resolveVirtualModelFallback(this.context.sessionManager, session.id,
+            this.context.extensionRegistry.virtualModels, name => this.configuredProvider(name));
+          if (fallback) await this.context.sessionManager.update(session.id, {
+            model: fallback.selection.id, providerConfig: { type: fallback.selection.provider },
+          });
           this.currentSessionId = session.id;
-          const savedProviderName = typeof session.providerConfig?.type === 'string'
+          const savedProviderName = fallback?.selection.provider ?? (typeof session.providerConfig?.type === 'string'
             ? session.providerConfig.type
-            : this.context.providerName;
-          const savedProvider = this.configuredProvider(savedProviderName);
+            : this.context.providerName);
+          const savedProvider = fallback?.provider ?? this.configuredProvider(savedProviderName);
           if (savedProvider) {
             this.context.provider = savedProvider;
             this.context.providerName = savedProviderName;
             this.context.toolContext.provider = savedProvider;
             this.context.toolContext.providerName = savedProviderName;
           }
-          this.model = session.model ?? this.model;
+          this.model = fallback?.selection.id ?? session.model ?? this.model;
           if (this.model) this.context.provider.setConfiguredModel(this.model);
           this.refreshCompactionSettings();
           this.thinking = clampThinkingLevel(
-            rpcThinkingLevel(session.thinking ?? this.thinking),
+            rpcThinkingLevel(fallback?.selection.thinkingLevel ?? session.thinking ?? this.thinking),
             this.availableThinkingLevels(),
           );
           this.resetQueues();
@@ -1339,6 +1345,7 @@ export class RpcController {
             onTurnStart: () => this.events.startTurn(),
             streamTurn: async (messages, tools) => {
               let partialContent = '', partialReasoning = '';
+              let physicalProvider = this.context.providerName, physicalModel = this.model;
               const retryController = new AbortController();
               try {
                 return await streamProviderTurn({
@@ -1360,7 +1367,10 @@ export class RpcController {
                   redactText: this.context.redactText,
                   redactJson: this.context.redactJson,
                   createTextRedactor: this.context.createTextRedactor,
-                  onStart: (provider, model) => this.events.startAssistant(provider, model),
+                  onStart: (provider, model) => {
+                    physicalProvider = provider; physicalModel = model;
+                    return this.events.startAssistant(provider, model);
+                  },
                   onTextDelta: delta => { partialContent += delta; return this.events.textDelta(delta); },
                   onReasoningDelta: delta => { partialReasoning += delta; return this.events.reasoningDelta(delta); },
                   onError: async error => {
@@ -1370,7 +1380,7 @@ export class RpcController {
                         blocks: [
                           ...(partialReasoning ? [{ type: 'reasoning' as const, text: partialReasoning }] : []),
                           ...(partialContent ? [{ type: 'text' as const, text: partialContent }] : []),
-                        ], provider: this.context.providerName, model: this.model,
+                        ], provider: physicalProvider, model: physicalModel,
                         metadata: { outputError: (this.context.redactText?.(error instanceof Error ? error.message : String(error))
                           ?? (error instanceof Error ? error.message : String(error))).slice(0, 4_000) },
                       }, { skipAutoCompaction: true, signal });

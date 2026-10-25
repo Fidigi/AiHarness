@@ -1,4 +1,6 @@
 import type { ModelCapabilities, ModelPricing } from '../types/index.js';
+import type { AiProvider } from './index.js';
+import { getProviderPublishedModels } from './provider-model-metadata.js';
 
 export type PublishedThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
@@ -11,6 +13,7 @@ const STANDARD_REASONING_LEVELS: readonly PublishedThinkingLevel[] = [
 
 export interface PublishedModelMetadata {
   id: string;
+  api?: string;
   name: string;
   capabilities: ModelCapabilities;
   contextWindow?: number;
@@ -124,11 +127,14 @@ export function getSupportedThinkingLevels(
   provider: string,
   model: string | undefined,
   virtualModels?: { get(provider: string, id: string | undefined): { thinkingLevels?: readonly PublishedThinkingLevel[] } | undefined },
+  source?: Pick<AiProvider, 'getPublishedModels' | 'getModelApi'>,
 ): PublishedThinkingLevel[] {
   const virtual = virtualModels?.get(provider, model);
   if (virtual) return [...virtual.thinkingLevels ?? ['off']];
   if (!model) return [...PUBLISHED_THINKING_LEVELS];
-  const metadata = getPublishedModelMetadata(provider, model);
+  const declared = source ? getProviderPublishedModels(source) : undefined;
+  const metadata = declared === undefined ? getPublishedModelMetadata(provider, model) : declared.find(row => row.id === model);
+  if (declared !== undefined && !metadata) return ['off'];
   if (metadata?.thinkingLevelMap === null) return ['off'];
   const capabilities = metadata?.capabilities ?? inferModelCapabilities(provider, model);
   const levels = new Set<PublishedThinkingLevel>(capabilities.reasoning ? STANDARD_REASONING_LEVELS : ['off']);

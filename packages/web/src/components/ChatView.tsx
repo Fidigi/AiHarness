@@ -228,7 +228,16 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const [effectiveConfiguration, setEffectiveConfiguration] = useState<EffectiveConfiguration>();
   const configurationKey = `${workspace?.id ?? ''}:${currentSession?.id ?? ''}`;
   const [configurationReadyFor, setConfigurationReadyFor] = useState<string>();
-  const activeProviderType = (currentSession?.draft ? effectiveConfiguration?.values.provider : undefined) as ProviderType | undefined ?? selectedProviderType;
+  // A routed assistant records the logical selection separately from physical billing.
+  // Restore that saved selection, rather than the global provider's startup fallback.
+  const savedVirtualSelection = [...currentSession?.messages ?? []].reverse()
+    .find(message => message.role === 'assistant' && !message.metadata?.outputError)?.metadata?.selection as { provider?: unknown; id?: unknown } | undefined;
+  const savedVirtualProvider = typeof savedVirtualSelection?.provider === 'string'
+    && savedVirtualSelection.id === (currentSession?.model ?? effectiveConfiguration?.values.model)
+    ? savedVirtualSelection.provider as ProviderType : undefined;
+  const activeProviderType = (effectiveConfiguration?.provenance.provider?.scope === 'environment'
+    ? effectiveConfiguration.values.provider
+    : currentSession?.draft ? effectiveConfiguration?.values.provider : savedVirtualProvider) as ProviderType | undefined ?? selectedProviderType;
   const providerConfig = useSessionStore(state => state.providers.available[activeProviderType]);
   const modelCatalog = useSessionStore(state => state.providers.catalog);
   const currentRun = useSessionStore(state => id ? getStoredRun(state.runs, id) : undefined);

@@ -1444,14 +1444,14 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
 
 it('routes selectable models and derives non-context warming notices through genuinely installed public contracts', async () => {
   await writeFile(path.join(consumer, 'dispatch-public.ts'), `
-    import { ExtensionRegistry, type VirtualModelDefinition, type CacheTranscriptNotice, type ScopedConfigurationValues } from '@ai-harness/core';
+    import { ExtensionRegistry, resolveVirtualModelFallback, type VirtualModelDefinition, type CacheTranscriptNotice, type ScopedConfigurationValues } from '@ai-harness/core';
     const definition: VirtualModelDefinition = { provider: 'router', id: 'auto', route: request => ({ provider: 'mock', id: 'physical', state: request.state }) };
     const registry = new ExtensionRegistry(); await registry.load('owner', api => { api.registerVirtualModel(definition); });
     const preference: ScopedConfigurationValues = { showCacheMissNotices: false };
     const notice: CacheTranscriptNotice = { id: 'n', afterEntryId: 'm', kind: 'cache_warm' };
     // @ts-expect-error routing requires a physical provider-qualified result
     const invalid: VirtualModelDefinition = { provider: 'router', id: 'bad', route: () => ({ model: 'missing-provider' }) };
-    void preference; void notice; void invalid;
+    void preference; void notice; void invalid; void resolveVirtualModelFallback;
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'dispatch-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
@@ -1481,6 +1481,11 @@ it('routes selectable models and derives non-context warming notices through gen
     assert.equal(getSessionAccounting(entries, session.activeLeafId).active.requests, 2);
     assert.ok(!JSON.stringify(manager.getEffectiveContext(session.id)).includes('provider.cache_warm'));
     await registry.unload('owner');
+    const resumed = await runtime.start({ sessionId: session.id, cwd: process.cwd(), provider: 'router', input: 'resume', cacheWarming: 'off' });
+    assert.equal((await runtime.wait(resumed.id)).phase, 'completed');
+    assert.equal(calls, 3); assert.equal(requests.length, 2);
+    assert.equal(session.messages.at(-1).provider, 'mock'); assert.equal(session.messages.at(-1).model, 'physical');
+    assert.equal(session.messages.at(-1).metadata.selection.provider, 'router');
     console.log('installed routing and cache notices OK');
   `);
   expect(await run(process.execPath, ['dispatch-public.mjs'], consumer, environment))

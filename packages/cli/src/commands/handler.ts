@@ -5,6 +5,7 @@
 // ============================================================
 
 import chalk from 'chalk';
+import { resolveVirtualModelFallback } from '@ai-harness/core';
 import {
   atomicWriteStableFile,
   clampPublishedThinkingLevel,
@@ -520,8 +521,15 @@ const commands: CommandEntry[] = [
         return chalk.red(`Session not found: ${chalk.yellow(target)}. Use /list to see available sessions.`);
       }
 
+      const fallback = ctx.extensionRegistry ? await resolveVirtualModelFallback(ctx.sessionManager, session.id,
+        ctx.extensionRegistry.virtualModels, name => ctx.providers.get(name), undefined, ctx.signal) : undefined;
+      if (fallback) {
+        await ctx.sessionManager.update(session.id, { model: fallback.selection.id, providerConfig: { type: fallback.selection.provider } });
+        ctx.provider = fallback.provider; ctx.provider.setConfiguredModel(fallback.selection.id);
+        ctx.thinkingLevel = fallback.selection.thinkingLevel ?? 'off';
+      }
       ctx.currentSessionId = session.id;
-      return `Switched to session: ${chalk.cyan(session.id)} - ${chalk.dim(session.title || 'Untitled')} (${session.messages.length} msgs)`;
+      return `${fallback ? 'Saved virtual router unavailable; resuming its last physical model.\n' : ''}Switched to session: ${chalk.cyan(session.id)} - ${chalk.dim(session.title || 'Untitled')} (${session.messages.length} msgs)`;
     },
   },
   {
