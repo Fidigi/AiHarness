@@ -97,9 +97,9 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 
 **The separate static demo or Pages artifact** → Load `static-demo.md` + the root/validation rows in `project-map.md`; use `bash demo/run-docker.sh`, not production agent APIs.
 
-**MCP configuration inheritance, hosting, OAuth, or discovery** → Load `security.md` + the MCP flow in `project-map.md` §4 and the [native MCP-01 field/lifecycle contract](../audit/pi/MCP-01.md) plus [MCP-02 exposure/selection contract](../audit/pi/MCP-02.md); add `server-api.md` or `cli-reference.md` for the adapter
+**MCP configuration inheritance, hosting, OAuth, or discovery** → Load `security.md` + the MCP flow in `project-map.md` §4 and the [native MCP-01 field/lifecycle contract](../audit/pi/MCP-01.md) plus [MCP-02 exposure/selection](../audit/pi/MCP-02.md) and [MCP-03 resources/rich results](../audit/pi/MCP-03.md); add `server-api.md` or `cli-reference.md` for the adapter
 ```
-→ packages/core/src/mcp/{config-inventory,session-host,oauth,oauth-provider-factory,oauth-flow}.ts
+→ packages/core/src/mcp/{config-inventory,session-host,resource-tools,resource-content,oauth,oauth-provider-factory,oauth-flow}.ts
 → packages/core/src/tools/tool-search.ts
 → packages/server/src/api/mcp-routes.ts
 → packages/web/src/components/McpSettings.tsx

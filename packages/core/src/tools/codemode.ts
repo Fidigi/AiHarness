@@ -7,6 +7,7 @@ export type { CodemodeDetails } from '../types/index.js';
 import { createRequire } from 'node:module';
 import { bindHostToolAdmission, type ExtensionRuntimeContext, type ExtensionTool, type ExtensionToolResult } from '../extensions/extension-registry.js';
 import { CODEMODE_WORKER_SOURCE } from './codemode-worker.js';
+import { ownToolResult } from '../agent/tool-result.js';
 import { Bm25ToolRanker, createToolSearchDocument } from './tool-search.js';
 import { agentToolExposure, type RegisteredAgentTool } from './tool-selection.js';
 
@@ -243,8 +244,13 @@ export async function runCodemode(options: RunCodemodeOptions): Promise<Extensio
               });
               const result = await options.execute(tool.name, input, nestedContext, controller.signal);
               if (settled) return;
-              if (result.isError) throw new Error(result.content);
-              value = result.content;
+              const owned = ownToolResult(result, redact);
+              if (owned.isError) throw new Error(owned.content);
+              const attachments = owned.blocks.filter(block => block.type === 'image');
+              const bytes = attachments.reduce((sum, block) => sum + Buffer.byteLength(block.url), 0);
+              if (images.length + attachments.length > 4 || outputBytes + bytes > limits.outputBytes) throw new Error('Script output limit exceeded.');
+              images.push(...attachments); outputBytes += bytes; imageBytes += bytes;
+              value = owned.content;
             } else if (message.operation === 'image') {
               const image = validateGeneratedImages([input], 1)[0]!;
               const url = `data:${image.mediaType};base64,${image.data}`;

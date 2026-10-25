@@ -26,6 +26,7 @@ const calls = async () => {
   catch (error) { if (error.code === 'ENOENT') return []; throw error; }
 };
 const tool = 'mcp__fixture__lookup', mutate = 'mcp__fixture__mutate';
+const resourceNames = ['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource'].map(name => `mcp__fixture__${name}`);
 let child, host, server, fixtureError;
 const declarations = [], allDeclarations = [], toolResults = [];
 async function cli(args, rpc = false) {
@@ -118,9 +119,10 @@ try {
     assert.equal(fixtureError, undefined);
     assert.deepEqual(await calls(), policy === 'missing' ? ['lookup', 'mutate'] : policy === 'hidden' ? [] : ['lookup'],
       JSON.stringify({ allDeclarations, toolResults }));
-    const expected = policy === 'missing' ? [[tool, mutate], [tool, mutate]]
+    const directNames = policy === 'excluded' ? [...resourceNames, tool] : [tool];
+    const expected = policy === 'missing' ? [[...resourceNames, tool, mutate], [...resourceNames, tool, mutate]]
       : policy === 'hidden' ? [[], []] : policy === 'codemode' ? [[], [], []]
-      : policy === 'deferred' ? [[], [tool], [tool]] : [[tool], [tool]];
+      : policy === 'deferred' ? [[], [tool], [tool]] : [directNames, directNames];
     assert.deepEqual(declarations, expected, JSON.stringify({ allDeclarations }));
     if (['codemode', 'deferred'].includes(policy)) assert.ok(allDeclarations[0].includes('tool_search'));
     if (mode === 'print') assert.equal(stdout, 'Exposure OK\n');

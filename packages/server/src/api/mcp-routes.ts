@@ -181,6 +181,28 @@ export function createMcpRouter(
 ): Router {
   const router = Router();
 
+  router.get('/content/:sessionId/:id', requireCapability('workspace:read'), async (request, response) => {
+    response.setHeader('Cache-Control', 'no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    const controller = new AbortController();
+    const cancel = () => { if (!response.writableEnded) controller.abort(); };
+    response.once('close', cancel);
+    try {
+      const services = await servicesPromise;
+      const session = services.sessionManager.get(request.params.sessionId);
+      if (!session?.cwd) { response.status(404).json({ error: 'MCP content unavailable.' }); return; }
+      await services.workspaceManager.resolve(session.cwd, { kind: 'directory' });
+      const content = await services.mcpHost.readRetainedContent(session.id, request.params.id, controller.signal);
+      if (!content || controller.signal.aborted) { if (!controller.signal.aborted) response.status(404).json({ error: 'MCP content unavailable.' }); return; }
+      // Download only, regardless of the untrusted declared media type.
+      response.setHeader('Content-Type', 'application/octet-stream');
+      response.setHeader('Content-Disposition', 'attachment; filename="mcp-content.bin"');
+      response.send(content.data);
+    } catch { if (!controller.signal.aborted) response.status(404).json({ error: 'MCP content unavailable.' }); }
+    finally { response.off('close', cancel); }
+  });
+
   router.get('/', async (request, response, next) => {
     response.setHeader('Cache-Control', 'no-store');
     try {

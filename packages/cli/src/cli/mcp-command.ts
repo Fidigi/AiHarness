@@ -58,6 +58,11 @@ Exposure policy:
   --tool matches original remote names: exact first, then first matching * rule.
   All modes retain native allowlists, exclusions and read-only checks; --tools
   does not bypass them. Explicit Test lists capabilities without invoking tools.
+  Resource-capable peers add server-bound list_mcp_resources,
+  list_mcp_resource_templates and read_mcp_resource tools. Exposure overrides use
+  resources/list, resources/templates/list and resources/read. MCP Apps are excluded.
+  Binary references expire with the session/retention window; RPC read_mcp_content
+  reads only an explicit current-session reference, never a path or remote URL.
 
 Options:
   --scope <global|project>            Configuration scope (default: global)

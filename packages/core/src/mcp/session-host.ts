@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -22,6 +22,8 @@ import {
 import type { McpOAuthProviderBinding } from './oauth.js';
 import { mcpOAuthUrl } from './oauth.js';
 import { boundedMcpOAuthFetch } from './oauth-fetch.js';
+import { formatMcpResult, McpContentStore, type McpRetainedContent } from './resource-content.js';
+import { callMcpResource, MCP_RESOURCE_TOOLS, type McpResourceConnection, type McpResourceOperation } from './resource-tools.js';
 import {
   MCP_TEST_CLOSE_WAIT_MS,
   MCP_TEST_COMMAND_TIMEOUT_MS,
@@ -71,6 +73,7 @@ interface RemoteTool {
   description: string;
   parameters: Record<string, unknown>;
   readOnly: boolean;
+  resourceOperation?: McpResourceOperation;
 }
 
 interface ConnectionCallbacks {
@@ -81,6 +84,8 @@ interface ConnectionCallbacks {
 
 export interface McpHostConnection {
   tools: RemoteTool[];
+  /** Present only when the peer advertises the MCP resources capability. */
+  resources?: McpResourceConnection;
   callTool(name: string, input: Record<string, unknown>, signal?: AbortSignal): Promise<CallToolResult>;
   close(): Promise<void>;
   redact(value: string): string;
@@ -107,6 +112,8 @@ export type McpOAuthProviderFactory = (
 
 export interface McpSessionHostOptions {
   agentDir: string;
+  /** Live host credential scrubber, also applied to decoded retained binary. */
+  redactText?: (text: string) => string;
   trustManager?: ProjectTrustManager;
   resolveWorkingDirectory?: (configured: string, base: string) => Promise<string>;
   startupWaitMs?: number;
@@ -150,6 +157,7 @@ export interface PreparedMcpTools {
 
 interface ConnectionRecord {
   key: string;
+  contentOwner: string;
   sessionId: string;
   target: McpServerTestTarget;
   exposure: McpExposure;
@@ -283,39 +291,6 @@ function normalizedInput(input: unknown): Record<string, unknown> {
   return JSON.parse(text) as Record<string, unknown>;
 }
 
-function safeJson(value: unknown): string {
-  try { return JSON.stringify(value); }
-  catch { return '[unserializable MCP value]'; }
-}
-
-function formatToolResult(result: CallToolResult, redact: (value: string) => string): ExtensionToolResult {
-  const output: string[] = [];
-  for (const item of Array.isArray(result.content) ? result.content : []) {
-    if (item.type === 'text') {
-      output.push(item.text);
-    } else if (item.type === 'image' || item.type === 'audio') {
-      output.push(`[${item.type} ${item.mimeType}; binary payload omitted]`);
-    } else if (item.type === 'resource') {
-      const resource = item.resource;
-      if ('text' in resource && typeof resource.text === 'string') output.push(resource.text);
-      else output.push(`[resource ${resource.uri}; binary payload omitted]`);
-    } else if (item.type === 'resource_link') {
-      output.push(`[resource ${item.name}: ${item.uri}]`);
-    } else {
-      output.push(safeJson(item));
-    }
-  }
-  if (result.structuredContent !== undefined) {
-    output.push(safeJson(result.structuredContent));
-  }
-  const text = safeText(output.join('\n') || '(MCP tool returned no content)', redact, MCP_RUNTIME_MAX_OUTPUT_CHARS);
-  return {
-    content: text,
-    isError: result.isError === true,
-    details: { mcp: true, contentItems: Array.isArray(result.content) ? result.content.length : 0 },
-  };
-}
-
 async function listRemoteTools(
   client: Client,
   requestTimeoutMs: number,
@@ -395,14 +370,21 @@ async function connectMcpSession(
     });
     client.setNotificationHandler(ToolListChangedNotificationSchema, async () => {
       try {
-        options.callbacks.onToolsChanged(await listRemoteTools(client, options.requestTimeoutMs, redact));
+        if (client.getServerCapabilities()?.tools) options.callbacks.onToolsChanged(await listRemoteTools(client, options.requestTimeoutMs, redact));
       } catch (error) {
         options.callbacks.onError(error);
       }
     });
-    const tools = await listRemoteTools(client, options.requestTimeoutMs, redact, signal);
+    const tools = client.getServerCapabilities()?.tools ? await listRemoteTools(client, options.requestTimeoutMs, redact, signal) : [];
+    const resourceOptions = (callSignal: AbortSignal) => ({ signal: callSignal, timeout: options.requestTimeoutMs,
+      maxTotalTimeout: options.requestTimeoutMs, resetTimeoutOnProgress: true });
     return {
       tools,
+      ...(client.getServerCapabilities()?.resources ? { resources: {
+        listResources: (cursor: string | undefined, callSignal: AbortSignal) => client.listResources(cursor ? { cursor } : {}, resourceOptions(callSignal)),
+        listTemplates: (cursor: string | undefined, callSignal: AbortSignal) => client.listResourceTemplates(cursor ? { cursor } : {}, resourceOptions(callSignal)),
+        readResource: (uri: string, callSignal: AbortSignal) => client.readResource({ uri }, resourceOptions(callSignal)),
+      } } : {}),
       redact,
       async callTool(name, input, callSignal) {
         return client.callTool(
@@ -443,6 +425,8 @@ async function connectMcpSession(
  */
 export class McpSessionHost {
   private readonly agentDir: string;
+  private readonly contentStore = new McpContentStore();
+  private readonly redactText: (text: string) => string;
   private readonly trustManager?: ProjectTrustManager;
   private readonly resolveWorkingDirectory?: (configured: string, base: string) => Promise<string>;
   private readonly startupWaitMs: number;
@@ -463,6 +447,7 @@ export class McpSessionHost {
 
   constructor(options: McpSessionHostOptions) {
     this.agentDir = options.agentDir;
+    this.redactText = options.redactText ?? (text => text);
     this.trustManager = options.trustManager;
     this.resolveWorkingDirectory = options.resolveWorkingDirectory;
     this.startupWaitMs = boundedInteger(options.startupWaitMs, MCP_RUNTIME_STARTUP_WAIT_MS);
@@ -698,6 +683,7 @@ export class McpSessionHost {
     const controller = new AbortController();
     const record: ConnectionRecord = {
       key: targetIdentity(target),
+      contentOwner: randomUUID(),
       sessionId,
       target,
       exposure: exposure(target),
@@ -721,6 +707,7 @@ export class McpSessionHost {
           this.updateStatus(sessionId, record);
         },
         onClose: () => {
+          this.contentStore.removeOwner(this.contentOwner(record));
           if (record.state === 'failed' || record.state === 'needs-auth') return;
           record.state = controller.signal.aborted ? 'closed' : 'disconnected';
           record.error = controller.signal.aborted ? undefined : 'The MCP server disconnected.';
@@ -776,7 +763,7 @@ export class McpSessionHost {
     if (preset !== 'chat-only') {
       outer: for (const record of session?.records.values() ?? []) {
         if (record.state !== 'connected' || !record.connection) continue;
-        for (const remote of record.tools) {
+        for (const remote of [...(record.connection.resources ? MCP_RESOURCE_TOOLS : []), ...record.tools]) {
           if (mcpToolExposure(record.target.config, remote.remoteName) === 'hidden') continue;
           if (preset === 'read-only' && !remote.readOnly) continue;
           candidates.push({
@@ -904,7 +891,7 @@ export class McpSessionHost {
     name: string,
     bindings: Map<string, BoundTool>,
     input: unknown,
-    _context: ExtensionRuntimeContext,
+    context: ExtensionRuntimeContext,
     signal?: AbortSignal,
   ): Promise<ExtensionToolResult> {
     throwIfAborted(signal);
@@ -915,6 +902,7 @@ export class McpSessionHost {
     if (record.state !== 'connected' || !record.connection) {
       throw new Error(`MCP server ${record.target.name} is not connected.`);
     }
+    if (remote.resourceOperation) return this.executeResource(record, remote.resourceOperation, normalizedInput(input), context, signal);
     const currentTool = record.tools.find(tool => tool.remoteName === remote.remoteName);
     if (!currentTool) {
       throw new Error(`MCP tool ${record.target.name}/${remote.name} is no longer available.`);
@@ -934,7 +922,9 @@ export class McpSessionHost {
       await record.connection.close().catch(() => undefined);
       throw new Error(`MCP tool ${record.target.name}/${remote.name} failed: ${record.error}`);
     }
-    const formatted = formatToolResult(result, record.connection.redact);
+    throwIfAborted(signal);
+    const formatted = formatMcpResult(result, text => this.redact(record, text),
+      (data, mime) => this.contentStore.put(this.contentOwner(record), data, mime));
     return {
       ...formatted,
       details: {
@@ -945,6 +935,55 @@ export class McpSessionHost {
         readOnly: remote.readOnly,
       },
     };
+  }
+
+  private contentOwner(record: ConnectionRecord): string { return record.contentOwner; }
+  private redact(record: ConnectionRecord, text: string): string { return this.redactText(record.connection?.redact(text) ?? text); }
+
+  private async validateResourceRecord(record: ConnectionRecord, signal?: AbortSignal): Promise<void> {
+    const session = this.sessions.get(record.sessionId);
+    if (!session || session.records.get(record.key) !== record || record.state !== 'connected') throw new Error('MCP resource binding is unavailable.');
+    this.assertSessionActive(session, signal);
+    const target = await readMcpServerTestTarget({ agentDir: this.agentDir, scope: record.target.scope, name: record.target.name,
+      ...(record.target.scope === 'project' ? { cwd: session.cwd } : {}), defaultCwd: session.cwd,
+      trustManager: this.trustManager, resolveWorkingDirectory: this.resolveWorkingDirectory });
+    this.assertSessionActive(session, signal);
+    if (targetIdentity(target) !== targetIdentity(record.target)) throw new Error('MCP resource configuration changed.');
+  }
+
+  /** Opaque references are session-bound, expire, and never authorize a filesystem read. */
+  async readRetainedContent(sessionId: string, id: string, signal?: AbortSignal): Promise<McpRetainedContent | undefined> {
+    if (!/^[a-f0-9-]{36}$/u.test(id)) return undefined;
+    for (const record of this.sessions.get(sessionId)?.records.values() ?? []) {
+      const owner = this.contentOwner(record);
+      if (!this.contentStore.get(owner, id)) continue;
+      await this.validateResourceRecord(record, signal);
+      const content = this.contentStore.get(owner, id);
+      if (!content) return undefined;
+      const text = content.data.toString('utf8'), encoded = content.data.toString('base64');
+      return this.redact(record, text) === text && this.redact(record, encoded) === encoded ? content : undefined;
+    }
+    return undefined;
+  }
+
+  private async executeResource(record: ConnectionRecord, operation: McpResourceOperation, input: Record<string, unknown>,
+    context: ExtensionRuntimeContext, signal?: AbortSignal): Promise<ExtensionToolResult> {
+    if (context.toolPreset === 'chat-only' || (context.currentSessionId && context.currentSessionId !== record.sessionId)) throw new Error('MCP resource operation is not allowed.');
+    const lifetime = new AbortController();
+    const timer = setTimeout(() => lifetime.abort('mcp-resource-timeout'), mcpRequestTimeout(record.target.config, this.requestTimeoutMs));
+    timer.unref?.();
+    const callSignal = AbortSignal.any([record.controller.signal, lifetime.signal, ...(signal ? [signal] : [])]);
+    try {
+      await this.validateResourceRecord(record, callSignal);
+      const connection = record.connection;
+      if (!connection?.resources || mcpToolExposure(record.target.config, operation) === 'hidden') throw new Error('MCP resource operation is not allowed.');
+      const result = await Promise.race([callMcpResource(connection.resources, operation, input, callSignal, text => this.redact(record, text)), waitForAbort(callSignal)]);
+      await this.validateResourceRecord(record, callSignal);
+      return formatMcpResult(result, text => this.redact(record, text), (data, mime) => this.contentStore.put(this.contentOwner(record), data, mime));
+    } catch {
+      if (callSignal.aborted) throw abortError();
+      throw new Error('MCP resource operation failed or is no longer authorized.');
+    } finally { clearTimeout(timer); lifetime.abort('mcp-resource-complete'); }
   }
 
   private async waitForStartup(promises: Promise<void>[], signal?: AbortSignal): Promise<void> {
@@ -1021,6 +1060,7 @@ export class McpSessionHost {
 
   private async closeRecords(records: Iterable<ConnectionRecord>): Promise<void> {
     const closing = [...records].map(async record => {
+      this.contentStore.removeOwner(this.contentOwner(record));
       record.controller.abort('mcp-session-close');
       record.state = 'closed';
       record.error = undefined;

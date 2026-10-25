@@ -13,6 +13,7 @@ import { McpServerTester } from './server-test.js';
 
 const fixture = fileURLToPath(new URL('./fixtures/test-server.mjs', import.meta.url));
 const roots: string[] = [];
+const resourceNames = ['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource'].map(name => `mcp__fixture__${name}`);
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 
 async function setup(scope: McpConfigScope, toolExposure: Record<string, McpExposure>, exposure: McpExposure | null = 'hidden') {
@@ -49,7 +50,7 @@ describe('real stdio MCP pattern exposure', () => {
         selection: { allowedTools: ['tool_search', 'codemode', lookup, mutate], excludedTools: [mutate] },
         initialLoadedTools: [mutate], codemode: { enabled: true } });
       const direct = mode === null || mode === 'direct';
-      expect(prepared.tools.map(tool => tool.name)).toEqual(direct ? [lookup, mutate] : []);
+      expect(prepared.tools.map(tool => tool.name)).toEqual(direct ? [...resourceNames, lookup, mutate] : []);
       if (mode === 'codemode' || mode === 'deferred') {
         expect((await loadout.executeToolSearch({ query: 'documentation state' }, w.context)).details).toEqual({ loaded: [lookup] });
       }
@@ -136,12 +137,12 @@ describe('real stdio MCP pattern exposure', () => {
     const w = await setup('global', { 'mcp__fixture__look*': 'hidden', 'look*': 'deferred', '*': 'direct' });
     try {
       const prepared = await w.host.prepareForPrompt({ sessionId: 'readonly', cwd: w.cwd, preset: 'read-only' });
-      expect(prepared.tools).toEqual([]);
+      expect(prepared.tools.map(tool => tool.name)).toEqual(resourceNames);
       expect((await prepared.waitForDiscoverableTools?.())?.map(tool => tool.name)).toEqual(['mcp__fixture__lookup']);
       await expect(prepared.execute('mcp__fixture__mutate', {}, w.context)).rejects.toThrow('Unknown or disabled');
       expect(await w.calls()).toEqual([]);
       const full = await w.host.prepareForPrompt({ sessionId: 'readonly', cwd: w.cwd, preset: 'full' });
-      expect(full.tools.map(tool => tool.name)).toEqual(['mcp__fixture__mutate']);
+      expect(full.tools.map(tool => tool.name)).toEqual([...resourceNames, 'mcp__fixture__mutate']);
       await full.execute('mcp__fixture__mutate', {}, w.context);
       expect(await w.calls()).toEqual(['mutate']);
     } finally { await w.host.shutdown(); }

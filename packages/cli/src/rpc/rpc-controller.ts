@@ -36,6 +36,7 @@ import type {
   AiProvider,
   ChatToolDefinition,
   CredentialRedactionStream,
+  McpRetainedContent,
   ExtensionRegistry,
   ExtensionRuntimeContext,
   ExtensionToolResult,
@@ -99,6 +100,8 @@ export interface RpcControllerContext {
   tools?: ChatToolDefinition[];
   /** Resolve session-scoped tools (for example persistent MCP tools) before each prompt. */
   prepareDynamicTools?(sessionId: string, signal: AbortSignal): Promise<RpcDynamicTools>;
+  /** Explicit operator read of a process-local, session-owned MCP binary reference. */
+  readMcpContent?(sessionId: string, reference: string): Promise<McpRetainedContent | undefined>;
   hooks?: { emit(event: string, data: Record<string, unknown>): Promise<void> };
   thinking?: ThinkingLevel;
   providerModels?: () => unknown[] | Promise<unknown[]>;
@@ -672,6 +675,16 @@ export class RpcController {
         }
         case 'get_state':
           return success(id, command, this.state());
+        case 'read_mcp_content': {
+          if (Reflect.ownKeys(request).some(key => !['type', 'id', 'reference'].includes(String(key)))
+            || typeof request.reference !== 'string' || !/^[a-f0-9-]{36}$/u.test(request.reference)) throw new Error('Invalid MCP content reference.');
+          const source = this.currentSessionId, read = this.context.readMcpContent;
+          if (this.navigationRetired || !read) throw new Error('MCP content unavailable.');
+          const content = await read(source, request.reference);
+          if (!content || this.navigationRetired || this.currentSessionId !== source || this.context.readMcpContent !== read) throw new Error('MCP content unavailable.');
+          return success(id, command, { reference: request.reference, mediaType: content.mediaType, size: content.size,
+            sha256: content.sha256, data: content.data.toString('base64') });
+        }
         case 'reload_context_settings': {
           if (Reflect.ownKeys(request).some(key => key !== 'type' && key !== 'id')) {
             throw new Error('reload_context_settings accepts only type and id.');

@@ -1832,7 +1832,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             : `🤖 ${t('chat.role.assistant')}`}
     </div>
     <div className="message-content">{renderMessage(message, preferences.reasoningOpen, t,
-      message.toolCallId ? toolInputs.get(message.toolCallId) : undefined, process)}</div>
+      message.toolCallId ? toolInputs.get(message.toolCallId) : undefined, process, currentSession?.id)}</div>
     {message.role === 'assistant' && message.metadata?.stopReason === 'length' && <aside className="notice warning reply-evidence" role="note">
       <span>{replyMessages(locale).truncated}</span>
       {message.id === lastMessageId && <button type="button" disabled={active || busyCompacting || !workspaceOperationTrusted}
@@ -2353,7 +2353,7 @@ function toolPatch(tools: NonNullable<AgentRunSnapshot['activeTool']>[]) {
   return { activeTool: tools[0], activeTools: tools };
 }
 
-function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationFunction, callInput?: unknown, process?: ProcessTurn): ReactNode {
+function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationFunction, callInput?: unknown, process?: ProcessTurn, sessionId?: string): ReactNode {
   const codeDetails = message.name === 'codemode' && message.toolCallId
     ? codemodeDetails(message.metadata?.codemode, message.toolCallId) : undefined;
   const reasoning = message.blocks?.filter(block => block.type === 'reasoning') ?? [];
@@ -2394,6 +2394,10 @@ function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationF
             error={block.type === 'tool_result' && block.isError} t={t} openFile={openWorkspaceFile} />;
         })}
       </section>}
+      {sessionId && message.role === 'tool' && [...new Set([...message.content.matchAll(/mcp-content:([a-f0-9-]{36})/gu)].map(match => match[1]!))].slice(0, 64).map((id, index) => (
+        <a key={id} className="mcp-content-download" download="mcp-content.bin" target="_blank" rel="noopener noreferrer"
+          href={`/api/mcp/content/${encodeURIComponent(sessionId)}/${id}`}>{t('common.download')} MCP {index + 1}</a>
+      ))}
       {message.role === 'tool' && message.name && message.name !== 'codemode' && message.toolCallId && <ToolProgressBoundary
         key={`${message.id}:${message.toolCallId}`} terminal value={message.metadata?.toolProgress}
         toolCallId={message.toolCallId} toolName={message.name} />}

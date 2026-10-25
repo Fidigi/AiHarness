@@ -1,3 +1,6 @@
+export type { McpRetainedContent } from './resource-content.js';
+export type { McpResourceConnection, McpResourceOperation } from './resource-tools.js';
+
 export {
   MCP_IMPORT_MAX_BYTES,
   MCP_IMPORT_MAX_FIELDS,

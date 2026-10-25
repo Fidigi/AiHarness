@@ -160,6 +160,7 @@ export async function createRuntimeServices(
   proxy.setNetworkSettings(resolveAgentProviderNetworkSettings(providerSettings.settings));
   const mcpHost = new McpSessionHost({
     agentDir: dataDir,
+    redactText: value => proxy.redactText(value),
     trustManager,
     resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, {
       base,

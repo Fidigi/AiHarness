@@ -337,6 +337,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       : undefined;
     mcpHost = new McpSessionHost({
       agentDir: settingsResolution.agentDir,
+      redactText: value => redactor.redact(value),
       trustManager,
       resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, {
         base,
@@ -580,6 +581,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
         return () => { contextSettings = next; };
       },
       tools: toChatToolDefinitions(selectedTools),
+      readMcpContent: (sessionId, reference) => mcpHost!.readRetainedContent(sessionId, reference),
       prepareDynamicTools: async (sessionId, signal) => {
         try {
           const session = sessionManager.get(sessionId);

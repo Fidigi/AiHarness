@@ -681,6 +681,7 @@ async function main(): Promise<void> {
     : undefined;
   const mcpHost = new McpSessionHost({
     agentDir: settingsResolution.agentDir,
+    redactText: value => outputCredentialRedactor.redact(value),
     trustManager,
     resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, {
       base,

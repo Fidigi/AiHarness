@@ -110,7 +110,9 @@ describe('McpSessionHost', () => {
     });
 
     const prepared = await host.prepareForPrompt({ sessionId: 'one', cwd: project, preset: 'read-only' });
-    expect(prepared.tools.map(tool => tool.name)).toEqual(['mcp__fixture__lookup']);
+    expect(prepared.tools.map(tool => tool.name)).toEqual([
+      'mcp__fixture__list_mcp_resources', 'mcp__fixture__list_mcp_resource_templates', 'mcp__fixture__read_mcp_resource', 'mcp__fixture__lookup',
+    ]);
     const result = await prepared.execute('mcp__fixture__lookup', { topic: 'docs' }, context);
     expect(result).toMatchObject({ isError: false });
     expect(result.content).toContain('lookup:{"topic":"docs"}:•••');
@@ -118,6 +120,7 @@ describe('McpSessionHost', () => {
 
     const second = await host.prepareForPrompt({ sessionId: 'one', cwd: project, preset: 'full' });
     expect(second.tools.map(tool => tool.name)).toEqual([
+      'mcp__fixture__list_mcp_resources', 'mcp__fixture__list_mcp_resource_templates', 'mcp__fixture__read_mcp_resource',
       'mcp__fixture__lookup',
       'mcp__fixture__mutate',
     ]);

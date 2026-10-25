@@ -105,6 +105,23 @@ function createController(responses = ['RPC response']): {
 }
 
 describe('RPC command controller', () => {
+  it('reads only an explicit current-session MCP reference and suppresses a read retired by EOF', async () => {
+    const { controller, context } = createController();
+    const reference = '00000000-0000-4000-8000-000000000001';
+    const content = { data: Buffer.from('disposable-RPC'), mediaType: 'audio/wav', size: 14, sha256: 'a'.repeat(64) };
+    const read = vi.fn(async () => content); context.readMcpContent = read;
+    expect((await controller.handle({ type: 'read_mcp_content', reference, sessionId: 'foreign' }))?.success).toBe(false);
+    expect((await controller.handle({ type: 'read_mcp_content', reference: '../private' }))?.success).toBe(false);
+    expect(read).not.toHaveBeenCalled();
+    const result = await controller.handle({ type: 'read_mcp_content', reference });
+    expect(result?.data).toMatchObject({ reference, mediaType: 'audio/wav', data: content.data.toString('base64') });
+    expect(read).toHaveBeenCalledWith(context.sessionId, reference);
+    let release!: (value: typeof content) => void;
+    context.readMcpContent = () => new Promise(resolve => { release = resolve; });
+    const pending = controller.handle({ type: 'read_mcp_content', reference });
+    await controller.close(); release(content);
+    expect((await pending)?.success).toBe(false);
+  });
   it('durably retains failed provider text/reasoning without inventing usage or retrying visible output', async () => {
     const { controller, context, records } = createController();
     context.redactText = text => text.replaceAll('disposable-private', '[REDACTED]');
