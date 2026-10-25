@@ -679,8 +679,9 @@ async function main(): Promise<void> {
       outputCredentialRedactor,
     )
     : undefined;
-  const mcpHost = new McpSessionHost({
+  const mcpHost: McpSessionHost = new McpSessionHost({
     agentDir: settingsResolution.agentDir,
+    registeredServers: extensionRegistry.mcpServers,
     redactText: value => outputCredentialRedactor.redact(value),
     trustManager,
     resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, {
@@ -690,18 +691,13 @@ async function main(): Promise<void> {
     ...(mcpOAuth ? {
       oauthProviderFactory: createMcpOAuthProviderFactory({
         manager: mcpOAuth,
-        resolveTarget: target => readMcpServerTestTarget({
-          agentDir: settingsResolution.agentDir,
-          scope: target.scope,
-          name: target.name,
-          cwd: target.cwd,
-          defaultCwd: target.cwd,
-          trustManager,
-          resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, {
-            base,
-            kind: 'directory',
+        resolveTarget: target => target.registration
+          ? mcpHost.readServerTarget(target.scope, target.name, workspaceCwd)
+          : readMcpServerTestTarget({
+            agentDir: settingsResolution.agentDir, scope: target.scope, name: target.name,
+            cwd: target.cwd, defaultCwd: target.cwd, trustManager,
+            resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, { base, kind: 'directory' }),
           }),
-        }),
       }),
     } : {}),
   });
@@ -1019,6 +1015,7 @@ async function main(): Promise<void> {
           const output: string[] = [];
           await runMcpCommand(args, {
             cwd: workspaceCwd, signal, allowOAuthPaste: false,
+            host: mcpHost,
             stdout: value => output.push(value),
             stderr: value => terminal.writeOutput(redactOutput(value)),
             onChanged: async (_scope, name) => {

@@ -16,7 +16,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Session Context State | [`topics/session-context-state.md`](./topics/session-context-state.md) | ~100 lines |
 | TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~75 lines |
 | Native Run Lifecycle | [`topics/run-lifecycle.md`](./topics/run-lifecycle.md) | ~130 lines — lifetime, queues, bounded recovery and parallel/nested/rich results |
-| Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~250 lines |
+| Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~270 lines — owned MCP registration and generation retirement |
 | Native Extension / SDK Contract | [`topics/native-extension-contract.md`](./topics/native-extension-contract.md) | ~110 lines — host/import/event/UI/package adaptation |
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~430 lines |
 | CLI Invocation Contract | [`topics/cli-invocation-contract.md`](./topics/cli-invocation-contract.md) | ~140 lines |
@@ -97,9 +97,9 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 
 **The separate static demo or Pages artifact** → Load `static-demo.md` + the root/validation rows in `project-map.md`; use `bash demo/run-docker.sh`, not production agent APIs.
 
-**MCP configuration inheritance, hosting, OAuth, or discovery** → Load `security.md` + the MCP flow in `project-map.md` §4 and the [native MCP-01 field/lifecycle contract](../audit/pi/MCP-01.md) plus [MCP-02 exposure/selection](../audit/pi/MCP-02.md) and [MCP-03 resources/rich results](../audit/pi/MCP-03.md); add `server-api.md` or `cli-reference.md` for the adapter
+**MCP configuration inheritance, hosting, OAuth, or discovery** → Load `security.md` + the MCP flow in `project-map.md` §4 and the [native MCP-01 field/lifecycle contract](../audit/pi/MCP-01.md) plus [MCP-02 exposure/selection](../audit/pi/MCP-02.md) and [MCP-03 resources/rich results](../audit/pi/MCP-03.md), plus [MCP-04 owned registrations](../audit/pi/MCP-04.md) for extension provenance/retirement; add `server-api.md` or `cli-reference.md` for the adapter
 ```
-→ packages/core/src/mcp/{config-inventory,session-host,resource-tools,resource-content,oauth,oauth-provider-factory,oauth-flow}.ts
+→ packages/core/src/mcp/{config-inventory,registered-servers,session-host,resource-tools,resource-content,oauth,oauth-provider-factory,oauth-flow}.ts
 → packages/core/src/tools/tool-search.ts
 → packages/server/src/api/mcp-routes.ts
 → packages/web/src/components/McpSettings.tsx

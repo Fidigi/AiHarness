@@ -15,6 +15,11 @@ const mcpExposureHelp = {
   fr: "    'settings.mcp.exposureHelp': 'Sans exposition définie, les outils sont directs. Le mode Code est réservé aux scripts ; les outils différés nécessitent tool_search avant un tour ultérieur du modèle ; les outils cachés ne sont pas appelables par le modèle. Les listes autorisées, exclusions et contrôles de lecture seule restent prioritaires. Les surcharges visent les noms distants : nom exact, puis premier motif * correspondant.',\n",
 };
 
+const mcpRegistrationHelp = {
+  en: "    'settings.mcp.registrationHelp': 'Temporary server registered by {extension}. Its extension controls changes; a file with the same name takes priority.',\n",
+  fr: "    'settings.mcp.registrationHelp': 'Serveur temporaire inscrit par {extension}. Les changements dépendent de son extension ; un fichier homonyme est prioritaire.',\n",
+};
+
 describe('Settings locale allocation', () => {
   it('relocates all projected inventoried EN/FR literals byte-for-byte and changes no retained key/value', () => {
     expect(inventory.moved).toHaveLength(228);
@@ -24,7 +29,7 @@ describe('Settings locale allocation', () => {
       const moved = inventory.moved.map(entry => entry[locale === 'en' ? 'enLine' : 'frLine']);
       expect(lazy).toEqual(moved);
       const projected = inventory.original[locale].lines.flatMap(line =>
-        line.startsWith("    'settings.mcp.exposureLabel':") ? [mcpExposureHelp[locale], line] : [line]);
+        line.startsWith("    'settings.mcp.exposureLabel':") ? [mcpExposureHelp[locale], mcpRegistrationHelp[locale], line] : [line]);
       expect([...eager, ...lazy].sort()).toEqual([...projected].sort());
       expect(eager).toEqual(projected.filter(line => !moved.includes(line)));
     }

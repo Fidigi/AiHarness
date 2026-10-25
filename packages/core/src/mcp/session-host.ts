@@ -11,7 +11,9 @@ import type { Session } from '../types/index.js';
 import {
   inspectMcpConfig,
   mcpToolExposure,
+  McpServerTargetError,
   readMcpServerTestTarget,
+  readRegisteredMcpServerTarget,
   type McpConfigInventory,
   type McpExposure,
   type McpServerInventoryEntry,
@@ -42,6 +44,8 @@ import {
   safeEnvironment,
   safeText,
 } from './server-test.js';
+
+import type { RegisteredMcpServers } from './registered-servers.js';
 
 export const MCP_EXTENSION_ID = 'builtin:mcp';
 export const MCP_RUNTIME_STARTUP_WAIT_MS = MCP_TEST_DEADLINE_MS;
@@ -112,6 +116,8 @@ export type McpOAuthProviderFactory = (
 
 export interface McpSessionHostOptions {
   agentDir: string;
+  /** Explicit low-level composition; never implicitly hosts MCP in the SDK. */
+  registeredServers?: RegisteredMcpServers;
   /** Live host credential scrubber, also applied to decoded retained binary. */
   redactText?: (text: string) => string;
   trustManager?: ProjectTrustManager;
@@ -425,6 +431,8 @@ async function connectMcpSession(
  */
 export class McpSessionHost {
   private readonly agentDir: string;
+  private readonly registeredServers?: RegisteredMcpServers;
+  private readonly detachRegistrations?: () => void;
   private readonly contentStore = new McpContentStore();
   private readonly redactText: (text: string) => string;
   private readonly trustManager?: ProjectTrustManager;
@@ -447,6 +455,15 @@ export class McpSessionHost {
 
   constructor(options: McpSessionHostOptions) {
     this.agentDir = options.agentDir;
+    this.registeredServers = options.registeredServers;
+    this.detachRegistrations = this.registeredServers?.subscribe(name => {
+      for (const session of this.sessions.values()) {
+        const retired = [...session.records.values()].filter(record => record.target.registration && record.target.name === name);
+        for (const record of retired) session.records.delete(record.key);
+        // closeRecords retires bindings and retained bytes synchronously, before transport cleanup.
+        void this.closeRecords(retired);
+      }
+    });
     this.redactText = options.redactText ?? (text => text);
     this.trustManager = options.trustManager;
     this.resolveWorkingDirectory = options.resolveWorkingDirectory;
@@ -460,6 +477,20 @@ export class McpSessionHost {
     this.now = options.now ?? Date.now;
     this.connect = options.connect ?? connectMcpSession;
     this.oauthProviderFactory = options.oauthProviderFactory;
+  }
+
+  /** Resolve one explicit operator target, retaining file precedence and fresh ownership. */
+  async readServerTarget(scope: 'global' | 'project', name: string, cwd: string): Promise<McpServerTestTarget> {
+    const inventory = this.decorateInventory(await inspectMcpConfig({ agentDir: this.agentDir, cwd, trustManager: this.trustManager }), cwd);
+    const entry = inventory.servers.find(server => server.scope === scope && server.name === name
+      && !server.registration?.shadowedByFile);
+    if (!entry) return readMcpServerTestTarget({ agentDir: this.agentDir, scope, name, defaultCwd: cwd,
+      ...(scope === 'project' ? { cwd } : {}), trustManager: this.trustManager, resolveWorkingDirectory: this.resolveWorkingDirectory });
+    try { return await this.readTarget(entry, inventory, cwd); }
+    catch (error) {
+      if (!entry.registration) throw error;
+      throw new McpServerTargetError('server-not-found', 'The MCP server is not available.');
+    }
   }
 
   /** Install the process-local credential provider before starting MCP work. */
@@ -496,7 +527,9 @@ export class McpSessionHost {
     return this.buildPreparedTools(session, preset);
   }
 
-  decorateInventory(inventory: McpConfigInventory): McpConfigInventory {
+  decorateInventory(inventory: McpConfigInventory, cwd = inventory.project?.cwd): McpConfigInventory {
+    inventory = { ...inventory, servers: [...inventory.servers.filter(server => !server.registration),
+      ...(this.registeredServers?.list(inventory, cwd) ?? [])] };
     const current = new Set(inventory.servers.map(server => `${server.scope}\0${server.name}\0${server.configKey}`));
     for (const key of this.statuses.keys()) {
       if (!current.has(key)) this.statuses.delete(key);
@@ -560,6 +593,7 @@ export class McpSessionHost {
   async shutdown(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    this.detachRegistrations?.();
     await this.releaseAllSessions();
   }
 
@@ -591,16 +625,16 @@ export class McpSessionHost {
       session.cwd = options.cwd;
     }
 
-    const inventory = await inspectMcpConfig({
+    const inventory = this.decorateInventory(await inspectMcpConfig({
       agentDir: this.agentDir,
       cwd: options.cwd,
       trustManager: this.trustManager,
-    });
+    }), options.cwd);
     this.assertSessionActive(session, options.signal);
     const desired = new Set<string>();
     const directReady: Promise<void>[] = [];
     const effectiveEntries = inventory.servers.filter(server => (
-      server.valid && server.enabled && !(server.scope === 'global' && server.shadowedByProject)
+      server.valid && server.enabled && !server.registration?.shadowedByFile && !(server.scope === 'global' && server.shadowedByProject)
       && (server.exposure !== 'hidden' || Object.values(server.toolExposure ?? {}).some(mode => mode !== 'hidden'))
     ));
     const entries = effectiveEntries.slice(0, MCP_RUNTIME_MAX_SERVERS);
@@ -615,15 +649,7 @@ export class McpSessionHost {
       this.assertSessionActive(session, options.signal);
       let target: McpServerTestTarget;
       try {
-        target = await readMcpServerTestTarget({
-          agentDir: this.agentDir,
-          scope: entry.scope,
-          name: entry.name,
-          ...(entry.scope === 'project' ? { cwd: options.cwd } : {}),
-          defaultCwd: options.cwd,
-          trustManager: this.trustManager,
-          resolveWorkingDirectory: this.resolveWorkingDirectory,
-        });
+        target = await this.readTarget(entry, inventory, options.cwd);
         this.assertSessionActive(session, options.signal);
       } catch (error) {
         this.assertSessionActive(session, options.signal);
@@ -633,7 +659,7 @@ export class McpSessionHost {
         });
         continue;
       }
-      if (target.configKey !== entry.configKey) {
+      if (target.configKey !== entry.configKey || (target.registration && !this.registeredServers?.isCurrent(target))) {
         this.rememberStatus(entry, {
           state: 'failed', sessionId, updatedAt: new Date(this.now()).toISOString(),
           error: 'The MCP server configuration changed; retry the prompt.',
@@ -722,8 +748,10 @@ export class McpSessionHost {
       },
     }).then(connection => {
       clearTimeout(deadline);
-      if (controller.signal.aborted) {
-        void connection.close();
+      if (controller.signal.aborted || (target.registration && !this.registeredServers?.isCurrent(target))) {
+        controller.abort('mcp-registration-retired');
+        record.state = 'closed';
+        void connection.close().catch(() => undefined);
         return;
       }
       record.connection = connection;
@@ -762,7 +790,8 @@ export class McpSessionHost {
     }> = [];
     if (preset !== 'chat-only') {
       outer: for (const record of session?.records.values() ?? []) {
-        if (record.state !== 'connected' || !record.connection) continue;
+        if (record.state !== 'connected' || !record.connection
+          || (record.target.registration && !this.registeredServers?.isCurrent(record.target))) continue;
         for (const remote of [...(record.connection.resources ? MCP_RESOURCE_TOOLS : []), ...record.tools]) {
           if (mcpToolExposure(record.target.config, remote.remoteName) === 'hidden') continue;
           if (preset === 'read-only' && !remote.readOnly) continue;
@@ -902,6 +931,10 @@ export class McpSessionHost {
     if (record.state !== 'connected' || !record.connection) {
       throw new Error(`MCP server ${record.target.name} is not connected.`);
     }
+    if (record.target.registration) {
+      if (context.toolPreset === 'chat-only' || (context.currentSessionId && context.currentSessionId !== record.sessionId)) throw new Error('MCP registration is not allowed.');
+      await this.validateResourceRecord(record, signal);
+    }
     if (remote.resourceOperation) return this.executeResource(record, remote.resourceOperation, normalizedInput(input), context, signal);
     const currentTool = record.tools.find(tool => tool.remoteName === remote.remoteName);
     if (!currentTool) {
@@ -912,9 +945,10 @@ export class McpSessionHost {
     }
     let result: CallToolResult;
     try {
-      result = await record.connection.callTool(remote.remoteName, normalizedInput(input), signal);
+      const callSignal = AbortSignal.any([record.controller.signal, ...(signal ? [signal] : [])]);
+      result = await record.connection.callTool(remote.remoteName, normalizedInput(input), callSignal);
     } catch (error) {
-      if (signal?.aborted) throw abortError();
+      if (signal?.aborted || record.controller.signal.aborted) throw abortError();
       record.state = 'disconnected';
       record.error = safeText(errorMessage(error), record.connection.redact, 500);
       record.updatedAt = new Date(this.now()).toISOString();
@@ -923,6 +957,7 @@ export class McpSessionHost {
       throw new Error(`MCP tool ${record.target.name}/${remote.name} failed: ${record.error}`);
     }
     throwIfAborted(signal);
+    if (record.target.registration) await this.validateResourceRecord(record, signal);
     const formatted = formatMcpResult(result, text => this.redact(record, text),
       (data, mime) => this.contentStore.put(this.contentOwner(record), data, mime));
     return {
@@ -944,11 +979,27 @@ export class McpSessionHost {
     const session = this.sessions.get(record.sessionId);
     if (!session || session.records.get(record.key) !== record || record.state !== 'connected') throw new Error('MCP resource binding is unavailable.');
     this.assertSessionActive(session, signal);
-    const target = await readMcpServerTestTarget({ agentDir: this.agentDir, scope: record.target.scope, name: record.target.name,
-      ...(record.target.scope === 'project' ? { cwd: session.cwd } : {}), defaultCwd: session.cwd,
-      trustManager: this.trustManager, resolveWorkingDirectory: this.resolveWorkingDirectory });
+    const inventory = record.target.registration ? await inspectMcpConfig({ agentDir: this.agentDir, cwd: session.cwd,
+      trustManager: this.trustManager }) : { servers: [], files: [] };
+    const target = await this.readTarget(record.target, inventory, session.cwd);
     this.assertSessionActive(session, signal);
+    if (session.records.get(record.key) !== record || record.state !== 'connected') throw new Error('MCP resource binding is unavailable.');
     if (targetIdentity(target) !== targetIdentity(record.target)) throw new Error('MCP resource configuration changed.');
+  }
+
+  private async readTarget(entry: Pick<McpServerInventoryEntry, 'name' | 'scope' | 'configKey' | 'registration'>,
+    inventory: McpConfigInventory, cwd: string): Promise<McpServerTestTarget> {
+    const options = { agentDir: this.agentDir, scope: entry.scope, name: entry.name,
+      ...(entry.scope === 'project' ? { cwd } : {}), defaultCwd: cwd,
+      trustManager: this.trustManager, resolveWorkingDirectory: this.resolveWorkingDirectory };
+    if (!entry.registration) return readMcpServerTestTarget(options);
+    const current = this.registeredServers?.list(inventory, cwd).find(candidate => candidate.configKey === entry.configKey);
+    if (!current || !this.registeredServers) throw new Error('MCP registration is no longer available.');
+    const config = await this.registeredServers.resolve(current, inventory, cwd);
+    const target = await readRegisteredMcpServerTarget(current, config, options);
+    // Trust/cwd resolution may yield to extension replacement.
+    await this.registeredServers.resolve(current, inventory, cwd);
+    return target;
   }
 
   /** Opaque references are session-bound, expire, and never authorize a filesystem read. */

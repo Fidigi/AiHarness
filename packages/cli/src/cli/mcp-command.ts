@@ -16,10 +16,12 @@ import {
   WorkspaceManager,
   type McpConfigInventory,
   type McpConfigScope,
+  type McpSessionHost,
 } from '@ai-harness/core';
 
 interface McpCommandIo {
   cwd?: string;
+  host?: McpSessionHost;
   stdout?: (value: string) => void;
   stderr?: (value: string) => void;
   signal?: AbortSignal;
@@ -107,13 +109,13 @@ function formatInventory(inventory: McpConfigInventory): string {
   if (inventory.servers.length === 0) return 'No MCP servers configured.';
   return inventory.servers.map(server => {
     const configured = !server.valid ? 'invalid'
-      : server.shadowedByProject ? 'shadowed'
+      : server.shadowedByProject || server.registration?.shadowedByFile ? 'shadowed'
         : !server.enabled ? 'disabled' : 'configured';
     const test = server.testStatus ? `; test=${server.testStatus.state}` : '';
     const runtime = server.runtimeStatus
       ? `; runtime=${server.runtimeStatus.state}${server.runtimeStatus.toolCount === undefined ? '' : `:${server.runtimeStatus.toolCount}`}`
       : '';
-    return `${server.name}\t${server.scope}\t${server.transport ?? 'unknown'}\t${server.exposure}\t${configured}${test}${runtime}`;
+    return `${server.name}\t${server.scope}\t${server.transport ?? 'unknown'}\t${server.exposure}\t${configured}${test}${runtime}${server.registration ? `; extension=${server.registration.extensionId}` : ''}`;
   }).join('\n');
 }
 
@@ -174,7 +176,19 @@ export async function runMcpCommand(args: string[], io: McpCommandIo = {}): Prom
     await trustManager.load();
     const settings = await loadAgentSettings({ cwd, projectTrusted: await trustManager.isTrusted(cwd) });
     const inventoryOptions = { agentDir: settings.agentDir, cwd, trustManager };
-    const inventory = await inspectMcpConfig(inventoryOptions);
+    const files = await inspectMcpConfig(inventoryOptions);
+    const inventory = io.host ? io.host.decorateInventory(files, cwd) : files;
+    const readTarget = (name: string) => io.host ? io.host.readServerTarget(parsed.scope, name, cwd)
+      : readMcpServerTestTarget({
+        agentDir: settings.agentDir, trustManager, scope: parsed.scope, name, defaultCwd: cwd,
+        ...(parsed.scope === 'project' ? { cwd } : {}),
+        resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, { base, kind: 'directory' }),
+      });
+    if (['enable', 'disable', 'exposure', 'remove'].includes(command) && parsed.rest.some(name =>
+      inventory.servers.some(server => server.scope === parsed.scope && server.name === name && server.registration)
+      && !files.servers.some(server => server.scope === parsed.scope && server.name === name))) {
+      throw new Error('Extension MCP servers are managed by their owning extension, not mcp.json.');
+    }
     if (io.signal?.aborted) throw new Error('The MCP command was aborted.');
     const mutationTarget = {
       agentDir: settings.agentDir,
@@ -201,11 +215,7 @@ export async function runMcpCommand(args: string[], io: McpCommandIo = {}): Prom
       const result = await runMcpOAuthCommand(command, parsed.rest.slice(1), {
         agentDir: settings.agentDir, agentDirTrusted: settings.agentDirTrusted, redactor,
         json: parsed.json, write, writeError, signal: io.signal, allowPaste: io.allowOAuthPaste,
-        readTarget: () => readMcpServerTestTarget({
-          agentDir: settings.agentDir, scope: parsed.scope, name,
-          ...(parsed.scope === 'project' ? { cwd } : {}), defaultCwd: cwd, trustManager,
-          resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, { base, kind: 'directory' }),
-        }),
+        readTarget: () => readTarget(name),
       });
       if (result === 0) await io.onChanged?.(parsed.scope, name);
       return result;
@@ -214,17 +224,11 @@ export async function runMcpCommand(args: string[], io: McpCommandIo = {}): Prom
     if (command === 'test') {
       const name = parsed.rest[0];
       if (!name || parsed.rest.length !== 1) throw new Error('Usage: ai-harness mcp test <name> [--scope <scope>] [--json]');
-      const target = await readMcpServerTestTarget({
-        agentDir: settings.agentDir,
-        scope: parsed.scope,
-        name,
-        ...(parsed.scope === 'project' ? { cwd } : {}),
-        defaultCwd: cwd,
-        trustManager,
-        resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, { base, kind: 'directory' }),
-      });
+      const target = await readTarget(name);
       tester = new McpServerTester();
-      const result = await tester.test(target, io.signal);
+      const result = await tester.test(target, io.signal, async () => {
+        if ((await readTarget(name)).configKey !== target.configKey) throw new Error('MCP server configuration changed.');
+      });
       write(parsed.json
         ? `${JSON.stringify({ scope: target.scope, name: target.name, configKey: target.configKey, result }, null, 2)}\n`
         : `${target.name}: ${result.state}; ${result.toolCount} tools; ${result.durationMs} ms${result.error ? `; ${result.error}` : ''}\n`);

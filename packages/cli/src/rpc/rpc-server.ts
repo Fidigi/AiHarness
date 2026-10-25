@@ -337,6 +337,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       : undefined;
     mcpHost = new McpSessionHost({
       agentDir: settingsResolution.agentDir,
+      registeredServers: extensionRegistry.mcpServers,
       redactText: value => redactor.redact(value),
       trustManager,
       resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, {
@@ -346,7 +347,9 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       ...(mcpOAuth ? {
         oauthProviderFactory: createMcpOAuthProviderFactory({
           manager: mcpOAuth,
-          resolveTarget: target => readMcpServerTestTarget({
+          resolveTarget: target => target.registration
+            ? mcpHost!.readServerTarget(target.scope, target.name, canonicalCwd)
+            : readMcpServerTestTarget({
             agentDir: settingsResolution.agentDir,
             scope: target.scope,
             name: target.name,

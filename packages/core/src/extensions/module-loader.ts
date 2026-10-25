@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { compileFunction } from 'node:vm';
 import { openStableDirectoryHandle, readStableDirectoryEntries } from '../security/stable-directory.js';
 import type { ExtensionFactory } from './extension-registry.js';
+import type { ExtensionMcpSource } from '../mcp/registered-servers.js';
 import type { ExtensionRegistry } from './extension-registry.js';
 import { isExtensionPathWithin, selectExtensionFiles, type ExtensionModuleSelector } from './extension-selectors.js';
 import { EXTENSION_MODULE_SUFFIXES, isExtensionModulePath, isTypeScriptExtensionPath } from './module-format.js';
@@ -202,7 +203,7 @@ async function importExtensionFactory(
 
 /** Discovers trusted JavaScript/TypeScript modules and swaps registrations transactionally. */
 export class ExtensionModuleLoader {
-  private readonly cwd: string;
+  private cwd: string;
   private readonly homeDir: string;
   private readonly configuredPaths: ExtensionModuleLoaderOptions['paths'];
   private readonly configuredSelectors: ExtensionModuleLoaderOptions['selectors'];
@@ -235,9 +236,12 @@ export class ExtensionModuleLoader {
     return this.reload();
   }
 
-  reload(): Promise<ExtensionModuleLoadResult> {
-    if (this.activeReload) return this.activeReload;
-    this.activeReload = this.performReload().finally(() => { this.activeReload = undefined; });
+  reload(cwd = this.cwd): Promise<ExtensionModuleLoadResult> {
+    if (this.activeReload) {
+      if (path.resolve(cwd) !== path.resolve(this.cwd)) return Promise.reject(new Error('Extension workspace rebind requires a settled generation.'));
+      return this.activeReload;
+    }
+    this.activeReload = this.performReload(cwd).finally(() => { this.activeReload = undefined; });
     return this.activeReload;
   }
 
@@ -346,11 +350,18 @@ export class ExtensionModuleLoader {
     return [...files];
   }
 
-  private async performReload(): Promise<ExtensionModuleLoadResult> {
+  private async performReload(cwd: string): Promise<ExtensionModuleLoadResult> {
+    if (path.resolve(cwd) !== path.resolve(this.cwd)) {
+      // A workspace switch may never roll back executable registrations to the old root.
+      await this.registry.replaceManaged(this.managedIds, []);
+      this.managedIds.clear();
+      this.cwd = cwd;
+      this.generation++;
+    }
     const nextGeneration = this.generation + 1;
     const importAttempt = ++this.importAttempt;
     const errors: ExtensionModuleLoadError[] = [];
-    const candidates: Array<{ id: string; factory: ExtensionFactory }> = [];
+    const candidates: Array<{ id: string; factory: ExtensionFactory; source: ExtensionMcpSource }> = [];
     let files: string[];
     try { files = await this.discover(); }
     catch (error) {
@@ -364,7 +375,9 @@ export class ExtensionModuleLoader {
         try {
           const imported = await importExtensionFactory(filePath, `${this.importIdentity}-${importAttempt}`);
           releases.push(imported.release);
-          candidates.push({ id: filePath, factory: imported.factory });
+          candidates.push({ id: filePath, factory: imported.factory, source: {
+            cwd: this.cwd, project: isExtensionPathWithin(filePath, this.cwd), isTrusted: this.isProjectTrusted,
+          } });
         } catch (error) {
           errors.push({ path: filePath, error: error instanceof Error ? error : new Error(String(error)) });
         }

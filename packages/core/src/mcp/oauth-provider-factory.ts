@@ -5,6 +5,7 @@ import {
   type McpOAuthCredentialManager,
   type McpOAuthProviderBinding,
   mcpOAuthUrl,
+  mcpOAuthTargetName,
 } from './oauth.js';
 import { MCP_TEST_COMMAND_TIMEOUT_MS, MCP_TEST_REQUEST_TIMEOUT_MS, mcpRequestTimeout, resolveMcpOAuthSettings } from './server-test.js';
 import { mcpOAuthScopes } from './oauth-config.js';
@@ -42,7 +43,7 @@ export function createMcpOAuthProviderFactory(
       return current;
     };
     return options.manager.createProvider({
-      identity: { name: target.name, url },
+      identity: { name: mcpOAuthTargetName(target), url },
       mode: 'passive',
       settings: {
         clientId: target.config.oauth?.clientId,

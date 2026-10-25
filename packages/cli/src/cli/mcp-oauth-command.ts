@@ -2,7 +2,7 @@ import path from 'node:path';
 import { createInterface } from 'node:readline';
 import {
   EncryptedCredentialStore, McpOAuthCredentialManager, McpOAuthFlowService,
-  mcpOAuthUrl, openExternalTarget,
+  mcpOAuthUrl, mcpOAuthTargetName, openExternalTarget,
   type CredentialRedactor, type McpServerTestTarget,
 } from '@ai-harness/core';
 
@@ -62,7 +62,7 @@ export async function runMcpOAuthCommand(
   try {
     if (options.signal?.aborted) return 130;
     if (command === 'logout') {
-      const removed = await flows.signOut({ name: target.name, url });
+      const removed = await flows.signOut({ name: mcpOAuthTargetName(target), url });
       options.write(options.json ? `${JSON.stringify({ name: target.name, scope: target.scope, removed })}\n`
         : `Signed out of MCP server ${target.name}. Issuer-side tokens are not revoked.\n`);
       return 0;

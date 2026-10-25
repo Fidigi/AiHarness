@@ -175,6 +175,8 @@ export type McpEntryProblemReason =
   | 'override-fields' | 'orphan-override';
 
 export interface McpServerInventoryEntry {
+  /** Process-local extension owner/generation; never a file mutation target. */
+  registration?: { extensionId: string; id: string; shadowedByFile?: boolean };
   name: string;
   scope: McpConfigScope;
   sourcePath: string;
@@ -226,6 +228,7 @@ export class McpServerTargetError extends Error {
 }
 
 export interface McpServerTestTarget {
+  registration?: { extensionId: string; id: string; cwd?: string };
   scope: McpConfigScope;
   name: string;
   sourcePath: string;
@@ -1050,6 +1053,23 @@ async function requirePersistedProjectTrust(
   if (status.decision !== true) {
     throw targetError('trust-required', 'A persisted project allow is required to test this MCP server.');
   }
+}
+
+/** Resolve an already owned registration under the same cwd/trust boundary as files. */
+export async function readRegisteredMcpServerTarget(
+  entry: McpServerInventoryEntry, config: McpServerRuntimeConfig, options: ReadMcpServerTargetOptions,
+): Promise<McpServerTestTarget> {
+  const workspaceCwd = await canonicalRuntimeDirectory(options.defaultCwd);
+  let cwd = workspaceCwd;
+  if (entry.scope === 'project') await requirePersistedProjectTrust(cwd, options.trustManager);
+  if ('command' in config && config.cwd) {
+    const resolved = options.resolveWorkingDirectory
+      ? await options.resolveWorkingDirectory(config.cwd, cwd) : path.resolve(cwd, config.cwd);
+    cwd = await canonicalRuntimeDirectory(resolved);
+    if (entry.scope === 'project') await requirePersistedProjectTrust(cwd, options.trustManager);
+  }
+  return { scope: entry.scope, name: entry.name, sourcePath: entry.sourcePath, configKey: entry.configKey,
+    registration: entry.registration ? { ...entry.registration, cwd: workspaceCwd } : undefined, config, cwd };
 }
 
 /**

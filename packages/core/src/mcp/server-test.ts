@@ -858,6 +858,7 @@ export class McpServerTester {
           timedOut: true,
         }
         : completed;
+      if (target.registration) await validate?.();
       const result: McpServerTestResult = {
         ...run,
         testedAt: new Date(this.now()).toISOString(),

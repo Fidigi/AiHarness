@@ -245,7 +245,7 @@ function initializeCredentials(
             scope: target.scope,
             name: target.name,
             expectedConfigKey: target.configKey,
-            cwd: target.cwd,
+            cwd: target.registration?.cwd ?? target.cwd,
           })
         ).target,
       }));

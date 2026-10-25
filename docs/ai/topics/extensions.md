@@ -45,6 +45,7 @@ The [native extension/SDK support map](./native-extension-contract.md) specifies
 | `registerCommand` | Slash command handler with runtime context |
 | `registerTool` | Model/manual tool with JSON schema, AbortSignal and structured result |
 | `registerProvider` | Runtime `AiProvider` factory and optional defaults |
+| `registerMcpServer` / `unregisterMcpServer` | Owned process-local native MCP configuration, exact-generation disposer and owner-only removal |
 | `registerUI` | Plain-text `header`/`status` terminal component |
 | `before` | Agent/provider/tool/model transforms; bounded message/result replacement, actionable turn/settlement continuations; ordered branch/summary/compaction admission |
 | `on` | Session/message/compaction lifecycle listener |
@@ -64,6 +65,10 @@ Prompts, package skills, and themes are discovered resources, not `ExtensionAPI`
 Core owns at most 16 pending requests per run, 128,000 UTF-8 JSON bytes per normalized request and 512,000 aggregate bytes. Oversized admission/update throws `409 EXTENSION_INTERACTION_QUEUE_FULL` without changing prior state. A supplied timeout must be finite, nonnegative and at most 2,147,483,647 ms; otherwise `400 INVALID_EXTENSION_INTERACTION_TIMEOUT`. No active run returns a cancelled Promise. Responses validate the latest schema and settle once; late controls return false. `extensionRequests` is the complete ordered reconnect snapshot; `extensionRequest` remains its first-entry compatibility projection. The Web adapter reads the complete ordered queue (explicit empty plural wins over the compatibility alias), presents its head and waiting count, and suppresses restored attention replay. Client admission remains separate from exactly-once Core settlement and backend cancellation.
 
 Session-scoped extension-command `notify` uses `AgentRuntime.publishSessionEvent`: notices omit `runId` when the current session run is `completed`, `failed` or `stopped`, while nonterminal correlation is retained. Run-bound tool-context `notify` callbacks retain their original run ID after termination. This changes event correlation only, not interaction admission or browser queue/notice acceptance; see [the session event contract](./server-api.md#current-event-contract).
+
+### Owned MCP servers
+
+`api.registerMcpServer(name, config)` returns an exact-registration disposer; `api.unregisterMcpServer(name)` removes only the caller's current registration and returns a boolean. Native schema/own-data validation, file precedence, loader-supplied workspace/trust, immediate all-session withdrawal and generation-isolated OAuth apply. Replacement never reconnects automatically. CLI/RPC/Server explicitly compose `registry.mcpServers` with their host; the high-level SDK remains opt-in. See the [MCP-04 contract and requirement map](../../audit/pi/MCP-04.md) before changing ownership, rollback, management or secret identity.
 
 ### Session state and active ancestry
 
@@ -197,6 +202,8 @@ Initial focus is admitted before the renderer exists and checked again at its fi
 - Serialize CLI/Server mutations with the Core heartbeat lock and owner-only atomic state writes; group activation remains bounded, uses one write, and returns value-free per-entry failures.
 
 ## Associated Tests
+
+- `packages/core/src/mcp/registered-servers.test.ts`, `oauth-provider-factory.test.ts` in the same directory — owner/schema/bounds, passive file precedence, all-session retirement, late response/connection, loader trust/rollback and OAuth generation isolation; emitted CLI `cli/mcp-resources-process.test.ts`, Server `api/mcp-content-http.test.ts`, installed public consumers and `e2e/mcp-resources-live.spec.ts` separately cover their real host boundaries
 
 - `packages/server/src/api/session-notice-process.test.ts` — public Core/real built Server process coverage for completed/failed/stopped session-command notice correlation, active correlation and captured tool callbacks over HTTP/SSE; not browser queue delivery
 - Core `extensions/{session-branch-hooks,session-summary-hooks}.test.ts`, `sessions/{session-branch-admission,session-branch-hooks,session-summary-hooks}.test.ts` and `sdk/session-branch-hooks.test.ts` — ordered admission/override validation, ignored callbacks, bounded leases/generations/reentrancy, borrowed lifecycle and durable publication ownership

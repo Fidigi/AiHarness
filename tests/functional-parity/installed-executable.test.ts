@@ -1487,6 +1487,59 @@ it('routes selectable models and derives non-context warming notices through gen
     .toEqual({ code: 0, stdout: 'installed routing and cache notices OK\n', stderr: '' });
 }, 60_000);
 
+it('hosts and withdraws owned MCP registrations through installed declarations and actual stdio', async () => {
+  await writeFile(path.join(consumer, 'mcp-registration-public.ts'), `
+    import { ExtensionRegistry, McpSessionHost, type ExtensionAPI } from '@ai-harness/core';
+    declare const api: ExtensionAPI;
+    const dispose: () => void = api.registerMcpServer('docs', { command: 'node', exposure: 'codemode', toolExposure: { 'resources/read': 'deferred' } });
+    const removed: boolean = api.unregisterMcpServer('docs');
+    // @ts-expect-error unsupported transport configuration
+    api.registerMcpServer('invalid', { url: 'https://example.test', command: 'node', type: 'sse' });
+    // @ts-expect-error ownership is not an extension-supplied argument
+    api.unregisterMcpServer('docs', 'foreign');
+    const registry = new ExtensionRegistry();
+    const host = new McpSessionHost({ agentDir: process.cwd(), registeredServers: registry.mcpServers });
+    void dispose; void removed; void host;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'mcp-registration-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'mcp-registration-peer.mjs'), `
+    import readline from 'node:readline'; import { appendFileSync } from 'node:fs';
+    const lines = readline.createInterface({ input: process.stdin });
+    lines.on('line', line => { const request = JSON.parse(line); if (request.id === undefined) return;
+      let result;
+      if (request.method === 'initialize') result = { protocolVersion: request.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'installed-peer', version: '1' } };
+      else if (request.method === 'tools/list') result = { tools: [{ name: 'lookup', description: 'Read', inputSchema: { type: 'object' }, annotations: { readOnlyHint: true } }] };
+      else if (request.method === 'tools/call') { appendFileSync(process.env.LOG, 'called\\n'); result = { content: [{ type: 'text', text: 'installed dynamic' }] }; }
+      else result = {};
+      process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) + '\\n');
+    }); lines.on('close', () => process.exit(0));
+  `);
+  await writeFile(path.join(consumer, 'mcp-registration-public.mjs'), `
+    import assert from 'node:assert/strict'; import { readFile } from 'node:fs/promises';
+    import { ExtensionRegistry, McpSessionHost, SessionManager, inspectMcpConfig } from '@ai-harness/core';
+    const registry = new ExtensionRegistry(), cwd = process.cwd(); let api;
+    await registry.load('owner', value => { api = value; api.registerMcpServer('docs', { command: process.execPath, args: [cwd + '/mcp-registration-peer.mjs'], env: { LOG: cwd + '/registration-effects' } }); });
+    const host = new McpSessionHost({ agentDir: cwd, registeredServers: registry.mcpServers });
+    try {
+      const inventory = host.decorateInventory(await inspectMcpConfig({ agentDir: cwd }));
+      assert.equal(inventory.servers[0].registration.extensionId, 'owner'); assert.equal(inventory.servers[0].runtimeStatus, undefined);
+      const prepared = await host.prepareForPrompt({ sessionId: 'installed', cwd, preset: 'read-only' });
+      const tool = prepared.tools[0]; assert.equal(tool.name, 'mcp__docs__lookup');
+      const context = { sessionManager: new SessionManager(), notify() {} };
+      assert.equal((await tool.execute({}, context)).content, 'installed dynamic');
+      await registry.load('foreign', foreign => assert.equal(foreign.unregisterMcpServer('docs'), false));
+      await registry.unload('owner'); await assert.rejects(tool.execute({}, context));
+      assert.deepEqual(host.getPreparedTools('installed').tools, []);
+      assert.equal(await readFile(cwd + '/registration-effects', 'utf8'), 'called\\n');
+      assert.throws(() => api.registerMcpServer('late', { command: 'node' }), /retired/);
+      console.log('installed MCP registration OK');
+    } finally { await host.shutdown(); await registry.unloadAll(); }
+  `);
+  expect(await run(process.execPath, ['mcp-registration-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed MCP registration OK\n', stderr: '' });
+}, 60_000);
+
 // Provider addition: original installed executable/declaration/PATH probes above
 // remain intact. This case consumes only freshly packed, actually installed Core.
 it('validates installed public provider discovery declarations and keyless based-path runtime', async () => {

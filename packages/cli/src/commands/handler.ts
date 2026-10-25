@@ -1437,12 +1437,12 @@ const commands: CommandEntry[] = [
         if (inventory.servers.length === 0) return chalk.yellow('No MCP servers configured.');
         return inventory.servers.map(server => {
           const configured = !server.valid ? 'invalid'
-            : server.shadowedByProject ? 'shadowed'
+            : server.shadowedByProject || server.registration?.shadowedByFile ? 'shadowed'
               : !server.enabled ? 'disabled' : 'configured';
           const runtime = server.runtimeStatus
             ? ` · ${server.runtimeStatus.state}${server.runtimeStatus.toolCount === undefined ? '' : ` (${server.runtimeStatus.toolCount} tools)`}`
             : '';
-          return `${server.runtimeStatus?.state === 'connected' ? chalk.green('●') : chalk.dim('○')} ${chalk.cyan(server.name)} [${server.scope}] — ${configured}${runtime}`;
+          return `${server.runtimeStatus?.state === 'connected' ? chalk.green('●') : chalk.dim('○')} ${chalk.cyan(server.name)} [${server.scope}${server.registration ? ` · extension:${server.registration.extensionId}` : ''}] — ${configured}${runtime}`;
         }).join('\n');
       }
       if (!ctx.currentSessionId) return chalk.red('An active session is required.');

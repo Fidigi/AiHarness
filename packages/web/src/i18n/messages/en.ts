@@ -390,6 +390,7 @@ export const enLocale: LocalePlugin = {
     'settings.mcp.oauth.failure.credential-write-rejected': 'The encrypted credential update was rejected.',
     'settings.mcp.oauth.failure.verification-failed': 'The authenticated MCP connection could not be verified.',
     'settings.mcp.exposureHelp': 'Missing exposure defaults to direct. Code mode is script-only; deferred tools need tool_search before a later model turn; hidden tools are not model-callable. All modes retain allowlists, exclusions and read-only checks. Overrides match original remote names: exact first, then the first matching * pattern.',
+    'settings.mcp.registrationHelp': 'Temporary server registered by {extension}. Its extension controls changes; a file with the same name takes priority.',
     'settings.mcp.exposure.direct': 'direct tools',
     'settings.mcp.exposure.codemode': 'Code mode',
     'settings.mcp.exposure.deferred': 'deferred tools',

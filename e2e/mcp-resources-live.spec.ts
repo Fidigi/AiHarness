@@ -7,7 +7,7 @@ import { start, stop, getProxy } from '../packages/server/dist/index.js';
 import { resourceProvider } from '../packages/core/src/mcp/fixtures/resource-provider.mjs';
 import { expect, test, reserveReadBudget } from './fixtures/test-budget';
 
-for (const locale of ['en', 'fr'] as const) test(`native ${locale} MCP resources, structured/images and session-bound binary download`, async ({ page }) => {
+for (const registered of [false, true]) for (const locale of ['en', 'fr'] as const) test(`native ${locale} MCP resources${registered ? ' registered by extension' : ''}, structured/images and session-bound binary download`, async ({ page }) => {
   const previous = { AI_HARNESS_AUTH_TOKEN: process.env.AI_HARNESS_AUTH_TOKEN, AI_HARNESS_ADMIN_TOKEN: process.env.AI_HARNESS_ADMIN_TOKEN };
   process.env.AI_HARNESS_AUTH_TOKEN = 'disposable-resource-user'; process.env.AI_HARNESS_ADMIN_TOKEN = 'disposable-resource-admin';
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-resource-browser-')), data = path.join(root, 'data'), cwd = path.join(root, 'work');
@@ -17,7 +17,11 @@ for (const locale of ['en', 'fr'] as const) test(`native ${locale} MCP resources
     const config = { mcpServers: { docs: { command: process.execPath,
       args: [fileURLToPath(new URL('../packages/core/src/mcp/fixtures/resource-server.mjs', import.meta.url))],
       env: { MCP_RICH_TOOL: 'yes', MCP_SECRET: 'disposable-resource-secret' } } } };
-    await writeFile(path.join(data, 'mcp.json'), JSON.stringify(config));
+    const extension = path.join(data, 'extensions', 'resources.mjs');
+    if (registered) {
+      await mkdir(path.dirname(extension));
+      await writeFile(extension, `export default api => { api.registerMcpServer('docs', ${JSON.stringify(config.mcpServers.docs)}); };`);
+    } else await writeFile(path.join(data, 'mcp.json'), JSON.stringify(config));
     const server = await start({ host: '127.0.0.1', port: 0, dataDir: data, defaultCwd: cwd, allowedRoots: [root],
       webRoot: fileURLToPath(new URL('../packages/web/dist/', import.meta.url)), enableMockProvider: true });
     const base = `http://localhost:${server.port}`;
@@ -27,13 +31,37 @@ for (const locale of ['en', 'fr'] as const) test(`native ${locale} MCP resources
     expect((await page.request.post(base + '/api/auth/login', { headers: { Origin: base }, data: { token: 'disposable-resource-admin' } })).status()).toBe(200);
     await reserveReadBudget(page.request, base);
     expect((await page.request.post(base + '/api/workspaces/trust', { headers: { Origin: base }, data: { cwd, confirm: true } })).status()).toBe(200);
+    if (registered) {
+      const inventoryResponse = await page.request.get(`${base}/api/mcp?cwd=${encodeURIComponent(cwd)}`);
+      expect(inventoryResponse.status()).toBe(200);
+      const inventory = await inventoryResponse.json();
+      expect(inventory.servers[0]).toMatchObject({ name: 'docs', registration: { extensionId: extension, shadowedByFile: false } });
+      expect(inventory.servers[0].runtimeStatus).toBeUndefined();
+      expect(JSON.stringify(inventory)).not.toContain('disposable-resource-secret');
+    }
+    await page.addInitScript(value => {
+      localStorage.setItem('ai-harness-locale', value);
+      localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, lastSettingsSection: 'mcp', filesOpen: false }));
+    }, locale);
+    if (locale === 'fr') await page.setViewportSize({ width: 390, height: 844 });
+    if (registered) {
+      await page.goto(base + '/settings#mcp');
+      const card = page.locator('#mcp .mcp-server-card'); await expect(card).toHaveCount(1);
+      await card.locator('.mcp-detail-toggle').click();
+      await expect(card.locator('.mcp-server-detail')).toContainText(locale === 'en' ? 'Temporary server registered by' : 'Serveur temporaire inscrit par');
+      await expect(card.locator('.mcp-exposure-control select').first()).toBeDisabled();
+      const buttons = card.locator('.mcp-row-actions button');
+      await expect(buttons.nth(0)).toBeEnabled();
+      for (const index of [1, 2, 3]) await expect(buttons.nth(index)).toBeDisabled();
+      const testing = page.waitForResponse(response => response.url() === base + '/api/mcp/test' && response.request().method() === 'POST');
+      await buttons.first().click(); expect((await testing).status()).toBe(200);
+      await expect(card.locator('.mcp-test-summary .status-success')).toBeVisible();
+    }
     const started = await page.request.post(base + '/api/agent/runs', { headers: { Origin: base }, data: {
       cwd, provider: 'resources', model: 'fixture', input: 'Read MCP resources', toolPreset: 'read-only',
     } });
     expect(started.status()).toBe(202);
     const { run } = await started.json() as { run: { sessionId: string } };
-    await page.addInitScript(value => localStorage.setItem('ai-harness-locale', value), locale);
-    if (locale === 'fr') await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${base}/chat/${run.sessionId}?cwd=${encodeURIComponent(cwd)}`);
     await expect(page.locator('.message.assistant').last()).toContainText('MCP resources complete');
     await expect(page.locator('.message.tool img[src^="data:image/png;base64,"]')).toHaveCount(2);
@@ -54,7 +82,15 @@ for (const locale of ['en', 'fr'] as const) test(`native ${locale} MCP resources
     expect(await page.locator('body').textContent()).not.toContain('disposable-resource-secret');
     expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).not.toContain('disposable-resource-secret');
     expect(JSON.stringify(wire.observed)).not.toContain('ui://app'); expect(wire.failure()).toBeUndefined();
-    config.mcpServers.docs.env.MCP_RICH_TOOL = 'changed'; await writeFile(path.join(data, 'mcp.json'), JSON.stringify(config));
+    if (registered) {
+      await writeFile(extension, 'export default () => {};');
+      const reloaded = await page.request.post(base + '/api/agent/reload', { headers: { Origin: base }, data: { cwd } });
+      expect(reloaded.status()).toBe(200); expect((await reloaded.json()).errors).toEqual([]);
+      await expect(readFile(path.join(data, 'mcp.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(readFile(path.join(cwd, '.ai-harness', 'mcp.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+    } else {
+      config.mcpServers.docs.env.MCP_RICH_TOOL = 'changed'; await writeFile(path.join(data, 'mcp.json'), JSON.stringify(config));
+    }
     expect((await page.request.get(base + href!)).status()).toBe(404);
   } finally {
     await page.goto('about:blank').catch(() => undefined); await stop(); await wire.close(); await rm(root, { recursive: true, force: true });

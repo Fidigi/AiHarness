@@ -1,3 +1,4 @@
+export type { ExtensionMcpSource } from './registered-servers.js';
 export type { McpRetainedContent } from './resource-content.js';
 export type { McpResourceConnection, McpResourceOperation } from './resource-tools.js';
 
@@ -120,6 +121,7 @@ export {
   McpOAuthCredentialWriteError,
   McpOAuthSignedOutError,
   mcpOAuthStorageName,
+  mcpOAuthTargetName,
   mcpOAuthUrl,
 } from './oauth.js';
 export { createMcpOAuthProviderFactory } from './oauth-provider-factory.js';

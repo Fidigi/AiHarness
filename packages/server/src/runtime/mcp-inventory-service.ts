@@ -165,8 +165,7 @@ export class McpInventoryService {
       } : {}),
       trustManager: this.trustManager,
     });
-    const tested = this.tester.decorateInventory(inventory);
-    return this.host ? this.host.decorateInventory(tested) : tested;
+    return this.tester.decorateInventory(this.host ? this.host.decorateInventory(inventory, canonicalCwd) : inventory);
   }
 
   async resolveServerTarget(request: {
@@ -186,7 +185,9 @@ export class McpInventoryService {
       throw new McpServerTargetError('invalid-request', 'The MCP project selection is invalid.');
     }
     const defaultCwd = canonicalCwd ?? await this.workspaceManager.getDefaultCwd();
-    const readTarget = () => readMcpServerTestTarget({
+    const readTarget = () => this.host
+      ? this.host.readServerTarget(request.scope, request.name, defaultCwd)
+      : readMcpServerTestTarget({
       agentDir: this.agentDir,
       scope: request.scope,
       name: request.name,
@@ -390,6 +391,7 @@ export class McpInventoryService {
 
   async setEnabled(request: McpSetEnabledRequest): Promise<McpMutationOverview> {
     const canonicalCwd = await this.resolveOptionalWorkspace(request.cwd);
+    await this.requireFileManaged(request.scope, request.names, canonicalCwd);
     const activation = await setMcpServersEnabled({
       agentDir: this.agentDir,
       scope: request.scope,
@@ -413,6 +415,7 @@ export class McpInventoryService {
 
   async setExposure(request: McpSetExposureRequest): Promise<McpMutationOverview> {
     const canonicalCwd = await this.resolveOptionalWorkspace(request.cwd);
+    await this.requireFileManaged(request.scope, [request.name], canonicalCwd);
     const exposure = await setMcpServerExposure({
       agentDir: this.agentDir,
       scope: request.scope,
@@ -433,6 +436,7 @@ export class McpInventoryService {
 
   async remove(request: McpRemoveRequest): Promise<McpMutationOverview> {
     const canonicalCwd = await this.resolveOptionalWorkspace(request.cwd);
+    await this.requireFileManaged(request.scope, [request.name], canonicalCwd);
     const removal = await removeMcpServer({
       agentDir: this.agentDir,
       scope: request.scope,
@@ -468,6 +472,15 @@ export class McpInventoryService {
       return { inventory: await this.getOverview(canonicalCwd) };
     } catch (error) {
       throw this.postCommitFailure(error);
+    }
+  }
+
+  private async requireFileManaged(scope: McpConfigScope, names: string[], cwd?: string): Promise<void> {
+    if (!this.host) return;
+    const inventory = await this.getOverview(cwd);
+    if (names.some(name => inventory.servers.some(server => server.scope === scope && server.name === name && server.registration)
+      && !inventory.servers.some(server => server.scope === scope && server.name === name && !server.registration))) {
+      throw new McpConfigMutationError('invalid-request', 'Extension MCP servers are managed by their owning extension, not mcp.json.');
     }
   }
 

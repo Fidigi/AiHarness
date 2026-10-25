@@ -14,6 +14,11 @@ import {
 } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { McpServerRuntimeConfig, McpServerTestTarget } from './config-inventory.js';
 
+/** Never let a temporary registration inherit a file's or another owner's credentials. */
+export function mcpOAuthTargetName(target: Pick<McpServerTestTarget, 'name' | 'registration'>): string {
+  return target.registration ? `extension:${target.registration.id}` : target.name;
+}
+
 const MCP_OAUTH_RECORD_VERSION = 1;
 const MCP_OAUTH_RECORD_MAX_BYTES = 60 * 1024;
 const MCP_OAUTH_SECRET_MAX_BYTES = 48 * 1024;

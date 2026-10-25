@@ -75,7 +75,7 @@ interface PendingControlFocus {
 
 function serverState(server: McpServerInventoryEntry): 'invalid' | 'shadowed' | 'disabled' | 'configured' {
   if (!server.valid) return 'invalid';
-  if (server.shadowedByProject) return 'shadowed';
+  if (server.shadowedByProject || server.registration?.shadowedByFile) return 'shadowed';
   if (!server.enabled) return 'disabled';
   return 'configured';
 }
@@ -287,6 +287,7 @@ function ServerCard({
 }) {
   const { locale, t } = useI18n();
   const state = serverState(server);
+  const fileDisabled = disabled || Boolean(server.registration);
   const detailId = useId();
   const identity = `${t(SCOPE_KEYS[server.scope])} / ${server.name}`;
   const target = server.transport === 'stdio'
@@ -317,7 +318,7 @@ function ServerCard({
       </>}
       {server.valid ? <label className="mcp-exposure-control">
         <span>{t('settings.mcp.exposureLabel')}</span>
-        <select value={server.exposure} disabled={disabled}
+        <select value={server.exposure} disabled={fileDisabled}
           data-mcp-exposure-key={editKey(server.scope, server.name)}
           aria-label={t('settings.mcp.exposureNamed', { name: server.name })}
           aria-description={t('settings.mcp.exposureHelp')}
@@ -331,20 +332,20 @@ function ServerCard({
       {server.masked && <small>{t('settings.mcp.masked')}</small>}
       {server.replacesGlobal && <small>{t('settings.mcp.replacesGlobal')}</small>}
       {server.valid && <div className="mcp-row-actions">
-        <button type="button" disabled={disabled} onClick={onTest}
+        <button type="button" disabled={disabled || server.registration?.shadowedByFile} onClick={onTest}
           aria-label={mcpTestMessage(locale, 'settings.mcp.test.named', { name: server.name })}>
           {mcpTestMessage(locale, testing ? 'settings.mcp.test.testing' : 'settings.mcp.test.action')}
         </button>
-        <button type="button" disabled={disabled} onClick={event => onEdit(event.currentTarget)}
+        <button type="button" disabled={fileDisabled} onClick={event => onEdit(event.currentTarget)}
           data-mcp-edit-key={editKey(server.scope, server.name)}
           aria-label={t('settings.mcp.editNamed', { name: server.name })}>
           {t('settings.mcp.edit')}
         </button>
-        <button type="button" disabled={disabled} onClick={onToggle}
+        <button type="button" disabled={fileDisabled} onClick={onToggle}
           aria-label={t(server.enabled ? 'settings.mcp.disableNamed' : 'settings.mcp.enableNamed', { name: server.name })}>
           {t(server.enabled ? 'settings.mcp.disable' : 'settings.mcp.enable')}
         </button>
-        <button type="button" className="mcp-remove-button" disabled={disabled}
+        <button type="button" className="mcp-remove-button" disabled={fileDisabled}
           onClick={event => onRemove(event.currentTarget)}
           aria-label={t('settings.mcp.removeNamed', { name: server.name })}>
           {t('settings.mcp.remove')}
@@ -355,6 +356,7 @@ function ServerCard({
       aria-label={`${mcpDetailMessage(locale, 'region')} ${identity}`}>
       {target && <small>{target}</small>}
       <small>{server.sourcePath}</small>
+      {server.registration && <small>{t('settings.mcp.registrationHelp', { extension: server.registration.extensionId })}</small>}
       {server.envNames.length > 0 && <small>{t('settings.mcp.envNames', { names: server.envNames.join(', ') })}</small>}
       {server.headerNames.length > 0 && <small>{t('settings.mcp.headerNames', { names: server.headerNames.join(', ') })}</small>}
       {server.commandFields.length > 0 && <small>{t('settings.mcp.commandFields', { fields: server.commandFields.join(', ') })}</small>}
@@ -370,7 +372,7 @@ function ServerCard({
         <summary>{t('settings.mcp.perToolExposure')}</summary>
         {[...new Set([...Object.keys(server.toolExposure ?? {}), ...server.testStatus?.tools.map(tool => tool.name) ?? []])].map(name => <label key={name} className="mcp-exposure-control">
           <span><code>{name}</code></span>
-          <select disabled={disabled} value={mcpToolExposureValue(server, name)}
+          <select disabled={fileDisabled} value={mcpToolExposureValue(server, name)}
             data-mcp-exposure-key={editKey(server.scope, `${server.name}\0${name}`)}
             aria-label={t('settings.mcp.exposureNamed', { name: `${server.name} / ${name}` })}
             aria-description={t('settings.mcp.exposureHelp')}
@@ -386,7 +388,7 @@ function ServerCard({
         flow={oauthFlow}
         busy={oauthBusy}
         error={oauthError}
-        disabled={disabled}
+        disabled={disabled || Boolean(server.registration?.shadowedByFile)}
         onStart={onOAuthStart}
         onPaste={onOAuthPaste}
         onCancel={onOAuthCancel}
@@ -926,7 +928,7 @@ function McpSettingsPanel() {
       {mcpDetailMessage(locale, 'unavailable')}
     </p>}
     {inventory && groups.map(group => {
-      const actionable = group.servers.filter(server => server.valid);
+      const actionable = group.servers.filter(server => server.valid && !server.registration);
       const enableNames = actionable.filter(server => !server.enabled).map(server => server.name);
       const disableNames = actionable.filter(server => server.enabled).map(server => server.name);
       const revision = group.file?.revision ?? null;

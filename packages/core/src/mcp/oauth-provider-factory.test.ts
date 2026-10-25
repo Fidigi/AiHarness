@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { McpServerTestTarget } from './config-inventory.js';
-import { McpOAuthCredentialManager, type McpOAuthCredentialBackend } from './oauth.js';
+import { McpOAuthCredentialManager, mcpOAuthTargetName, type McpOAuthCredentialBackend } from './oauth.js';
 import { createMcpOAuthProviderFactory } from './oauth-provider-factory.js';
 
 class MemoryBackend implements McpOAuthCredentialBackend {
@@ -45,6 +45,28 @@ function target(marker: string): McpServerTestTarget {
 }
 
 describe('persistent MCP OAuth provider factory', () => {
+  it('isolates registration OAuth credentials from files, foreign owners and replacement generations', async () => {
+    const manager = new McpOAuthCredentialManager(new MemoryBackend());
+    const file = { ...target('/workspace/marker'), config: { url: 'https://mcp.example.test/factory', oauth: { clientId: 'factory-client' } } };
+    const first: McpServerTestTarget = { ...file, configKey: 'registration-one', registration: { extensionId: 'owner', id: '00000000-0000-4000-8000-000000000001' } };
+    let current: McpServerTestTarget = first;
+    const factory = createMcpOAuthProviderFactory({ manager, resolveTarget: async () => current });
+    const seed = async (value: McpServerTestTarget, token: string) => {
+      const binding = await manager.createProvider({ identity: { name: mcpOAuthTargetName(value), url: file.config.url }, mode: 'interactive', settings: { clientId: 'factory-client' } });
+      await binding.provider.clientInformation(); await binding.provider.saveTokens({ access_token: token, token_type: 'Bearer' });
+    };
+    await seed(file, 'file-bearer');
+    expect(await (await factory(first, new AbortController().signal))!.provider.tokens()).toBeUndefined();
+    await seed(first, 'owner-bearer');
+    const owned = await factory(first, new AbortController().signal);
+    expect(await owned!.provider.tokens()).toMatchObject({ access_token: 'owner-bearer' });
+    current = { ...first, configKey: 'replacement', registration: { extensionId: 'foreign', id: '00000000-0000-4000-8000-000000000002' } };
+    expect(await (await factory(current, new AbortController().signal))!.provider.tokens()).toBeUndefined();
+    await expect(owned!.provider.saveTokens({ access_token: 'late-bearer', token_type: 'Bearer' })).rejects.toThrow('configuration changed');
+    current = file;
+    expect(await (await factory(file, new AbortController().signal))!.provider.tokens()).toMatchObject({ access_token: 'file-bearer' });
+    expect(mcpOAuthTargetName({ ...first, name: 'x'.repeat(256) })).toBe(mcpOAuthTargetName(first));
+  });
   it('loads configured metadata only after challenge, revalidates, and never echoes malformed bodies', async () => {
     const initial: McpServerTestTarget = { ...target('/workspace/marker'), config: {
       url: 'https://mcp.example.test/factory', oauth: { authServerMetadataUrl: 'https://issuer.example/metadata' },

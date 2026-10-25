@@ -158,7 +158,9 @@ export async function createRuntimeServices(
     projectTrusted: defaultCwd ? await trustManager.isTrusted(defaultCwd) : false,
   });
   proxy.setNetworkSettings(resolveAgentProviderNetworkSettings(providerSettings.settings));
+  const extensionRegistry = new ExtensionRegistry();
   const mcpHost = new McpSessionHost({
+    registeredServers: extensionRegistry.mcpServers,
     agentDir: dataDir,
     redactText: value => proxy.redactText(value),
     trustManager,
@@ -216,7 +218,6 @@ export async function createRuntimeServices(
     skillCatalog,
     dataDir,
   );
-  const extensionRegistry = new ExtensionRegistry();
   extensionRegistry.attachSessionManager(sessionManager);
   await registerWorkspaceTools(extensionRegistry, workspaceManager);
   if (exclusiveHost) await extensionRegistry.load('builtin:provider-administration-policy', api => {
@@ -397,7 +398,7 @@ export async function createRuntimeServices(
       ],
       isProjectTrusted: () => extensionContext.trusted,
     });
-    let result = await extensionLoader.reload();
+    let result = await extensionLoader.reload(cwd);
     // Never keep executable handlers from another workspace when its replacement is invalid.
     if (contextChanged && !result.committed) {
       const cleared = await extensionLoader.clear();

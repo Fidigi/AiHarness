@@ -9,6 +9,7 @@ import {
   McpOAuthCredentialWriteError,
   McpOAuthSignedOutError,
   mcpOAuthStorageName,
+  mcpOAuthTargetName,
   mcpOAuthUrl,
   type McpOAuthCredentialManager,
   type McpOAuthIdentity,
@@ -210,7 +211,7 @@ function positiveInteger(value: number | undefined, fallback: number): number {
 function flowIdentity(target: McpServerTestTarget): McpOAuthIdentity {
   const url = mcpOAuthUrl(target.config);
   if (!url) throw new McpOAuthFlowServiceError('not-oauth', 'The MCP server does not use OAuth.');
-  return { name: target.name, url };
+  return { name: mcpOAuthTargetName(target), url };
 }
 
 function assertSameTarget(

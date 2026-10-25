@@ -5,6 +5,7 @@ import {
   McpConfigMutationError,
   McpOAuthFlowServiceError,
   mcpOAuthUrl,
+  mcpOAuthTargetName,
   McpServerTargetError,
   type McpConfigScope,
   type McpExposure,
@@ -262,7 +263,7 @@ export function createMcpRouter(
             scope,
             name: server.target.name,
             configKey: server.target.configKey,
-            identity: { name: server.target.name, url },
+            identity: { name: mcpOAuthTargetName(server.target), url },
           });
         } catch {
           // A stale/invalid row remains unknown; no target detail crosses this batch boundary.
@@ -433,7 +434,7 @@ export function createMcpRouter(
       }
       let removed: boolean;
       try {
-        removed = await runtime.flows.signOut({ name: resolved.target.name, url });
+        removed = await runtime.flows.signOut({ name: mcpOAuthTargetName(resolved.target), url });
       } finally {
         await services.mcpHost.disconnectServer(scope, resolved.target.name);
       }

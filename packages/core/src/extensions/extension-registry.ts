@@ -4,6 +4,8 @@ import type { BeforeSpecializedModel, SpecializedModelType, SpecializedModelRequ
 import { ProviderFactory } from '../providers/index.js';
 import { VirtualModelRegistry, VirtualSelectionProvider, type VirtualModelDefinition } from '../providers/virtual-models.js';
 import type { CacheWarmer, CacheWarmingDecision } from '../providers/cache-warmer.js';
+import { RegisteredMcpServers, type ExtensionMcpSource } from '../mcp/registered-servers.js';
+import type { McpServerRuntimeConfig } from '../mcp/config-inventory.js';
 import { AI_HARNESS_EXTENSION_API_VERSION } from '../public-api-version.js';
 import type { CodemodeProgress, Message, MessageContentBlock, ProviderConfig, Session } from '../types/index.js';
 import { SessionManager, type SessionCompactionEvent } from '../sessions/session-manager.js';
@@ -275,6 +277,10 @@ export interface ExtensionAPI {
   registerTool(tool: ExtensionTool): void;
   registerProvider(type: string, provider: ExtensionProvider): void;
   registerVirtualModel(definition: VirtualModelDefinition): () => void;
+  /** Temporary owned MCP server. Files win; same-owner replacement retires old bindings. */
+  registerMcpServer(name: string, config: McpServerRuntimeConfig): () => void;
+  /** Remove only this factory generation's registration. */
+  unregisterMcpServer(name: string): boolean;
   registerUI(component: ExtensionUIComponent): void;
   on<K extends keyof EventMap>(event: K, handler: EventHandler<EventMap[K]>): () => void;
   before<K extends keyof BeforeHookMap>(event: K, handler: BeforeHookHandler<BeforeHookMap[K]>): () => void;
@@ -289,6 +295,7 @@ interface Owned<T> {
 }
 
 interface LoadedExtension {
+  source?: ExtensionMcpSource;
   id: string;
   factory: ExtensionFactory;
   cleanups: Array<() => void | Promise<void>>;
@@ -325,6 +332,7 @@ const SESSION_EVENTS: SessionEvent[] = [
 
 /** Runtime registry for extension commands, tools, providers and lifecycle hooks. */
 export class ExtensionRegistry {
+  readonly mcpServers = new RegisteredMcpServers();
   readonly virtualModels = new VirtualModelRegistry();
   private readonly providerCaches = new Set<CacheWarmer>();
   trackProviderCache(warmer: CacheWarmer): void { this.providerCaches.add(warmer); }
@@ -372,12 +380,12 @@ export class ExtensionRegistry {
   private reloadHandler?: () => Promise<void>;
   private executionHookLifetime = new AbortController();
 
-  async load(id: string, factory: ExtensionFactory): Promise<void> {
+  async load(id: string, factory: ExtensionFactory, source?: ExtensionMcpSource): Promise<void> {
     const normalizedId = id.trim();
     if (!normalizedId) throw new Error('Extension id is required');
     if (this.loaded.has(normalizedId)) throw new Error(`Extension already loaded: ${normalizedId}`);
 
-    const extension: LoadedExtension = { id: normalizedId, factory, cleanups: [] };
+    const extension: LoadedExtension = { id: normalizedId, factory, cleanups: [], source };
     this.loaded.set(normalizedId, extension);
     const api = this.createApi(extension);
 
@@ -394,6 +402,7 @@ export class ExtensionRegistry {
     const extension = this.loaded.get(id);
     if (!extension) return false;
     this.loaded.delete(id);
+    this.mcpServers.removeOwner(extension);
     for (const warmer of this.providerCaches) warmer.cancel('extension generation changed');
     this.refreshBranchBindings();
     this.retireExecutionHooks();
@@ -419,13 +428,13 @@ export class ExtensionRegistry {
    */
   async replaceManaged(
     previousIds: Iterable<string>,
-    candidates: Array<{ id: string; factory: ExtensionFactory }>,
+    candidates: Array<{ id: string; factory: ExtensionFactory; source?: ExtensionMcpSource }>,
   ): Promise<void> {
     const previousOptionValues = this.startupOptionValues;
     const previous = [...new Set(previousIds)]
       .map(id => this.loaded.get(id))
       .filter((item): item is LoadedExtension => Boolean(item))
-      .map(item => ({ id: item.id, factory: item.factory }));
+      .map(item => ({ id: item.id, factory: item.factory, source: item.source }));
     const candidateIds = new Set(candidates.map(candidate => candidate.id));
     if (candidateIds.size !== candidates.length) throw new Error('Duplicate extension module id in reload candidate');
 
@@ -433,14 +442,14 @@ export class ExtensionRegistry {
     const loadedCandidates: string[] = [];
     try {
       for (const candidate of candidates) {
-        await this.load(candidate.id, candidate.factory);
+        await this.load(candidate.id, candidate.factory, candidate.source);
         loadedCandidates.push(candidate.id);
       }
     } catch (error) {
       for (const id of loadedCandidates.reverse()) await this.unload(id);
       const restoreErrors: string[] = [];
       for (const item of previous) {
-        try { await this.load(item.id, item.factory); }
+        try { await this.load(item.id, item.factory, item.source); }
         catch (restoreError) {
           restoreErrors.push(`${item.id}: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`);
         }
@@ -911,6 +920,14 @@ export class ExtensionRegistry {
         const dispose = this.virtualModels.register(definition);
         extension.cleanups.push(dispose);
         return dispose;
+      },
+      registerMcpServer: (name, config) => {
+        active();
+        return this.mcpServers.register(extension, extension.id, name, config, extension.source);
+      },
+      unregisterMcpServer: name => {
+        active();
+        return this.mcpServers.unregister(extension, name);
       },
       registerUI: component => {
         active();

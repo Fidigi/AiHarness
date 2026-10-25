@@ -13,12 +13,14 @@ try {
   await mkdir(agent); await mkdir(path.join(cwd, '.ai-harness'), { recursive: true });
   const trust = new ProjectTrustManager(path.join(agent, 'trust.json')); await trust.load(); await trust.setDecision(cwd, true);
   const peer = fileURLToPath(new URL('../../../../core/src/mcp/fixtures/resource-server.mjs', import.meta.url));
-  await writeFile(path.join(scope === 'global' ? agent : path.join(cwd, '.ai-harness'), 'mcp.json'), JSON.stringify({ mcpServers: { docs: {
-    command: process.execPath, args: [peer], env: { MCP_RICH_TOOL: 'yes', MCP_SECRET: 'disposable-resource-secret' },
-  } } }));
-  const extension = path.join(agent, 'provider.mjs');
-  await writeFile(extension, `import { OpenAiProvider } from ${JSON.stringify(import.meta.resolve('@ai-harness/core'))}; export default api => api.registerProvider('resource-fixture', {
-    defaultConfig: { model: 'fixture' }, create: config => new OpenAiProvider({...config, type:'openai', model:'fixture', baseUrl:${JSON.stringify(wire.url)}, apiKey:'opaque-fixture-provider-key'}) });`);
+  const registered = scope.startsWith('extension-');
+  const config = { command: process.execPath, args: [peer], env: { MCP_RICH_TOOL: 'yes', MCP_SECRET: 'disposable-resource-secret' } };
+  if (!registered) await writeFile(path.join(scope === 'global' ? agent : path.join(cwd, '.ai-harness'), 'mcp.json'), JSON.stringify({ mcpServers: { docs: config } }));
+  const extension = path.join(scope === 'extension-project' ? cwd : agent, 'provider.mjs');
+  await writeFile(extension, `import { OpenAiProvider } from ${JSON.stringify(import.meta.resolve('@ai-harness/core'))}; export default api => {
+    api.registerProvider('resource-fixture', { defaultConfig: { model: 'fixture' }, create: config => new OpenAiProvider({...config, type:'openai', model:'fixture', baseUrl:${JSON.stringify(wire.url)}, apiKey:'opaque-fixture-provider-key'}) });
+    ${registered ? `api.registerMcpServer('docs', ${JSON.stringify(config)});` : ''}
+  };`);
   child = spawn(process.execPath, [fileURLToPath(new URL('../../../dist/index.js', import.meta.url)), '--offline', '--approve', '--no-extensions', '-e', 'builtin:mcp', '-e', extension,
     '--no-context-files', '--model', 'resource-fixture/fixture', '--tools', 'mcp__docs__*', '--session-dir', path.join(root, 'sessions'),
     ...(mode === 'print' ? ['-p'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['Read resources'])],
