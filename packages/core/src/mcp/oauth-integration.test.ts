@@ -68,7 +68,7 @@ afterEach(async () => {
 });
 
 describe('MCP OAuth end-to-end', () => {
-  it('keeps runtime auth passive, completes explicit loopback login, and refreshes stored tokens', async () => {
+  it.each([false, true])('keeps runtime auth passive, completes login and refreshes tokens (configured vocabulary: %s)', async configured => {
     let baseUrl = '';
     let acceptedAccess = 'access-1';
     let registrationCalls = 0;
@@ -102,7 +102,9 @@ describe('MCP OAuth end-to-end', () => {
       }
       if (url.pathname === '/register' && request.method === 'POST') {
         registrationCalls++;
-        const registration = JSON.parse(await body(request)) as { redirect_uris: string[] };
+        const registration = JSON.parse(await body(request)) as { redirect_uris: string[]; client_name: string; scope?: string };
+        expect(registration.client_name).toBe(configured ? 'Native test operator' : 'AiHarness');
+        expect(new URL(registration.redirect_uris[0]!).pathname).toBe(configured ? '/native/callback' : '/oauth/callback');
         const clientId = `client-${registrationCalls}`;
         registeredRedirects.set(clientId, registration.redirect_uris[0]!);
         json(response, 201, {
@@ -248,9 +250,13 @@ describe('MCP OAuth end-to-end', () => {
     const project = path.join(root, 'project');
     await Promise.all([mkdir(agentDir), mkdir(project)]);
     cleanups.push(() => rm(root, { recursive: true, force: true }));
+    const config = { url: `${baseUrl}/mcp`, exposure: 'direct' as const, ...(configured ? { oauth: {
+      clientName: 'Native test operator', scope: 'tools.read', callbackUrl: 'http://127.0.0.1/native/callback',
+      authServerMetadataUrl: `${baseUrl}/.well-known/oauth-authorization-server`,
+    } } : {}) };
     await writeFile(path.join(agentDir, 'mcp.json'), JSON.stringify({
       version: 1,
-      mcpServers: { protected: { url: `${baseUrl}/mcp`, exposure: 'direct' } },
+      mcpServers: { protected: config },
     }));
     const trust = new ProjectTrustManager(path.join(agentDir, 'trust.json'));
     await trust.load();
@@ -281,7 +287,7 @@ describe('MCP OAuth end-to-end', () => {
       name: 'protected',
       sourcePath: path.join(agentDir, 'mcp.json'),
       configKey: unauthenticatedInventory.servers[0]!.configKey,
-      config: { url: `${baseUrl}/mcp`, exposure: 'direct' },
+      config,
       cwd: project,
     };
     const flows = new McpOAuthFlowService(credentials, {

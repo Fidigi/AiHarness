@@ -6,7 +6,9 @@ import {
   type McpOAuthProviderBinding,
   mcpOAuthUrl,
 } from './oauth.js';
-import { MCP_TEST_COMMAND_TIMEOUT_MS, resolveMcpOAuthSettings } from './server-test.js';
+import { MCP_TEST_COMMAND_TIMEOUT_MS, MCP_TEST_REQUEST_TIMEOUT_MS, mcpRequestTimeout, resolveMcpOAuthSettings } from './server-test.js';
+import { mcpOAuthScopes } from './oauth-config.js';
+import { loadMcpOAuthDiscovery } from './oauth-discovery.js';
 
 export interface McpOAuthProviderFactoryOptions {
   manager: McpOAuthCredentialManager;
@@ -44,7 +46,13 @@ export function createMcpOAuthProviderFactory(
       mode: 'passive',
       settings: {
         clientId: target.config.oauth?.clientId,
-        scopes: target.config.oauth?.scopes,
+        scopes: mcpOAuthScopes(target.config.oauth),
+        clientName: target.config.oauth?.clientName,
+        clientMetadataUrl: target.config.oauth?.clientMetadataUrl,
+        loadDiscoveryState: () => loadMcpOAuthDiscovery(
+          target.config as Extract<McpServerTestTarget['config'], { url: string }>, signal,
+          mcpRequestTimeout(target.config, MCP_TEST_REQUEST_TIMEOUT_MS), resolveCurrentTarget,
+        ),
         resolveClientSecret: async () => (await resolveMcpOAuthSettings(
           await resolveCurrentTarget(),
           signal,

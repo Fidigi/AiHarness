@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { McpServerTestTarget } from './config-inventory.js';
 import { McpOAuthCredentialManager, type McpOAuthCredentialBackend } from './oauth.js';
 import { createMcpOAuthProviderFactory } from './oauth-provider-factory.js';
@@ -23,6 +23,7 @@ class MemoryBackend implements McpOAuthCredentialBackend {
 const directories: string[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(directories.splice(0).map(directory => rm(directory, { recursive: true, force: true })));
 });
 
@@ -44,6 +45,21 @@ function target(marker: string): McpServerTestTarget {
 }
 
 describe('persistent MCP OAuth provider factory', () => {
+  it('loads configured metadata only after challenge, revalidates, and never echoes malformed bodies', async () => {
+    const initial: McpServerTestTarget = { ...target('/workspace/marker'), config: {
+      url: 'https://mcp.example.test/factory', oauth: { authServerMetadataUrl: 'https://issuer.example/metadata' },
+    } };
+    let current = initial;
+    const network = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('PRIVATE_REMOTE_METADATA invalid json'));
+    const factory = createMcpOAuthProviderFactory({ manager: new McpOAuthCredentialManager(new MemoryBackend()), resolveTarget: async () => current });
+    const binding = await factory(initial, new AbortController().signal);
+    expect(network).not.toHaveBeenCalled();
+    await expect(binding!.provider.discoveryState?.()).rejects.toThrow(/^OAuth metadata is invalid\.$/u);
+    expect(network).toHaveBeenCalledTimes(1);
+    current = { ...initial, configKey: 'b'.repeat(64) };
+    await expect(binding!.provider.discoveryState?.()).rejects.toThrow('configuration changed during OAuth refresh');
+    expect(network).toHaveBeenCalledTimes(1);
+  });
   it('defers configured secret commands until an auth challenge and revalidates first', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'ai-harness-oauth-factory-'));
     directories.push(directory);

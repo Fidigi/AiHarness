@@ -1,3 +1,4 @@
+import { auth } from '@modelcontextprotocol/sdk/client/auth.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -62,6 +63,49 @@ afterEach(async () => {
 });
 
 describe('MCP OAuth credentials', () => {
+  it.each([true, false])('uses operator CIMD only when discovery advertises it (%s)', async supported => {
+    const { manager } = await encryptedManager();
+    const authorization = vi.fn();
+    const metadata = {
+      issuer: 'https://issuer.example', authorization_endpoint: 'https://issuer.example/authorize',
+      token_endpoint: 'https://issuer.example/token', registration_endpoint: 'https://issuer.example/register',
+      response_types_supported: ['code'], code_challenge_methods_supported: ['S256'],
+      token_endpoint_auth_methods_supported: ['none'], client_id_metadata_document_supported: supported,
+    };
+    const loadDiscoveryState = vi.fn(async () => ({
+      authorizationServerUrl: 'https://issuer.example', authorizationServerMetadata: metadata,
+      resourceMetadata: { resource: 'https://mcp.example/api', authorization_servers: ['https://issuer.example'] },
+    }));
+    const { provider } = await manager.createProvider({
+      identity: { name: 'cimd', url: 'https://mcp.example/api' }, mode: 'interactive',
+      settings: { clientMetadataUrl: 'https://operator.example/client.json', loadDiscoveryState },
+      onAuthorizationUrl: authorization,
+    });
+    expect(loadDiscoveryState).not.toHaveBeenCalled();
+    const network = vi.fn<typeof fetch>();
+    const result = auth(provider, { serverUrl: 'https://mcp.example/api', fetchFn: network });
+    if (supported) {
+      await expect(result).resolves.toBe('REDIRECT');
+      const url = authorization.mock.calls[0]![0] as URL;
+      expect(url.searchParams.get('client_id')).toBe('https://operator.example/client.json');
+      expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+      await provider.saveTokens(tokens('cimd-access'));
+      const changed = await manager.createProvider({ identity: { name: 'cimd', url: 'https://mcp.example/api' }, mode: 'passive' });
+      expect(await changed.provider.tokens()).toBeUndefined();
+      await expect(changed.provider.clientInformation()).rejects.toBeInstanceOf(McpOAuthAuthorizationRequiredError);
+      expect(await changed.provider.tokens()).toBeUndefined();
+    } else await expect(result).rejects.toThrow('does not support public CIMD');
+    expect(network).not.toHaveBeenCalled();
+  });
+
+  it('rejects a discovered issuer mismatch before client registration', async () => {
+    const { manager } = await encryptedManager();
+    const { provider } = await manager.createProvider({ identity: { name: 'docs', url: 'https://mcp.example' }, mode: 'interactive' });
+    expect(() => provider.saveDiscoveryState?.({ authorizationServerUrl: 'https://expected.example', authorizationServerMetadata: {
+      issuer: 'https://wrong.example', authorization_endpoint: 'https://wrong.example/authorize', response_types_supported: ['code'],
+    } })).toThrow('issuer does not match');
+  });
+
   it('isolates encrypted credentials by server name and normalized URL', async () => {
     const { manager, store } = await encryptedManager();
     const first = { name: 'first', url: 'https://mcp.example.test/api' };

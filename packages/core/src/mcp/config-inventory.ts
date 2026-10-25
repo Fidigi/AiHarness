@@ -2,6 +2,7 @@ import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { lstat, mkdir, open, realpath, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
+import { validMcpOAuthConfig, type McpOAuthConfig } from './oauth-config.js';
 import type {
   FreshProjectTrustBlockReason,
   FreshProjectTrustOptions,
@@ -107,6 +108,8 @@ export interface McpServerRuntimeStatus {
 
 interface McpRuntimeConfigBase {
   description?: string;
+  /** Per-request seconds; may reduce, never expand the host's absolute deadline. */
+  timeout?: number;
   enabled?: boolean;
   exposure?: McpExposure;
   toolExposure?: Record<string, McpExposure>;
@@ -123,11 +126,7 @@ export interface McpStdioRuntimeConfig extends McpRuntimeConfigBase {
 export interface McpHttpRuntimeConfig extends McpRuntimeConfigBase {
   url: string;
   headers?: Record<string, string>;
-  oauth?: {
-    clientId?: string;
-    clientSecret?: string;
-    scopes?: string[];
-  };
+  oauth?: McpOAuthConfig;
   type?: 'http' | 'streamable-http';
 }
 
@@ -736,7 +735,7 @@ function describeEntry(
   if (!validName(rawName)) invalid('server-name', 'The server name is empty, too long, or contains hidden characters.');
 
   const knownFields = new Set([
-    'args', 'command', 'cwd', 'description', 'enabled', 'env', 'exposure', 'headers', 'oauth', 'type', 'url', 'toolExposure',
+    'args', 'command', 'cwd', 'description', 'enabled', 'env', 'exposure', 'headers', 'oauth', 'type', 'url', 'toolExposure', 'timeout',
   ]);
   if (Object.keys(config).some(key => !knownFields.has(key))) {
     invalid('unsupported-properties', 'The server entry contains unsupported properties.');
@@ -774,6 +773,10 @@ function describeEntry(
   if (config.description !== undefined && !boundedString(config.description)) {
     invalid('description', 'The description must be a bounded string.');
   }
+  if (config.timeout !== undefined && (typeof config.timeout !== 'number'
+    || !Number.isFinite(config.timeout) || config.timeout <= 0 || config.timeout > 300)) {
+    invalid('unsupported-properties', 'Timeout must be a positive number of seconds no greater than 300.');
+  }
   const envValid = config.env === undefined || validateStringMap(config.env);
   const headersValid = config.headers === undefined || validateStringMap(config.headers);
   if (!envValid) invalid('env', 'Environment entries must be a bounded string map.');
@@ -796,16 +799,7 @@ function describeEntry(
 
   let oauthValid = true;
   if (config.oauth !== undefined) {
-    oauthValid = isRecord(config.oauth)
-      && Object.keys(config.oauth).length <= 3
-      && Object.keys(config.oauth).every(key => ['clientId', 'clientSecret', 'scopes'].includes(key))
-      && (config.oauth.clientId === undefined || boundedString(config.oauth.clientId))
-      && (config.oauth.clientSecret === undefined || boundedString(config.oauth.clientSecret))
-      && (config.oauth.scopes === undefined || (
-        Array.isArray(config.oauth.scopes)
-        && config.oauth.scopes.length <= MCP_CONFIG_MAX_COLLECTION_ENTRIES
-        && config.oauth.scopes.every(boundedString)
-      ));
+    oauthValid = validMcpOAuthConfig(config.oauth);
     if (!oauthValid) invalid('oauth', 'OAuth settings do not match the supported schema.');
   }
 

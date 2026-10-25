@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { McpServerTestTarget } from './config-inventory.js';
 import {
@@ -167,6 +168,39 @@ describe('MCP OAuth flow service', () => {
     expect(response.status).toBe(200);
     expect(await response.text()).not.toContain('authorization-code');
     await waitFor(service, first.flow.flowId, 'connected');
+  });
+
+  it('uses the configured loopback path for actual callbacks and refuses another path', async () => {
+    const service = flowService(manager(), authorizationDriver(false));
+    const initial = target({ config: { url: 'https://mcp.example.test/api', oauth: { callbackUrl: 'http://127.0.0.1/native/callback' } } });
+    const started = service.start({ target: initial, validate: async () => initial });
+    const authorize = await waitFor(service, started.flow.flowId, 'authorize');
+    expect(new URL(authorize.redirectUrl!).pathname).toBe('/native/callback');
+    const state = new URL(authorize.authorizationUrl!).searchParams.get('state');
+    expect((await fetch(authorize.redirectUrl!.replace('/native/callback', '/wrong'))).status).toBe(400);
+    expect((await fetch(`${authorize.redirectUrl}?code=authorization-code&state=${state}`)).status).toBe(200);
+    await waitFor(service, started.flow.flowId, 'connected');
+  });
+
+  it('never substitutes an ephemeral port for an unavailable explicitly registered port', async () => {
+    const occupied = createServer();
+    await new Promise<void>(resolve => occupied.listen(0, '127.0.0.1', resolve));
+    try {
+      const address = occupied.address();
+      if (!address || typeof address === 'string') throw new Error('fixture address');
+      const driver = vi.fn(authorizationDriver(false));
+      const service = flowService(manager(), driver);
+      const initial = target({ config: { url: 'https://mcp.example.test/api', oauth: { callbackPort: address.port } } });
+      const started = service.start({ target: initial, validate: async () => initial });
+      expect(await waitFor(service, started.flow.flowId, 'failed')).toMatchObject({ failure: 'connection-failed' });
+      expect(driver).not.toHaveBeenCalled();
+    } finally { await new Promise<void>(resolve => occupied.close(() => resolve())); }
+  });
+
+  it('rejects unsafe callbacks from structural callers before starting a flow', () => {
+    const service = flowService(manager(), authorizationDriver(false));
+    const initial = target({ config: { url: 'https://mcp.example.test/api', oauth: { callbackUrl: 'http://remote.example/callback' } } });
+    expect(() => service.start({ target: initial, validate: async () => initial })).toThrow('settings are invalid');
   });
 
   it('revalidates the target after runtime resolution before the first network request', async () => {

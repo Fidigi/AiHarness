@@ -35,6 +35,7 @@ import {
   createRedactor,
   isNeedsAuth,
   mcpSessionRunsCommand,
+  mcpRequestTimeout,
   resolveRuntimeConfig,
   safeEnvironment,
   safeText,
@@ -710,7 +711,7 @@ export class McpSessionHost {
     const deadline = setTimeout(() => controller.abort('mcp-connect-deadline'), this.deadlineMs);
     deadline.unref?.();
     record.ready = this.connectBounded(target, controller.signal, {
-      requestTimeoutMs: this.requestTimeoutMs,
+      requestTimeoutMs: mcpRequestTimeout(target.config, this.requestTimeoutMs),
       closeWaitMs: this.closeWaitMs,
       commandTimeoutMs: this.commandTimeoutMs,
       callbacks: {

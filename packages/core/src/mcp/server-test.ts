@@ -24,6 +24,10 @@ export const MCP_TEST_MAX_PAGED_ITEMS = 1_000;
 export const MCP_TEST_MAX_PAGES = 20;
 export const MCP_TEST_STATUS_LIMIT = 500;
 
+export function mcpRequestTimeout(config: McpServerRuntimeConfig, hostLimit: number): number {
+  return config.timeout === undefined ? hostLimit : Math.max(1, Math.min(hostLimit, config.timeout * 1_000));
+}
+
 const STDERR_MAX_BYTES = 64 * 1024;
 const RESULT_TEXT_MAX_CHARS = 2_000;
 const DESCRIPTION_MAX_CHARS = 300;
@@ -837,7 +841,7 @@ export class McpServerTester {
         });
       const completed = await Promise.race([
         this.connect(target, controller.signal, {
-          requestTimeoutMs: this.requestTimeoutMs,
+          requestTimeoutMs: mcpRequestTimeout(target.config, this.requestTimeoutMs),
           closeWaitMs: this.closeWaitMs,
         }),
         fallback,

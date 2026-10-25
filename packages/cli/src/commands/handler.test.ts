@@ -692,6 +692,19 @@ describe('/export command', () => {
   // ===================================================================
 
   describe('extension integration', () => {
+    it('delegates explicit MCP management without starting discovery or needing a session', async () => {
+      const manage = vi.fn(async () => 'native action complete');
+      const prepare = vi.fn(), overview = vi.fn(), reconnect = vi.fn();
+      const native = new CommandHandler(manager, store, terminal as unknown as TerminalUI, undefined, undefined, {
+        cwd: process.cwd(), mcpControl: { manage, prepare, overview, reconnect, finish: vi.fn() },
+      });
+      for (const command of ['test', 'enable', 'disable', 'exposure', 'login', 'logout', 'remove', 'add']) {
+        expect(await captureOutput(() => native.execute(`/mcp ${command} docs --project`))).toContain('native action complete');
+        expect(manage).toHaveBeenLastCalledWith([command, 'docs', '--project'], undefined);
+      }
+      expect(prepare).not.toHaveBeenCalled(); expect(overview).not.toHaveBeenCalled(); expect(reconnect).not.toHaveBeenCalled();
+    });
+
     it('respects /mcp ownership, rejects a second owner and restores the builtin on unload', async () => {
       const registry = new ExtensionRegistry();
       await registry.load('mcp-owner', api => api.registerCommand('mcp', {

@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,6 +17,36 @@ afterEach(async () => {
 });
 
 describe('top-level MCP command', () => {
+  it('imports complete configuration with confirmations and returns failure for needs-auth', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'ai-harness-cli-mcp-vocabulary-'));
+    roots.push(root);
+    const cwd = path.join(root, 'project'), agentDir = path.join(root, 'agent');
+    await Promise.all([mkdir(cwd), mkdir(agentDir)]);
+    process.env.AI_HARNESS_AGENT_DIR = agentDir;
+    const output: string[] = [], errors: string[] = [], changed: string[] = [];
+    const io = { cwd, stdout: (value: string) => output.push(value), stderr: (value: string) => errors.push(value),
+      onChanged: async (scope: string, name: string) => { changed.push(`${scope}/${name}`); } };
+    const server = createServer((_request, response) => response.writeHead(401).end());
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('fixture address');
+      const config = { url: `http://127.0.0.1:${address.port}/mcp`, timeout: 1,
+        oauth: { clientId: 'registered', clientName: 'Native operator', scope: 'tools.read', callbackUrl: 'http://127.0.0.1/callback' } };
+      expect(await runMcpCommand(['add', 'protected', '--config', JSON.stringify(config), '--json'], io)).toBe(0);
+      expect(JSON.parse(await readFile(path.join(agentDir, 'mcp.json'), 'utf8')).mcpServers.protected).toEqual({
+        ...config, oauth: { ...config.oauth, scope: undefined, scopes: ['tools.read'] },
+      });
+      expect(changed).toEqual(['global/protected']);
+      output.length = 0;
+      expect(await runMcpCommand(['test', 'protected', '--json'], io)).toBe(1);
+      expect(JSON.parse(output.join('')).result.state).toBe('needs-auth');
+      expect(errors).toEqual([]);
+      const abort = new AbortController(); abort.abort();
+      expect(await runMcpCommand(['test', 'protected'], { ...io, signal: abort.signal })).toBe(1);
+      expect(changed).toEqual(['global/protected']);
+    } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+  });
   it('uses shared Core mutations and performs a bounded one-shot test', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'ai-harness-cli-mcp-'));
     roots.push(root);

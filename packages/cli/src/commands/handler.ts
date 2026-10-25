@@ -169,9 +169,10 @@ export interface CommandThemeControl {
 
 export interface CommandMcpControl {
   overview(): Promise<McpConfigInventory>;
-  prepare(sessionId: string, preset?: Session['toolPreset']): Promise<PreparedMcpTools>;
+  prepare(sessionId: string, preset?: Session['toolPreset'], signal?: AbortSignal): Promise<PreparedMcpTools>;
   finish(sessionId: string): void;
   reconnect(sessionId: string): Promise<void>;
+  manage?(args: string[], signal?: AbortSignal): Promise<string>;
 }
 
 export interface CommandWorkspaceContext {
@@ -1423,10 +1424,14 @@ const commands: CommandEntry[] = [
   {
     name: 'mcp',
     description: 'Inspect persistent MCP servers and session tools',
-    usage: '/mcp [status|tools|reconnect]',
+    usage: '/mcp [status|tools|reconnect|test|add|remove|enable|disable|exposure|login|logout] [arguments]',
     handler: async (args, ctx) => {
       if (!ctx.mcpControl) return chalk.yellow('MCP runtime is not configured.');
       const action = args[0]?.toLowerCase() || 'status';
+      if (['test', 'add', 'remove', 'enable', 'disable', 'exposure', 'login', 'logout'].includes(action)) {
+        if (!ctx.mcpControl.manage) return chalk.yellow('MCP management is not configured.');
+        return ctx.mcpControl.manage([action, ...args.slice(1)], ctx.signal);
+      }
       if (action === 'status' || action === 'list') {
         const inventory = await ctx.mcpControl.overview();
         if (inventory.servers.length === 0) return chalk.yellow('No MCP servers configured.');
@@ -1448,7 +1453,7 @@ const commands: CommandEntry[] = [
         return chalk.red('Usage: /mcp [status|tools|reconnect]');
       }
       try {
-        const prepared = await ctx.mcpControl.prepare(ctx.currentSessionId, session?.toolPreset);
+        const prepared = await ctx.mcpControl.prepare(ctx.currentSessionId, session?.toolPreset, ctx.signal);
         if (prepared.tools.length === 0) {
           return action === 'reconnect'
             ? chalk.yellow('MCP connections reset; no direct tools are ready yet.')

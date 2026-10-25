@@ -15,6 +15,8 @@ export interface CliMcpOAuthOptions {
   writeError(value: string): void;
   json: boolean;
   signal?: AbortSignal;
+  /** Interactive hosts already own stdin; their login uses the browser callback. */
+  allowPaste?: boolean;
 }
 
 /** CLI presentation only; Core owns discovery, PKCE, callback/paste validation and durable CAS. */
@@ -58,6 +60,7 @@ export async function runMcpOAuthCommand(
     if (inputBytes > 64 * 1024) abort();
   };
   try {
+    if (options.signal?.aborted) return 130;
     if (command === 'logout') {
       const removed = await flows.signOut({ name: target.name, url });
       options.write(options.json ? `${JSON.stringify({ name: target.name, scope: target.scope, removed })}\n`
@@ -78,7 +81,7 @@ export async function runMcpOAuthCommand(
         if (!noOpen && flow.authorizationUrl) {
           await openExternalTarget(flow.authorizationUrl, 'url').catch(() => options.writeError('Browser opening failed; open the authorization address manually.\n'));
         }
-        if (process.stdin.isTTY && !input) {
+        if (options.allowPaste !== false && process.stdin.isTTY && !input) {
           options.writeError('Paste the full redirected address if needed, or press Ctrl+C to cancel.\n');
           process.stdin.on('data', boundInput);
           input = createInterface({ input: process.stdin, terminal: false });

@@ -59,6 +59,8 @@ export interface McpOAuthClientSettings {
   clientId?: string;
   scopes?: readonly string[];
   clientName?: string;
+  clientMetadataUrl?: string;
+  loadDiscoveryState?: () => Promise<OAuthDiscoveryState | undefined>;
   resolveClientSecret?: () => Promise<string | undefined>;
 }
 
@@ -84,7 +86,7 @@ interface StoredMcpOAuthRecord {
   version: typeof MCP_OAUTH_RECORD_VERSION;
   identity: string;
   clientInformation?: OAuthClientInformationMixed;
-  clientMode?: 'dynamic' | 'configured';
+  clientMode?: 'dynamic' | 'configured' | 'cimd';
   clientFingerprint?: string;
   tokens?: OAuthTokens;
 }
@@ -243,7 +245,7 @@ function parseStoredRecord(raw: string | undefined, identity: IdentityParts): St
   const tokens = value.tokens === undefined ? undefined : parseTokens(value.tokens);
   if ((value.clientInformation !== undefined && !clientInformation)
     || (value.tokens !== undefined && !tokens)
-    || (value.clientMode !== undefined && value.clientMode !== 'dynamic' && value.clientMode !== 'configured')
+    || (value.clientMode !== undefined && value.clientMode !== 'dynamic' && value.clientMode !== 'configured' && value.clientMode !== 'cimd')
     || (value.clientFingerprint !== undefined
       && (typeof value.clientFingerprint !== 'string' || !/^[a-f0-9]{64}$/u.test(value.clientFingerprint)))) {
     return undefined;
@@ -252,7 +254,7 @@ function parseStoredRecord(raw: string | undefined, identity: IdentityParts): St
     version: MCP_OAUTH_RECORD_VERSION,
     identity: identity.digest,
     ...(clientInformation ? { clientInformation } : {}),
-    ...(value.clientMode === 'dynamic' || value.clientMode === 'configured'
+    ...(value.clientMode === 'dynamic' || value.clientMode === 'configured' || value.clientMode === 'cimd'
       ? { clientMode: value.clientMode } : {}),
     ...(typeof value.clientFingerprint === 'string'
       ? { clientFingerprint: value.clientFingerprint } : {}),
@@ -443,13 +445,32 @@ export class McpOAuthCredentialManager {
       ...(scope ? { scope } : {}),
     };
 
+    const clientMetadataUrl = options.settings?.clientMetadataUrl;
+    if (clientMetadataUrl) {
+      if (clientId || options.settings?.clientName) throw new McpOAuthConfigurationError();
+      const url = new URL(clientMetadataUrl);
+      if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.search || url.pathname === '/') {
+        throw new McpOAuthConfigurationError();
+      }
+    }
     const provider: OAuthClientProvider = {
       redirectUrl,
+      ...(clientMetadataUrl ? { clientMetadataUrl } : {}),
       clientMetadata,
       state: () => state,
       clientInformation: async () => {
         assertGeneration();
         const current = snapshot.current.state;
+        if (clientMetadataUrl) {
+          if (discoveryState?.authorizationServerMetadata?.client_id_metadata_document_supported !== true
+            || (discoveryState.authorizationServerMetadata.token_endpoint_auth_methods_supported
+              && !discoveryState.authorizationServerMetadata.token_endpoint_auth_methods_supported.includes('none'))) {
+            throw new McpOAuthConfigurationError('The authorization server does not support public CIMD clients.');
+          }
+          if (current?.clientMode === 'cimd' && current.clientInformation?.client_id === clientMetadataUrl) return cloneJson(current.clientInformation);
+          if (options.mode === 'passive') throw new McpOAuthAuthorizationRequiredError();
+          return undefined;
+        }
         const configured = await configuredClient();
         if (configured) {
           if (current?.clientMode === 'configured'
@@ -466,7 +487,7 @@ export class McpOAuthCredentialManager {
           }));
           return configured.information;
         }
-        if (current?.clientMode === 'configured') {
+        if (current?.clientMode === 'configured' || current?.clientMode === 'cimd') {
           await this.update(parts, generation, snapshot, options.validateWrite, () => undefined);
           if (options.mode === 'passive') throw new McpOAuthAuthorizationRequiredError();
           return undefined;
@@ -484,8 +505,9 @@ export class McpOAuthCredentialManager {
       saveClientInformation: async clientInformation => {
         const parsed = parseClientInformation(clientInformation);
         if (!parsed) throw new McpOAuthConfigurationError('The OAuth client registration is invalid.');
+        if (clientMetadataUrl && parsed.client_id !== clientMetadataUrl) throw new McpOAuthConfigurationError();
         const configured = await configuredClient();
-        const mode = configured ? 'configured' as const : 'dynamic' as const;
+        const mode = clientMetadataUrl ? 'cimd' as const : configured ? 'configured' as const : 'dynamic' as const;
         const fingerprint = configured?.fingerprint;
         await this.update(parts, generation, snapshot, options.validateWrite, current => {
           const clientChanged = current?.clientInformation?.client_id !== parsed.client_id
@@ -503,7 +525,16 @@ export class McpOAuthCredentialManager {
       },
       tokens: () => {
         assertGeneration();
-        const tokens = snapshot.current.state?.tokens;
+        const current = snapshot.current.state;
+        // HTTP transports ask for a Bearer before discovery/clientInformation.
+        // Never send an old client's tokens after a registration-mode/ID change.
+        if (clientMetadataUrl
+          ? current?.clientMode !== 'cimd' || current.clientInformation?.client_id !== clientMetadataUrl
+          : current?.clientMode === 'cimd') return undefined;
+        if (clientId
+          ? current?.clientMode !== 'configured' || current.clientInformation?.client_id !== clientId
+          : current?.clientMode === 'configured') return undefined;
+        const tokens = current?.tokens;
         return tokens ? cloneJson(tokens) : undefined;
       },
       saveTokens: async tokens => {
@@ -561,8 +592,18 @@ export class McpOAuthCredentialManager {
           } : undefined;
         });
       },
-      discoveryState: () => discoveryState ? cloneJson(discoveryState) : undefined,
-      saveDiscoveryState: value => { discoveryState = cloneJson(value); },
+      discoveryState: async () => {
+        assertGeneration();
+        discoveryState ??= await options.settings?.loadDiscoveryState?.();
+        return discoveryState ? cloneJson(discoveryState) : undefined;
+      },
+      saveDiscoveryState: value => {
+        if (value.authorizationServerMetadata
+          && new URL(value.authorizationServerMetadata.issuer).href !== new URL(value.authorizationServerUrl).href) {
+          throw new McpOAuthConfigurationError('The OAuth issuer does not match discovery.');
+        }
+        discoveryState = cloneJson(value);
+      },
     };
 
     return {

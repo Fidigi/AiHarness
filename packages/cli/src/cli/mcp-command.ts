@@ -23,6 +23,8 @@ interface McpCommandIo {
   stdout?: (value: string) => void;
   stderr?: (value: string) => void;
   signal?: AbortSignal;
+  allowOAuthPaste?: boolean;
+  onChanged?: (scope: McpConfigScope, name: string) => Promise<void>;
 }
 
 interface ParsedOptions {
@@ -34,10 +36,13 @@ interface ParsedOptions {
 const HELP = `Usage: ai-harness mcp <command> [options]
 
 Commands:
-  list | status                       List configured servers and local status
+  list | status                       Passive inventory (never connects)
   test <name>                         Run one bounded connectivity test
   add <name> --url <url>              Add an HTTP server
   add <name> -- <command> [args...]   Add a stdio server
+  add <name> --config <json>          Add a complete native server entry
+                                      Secret literals require --confirm-literal-secrets
+                                      Remote variables require --confirm-remote-variable <name>
   enable <name> [...]                 Enable servers
   disable <name> [...]                Disable servers
   exposure <name> <mode> [--tool <remote-name>]
@@ -100,9 +105,23 @@ function formatInventory(inventory: McpConfigInventory): string {
   }).join('\n');
 }
 
-function commandConfig(args: string[]): { name: string; config: Record<string, unknown> } {
+function commandConfig(args: string[]): { name: string; config: Record<string, unknown>; confirmLiteralSecrets?: boolean; confirmedRemoteVariables?: string[] } {
   const name = args[0]?.trim();
   if (!name) throw new Error('Usage: ai-harness mcp add <name> --url <url> | -- <command> [args...]');
+  if (args[1] === '--config') {
+    let config: unknown;
+    try { config = JSON.parse(args[2] ?? ''); } catch { throw new Error('The MCP entry must be valid JSON.'); }
+    if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('The MCP entry must be an object.');
+    let confirmLiteralSecrets = false;
+    const confirmedRemoteVariables: string[] = [];
+    for (let index = 3; index < args.length; index++) {
+      if (args[index] === '--confirm-literal-secrets') confirmLiteralSecrets = true;
+      else if (args[index] === '--confirm-remote-variable' && /^[A-Za-z_][A-Za-z0-9_]*$/u.test(args[index + 1] ?? '')) {
+        confirmedRemoteVariables.push(args[++index]!);
+      } else throw new Error('Invalid MCP import confirmation.');
+    }
+    return { name, config: config as Record<string, unknown>, confirmLiteralSecrets, confirmedRemoteVariables };
+  }
   const urlIndex = args.indexOf('--url');
   const separator = args.indexOf('--');
   if (urlIndex >= 0) {
@@ -144,6 +163,7 @@ export async function runMcpCommand(args: string[], io: McpCommandIo = {}): Prom
     const settings = await loadAgentSettings({ cwd, projectTrusted: await trustManager.isTrusted(cwd) });
     const inventoryOptions = { agentDir: settings.agentDir, cwd, trustManager };
     const inventory = await inspectMcpConfig(inventoryOptions);
+    if (io.signal?.aborted) throw new Error('The MCP command was aborted.');
     const mutationTarget = {
       agentDir: settings.agentDir,
       scope: parsed.scope,
@@ -165,15 +185,18 @@ export async function runMcpCommand(args: string[], io: McpCommandIo = {}): Prom
     if (command === 'login' || command === 'logout') {
       const name = parsed.rest[0];
       if (!name || name.startsWith('-')) throw new Error(`Usage: ai-harness mcp ${command} <name> [--scope <scope>]`);
-      return await runMcpOAuthCommand(command, parsed.rest.slice(1), {
+      if (command === 'logout') await io.onChanged?.(parsed.scope, name);
+      const result = await runMcpOAuthCommand(command, parsed.rest.slice(1), {
         agentDir: settings.agentDir, agentDirTrusted: settings.agentDirTrusted, redactor,
-        json: parsed.json, write, writeError, signal: io.signal,
+        json: parsed.json, write, writeError, signal: io.signal, allowPaste: io.allowOAuthPaste,
         readTarget: () => readMcpServerTestTarget({
           agentDir: settings.agentDir, scope: parsed.scope, name,
           ...(parsed.scope === 'project' ? { cwd } : {}), defaultCwd: cwd, trustManager,
           resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, { base, kind: 'directory' }),
         }),
       });
+      if (result === 0) await io.onChanged?.(parsed.scope, name);
+      return result;
     }
 
     if (command === 'test') {
@@ -189,15 +212,15 @@ export async function runMcpCommand(args: string[], io: McpCommandIo = {}): Prom
         resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, { base, kind: 'directory' }),
       });
       tester = new McpServerTester();
-      const result = await tester.test(target);
+      const result = await tester.test(target, io.signal);
       write(parsed.json
         ? `${JSON.stringify({ scope: target.scope, name: target.name, configKey: target.configKey, result }, null, 2)}\n`
         : `${target.name}: ${result.state}; ${result.toolCount} tools; ${result.durationMs} ms${result.error ? `; ${result.error}` : ''}\n`);
-      return result.state === 'failed' ? 1 : 0;
+      return result.state === 'connected' ? 0 : 1;
     }
 
     if (command === 'add') {
-      const { name, config } = commandConfig(parsed.rest);
+      const { name, config, confirmLiteralSecrets, confirmedRemoteVariables } = commandConfig(parsed.rest);
       const result = await importMcpServer({
         ...mutationTarget,
         text: JSON.stringify({ mcpServers: { [name]: config } }),
@@ -205,7 +228,12 @@ export async function runMcpCommand(args: string[], io: McpCommandIo = {}): Prom
         entryIndex: 0,
         name,
         availableVariableNames: Object.keys(process.env),
+        confirmations: {
+          ...(confirmLiteralSecrets ? { literalSecret: true as const } : {}),
+          remoteHostVariables: confirmedRemoteVariables,
+        },
       });
+      await io.onChanged?.(parsed.scope, name);
       write(parsed.json ? `${JSON.stringify(result)}\n` : `Added MCP server ${result.name} (${result.scope}).\n`);
       return 0;
     }
@@ -217,6 +245,7 @@ export async function runMcpCommand(args: string[], io: McpCommandIo = {}): Prom
         names: parsed.rest,
         enabled: command === 'enable',
       });
+      for (const name of parsed.rest) await io.onChanged?.(parsed.scope, name);
       write(parsed.json ? `${JSON.stringify(result)}\n` : `${command === 'enable' ? 'Enabled' : 'Disabled'}: ${result.outcomes.map(item => `${item.name}=${item.status}`).join(', ')}\n`);
       return 0;
     }
@@ -228,6 +257,7 @@ export async function runMcpCommand(args: string[], io: McpCommandIo = {}): Prom
         throw new Error('Usage: ai-harness mcp exposure <name> <direct|codemode|deferred|hidden> [--tool <remote-name>] [--scope <scope>]');
       }
       const result = await setMcpServerExposure({ ...mutationTarget, name, exposure: mode, ...(tool ? { tool } : {}) });
+      await io.onChanged?.(parsed.scope, name);
       write(parsed.json ? `${JSON.stringify(result)}\n` : `Updated ${name}: exposure=${mode}.\n`);
       return 0;
     }
@@ -236,6 +266,7 @@ export async function runMcpCommand(args: string[], io: McpCommandIo = {}): Prom
       const name = parsed.rest[0];
       if (!name || parsed.rest.length !== 1) throw new Error('Usage: ai-harness mcp remove <name> [--scope <scope>]');
       const result = await removeMcpServer({ ...mutationTarget, name });
+      await io.onChanged?.(parsed.scope, name);
       // The Core result contains server-only undo material; never serialize it here.
       const output = { revision: result.revision, name: result.removed.name, scope: result.removed.scope };
       write(parsed.json ? `${JSON.stringify(output)}\n` : `Removed MCP server ${name} (${parsed.scope}).\n`);

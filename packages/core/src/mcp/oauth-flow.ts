@@ -14,11 +14,14 @@ import {
   type McpOAuthIdentity,
 } from './oauth.js';
 import { boundedMcpOAuthFetch } from './oauth-fetch.js';
+import { mcpOAuthScopes, validMcpOAuthConfig } from './oauth-config.js';
+import { loadMcpOAuthDiscovery } from './oauth-discovery.js';
 import {
   MCP_TEST_CLOSE_WAIT_MS,
   MCP_TEST_COMMAND_TIMEOUT_MS,
   closeClient,
   resolveMcpOAuthSettings,
+  mcpRequestTimeout,
   resolveRuntimeConfig,
 } from './server-test.js';
 
@@ -254,6 +257,7 @@ async function runDefaultDriver(
   context: McpOAuthFlowDriverContext,
   options: { requestTimeoutMs: number; commandTimeoutMs: number; closeWaitMs: number },
 ): Promise<McpOAuthFlowDriverResult> {
+  options = { ...options, requestTimeoutMs: mcpRequestTimeout(context.target.config, options.requestTimeoutMs) };
   const identity = flowIdentity(context.target);
   const validate = async (): Promise<McpServerTestTarget> => {
     if (context.signal.aborted) throw abortError();
@@ -272,7 +276,10 @@ async function runDefaultDriver(
     state: context.state,
     settings: {
       clientId: rawHttpConfig.oauth?.clientId,
-      scopes: rawHttpConfig.oauth?.scopes,
+      scopes: mcpOAuthScopes(rawHttpConfig.oauth),
+      clientName: rawHttpConfig.oauth?.clientName,
+      clientMetadataUrl: rawHttpConfig.oauth?.clientMetadataUrl,
+      loadDiscoveryState: () => loadMcpOAuthDiscovery(rawHttpConfig, context.signal, options.requestTimeoutMs, validate),
       resolveClientSecret: async () => {
         const current = await validate();
         const resolved = await resolveMcpOAuthSettings(
@@ -338,7 +345,10 @@ async function runDefaultDriver(
       mode: 'passive',
       settings: {
         clientId: rawHttpConfig.oauth?.clientId,
-        scopes: rawHttpConfig.oauth?.scopes,
+        scopes: mcpOAuthScopes(rawHttpConfig.oauth),
+        clientName: rawHttpConfig.oauth?.clientName,
+        clientMetadataUrl: rawHttpConfig.oauth?.clientMetadataUrl,
+        loadDiscoveryState: () => loadMcpOAuthDiscovery(rawHttpConfig, context.signal, options.requestTimeoutMs, validate),
         resolveClientSecret: async () => (await resolveMcpOAuthSettings(
           await validate(),
           context.signal,
@@ -393,6 +403,7 @@ function callbackPage(ok: boolean): string {
 
 async function listenOnce(
   port: number,
+  callback: URL,
   onRedirect: (value: string) => boolean,
 ): Promise<{ server: Server; redirectUrl: string }> {
   const server = createServer((request, response) => {
@@ -410,13 +421,15 @@ async function listenOnce(
     try {
       const address = server.address();
       if (!address || typeof address === 'string') throw new Error('listener unavailable');
-      url = new URL(request.url, `http://${CALLBACK_HOST}:${address.port}`);
+      const base = new URL(callback);
+      base.port = String(address.port);
+      url = new URL(request.url, base);
     } catch {
       response.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
       response.end(callbackPage(false));
       return;
     }
-    if (url.pathname !== CALLBACK_PATH || !onRedirect(url.href)) {
+    if (url.pathname !== callback.pathname || !onRedirect(url.href)) {
       response.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
       response.end(callbackPage(false));
       return;
@@ -439,25 +452,29 @@ async function listenOnce(
     };
     server.once('error', onError);
     server.once('listening', onListening);
-    server.listen({ host: CALLBACK_HOST, port, exclusive: true });
+    server.listen({ host: callback.hostname === '[::1]' ? '::1' : CALLBACK_HOST, port, exclusive: true });
   });
   const address = server.address();
   if (!address || typeof address === 'string') {
     server.close();
     throw new Error('The OAuth callback listener is unavailable.');
   }
-  return { server, redirectUrl: `http://${CALLBACK_HOST}:${address.port}${CALLBACK_PATH}` };
+  const redirect = new URL(callback);
+  redirect.port = String(address.port);
+  return { server, redirectUrl: redirect.href };
 }
 
 async function createLoopbackListener(
   preferredPort: number | undefined,
+  callback: URL,
+  fixedPort: boolean,
   onRedirect: (value: string) => boolean,
 ): Promise<LoopbackListener> {
   let opened: { server: Server; redirectUrl: string };
-  try { opened = await listenOnce(preferredPort ?? 0, onRedirect); }
+  try { opened = await listenOnce(preferredPort ?? 0, callback, onRedirect); }
   catch (error) {
-    if (preferredPort === undefined || (error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
-    opened = await listenOnce(0, onRedirect);
+    if (fixedPort || preferredPort === undefined || (error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
+    opened = await listenOnce(0, callback, onRedirect);
   }
   let closing: Promise<void> | undefined;
   return {
@@ -516,6 +533,9 @@ export class McpOAuthFlowService {
       throw new McpOAuthFlowServiceError('invalid-target', 'The MCP server is disabled.');
     }
     const identity = flowIdentity(target);
+    if ('url' in target.config && target.config.oauth !== undefined && !validMcpOAuthConfig(target.config.oauth)) {
+      throw new McpOAuthFlowServiceError('invalid-target', 'The MCP OAuth settings are invalid.');
+    }
     const key = mcpOAuthStorageName(identity);
     const activeId = this.active.get(key);
     const current = activeId ? this.flows.get(activeId) : undefined;
@@ -629,7 +649,11 @@ export class McpOAuthFlowService {
       if (this.ended(flow)) return;
       const redirects = await this.manager.registeredRedirectUrls(identity);
       if (this.ended(flow)) return;
-      flow.listener = await createLoopbackListener(preferredCallbackPort(redirects), value => {
+      const oauth = 'url' in flow.target.config ? flow.target.config.oauth : undefined;
+      const callback = new URL(oauth?.callbackUrl ?? `http://${CALLBACK_HOST}${CALLBACK_PATH}`);
+      const explicitPort = oauth?.callbackUrl?.match(/:([0-9]+)(?:\/|$)/u)?.[1];
+      const configuredPort = explicitPort ? Number(explicitPort) : oauth?.callbackPort;
+      flow.listener = await createLoopbackListener(configuredPort ?? preferredCallbackPort(redirects), callback, configuredPort !== undefined, value => {
         const result = this.pasteRedirect(flow.id, value);
         return result?.ok === true;
       });

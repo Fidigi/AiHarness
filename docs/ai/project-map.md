@@ -308,6 +308,8 @@ Keep delegation on the shared `AgentRuntime`; a separate provider loop would byp
 
 ### MCP configuration, explicit Test, persistent prompt hosting and local mutations
 
+The [native MCP-01 contract](../audit/pi/MCP-01.md) maps every pinned configuration/OAuth field to native admission, bounded request-timeout reductions, configured loopback callbacks, metadata overrides and operator-owned CIMD. `mcp list` stays passive; explicit shell/interactive management shares Core and retires changed connections. Real terminal and browser/issuer journeys remain separate from MCP-02/03/04 and whole-platform qualification.
+
 ```text
 Settings › MCP -> GET /api/mcp?cwd=<selected workspace>
   -> workspace:read capability + canonical allowed-root directory resolution

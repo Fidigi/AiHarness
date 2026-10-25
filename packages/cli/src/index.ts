@@ -1006,13 +1006,27 @@ async function main(): Promise<void> {
           cwd: workspaceCwd,
           trustManager,
         })),
-        prepare: (sessionId, preset) => mcpHost.prepareForPrompt({
+        prepare: (sessionId, preset, signal) => mcpHost.prepareForPrompt({
           sessionId,
           cwd: workspaceCwd,
           preset,
+          signal,
         }),
         finish: sessionId => mcpHost.finishPrompt(sessionId),
         reconnect: sessionId => mcpHost.reconnect(sessionId),
+        manage: async (args, signal) => {
+          const output: string[] = [];
+          await runMcpCommand(args, {
+            cwd: workspaceCwd, signal, allowOAuthPaste: false,
+            stdout: value => output.push(value),
+            stderr: value => terminal.writeOutput(redactOutput(value)),
+            onChanged: async (_scope, name) => {
+              // Inherited targets and OAuth identities may be shared across scopes.
+              await Promise.all((['global', 'project'] as const).map(scope => mcpHost.disconnectServer(scope, name)));
+            },
+          });
+          return output.join('').trim();
+        },
       },
       redactText: redactOutput,
       redactJson: value => outputCredentialRedactor.redactJson(value),
@@ -1494,7 +1508,7 @@ async function main(): Promise<void> {
           trimmed = resourceManager.expandPrompt(resourceCommand, resourceArgs);
         } else {
           if (trimmed === '/help') terminal.showHelp();
-          else if (resourceCommand === 'navigate' || resourceCommand === 'fork' || resourceCommand === 'clone') {
+          else if (resourceCommand === 'navigate' || resourceCommand === 'fork' || resourceCommand === 'clone' || resourceCommand === 'mcp') {
             const controller = new AbortController();
             const commandContext = commandHandler.getContext();
             activeAbortController = controller;

@@ -670,7 +670,9 @@ function mappedCandidate(
         if (values.length > MAX_COLLECTION_ENTRIES) return note('too-many-fields');
         oauth.scopes = values;
       }
-      const known = new Set(['clientId', 'CLIENT_ID', 'clientSecret', 'CLIENT_SECRET', 'scopes', 'scope']);
+      const extraOAuthFields = ['clientName', 'callbackPort', 'callbackUrl', 'authServerMetadataUrl', 'clientRegistration', 'clientMetadataUrl'];
+      for (const key of extraOAuthFields) if (Object.hasOwn(oauthInput, key)) oauth[key] = oauthInput[key];
+      const known = new Set(['clientId', 'CLIENT_ID', 'clientSecret', 'CLIENT_SECRET', 'scopes', 'scope', ...extraOAuthFields]);
       const dropped = Object.keys(oauthInput).filter(key => !known.has(key)).length;
       if (dropped) addNote(notes, note('dropped-properties', { count: dropped }));
       if (Object.keys(oauth).length) config.oauth = oauth;
@@ -701,6 +703,8 @@ function mappedCandidate(
       || !Object.values(toolExposure).every(isMcpExposure)) return note('invalid-entry');
     config.toolExposure = { ...toolExposure };
   }
+  const timeout = take('timeout');
+  if (timeout !== undefined) config.timeout = timeout;
   const description = take('description');
   if (boundedString(description)) config.description = description;
   else if (description !== undefined) addNote(notes, note('dropped-properties', { count: 1 }));
