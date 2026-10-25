@@ -1,5 +1,6 @@
 import {
   normalizeProviderUsage,
+  AnthropicProvider,
   type AiProvider,
   type ChatResponse,
   type ChatToolDefinition,
@@ -24,7 +25,6 @@ import type { SessionManager } from '../sessions/session-manager.js';
 import { resolveVirtualModelFallback, VirtualModelRoutingError, type VirtualModelReason, type VirtualModelRequest } from '../providers/virtual-models.js';
 import { getProviderPublishedModel } from '../providers/provider-model-metadata.js';
 import { clampPublishedThinkingLevel, getSupportedThinkingLevels } from '../providers/model-metadata.js';
-import { getPublishedModelMetadata } from '../providers/model-metadata.js';
 import { getSessionCacheWarmer, type CacheWarmingMode } from '../providers/cache-warmer.js';
 
 export interface StreamProviderTurnOptions {
@@ -426,18 +426,25 @@ async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
           }, options.onCacheWarmUsage);
           options.extensionRegistry.trackProviderCache(warmer);
           warmer.setMode(options.cacheWarming ?? 'streaming');
-          const metadata = getPublishedModelMetadata(prepared.data.provider, requestOptions.model ?? '');
+          const metadata = getProviderPublishedModel(prepared.data.provider, requestOptions.model ?? '', provider);
+          const api = metadata?.api ?? (provider instanceof AnthropicProvider ? 'anthropic-messages' : undefined);
           const retention = requestOptions.cacheRetention ?? 'short';
           const ttl = retention === 'none' ? undefined : metadata?.promptCache?.[retention];
           const sameSelection = prepared.data.provider === options.providerName
             && options.model !== undefined && requestOptions.model === options.model;
-          const replayable = sameSelection && (prepared.data.provider !== 'anthropic' || !requestOptions.thinking || requestOptions.thinking === 'off'
-            || requestOptions.model === 'claude-sonnet-4-6');
-          if (ttl && metadata?.pricing && replayable) {
+          const replayable = sameSelection && api !== undefined && (api !== 'anthropic-messages'
+            || !requestOptions.thinking || requestOptions.thinking === 'off'
+            || provider instanceof AnthropicProvider && requestOptions.model === 'claude-sonnet-4-6');
+          const pricing = metadata?.pricing;
+          const knownPrices = pricing && [pricing.inputPerMillion, pricing.outputPerMillion,
+            pricing.cacheReadPerMillion, pricing.cacheWritePerMillion].every(value => value !== undefined);
+          if (ttl && pricing && knownPrices && replayable) {
             const ids = sourceSession.messages.map(message => message.id);
             const selectedModel = sourceSession.model;
             warmer.start({ provider, providerName: prepared.data.provider, model: requestOptions.model!,
-              messages: requestMessages, options: requestOptions, ttlSeconds: ttl, pricing: metadata.pricing,
+              messages: requestMessages, options: requestOptions, ttlSeconds: ttl,
+              pricing: retention === 'long' && api === 'anthropic-messages'
+                ? { ...pricing, cacheWritePerMillion: pricing.inputPerMillion! * 2 } : pricing,
               isAuthorized: async () => (!options.resolveProvider || await options.resolveProvider(prepared.data.provider) === provider) && provider.validateConfig(),
               isCurrent: () => sessionManager.get(sessionId) === sourceSession && sourceSession.model === selectedModel
                 && ids.every((id, index) => sourceSession.messages[index]?.id === id),

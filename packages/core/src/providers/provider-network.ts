@@ -7,6 +7,9 @@ import {
 import type { AgentProviderNetworkSettings } from '../config/agent-settings.js';
 
 const RETRYABLE_STATUSES = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+const nonRetryableSignals = new WeakSet<AbortSignal>();
+/** Internal paid-refresh authority; never changes the provider's foreground policy. */
+export function disableProviderNetworkRetries(signal: AbortSignal): void { nonRetryableSignals.add(signal); }
 const MAX_RETRY_AFTER_MS = 24 * 60 * 60 * 1_000;
 const providerNetworkScopeBrand: unique symbol = Symbol('ProviderNetworkScopeBrand');
 /** Process-local ProviderConfig key; symbol properties never cross JSON boundaries. */
@@ -508,7 +511,8 @@ export async function fetchProviderResponse(
   const proxy = policy.httpProxy;
   const fetcher = options.fetcher ?? (proxy ? undiciFetch as unknown as typeof fetch : fetch);
 
-  for (let attempt = 0; attempt <= policy.maxRetries; attempt++) {
+  const maxRetries = init.signal && nonRetryableSignals.has(init.signal) ? 0 : policy.maxRetries;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const timeout = withTimeout(requestSignal, policy.requestTimeoutMs);
     try {
       const requestInit = {
@@ -519,7 +523,7 @@ export async function fetchProviderResponse(
         ...(proxy ? { dispatcher: proxyDispatcher(proxy, scope) as Dispatcher } : {}),
       } as RequestInit;
       const response = await abortable(fetcher(endpoint.toString(), requestInit), timeout.signal);
-      if (!RETRYABLE_STATUSES.has(response.status) || attempt >= policy.maxRetries) {
+      if (!RETRYABLE_STATUSES.has(response.status) || attempt >= maxRetries) {
         return idleTimeoutResponse(response, policy.httpIdleTimeoutMs);
       }
       // Do not let a non-cooperative body prevent the bounded retry policy from progressing.
@@ -530,7 +534,7 @@ export async function fetchProviderResponse(
       if (scopeSignal.aborted) {
         throw new ProviderNetworkError('request-failed', 'The provider network runtime is closed.');
       }
-      if (attempt >= policy.maxRetries) {
+      if (attempt >= maxRetries) {
         throw new ProviderNetworkError(
           timeout.timedOut() ? 'request-timeout' : 'request-failed',
           timeout.timedOut() ? 'The provider request timed out.' : 'The provider request failed.',

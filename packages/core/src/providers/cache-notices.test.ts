@@ -21,6 +21,14 @@ describe('derived non-context cache notices', () => {
     expect(getCacheTranscriptNotices(entries)).toEqual(notices);
     expect(getCacheTranscriptNotices([...entries, ...entries])).toEqual(notices);
   });
+  it('uses authenticated long-retention cost instead of repricing one-hour writes as five-minute writes', () => {
+    const missed = reply('long-write', 0);
+    if (missed.type !== 'message') throw new Error('fixture');
+    missed.usage = { inputTokens: 0, cacheWriteTokens: 100_000, outputTokens: 1, costUsd: 0.600015 };
+    expect(getCacheTranscriptNotices([reply('cached', 100_000), missed])).toEqual([
+      expect.objectContaining({ kind: 'cache_miss', missedTokens: 100_000, costUsd: 0.57 }),
+    ]);
+  });
   it('accepts only bounded plain-data usage and never executes accessors', () => {
     let reads = 0;
     const entry: SessionEntry = { id: 'warm', type: 'custom', timestamp: 1, customType: 'provider.cache_warm',

@@ -6,7 +6,8 @@
 
 import type { Message, ProviderConfig, ToolCall, TokenUsage } from '../types/index.js';
 import { ProviderType } from '../types/index.js';
-import { getPublishedModelMetadata, type PublishedModelMetadata } from './model-metadata.js';
+import { calculateModelCost, getPublishedModelMetadata, type PublishedModelMetadata } from './model-metadata.js';
+import { getProviderPublishedModel } from './provider-model-metadata.js';
 import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
 import { azureIdentifier, normalizeAzureResponsesBaseUrl, usesAzureResponses } from './azure-config.js';
 import { parseProviderToolArguments } from './tool-arguments.js';
@@ -2415,6 +2416,31 @@ export class AnthropicProvider extends AiProvider {
     return boundedModelIds(data.data, model => (model as { id?: unknown })?.id);
   }
 
+  protected updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown {
+    const prior = previous as AnthropicUsage | undefined, usage = value as AnthropicUsage | undefined;
+    return { ...prior, ...usage, ...(start ? { output_tokens: prior?.output_tokens ?? usage?.output_tokens } : {}),
+      ...(usage?.cache_creation ? { cache_creation: { ...prior?.cache_creation, ...usage.cache_creation } } : {}) };
+  }
+  protected messageUsage(value: unknown, model: string, stream = false, retention?: ChatOptions['cacheRetention']): ChatResponse['usage'] {
+    const usage = value as AnthropicUsage | undefined;
+    if (!usage) return undefined;
+    const token = (value: unknown): number => typeof value === 'number' && Number.isFinite(value) && value > 0
+      ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(value)) : 0;
+    const prompt = token(usage.input_tokens), completion = token(usage.output_tokens);
+    const cacheRead = token(usage.cache_read_input_tokens), cacheWrite = token(usage.cache_creation_input_tokens);
+    if (stream && prompt === 0 && completion === 0 && cacheRead === 0 && cacheWrite === 0) return undefined;
+    const longWrite = token(usage.cache_creation?.ephemeral_1h_input_tokens ?? (retention === 'long' ? cacheWrite : 0));
+    const pricing = longWrite > 0 || retention === 'long' ? getProviderPublishedModel('anthropic', model, this)?.pricing : undefined;
+    const knownPrices = pricing && [pricing.inputPerMillion, pricing.outputPerMillion,
+      pricing.cacheReadPerMillion, pricing.cacheWritePerMillion].every(value => value !== undefined);
+    const costUsd = pricing && knownPrices ? calculateModelCost(pricing, {
+      inputTokens: prompt, outputTokens: completion, cacheReadTokens: cacheRead, cacheWriteTokens: cacheWrite, cacheWrite1hTokens: longWrite,
+    }) : undefined;
+    return { promptTokens: prompt, completionTokens: completion, cacheReadTokens: cacheRead, cacheWriteTokens: cacheWrite,
+      totalTokens: Math.min(Number.MAX_SAFE_INTEGER, prompt + completion + cacheRead + cacheWrite),
+      ...(costUsd !== undefined ? { costUsd } : {}) };
+  }
+
   private buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
     messages = toolImageMessages(messages);
     return messages.filter(message => message.role !== 'system').map(message => {
@@ -2508,11 +2534,6 @@ export class AnthropicProvider extends AiProvider {
     if (!response.ok) await rejectProviderHttpResponse(response, `Anthropic API error (${response.status}).`);
 
     const data = await readProviderJson<AnthropicResponse>(response);
-    const token = (value: unknown): number => (
-      typeof value === 'number' && Number.isFinite(value) && value > 0
-        ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(value))
-        : 0
-    );
     if (data.content && (!Array.isArray(data.content) || data.content.length > MAX_PROVIDER_STREAM_TOOL_CALLS)) {
       throw new Error('The provider response exceeded the content-block limit.');
     }
@@ -2533,19 +2554,7 @@ export class AnthropicProvider extends AiProvider {
       ...lengthStop(data.stop_reason),
       ...(reasoning ? { reasoning } : {}),
       model: data.model,
-      usage: data.usage ? (() => {
-        const prompt = token(data.usage?.input_tokens);
-        const completion = token(data.usage?.output_tokens);
-        const cacheRead = token(data.usage?.cache_read_input_tokens);
-        const cacheWrite = token(data.usage?.cache_creation_input_tokens);
-        return {
-          promptTokens: prompt,
-          completionTokens: completion,
-          cacheReadTokens: cacheRead,
-          cacheWriteTokens: cacheWrite,
-          totalTokens: Math.min(Number.MAX_SAFE_INTEGER, prompt + completion + cacheRead + cacheWrite),
-        };
-      })() : undefined,
+      usage: this.messageUsage(data.usage, model, false, options?.cacheRetention),
       toolCalls,
     };
   }
@@ -2609,18 +2618,10 @@ export class AnthropicProvider extends AiProvider {
       let fullContent = '';
       let fullReasoning = '';
       let stopReason: ChatResponse['stopReason'];
-      let inputTokens = 0;
-      let outputTokens = 0;
-      let cacheReadTokens = 0;
-      let cacheWriteTokens = 0;
+      let usage: unknown;
       let outputBytes = 0;
       let transportBytes = 0;
       let streamEvents = 0;
-      const token = (value: unknown): number => (
-        typeof value === 'number' && Number.isFinite(value) && value > 0
-          ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(value))
-          : 0
-      );
       const toolCallFragments = new Map<number, { id: string; name: string; json: string }>();
 
       if (!response.body) throw new Error('Anthropic streaming response has no body');
@@ -2701,16 +2702,14 @@ export class AnthropicProvider extends AiProvider {
             case 'message_start': {
               const msgStart = eventData.message as AnthropicStreamMessage | undefined;
               if (msgStart?.usage) {
-                cacheReadTokens = token(msgStart.usage.cache_read_input_tokens);
-                cacheWriteTokens = token(msgStart.usage.cache_creation_input_tokens);
-                inputTokens = token(msgStart.usage.input_tokens);
+                usage = this.updateMessageUsage(usage, msgStart.usage, true);
               }
               await onChunk('', { type: 'message_start', data: eventData });
               break;
             }
             case 'message_delta': {
               stopReason = lengthStop(eventData.delta?.stop_reason ?? eventData.stop_reason).stopReason ?? stopReason;
-              if (eventData.usage) outputTokens = token(eventData.usage.output_tokens);
+              if (eventData.usage) usage = this.updateMessageUsage(usage, eventData.usage, false);
               break;
             }
             case 'error':
@@ -2730,16 +2729,7 @@ export class AnthropicProvider extends AiProvider {
           ...(fullReasoning ? { reasoning: fullReasoning } : {}),
           model,
           ...(stopReason ? { stopReason } : {}),
-          usage: inputTokens > 0 || outputTokens > 0 ? {
-            promptTokens: inputTokens,
-            completionTokens: outputTokens,
-            cacheReadTokens,
-            cacheWriteTokens,
-            totalTokens: Math.min(
-              Number.MAX_SAFE_INTEGER,
-              inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens,
-            ),
-          } : undefined,
+          usage: this.messageUsage(usage, model, true, options?.cacheRetention),
           toolCalls: toolCalls.length ? toolCalls : undefined,
         });
       } finally {
@@ -2753,18 +2743,20 @@ export class AnthropicProvider extends AiProvider {
 }
 
 // Anthropic internal types
+interface AnthropicUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_creation?: { ephemeral_5m_input_tokens?: number; ephemeral_1h_input_tokens?: number };
+}
 interface AnthropicResponse {
   id?: string;
   type?: string;
   model?: string;
   content?: Array<AnthropicTextContent | AnthropicThinkingContent | AnthropicToolUseContent>;
   stop_reason?: string;
-  usage?: {
-    input_tokens?: number;
-    output_tokens?: number;
-    cache_read_input_tokens?: number;
-    cache_creation_input_tokens?: number;
-  };
+  usage?: AnthropicUsage;
 }
 
 interface AnthropicTextContent {
@@ -2798,11 +2790,7 @@ interface AnthropicStreamMessage {
   content?: Array<{ type: string; text?: string }>;
   model?: string;
   stop_reason?: string | null;
-  usage?: {
-    input_tokens?: number;
-    cache_read_input_tokens?: number;
-    cache_creation_input_tokens?: number;
-  };
+  usage?: AnthropicUsage;
 }
 
 interface AnthropicContentBlockStart {
@@ -2824,7 +2812,7 @@ interface AnthropicContentDelta {
 interface AnthropicMessageDelta {
   type: 'message_delta';
   delta?: { stop_reason?: string | null };
-  usage?: { output_tokens?: number };
+  usage?: AnthropicUsage;
   stop_reason?: string | null;
 }
 

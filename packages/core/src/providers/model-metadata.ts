@@ -30,6 +30,8 @@ export interface PricedTokenUsage {
   outputTokens?: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
+  /** Observed Anthropic one-hour writes, a subset of cacheWriteTokens. */
+  cacheWrite1hTokens?: number;
 }
 
 const TEXT_TOOLS: ModelCapabilities = { reasoning: false, imageInput: false, toolCalls: true };
@@ -37,11 +39,11 @@ const VISION_TOOLS: ModelCapabilities = { reasoning: false, imageInput: true, to
 const REASONING_VISION_TOOLS: ModelCapabilities = { reasoning: true, imageInput: true, toolCalls: true };
 
 /** Versioned non-secret metadata shared by CLI and Web catalogues. */
-export const PUBLISHED_MODEL_METADATA_VERSION = 4 as const;
+export const PUBLISHED_MODEL_METADATA_VERSION = 7 as const;
 
 const PUBLISHED_MODELS: Readonly<Record<string, readonly PublishedModelMetadata[]>> = {
   openai: [
-    { id: 'gpt-4o', name: 'GPT-4o', capabilities: VISION_TOOLS, contextWindow: 128_000, maxOutputTokens: 16_384, promptCache: { short: 300 }, pricing: { inputPerMillion: 2.5, outputPerMillion: 10, cacheReadPerMillion: 1.25 }, thinkingLevelMap: null },
+    { id: 'gpt-4o', name: 'GPT-4o', capabilities: VISION_TOOLS, contextWindow: 128_000, maxOutputTokens: 16_384, pricing: { inputPerMillion: 2.5, outputPerMillion: 10, cacheReadPerMillion: 1.25 }, thinkingLevelMap: null },
     { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 10, outputPerMillion: 30 } },
     { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', capabilities: TEXT_TOOLS, pricing: { inputPerMillion: 0.5, outputPerMillion: 1.5 } },
     { id: 'gpt-4.1', name: 'GPT-4.1', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 2, outputPerMillion: 8, cacheReadPerMillion: 0.5 } },
@@ -54,7 +56,7 @@ const PUBLISHED_MODELS: Readonly<Record<string, readonly PublishedModelMetadata[
     { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 0.25, outputPerMillion: 1.25 } },
     { id: 'claude-3-7-sonnet-latest', name: 'Claude 3.7 Sonnet', capabilities: REASONING_VISION_TOOLS, pricing: { inputPerMillion: 3, outputPerMillion: 15, cacheReadPerMillion: 0.3, cacheWritePerMillion: 3.75 } },
     { id: 'claude-3-5-haiku-latest', name: 'Claude 3.5 Haiku', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 0.8, outputPerMillion: 4, cacheReadPerMillion: 0.08, cacheWritePerMillion: 1 } },
-    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', capabilities: REASONING_VISION_TOOLS, contextWindow: 1_000_000, maxOutputTokens: 128_000, promptCache: { short: 300 }, pricing: { inputPerMillion: 3, outputPerMillion: 15, cacheReadPerMillion: 0.3, cacheWritePerMillion: 3.75 }, thinkingLevelMap: { max: 'max' } },
+    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', capabilities: REASONING_VISION_TOOLS, contextWindow: 1_000_000, maxOutputTokens: 128_000, promptCache: { short: 300, long: 3600 }, pricing: { inputPerMillion: 3, outputPerMillion: 15, cacheReadPerMillion: 0.3, cacheWritePerMillion: 3.75 }, thinkingLevelMap: { max: 'max' } },
   ],
   google: [
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', capabilities: REASONING_VISION_TOOLS, pricing: { inputPerMillion: 1.25, outputPerMillion: 10, cacheReadPerMillion: 0.125 } },
@@ -111,15 +113,21 @@ export function calculatePublishedModelCost(
   usage: PricedTokenUsage,
 ): number | undefined {
   const pricing = PUBLISHED_MODELS[provider]?.find(candidate => candidate.id === id)?.pricing;
-  if (!pricing) return undefined;
+  return pricing ? calculateModelCost(pricing, usage) : undefined;
+}
+
+/** Price owned physical declarations without inferring an operator alias. */
+export function calculateModelCost(pricing: ModelPricing, usage: PricedTokenUsage): number {
   const tokens = (value: number | undefined): number => (
     typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
   );
+  const longWrite = Math.min(tokens(usage.cacheWriteTokens), tokens(usage.cacheWrite1hTokens));
   return (
     tokens(usage.inputTokens) * (pricing.inputPerMillion ?? 0)
     + tokens(usage.outputTokens) * (pricing.outputPerMillion ?? 0)
     + tokens(usage.cacheReadTokens) * (pricing.cacheReadPerMillion ?? 0)
-    + tokens(usage.cacheWriteTokens) * (pricing.cacheWritePerMillion ?? 0)
+    + (tokens(usage.cacheWriteTokens) - longWrite) * (pricing.cacheWritePerMillion ?? 0)
+    + longWrite * (pricing.inputPerMillion ?? 0) * 2
   ) / 1_000_000;
 }
 

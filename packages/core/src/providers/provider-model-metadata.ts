@@ -33,6 +33,10 @@ export function getProviderPublishedModels(
     for (const key of ['inputPerMillion', 'outputPerMillion', 'cacheReadPerMillion', 'cacheWritePerMillion'] as const) {
       const value = data(rawPricing, key); if (typeof value === 'number' && Number.isFinite(value) && value >= 0) pricing[key] = value;
     }
+    const rawCache = data(row, 'promptCache'), promptCache: { short?: number; long?: number } = {};
+    for (const key of ['short', 'long'] as const) {
+      const value = data(rawCache, key); if (positive(value) && value <= 86_400) promptCache[key] = value;
+    }
     const rawThinking = data(row, 'thinkingLevelMap'), thinkingLevelMap: Partial<Record<PublishedThinkingLevel, string | null>> = {};
     for (const key of ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const) {
       const value = data(rawThinking, key); if (value === null || text(value)) thinkingLevelMap[key] = value;
@@ -41,6 +45,7 @@ export function getProviderPublishedModels(
     models.push({ id: id.trim(), name: name.trim(), capabilities: { reasoning, imageInput, toolCalls }, ...(api ? { api } : {}),
       ...(positive(contextWindow) ? { contextWindow } : {}), ...(positive(maxOutputTokens) ? { maxOutputTokens } : {}),
       ...(Object.keys(pricing).length ? { pricing } : {}),
+      ...(Object.keys(promptCache).length ? { promptCache } : {}),
       ...(rawThinking === null ? { thinkingLevelMap: null } : Object.keys(thinkingLevelMap).length ? { thinkingLevelMap } : {}) });
   }
   return models;

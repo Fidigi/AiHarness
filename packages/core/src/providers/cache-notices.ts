@@ -47,9 +47,13 @@ export function getCacheTranscriptNotices(entries: readonly SessionEntry[]): Cac
       const missedTokens = Math.max(0, Math.min(previous.tokens, tokens) - (usage.cacheReadTokens ?? 0));
       const pricing = getPublishedModelMetadata(provider, model)?.pricing;
       const paid = (usage.inputTokens ?? 0) + (usage.cacheWriteTokens ?? 0);
+      const paidCost = usage.costUsd !== undefined && pricing?.outputPerMillion !== undefined && pricing.cacheReadPerMillion !== undefined
+        ? Math.max(0, usage.costUsd - ((usage.outputTokens ?? 0) * pricing.outputPerMillion
+          + (usage.cacheReadTokens ?? 0) * pricing.cacheReadPerMillion) / 1_000_000)
+        : ((usage.inputTokens ?? 0) * (pricing?.inputPerMillion ?? 0)
+          + (usage.cacheWriteTokens ?? 0) * (pricing?.cacheWritePerMillion ?? 0)) / 1_000_000;
       const costUsd = pricing && paid > 0 ? missedTokens * Math.max(0,
-        ((usage.inputTokens ?? 0) * (pricing.inputPerMillion ?? 0) + (usage.cacheWriteTokens ?? 0) * (pricing.cacheWritePerMillion ?? 0))
-          / paid - (pricing.cacheReadPerMillion ?? 0)) / 1_000_000 : undefined;
+        paidCost * 1_000_000 / paid - (pricing.cacheReadPerMillion ?? 0)) / 1_000_000 : undefined;
       if (missedTokens > 1024 && (missedTokens >= 20_000 || (costUsd ?? 0) >= 0.1)) {
         const idle = Math.max(0, entry.timestamp - previous.timestamp);
         notices.push({ id: `cache-miss:${entry.id}`, afterEntryId: entry.id, kind: 'cache_miss', missedTokens,

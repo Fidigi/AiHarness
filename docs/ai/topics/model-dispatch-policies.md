@@ -4,7 +4,7 @@
 
 ## Overview
 
-Core separates selectable virtual chat models from their physical provider requests and owns a session-local prompt-cache warmer. These are native APIs following the approved Pi 1.2.0 policy, not a Pi extension ABI or full provider-parity certificate. MOD-04 native routing delivery is tracked separately from open MOD-05 and whole-platform qualification in `docs/audit/pi/AUDIT-5.md`.
+Core separates selectable virtual chat models from their physical provider requests and owns a session-local prompt-cache warmer. These are native APIs following the approved Pi 1.2.0 policy, not a Pi extension ABI or full provider-parity certificate. MOD-04 routing and MOD-05 cache delivery are tracked separately from whole-platform qualification in `docs/audit/pi/AUDIT-5.md`.
 
 ## Main Entry Points
 
@@ -14,6 +14,7 @@ Core separates selectable virtual chat models from their physical provider reque
 | `packages/core/src/providers/provider-model-metadata.ts` | Sanitized optional adapter-owned physical declarations; undeclared sources retain legacy published lookup |
 | `packages/core/src/agent/provider-turn.ts` | Virtual versus physical dispatch, retry reasons, physical limits and cache eligibility |
 | `packages/core/src/providers/cache-warmer.ts` | Timing, economics, replay, cancellation and durable usage |
+| `packages/core/src/providers/{model-metadata,index,provider-network}.ts` | Explicit short/long profiles, mixed-tier Anthropic pricing and signal-owned suppression of paid-refresh transport retries |
 | `packages/core/src/providers/cache-notices.ts` | Stable derived warming/miss notices, independent of visibility or billable work |
 | `packages/cli/src/tui/cache-notices.ts`, `packages/web/src/components/{CacheNotices,CacheNoticeSettings}.tsx` | Historical terminal/browser presentation and server-global Web visibility |
 | `packages/server/src/api/session-pagination.ts`, `packages/server/src/api/agent-routes.ts` | Active-ancestry, page/snapshot-filtered notice DTOs without private receipts |
@@ -47,13 +48,17 @@ Child agents reuse the same loop with fresh child-local state, never the parent'
 
 `cacheWarming` is `off | streaming | idle`, default `streaming`. CLI/RPC and detached Server runs compose already trusted agent settings. `streaming` stops at agent settlement; successful `idle` may continue afterward. Abort/failure, disabled mode, changed context/model, unavailable/replaced physical provider, extension unload and shutdown retire work. A selected mode is not a credential grant.
 
-Only explicitly eligible published physical models with known prompt-cache lifetime and pricing are considered. Current short-lifetime metadata is limited to GPT-4o and Claude Sonnet 4.6; absent/none retention, virtual routing and extension model redirection do not warm. Other model names or an API-compatible endpoint do not establish cache support. Long-retention automatic warming is not currently qualified. Anthropic chat/stream use one last-message ephemeral breakpoint by default; `ChatOptions.cacheRetention: 'none'` omits it and `long` requests the one-hour wire TTL explicitly.
+Only explicit physical cache profiles with a bound API, declared lifetime and complete known input/output/cache-read/cache-write prices are considered. Use sanitized adapter-owned `getPublishedModels()` data; absent declarations retain the native table, but empty/invalid declarations cannot borrow eligibility from an alias. TTLs are copied positive finite seconds, bounded to one day; accessors are not evaluated. Claude Sonnet 4.6 declares short 300-second and long 3,600-second retention. The pinned OpenAI catalogue does not declare GPT-4o cache lifetime, so its former inferred warming eligibility is removed. Other model names and compatible URLs never establish cache support; adapter declarations do not certify a new vendor integration.
+
+Omitted retention selects short; `none`, missing profiles/prices/API, virtual routing and post-hook selection redirection do not warm. Native Anthropic numeric-thinking requests cannot safely replay a one-token cap and are excluded, including under account aliases. The owning native Sonnet 4.6 adaptive profile can disable thinking without expanding that cap. Anthropic chat/stream retain the last-message ephemeral breakpoint; `ChatOptions.cacheRetention: 'none'` omits it and `long` requests the one-hour wire TTL explicitly.
 
 - Schedule at `min(90% TTL, TTL − 10 seconds)`; TTL at most ten seconds is ineligible.
 - Require at least $0.05 expected net saving; continuation probability is 1 while streaming and 0.15 while idle.
 - Bound the economic prompt estimate by the captured canonical prefix and observed usage; a compacted small prefix cannot inherit old large-request economics. Unknown media provides no automatic economic estimate.
-- Stop at 60 minutes streaming or 30 minutes idle from the last real request. Warming never extends that horizon; late refreshes refuse.
-- Replay the owned request with `maxTokens: 1`, `maxRetries: 0`, no output publication and no tool execution. Recheck authorization, context, cancellation and deadline after asynchronous decision work.
+- Stop at 60 minutes streaming or 30 minutes idle from the last real request, including an exact-boundary timer and an awaited decision/authorization crossing the horizon. Settling into idle retires a timer already scheduled beyond its shorter horizon; warming never extends that horizon.
+- Replay the owned request with `maxTokens: 1`, `maxRetries: 0`, no output publication and no tool execution. A private signal-owned transport mark also suppresses built-in network retries even if the physical provider configuration allows them; foreground retry policy is unchanged. Recheck authorization, context, cancellation and deadline after asynchronous decision work.
+
+Anthropic JSON and final cumulative SSE usage distinguish one-hour writes as a subset of aggregate cache writes, not additional tokens. Price that subset at twice the owned input rate and the remaining writes at the short rate; an explicit breakdown overrides the requested-retention fallback. Long-retention economics use the long write rate. Completed usage keeps aggregate token counts and known cost in the existing receipt shape; resolve that cost before invoking host usage observers and durable persistence. Unknown prices never manufacture a free receipt. Significant-miss notices use known observed cost when available instead of repricing one-hour writes as short writes. Costs are versioned-price estimates, not live-account invoices.
 
 `before:cache:warm` receives the economic decision and signal; only `action: 'warm' | 'stop'` controls the result. Hook failure falls back to economics. A different action is an explicit extension override, recorded with usage. Economics and time horizons are not a global monetary cap.
 
@@ -78,16 +83,18 @@ Web's independent administrator-owned `config.json` global boolean defaults to t
 - `packages/server/src/api/virtual-model-http.test.ts`: authenticated legacy SSE/summary and JSON adapter routing, delegated child-state separation, detached missing-router resume, privacy and physical usage attribution.
 - `tests/functional-parity/installed-executable.test.ts`: genuinely packed/installed virtual declarations, physical runtime identity, direct-state exclusion and non-context warming/accounting.
 - `packages/server/src/api/cache-notices-http.test.ts`, `packages/web/src/store/session-store.integration.test.ts`: real authenticated branch/page/clone/snapshot/privacy/global-only controls and deduplicated page/hide/replacement projection.
-- `packages/cli/src/tui/cache-notices.test.ts`, `packages/cli/src/cli/cache-notices-process.test.ts`, `e2e/model-cache-live.spec.ts`: both emitted terminal renderers, real static Web/API routing/history, reload/network reconnect/branches/global hiding, real routed browser continuation after unload and unchanged passive request counts in EN/light desktop and FR/dark mobile.
+- `packages/cli/src/tui/cache-notices.test.ts`, `packages/cli/src/cli/cache-notices-process.test.ts`, `e2e/model-cache-live.spec.ts`: both emitted terminal renderers, real static Web/API routing/history, reload/network reconnect/branches/global hiding, real routed browser continuation after unload and unchanged passive request counts in EN/light desktop and FR/dark mobile. The same journeys additionally exercise a real scheduler/detached host with a disposable declared 11-second mock cache: hiding notices does not stop a one-token refresh, host totals and durable receipts agree, warm output is private, and showing notices after reload creates no new request.
 - `packages/core/src/providers/cache-warmer.test.ts`: economics, owned replay, deadlines/horizons, modes, authorization, cancellation, usage observers and abandoned branches.
-- `packages/core/src/providers/cache-notices.test.ts`: significant miss derivation, stable replay and passive usage validation.
+- `packages/core/src/providers/cache-warming-native.test.ts`: owned TTL copying/refusal, account aliases, real loopback Anthropic JSON/SSE mixed-tier billing, one-hour replay, numeric-thinking exclusion, idle retirement and configured native retry suppression.
+- `packages/core/src/providers/provider-network.test.ts`, `stream-error-frames.test.ts`: unchanged ordinary retry/deadline and stream-error controls.
+- `packages/core/src/providers/cache-notices.test.ts`: significant miss derivation including long-retention cost, stable replay and passive usage validation.
 - `packages/core/src/sessions/session-accounting.test.ts`: non-message usage totals, memory/durable reload and independent clone without model-context pollution.
 - `packages/core/src/providers/anthropic-thinking.test.ts`: actual loopback chat/stream cache-retention payloads alongside reasoning dialects.
 - Existing Core provider-output/request guards and CLI/RPC/HTTP compaction lifecycle tests remain separate regression controls. Test presence is not a successful execution receipt; consult AUDIT-5.
 
 ## Common Changes
 
-- Add a cache-eligible model only in `providers/model-metadata.ts` after checking actual native cache markers, minimum output/replay constraints, TTL and short/long pricing. Extend real-wire tests, not merely catalogue entries.
+- Add eligibility only through an owned adapter declaration or `providers/model-metadata.ts`, after checking the actual API/cache markers, one-token replay constraints, explicit TTL and complete short/long pricing. Extend real-wire and host tests, not merely catalogue entries. Never infer eligibility from a model family or endpoint URL.
 - Change routing in `providers/virtual-models.ts` and `agent/provider-turn.ts` together. Preserve current credential/generation checks, direct-call state exclusion, branch persistence and physical accounting; exercise emitted host paths.
 - Change notice presentation through `api/session-pagination.ts`, Web `store/session-store.ts`/`components/CacheNotices.tsx` and CLI `tui/cache-notices.ts` together. Preserve global-only Web authority, branch/page/reconnect ownership and actual browser/terminal controls. Do not append notices as assistant or custom model-visible messages.
 

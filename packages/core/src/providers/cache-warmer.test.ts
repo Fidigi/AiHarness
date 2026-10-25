@@ -136,6 +136,21 @@ describe('Pi-policy native prompt-cache warming', () => {
     expect(f.stream).toHaveBeenCalledTimes(6);
   });
 
+  it('stops at the fixed streaming horizon even when its next timer lies exactly on the boundary', async () => {
+    const f = await fixture(); f.warmer.start(f.request);
+    await vi.advanceTimersByTimeAsync(60 * 60_000);
+    expect(f.stream).toHaveBeenCalledTimes(179);
+    expect(f.warmer.status.state).toBe('inactive');
+  });
+
+  it('does not invent a free receipt when a declaration has no prices', async () => {
+    const f = await fixture(async () => 'warm'); f.warmer.start({ ...f.request, pricing: {} });
+    await vi.advanceTimersByTimeAsync(20_000);
+    const entries = await f.manager.getRawEntries(f.session.id);
+    expect(entries.at(-1)).toMatchObject({ customType: 'provider.cache_warm', data: { usage: { cacheReadTokens: 100_000 } } });
+    expect((entries.at(-1) as { data: { usage: TokenUsage } }).data.usage.costUsd).toBeUndefined();
+  });
+
   it('allows an explicit extension decision override and falls back after hook failure', async () => {
     const override = await fixture(async () => 'warm');
     override.warmer.setMode('idle'); override.warmer.start(override.request); await override.warmer.settle(true);

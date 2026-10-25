@@ -3,7 +3,8 @@ import type { Message, ModelPricing, TokenUsage } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import { captureProviderMessages, prepareProviderPayload } from '../agent/provider-request-payload.js';
 import { copySessionCustomValue } from '../sessions/session-custom-data.js';
-import { calculatePublishedModelCost } from './model-metadata.js';
+import { calculateModelCost } from './model-metadata.js';
+import { disableProviderNetworkRetries } from './provider-network.js';
 import { sessionEntryPath } from '../sessions/session-context.js';
 import { estimateCanonicalProviderRequest } from '../agent/provider-request-estimate.js';
 import { awaitAgentAdmission } from '../agent/prestart-admission.js';
@@ -113,7 +114,8 @@ export class CacheWarmer {
     const run = this.active;
     if (run && success && this.mode === 'idle') { run.phase = 'idle'; run.detach(); }
     else this.cancel('agent run settled');
-    if (run && Date.now() >= run.startedAt + 30 * 60_000 && run.phase === 'idle') this.cancel('30-minute idle safety limit');
+    if (run && run.phase === 'idle' && (Date.now() >= run.startedAt + 30 * 60_000
+      || run.next > run.startedAt + 30 * 60_000)) this.cancel('30-minute idle safety limit');
     await Promise.all([...this.pending]);
   }
   cancel(reason = 'inactive'): void {
@@ -126,6 +128,9 @@ export class CacheWarmer {
   private current(run: ActiveWarm): boolean {
     if (this.active !== run || run.controller.signal.aborted) return false;
     if (this.mode === 'off' || !run.request.isCurrent()) { this.cancel('conversation context changed'); return false; }
+    if (Date.now() >= run.startedAt + (run.phase === 'idle' ? 30 : 60) * 60_000) {
+      this.cancel('cache warming safety limit'); return false;
+    }
     return true;
   }
   private evaluate(run: ActiveWarm): CacheWarmingDecision {
@@ -174,6 +179,7 @@ export class CacheWarmer {
     let accepting = true;
     try {
       const request = run.request;
+      disableProviderNetworkRetries(run.controller.signal);
       await request.provider.streamChat(captureProviderMessages(request.messages), () => undefined,
         result => { if (accepting) response = result; }, error => { if (accepting) failure = error; },
         { ...request.options, maxTokens: 1, maxRetries: 0, signal: run.controller.signal });
@@ -183,10 +189,13 @@ export class CacheWarmer {
     const usage = !failure && response ? normalizeProviderUsage(response.usage) : undefined;
     if (usage && this.manager.get(this.sessionId) === source) {
       const request = run.request;
+      const priced = [[usage.inputTokens, request.pricing.inputPerMillion], [usage.outputTokens, request.pricing.outputPerMillion],
+        [usage.cacheReadTokens, request.pricing.cacheReadPerMillion], [usage.cacheWriteTokens, request.pricing.cacheWritePerMillion]]
+        .every(([tokens, rate]) => !tokens || rate !== undefined);
+      const cost = usage.costUsd ?? (priced ? calculateModelCost(request.pricing, usage) : undefined);
+      if (cost !== undefined) usage.costUsd = cost;
       try { void Promise.resolve(this.onUsage?.(usage, request.providerName, response?.model ?? request.model)).catch(() => undefined); }
       catch { /* Preserve durable billing if an observer fails. */ }
-      const cost = usage.costUsd ?? calculatePublishedModelCost(request.providerName, response?.model ?? request.model, usage);
-      if (cost !== undefined) usage.costUsd = cost;
       const entries = await this.manager.getRawEntries(this.sessionId);
       const receiptParent = this.current(run) && sessionEntryPath(entries, source?.activeLeafId).entries.some(entry => entry.id === parentEntryId)
         ? source!.activeLeafId! : parentEntryId;
