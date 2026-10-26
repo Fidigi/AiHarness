@@ -1,17 +1,29 @@
 import type { AiProvider } from './index.js';
-import type { TokenUsage } from '../types/index.js';
+import type { ModelPricing, TokenUsage } from '../types/index.js';
 import { copyQuestionClassificationRequest, copyQuestionAnswers, type QuestionClassificationRequest, type QuestionClassificationResult } from './classification-questions.js';
 import { calculatePublishedModelCost } from './model-metadata.js';
 
 /** AiHarness-owned SDK contract. Descriptors never contain endpoints or credentials. */
 export type SpecializedModelType = 'classifier' | 'image';
-export interface SpecializedModel { id: string; type: SpecializedModelType; provider: string; model: string; virtual?: boolean; imageInput?: boolean }
+export interface SpecializedModel { id: string; type: SpecializedModelType; provider: string; model: string; virtual?: boolean; imageInput?: boolean;
+  name?: string; api?: string; contextWindow?: number; pricing?: ModelPricing }
 export interface ClassificationRequest { model: string; input: string; labels: string[]; images?: GeneratedImage[] }
 export interface ClassificationResult { label: string; usage?: TokenUsage }
 export interface ImageGenerationRequest { model: string; prompt: string; count?: number; size?: '256x256' | '512x512' | '1024x1024' }
 export interface GeneratedImage { mediaType: 'image/png' | 'image/jpeg' | 'image/webp'; data: string }
 export interface ImageGenerationResult { images: GeneratedImage[]; usage?: TokenUsage }
-export interface SpecializedModelOptions { signal?: AbortSignal }
+/** The host SDK may bind an operation's physical API independently of its model ID. */
+export interface SpecializedModelOptions { signal?: AbortSignal; api?: string }
+/** Observed provider accounting may survive an invalid answer; no response body or cause is retained. */
+export class SpecializedModelError extends Error {
+  readonly usage?: Readonly<TokenUsage>;
+  constructor(message: string, usage?: TokenUsage) {
+    super(message);
+    this.name = 'SpecializedModelError';
+    const copied = safeUsage(usage);
+    this.usage = copied ? Object.freeze(copied) : undefined;
+  }
+}
 export type SpecializedModelRequest = ClassificationRequest | QuestionClassificationRequest | ImageGenerationRequest;
 export type BeforeSpecializedModel = (type: SpecializedModelType, request: SpecializedModelRequest, signal: AbortSignal) => Promise<SpecializedModelRequest>;
 export const SPECIALIZED_MODEL_LIMITS = Object.freeze({ models: 100, inputBytes: 32_768, labels: 100,
@@ -90,7 +102,17 @@ export class SpecializedModels {
         const id = this.redact(candidate.id); const model = this.redact(candidate.model);
         if (!text(id, 500) || !text(model, 500) || seen.has(id)) return [];
         seen.add(id);
-        return [{ id, type, provider, model, ...(candidate.virtual === true ? { virtual: true } : {}),
+        const name = typeof candidate.name === 'string' ? this.redact(candidate.name) : undefined;
+        const api = typeof candidate.api === 'string' ? this.redact(candidate.api) : undefined;
+        const priceKeys = ['inputPerMillion', 'outputPerMillion', 'cacheReadPerMillion', 'cacheWritePerMillion'] as const;
+        const prices = candidate.pricing;
+        const pricing = object(prices) && ['inputPerMillion', 'outputPerMillion'].every(key => typeof prices[key] === 'number')
+          && priceKeys.every(key => prices[key] === undefined || (typeof prices[key] === 'number' && Number.isFinite(prices[key]) && prices[key] >= 0 && prices[key] <= Number.MAX_SAFE_INTEGER))
+          ? Object.fromEntries(priceKeys.filter(key => prices[key] !== undefined).map(key => [key, prices[key]])) as unknown as ModelPricing : undefined;
+        return [{ id, type, provider, model, ...(text(name, 500) ? { name } : {}),
+          ...(api && /^[a-z][a-z0-9-]{0,63}$/u.test(api) ? { api } : {}),
+          ...(typeof candidate.contextWindow === 'number' && Number.isSafeInteger(candidate.contextWindow) && candidate.contextWindow > 0 ? { contextWindow: candidate.contextWindow } : {}),
+          ...(pricing ? { pricing } : {}), ...(candidate.virtual === true ? { virtual: true } : {}),
           ...(candidate.imageInput === true ? { imageInput: true } : {}) }];
       });
     } catch { throw new Error('Specialized model metadata is unavailable.'); }
@@ -111,7 +133,7 @@ export class SpecializedModels {
       request = copyClassificationRequest(transformed);
       const model = this.resolve('classifier', request.model);
       if (request.images && model.imageInput !== true) throw new Error('Classification model does not support image input.');
-      const result = await this.provider.classify({ ...request, model: model.model }, { signal });
+      const result = await this.provider.classify({ ...request, model: model.model }, { signal, ...(model.api ? { api: model.api } : {}) });
       if (!object(result) || !request.labels.includes(result.label)) throw new Error('Invalid classification result.');
       const usage = safeUsage(result.usage);
       if (usage && usage.costUsd === undefined && usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
@@ -130,7 +152,7 @@ export class SpecializedModels {
       request = copyQuestionClassificationRequest(transformed);
       const model = this.resolve('classifier', request.model);
       if (request.images && model.imageInput !== true) throw new Error('Classification model does not support image input.');
-      const result = await this.provider.classifyQuestions({ ...request, model: model.model }, { signal });
+      const result = await this.provider.classifyQuestions({ ...request, model: model.model }, { signal, ...(model.api ? { api: model.api } : {}) });
       const answers = copyQuestionAnswers(result.answers, request.questions);
       const usage = safeUsage(result.usage);
       if (usage && usage.costUsd === undefined && usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
@@ -171,7 +193,10 @@ export class SpecializedModels {
       if (signal.aborted) abort();
     });
     try { return await Promise.race([Promise.resolve().then(() => { if (signal.aborted) throw new Error('Cancelled.'); return operation(signal); }), cancelled]); }
-    catch { throw new Error('Specialized model operation failed or was cancelled.'); }
+    catch (error) {
+      const message = 'Specialized model operation failed or was cancelled.';
+      throw error instanceof SpecializedModelError ? new SpecializedModelError(message, error.usage) : new Error(message);
+    }
     finally { clearTimeout(timer); signal.removeEventListener('abort', abort); controller.abort(); }
   }
 }

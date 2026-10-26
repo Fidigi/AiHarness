@@ -8,6 +8,7 @@ import { spawn as spawnPty } from 'node-pty';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { fixtureRoot, loadManifest, normalizeFixture, readExpected } from './harness.js';
 import { compilerNodeArgs, run, type Result } from './installed-process.js';
+import { bedrockText } from '../fixtures/bedrock-event-stream.js';
 
 const checkout = fileURLToPath(new URL('../..', import.meta.url));
 const require = createRequire(import.meta.url);
@@ -881,9 +882,15 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
 
   it('publishes installed host-supplied compaction windows without adding a facade mutation or changing API 1', async () => {
     await writeFile(path.join(consumer, 'compaction-window-public.ts'), `
-      import { SessionManager, resolveAgentCompactionContextWindow, AI_HARNESS_CORE_API_VERSION,
-        type AgentSession } from '@ai-harness/core';
+      import { SessionManager, OpenAiMixedProvider, getProviderPublishedModel, resolveAgentCompactionContextWindow, getSupportedThinkingLevels, AI_HARNESS_CORE_API_VERSION,
+        type AgentSession, type PublishedModelMetadata, type PublishedThinkingLevel } from '@ai-harness/core';
       const manager = new SessionManager();
+      const provider = new OpenAiMixedProvider({ type: 'operator-r', apiKey: 'disposable', baseUrl: 'http://127.0.0.1:1/v1' });
+      const nativeWindow: number | undefined = resolveAgentCompactionContextWindow('operator-r', 'gpt-6-luna', provider); void nativeWindow;
+      const levels: PublishedThinkingLevel[] = getSupportedThinkingLevels('operator-r', 'gpt-6-luna', undefined, provider); void levels;
+      // @ts-expect-error actual sources are provider objects, never aliases
+      getSupportedThinkingLevels('operator-r', 'gpt-6-luna', undefined, 'operator-r');
+      const metadata: PublishedModelMetadata | undefined = getProviderPublishedModel('operator-r', 'gpt-6-luna', provider); void metadata;
       const window: number | undefined = resolveAgentCompactionContextWindow('openai', 'gpt-4o');
       manager.setCompactionContextWindow(window); manager.setCompactionContextWindow(undefined);
       const current: number | undefined = manager.getCompactionContextWindow(); void current;
@@ -898,9 +905,28 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     `);
     const result = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'compaction-window-public.ts'], consumer, environment);
     expect(result.stdout).toBe(''); expect(result.stderr).toBe('');
+    const worker = path.join(consumer, 'compaction-window-public.mjs');
+    await writeFile(worker, `import assert from 'node:assert/strict';
+      import { OpenAiMixedProvider, getProviderPublishedModel, resolveAgentCompactionContextWindow, getSupportedThinkingLevels } from '@ai-harness/core';
+      const provider = new OpenAiMixedProvider({ type: 'anthropic', apiKey: 'disposable', baseUrl: 'http://127.0.0.1:1/v1' });
+      const row = getProviderPublishedModel('anthropic', 'gpt-6-luna', provider);
+      assert.equal(row.contextWindow,272000); row.contextWindow=1;
+      const levels=['off','low','medium','high','xhigh','max'];
+      assert.deepEqual(getSupportedThinkingLevels('anthropic','gpt-6-luna',undefined,provider),levels);
+      row.thinkingLevelMap.max=null;
+      assert.deepEqual(getSupportedThinkingLevels('anthropic','gpt-6-luna',undefined,provider),levels);
+      assert.deepEqual(getSupportedThinkingLevels('anthropic','claude-sonnet-4-6',undefined,provider),['off']);
+      assert.deepEqual(getSupportedThinkingLevels('anthropic','claude-sonnet-4-6'),['off','minimal','low','medium','high','max']);
+      assert.equal(resolveAgentCompactionContextWindow('anthropic','gpt-6-luna',provider),272000);
+      assert.equal(getProviderPublishedModel('anthropic','claude-sonnet-4-6',provider),undefined);
+      assert.equal(resolveAgentCompactionContextWindow('anthropic','claude-sonnet-4-6',provider),128000);
+      assert.equal(resolveAgentCompactionContextWindow('anthropic','claude-sonnet-4-6'),1000000);
+      console.log('COMPACTION_METADATA_PUBLIC_OK');`);
+    const runtime = await succeed(process.execPath, [worker], consumer, environment);
+    expect(runtime.stdout).toBe('COMPACTION_METADATA_PUBLIC_OK\n'); expect(runtime.stderr).toBe('');
   });
 
-  it.each(['thresholds', 'eof'])('uses installed Core and the actual PATH-bin context-settings protocol (%s)', async scenario => {
+  it.each(['thresholds', 'eof', 'native-rpc', 'native-print', 'native-json'])('uses installed Core and the actual PATH-bin context-settings protocol (%s)', async scenario => {
     const worker = path.join(consumer, `context-settings-${scenario}.mjs`);
     await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', 'context-settings-probe.mjs'), worker);
     const result = await run(process.execPath, [worker, scenario], consumer,
@@ -908,7 +934,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe('');
     const records = result.stdout.trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
     expect(records).toEqual([
-      { scenario, requests: scenario === 'thresholds' ? 4 : 0, compactions: scenario === 'thresholds' ? 1 : 0,
+      { scenario, requests: scenario.startsWith('native-') ? 1 : scenario === 'thresholds' ? 4 : 0, compactions: scenario === 'thresholds' ? 1 : 0,
         summaries: scenario === 'thresholds' ? 1 : 0, exit: 0 },
       { result: 'CONTEXT_SETTINGS_PROCESS_OK', node: process.versions.node, cases: 1 },
     ]);
@@ -1619,6 +1645,72 @@ it('validates installed public provider discovery declarations and keyless based
   }
 }, 60_000);
 
+it('dispatches native Bedrock binary streams through installed public declarations and runtime', async () => {
+  await writeFile(path.join(consumer, 'bedrock-public.ts'), `
+    import { BedrockProvider, ProviderFactory, bedrockCredentialConfig, type AiProvider, type ChatResponse, type ProviderConfig } from '@ai-harness/core';
+    const config: ProviderConfig = { type: 'bedrock', accessKeyId: 'DISPOSABLE', secretAccessKey: 'disposable', baseUrl: 'https://proxy.example', model: 'fixture:0' };
+    const native: AiProvider = new BedrockProvider(config);
+    const factory: AiProvider = ProviderFactory.create(config);
+    const bearer: AiProvider = ProviderFactory.create({ type: 'bedrock', ...bedrockCredentialConfig('opaque-token') });
+    void [native, factory, bearer];
+    async function compile() {
+      let complete: ChatResponse | undefined;
+      await native.streamChat([], async (text, event) => { void [text, event]; }, value => { complete = value; }, undefined, { model: 'override:1' });
+      const api: string | undefined = complete?.api; void api;
+    }
+    void compile;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'bedrock-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  const bytes = bedrockText('installed-bedrock-ok', 'end_turn', { inputTokens: 7, outputTokens: 2, cacheReadInputTokens: 3, totalTokens: 12 });
+  await writeFile(path.join(consumer, 'bedrock-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { BedrockProvider, ProviderFactory, bedrockCredentialConfig, collectProviderModelCatalog, flattenModelCatalog } from '@ai-harness/core';
+    const calls = [];
+    const server = createServer(async (request, reply) => {
+      let body = ''; for await (const chunk of request) body += chunk;
+      calls.push({ path: request.url, headers: request.headers, body: JSON.parse(body) });
+      if (request.url.endsWith('/converse')) {
+        reply.writeHead(200, { 'content-type': 'application/json' });
+        reply.end(JSON.stringify({ output: { message: { content: [{ text: 'installed-bedrock-json-ok' }] } } }));
+      } else {
+        reply.writeHead(200, { 'content-type': 'application/vnd.amazon.eventstream' });
+        reply.end(Buffer.from(${JSON.stringify(bytes.toString('base64'))}, 'base64'));
+      }
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = ProviderFactory.create({ type: 'bedrock', accessKeyId: 'DISPOSABLE', secretAccessKey: 'disposable', sessionToken: 'disposablesession', model: 'fixture:0', baseUrl: 'http://127.0.0.1:' + server.address().port + '/proxy' });
+      assert.ok(provider instanceof BedrockProvider);
+      let text = '', complete;
+      await provider.streamChat([{ id: 'u', role: 'user', content: 'hello', timestamp: new Date(0) }], async chunk => { text += chunk; }, value => { complete = value; }, undefined, { model: 'override:1' });
+      assert.equal(text, 'installed-bedrock-ok');
+      assert.equal(complete.api, 'bedrock-converse-stream'); assert.equal(complete.model, 'override:1');
+      assert.deepEqual(complete.usage, { promptTokens: 7, completionTokens: 2, cacheReadTokens: 3, totalTokens: 12 });
+      assert.equal(calls.length, 1); assert.equal(calls[0].path, '/proxy/model/override%3A1/converse-stream');
+      assert.ok(calls[0].headers.authorization.startsWith('AWS4-HMAC-SHA256 Credential=DISPOSABLE/'));
+      assert.equal(calls[0].headers['x-amz-security-token'], 'disposablesession');
+      const catalog = flattenModelCatalog(await collectProviderModelCatalog(new Map([['operator-bedrock', provider]]), { discover: false }));
+      assert.equal(catalog.find(model => model.id === 'fixture:0').api, 'bedrock-converse-stream');
+      const credential = bedrockCredentialConfig(JSON.stringify({ bearerToken: 'installed:opaque:bearer' }));
+      assert.deepEqual(credential, { apiKey: 'installed:opaque:bearer' });
+      const bearer = ProviderFactory.create({ type: 'bedrock', ...credential, model: 'fixture:0', baseUrl: 'http://127.0.0.1:' + server.address().port + '/proxy/model/fixture%3A0/converse' });
+      assert.equal((await bearer.chat([])).content, 'installed-bedrock-json-ok');
+      await bearer.streamChat([], () => {}, value => { complete = value; });
+      assert.equal(complete.content, 'installed-bedrock-ok'); assert.equal(complete.api, 'bedrock-converse-stream');
+      assert.equal(calls.length, 3);
+      for (const call of calls.slice(1)) {
+        assert.equal(call.headers.authorization, 'Bearer installed:opaque:bearer');
+        assert.deepEqual(Object.keys(call.headers).filter(name => name.startsWith('x-amz-')), []);
+      }
+      console.log('installed Bedrock ConverseStream OK');
+    } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+  `);
+  expect(await run(process.execPath, ['bedrock-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed Bedrock ConverseStream OK\n', stderr: '' });
+}, 60_000);
+
 it('dispatches Azure Responses through installed public declarations and runtime', async () => {
   await writeFile(path.join(consumer, 'azure-public.ts'), `
     import { AzureResponsesProvider, ProviderFactory, azureEnvironmentConfig, type ProviderConfig, type AiProvider } from '@ai-harness/core';
@@ -1659,4 +1751,1957 @@ it('dispatches Azure Responses through installed public declarations and runtime
   `);
   expect(await run(process.execPath, ['azure-public.mjs'], consumer, environment))
     .toEqual({ code: 0, stdout: 'installed Azure Responses OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native OpenRouter images through installed declarations, output blocks and failed guest accounting', async () => {
+  await writeFile(path.join(consumer, 'openrouter-images-public.ts'), `
+    import { OpenRouterImagesProvider, OPENROUTER_IMAGE_MODELS, SpecializedModels, type NativeImageRequest, type NativeImageResult } from '@ai-harness/core';
+    const provider = new OpenRouterImagesProvider({ type: 'operator-images', apiKey: 'disposable' });
+    const request: NativeImageRequest = { model: 'google/gemini-2.5-flash-image', input: [{ type: 'text', text: 'Pixel' }] };
+    const result: Promise<NativeImageResult> = provider.generateNativeImages(request);
+    const bridge = new SpecializedModels(provider);
+    // @ts-expect-error pinned input modes are immutable
+    OPENROUTER_IMAGE_MODELS[0].input.push('image');
+    // @ts-expect-error native input uses supported bounded media, not SVG
+    provider.generateNativeImages({ model: request.model, input: [{ type: 'image', mediaType: 'image/svg+xml', data: 'AAAA' }] });
+    void result; void bridge;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'openrouter-images-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'openrouter-images-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { OpenRouterImagesProvider, OPENROUTER_IMAGE_MODELS, SpecializedModels, SpecializedModelError, runCodemode, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = []; let multiple = false;
+    const png = { mediaType: 'image/png', data: Buffer.from([137,80,78,71,13,10,26,10]).toString('base64') };
+    const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 3, cache_write_tokens: 1 } };
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      calls.push({ url: request.url, authorization: request.headers.authorization, body: JSON.parse(text) });
+      const image = { image_url: 'data:image/png;base64,' + png.data };
+      response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ id: 'image-response', usage,
+        choices: [{ message: { content: 'A pixel.', images: multiple ? [image, image] : [image] } }] }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new OpenRouterImagesProvider({ type: 'operator-images', apiKey: 'disposable-installed-key',
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/proxy/api/v1/chat/completions/' });
+      assert.equal(OPENROUTER_IMAGE_MODELS.length, 61); assert.equal(new SpecializedModels(provider).getModelsOfType('image').length, 61);
+      const model = 'google/gemini-2.5-flash-image';
+      const result = await provider.generateNativeImages({ model, input: [{ type: 'text', text: 'Pixel' }, { type: 'image', ...png }] });
+      assert.equal(result.stopReason, 'stop'); assert.equal(result.api, 'openrouter-images'); assert.equal(result.responseId, 'image-response');
+      assert.deepEqual(result.output, [{ type: 'text', text: 'A pixel.' }, { type: 'image', ...png }]);
+      assert.deepEqual(calls[0].body.messages[0].content, [{ type: 'text', text: 'Pixel' }, { type: 'image_url', image_url: { url: 'data:image/png;base64,' + png.data } }]);
+      const cost = (7 * 0.3 + 2 * 2.5 + 2 * 0.03 + 0.083333) / 1e6;
+      assert.equal(result.usage.inputTokens, 7); assert.equal(result.usage.cacheReadTokens, 2); assert.equal(result.usage.cacheWriteTokens, 1);
+      assert.equal(result.usage.totalTokens, 12); assert.equal(result.usage.costUsd, cost);
+      const bridge = new SpecializedModels(provider), request = { model, prompt: 'Pixel' };
+      assert.deepEqual((await bridge.generateImages(request)).images, [png]);
+      multiple = true;
+      await assert.rejects(bridge.generateImages(request), error => { assert.ok(error instanceof SpecializedModelError); assert.equal(error.usage.costUsd, cost); return true; });
+      const failed = await runCodemode({ code: 'store("bad",true); await models.generateImages(' + JSON.stringify(request) + ')',
+        context: { provider }, tools: () => [], execute: async () => { throw Error('Unexpected tool'); } });
+      assert.equal(failed.isError, true); assert.equal(failed.blocks, undefined); assert.equal(failed.details.store, undefined);
+      assert.equal(failed.details.nestedCalls.length, 1); assert.equal(failed.details.nestedCalls[0].state, 'failed');
+      assert.equal(failed.details.usage.totalTokens, 12); assert.equal(failed.details.usage.costUsd, cost); assert.equal(failed.details.costComplete, true);
+      multiple = false;
+      const shown = await runCodemode({ code: 'const r=await models.generateImages(' + JSON.stringify(request) + '); await image(r.images[0]); store("shown",true);',
+        context: { provider }, tools: () => [], execute: async () => { throw Error('Unexpected tool'); } });
+      assert.equal(shown.isError, false); assert.equal(shown.details.store.shown, true); assert.equal(shown.blocks.length, 1);
+      assert.equal(shown.blocks[0].url, 'data:image/png;base64,' + png.data); assert.equal(shown.details.usage.totalTokens, 12);
+      assert.equal(calls.length, 5);
+      for (const call of calls) { assert.equal(call.url, '/proxy/api/v1/chat/completions'); assert.equal(call.authorization, 'Bearer disposable-installed-key'); assert.deepEqual(call.body.modalities, ['image', 'text']); }
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed OpenRouter images OK');
+  `);
+  expect(await run(process.execPath, ['openrouter-images-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed OpenRouter images OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native OpenAI Decisions through installed declarations, images and failed guest accounting', async () => {
+  await writeFile(path.join(consumer, 'decisions-public.ts'), `
+    import { OpenAiDecisionsProvider, OPENAI_DECISIONS_MODEL, SpecializedModels, type NativeClassifierResult } from '@ai-harness/core';
+    const provider = new OpenAiDecisionsProvider({ type: 'operator-decisions', apiKey: 'disposable' });
+    const result: Promise<NativeClassifierResult> = provider.classifyNativeQuestions({ model: OPENAI_DECISIONS_MODEL.id,
+      state: {}, questions: { severity: { type: 'score', instructions: 'Severity?', criteria: ['Low', 'High'] } } });
+    const bridge = new SpecializedModels(provider);
+    // @ts-expect-error published tier thresholds are immutable
+    OPENAI_DECISIONS_MODEL.pricingTiers[0].inputTokensAbove = 1;
+    // @ts-expect-error native scalar criteria are descriptive strings, not finite numeric values
+    provider.classifyNativeQuestions({ model: 'gpt-6-luna', state: {}, questions: { q: { type: 'score', instructions: '?', criteria: [1, 2] } } });
+    void result; void bridge;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'decisions-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'decisions-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { OpenAiDecisionsProvider, OPENAI_DECISIONS_MODEL, SpecializedModels, SpecializedModelError, runCodemode, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = []; let malformed = false;
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, authorization: request.headers.authorization, body });
+      const answers = malformed ? [] : body.questions.map(question => question.type === 'predicate'
+        ? { name: question.name, type: 'predicate', probability: 0.8 } : { name: question.name, type: 'score', score: 1.25, confidence: 0.75 });
+      response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ answers, usage: { input_tokens: 272001, output_tokens: 2 } }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new OpenAiDecisionsProvider({ type: 'operator-decisions', apiKey: 'disposable-installed-key',
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/proxy/v1/decisions/' });
+      assert.equal(OPENAI_DECISIONS_MODEL.contextWindow, 922000); assert.equal(provider.getSpecializedModels().length, 1);
+      const png = { mediaType: 'image/png', data: Buffer.from([137,80,78,71,13,10,26,10]).toString('base64') };
+      const request = { model: 'gpt-6-luna', state: {}, questions: { severity: { type: 'score', instructions: 'Severity?', criteria: ['Low', 'High'] } }, images: [png] };
+      const result = await provider.classifyNativeQuestions(request);
+      assert.equal(result.stopReason, 'stop'); assert.equal(result.api, 'openai-decisions');
+      assert.deepEqual(result.answers.severity, { type: 'score', score: 1.25, confidence: 0.75 });
+      assert.equal(result.usage.totalTokens, 272003); assert.equal(result.usage.costUsd, 272001 * 0.2 / 1e6);
+      assert.deepEqual(calls[0].body.input[0].content, [{ type: 'input_text', text: '{}' }, { type: 'input_image', image_url: 'data:image/png;base64,' + png.data }]);
+      const finite = { model: request.model, state: false, questions: { approved: { type: 'boolean', prompt: 'Approved?' } } };
+      assert.equal((await new SpecializedModels(provider).classifyQuestions(finite)).answers.approved.value, true);
+      assert.equal(calls[1].body.input, 'false'); assert.equal(calls[1].body.questions[0].type, 'predicate');
+      malformed = true;
+      await assert.rejects(new SpecializedModels(provider).classifyQuestions(finite), error => {
+        assert.ok(error instanceof SpecializedModelError); assert.equal(error.usage.totalTokens, 272003); return true;
+      });
+      const failed = await runCodemode({ code: 'store("bad",true); await models.classifyQuestions(' + JSON.stringify(finite) + ')',
+        context: { provider }, tools: () => [], execute: async () => { throw Error('Unexpected tool'); } });
+      assert.equal(failed.isError, true); assert.equal(failed.details.store, undefined); assert.equal(failed.details.nestedCalls.length, 1);
+      assert.equal(failed.details.nestedCalls[0].state, 'failed'); assert.equal(failed.details.usage.totalTokens, 272003);
+      assert.equal(failed.details.usage.costUsd, 272001 * 0.2 / 1e6); assert.equal(failed.details.costComplete, true);
+      assert.equal(calls.length, 4);
+      for (const call of calls) { assert.equal(call.url, '/proxy/v1/decisions'); assert.equal(call.authorization, 'Bearer disposable-installed-key'); }
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed OpenAI Decisions OK');
+  `);
+  expect(await run(process.execPath, ['decisions-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed OpenAI Decisions OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native OpenRouter C through installed declarations, reasoning, tools and virtual classification', async () => {
+  await writeFile(path.join(consumer, 'router-completions-public.ts'), `
+    import { OpenRouterCompletionsProvider, OPENROUTER_COMPLETION_MODELS, SpecializedModels, type ChatResponse } from '@ai-harness/core';
+    const provider = new OpenRouterCompletionsProvider({ type: 'operator-router', apiKey: 'disposable' });
+    const result: Promise<ChatResponse> = provider.chat([], { model: OPENROUTER_COMPLETION_MODELS[0].id, thinking: 'max' });
+    // @ts-expect-error native input declarations are readonly
+    OPENROUTER_COMPLETION_MODELS[0].declaredInput.push('image');
+    // @ts-expect-error base prices are readonly
+    OPENROUTER_COMPLETION_MODELS[0].declaredPricing.inputPerMillion = 999;
+    const tier = OPENROUTER_COMPLETION_MODELS[0].declaredPricing.tiers?.[0];
+    if (tier) {
+      // @ts-expect-error thresholds are readonly
+      tier.inputTokensAbove = 999;
+    }
+    void result; void new SpecializedModels(provider);
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'router-completions-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'router-completions-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { OpenRouterCompletionsProvider, OPENROUTER_COMPLETION_MODELS, SpecializedModels, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [];
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, headers: request.headers, body });
+      const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } };
+      if (body.stream) {
+        response.setHeader('content-type', 'text/event-stream');
+        for (const value of [{ choices: [{ delta: { reasoning: 'Plan', content: 'Ready' } }] },
+          { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call-1', function: { name: 'read', arguments: '{}' } }] } }] },
+          { choices: [], usage }]) response.write('data: ' + JSON.stringify(value) + '\\n\\n');
+        response.end('data: [DONE]\\n\\n');
+      } else response.end(JSON.stringify({ model: body.model, choices: [{ message: {
+        content: body.max_tokens === 512 ? JSON.stringify({ label: 'yes' }) : 'Ready', reasoning: 'Plan' } }], usage }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const model = '~anthropic/claude-fable-latest';
+      const provider = new OpenRouterCompletionsProvider({ type: 'azure', apiKey: 'disposable-installed-key', model,
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/proxy/api/v1/chat/completions' });
+      assert.equal(OPENROUTER_COMPLETION_MODELS.length, 377); assert.equal(provider.canDiscoverModels(), false);
+      assert.equal((await provider.getAvailableModels()).length, 377);
+      const result = await provider.chat([], { thinking: 'max', sessionId: 'installed-session' });
+      assert.equal(result.api, 'openai-completions'); assert.equal(result.reasoning, 'Plan');
+      assert.deepEqual(result.usage, { promptTokens: 5, completionTokens: 2, cacheReadTokens: 4, cacheWriteTokens: 1, totalTokens: 12,
+        costUsd: (5 * 10 + 2 * 50 + 4 * 0.25 + 12.5) / 1_000_000 });
+      const events = []; let completion;
+      await provider.streamChat([], async (_text, event) => { await Promise.resolve(); events.push(event.type); }, value => { completion = value; },
+        error => { throw error; }, { thinking: 'max', sessionId: 'installed-session' });
+      assert.deepEqual(events, ['reasoning_delta', 'text_delta', 'tool_call']); assert.equal(completion.api, 'openai-completions');
+      assert.deepEqual(completion.toolCalls, [{ id: 'call-1', name: 'read', input: {} }]);
+      assert.equal((await new SpecializedModels(provider).classify({ model: model + ':classifier', input: 'Approved', labels: ['yes', 'no'] })).label, 'yes');
+      assert.equal(calls.length, 3);
+      for (const call of calls) {
+        assert.equal(call.url, '/proxy/api/v1/chat/completions'); assert.equal(call.headers.authorization, 'Bearer disposable-installed-key');
+        assert.equal(call.headers['api-key'], undefined); assert.equal(Object.hasOwn(call.body, 'reasoning_effort'), false);
+      }
+      assert.equal(calls[0].headers['x-session-id'], 'installed-session'); assert.equal(calls[0].body.reasoning.effort, 'max');
+      assert.deepEqual(calls[1].body.stream_options, { include_usage: true });
+      assert.equal(JSON.stringify(provider.getSpecializedModels()).includes('disposable-installed-key'), false);
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed OpenRouter C OK');
+  `);
+  expect(await run(process.execPath, ['router-completions-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed OpenRouter C OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native OpenRouter A through installed declarations, adaptive effort and virtual classification', async () => {
+  await writeFile(path.join(consumer, 'router-messages-public.ts'), `
+    import { OpenRouterMessagesProvider, OPENROUTER_MESSAGE_MODELS, SpecializedModels, type ChatResponse } from '@ai-harness/core';
+    const provider = new OpenRouterMessagesProvider({ type: 'operator-router', apiKey: 'disposable' });
+    const result: Promise<ChatResponse> = provider.chat([], { model: OPENROUTER_MESSAGE_MODELS[0].id, thinking: 'high' });
+    // @ts-expect-error native input declarations are readonly
+    OPENROUTER_MESSAGE_MODELS[0].declaredInput.push('image');
+    // @ts-expect-error base prices are readonly
+    OPENROUTER_MESSAGE_MODELS[0].declaredPricing.inputPerMillion = 999;
+    const tier = OPENROUTER_MESSAGE_MODELS[0].declaredPricing.tiers?.[0];
+    if (tier) {
+      // @ts-expect-error thresholds are readonly
+      tier.inputTokensAbove = 999;
+    }
+    void result; void new SpecializedModels(provider);
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'router-messages-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'router-messages-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { OpenRouterMessagesProvider, OPENROUTER_MESSAGE_MODELS, SpecializedModels, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [];
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, headers: request.headers, body });
+      const usage = { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 1 };
+      if (body.stream) {
+        response.setHeader('content-type', 'text/event-stream');
+        const events = [
+          { type: 'message_start', message: { model: body.model, usage } },
+          { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Plan' } },
+          { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Ready' } },
+          { type: 'content_block_start', index: 2, content_block: { type: 'tool_use', id: 'call-1', name: 'read', input: {} } },
+          { type: 'content_block_delta', index: 2, delta: { type: 'input_json_delta', partial_json: '{}' } },
+          { type: 'message_delta', delta: { stop_reason: 'tool_use' }, usage: { output_tokens: 2 } }, { type: 'message_stop' },
+        ];
+        response.end(events.map(event => 'data: ' + JSON.stringify(event) + '\\n\\n').join(''));
+      } else response.end(JSON.stringify({ model: body.model, content: [{ type: 'text', text: body.max_tokens === 512 ? JSON.stringify({ label: 'yes' }) : 'Ready' },
+        { type: 'thinking', thinking: 'Plan' }], usage }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const model = 'anthropic/claude-sonnet-4.6';
+      const provider = new OpenRouterMessagesProvider({ type: 'azure', apiKey: 'disposable-installed-key', model,
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/proxy/api/v1/messages' });
+      assert.equal(OPENROUTER_MESSAGE_MODELS.length, 16); assert.equal(provider.canDiscoverModels(), false);
+      assert.equal((await provider.getAvailableModels()).length, 16);
+      const result = await provider.chat([], { thinking: 'max', maxTokens: 64, sessionId: 'installed-session' });
+      assert.equal(result.api, 'anthropic-messages'); assert.equal(result.reasoning, 'Plan');
+      assert.deepEqual(result.usage, { promptTokens: 5, completionTokens: 2, cacheReadTokens: 4, cacheWriteTokens: 1, totalTokens: 12,
+        costUsd: (5 * 3 + 2 * 15 + 4 * 0.3 + 3.75) / 1_000_000 });
+      const events = []; let completion;
+      await provider.streamChat([], async (_text, event) => { await Promise.resolve(); events.push(event.type); }, value => { completion = value; },
+        error => { throw error; }, { thinking: 'max', maxTokens: 64, sessionId: 'installed-session' });
+      assert.deepEqual(events, ['message_start', 'reasoning_delta', 'text_delta', 'tool_call']); assert.equal(completion.api, 'anthropic-messages');
+      assert.deepEqual(completion.toolCalls, [{ id: 'call-1', name: 'read', input: {} }]);
+      assert.equal((await new SpecializedModels(provider).classify({ model: model + ':classifier', input: 'Approved', labels: ['yes', 'no'] })).label, 'yes');
+      assert.equal(calls.length, 3);
+      for (const call of calls) {
+        assert.equal(call.url, '/proxy/api/v1/messages'); assert.equal(call.headers['x-api-key'], 'disposable-installed-key');
+        assert.equal(call.headers.authorization, undefined); assert.equal(call.headers['api-key'], undefined);
+        assert.equal(call.headers['anthropic-version'], '2023-06-01'); assert.equal(Object.hasOwn(call.body, 'reasoning_effort'), false);
+      }
+      assert.equal(calls[0].headers['x-session-id'], 'installed-session'); assert.deepEqual(calls[0].body.output_config, { effort: 'max' });
+      assert.equal(calls[0].body.thinking.type, 'adaptive'); assert.equal(calls[0].body.max_tokens, 64);
+      assert.equal(JSON.stringify(provider.getSpecializedModels()).includes('disposable-installed-key'), false);
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed OpenRouter A OK');
+  `);
+  expect(await run(process.execPath, ['router-messages-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed OpenRouter A OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches mixed OpenRouter A/C/I/T through one installed SDK without overlapping cache or authentication', async () => {
+  await writeFile(path.join(consumer, 'router-mixed-public.ts'), `
+    import { OpenRouterProvider, SpecializedModels, getProviderPublishedModels, type PublishedModelMetadata, type ChatResponse, type QuestionClassificationResult, type ProviderDialect } from '@ai-harness/core';
+    const dialect: ProviderDialect = 'openrouter'; void dialect;
+    const provider = new OpenRouterProvider({ type: 'operator-router', apiKey: 'disposable' });
+    const profiles: readonly PublishedModelMetadata[] = getProviderPublishedModels(provider) ?? []; void profiles;
+    const chat: Promise<ChatResponse> = provider.chat([], { model: 'anthropic/claude-sonnet-4.6' });
+    const api: string | undefined = provider.getModelApi('google/gemini-3-pro-image');
+    const questions: Promise<QuestionClassificationResult> = provider.classifyQuestions({ model: '~typesafe/jev-latest', state: {}, questions: { approved: { type: 'boolean', prompt: 'Approved?' } } });
+    void chat; void api; void questions; void new SpecializedModels(provider);
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'router-mixed-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'router-mixed-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { OpenRouterProvider, SpecializedModels, ProviderFactory, getProviderPublishedModels, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [], overlap = 'google/gemini-3-pro-image', a = 'anthropic/claude-sonnet-4.6';
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6L3sAAAAASUVORK5CYII=';
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, headers: request.headers, body });
+      response.setHeader('content-type', 'application/json');
+      if (request.url.endsWith('/messages')) response.end(JSON.stringify({ model: body.model, content: [{ type: 'text', text: 'A ready' }],
+        usage: { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 1, cache_creation: { ephemeral_1h_input_tokens: 1 } } }));
+      else if (request.url.endsWith('/systemone')) response.end(JSON.stringify({ answers: { approved: { type: 'noul', noul: 0.8 } }, usage: { input_tokens: 10, output_tokens: 2 } }));
+      else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: body.modalities ? 'Caption' : 'C ready',
+        ...(body.modalities ? { images: [{ image_url: { url: 'data:image/png;base64,' + png } }] } : {}) } }],
+        usage: { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } } }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new OpenRouterProvider({ type: 'azure', apiKey: 'disposable-installed-key', model: overlap,
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/proxy/api/v1' });
+      assert.equal(provider.canDiscoverModels(), false); assert.equal((await provider.getAvailableModels()).length, 393);
+      const profiles = getProviderPublishedModels(provider); assert.equal(profiles.length, 393); assert.equal(profiles.filter(model => model.pricing === undefined).length, 21);
+      const profile = profiles.find(model => model.id === a); assert.equal(profile.name, 'Anthropic: Claude Sonnet 4.6'); assert.equal(profile.contextWindow, 1000000);
+      assert.equal(profile.api, 'anthropic-messages'); assert.deepEqual(profile.pricing, { inputPerMillion: 3, outputPerMillion: 15, cacheReadPerMillion: 0.3, cacheWritePerMillion: 3.75 });
+      assert.ok(profiles.every(model => !model.pricing || !('tiers' in model.pricing))); assert.equal(calls.length, 0);
+      profile.name = 'mutated'; profile.pricing.inputPerMillion = 999; assert.equal(getProviderPublishedModels(provider).find(model => model.id === a).pricing.inputPerMillion, 3);
+      assert.equal(ProviderFactory.has('openrouter'), false);
+      const models = new SpecializedModels(provider), messages = [{ id: 'u', role: 'user', content: 'Hello', timestamp: 1 }];
+      assert.equal(models.getModelsOfType('image').length, 61); assert.equal(models.getModelsOfType('classifier').length, 22);
+      const nativeA = await provider.chat(messages, { model: a, thinking: 'high', maxTokens: 64 });
+      assert.equal(nativeA.api, 'anthropic-messages'); assert.equal(nativeA.usage.costUsd, 0.0000522);
+      const nativeC = await provider.chat(messages);
+      assert.equal(nativeC.api, 'openai-completions');
+      assert.deepEqual([nativeC.usage.promptTokens, nativeC.usage.cacheReadTokens, nativeC.usage.cacheWriteTokens], [5, 4, 1]);
+      assert.equal((await models.classifyQuestions({ model: '~typesafe/jev-latest', state: {}, questions: { approved: { type: 'boolean', prompt: 'Approved?' } } })).answers.approved.value, true);
+      const image = await models.generateImages({ model: overlap, prompt: 'Generate' });
+      assert.deepEqual(image.images, [{ mediaType: 'image/png', data: png }]);
+      assert.deepEqual([image.usage.inputTokens, image.usage.cacheReadTokens, image.usage.cacheWriteTokens], [6, 3, 1]);
+      assert.deepEqual(calls.map(call => call.url), ['/proxy/api/v1/messages', '/proxy/api/v1/chat/completions', '/proxy/api/v1/systemone', '/proxy/api/v1/chat/completions']);
+      assert.equal(calls[0].headers['x-api-key'], 'disposable-installed-key'); assert.equal(calls[0].headers.authorization, undefined);
+      for (const call of calls.slice(1)) { assert.equal(call.headers.authorization, 'Bearer disposable-installed-key'); assert.equal(call.headers['x-api-key'], undefined); }
+      assert.equal(calls[0].body.thinking.type, 'adaptive'); assert.equal(calls[1].body.modalities, undefined); assert.ok(calls[3].body.modalities.includes('image'));
+      assert.equal(JSON.stringify(provider.getSpecializedModels()).includes('disposable-installed-key'), false);
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed mixed OpenRouter OK');
+  `);
+  expect(await run(process.execPath, ['router-mixed-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed mixed OpenRouter OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native OpenRouter classifiers through installed declarations, native answers and guest accounting', async () => {
+  await writeFile(path.join(consumer, 'router-classifiers-public.ts'), `
+    import { OpenRouterClassifiersProvider, OPENROUTER_CLASSIFIER_MODELS, SpecializedModels, type NativeClassifierResult } from '@ai-harness/core';
+    const provider = new OpenRouterClassifiersProvider({ type: 'operator-router', apiKey: 'disposable' });
+    const result: Promise<NativeClassifierResult> = provider.classifyNativeQuestions({ model: OPENROUTER_CLASSIFIER_MODELS[0].id,
+      state: {}, questions: { severity: { type: 'score', instructions: 'Severity?', criteria: ['Low', 'High'] } } });
+    const bridge = new SpecializedModels(provider);
+    // @ts-expect-error catalogue input declarations are readonly, not mutable transport capabilities
+    OPENROUTER_CLASSIFIER_MODELS[0].declaredInput.push('image');
+    // @ts-expect-error reviewed prices cannot be mutated
+    OPENROUTER_CLASSIFIER_MODELS[0].declaredPricing.inputPerMillion = 999;
+    if (OPENROUTER_CLASSIFIER_MODELS[0].pricing) {
+      // @ts-expect-error SDK prices are readonly too
+      OPENROUTER_CLASSIFIER_MODELS[0].pricing.inputPerMillion = 999;
+    }
+    void result; void bridge;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'router-classifiers-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'router-classifiers-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { OpenRouterClassifiersProvider, OPENROUTER_CLASSIFIER_MODELS, SpecializedModels, SpecializedModelError, runCodemode, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = []; let malformed = false;
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, authorization: request.headers.authorization, body });
+      response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({
+        answers: malformed ? {} : Object.fromEntries(Object.entries(body.questions).map(([id, question]) => [id,
+          question.type === 'score' ? { type: 'score', score: 1.25, confidence: 0.75 } : { type: 'noul', noul: 0.8 }])),
+        usage: { input_tokens: 10, output_tokens: 2 } }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new OpenRouterClassifiersProvider({ type: 'operator-router', apiKey: 'disposable-installed-key',
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/proxy/api/v1/systemone' });
+      assert.equal(OPENROUTER_CLASSIFIER_MODELS.length, 21); assert.equal(provider.getSpecializedModels().length, 21);
+      const request = { model: '~typesafe/jev-latest', state: {}, questions: { severity: { type: 'score', instructions: 'Severity?', criteria: ['Low', 'High'] } } };
+      const result = await provider.classifyNativeQuestions(request);
+      assert.equal(result.stopReason, 'stop'); assert.equal(result.api, 'typesafe-system-one');
+      assert.deepEqual(result.answers.severity, { type: 'score', score: 1.25, confidence: 0.75 });
+      assert.equal(result.usage.totalTokens, 12); assert.equal(result.usage.costUsd, 10 * 0.042 / 1_000_000);
+      const finite = { model: request.model, state: {}, questions: { approved: { type: 'boolean', prompt: 'Approved?' } } };
+      assert.equal((await new SpecializedModels(provider).classifyQuestions(finite)).answers.approved.value, true);
+      malformed = true;
+      await assert.rejects(new SpecializedModels(provider).classifyQuestions(finite), error => {
+        assert.ok(error instanceof SpecializedModelError); assert.equal(error.usage.totalTokens, 12); return true;
+      });
+      const failed = await runCodemode({ code: 'store("bad",true); await models.classifyQuestions(' + JSON.stringify(finite) + ')',
+        context: { provider }, tools: () => [], execute: async () => { throw Error('Unexpected tool'); } });
+      assert.equal(failed.isError, true); assert.equal(failed.details.store, undefined); assert.equal(failed.details.nestedCalls.length, 1);
+      assert.equal(failed.details.nestedCalls[0].state, 'failed'); assert.equal(failed.details.usage.totalTokens, 12);
+      assert.equal(failed.details.usage.costUsd, 10 * 0.042 / 1_000_000); assert.equal(failed.details.costComplete, true);
+      malformed = false;
+      const unpriced = { ...finite, model: 'respan/span-01-lite' };
+      assert.equal((await new SpecializedModels(provider).classifyQuestions(unpriced)).usage.costUsd, undefined);
+      const partial = await runCodemode({ code: 'await models.classifyQuestions(' + JSON.stringify(unpriced) + ')', context: { provider }, tools: () => [], execute: async () => { throw Error('Unexpected tool'); } });
+      assert.notEqual(partial.isError, true); assert.equal(partial.details.costComplete, false);
+      assert.equal(partial.details.usage.costUsd, undefined); assert.equal(partial.details.usage.totalTokens, 12);
+      assert.equal(calls.length, 6);
+      for (const call of calls) { assert.equal(call.url, '/proxy/api/v1/systemone'); assert.equal(call.authorization, 'Bearer disposable-installed-key');
+        assert.ok(Object.hasOwn(call.body, 'state')); assert.equal(Object.hasOwn(call.body, 'input'), false); }
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed OpenRouter classifiers OK');
+  `);
+  expect(await run(process.execPath, ['router-classifiers-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed OpenRouter classifiers OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches overlapping OpenAI R/D through one installed SDK with operation-owned prices', async () => {
+  await writeFile(path.join(consumer, 'openai-mixed-public.ts'), `
+    import { OpenAiMixedProvider, OPENAI_RESPONSE_MODELS, SpecializedModels, getProviderPublishedModels, type PublishedModelMetadata, type ChatResponse, type SpecializedModelOptions, type ProviderDialect } from '@ai-harness/core';
+    const dialect: ProviderDialect = 'openai'; void dialect;
+    const provider = new OpenAiMixedProvider({ type: 'operator-openai', apiKey: 'disposable', model: 'gpt-6-luna' });
+    const response: Promise<ChatResponse> = provider.chat([]); const sdk = new SpecializedModels(provider);
+    const options: SpecializedModelOptions = { api: 'openai-responses' }; void options; void response; void sdk;
+    const api: 'openai-responses' = OPENAI_RESPONSE_MODELS[0].api; void api;
+    const metadata: readonly PublishedModelMetadata[] = provider.getPublishedModels(); void getProviderPublishedModels(provider);
+    // @ts-expect-error Provider static metadata arrays are readonly.
+    metadata.push(metadata[0]);
+    // @ts-expect-error Published model tables are readonly.
+    OPENAI_RESPONSE_MODELS.push(OPENAI_RESPONSE_MODELS[0]);
+    // @ts-expect-error Nested reviewed prices are readonly.
+    OPENAI_RESPONSE_MODELS[0].pricing.inputPerMillion = 999;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'openai-mixed-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'openai-mixed-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { OpenAiMixedProvider, OpenAiProvider, OPENAI_RESPONSE_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModels, runCodemode, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(process.cwd() + '/node_modules/'));
+    const model = 'gpt-6-luna', key = 'disposable-installed-openai-mixed', calls = [], questions = { approved: { type: 'boolean', prompt: 'Approved?' } }; let malformed = false;
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk; const body = JSON.parse(text); calls.push({ path: request.url, headers: request.headers, body });
+      if (request.url.endsWith('/decisions')) response.end(JSON.stringify({ answers: malformed ? [] : [{ name: 'approved', type: 'predicate', probability: 0.8 }], usage: { input_tokens: 10, output_tokens: 2 } }));
+      else {
+        const content = body.input.some(item => item.role === 'developer') ? JSON.stringify({ answers: { approved: { value: true, probabilities: [{ value: true, probability: 0.8 }, { value: false, probability: 0.2 }] } } }) : 'Ready';
+        response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ type: 'response.output_text.delta', delta: content }) + '\\n\\ndata: ' + JSON.stringify({ type: 'response.completed', response: { id: 'response-1', model: body.model, usage: { input_tokens: 10, output_tokens: 2, total_tokens: 12, input_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } } } }) + '\\n\\n');
+      }
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const previous = ProviderFactory.getRegisteredTypes();
+      const provider = new OpenAiMixedProvider({ type: 'azure', apiKey: key, model, transport: 'sse', baseUrl: 'http://127.0.0.1:' + server.address().port + '/owned%2Fproxy/v1/decisions' });
+      const sdk = new SpecializedModels(provider), message = { id: 'input', role: 'user', content: 'Hello', timestamp: new Date(0) };
+      assert.equal(OPENAI_RESPONSE_MODELS.length, 44); assert.ok(Object.isFrozen(OPENAI_RESPONSE_MODELS[0].pricing));
+      assert.equal((await provider.getAvailableModels()).length, 44); assert.equal(provider.canDiscoverModels(), false); assert.equal(provider.getModelApi(model), 'openai-responses');
+      const published = getProviderPublishedModels(provider); assert.equal(published.length, 44); assert.ok(published.every(profile => profile.api === 'openai-responses'));
+      assert.deepEqual(published.find(profile => profile.id === model), { id: model, name: 'GPT-6 Luna', api: 'openai-responses', capabilities: { reasoning: true, imageInput: true, toolCalls: true },
+        contextWindow: 272000, maxOutputTokens: 128000, pricing: { inputPerMillion: 0.1, outputPerMillion: 0.5, cacheReadPerMillion: 0.01, cacheWritePerMillion: 0.125 },
+        thinkingLevelMap: { off: 'none', minimal: null, low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' } });
+      published[0].name = 'mutated'; assert.notEqual(getProviderPublishedModels(provider)[0].name, 'mutated'); assert.equal(calls.length, 0);
+      assert.equal(provider.getSpecializedModels().find(profile => profile.api === 'openai-decisions').contextWindow, 922000);
+      assert.equal(sdk.getModelsOfType('classifier').length, 2); assert.equal(sdk.getModelsOfType('image').length, 0);
+      assert.equal(new OpenAiProvider({ type: 'openai', apiKey: 'disposable' }).getModelApi(), 'openai-completions'); assert.deepEqual(ProviderFactory.getRegisteredTypes(), previous);
+      const result = await provider.chat([message]); assert.equal(result.provider, 'azure'); assert.equal(result.api, 'openai-responses'); assert.equal(result.model, model);
+      assert.deepEqual(result.usage, { promptTokens: 5, completionTokens: 2, totalTokens: 12, cacheReadTokens: 4, cacheWriteTokens: 1, costUsd: 0.000001665 });
+      for (const selected of [model, model + ':classifier']) {
+        const answer = await sdk.classifyQuestions({ model: selected, state: {}, questions }, { api: selected === model ? 'openai-responses' : 'openai-decisions' });
+        assert.equal(answer.answers.approved.value, true); assert.equal(answer.usage.costUsd, selected === model ? 0.000001 : 0.000001665);
+      }
+      const code = 'await models.classifyQuestions(' + JSON.stringify({ model, state: {}, questions }) + '); await models.classifyQuestions(' + JSON.stringify({ model: model + ':classifier', state: {}, questions }) + '); store("mixed",true);';
+      const guest = await runCodemode({ code, context: { provider }, tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
+      assert.equal(guest.isError, false); assert.deepEqual(guest.details.store, { mixed: true }); assert.equal(guest.details.usage.totalTokens, 24); assert.equal(guest.details.costComplete, true);
+      malformed = true;
+      const failed = await runCodemode({ code: 'store("bad",true); await models.classifyQuestions(' + JSON.stringify({ model, state: {}, questions }) + ')', context: { provider }, tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
+      assert.equal(failed.isError, true); assert.equal(failed.details.store, undefined); assert.equal(failed.details.usage.totalTokens, 12); assert.equal(failed.details.usage.costUsd, 0.000001); assert.equal(failed.details.nestedCalls.length, 1);
+      assert.equal(calls.length, 6); assert.equal(calls.filter(call => call.path.endsWith('/decisions')).length, 3);
+      for (const call of calls) { assert.equal(call.body.model, model); assert.equal(call.headers.authorization, 'Bearer ' + key); assert.equal(call.headers['api-key'], undefined); assert.equal(call.headers['x-api-key'], undefined); }
+      assert.ok(!JSON.stringify([result, guest, failed, provider.getSpecializedModels()]).includes(key));
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed mixed OpenAI OK');
+  `);
+  expect(await run(process.execPath, ['openai-mixed-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'installed mixed OpenAI OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches mixed Cloudflare C/S through one installed SDK without changing native classifier accounting', async () => {
+  await writeFile(path.join(consumer, 'cloudflare-mixed-public.ts'), `
+    import { CloudflareWorkersAiMixedProvider, SpecializedModels, getProviderPublishedModels, type PublishedModelMetadata, type CloudflareWorkersAiConfig, type ChatResponse, type ProviderDialect } from '@ai-harness/core';
+    const dialect: ProviderDialect = 'cloudflare-workers-ai'; void dialect;
+    const config: CloudflareWorkersAiConfig = { type: 'operator-cloudflare', apiKey: 'disposable', accountId: 'explicit' };
+    const provider = new CloudflareWorkersAiMixedProvider(config);
+    const profiles: readonly PublishedModelMetadata[] = getProviderPublishedModels(provider) ?? []; void profiles;
+    const response: Promise<ChatResponse> = provider.chat([]); const api: string | undefined = provider.getModelApi('@cf/cloudflare/clef');
+    const sdk = new SpecializedModels(provider); void response; void api; void sdk;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'cloudflare-mixed-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'cloudflare-mixed-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { CloudflareWorkersAiMixedProvider, CloudflareWorkersAiProvider, SpecializedModels, ProviderFactory, getProviderPublishedModels, runCodemode, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(process.cwd() + '/node_modules/'));
+    const chat = '@cf/deepseek-ai/deepseek-v4-flash-0731', native = '@cf/cloudflare/clef', vision = '@cf/google/gemma-4-26b-a4b-it';
+    const key = 'disposable-installed-cloudflare-mixed', calls = [], questions = { approved: { type: 'boolean', prompt: 'Approved?' } }; let malformed = false;
+    const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } };
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk; const body = JSON.parse(text); calls.push({ path: request.url, headers: request.headers, body });
+      if (request.url.endsWith('/run')) response.end(JSON.stringify({ success: true, result: { answers: malformed ? {} : { approved: { type: 'noul', noul: 0.8 } }, usage: { input_tokens: 10, output_tokens: 2 } } }));
+      else if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ model: body.model, choices: [{ delta: { content: 'Ready' }, finish_reason: 'stop' }], usage }) + '\\n\\ndata: [DONE]\\n\\n'); }
+      else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: body.messages[0]?.content.includes('Answer these finite-domain questions') ? JSON.stringify({ answers: { approved: { value: true, probabilities: [{ value: true, probability: 0.8 }, { value: false, probability: 0.2 }] } } }) : 'Ready' } }], usage }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new CloudflareWorkersAiMixedProvider({ type: 'azure', apiKey: key, baseUrl: 'http://127.0.0.1:' + server.address().port + '/owned/ai/v1/chat/completions' });
+      const message = { id: 'input', role: 'user', content: 'Hello', timestamp: new Date(0) }, sdk = new SpecializedModels(provider);
+      assert.equal(ProviderFactory.has('cloudflare-workers-ai'), false); assert.equal((await provider.getAvailableModels()).length, 18); assert.equal(provider.canDiscoverModels(), false);
+      const profiles = getProviderPublishedModels(provider); assert.equal(profiles.length, 18); assert.equal(profiles.filter(model => model.capabilities.imageInput).length, 7);
+      const profile = profiles.find(model => model.id === vision); assert.equal(profile.name, 'Gemma 4 26B A4B IT'); assert.equal(profile.contextWindow, 256000);
+      assert.equal(profile.api, 'openai-completions'); assert.deepEqual(profile.pricing, { inputPerMillion: 0.1, outputPerMillion: 0.3, cacheReadPerMillion: 0.05, cacheWritePerMillion: 0 });
+      assert.equal(calls.length, 0); profile.pricing.inputPerMillion = 999; assert.equal(getProviderPublishedModels(provider).find(model => model.id === vision).pricing.inputPerMillion, 0.1);
+      assert.equal(provider.getModelApi(native), 'cloudflare-workers-ai-system-one'); assert.equal(provider.getModelApi(chat), 'openai-completions'); assert.equal(provider.getModelApi('future'), undefined);
+      assert.equal(sdk.getModelsOfType('classifier').length, 4); assert.equal(sdk.getModelsOfType('image').length, 0);
+      assert.equal(new CloudflareWorkersAiProvider({ type: 'legacy', accountId: 'explicit' }).getConfiguredModel(), undefined);
+      const result = await provider.chat([message]); assert.equal(result.provider, 'azure'); assert.equal(result.api, 'openai-completions'); assert.equal(result.usage.promptTokens, 5);
+      for (const model of [native, chat + ':classifier']) assert.equal((await sdk.classifyQuestions({ model, state: {}, questions })).answers.approved.value, true);
+      let completed;
+      await provider.streamChat([message], async () => { await sdk.classifyQuestions({ model: native, state: {}, questions }); provider.setConfiguredModel(vision); }, value => { completed = value; });
+      assert.equal(completed.model, chat); assert.equal(completed.provider, 'azure'); assert.equal(completed.api, 'openai-completions'); assert.deepEqual(completed.usage, result.usage); provider.setConfiguredModel(chat);
+      const code = 'await models.classifyQuestions(' + JSON.stringify({ model: native, state: {}, questions }) + '); await models.classifyQuestions(' + JSON.stringify({ model: chat + ':classifier', state: {}, questions }) + '); store("mixed",true);';
+      const guest = await runCodemode({ code, context: { provider }, tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
+      assert.equal(guest.isError, false); assert.deepEqual(guest.details.store, { mixed: true }); assert.equal(guest.details.usage.totalTokens, 24); assert.equal(guest.details.costComplete, true); assert.deepEqual(guest.details.nestedCalls.map(call => call.state), ['completed', 'completed']);
+      malformed = true;
+      const failed = await runCodemode({ code: 'store("bad",true); await models.classifyQuestions(' + JSON.stringify({ model: native, state: {}, questions }) + ')', context: { provider }, tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
+      assert.equal(failed.isError, true); assert.equal(failed.details.store, undefined); assert.equal(failed.details.usage.totalTokens, 12); assert.equal(failed.details.usage.costUsd, 0.0000024); assert.equal(failed.details.nestedCalls.length, 1);
+      for (const model of ['future', native]) await assert.rejects(provider.chat([], { model }), /Cloudflare chat model is not supported/);
+      assert.equal(calls.length, 8); assert.equal(calls.filter(call => call.path === '/owned/ai/run').length, 4);
+      for (const call of calls) { assert.ok(['/owned/ai/run', '/owned/ai/v1/chat/completions'].includes(call.path)); assert.equal(call.headers.authorization, 'Bearer ' + key); assert.equal(call.headers['api-key'], undefined); assert.equal(call.headers['x-api-key'], undefined); }
+      assert.ok(!JSON.stringify([result, completed, guest, failed, provider.getSpecializedModels()]).includes(key));
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed mixed Cloudflare OK');
+  `);
+  expect(await run(process.execPath, ['cloudflare-mixed-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed mixed Cloudflare OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Cloudflare C through installed public declarations, reasoning and virtual classification', async () => {
+  await writeFile(path.join(consumer, 'cloudflare-chat-public.ts'), `
+    import { CloudflareWorkersAiChatProvider, CLOUDFLARE_CHAT_MODELS, SpecializedModels, type CloudflareWorkersAiConfig, type ChatResponse } from '@ai-harness/core';
+    const config: CloudflareWorkersAiConfig = { type: 'operator-cloudflare', apiKey: 'disposable', accountId: 'explicit' };
+    const provider = new CloudflareWorkersAiChatProvider(config);
+    const response: Promise<ChatResponse> = provider.chat([], { model: CLOUDFLARE_CHAT_MODELS[0].id, thinking: 'max' });
+    const sdk = new SpecializedModels(provider); void sdk; void response;
+    // @ts-expect-error reviewed profiles and prices are readonly
+    CLOUDFLARE_CHAT_MODELS[0].pricing.inputPerMillion = 999;
+    // @ts-expect-error input declarations are readonly
+    CLOUDFLARE_CHAT_MODELS[0].declaredInput.push('image');
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'cloudflare-chat-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'cloudflare-chat-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { CloudflareWorkersAiChatProvider, CLOUDFLARE_CHAT_MODELS, SpecializedModels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(process.cwd() + '/node_modules/'));
+    const model = '@cf/deepseek-ai/deepseek-v4-flash-0731', key = 'disposable-installed-cloudflare-chat';
+    const calls = []; let mode = 'normal';
+    const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } };
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk; const body = JSON.parse(text);
+      calls.push({ path: request.url, headers: request.headers, body });
+      if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ choices: [{ delta: { reasoning_content: 'Thought' } }] }) + '\\n\\ndata: ' + JSON.stringify({ model, choices: [{ delta: { content: 'Ready' }, finish_reason: 'stop' }], usage }) + '\\n\\ndata: [DONE]\\n\\n'); }
+      else response.end(JSON.stringify({ model, choices: [{ message: { content: mode === 'label' ? JSON.stringify({ label: 'safe' }) : mode === 'questions' ? JSON.stringify({ answers: { approved: { value: true, probabilities: [{ value: true, probability: 0.8 }, { value: false, probability: 0.2 }] } } }) : 'Ready', reasoning_content: 'Thought' } }], usage }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new CloudflareWorkersAiChatProvider({ type: 'azure', model, apiKey: key, baseUrl: 'http://127.0.0.1:' + server.address().port + '/owned/ai/v1/chat/completions' });
+      const message = { id: 'input', role: 'user', content: 'Hello', timestamp: new Date(0) };
+      assert.equal(ProviderFactory.has('cloudflare-workers-ai'), false); assert.equal(CLOUDFLARE_CHAT_MODELS.length, 18); assert.ok(Object.isFrozen(CLOUDFLARE_CHAT_MODELS[0].pricing));
+      assert.equal((await provider.getAvailableModels()).length, 18); assert.equal(provider.canDiscoverModels(), false); assert.equal(calls.length, 0);
+      const result = await provider.chat([message], { thinking: 'max', sessionId: 'installed-affinity' });
+      assert.equal(result.provider, 'azure'); assert.equal(result.api, 'openai-completions'); assert.equal(result.reasoning, 'Thought');
+      assert.deepEqual(result.usage, { promptTokens: 5, completionTokens: 2, cacheReadTokens: 4, cacheWriteTokens: 1, totalTokens: 12, costUsd: (5 * 0.44 + 2 * 1.32 + 4 * 0.014) / 1_000_000 });
+      assert.equal(calls[0].body.thinking.type, 'enabled'); assert.equal(calls[0].body.reasoning_effort, 'max');
+      assert.equal(calls[0].headers.session_id, 'installed-affinity'); assert.equal(calls[0].headers['x-client-request-id'], 'installed-affinity'); assert.equal(calls[0].headers['x-session-affinity'], 'installed-affinity');
+      let complete; const chunks = [];
+      await provider.streamChat([message], async (text, event) => { chunks.push(event.type === 'reasoning_delta' ? event.data.content : text); }, value => { complete = value; });
+      assert.deepEqual(chunks, ['Thought', 'Ready']); assert.deepEqual(complete.usage, result.usage); assert.equal(complete.provider, 'azure'); assert.equal(complete.api, 'openai-completions');
+      const sdk = new SpecializedModels(provider), id = model + ':classifier';
+      assert.equal(sdk.getModelsOfType('image').length, 0); mode = 'label'; assert.equal((await sdk.classify({ model: id, input: 'Approved', labels: ['safe', 'review'] })).label, 'safe');
+      mode = 'questions'; assert.equal((await sdk.classifyQuestions({ model: id, state: {}, questions: { approved: { type: 'boolean', prompt: 'Approved?' } } })).answers.approved.value, true);
+      for (const id of ['future', '@cf/cloudflare/clef']) await assert.rejects(provider.chat([message], { model: id }), /Cloudflare chat model is not supported/);
+      assert.equal(calls.length, 4);
+      for (const call of calls) { assert.equal(call.path, '/owned/ai/v1/chat/completions'); assert.equal(call.headers.authorization, 'Bearer ' + key); assert.equal(call.headers['api-key'], undefined); assert.equal(call.headers['x-api-key'], undefined); }
+      assert.ok(!JSON.stringify([result, complete, provider.getSpecializedModels()]).includes(key));
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed Cloudflare C OK');
+  `);
+  expect(await run(process.execPath, ['cloudflare-chat-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed Cloudflare C OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Cloudflare classifiers through installed public declarations, envelopes and guest bridge', async () => {
+  await writeFile(path.join(consumer, 'cloudflare-public.ts'), `
+    import { CloudflareWorkersAiProvider, CLOUDFLARE_CLASSIFIER_MODELS, SpecializedModels, type CloudflareWorkersAiConfig, type NativeClassifierResult } from '@ai-harness/core';
+    const config: CloudflareWorkersAiConfig = { type: 'operator-cloudflare', apiKey: 'disposable', accountId: 'explicit' };
+    const provider = new CloudflareWorkersAiProvider(config);
+    const result: Promise<NativeClassifierResult> = provider.classifyNativeQuestions({ model: CLOUDFLARE_CLASSIFIER_MODELS[0].id,
+      state: {}, questions: { severity: { type: 'score', instructions: 'Severity?', criteria: ['Low', 'High'] } } });
+    const bridge = new SpecializedModels(provider);
+    // @ts-expect-error account identity is a string, not an arbitrary JSON value
+    new CloudflareWorkersAiProvider({ type: 'operator-cloudflare', accountId: 3 });
+    // @ts-expect-error published prices cannot be mutated
+    CLOUDFLARE_CLASSIFIER_MODELS[0].pricing.inputPerMillion = 999;
+    void result; void bridge;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'cloudflare-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'cloudflare-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { CloudflareWorkersAiProvider, CLOUDFLARE_CLASSIFIER_MODELS, SpecializedModels, SpecializedModelError, runCodemode, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = []; let malformed = false;
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, authorization: request.headers.authorization, body });
+      const result = { answers: malformed ? {} : { severity: { type: 'score', score: 1.25, confidence: 0.75 } }, usage: { input_tokens: 10, output_tokens: 2 } };
+      response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ success: true,
+        result: body.model === 'typesafe/jev' ? { state: 'Completed', result } : result }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new CloudflareWorkersAiProvider({ type: 'operator-cloudflare', apiKey: 'disposable-installed-key',
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/accounts/explicit/ai' });
+      assert.equal(CLOUDFLARE_CLASSIFIER_MODELS.length, 3); assert.equal(provider.getSpecializedModels().length, 3);
+      const request = { model: '@cf/cloudflare/clef', state: {}, questions: { severity: { type: 'score', instructions: 'Severity?', criteria: ['Low', 'High'] } } };
+      for (const model of ['@cf/cloudflare/clef', 'typesafe/jev']) {
+        const result = await provider.classifyNativeQuestions({ ...request, model });
+        assert.equal(result.stopReason, 'stop'); assert.equal(result.api, 'cloudflare-workers-ai-system-one');
+        assert.deepEqual(result.answers.severity, { type: 'score', score: 1.25, confidence: 0.75 });
+        assert.equal(result.usage.totalTokens, 12); assert.equal(result.usage.costUsd, model === 'typesafe/jev' ? 0 : 0.0000024);
+      }
+      malformed = true;
+      const finite = { model: request.model, state: {}, questions: { approved: { type: 'boolean', prompt: 'Approved?' } } };
+      await assert.rejects(new SpecializedModels(provider).classifyQuestions(finite), error => {
+        assert.ok(error instanceof SpecializedModelError); assert.equal(error.usage.totalTokens, 12); return true;
+      });
+      const failed = await runCodemode({ code: 'store("bad",true); await models.classifyQuestions(' + JSON.stringify(finite) + ')',
+        context: { provider }, tools: () => [], execute: async () => { throw Error('Unexpected tool'); } });
+      assert.equal(failed.isError, true); assert.equal(failed.details.store, undefined); assert.equal(failed.details.nestedCalls.length, 1);
+      assert.equal(failed.details.nestedCalls[0].state, 'failed'); assert.equal(failed.details.usage.totalTokens, 12);
+      assert.equal(failed.details.usage.costUsd, 0.0000024); assert.equal(failed.details.costComplete, true);
+      assert.equal(calls.length, 4);
+      for (const call of calls) { assert.equal(call.url, '/accounts/explicit/ai/run'); assert.equal(call.authorization, 'Bearer disposable-installed-key');
+        assert.equal(Object.hasOwn(call.body, 'state'), false); assert.equal(Object.hasOwn(call.body.input, 'model'), false); }
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed Cloudflare classifiers OK');
+  `);
+  expect(await run(process.execPath, ['cloudflare-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed Cloudflare classifiers OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native TypeSafe classifiers through installed public declarations, runtime and guest bridge', async () => {
+  await writeFile(path.join(consumer, 'typesafe-public.ts'), `
+    import { TypesafeProvider, TYPESAFE_CLASSIFIER_MODEL, SpecializedModelError, SpecializedModels, type AiProvider, type SpecializedModel, type ModelPricing, type QuestionClassificationResult, type TokenUsage, type NativeClassifierQuestion, type NativeClassifierRequest, type NativeClassifierAnswer, type NativeClassifierResult } from '@ai-harness/core';
+    const native = new TypesafeProvider({ type: 'operator-typesafe', apiKey: 'disposable' });
+    const provider: AiProvider = native;
+    const bridge = new SpecializedModels(provider);
+    const descriptor: SpecializedModel | undefined = bridge.getModelOfType('classifier');
+    const pricing: ModelPricing | undefined = descriptor?.pricing;
+    const api: string = native.getModelApi('jev-latest');
+    const result: Promise<QuestionClassificationResult> = bridge.classifyQuestions({ model: TYPESAFE_CLASSIFIER_MODEL.id,
+      state: { approved: true }, questions: { approved: { type: 'boolean', prompt: 'Approved?' } } });
+    const failure = new SpecializedModelError('Invalid classifier response.', { inputTokens: 10 });
+    const reported: Readonly<TokenUsage> | undefined = failure.usage;
+    // @ts-expect-error reported failure accounting is readonly
+    if (failure.usage) failure.usage.inputTokens = 0;
+    const nativeQuestion: NativeClassifierQuestion = { type: 'score', instructions: 'Severity?', criteria: ['Low', 'High'] };
+    const nativeRequest: NativeClassifierRequest = { model: 'jev-latest', state: {}, questions: { level: nativeQuestion } };
+    const nativeResult: Promise<NativeClassifierResult> = native.classifyNativeQuestions(nativeRequest);
+    function checkAnswer(answer: NativeClassifierAnswer) {
+      if (answer.type === 'score') {
+        const score: number = answer.score; const confidence: number = answer.confidence;
+        // @ts-expect-error scalar confidence is not a finite probability distribution
+        const distribution = answer.probabilities;
+        void [score, confidence, distribution];
+      }
+    }
+    void pricing; void api; void result; void reported; void nativeResult; void checkAnswer;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'typesafe-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'typesafe-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { TypesafeProvider, TYPESAFE_CLASSIFIER_MODEL, SpecializedModelError, SpecializedModels, runCodemode, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = []; let malformed = false, scalar = false;
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      calls.push({ url: request.url, authorization: request.headers.authorization, accept: request.headers.accept, body: JSON.parse(text) });
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ answers: malformed ? {} : scalar ? { level: { type: 'score', score: 1.25, confidence: 0.75 } } : { approved: { type: 'noul', noul: 0.8 } }, usage: { input_tokens: 10, output_tokens: 2 } }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new TypesafeProvider({ type: 'operator-typesafe', apiKey: 'disposable-installed-key', baseUrl: 'http://127.0.0.1:' + server.address().port + '/proxy/v1' });
+      const bridge = new SpecializedModels(provider);
+      assert.deepEqual(bridge.getModelOfType('classifier'), { ...TYPESAFE_CLASSIFIER_MODEL, provider: 'operator-typesafe', model: 'jev-latest' });
+      assert.equal(provider.getConfiguredModel(), undefined); assert.deepEqual(bridge.getModelsOfType('image'), []);
+      const request = { model: 'jev-latest', state: { approved: true }, questions: { approved: { type: 'boolean', prompt: 'Approved?' } } };
+      const answer = await bridge.classifyQuestions(request);
+      assert.equal(answer.answers.approved.value, true); assert.equal(answer.usage.totalTokens, 12); assert.equal(answer.usage.costUsd, 0);
+      const result = await runCodemode({ code: 'text((await models.classifyQuestions(' + JSON.stringify(request) + ')).answers.approved.value)', context: { provider }, tools: () => [], execute: async () => { throw Error('Unexpected tool'); } });
+      assert.equal(result.isError, false); assert.equal(result.details.costComplete, true); assert.equal(result.details.usage.totalTokens, 12);
+      assert.equal(calls.length, 2);
+      malformed = true;
+      await assert.rejects(bridge.classifyQuestions(request), error => {
+        assert.ok(error instanceof SpecializedModelError); assert.ok(Object.isFrozen(error.usage));
+        assert.deepEqual(error.usage, { inputTokens: 10, outputTokens: 2, totalTokens: 12, costUsd: 0 }); return true;
+      });
+      const failed = await runCodemode({ code: 'store("bad",true); await models.classifyQuestions(' + JSON.stringify(request) + ')', context: { provider }, tools: () => [], execute: async () => { throw Error('Unexpected tool'); } });
+      assert.equal(failed.isError, true); assert.equal(failed.details.store, undefined);
+      assert.equal(failed.details.usage.totalTokens, 12); assert.equal(failed.details.costComplete, true);
+      assert.equal(failed.details.nestedCalls.length, 1); assert.equal(failed.details.nestedCalls[0].state, 'failed');
+      assert.equal(calls.length, 4);
+      for (const call of calls) assert.deepEqual(call, { url: '/proxy/v1/systemone', authorization: 'Bearer disposable-installed-key', accept: 'application/json',
+        body: { ...request, questions: { approved: { type: 'noul', instructions: 'Approved?', criteria: { true: 'true', false: 'false' } } } } });
+      scalar = true; malformed = false;
+      const nativeRequest = { model: 'jev-latest', state: {}, questions: { level: { type: 'score', instructions: 'Severity?', criteria: ['Low', 'High'] } } };
+      const native = await provider.classifyNativeQuestions(nativeRequest);
+      assert.equal(native.api, 'typesafe-system-one'); assert.equal(native.provider, 'operator-typesafe'); assert.equal(native.stopReason, 'stop');
+      assert.deepEqual(native.answers.level, { type: 'score', score: 1.25, confidence: 0.75 });
+      assert.deepEqual(calls[4].body, nativeRequest); assert.equal(native.usage.totalTokens, 12);
+      malformed = true;
+      const rejected = await provider.classifyNativeQuestions(nativeRequest);
+      assert.equal(rejected.stopReason, 'error'); assert.deepEqual(rejected.answers, {});
+      assert.equal(rejected.errorMessage, 'Invalid System One response.'); assert.equal(rejected.usage.totalTokens, 12);
+      assert.equal(calls.length, 6);
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed TypeSafe classifier OK');
+  `);
+  expect(await run(process.execPath, ['typesafe-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed TypeSafe classifier OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Groq through installed public declarations and captured C policies', async () => {
+  await writeFile(path.join(consumer, 'groq-public.ts'), `
+    import { GroqProvider, GROQ_MODELS, type GroqProfile, type ProviderDialect, type AiProvider, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
+    const dialect: ProviderDialect = 'groq'; void dialect;
+    const profile: GroqProfile = GROQ_MODELS[0];
+    const provider: AiProvider = new GroqProvider({ type: 'operator-groq', apiKey: 'disposable' });
+    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error reviewed profiles are immutable
+    profile.contextWindow = 1;
+    // @ts-expect-error nested price tables are immutable
+    profile.pricing.inputPerMillion = 1;
+    // @ts-expect-error native profiles are not mutable model registries
+    GROQ_MODELS.push(profile);
+    // @ts-expect-error declared inputs are immutable
+    profile.declaredInput.push('image');
+    void provider; void version;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'groq-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'groq-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { GroqProvider, GROQ_MODELS, SpecializedModels, getProviderPublishedModel, getSupportedThinkingLevels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [], model = 'openai/gpt-oss-120b';
+    const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4 } };
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, authorization: request.headers.authorization, apiKey: request.headers['api-key'], body });
+      if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ model: body.model, choices: [{ delta: { reasoning: 'Thought', content: 'Installed Groq' }, finish_reason: 'stop' }], usage }) + '\\n\\ndata: [DONE]\\n\\n'); }
+      else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: '{"label":"safe"}' }, finish_reason: 'stop' }], usage }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new GroqProvider({ type: 'azure', apiKey: 'disposable-installed-groq', model,
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/owned%2Fgroq/openai/v1/chat/completions/' });
+      assert.equal(ProviderFactory.has('groq'), false); assert.equal(GROQ_MODELS.length, 7); assert.ok(Object.isFrozen(GROQ_MODELS));
+      for (const profile of GROQ_MODELS) { assert.ok(Object.isFrozen(profile)); assert.ok(Object.isFrozen(profile.pricing)); assert.ok(Object.isFrozen(profile.declaredInput)); }
+      assert.equal(getProviderPublishedModel('azure', model, provider).contextWindow, 131072);
+      assert.equal(getProviderPublishedModel('azure', 'gpt-4o', provider), undefined);
+      assert.equal(getProviderPublishedModel('azure', 'qwen/qwen3.8-27b', provider).contextWindow, 131042);
+      assert.equal(getProviderPublishedModel('azure', model, provider).capabilities.imageInput, false);
+      assert.deepEqual(getSupportedThinkingLevels('azure', model, undefined, provider), ['low','medium','high']);
+      assert.equal(calls.length, 0);
+      const events = []; let complete;
+      await provider.streamChat([{ id: 'u', role: 'user', content: 'hello', timestamp: new Date() }], async (_text, event) => { await Promise.resolve(); events.push(event.type); provider.setConfiguredModel('qwen/qwen3.8-27b'); }, value => { complete = value; }, undefined,
+        { thinking: 'off', maxTokens: 64, systemPrompt: 'System', tools: [{ name: 'read', description: 'Read', parameters: { type: 'object' } }] });
+      assert.deepEqual(events, ['reasoning_delta', 'text_delta']); assert.equal(complete.content, 'Installed Groq');
+      assert.equal(complete.api, 'openai-completions'); assert.equal(complete.provider, 'azure'); assert.equal(complete.model, model);
+      assert.equal(complete.usage.promptTokens, 6); assert.equal(complete.usage.cacheReadTokens, 4);
+      assert.equal(complete.usage.costUsd, (6 * 0.15 + 2 * 0.6 + 4 * 0.075) / 1e6);
+      assert.equal(provider.getSpecializedModels().length, 1); assert.equal(provider.getSpecializedModels()[0].model, 'qwen/qwen3.8-27b');
+      provider.setConfiguredModel('qwen/qwen3.6-27b');
+      const sdk = new SpecializedModels(provider); assert.deepEqual(sdk.getModelsOfType('image'), []);
+      const result = await sdk.classify({ model: 'qwen/qwen3.6-27b:classifier', input: 'Approve', labels: ['safe','review'] });
+      assert.equal(result.label, 'safe'); assert.equal(result.usage.totalTokens, 12);
+      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_completion_tokens, 64); assert.equal(calls[0].body.tools[0].function.strict, true);
+      assert.equal(calls[0].body.reasoning_effort, 'low'); assert.equal(calls[0].body.messages[0].role, 'developer'); assert.equal(calls[1].body.reasoning_effort, 'none');
+      for (const call of calls) { assert.equal(call.url, '/owned%2Fgroq/openai/v1/chat/completions'); assert.equal(call.authorization, 'Bearer disposable-installed-groq'); assert.equal(call.apiKey, undefined); assert.equal(call.body.max_tokens, undefined); assert.equal(call.body.thinking, undefined); assert.equal(call.body.store, false); }
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed Groq OK');
+  `);
+  expect(await run(process.execPath, ['groq-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed Groq OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Z.ai through installed public declarations and captured C policies', async () => {
+  await writeFile(path.join(consumer, 'zai-public.ts'), `
+    import { ZaiProvider, ZAI_MODELS, type ZaiProfile, type AiProvider, type ProviderDialect, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
+    const dialect: ProviderDialect = 'zai'; void dialect;
+    const profile: ZaiProfile = ZAI_MODELS[0];
+    const provider: AiProvider = new ZaiProvider({ type: 'operator-zai', apiKey: 'disposable' });
+    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error reviewed profiles are immutable
+    profile.contextWindow = 1;
+    // @ts-expect-error nested declared price tables are immutable
+    profile.declaredPricing.inputPerMillion = 1;
+    // @ts-expect-error native profiles are not mutable model registries
+    ZAI_MODELS.push(profile);
+    // @ts-expect-error declared inputs are immutable
+    profile.declaredInput.push('image');
+    void provider; void version;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'zai-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'zai-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { ZaiProvider, ZAI_MODELS, SpecializedModels, getProviderPublishedModel, getSupportedThinkingLevels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [], model = 'glm-5.3-flash';
+    const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4 } };
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, authorization: request.headers.authorization, apiKey: request.headers['api-key'], body });
+      if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ model: body.model, choices: [{ delta: { reasoning_content: 'Thought', content: 'Installed Z.ai' }, finish_reason: 'stop' }], usage }) + '\\n\\ndata: [DONE]\\n\\n'); }
+      else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: '{"label":"safe"}' }, finish_reason: 'stop' }], usage }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new ZaiProvider({ type: 'azure', apiKey: 'disposable-installed-zai', model,
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/owned%2Fzai/api/coding/paas/v4/chat/completions/' });
+      assert.equal(ProviderFactory.has('zai'), false); assert.equal(ZAI_MODELS.length, 7); assert.ok(Object.isFrozen(ZAI_MODELS));
+      for (const profile of ZAI_MODELS) { assert.ok(Object.isFrozen(profile)); assert.ok(Object.isFrozen(profile.declaredPricing)); assert.ok(Object.isFrozen(profile.declaredInput)); }
+      assert.equal(getProviderPublishedModel('azure', model, provider).contextWindow, 1000000);
+      assert.equal(getProviderPublishedModel('azure', 'gpt-4o', provider), undefined);
+      assert.equal(getProviderPublishedModel('azure', 'glm-5.3-highspeed', provider).pricing, undefined);
+      assert.equal(getProviderPublishedModel('azure', model, provider).capabilities.imageInput, true);
+      assert.deepEqual(getSupportedThinkingLevels('azure', model, undefined, provider), ['low','high','max']);
+      assert.equal(calls.length, 0);
+      const events = []; let complete;
+      await provider.streamChat([{ id: 'u', role: 'user', content: 'hello', timestamp: new Date() }], async (_text, event) => { await Promise.resolve(); events.push(event.type); provider.setConfiguredModel('glm-5.3-highspeed'); }, value => { complete = value; }, undefined,
+        { thinking: 'off', maxTokens: 64, systemPrompt: 'System', tools: [{ name: 'read', description: 'Read', parameters: { type: 'object' } }] });
+      assert.deepEqual(events, ['reasoning_delta', 'text_delta']); assert.equal(complete.content, 'Installed Z.ai');
+      assert.equal(complete.api, 'openai-completions'); assert.equal(complete.provider, 'azure'); assert.equal(complete.model, model);
+      assert.equal(complete.usage.promptTokens, 6); assert.equal(complete.usage.cacheReadTokens, 4);
+      assert.equal(complete.usage.costUsd, (6 * 0.15 + 2 * 0.5 + 4 * 0.03) / 1e6);
+      assert.equal(provider.getSpecializedModels().length, 1); assert.equal(provider.getSpecializedModels()[0].model, 'glm-5.3-highspeed'); assert.equal(provider.getSpecializedModels()[0].pricing, undefined);
+      provider.setConfiguredModel('glm-5.2');
+      const sdk = new SpecializedModels(provider); assert.deepEqual(sdk.getModelsOfType('image'), []);
+      const result = await sdk.classify({ model: 'glm-5.2:classifier', input: 'Approve', labels: ['safe','review'] });
+      assert.equal(result.label, 'safe'); assert.equal(result.usage.totalTokens, 12);
+      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_tokens, 64); assert.equal(calls[0].body.tools[0].function.strict, true); assert.equal(calls[0].body.tool_stream, true);
+      assert.equal(calls[0].body.reasoning_effort, 'low'); assert.equal(calls[0].body.messages[0].role, 'system'); assert.deepEqual(calls[0].body.thinking, { type:'enabled', clear_thinking:false });
+      assert.equal(calls[1].body.reasoning_effort, undefined); assert.deepEqual(calls[1].body.thinking, { type:'disabled' }); assert.equal(calls[1].body.tool_stream, undefined);
+      for (const call of calls) { assert.equal(call.url, '/owned%2Fzai/api/coding/paas/v4/chat/completions'); assert.equal(call.authorization, 'Bearer disposable-installed-zai'); assert.equal(call.apiKey, undefined); assert.equal(call.body.max_completion_tokens, undefined); assert.equal(call.body.store, undefined); }
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed Z.ai OK');
+  `);
+  expect(await run(process.execPath, ['zai-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed Z.ai OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Moonshot through installed public declarations and captured C policies', async () => {
+  await writeFile(path.join(consumer, 'moonshot-public.ts'), `
+    import { MoonshotProvider, MOONSHOT_MODELS, type MoonshotProfile, type AiProvider, type ProviderDialect, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
+    const dialect: ProviderDialect = 'moonshot'; void dialect;
+    const profile: MoonshotProfile = MOONSHOT_MODELS[0];
+    const provider: AiProvider = new MoonshotProvider({ type: 'operator-moonshot', apiKey: 'disposable' });
+    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error reviewed profiles are immutable
+    profile.contextWindow = 1;
+    // @ts-expect-error nested declared price tables are immutable
+    profile.pricing.inputPerMillion = 1;
+    // @ts-expect-error native profiles are not mutable model registries
+    MOONSHOT_MODELS.push(profile);
+    // @ts-expect-error declared inputs are immutable
+    profile.declaredInput.push('image');
+    void provider; void version;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'moonshot-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'moonshot-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { MoonshotProvider, MOONSHOT_MODELS, SpecializedModels, getProviderPublishedModel, getSupportedThinkingLevels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [], model = 'kimi-k3';
+    const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4 } };
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, authorization: request.headers.authorization, apiKey: request.headers['api-key'], body });
+      if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ model: body.model, choices: [{ delta: { reasoning_content: 'Thought', content: 'Installed Moonshot' }, finish_reason: 'stop' }], usage }) + '\\n\\ndata: [DONE]\\n\\n'); }
+      else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: '{"label":"safe"}' }, finish_reason: 'stop' }], usage }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new MoonshotProvider({ type: 'azure', apiKey: 'disposable-installed-moonshot', model,
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/owned%2Fmoonshot/v1/chat/completions/' });
+      assert.equal(ProviderFactory.has('moonshotai'), false); assert.equal(MOONSHOT_MODELS.length, 4); assert.ok(Object.isFrozen(MOONSHOT_MODELS));
+      for (const profile of MOONSHOT_MODELS) { assert.ok(Object.isFrozen(profile)); assert.ok(Object.isFrozen(profile.pricing)); assert.ok(Object.isFrozen(profile.declaredInput)); }
+      assert.equal(getProviderPublishedModel('azure', model, provider).contextWindow, 1048576);
+      assert.equal(getProviderPublishedModel('azure', 'gpt-4o', provider), undefined);
+      assert.equal(getProviderPublishedModel('azure', 'kimi-k2.7-code-highspeed', provider).pricing.inputPerMillion, 1.9);
+      assert.equal(getProviderPublishedModel('azure', model, provider).capabilities.imageInput, true);
+      assert.deepEqual(getSupportedThinkingLevels('azure', model, undefined, provider), ['low','high','max']);
+      assert.equal(calls.length, 0);
+      const events = []; let complete;
+      await provider.streamChat([{ id: 'u', role: 'user', content: 'hello', timestamp: new Date() }], async (_text, event) => { await Promise.resolve(); events.push(event.type); provider.setConfiguredModel('kimi-k2.7-code-highspeed'); }, value => { complete = value; }, undefined,
+        { thinking: 'off', maxTokens: 64, systemPrompt: 'System', tools: [{ name: 'read', description: 'Read', parameters: { type: 'object' } }] });
+      assert.deepEqual(events, ['reasoning_delta', 'text_delta']); assert.equal(complete.content, 'Installed Moonshot');
+      assert.equal(complete.api, 'openai-completions'); assert.equal(complete.provider, 'azure'); assert.equal(complete.model, model);
+      assert.equal(complete.usage.promptTokens, 6); assert.equal(complete.usage.cacheReadTokens, 4);
+      assert.equal(complete.usage.costUsd, (6 * 3 + 2 * 15 + 4 * 0.3) / 1e6);
+      assert.equal(provider.getSpecializedModels().length, 1); assert.equal(provider.getSpecializedModels()[0].model, 'kimi-k2.7-code-highspeed'); assert.equal(provider.getSpecializedModels()[0].pricing.inputPerMillion, 1.9);
+      provider.setConfiguredModel('kimi-k2.6');
+      const sdk = new SpecializedModels(provider); assert.deepEqual(sdk.getModelsOfType('image'), []);
+      const result = await sdk.classify({ model: 'kimi-k2.6:classifier', input: 'Approve', labels: ['safe','review'] });
+      assert.equal(result.label, 'safe'); assert.equal(result.usage.totalTokens, 12);
+      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_tokens, 64); assert.equal(calls[0].body.tools[0].function.strict, undefined); assert.equal(calls[0].body.tool_stream, undefined);
+      assert.equal(calls[0].body.reasoning_effort, 'low'); assert.equal(calls[0].body.messages[0].role, 'system'); assert.equal(calls[0].body.thinking, undefined);
+      assert.equal(calls[1].body.reasoning_effort, undefined); assert.deepEqual(calls[1].body.thinking, { type:'disabled' }); assert.equal(calls[1].body.tool_stream, undefined);
+      for (const call of calls) { assert.equal(call.url, '/owned%2Fmoonshot/v1/chat/completions'); assert.equal(call.authorization, 'Bearer disposable-installed-moonshot'); assert.equal(call.apiKey, undefined); assert.equal(call.body.max_completion_tokens, undefined); assert.equal(call.body.store, undefined); }
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed Moonshot OK');
+  `);
+  expect(await run(process.execPath, ['moonshot-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed Moonshot OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native OpenCode Go through installed declarations and owned A/C/R policies', async () => {
+  await writeFile(path.join(consumer, 'opencode-go-public.ts'), `
+    import { OpenCodeGoProvider, OPENCODE_GO_MODELS, AI_HARNESS_CORE_API_VERSION, type OpenCodeGoProfile } from '@ai-harness/core';
+    const profile: OpenCodeGoProfile = OPENCODE_GO_MODELS[0]; const priced: NonNullable<OpenCodeGoProfile['pricing']> = profile.pricing!;
+    const provider = new OpenCodeGoProvider({ type: 'operator', apiKey: 'disposable' }); const api: 'anthropic-messages' | 'openai-completions' | 'openai-responses' = profile.api;
+    provider.setConfiguredModel(profile.id); void provider.getPublishedModels(); void api; void AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error physical limits are readonly
+    profile.maxOutputTokens = 1;
+    // @ts-expect-error native maps are readonly
+    profile.thinkingLevelMap.high = 'foreign';
+    // @ts-expect-error known prices are readonly
+    priced.inputPerMillion = 999;
+    // @ts-expect-error zero-only declared prices are readonly too
+    profile.declaredPricing.inputPerMillion = 999;
+    // @ts-expect-error catalogue rows are readonly
+    OPENCODE_GO_MODELS.push(profile);
+    // @ts-expect-error declared resize is readonly,not an effective pipeline
+    profile.declaredInputLimits!.images.resize.maxWidth = 1;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'opencode-go-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'opencode-go-public.mjs'), String.raw`
+    import assert from 'node:assert/strict'; import { createServer } from 'node:http';
+    import { OpenCodeGoProvider, OPENCODE_GO_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel } from '@ai-harness/core';
+    const calls=[],input={id:'u',role:'user',content:'Hello',timestamp:new Date(0)},key='disposable-installed-go',usage={A:{input_tokens:5,output_tokens:2,cache_read_input_tokens:4,cache_creation_input_tokens:1},C:{prompt_tokens:10,completion_tokens:2,prompt_tokens_details:{cached_tokens:4,cache_write_tokens:1}},R:{input_tokens:10,output_tokens:2,input_tokens_details:{cached_tokens:4,cache_write_tokens:1}}};
+    const server=createServer(async(req,res)=>{let text='';for await(const b of req)text+=b;const body=JSON.parse(text),a=req.url.endsWith('/messages'),r=req.url.endsWith('/responses'),answer=(body.max_tokens??body.max_output_tokens)===512?' {"label":"safe"} ':'Ready';calls.push({url:req.url,headers:req.headers,body});
+      if(r||body.stream){res.setHeader('content-type','text/event-stream');const events=r?[{type:'response.output_text.delta',delta:answer},{type:'response.completed',response:{id:'answer',model:'remote-alias',usage:usage.R}}]:a?[{type:'message_start',message:{id:'answer',usage:{...usage.A,output_tokens:0}}},{type:'content_block_start',index:0,content_block:{type:'text',text:''}},{type:'content_block_delta',index:0,delta:{type:'text_delta',text:answer}},{type:'content_block_stop',index:0},{type:'message_delta',delta:{stop_reason:'end_turn'},usage:{output_tokens:2}},{type:'message_stop'}]:[{choices:[{delta:{content:answer},finish_reason:'stop'}],usage:usage.C}];res.end(events.map(v=>'data: '+JSON.stringify(v)+'\n\n').join('')+(!a&&!r?'data: [DONE]\n\n':''));}
+      else res.end(JSON.stringify(a?{model:'remote-alias',content:[{type:'text',text:answer}],stop_reason:'end_turn',usage:usage.A}:{model:'remote-alias',choices:[{message:{content:answer},finish_reason:'stop'}],usage:usage.C}));
+    });await new Promise(r=>server.listen(0,'127.0.0.1',r));
+    try{
+      assert.equal(OPENCODE_GO_MODELS.length,31);assert.equal(OPENCODE_GO_MODELS.filter(p=>p.pricing).length,29);assert.equal(ProviderFactory.has('opencode-go'),false);
+      for(const[model,api,rates]of[['claude-haiku-5-5','anthropic-messages',[.1,.5,.01,.125]],['glm-5.3','openai-completions',[1.4,4.4,.26,0]],['gpt-6-luna','openai-responses',[.1,.5,.01,.125]]]){
+        const provider=new OpenCodeGoProvider({type:'anthropic',apiKey:key,model,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fgo'}),options={model:'',thinking:'high',sessionId:'installed-go',cacheRetention:'long'},cost=(5*rates[0]+2*rates[1]+4*rates[2]+rates[3])/1e6;
+        assert.equal(provider.getModelApi(model),api);assert.equal(provider.canDiscoverModels(),false);assert.equal((await provider.getAvailableModels()).length,31);assert.equal(getProviderPublishedModel('anthropic',model,provider).api,api);
+        const first=await provider.chat([input],options);let final;await provider.streamChat([input],async()=>{await Promise.resolve();provider.setConfiguredModel(model==='glm-5.3'?'claude-haiku-5-5':'glm-5.3');},v=>{final=v;},undefined,options);
+        for(const result of[first,final]){assert.equal(result.model,model);assert.equal(result.api,api);assert.equal(result.usage.costUsd,cost);assert.equal(result.content,'Ready');}
+        for(const call of calls.slice(-2)){assert.equal(call.url,'/owned%2Fgo/v1/'+(api==='anthropic-messages'?'messages':api==='openai-completions'?'chat/completions':'responses'));assert.equal(call.headers['x-opencode-session'],'installed-go');assert.equal(call.headers['session-id'],undefined);assert.equal(call.headers.session_id,undefined);assert.equal(call.body.prompt_cache_retention,api==='anthropic-messages'?undefined:'24h');}
+        provider.setConfiguredModel(model);const label=await new SpecializedModels(provider).classify({model:model+':classifier',input:'Approve',labels:['safe','review']});assert.equal(label.label,'safe');assert.equal(label.usage.inputTokens,5);assert.equal(label.usage.outputTokens,2);assert.equal(calls.at(-1).body[api==='openai-responses'?'max_output_tokens':'max_tokens'],512);
+      }
+      const provider=new OpenCodeGoProvider({type:'openai',apiKey:key,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fgo'});for(const model of['longcat-2.5-preview-free','step-5-preview-free']){assert.equal(getProviderPublishedModel('openai',model,provider).pricing,undefined);assert.equal((await provider.chat([input],{model})).usage.costUsd,undefined);}assert.equal(calls.length,11);console.log('native opencode go installed OK');
+    }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
+  `);
+  expect(await run(process.execPath, ['opencode-go-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'native opencode go installed OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Kimi Coding through installed declarations and owned A policies', async () => {
+  await writeFile(path.join(consumer, 'kimi-coding-public.ts'), `
+    import { KimiCodingProvider, KIMI_CODING_MODELS, AI_HARNESS_CORE_API_VERSION, getKimiCodingOAuthConfig, type KimiCodingProfile, type KimiCodingOAuthConfig, type ProviderOAuthRefreshConfig } from '@ai-harness/core';
+    const issuer: KimiCodingOAuthConfig = getKimiCodingOAuthConfig();
+    const refresh: ProviderOAuthRefreshConfig = issuer; const responseProfile: 'kimi-coding' = issuer.responseProfile; void refresh; void responseProfile;
+    // @ts-expect-error issuer endpoints are readonly
+    issuer.tokenUrl = 'https://foreign.test/token';
+    // @ts-expect-error response contracts are explicit,not arbitrary provider labels
+    const foreign: ProviderOAuthRefreshConfig = { ...issuer, responseProfile: 'foreign' }; void foreign;
+    const profile: KimiCodingProfile = KIMI_CODING_MODELS[0]; const priced: NonNullable<KimiCodingProfile['pricing']> = profile.pricing!;
+    const provider = new KimiCodingProvider({ type: 'operator', apiKey: 'disposable' }); const api: 'anthropic-messages' = profile.api;
+    provider.setConfiguredModel(profile.id); void provider.getPublishedModels(); void api; void AI_HARNESS_CORE_API_VERSION;
+    new KimiCodingProvider({ type: 'operator', apiKey: 'disposable', kimiAuthMode: 'oauth' });
+    new KimiCodingProvider({ type: 'operator', apiKey: 'disposable', kimiAuthMode: 'api-key' });
+    // @ts-expect-error auth transport is explicit,not an arbitrary inference rule
+    new KimiCodingProvider({ type: 'operator', apiKey: 'disposable', kimiAuthMode: 'token-prefix' });
+    // @ts-expect-error physical limits are readonly
+    profile.maxOutputTokens = 1;
+    // @ts-expect-error native maps are readonly
+    profile.thinkingLevelMap!.low = 'foreign';
+    // @ts-expect-error known prices are readonly
+    priced.inputPerMillion = 999;
+    // @ts-expect-error unknown-price declarations are readonly too
+    profile.declaredPricing.inputPerMillion = 999;
+    // @ts-expect-error catalogue rows are readonly
+    KIMI_CODING_MODELS.push(profile);
+    // @ts-expect-error declared resize is readonly,not an effective pipeline
+    profile.declaredInputLimits!.images.resize.maxWidth = 1;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'kimi-coding-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'kimi-coding-public.mjs'), String.raw`
+    import assert from 'node:assert/strict'; import { createServer } from 'node:http';
+    import { KimiCodingProvider, KIMI_CODING_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, getSupportedThinkingLevels, getKimiCodingOAuthConfig } from '@ai-harness/core';
+    const issuer=getKimiCodingOAuthConfig('https://issuer.test/prefix/');assert.equal(Object.isFrozen(issuer),true);assert.deepEqual(issuer,{deviceAuthorizationUrl:'https://issuer.test/prefix/api/oauth/device_authorization',tokenUrl:'https://issuer.test/prefix/api/oauth/token',clientId:'17e5f671-d194-4dfb-9706-5516cb48c098',responseProfile:'kimi-coding'});
+    const calls=[],key='disposable-installed-kimi-coding',model='k3',unknown='k3-256k',input={id:'u',role:'user',content:'Hello',timestamp:new Date(0)},prior={...input,id:'prior',role:'assistant',content:'Before',blocks:[{type:'reasoning',text:'Earlier plan'}]},cost=(5*3+2*15+4*.3)/1e6;
+    const server=createServer(async(req,res)=>{let text='';for await(const b of req)text+=b;const body=JSON.parse(text);calls.push({url:req.url,headers:req.headers,body});const usage={input_tokens:5,output_tokens:2,cache_read_input_tokens:4,cache_creation_input_tokens:1};
+      if(body.stream){res.setHeader('content-type','text/event-stream');res.end([{type:'message_start',message:{id:'message',type:'message',model:'remote-alias',usage:{...usage,output_tokens:0}}},{type:'content_block_start',index:0,content_block:{type:'text',text:''}},{type:'content_block_delta',index:0,delta:{type:'text_delta',text:'Ready'}},{type:'content_block_stop',index:0},{type:'message_delta',delta:{stop_reason:'end_turn'},usage:{output_tokens:2}},{type:'message_stop'}].map(v=>'data: '+JSON.stringify(v)+'\n\n').join(''));}
+      else res.end(JSON.stringify({model:'remote-alias',stop_reason:'end_turn',content:[{type:'text',text:body.max_tokens===512?'{"label":"safe"}':'Ready'}],usage}));
+    });await new Promise(r=>server.listen(0,'127.0.0.1',r));
+    try{
+      const provider=new KimiCodingProvider({type:'openai',apiKey:key,model,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fkimi/coding'});assert.equal(KIMI_CODING_MODELS.length,4);assert.equal(KIMI_CODING_MODELS.filter(p=>p.pricing).length,3);assert.equal(ProviderFactory.has('kimi-coding'),false);assert.equal(provider.canDiscoverModels(),false);assert.equal((await provider.getAvailableModels()).length,4);
+      assert.equal(getProviderPublishedModel('openai',model,provider).contextWindow,1048576);assert.equal(getProviderPublishedModel('openai',unknown,provider).pricing,undefined);assert.deepEqual(getSupportedThinkingLevels('openai',model,undefined,provider),['low','high','max']);assert.deepEqual(getSupportedThinkingLevels('openai','kimi-for-coding-highspeed',undefined,provider),['off','minimal','low','medium','high']);
+      const first=await provider.chat([prior,input],{thinking:'high',maxTokens:64,cacheRetention:'long',systemPrompt:'System',tools:[{name:'read',description:'Read',parameters:{type:'object'}}]});assert.equal(first.model,model);assert.equal(first.api,'anthropic-messages');assert.equal(first.usage.costUsd,cost);assert.equal(calls[0].body.max_tokens,64);assert.deepEqual(calls[0].body.thinking,{type:'adaptive',display:'summarized'});assert.deepEqual(calls[0].body.output_config,{effort:'high'});assert.deepEqual(calls[0].body.messages[0].content[0],{type:'thinking',thinking:'Earlier plan',signature:''});assert.deepEqual(calls[0].body.system[0].cache_control,{type:'ephemeral',ttl:'1h'});assert.equal(calls[0].body.tools[0].eager_input_streaming,true);assert.equal(calls[0].body.tools[0].strict,undefined);
+      const unpriced=await provider.chat([input],{model:unknown});assert.equal(unpriced.model,unknown);assert.equal(unpriced.usage.totalTokens,12);assert.equal(unpriced.usage.costUsd,undefined);assert.deepEqual(calls[1].body.output_config,{effort:'low'});
+      const label=await new SpecializedModels(provider).classify({model:model+':classifier',input:'Approve',labels:['safe','review']});assert.equal(label.label,'safe');assert.equal(calls[2].body.max_tokens,512);
+      const empty=await provider.chat([input],{model:''});let final;await provider.streamChat([input],async()=>{await Promise.resolve();provider.setConfiguredModel('kimi-for-coding-highspeed');},v=>{final=v;},undefined,{model:''});for(const result of[empty,final]){assert.equal(result.model,model);assert.equal(result.api,'anthropic-messages');assert.equal(result.usage.totalTokens,12);assert.equal(result.usage.costUsd,cost);}assert.deepEqual(calls.slice(3).map(c=>c.body.model),[model,model]);
+      assert.equal(calls.length,5);for(const c of calls){assert.equal(c.url,'/owned%2Fkimi/coding/v1/messages');assert.equal(c.headers['x-api-key'],key);assert.equal(c.headers['anthropic-version'],'2023-06-01');for(const name of['authorization','anthropic-beta','api-key','x-session-id','x-session-affinity','nvcf-poll-seconds'])assert.equal(c.headers[name],undefined);for(const field of['reasoning_effort','max_completion_tokens','prompt_cache_key','store','tool_stream'])assert.equal(c.body[field],undefined);}assert.throws(()=>provider.setConfiguredModel('future'),/Kimi Coding chat model is not supported/);
+      const oauth=new KimiCodingProvider({type:'operator',apiKey:key,kimiAuthMode:'oauth',baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fkimi/coding',customHeaders:{'X-Api-Key':'unselected-key',Authorization:'unselected-auth'}});
+      assert.equal((await oauth.chat([input])).content,'Ready');let oauthFinal;await oauth.streamChat([input],()=>{},value=>{oauthFinal=value;});assert.equal(oauthFinal.content,'Ready');
+      assert.equal(calls.length,7);for(const c of calls.slice(5)){assert.equal(c.url,'/owned%2Fkimi/coding/v1/messages');assert.equal(c.headers.authorization,'Bearer '+key);assert.equal(c.headers['x-api-key'],undefined);assert.equal(c.headers['anthropic-version'],'2023-06-01');}
+      console.log('native kimi coding installed OK');
+    }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
+  `);
+  expect(await run(process.execPath, ['kimi-coding-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'native kimi coding installed OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Xiaomi through installed declarations and owned C policies', async () => {
+  await writeFile(path.join(consumer, 'xiaomi-public.ts'), `
+    import { XiaomiProvider, XIAOMI_MODELS, AI_HARNESS_CORE_API_VERSION, type XiaomiProfile } from '@ai-harness/core';
+    const profile: XiaomiProfile = XIAOMI_MODELS[0]; const provider = new XiaomiProvider({ type: 'operator', apiKey: 'disposable' });
+    const api: 'openai-completions' = profile.api; provider.setConfiguredModel(profile.id); void provider.getPublishedModels(); void api; void AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error profile limits are readonly
+    profile.maxOutputTokens = 1;
+    // @ts-expect-error physical maps are readonly
+    profile.thinkingLevelMap.high = 'foreign';
+    // @ts-expect-error known prices are readonly
+    profile.pricing.inputPerMillion = 99;
+    // @ts-expect-error public catalogues are readonly
+    XIAOMI_MODELS.push(profile);
+    // @ts-expect-error declared resize is readonly,not an effective pipeline
+    profile.declaredInputLimits!.images.resize.maxWidth = 1;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'xiaomi-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'xiaomi-public.mjs'), String.raw`
+    import assert from 'node:assert/strict'; import { createServer } from 'node:http';
+    import { XiaomiProvider, XIAOMI_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, getSupportedThinkingLevels } from '@ai-harness/core';
+    const calls=[],key='disposable-installed-xiaomi',model='mimo-v2.5',input={id:'u',role:'user',content:'Hi',timestamp:new Date(0)},prior={...input,id:'prior',role:'assistant',content:'Prior'},cost=(5*.14+2*.28+4*.0028)/1e6;
+    const server=createServer(async(req,res)=>{let text='';for await(const b of req)text+=b;const body=JSON.parse(text);calls.push({url:req.url,headers:req.headers,body});const usage={prompt_tokens:10,completion_tokens:2,prompt_tokens_details:{cached_tokens:4,cache_write_tokens:1}};
+      if(body.stream){res.setHeader('content-type','text/event-stream');res.end([{choices:[{delta:{reasoning_content:'Thought',content:'Ready'},finish_reason:'stop'}]},{choices:[],usage}].map(v=>'data: '+JSON.stringify(v)+'\n\n').join('')+'data: [DONE]\n\n');}
+      else res.end(JSON.stringify({choices:[{message:{content:body.max_completion_tokens===512?'{"label":"safe"}':'Ready'},finish_reason:'stop'}],usage}));
+    });await new Promise(r=>server.listen(0,'127.0.0.1',r));
+    try{
+      const provider=new XiaomiProvider({type:'anthropic',apiKey:key,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fxiaomi/v1',model});assert.equal(XIAOMI_MODELS.length,6);assert.equal(ProviderFactory.has('xiaomi'),false);assert.equal(provider.canDiscoverModels(),false);assert.equal((await provider.getAvailableModels()).length,6);assert.equal(XIAOMI_MODELS.every(p=>Object.isFrozen(p)&&Object.isFrozen(p.pricing)&&Object.isFrozen(p.thinkingLevelMap)),true);
+      assert.equal(getProviderPublishedModel('anthropic','xiaomi/mimo-v2.5',provider),undefined);assert.equal(getProviderPublishedModel('anthropic',model,provider).contextWindow,1048576);assert.equal(getProviderPublishedModel('anthropic',model,provider).maxOutputTokens,131072);assert.deepEqual(getSupportedThinkingLevels('anthropic',model,undefined,provider),['off','minimal','low','medium','high']);
+      const first=await provider.chat([prior,input],{thinking:'high',maxTokens:64,sessionId:'🙂'.repeat(70),cacheRetention:'long',systemPrompt:'System',tools:[{name:'read',description:'Read',parameters:{type:'object'}}]});assert.equal(first.model,model);assert.equal(first.api,'openai-completions');assert.equal(first.usage.costUsd,cost);assert.equal(calls[0].body.messages[0].role,'developer');assert.equal(calls[0].body.messages[1].reasoning_content,'');assert.equal(calls[0].body.thinking.type,'enabled');assert.equal(calls[0].body.reasoning_effort,'high');assert.equal(calls[0].body.max_completion_tokens,64);assert.equal(calls[0].body.prompt_cache_key,'🙂'.repeat(64));assert.equal(calls[0].body.prompt_cache_retention,'24h');assert.equal(calls[0].body.tools[0].function.strict,false);
+      const label=await new SpecializedModels(provider).classify({model:model+':classifier',input:'Approve',labels:['safe','review']});assert.equal(label.label,'safe');assert.equal(calls[1].body.max_completion_tokens,512);
+      const empty=await provider.chat([input],{model:''});let final;await provider.streamChat([input],async()=>{await Promise.resolve();provider.setConfiguredModel('mimo-v2.6-pro-ultraspeed');},v=>{final=v;},undefined,{model:''});for(const value of [empty,final]){assert.equal(value.model,model);assert.equal(value.api,'openai-completions');assert.equal(value.usage.costUsd,cost);assert.equal(value.usage.totalTokens,12);}assert.deepEqual(calls.slice(2).map(c=>c.body.model),[model,model]);
+      assert.equal(calls.length,4);for(const c of calls){assert.equal(c.url,'/owned%2Fxiaomi/v1/chat/completions');assert.equal(c.headers.authorization,'Bearer '+key);assert.equal(c.body.store,false);for(const field of ['max_tokens','reasoning','enable_thinking','chat_template_args','chat_template_kwargs','tool_stream'])assert.equal(c.body[field],undefined);for(const name of ['session_id','session-id','x-client-request-id','x-session-affinity','nvcf-poll-seconds'])assert.equal(c.headers[name],undefined);}for(const c of calls.slice(2)){assert.equal(c.body.thinking.type,'disabled');assert.equal(c.body.reasoning_effort,undefined);assert.equal(c.body.max_completion_tokens,undefined);}assert.throws(()=>provider.setConfiguredModel('future'),/Xiaomi chat model is not supported/);console.log('native xiaomi installed OK');
+    }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
+  `);
+  expect(await run(process.execPath, ['xiaomi-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'native xiaomi installed OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Hugging Face through installed declarations and owned C policies', async () => {
+  await writeFile(path.join(consumer, 'huggingface-public.ts'), `
+    import { HuggingFaceProvider, HUGGINGFACE_MODELS, AI_HARNESS_CORE_API_VERSION, type HuggingFaceProfile } from '@ai-harness/core';
+    const profile: HuggingFaceProfile = HUGGINGFACE_MODELS[0]; const provider = new HuggingFaceProvider({ type: 'operator', apiKey: 'disposable' });
+    const api: 'openai-completions' = profile.api; const priced: NonNullable<HuggingFaceProfile['pricing']> = profile.pricing!;
+    provider.setConfiguredModel(profile.id); void provider.getPublishedModels(); void api; void AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error profile limits are readonly
+    profile.maxOutputTokens = 1;
+    // @ts-expect-error physical maps are readonly
+    profile.thinkingLevelMap.high = 'foreign';
+    // @ts-expect-error known prices are readonly
+    priced.inputPerMillion = 99;
+    // @ts-expect-error even an unknown-price declaration is readonly
+    profile.declaredPricing.inputPerMillion = 99;
+    // @ts-expect-error public profiles are readonly
+    HUGGINGFACE_MODELS.push(profile);
+    // @ts-expect-error declared resize is readonly, not an effective pipeline
+    profile.declaredInputLimits!.images.resize.maxWidth = 1;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'huggingface-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'huggingface-public.mjs'), String.raw`
+    import assert from 'node:assert/strict'; import { createServer } from 'node:http';
+    import { HuggingFaceProvider, HUGGINGFACE_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, getSupportedThinkingLevels } from '@ai-harness/core';
+    const calls=[],key='disposable-installed-hf',model='Qwen/Qwen3.8-2.4T-A95B',unknown='zai-org/GLM-4.7-Flash',input={id:'u',role:'user',content:'Hi',timestamp:new Date(0)};
+    const server=createServer(async(req,res)=>{let text='';for await(const b of req)text+=b;const body=JSON.parse(text);calls.push({url:req.url,headers:req.headers,body});const usage={prompt_tokens:10,completion_tokens:2,prompt_tokens_details:{cached_tokens:4,cache_write_tokens:1}};
+      if(body.stream){res.setHeader('content-type','text/event-stream');res.end([{choices:[{delta:{reasoning_content:'Thought',content:'Ready'},finish_reason:'stop'}]},{choices:[],usage}].map(v=>'data: '+JSON.stringify(v)+'\n\n').join('')+'data: [DONE]\n\n');}
+      else res.end(JSON.stringify({choices:[{message:{content:body.max_completion_tokens===512?'{"label":"safe"}':'Ready'},finish_reason:'stop'}],usage}));
+    });await new Promise(r=>server.listen(0,'127.0.0.1',r));
+    try{
+      const provider=new HuggingFaceProvider({type:'anthropic',apiKey:key,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fhuggingface/v1',model});assert.equal(HUGGINGFACE_MODELS.length,78);assert.equal(ProviderFactory.has('huggingface'),false);assert.equal(provider.canDiscoverModels(),false);assert.equal((await provider.getAvailableModels()).length,78);assert.equal(HUGGINGFACE_MODELS.every(p=>Object.isFrozen(p)&&Object.isFrozen(p.declaredPricing)&&Object.isFrozen(p.thinkingLevelMap)),true);
+      assert.equal(getProviderPublishedModel('anthropic','gpt-4o',provider),undefined);assert.equal(getProviderPublishedModel('anthropic',model,provider).contextWindow,262144);assert.deepEqual(getSupportedThinkingLevels('anthropic',model,undefined,provider),['low','medium','xhigh']);assert.equal(getProviderPublishedModel('anthropic',unknown,provider).pricing,undefined);assert.equal(getProviderPublishedModel('anthropic','thinkingmachines/Inkling-Small',provider).maxOutputTokens,1048576);
+      const first=await provider.chat([input],{thinking:'high',maxTokens:64,sessionId:'🙂'.repeat(70),cacheRetention:'long',systemPrompt:'System',tools:[{name:'read',description:'Read',parameters:{type:'object'}}]});assert.equal(first.model,model);assert.equal(first.api,'openai-completions');assert.equal(first.usage.costUsd,(5*2.5+2*6.25)/1e6);assert.equal(calls[0].body.reasoning_effort,'xhigh');assert.equal(calls[0].body.max_completion_tokens,64);assert.equal(calls[0].body.prompt_cache_key,'🙂'.repeat(64));assert.equal(calls[0].body.prompt_cache_retention,'24h');assert.equal(calls[0].body.tools[0].function.strict,false);assert.equal(calls[0].body.messages[0].role,'system');
+      const unpriced=await provider.chat([input],{model:unknown,cacheRetention:'none'});assert.equal(unpriced.usage.totalTokens,12);assert.equal(unpriced.usage.costUsd,undefined);assert.equal(calls[1].body.max_completion_tokens,undefined);assert.equal(calls[1].body.prompt_cache_key,undefined);assert.equal(calls[1].body.prompt_cache_retention,undefined);
+      const label=await new SpecializedModels(provider).classify({model:model+':classifier',input:'Approve',labels:['safe','review']});assert.equal(label.label,'safe');assert.equal(calls[2].body.max_completion_tokens,512);
+      for(const selected of [model,unknown]){provider.setConfiguredModel(selected);let final;await provider.streamChat([input],async()=>{await Promise.resolve();provider.setConfiguredModel('deepseek-ai/DeepSeek-R1');},v=>{final=v;},undefined,{thinking:'high'});assert.equal(final.model,selected);assert.equal(final.api,'openai-completions');assert.equal(final.usage.costUsd,selected===unknown?undefined:(5*2.5+2*6.25)/1e6);}
+      await provider.chat([input],{model:'deepseek-ai/DeepSeek-V4.1-Flash',thinking:'off',maxTokens:64});assert.equal(calls[5].body.reasoning_effort,'none');
+      provider.setConfiguredModel('deepseek-ai/DeepSeek-R1');const empty=await provider.chat([input],{model:''});let emptyFinal;await provider.streamChat([input],async()=>{await Promise.resolve();provider.setConfiguredModel(unknown);},v=>{emptyFinal=v;},undefined,{model:''});for(const result of[empty,emptyFinal]){assert.equal(result.model,'deepseek-ai/DeepSeek-R1');assert.equal(result.api,'openai-completions');assert.equal(result.usage.costUsd,(5*.7+2*2.5)/1e6);}assert.deepEqual(calls.slice(6).map(c=>c.body.model),['deepseek-ai/DeepSeek-R1','deepseek-ai/DeepSeek-R1']);
+      assert.equal(calls.length,8);for(const c of calls){assert.equal(c.url,'/owned%2Fhuggingface/v1/chat/completions');assert.equal(c.headers.authorization,'Bearer '+key);assert.equal(c.body.store,false);for(const field of ['max_tokens','reasoning','thinking','chat_template_args','chat_template_kwargs','tool_stream'])assert.equal(c.body[field],undefined);for(const name of ['session_id','session-id','x-client-request-id','x-session-affinity','nvcf-poll-seconds'])assert.equal(c.headers[name],undefined);}assert.throws(()=>provider.setConfiguredModel('future'),/Hugging Face chat model is not supported/);console.log('native huggingface installed OK');
+    }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
+  `);
+  expect(await run(process.execPath, ['huggingface-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'native huggingface installed OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches mixed native Fireworks through installed declarations and owned A/C policies', async () => {
+  await writeFile(path.join(consumer, 'fireworks-public.ts'), `
+    import { FireworksProvider, FIREWORKS_MODELS, AI_HARNESS_CORE_API_VERSION, type FireworksProfile } from '@ai-harness/core';
+    const profile: FireworksProfile = FIREWORKS_MODELS[0]; const provider = new FireworksProvider({ type: 'operator', apiKey: 'disposable' });
+    const api: 'anthropic-messages' | 'openai-completions' = profile.api; void api; void AI_HARNESS_CORE_API_VERSION;
+    provider.setConfiguredModel(profile.id); void provider.getPublishedModels();
+    // @ts-expect-error profile limits are readonly
+    profile.maxOutputTokens = 1;
+    // @ts-expect-error physical maps are readonly
+    profile.thinkingLevelMap.high = 'foreign';
+    // @ts-expect-error physical prices are readonly
+    profile.pricing.inputPerMillion = 99;
+    // @ts-expect-error public profiles are readonly
+    FIREWORKS_MODELS.push(profile);
+    // @ts-expect-error declared resize is readonly, not an effective pipeline
+    profile.declaredInputLimits!.images.resize.maxWidth = 1;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'fireworks-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'fireworks-public.mjs'), String.raw`
+    import assert from 'node:assert/strict'; import { createServer } from 'node:http';
+    import { FireworksProvider, FIREWORKS_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, getSupportedThinkingLevels } from '@ai-harness/core';
+    const calls=[],key='disposable-installed-fireworks',flash='accounts/fireworks/models/deepseek-v4p1-flash',glm='accounts/fireworks/models/glm-5p3',input={id:'u',role:'user',content:'Hi',timestamp:new Date(0)};
+    const server=createServer(async(req,res)=>{let text='';for await(const b of req)text+=b;const body=JSON.parse(text),a=req.url.endsWith('/messages'),label=body.max_tokens===512||body.max_completion_tokens===512;calls.push({url:req.url,headers:req.headers,body});const usage=a?{input_tokens:5,output_tokens:2,cache_read_input_tokens:4,cache_creation_input_tokens:1}:{prompt_tokens:10,completion_tokens:2,prompt_tokens_details:{cached_tokens:4,cache_write_tokens:1}};
+      if(body.stream){res.setHeader('content-type','text/event-stream');const events=a?[{type:'message_start',message:{id:'answer',role:'assistant',content:[],usage:{input_tokens:5,cache_read_input_tokens:4,cache_creation_input_tokens:1}}},{type:'content_block_start',index:0,content_block:{type:'text',text:''}},{type:'content_block_delta',index:0,delta:{type:'text_delta',text:'Ready'}},{type:'content_block_stop',index:0},{type:'message_delta',delta:{stop_reason:'end_turn'},usage:{output_tokens:2}},{type:'message_stop'}]:[{choices:[{delta:{reasoning_content:'Thought',content:'Ready'},finish_reason:'stop'}]},{choices:[],usage}];res.end(events.map(v=>'data: '+JSON.stringify(v)+'\n\n').join('')+(a?'':'data: [DONE]\n\n'));}
+      else res.end(JSON.stringify(a?{content:[{type:'text',text:label?'{"label":"safe"}':'Ready'}],stop_reason:'end_turn',usage}:{choices:[{message:{content:label?'{"label":"safe"}':'Ready'},finish_reason:'stop'}],usage}));
+    });await new Promise(r=>server.listen(0,'127.0.0.1',r));
+    try{
+      const provider=new FireworksProvider({type:'anthropic',apiKey:key,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Ffireworks/inference/v1'});assert.equal(FIREWORKS_MODELS.length,22);assert.equal(ProviderFactory.has('fireworks'),false);assert.equal(provider.canDiscoverModels(),false);assert.equal((await provider.getAvailableModels()).length,22);assert.equal(FIREWORKS_MODELS.every(p=>Object.isFrozen(p)&&Object.isFrozen(p.pricing)&&Object.isFrozen(p.thinkingLevelMap)),true);assert.equal(provider.getModelApi(glm),'openai-completions');assert.equal(provider.getModelApi('future'),undefined);
+      assert.equal(getProviderPublishedModel('anthropic','gpt-4o',provider),undefined);assert.equal(getProviderPublishedModel('anthropic',glm,provider).contextWindow,1048573);assert.deepEqual(getSupportedThinkingLevels('anthropic',flash,undefined,provider),['off','low','high','max']);assert.deepEqual(getSupportedThinkingLevels('anthropic',glm,undefined,provider),['low','high','max']);
+      const first=await provider.chat([input],{thinking:'high',maxTokens:20000,sessionId:'installed-session',cacheRetention:'long',systemPrompt:'System',tools:[{name:'read',description:'Read',parameters:{type:'object'}}]});assert.equal(first.model,flash);assert.equal(first.api,'anthropic-messages');assert.equal(first.usage.costUsd,(5*.3+2*1.2+4*.006)/1e6);assert.deepEqual(calls[0].body.thinking,{type:'adaptive',display:'summarized'});assert.deepEqual(calls[0].body.output_config,{effort:'high'});assert.equal(calls[0].body.tools[0].cache_control,undefined);assert.equal(calls[0].body.tools[0].eager_input_streaming,undefined);
+      const second=await provider.chat([input],{model:glm,thinking:'off',maxTokens:64,sessionId:'installed-session',cacheRetention:'long',systemPrompt:'System',tools:[{name:'read',description:'Read',parameters:{type:'object'}}]});assert.equal(second.model,glm);assert.equal(second.api,'openai-completions');assert.equal(second.usage.costUsd,(5*1.4+2*4.4+4*.26)/1e6);assert.equal(calls[1].body.max_completion_tokens,64);assert.equal(calls[1].body.reasoning_effort,'low');assert.equal(calls[1].body.tools[0].function.strict,false);
+      for(const model of [flash,glm]){provider.setConfiguredModel(model);const result=await new SpecializedModels(provider).classify({model:model+':classifier',input:'Approve',labels:['safe','review']});assert.equal(result.label,'safe');assert.equal(calls.at(-1).body[model===flash?'max_tokens':'max_completion_tokens'],512);}
+      for(const model of [flash,glm]){provider.setConfiguredModel(model);let final;await provider.streamChat([input],async()=>{await Promise.resolve();provider.setConfiguredModel(model===flash?glm:flash);},v=>{final=v;},undefined,{thinking:'high',maxTokens:20000});assert.equal(final.model,model);assert.equal(final.api,model===flash?'anthropic-messages':'openai-completions');assert.equal(final.usage.costUsd,model===flash?(5*.3+2*1.2+4*.006)/1e6:(5*1.4+2*4.4+4*.26)/1e6);}
+      assert.equal(calls.length,6);for(const c of calls){const a=c.body.model===flash;assert.equal(c.url,'/owned%2Ffireworks/inference/v1/'+(a?'messages':'chat/completions'));assert.equal(c.headers[a?'x-api-key':'authorization'],a?key:'Bearer '+key);assert.equal(c.headers[a?'authorization':'x-api-key'],undefined);for(const field of ['store','prompt_cache_key','prompt_cache_retention','chat_template_args','chat_template_kwargs'])assert.equal(c.body[field],undefined);}assert.equal(calls[0].headers['x-session-affinity'],'installed-session');assert.equal(calls[0].headers.session_id,undefined);for(const name of ['session_id','x-client-request-id','x-session-affinity'])assert.equal(calls[1].headers[name],'installed-session');assert.throws(()=>provider.setConfiguredModel('future'),/Fireworks chat model is not supported/);console.log('native fireworks installed OK');
+    }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
+  `);
+  expect(await run(process.execPath, ['fireworks-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'native fireworks installed OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Together through installed public declarations and physical C policies', async () => {
+  await writeFile(path.join(consumer, 'together-public.ts'), `
+    import { TogetherProvider, TOGETHER_MODELS, AI_HARNESS_CORE_API_VERSION, type TogetherProfile } from '@ai-harness/core';
+    const profile: TogetherProfile = TOGETHER_MODELS[0]; const provider = new TogetherProvider({ type: 'operator', apiKey: 'disposable' });
+    provider.setConfiguredModel(profile.id); void provider.getPublishedModels(); void AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error profile limits are readonly
+    profile.maxOutputTokens = 1;
+    // @ts-expect-error effective native maps are readonly
+    profile.thinkingLevelMap.high = 'foreign';
+    // @ts-expect-error prices are readonly
+    profile.pricing.inputPerMillion = 99;
+    // @ts-expect-error public profile list is readonly
+    TOGETHER_MODELS.push(profile);
+    // @ts-expect-error declared resize limits are readonly, not an effective pipeline
+    profile.declaredInputLimits!.images.resize.maxWidth = 1;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'together-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'together-public.mjs'), `
+    import assert from 'node:assert/strict'; import { createServer } from 'node:http';
+    import { TogetherProvider, TOGETHER_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, getSupportedThinkingLevels } from '@ai-harness/core';
+    const calls=[],key='disposable-installed-together';const server=createServer(async(req,res)=>{let text='';for await(const b of req)text+=b;const body=JSON.parse(text);calls.push({url:req.url,headers:req.headers,body});const usage={prompt_tokens:10,completion_tokens:2,prompt_tokens_details:{cached_tokens:4,cache_write_tokens:1}};if(body.stream){res.setHeader('content-type','text/event-stream');res.end([{choices:[{delta:{reasoning_content:'Thought',content:'Ready'},finish_reason:'stop'}]},{choices:[],usage}].map(v=>'data: '+JSON.stringify(v)+'\\n\\n').join('')+'data: [DONE]\\n\\n');}else res.end(JSON.stringify({choices:[{message:{content:body.max_tokens===512?'{"label":"safe"}':'Ready',reasoning_content:'Thought'},finish_reason:'stop'}],usage}));});await new Promise(r=>server.listen(0,'127.0.0.1',r));
+    try {
+      const provider=new TogetherProvider({type:'anthropic',apiKey:key,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Ftogether/v1',model:'deepseek-ai/DeepSeek-V4-Pro-0813'});
+      assert.equal(TOGETHER_MODELS.length,17);assert.equal(ProviderFactory.has('together'),false);assert.equal(provider.canDiscoverModels(),false);assert.equal((await provider.getAvailableModels()).length,17);assert.equal(Object.isFrozen(TOGETHER_MODELS),true);assert.equal(TOGETHER_MODELS.every(p=>Object.isFrozen(p)&&Object.isFrozen(p.pricing)&&Object.isFrozen(p.thinkingLevelMap)),true);
+      assert.equal(getProviderPublishedModel('anthropic','gpt-4o',provider),undefined);assert.equal(getProviderPublishedModel('anthropic','MiniMaxAI/MiniMax-M2.7',provider).contextWindow,196608);assert.deepEqual(getSupportedThinkingLevels('anthropic','deepseek-ai/DeepSeek-V4-Pro-0813',undefined,provider),['off','high']);assert.deepEqual(getSupportedThinkingLevels('anthropic','MiniMaxAI/MiniMax-M2.7',undefined,provider),['high']);
+      const first=await provider.chat([{id:'u',role:'user',content:'Hi',timestamp:new Date(0)}],{thinking:'off',maxTokens:64,sessionId:'installed-session',cacheRetention:'long',systemPrompt:'System',tools:[{name:'read',description:'Read',parameters:{type:'object'}}]});assert.equal(first.model,'deepseek-ai/DeepSeek-V4-Pro-0813');assert.equal(first.api,'openai-completions');assert.equal(first.usage.costUsd,(5*1.32+2*3.96+4*.13)/1e6);assert.deepEqual(calls[0].body.reasoning,{enabled:false});assert.equal(Object.hasOwn(calls[0].body,'reasoning_effort'),false);assert.equal(Object.hasOwn(calls[0].body.tools[0].function,'strict'),false);assert.equal(calls[0].body.messages[0].role,'system');
+      const label=await new SpecializedModels(provider).classify({model:'deepseek-ai/DeepSeek-V4-Pro-0813:classifier',input:'Approve',labels:['safe','review']});assert.equal(label.label,'safe');assert.equal(calls[1].body.max_tokens,512);
+      provider.setConfiguredModel('MiniMaxAI/MiniMax-M2.7');let final;await provider.streamChat([{id:'u',role:'user',content:'Hi',timestamp:new Date(0)}],async()=>{await Promise.resolve();provider.setConfiguredModel('openai/gpt-oss-120b');},v=>{final=v;},undefined,{thinking:'high'});assert.equal(final.model,'MiniMaxAI/MiniMax-M2.7');assert.equal(final.usage.costUsd,(5*.3+2*1.2+4*.06)/1e6);assert.deepEqual(calls[2].body.reasoning,{enabled:true});assert.equal(calls[2].body.reasoning_effort,undefined);assert.equal(calls[2].body.max_tokens,undefined);
+      provider.setConfiguredModel('deepseek-ai/DeepSeek-V4-Flash-0731');const emptyInput=[{id:'u-empty',role:'user',content:'Continue',timestamp:new Date(0)}],emptyJson=await provider.chat(emptyInput,{model:''});assert.equal(emptyJson.model,'deepseek-ai/DeepSeek-V4-Flash-0731');assert.equal(emptyJson.provider,'anthropic');assert.equal(emptyJson.api,'openai-completions');assert.equal(emptyJson.usage.costUsd,(5*.14+2*.28+4*.03)/1e6);
+      let emptyStream;await provider.streamChat(emptyInput,async()=>{await Promise.resolve();provider.setConfiguredModel('MiniMaxAI/MiniMax-M2.7');},value=>{emptyStream=value;},error=>{throw error;},{model:''});assert.equal(emptyStream.model,'deepseek-ai/DeepSeek-V4-Flash-0731');assert.equal(emptyStream.provider,'anthropic');assert.equal(emptyStream.api,'openai-completions');assert.equal(emptyStream.usage.costUsd,(5*.14+2*.28+4*.03)/1e6);assert.equal(calls.length,5);assert.deepEqual(calls.slice(-2).map(c=>c.body.model),['deepseek-ai/DeepSeek-V4-Flash-0731','deepseek-ai/DeepSeek-V4-Flash-0731']);
+      for(const c of calls){assert.equal(c.url,'/owned%2Ftogether/v1/chat/completions');assert.equal(c.headers.authorization,'Bearer '+key);for(const f of ['store','prompt_cache_key','prompt_cache_retention','thinking','chat_template_args','chat_template_kwargs','max_completion_tokens'])assert.equal(c.body[f],undefined);for(const name of ['session_id','session-id','x-client-request-id','x-session-affinity','nvcf-poll-seconds'])assert.equal(c.headers[name],undefined);}assert.throws(()=>provider.setConfiguredModel('future'),/Together chat model is not supported/);console.log('native together installed OK');
+    }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
+  `);
+  expect(await run(process.execPath, ['together-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'native together installed OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Baseten through installed public declarations and physical C policies', async () => {
+  await writeFile(path.join(consumer, 'baseten-public.ts'), `
+    import { BasetenProvider, BASETEN_MODELS, AI_HARNESS_CORE_API_VERSION, type BasetenProfile } from '@ai-harness/core';
+    const profile: BasetenProfile = BASETEN_MODELS[0]; const provider = new BasetenProvider({ type: 'operator', apiKey: 'disposable' });
+    provider.setConfiguredModel(profile.id); void provider.getPublishedModels(); void AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error profile limits are readonly
+    profile.maxOutputTokens = 1;
+    // @ts-expect-error native maps are readonly
+    profile.thinkingLevelMap.high = 'foreign';
+    // @ts-expect-error prices are readonly
+    profile.pricing.inputPerMillion = 99;
+    // @ts-expect-error public profile list is readonly
+    BASETEN_MODELS.push(profile);
+    // @ts-expect-error declared resize limits are readonly, not an effective pipeline
+    profile.declaredInputLimits!.images.resize.maxWidth = 1;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'baseten-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'baseten-public.mjs'), `
+    import assert from 'node:assert/strict'; import { createServer } from 'node:http';
+    import { BasetenProvider, BASETEN_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, getSupportedThinkingLevels } from '@ai-harness/core';
+    const calls=[],key='disposable-installed-baseten';const server=createServer(async(req,res)=>{let text='';for await(const b of req)text+=b;const body=JSON.parse(text);calls.push({url:req.url,headers:req.headers,body});const usage={prompt_tokens:10,completion_tokens:2,prompt_tokens_details:{cached_tokens:4,cache_write_tokens:1}};if(body.stream){res.setHeader('content-type','text/event-stream');res.end([{choices:[{delta:{reasoning_content:'Thought',content:'Ready'},finish_reason:'stop'}]},{choices:[],usage}].map(v=>'data: '+JSON.stringify(v)+'\\n\\n').join('')+'data: [DONE]\\n\\n');}else res.end(JSON.stringify({choices:[{message:{content:body.max_tokens===512?'{"label":"safe"}':'Ready',reasoning_content:'Thought'},finish_reason:'stop'}],usage}));});await new Promise(r=>server.listen(0,'127.0.0.1',r));
+    try {
+      const provider=new BasetenProvider({type:'anthropic',apiKey:key,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fbaseten/v1',model:'zai-org/GLM-5.2'});
+      assert.equal(BASETEN_MODELS.length,22);assert.equal(ProviderFactory.has('baseten'),false);assert.equal(provider.canDiscoverModels(),false);assert.equal((await provider.getAvailableModels()).length,22);assert.equal(Object.isFrozen(BASETEN_MODELS),true);assert.equal(BASETEN_MODELS.every(p=>Object.isFrozen(p)&&Object.isFrozen(p.pricing)&&Object.isFrozen(p.thinkingLevelMap)),true);
+      assert.equal(getProviderPublishedModel('anthropic','gpt-4o',provider),undefined);assert.equal(getProviderPublishedModel('anthropic','moonshotai/Kimi-K2.6',provider).contextWindow,262000);assert.deepEqual(getSupportedThinkingLevels('anthropic','zai-org/GLM-5.2',undefined,provider),['off','high','max']);
+      const first=await provider.chat([{id:'u',role:'user',content:'Hi',timestamp:new Date(0)}],{thinking:'off',maxTokens:64,sessionId:'installed-session',cacheRetention:'long',systemPrompt:'System',tools:[{name:'read',description:'Read',parameters:{type:'object'}}]});assert.equal(first.model,'zai-org/GLM-5.2');assert.equal(first.api,'openai-completions');assert.equal(first.usage.costUsd,(5*1.4+2*4.4+4*.3)/1e6);assert.deepEqual(calls[0].body.chat_template_args,{enable_thinking:false});assert.equal(calls[0].body.reasoning_effort,'none');assert.equal(calls[0].body.tools[0].function.strict,false);assert.equal(calls[0].body.messages[0].role,'system');for(const name of ['session_id','x-client-request-id','x-session-affinity'])assert.equal(calls[0].headers[name],'installed-session');
+      const label=await new SpecializedModels(provider).classify({model:'zai-org/GLM-5.2:classifier',input:'Approve',labels:['safe','review']});assert.equal(label.label,'safe');assert.equal(calls[1].body.max_tokens,512);
+      provider.setConfiguredModel('moonshotai/Kimi-K2.6');let final;await provider.streamChat([{id:'u',role:'user',content:'Hi',timestamp:new Date(0)}],async()=>{await Promise.resolve();provider.setConfiguredModel('openai/gpt-oss-120b');},v=>{final=v;},undefined,{thinking:'high'});assert.equal(final.model,'moonshotai/Kimi-K2.6');assert.equal(final.usage.costUsd,(5*.95+2*4+4*.16)/1e6);assert.deepEqual(calls[2].body.chat_template_args,{enable_thinking:true});assert.equal(calls[2].body.reasoning_effort,undefined);assert.equal(calls[2].body.max_tokens,undefined);
+      provider.setConfiguredModel('deepseek-ai/DeepSeek-V4-Flash-0731');const emptyInput=[{id:'u-empty',role:'user',content:'Continue',timestamp:new Date(0)}],emptyJson=await provider.chat(emptyInput,{model:''});assert.equal(emptyJson.model,'deepseek-ai/DeepSeek-V4-Flash-0731');assert.equal(emptyJson.provider,'anthropic');assert.equal(emptyJson.api,'openai-completions');assert.equal(emptyJson.usage.costUsd,(5*.13+2*.26+4*.028)/1e6);
+      let emptyStream;await provider.streamChat(emptyInput,async()=>{await Promise.resolve();provider.setConfiguredModel('moonshotai/Kimi-K2.6');},value=>{emptyStream=value;},error=>{throw error;},{model:''});assert.equal(emptyStream.model,'deepseek-ai/DeepSeek-V4-Flash-0731');assert.equal(emptyStream.provider,'anthropic');assert.equal(emptyStream.api,'openai-completions');assert.equal(emptyStream.usage.costUsd,(5*.13+2*.26+4*.028)/1e6);assert.equal(calls.length,5);assert.deepEqual(calls.slice(-2).map(c=>c.body.model),['deepseek-ai/DeepSeek-V4-Flash-0731','deepseek-ai/DeepSeek-V4-Flash-0731']);
+      for(const c of calls){assert.equal(c.url,'/owned%2Fbaseten/v1/chat/completions');assert.equal(c.headers.authorization,'Bearer '+key);for(const f of ['store','prompt_cache_key','prompt_cache_retention','thinking','reasoning','max_completion_tokens'])assert.equal(c.body[f],undefined);assert.equal(c.headers['nvcf-poll-seconds'],undefined);}assert.throws(()=>provider.setConfiguredModel('future'),/Baseten chat model is not supported/);console.log('native baseten installed OK');
+    }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
+  `);
+  expect(await run(process.execPath, ['baseten-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'native baseten installed OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Meta through installed public declarations and captured R policies', async () => {
+  await writeFile(path.join(consumer, 'meta-public.ts'), `
+    import { MetaProvider, META_MODELS, type MetaProfile, type AiProvider, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
+    const profile: MetaProfile = META_MODELS[0];
+    const provider: AiProvider = new MetaProvider({ type: 'operator-meta', apiKey: 'disposable' });
+    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error physical profiles are immutable
+    profile.contextWindow = 1;
+    // @ts-expect-error base prices are immutable
+    profile.declaredPricing.inputPerMillion = 1;
+    // @ts-expect-error physical catalogues are not mutable registries
+    META_MODELS.push(profile);
+    // @ts-expect-error physical input declarations are immutable
+    profile.declaredInput.push('image');
+    // @ts-expect-error declared image resize data is immutable,not an installed resizer
+    profile.declaredInputLimits.images.resize.maxWidth = 1;
+    // @ts-expect-error native effort maps are immutable
+    profile.thinkingLevelMap.high = 'changed';
+    void provider; void version;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'meta-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'meta-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { MetaProvider, META_MODELS, SpecializedModels, getProviderPublishedModel, getSupportedThinkingLevels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [], model = 'muse-spark-1.1', usage = { input_tokens:10, output_tokens:2, input_tokens_details:{ cached_tokens:4, cache_write_tokens:1 } };
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url:request.url, headers:request.headers, body });
+      const system = body.input.filter(item => item.role === 'developer').map(item => item.content).join(' ');
+      const content = system.includes('Classify the user input') ? '{"label":"safe"}' : 'Installed Meta';
+      response.setHeader('content-type', 'text/event-stream'); response.end([
+        { type:'response.reasoning_summary_text.delta', delta:'Thought' }, { type:'response.output_text.delta', delta:content },
+        { type:'response.completed', response:{ id:'installed-meta', model:body.model, usage } }
+      ].map(value => 'data: ' + JSON.stringify(value) + '\\n\\n').join(''));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new MetaProvider({ type:'anthropic', apiKey:'disposable-installed-meta', model,
+        baseUrl:'http://127.0.0.1:' + server.address().port + '/owned%2Fmeta/v1/responses/' });
+      assert.equal(ProviderFactory.has('meta'), false); assert.equal(META_MODELS.length, 6); assert.ok(Object.isFrozen(META_MODELS));
+      for (const profile of META_MODELS) { assert.ok(Object.isFrozen(profile)); assert.ok(Object.isFrozen(profile.declaredPricing)); assert.ok(Object.isFrozen(profile.declaredInputLimits.images.resize)); assert.ok(Object.isFrozen(profile.thinkingLevelMap)); assert.ok(Object.isFrozen(profile.declaredInput)); }
+      assert.equal(getProviderPublishedModel('anthropic', model, provider).contextWindow, 1048576);
+      assert.equal(getProviderPublishedModel('anthropic', 'muse-wonder-1.0', provider).maxOutputTokens, 131072);
+      assert.equal(getProviderPublishedModel('anthropic', 'gpt-4o', provider), undefined);
+      assert.deepEqual(getSupportedThinkingLevels('anthropic', model, undefined, provider), ['minimal','low','medium','high','xhigh']);
+      assert.deepEqual(getSupportedThinkingLevels('anthropic', 'muse-wonder-1.0', undefined, provider), ['minimal','low','medium','high','xhigh','max']);
+      assert.equal(calls.length, 0); let complete;
+      await provider.streamChat([{ id:'u', role:'user', content:'hello', timestamp:new Date() }], async () => { await Promise.resolve(); provider.setConfiguredModel('muse-wonder-1.0'); }, value => { complete = value; }, undefined,
+        { thinking:'high', maxTokens:64, systemPrompt:'System', tools:[{ name:'read', description:'Read', parameters:{ type:'object' } }] });
+      assert.equal(complete.content, 'Installed Meta'); assert.equal(complete.api, 'openai-responses'); assert.equal(complete.provider, 'anthropic'); assert.equal(complete.model, model);
+      assert.equal(complete.usage.totalTokens, 12); assert.equal(complete.usage.promptTokens, 5);
+      assert.equal(complete.usage.costUsd, (5 * 1.25 + 2 * 4.25 + 4 * 0.15) / 1e6);
+      assert.equal(provider.getSpecializedModels().length, 1); assert.equal(provider.getSpecializedModels()[0].model, 'muse-wonder-1.0');
+      const sdk = new SpecializedModels(provider); assert.deepEqual(sdk.getModelsOfType('image'), []);
+      const result = await sdk.classify({ model:'muse-wonder-1.0:classifier', input:'Approve', labels:['safe','review'] }); assert.equal(result.label, 'safe'); assert.equal(result.usage.totalTokens, 12); assert.equal(result.usage.costUsd, undefined); assert.equal(calls[1].body.max_output_tokens, 512);
+      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_output_tokens, 64); assert.equal(calls[0].body.input[0].role, 'developer');
+      assert.deepEqual(calls[0].body.reasoning, { effort:'high', summary:'auto' }); assert.deepEqual(calls[1].body.reasoning, { effort:'minimal', summary:'auto' });
+      assert.equal(calls[0].body.tools[0].strict, false);
+      for (const call of calls) { assert.equal(call.url, '/owned%2Fmeta/v1/responses'); assert.equal(call.headers.authorization, 'Bearer disposable-installed-meta'); assert.equal(call.headers['api-key'], undefined); assert.equal(call.headers['x-api-key'], undefined); assert.equal(call.headers['nvcf-poll-seconds'], undefined); assert.equal(call.body.prompt_cache_retention, undefined); assert.equal(call.body.prompt_cache_options, undefined); assert.deepEqual(call.body.include, ['reasoning.encrypted_content']); }
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed Meta OK');
+  `);
+  expect(await run(process.execPath, ['meta-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed Meta OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native xAI through installed public declarations and captured R policies', async () => {
+  await writeFile(path.join(consumer, 'xai-public.ts'), `
+    import { XaiProvider, XAI_MODELS, type XaiProfile, type AiProvider, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
+    const profile: XaiProfile = XAI_MODELS[0];
+    const provider: AiProvider = new XaiProvider({ type: 'operator-xai', apiKey: 'disposable' });
+    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error physical profiles are immutable
+    profile.contextWindow = 1;
+    // @ts-expect-error base prices are immutable
+    profile.pricing.inputPerMillion = 1;
+    // @ts-expect-error physical catalogues are not mutable registries
+    XAI_MODELS.push(profile);
+    // @ts-expect-error physical input declarations are immutable
+    profile.declaredInput.push('image');
+    // @ts-expect-error native tier thresholds are immutable
+    profile.pricingTiers[0].inputTokensAbove = 1;
+    // @ts-expect-error native effort maps are immutable
+    profile.thinkingLevelMap.high = 'changed';
+    void provider; void version;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'xai-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'xai-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { XaiProvider, XAI_MODELS, SpecializedModels, getProviderPublishedModel, getSupportedThinkingLevels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [], model = 'grok-4.3', usage = { input_tokens:10, output_tokens:2, input_tokens_details:{ cached_tokens:4, cache_write_tokens:1 } };
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url:request.url, headers:request.headers, body });
+      const system = body.input.filter(item => item.role === 'developer').map(item => item.content).join(' ');
+      const content = system.includes('Classify the user input') ? '{"label":"safe"}' : 'Installed xAI';
+      response.setHeader('content-type', 'text/event-stream'); response.end([
+        { type:'response.reasoning_summary_text.delta', delta:'Thought' }, { type:'response.output_text.delta', delta:content },
+        { type:'response.completed', response:{ id:'installed-xai', model:body.model, usage } }
+      ].map(value => 'data: ' + JSON.stringify(value) + '\\n\\n').join(''));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new XaiProvider({ type:'anthropic', apiKey:'disposable-installed-xai', model,
+        baseUrl:'http://127.0.0.1:' + server.address().port + '/owned%2Fxai/v1/responses/' });
+      assert.equal(ProviderFactory.has('xai'), false); assert.equal(XAI_MODELS.length, 4); assert.ok(Object.isFrozen(XAI_MODELS));
+      for (const profile of XAI_MODELS) { assert.ok(Object.isFrozen(profile)); assert.ok(Object.isFrozen(profile.pricing)); assert.ok(Object.isFrozen(profile.pricingTiers[0])); assert.ok(Object.isFrozen(profile.thinkingLevelMap)); assert.ok(Object.isFrozen(profile.declaredInput)); }
+      assert.equal(getProviderPublishedModel('anthropic', model, provider).contextWindow, 1000000);
+      assert.equal(getProviderPublishedModel('anthropic', 'grok-4.6', provider).maxOutputTokens, 500000);
+      assert.equal(getProviderPublishedModel('anthropic', 'gpt-4o', provider), undefined);
+      assert.deepEqual(getSupportedThinkingLevels('anthropic', model, undefined, provider), ['off','low','medium','high']);
+      assert.deepEqual(getSupportedThinkingLevels('anthropic', 'grok-4.6', undefined, provider), ['low','medium','high','xhigh']);
+      assert.equal(calls.length, 0); let complete;
+      await provider.streamChat([{ id:'u', role:'user', content:'hello', timestamp:new Date() }], async () => { await Promise.resolve(); provider.setConfiguredModel('grok-4.6'); }, value => { complete = value; }, undefined,
+        { thinking:'high', maxTokens:64, systemPrompt:'System', tools:[{ name:'read', description:'Read', parameters:{ type:'object' } }] });
+      assert.equal(complete.content, 'Installed xAI'); assert.equal(complete.api, 'openai-responses'); assert.equal(complete.provider, 'anthropic'); assert.equal(complete.model, model);
+      assert.equal(complete.usage.totalTokens, 12); assert.equal(complete.usage.promptTokens, 5);
+      assert.equal(complete.usage.costUsd, (5 * 1.25 + 2 * 2.5 + 4 * 0.2) / 1e6);
+      assert.equal(provider.getSpecializedModels().length, 1); assert.equal(provider.getSpecializedModels()[0].model, 'grok-4.6');
+      const sdk = new SpecializedModels(provider); assert.deepEqual(sdk.getModelsOfType('image'), []);
+      const result = await sdk.classify({ model:'grok-4.6:classifier', input:'Approve', labels:['safe','review'] }); assert.equal(result.label, 'safe'); assert.equal(result.usage.totalTokens, 12);
+      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_output_tokens, 64); assert.equal(calls[0].body.input[0].role, 'developer');
+      assert.deepEqual(calls[0].body.reasoning, { effort:'high', summary:'auto' }); assert.deepEqual(calls[1].body.reasoning, { effort:'low', summary:'auto' });
+      assert.equal(calls[0].body.tools[0].strict, false);
+      for (const call of calls) { assert.equal(call.url, '/owned%2Fxai/v1/responses'); assert.equal(call.headers.authorization, 'Bearer disposable-installed-xai'); assert.equal(call.headers['api-key'], undefined); assert.equal(call.headers['x-api-key'], undefined); assert.equal(call.headers['nvcf-poll-seconds'], undefined); assert.equal(call.body.prompt_cache_retention, undefined); assert.equal(call.body.prompt_cache_options, undefined); assert.deepEqual(call.body.include, ['reasoning.encrypted_content']); }
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed xAI OK');
+  `);
+  expect(await run(process.execPath, ['xai-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed xAI OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native MiniMax through installed public declarations and captured A policies', async () => {
+  await writeFile(path.join(consumer, 'minimax-public.ts'), `
+    import { MiniMaxProvider, MINIMAX_MODELS, type MiniMaxProfile, type AiProvider, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
+    const profile: MiniMaxProfile = MINIMAX_MODELS[0];
+    const provider: AiProvider = new MiniMaxProvider({ type: 'operator-minimax', apiKey: 'disposable' });
+    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error reviewed profiles are immutable
+    profile.contextWindow = 1;
+    // @ts-expect-error nested prices are immutable
+    profile.pricing.inputPerMillion = 1;
+    // @ts-expect-error physical model catalogues are not mutable registries
+    MINIMAX_MODELS.push(profile);
+    // @ts-expect-error declared inputs are immutable
+    profile.declaredInput.push('image');
+    const tier = MINIMAX_MODELS[2].declaredPricing.tiers![0];
+    // @ts-expect-error native tier thresholds are immutable
+    tier.inputTokensAbove = 1;
+    void provider; void version;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'minimax-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'minimax-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { MiniMaxProvider, MINIMAX_MODELS, SpecializedModels, getProviderPublishedModel, getSupportedThinkingLevels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [], model = 'MiniMax-M2.7';
+    const usage = { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 1 };
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, headers: request.headers, body });
+      if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end([
+        { type:'message_start', message:{ type:'message', model:body.model, usage:{ ...usage, output_tokens:0 } } },
+        { type:'content_block_start', index:0, content_block:{ type:'text', text:'' } },
+        { type:'content_block_delta', index:0, delta:{ type:'text_delta', text:'Installed MiniMax' } },
+        { type:'content_block_stop', index:0 }, { type:'message_delta', delta:{ stop_reason:'end_turn' }, usage:{ output_tokens:2 } }, { type:'message_stop' }
+      ].map(value => 'data: ' + JSON.stringify(value) + '\\n\\n').join('')); }
+      else response.end(JSON.stringify({ model:body.model, stop_reason:'end_turn', content:[{ type:'text', text:'{"label":"safe"}' }], usage }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new MiniMaxProvider({ type:'azure', apiKey:'disposable-installed-minimax', model,
+        baseUrl:'http://127.0.0.1:' + server.address().port + '/owned%2Fminimax/anthropic/v1/messages/' });
+      assert.equal(ProviderFactory.has('minimax'), false); assert.equal(MINIMAX_MODELS.length, 3); assert.ok(Object.isFrozen(MINIMAX_MODELS));
+      for (const profile of MINIMAX_MODELS) { assert.ok(Object.isFrozen(profile)); assert.ok(Object.isFrozen(profile.declaredPricing)); assert.ok(Object.isFrozen(profile.declaredInput)); }
+      assert.ok(Object.isFrozen(MINIMAX_MODELS[2].declaredPricing.tiers[0]));
+      assert.equal(getProviderPublishedModel('azure', model, provider).contextWindow, 204800);
+      assert.equal(getProviderPublishedModel('azure', 'MiniMax-M3', provider).maxOutputTokens, 512000);
+      assert.equal(getProviderPublishedModel('azure', 'claude-sonnet-4-6', provider), undefined);
+      assert.deepEqual(getSupportedThinkingLevels('azure', model, undefined, provider), ['off','minimal','low','medium','high']);
+      assert.equal(calls.length, 0); let complete;
+      await provider.streamChat([{ id:'u', role:'user', content:'hello', timestamp:new Date() }], async () => { await Promise.resolve(); provider.setConfiguredModel('MiniMax-M3'); }, value => { complete = value; }, undefined,
+        { thinking:'high', maxTokens:32768, systemPrompt:'System', tools:[{ name:'read', description:'Read', parameters:{ type:'object' } }] });
+      assert.equal(complete.content, 'Installed MiniMax'); assert.equal(complete.api, 'anthropic-messages'); assert.equal(complete.provider, 'azure'); assert.equal(complete.model, model);
+      assert.equal(complete.usage.totalTokens, 12); assert.equal(complete.usage.promptTokens, 5);
+      assert.equal(complete.usage.costUsd, (5 * 0.3 + 2 * 1.2 + 4 * 0.06 + 0.375) / 1e6);
+      assert.equal(provider.getSpecializedModels().length, 1); assert.equal(provider.getSpecializedModels()[0].model, 'MiniMax-M3');
+      const sdk = new SpecializedModels(provider); assert.deepEqual(sdk.getModelsOfType('image'), []);
+      const result = await sdk.classify({ model:'MiniMax-M3:classifier', input:'Approve', labels:['safe','review'] }); assert.equal(result.label, 'safe'); assert.equal(result.usage.totalTokens, 12);
+      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_tokens, 32768);
+      assert.deepEqual(calls[0].body.thinking, { type:'enabled', budget_tokens:16384, display:'summarized' });
+      assert.equal(calls[0].headers['anthropic-beta'], 'interleaved-thinking-2025-05-14');
+      assert.equal(calls[0].body.tools[0].eager_input_streaming, true); assert.equal(calls[0].body.tools[0].strict, undefined); assert.ok(Array.isArray(calls[0].body.system));
+      for (const call of calls) { assert.equal(call.url, '/owned%2Fminimax/anthropic/v1/messages'); assert.equal(call.headers['x-api-key'], 'disposable-installed-minimax'); assert.equal(call.headers['anthropic-version'], '2023-06-01'); assert.equal(call.headers.authorization, undefined); assert.equal(call.headers['nvcf-poll-seconds'], undefined); assert.equal(call.body.output_config, undefined); }
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed MiniMax OK');
+  `);
+  expect(await run(process.execPath, ['minimax-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed MiniMax OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Nvidia through installed public declarations and captured C policies', async () => {
+  await writeFile(path.join(consumer, 'nvidia-public.ts'), `
+    import { NvidiaProvider, NVIDIA_MODELS, type NvidiaProfile, type AiProvider, type ProviderDialect, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
+    const dialect: ProviderDialect = 'nvidia'; void dialect;
+    const profile: NvidiaProfile = NVIDIA_MODELS[0];
+    const provider: AiProvider = new NvidiaProvider({ type: 'operator-nvidia', apiKey: 'disposable' });
+    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error reviewed profiles are immutable
+    profile.contextWindow = 1;
+    // @ts-expect-error nested declared price tables are immutable
+    profile.declaredPricing.inputPerMillion = 1;
+    // @ts-expect-error native profiles are not mutable model registries
+    NVIDIA_MODELS.push(profile);
+    // @ts-expect-error declared inputs are immutable
+    profile.declaredInput.push('image');
+    void provider; void version;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'nvidia-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'nvidia-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { NvidiaProvider, NVIDIA_MODELS, SpecializedModels, getProviderPublishedModel, getSupportedThinkingLevels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [], model = 'nvidia/nemotron-3-super-120b-a12b';
+    const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4 } };
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, authorization: request.headers.authorization, apiKey: request.headers['api-key'], pollSeconds: request.headers['nvcf-poll-seconds'], body });
+      if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ model: body.model, choices: [{ delta: { reasoning_content: 'Thought', content: 'Installed Nvidia' }, finish_reason: 'stop' }], usage }) + '\\n\\ndata: [DONE]\\n\\n'); }
+      else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: '{"label":"safe"}' }, finish_reason: 'stop' }], usage }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new NvidiaProvider({ type: 'azure', apiKey: 'disposable-installed-nvidia', model,
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/owned%2Fnvidia/v1/chat/completions/' });
+      assert.equal(ProviderFactory.has('nvidia'), false); assert.equal(NVIDIA_MODELS.length, 21); assert.ok(Object.isFrozen(NVIDIA_MODELS));
+      for (const profile of NVIDIA_MODELS) { assert.ok(Object.isFrozen(profile)); assert.ok(Object.isFrozen(profile.declaredPricing)); assert.ok(Object.isFrozen(profile.declaredInput)); }
+      assert.equal(getProviderPublishedModel('azure', model, provider).contextWindow, 262144);
+      assert.equal(getProviderPublishedModel('azure', 'gpt-4o', provider), undefined);
+      assert.equal(getProviderPublishedModel('azure', 'moonshotai/kimi-k3', provider).pricing, undefined);
+      assert.equal(getProviderPublishedModel('azure', model, provider).capabilities.imageInput, false);
+      assert.deepEqual(getSupportedThinkingLevels('azure', model, undefined, provider), ['off','minimal','low','medium','high']);
+      assert.equal(calls.length, 0);
+      const events = []; let complete;
+      await provider.streamChat([{ id: 'u', role: 'user', content: 'hello', timestamp: new Date() }], async (_text, event) => { await Promise.resolve(); events.push(event.type); provider.setConfiguredModel('moonshotai/kimi-k3'); }, value => { complete = value; }, undefined,
+        { thinking: 'off', maxTokens: 64, systemPrompt: 'System', tools: [{ name: 'read', description: 'Read', parameters: { type: 'object' } }] });
+      assert.deepEqual(events, ['reasoning_delta', 'text_delta']); assert.equal(complete.content, 'Installed Nvidia');
+      assert.equal(complete.api, 'openai-completions'); assert.equal(complete.provider, 'azure'); assert.equal(complete.model, model);
+      assert.equal(complete.usage.promptTokens, 6); assert.equal(complete.usage.cacheReadTokens, 4);
+      assert.equal(complete.usage.costUsd, (6 * 0.2 + 2 * 0.8) / 1e6);
+      assert.equal(provider.getSpecializedModels().length, 1); assert.equal(provider.getSpecializedModels()[0].model, 'moonshotai/kimi-k3'); assert.equal(provider.getSpecializedModels()[0].pricing, undefined);
+      provider.setConfiguredModel('deepseek-ai/deepseek-v4.1-flash');
+      const sdk = new SpecializedModels(provider); assert.deepEqual(sdk.getModelsOfType('image'), []);
+      const result = await sdk.classify({ model: 'deepseek-ai/deepseek-v4.1-flash:classifier', input: 'Approve', labels: ['safe','review'] });
+      assert.equal(result.label, 'safe'); assert.equal(result.usage.totalTokens, 12);
+      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_tokens, 64); assert.equal(calls[0].body.tools[0].function.strict, undefined); assert.equal(calls[0].body.tool_stream, undefined);
+      assert.equal(calls[0].body.reasoning_effort, undefined); assert.equal(calls[0].body.messages[0].role, 'system'); assert.equal(calls[0].body.thinking, undefined);
+      assert.equal(calls[1].body.reasoning_effort, undefined); assert.deepEqual(calls[1].body.thinking, { type:'disabled' }); assert.equal(calls[1].body.tool_stream, undefined);
+      for (const call of calls) { assert.equal(call.url, '/owned%2Fnvidia/v1/chat/completions'); assert.equal(call.authorization, 'Bearer disposable-installed-nvidia'); assert.equal(call.apiKey, undefined); assert.equal(call.pollSeconds, '3600'); assert.equal(call.body.max_completion_tokens, undefined); assert.equal(call.body.store, undefined); }
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed Nvidia OK');
+  `);
+  expect(await run(process.execPath, ['nvidia-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed Nvidia OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native DeepSeek through installed public declarations and captured C policies', async () => {
+  await writeFile(path.join(consumer, 'deepseek-public.ts'), `
+    import { DeepSeekProvider, DEEPSEEK_MODELS, type DeepSeekProfile, type AiProvider, type ProviderDialect, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
+    const dialect: ProviderDialect = 'deepseek'; void dialect;
+    const profile: DeepSeekProfile = DEEPSEEK_MODELS[0];
+    const provider: AiProvider = new DeepSeekProvider({ type: 'operator-deepseek', apiKey: 'disposable' });
+    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error reviewed profiles are immutable
+    profile.contextWindow = 1;
+    // @ts-expect-error nested price tables are immutable
+    profile.pricing.inputPerMillion = 1;
+    // @ts-expect-error native profiles are not mutable model registries
+    DEEPSEEK_MODELS.push(profile);
+    void provider; void version;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'deepseek-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'deepseek-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { DeepSeekProvider, DEEPSEEK_MODELS, SpecializedModels, getProviderPublishedModel, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [], model = 'deepseek-flash';
+    const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_cache_hit_tokens: 4 };
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, authorization: request.headers.authorization, body });
+      if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ model: body.model, choices: [{ delta: { reasoning_content: 'Thought', content: 'Installed DeepSeek' }, finish_reason: 'stop' }], usage }) + '\\n\\ndata: [DONE]\\n\\n'); }
+      else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: '{"label":"safe"}' }, finish_reason: 'stop' }], usage }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new DeepSeekProvider({ type: 'azure', apiKey: 'disposable-installed-deepseek', model,
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/owned%2Fdeepseek/chat/completions/' });
+      assert.equal(ProviderFactory.has('deepseek'), false); assert.equal(DEEPSEEK_MODELS.length, 2);
+      assert.equal(getProviderPublishedModel('azure', model, provider).contextWindow, 1000000);
+      assert.equal(getProviderPublishedModel('azure', 'gpt-4o', provider), undefined);
+      assert.equal(getProviderPublishedModel('azure', 'deepseek-v4-pro', provider).capabilities.imageInput, false);
+      const events = []; let complete;
+      await provider.streamChat([{ id: 'a', role: 'assistant', content: 'Prior', timestamp: new Date(), blocks: [{ type: 'reasoning', text: 'Owned reasoning' }] },
+        { id: 'u', role: 'user', content: 'hello', timestamp: new Date() }], async (_text, event) => { await Promise.resolve(); events.push(event.type); provider.setConfiguredModel('deepseek-v4-pro'); }, value => { complete = value; }, undefined,
+        { thinking: 'max', maxTokens: 64, tools: [{ name: 'read', description: 'Read', parameters: { type: 'object' } }] });
+      assert.deepEqual(events, ['reasoning_delta', 'text_delta']); assert.equal(complete.content, 'Installed DeepSeek');
+      assert.equal(complete.api, 'openai-completions'); assert.equal(complete.provider, 'azure'); assert.equal(complete.model, model);
+      assert.equal(complete.usage.promptTokens, 6); assert.equal(complete.usage.cacheReadTokens, 4);
+      assert.equal(complete.usage.costUsd, (6 * 0.3 + 2 * 1.2 + 4 * 0.006) / 1e6);
+      assert.equal(provider.getSpecializedModels().length, 1); assert.equal(provider.getSpecializedModels()[0].model, 'deepseek-v4-pro');
+      provider.setConfiguredModel(model);
+      const sdk = new SpecializedModels(provider); assert.deepEqual(sdk.getModelsOfType('image'), []);
+      const result = await sdk.classify({ model: model + ':classifier', input: 'Approve', labels: ['safe', 'review'] });
+      assert.equal(result.label, 'safe'); assert.equal(result.usage.totalTokens, 12);
+      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_tokens, 64); assert.equal(calls[0].body.tools[0].function.strict, true);
+      assert.equal(calls[0].body.reasoning_effort, 'max'); assert.equal(calls[0].body.thinking.type, 'enabled'); assert.equal(calls[0].body.messages[0].reasoning_content, 'Owned reasoning');
+      assert.equal(calls[1].body.thinking.type, 'disabled'); assert.equal(calls[1].body.reasoning_effort, undefined);
+      for (const call of calls) { assert.equal(call.url, '/owned%2Fdeepseek/chat/completions'); assert.equal(call.authorization, 'Bearer disposable-installed-deepseek'); assert.equal(call.body.max_completion_tokens, undefined); }
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed DeepSeek OK');
+  `);
+  expect(await run(process.execPath, ['deepseek-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed DeepSeek OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Ant Ling through installed public declarations and captured C policies', async () => {
+  await writeFile(path.join(consumer, 'ant-ling-public.ts'), `
+    import { AntLingProvider, ANT_LING_MODELS, type AntLingProfile, type AiProvider, type ProviderDialect, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
+    const profile: AntLingProfile = ANT_LING_MODELS[2];
+    const provider: AiProvider = new AntLingProvider({ type: 'operator-ant-ling', apiKey: 'disposable' });
+    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error this SDK does not add a custom-host dialect
+    const dialect: ProviderDialect = 'ant-ling';
+    // @ts-expect-error reviewed profile limits are immutable
+    profile.contextWindow = 1;
+    // @ts-expect-error nested prices are immutable
+    profile.pricing.inputPerMillion = 1;
+    // @ts-expect-error declared inputs are immutable
+    profile.declaredInput.push('text');
+    // @ts-expect-error model publication is not a mutable registry
+    ANT_LING_MODELS.push(profile);
+    if (profile.thinkingLevelMap) {
+      // @ts-expect-error physical effort maps are immutable
+      profile.thinkingLevelMap.high = 'foreign';
+    }
+    void provider; void version; void dialect;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'ant-ling-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'ant-ling-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { AntLingProvider, ANT_LING_MODELS, SpecializedModels, getProviderPublishedModel, getSupportedThinkingLevels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [], model = 'Ring-2.6-1T';
+    const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } };
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, authorization: request.headers.authorization, body });
+      if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ choices: [{ delta: { reasoning_content: 'Thought', content: 'Installed Ant Ling' }, finish_reason: 'stop' }], usage }) + '\\n\\ndata: [DONE]\\n\\n'); }
+      else response.end(JSON.stringify({ choices: [{ message: { content: '{"label":"safe"}' }, finish_reason: 'stop' }], usage }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new AntLingProvider({ type: 'azure', apiKey: 'disposable-installed-ant-ling', model,
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/owned%2Fant-ling/v1/chat/completions/' });
+      assert.equal(ProviderFactory.has('ant-ling'), false); assert.equal(ANT_LING_MODELS.length, 3); assert.ok(Object.isFrozen(ANT_LING_MODELS));
+      assert.ok(ANT_LING_MODELS.every(profile => Object.isFrozen(profile) && Object.isFrozen(profile.pricing) && Object.isFrozen(profile.declaredInput)));
+      assert.equal(getProviderPublishedModel('azure', model, provider).contextWindow, 262144);
+      assert.equal(getProviderPublishedModel('azure', 'gpt-4o', provider), undefined);
+      assert.deepEqual(getSupportedThinkingLevels('azure', model, undefined, provider), ['high', 'xhigh']);
+      assert.deepEqual(getSupportedThinkingLevels('azure', 'Ling-2.6-flash', undefined, provider), ['off']);
+      const events = []; let complete;
+      await provider.streamChat([{ id: 'u', role: 'user', content: 'hello', timestamp: new Date() }], async (_text, event) => { await Promise.resolve(); events.push(event.type); provider.setConfiguredModel('Ling-2.6-flash'); }, value => { complete = value; }, undefined,
+        { thinking: 'off', maxTokens: 64, tools: [{ name: 'read', description: 'Read', parameters: { type: 'object' } }] });
+      assert.deepEqual(events, ['reasoning_delta', 'text_delta']); assert.equal(complete.content, 'Installed Ant Ling');
+      assert.equal(complete.api, 'openai-completions'); assert.equal(complete.provider, 'azure'); assert.equal(complete.model, model);
+      assert.equal(complete.usage.promptTokens, 5); assert.equal(complete.usage.cacheReadTokens, 4); assert.equal(complete.usage.cacheWriteTokens, 1);
+      assert.equal(complete.usage.costUsd, (5 * 0.06 + 2 * 0.25) / 1e6);
+      const sdk = new SpecializedModels(provider); assert.deepEqual(sdk.getModelsOfType('image'), []);
+      assert.equal(provider.getSpecializedModels().length, 1); assert.equal(provider.getSpecializedModels()[0].model, 'Ling-2.6-flash');
+      const result = await sdk.classify({ model: 'Ling-2.6-flash:classifier', input: 'Approve', labels: ['safe', 'review'] });
+      assert.equal(result.label, 'safe'); assert.equal(result.usage.totalTokens, 12); assert.equal(result.usage.costUsd, (5 * 0.01 + 2 * 0.02) / 1e6);
+      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_tokens, 64); assert.equal(calls[0].body.tools[0].function.strict, false);
+      assert.deepEqual(calls[0].body.reasoning, { effort: 'high' }); assert.equal(calls[1].body.reasoning, undefined); assert.equal(calls[1].body.max_tokens, 512);
+      provider.setConfiguredModel(model); const emptyInput = [{ id: 'empty', role: 'user', content: 'Continue', timestamp: new Date(0) }];
+      const emptyJson = await provider.chat(emptyInput, { model: '' }); assert.equal(emptyJson.model, model); assert.equal(emptyJson.provider, 'azure'); assert.equal(emptyJson.api, 'openai-completions'); assert.equal(emptyJson.usage.costUsd, (5 * 0.06 + 2 * 0.25) / 1e6);
+      let emptyStream; await provider.streamChat(emptyInput, async () => { await Promise.resolve(); provider.setConfiguredModel('Ling-2.6-flash'); }, value => { emptyStream = value; }, error => { throw error; }, { model: '' }); assert.equal(emptyStream.model, model); assert.equal(emptyStream.provider, 'azure'); assert.equal(emptyStream.api, 'openai-completions'); assert.equal(emptyStream.usage.costUsd, (5 * 0.06 + 2 * 0.25) / 1e6); assert.equal(calls.length, 4); assert.deepEqual(calls.slice(-2).map(call => call.body.model), [model, model]);
+      for (const call of calls) { assert.equal(call.url, '/owned%2Fant-ling/v1/chat/completions'); assert.equal(call.authorization, 'Bearer disposable-installed-ant-ling'); for (const field of ['max_completion_tokens', 'reasoning_effort', 'store', 'prompt_cache_key', 'prompt_cache_retention']) assert.equal(call.body[field], undefined); }
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed Ant Ling OK');
+  `);
+  expect(await run(process.execPath, ['ant-ling-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed Ant Ling OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Cerebras through installed public declarations and captured C policies', async () => {
+  await writeFile(path.join(consumer, 'cerebras-public.ts'), `
+    import { CerebrasProvider, CEREBRAS_MODELS, ProviderType, type AgentProviderConfig, type CerebrasProfile, type AiProvider, type ProviderDialect, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
+    const dialect: ProviderDialect = 'cerebras'; void dialect;
+    const builtin: AgentProviderConfig = { type: 'cerebras', apiKey: 'disposable', model: 'gpt-oss-120b' };
+    const nativeType: ProviderType = ProviderType.CEREBRAS; void builtin; void nativeType;
+    const profile: CerebrasProfile = CEREBRAS_MODELS[0];
+    const provider: AiProvider = new CerebrasProvider({ type: 'operator-cerebras', apiKey: 'disposable' });
+    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error reviewed profiles are immutable
+    profile.contextWindow = 1;
+    // @ts-expect-error nested price tables are immutable
+    profile.pricing.inputPerMillion = 1;
+    // @ts-expect-error native profiles are not mutable model registries
+    CEREBRAS_MODELS.push(profile);
+    void provider; void version;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'cerebras-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'cerebras-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { CerebrasProvider, CEREBRAS_MODELS, ProviderType, SpecializedModels, getProviderPublishedModel, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [], model = 'qwen-3.8-27b';
+    const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } };
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text); calls.push({ url: request.url, authorization: request.headers.authorization, body });
+      if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ model: body.model, choices: [{ delta: { reasoning_content: 'Thought', content: 'Installed Cerebras' }, finish_reason: 'stop' }], usage }) + '\\n\\ndata: [DONE]\\n\\n'); }
+      else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: '{"label":"safe"}' }, finish_reason: 'stop' }], usage }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new CerebrasProvider({ type: 'azure', apiKey: 'disposable-installed-cerebras', model,
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/owned%2Fcerebras/v1/chat/completions/' });
+      assert.equal(ProviderFactory.has('cerebras'), true); assert.equal(CEREBRAS_MODELS.length, 2);
+      assert.equal(ProviderType.CEREBRAS, 'cerebras');
+      const native = ProviderFactory.create({ type: ProviderType.CEREBRAS, apiKey: 'disposable-installed-cerebras',
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/owned%2Fcerebras/v1/chat/completions/' });
+      assert.ok(native instanceof CerebrasProvider); assert.equal(native.getConfiguredModel(), 'gpt-oss-120b');
+      assert.equal(getProviderPublishedModel('azure', model, provider).contextWindow, 131072);
+      assert.equal(getProviderPublishedModel('azure', 'gpt-4o', provider), undefined);
+      const events = []; let complete;
+      await provider.streamChat([{ id: 'u', role: 'user', content: 'hello', timestamp: new Date() }], async (_text, event) => { await Promise.resolve(); events.push(event.type); }, value => { complete = value; }, undefined,
+        { thinking: 'off', maxTokens: 64, tools: [{ name: 'read', description: 'Read', parameters: { type: 'object' } }] });
+      assert.deepEqual(events, ['reasoning_delta', 'text_delta']); assert.equal(complete.content, 'Installed Cerebras');
+      assert.equal(complete.api, 'openai-completions'); assert.equal(complete.provider, 'azure');
+      assert.equal(complete.usage.promptTokens, 5); assert.equal(complete.usage.cacheReadTokens, 4); assert.equal(complete.usage.cacheWriteTokens, 1);
+      assert.equal(complete.usage.costUsd, (5 * 0.99 + 2 * 1.49 + 4 * 0.99) / 1e6);
+      const sdk = new SpecializedModels(provider); assert.deepEqual(sdk.getModelsOfType('image'), []);
+      const result = await sdk.classify({ model: model + ':classifier', input: 'Approve', labels: ['safe', 'review'] });
+      assert.equal(result.label, 'safe'); assert.equal(result.usage.totalTokens, 12);
+      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_completion_tokens, 64); assert.equal(calls[0].body.tools[0].function.strict, undefined);
+      for (const call of calls) { assert.equal(call.url, '/owned%2Fcerebras/v1/chat/completions'); assert.equal(call.authorization, 'Bearer disposable-installed-cerebras'); assert.equal(call.body.reasoning_effort, 'none'); assert.equal(call.body.max_tokens, undefined); }
+      let nativeComplete;
+      await native.streamChat([{ id: 'native', role: 'user', content: 'Native factory', timestamp: new Date() }],
+        () => {}, value => { nativeComplete = value; }, undefined, { thinking: 'low', maxTokens: 64 });
+      assert.equal(nativeComplete.content, 'Installed Cerebras'); assert.equal(nativeComplete.provider, 'cerebras');
+      assert.equal(nativeComplete.api, 'openai-completions'); assert.equal(nativeComplete.usage.promptTokens, 5);
+      assert.equal(nativeComplete.usage.costUsd, (5 * 0.35 + 2 * 0.75) / 1e6);
+      assert.equal(calls.length, 3); assert.equal(calls[2].body.model, 'gpt-oss-120b');
+      assert.equal(calls[2].body.reasoning_effort, 'low'); assert.equal(calls[2].body.max_completion_tokens, 64);
+      assert.equal(calls[2].url, '/owned%2Fcerebras/v1/chat/completions');
+      assert.equal(calls[2].authorization, 'Bearer disposable-installed-cerebras'); assert.equal(calls[2].body.max_tokens, undefined);
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed Cerebras OK');
+  `);
+  expect(await run(process.execPath, ['cerebras-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed Cerebras OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Mistral through installed public declarations and runtime', async () => {
+  await writeFile(path.join(consumer, 'mistral-public.ts'), `
+    import { MistralProvider, ProviderFactory, ProviderType, type AgentProviderConfig,
+      type AiProvider, type ProviderDialect, type PublishedModelMetadata } from '@ai-harness/core';
+    const dialect: ProviderDialect = 'mistral-conversations';
+    const config: AgentProviderConfig = { type: ProviderType.MISTRAL_CONVERSATIONS, apiKey: 'disposable' };
+    const native: AiProvider = ProviderFactory.create(config);
+    const provider: AiProvider = new MistralProvider({ type: 'my-mistral', apiKey: 'disposable', model: 'magistral-medium-latest' });
+    void native;
+    // @ts-expect-error the native dialect is not an arbitrary provider-name alias
+    const invalid: ProviderDialect = 'mistral';
+    const api: string | undefined = provider.getModelApi?.('magistral-medium-latest');
+    const profiles: readonly PublishedModelMetadata[] | undefined = provider.getPublishedModels?.();
+    void dialect; void provider; void invalid; void api; void profiles;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'mistral-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'mistral-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { fileURLToPath } from 'node:url';
+    import { MistralProvider, ProviderFactory, ProviderType, getProviderPublishedModels, getProviderPublishedModel, getSupportedThinkingLevels,
+      resolveAgentCompactionContextWindow, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const calls = [];
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      const body = JSON.parse(text);
+      calls.push({ url: request.url, authorization: request.headers.authorization, body });
+      response.setHeader('content-type', 'text/event-stream');
+      response.end('data: ' + JSON.stringify({ model: body.model, choices: [{ delta: { content: [{ type: 'thinking', thinking: [{ text: 'thought' }] }, { type: 'text', text: 'installed Mistral' }] }, finish_reason: 'stop' }], usage: { prompt_tokens: 4, num_cached_tokens: 1, completion_tokens: 1 } }) + '\\n\\ndata: [DONE]\\n\\n');
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const provider = new MistralProvider({ type: 'my-mistral', apiKey: 'disposable-installed-key', baseUrl: 'http://127.0.0.1:' + server.address().port, model: 'magistral-medium-latest' });
+      assert.equal(getProviderPublishedModels(provider).length, 40);
+      assert.equal(provider.getSpecializedModels().length, 1);
+      assert.equal(resolveAgentCompactionContextWindow('my-mistral', 'magistral-medium-latest', provider), 262144);
+      assert.deepEqual(getSupportedThinkingLevels('my-mistral', 'magistral-medium-latest', undefined, provider), ['off', 'high']);
+      assert.equal(getProviderPublishedModel('anthropic', 'claude-sonnet-4-6', provider), undefined);
+      assert.equal(calls.length, 0);
+      const result = await provider.chat([{ id: 'u', role: 'user', content: 'hello', timestamp: new Date() }], { thinking: 'low' });
+      assert.equal(result.content, 'installed Mistral'); assert.equal(result.reasoning, 'thought');
+      assert.equal(provider.getModelApi(), 'mistral-conversations'); assert.equal(result.api, 'mistral-conversations');
+      assert.equal(result.provider, 'my-mistral'); assert.equal(result.usage.totalTokens, 5); assert.equal(result.usage.cacheReadTokens, 1);
+      assert.equal(calls.length, 1); assert.equal(calls[0].url, '/v1/chat/completions');
+      assert.equal(calls[0].authorization, 'Bearer disposable-installed-key'); assert.equal(calls[0].body.reasoning_effort, 'high');
+      assert.equal(ProviderType.MISTRAL_CONVERSATIONS, 'mistral-conversations');
+      assert.equal(ProviderFactory.has('mistral-conversations'), true); assert.equal(ProviderFactory.has('mistral'), false);
+      const native = ProviderFactory.create({ type: ProviderType.MISTRAL_CONVERSATIONS, apiKey: 'disposable-native-key',
+        baseUrl: 'http://127.0.0.1:' + server.address().port });
+      assert.ok(native instanceof MistralProvider); assert.equal(native.getConfiguredModel(), 'mistral-small-latest');
+      assert.equal(ProviderFactory.getDefaultModel(ProviderType.MISTRAL_CONVERSATIONS), 'mistral-small-latest');
+      const answer = await native.chat([{ id: 'n', role: 'user', content: 'native factory', timestamp: new Date() }],
+        { thinking: 'off', maxTokens: 64 });
+      assert.equal(answer.content, 'installed Mistral'); assert.equal(answer.provider, 'mistral-conversations');
+      assert.equal(answer.model, 'mistral-small-latest'); assert.equal(answer.api, 'mistral-conversations');
+      assert.equal(answer.usage.promptTokens, 3); assert.equal(answer.usage.cacheReadTokens, 1);
+      assert.ok(Math.abs(answer.usage.costUsd - (3 * 0.15 + 0.015 + 0.6) / 1e6) < 1e-12);
+      assert.equal(calls.length, 2); assert.equal(calls[1].url, '/v1/chat/completions');
+      assert.equal(calls[1].authorization, 'Bearer disposable-native-key');
+      assert.equal(calls[1].body.model, 'mistral-small-latest'); assert.equal(calls[1].body.reasoning_effort, 'none');
+      assert.equal(calls[1].body.max_tokens, 64); assert.equal('max_completion_tokens' in calls[1].body, false);
+    } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    console.log('installed Mistral OK');
+  `);
+  expect(await run(process.execPath, ['mistral-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed Mistral OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native OpenCode Zen through installed A/G/C/R/T declarations and owned accounting', async () => {
+  await writeFile(path.join(consumer, 'opencode-public.ts'), `
+    import { OpenCodeProvider, OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS, AI_HARNESS_CORE_API_VERSION, type OpenCodeProfile, type NativeClassifierResult } from '@ai-harness/core';
+    const profile: OpenCodeProfile = OPENCODE_MODELS[0]; const priced: NonNullable<OpenCodeProfile['pricing']> = profile.pricing!;
+    const provider = new OpenCodeProvider({ type: 'operator', apiKey: 'disposable' }); const api: 'anthropic-messages' | 'google-generative-ai' | 'openai-completions' | 'openai-responses' = profile.api;
+    const native: Promise<NativeClassifierResult> = provider.classifyNativeQuestions({ model: 'jev-1.13', state: {}, questions: { level: { type: 'score', instructions: 'Level', criteria: ['Low', 'High'] } } });
+    provider.setConfiguredModel(profile.id); void provider.getPublishedModels(); void api; void native; const version: 1 = AI_HARNESS_CORE_API_VERSION; void version;
+    // @ts-expect-error physical limits are readonly
+    profile.maxOutputTokens = 1;
+    // @ts-expect-error native maps are readonly
+    profile.thinkingLevelMap.high = 'foreign';
+    // @ts-expect-error known prices are readonly
+    priced.inputPerMillion = 999;
+    // @ts-expect-error zero-only declared prices are readonly too
+    profile.declaredPricing.inputPerMillion = 999;
+    // @ts-expect-error catalogue rows are readonly
+    OPENCODE_MODELS.push(profile);
+    // @ts-expect-error native classifier windows are readonly
+    OPENCODE_CLASSIFIER_MODELS[0].contextWindow = 1;
+    // @ts-expect-error native bool questions require both true/false criteria
+    provider.classifyNativeQuestions({ model: 'jev-1.13', state: {}, questions: { approved: { type: 'bool', instructions: 'Approved?' } } });
+    // @ts-expect-error declared resize is readonly,not an effective pipeline
+    profile.declaredInputLimits!.images.resize.maxWidth = 1;
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'opencode-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'opencode-public.mjs'), String.raw`
+    import assert from 'node:assert/strict'; import { createServer } from 'node:http'; import { fileURLToPath } from 'node:url';
+    import { OpenCodeProvider, OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, runCodemode, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).includes('/node_modules/@ai-harness/core/'));
+    const calls=[],input={id:'u',role:'user',content:'Hello',timestamp:new Date(0)},key='disposable-installed-zen',usage={A:{input_tokens:5,output_tokens:2,cache_read_input_tokens:4,cache_creation_input_tokens:1},G:{promptTokenCount:10,candidatesTokenCount:2,thoughtsTokenCount:3,cachedContentTokenCount:4,totalTokenCount:15},C:{prompt_tokens:10,completion_tokens:2,prompt_tokens_details:{cached_tokens:4,cache_write_tokens:1}},R:{input_tokens:10,output_tokens:2,input_tokens_details:{cached_tokens:4,cache_write_tokens:1}},T:{input_tokens:10,output_tokens:2}};let malformed=false;
+    const server=createServer(async(req,res)=>{let text='';for await(const b of req)text+=b;const body=JSON.parse(text),a=req.url.endsWith('/messages'),g=req.url.includes('/models/'),r=req.url.endsWith('/responses'),t=req.url.endsWith('/systemone'),model=g?decodeURIComponent(req.url.match(/\/models\/([^/]+):/)[1]):body.model,answer=(body.max_tokens??body.max_output_tokens??body.generationConfig?.maxOutputTokens)===512?' {"label":"safe"} ':'Ready';calls.push({url:req.url,headers:req.headers,body,model});
+      if(t){const answers=malformed?[]:Object.fromEntries(Object.entries(body.questions).map(([id,q])=>{const values=Object.keys(q.criteria);return[id,q.type==='noul'?{type:'noul',noul:.75}:q.type==='score'?{type:'score',score:3.5,confidence:.8}:{type:'choice',choice:values[0],confidence:1,probabilities:Object.fromEntries(values.map((value,i)=>[value,i===0?1:0]))}];}));res.end(JSON.stringify({answers,usage:usage.T}));return;}
+      if(r||g||body.stream){res.setHeader('content-type','text/event-stream');const events=g?[{candidates:[{content:{role:'model',parts:[{text:answer}]},finishReason:'STOP'}],usageMetadata:usage.G}]:r?[{type:'response.output_text.delta',delta:answer},{type:'response.completed',response:{id:'answer',model:'remote-alias',usage:usage.R}}]:a?[{type:'message_start',message:{id:'answer',usage:{...usage.A,output_tokens:0}}},{type:'content_block_start',index:0,content_block:{type:'text',text:''}},{type:'content_block_delta',index:0,delta:{type:'text_delta',text:answer}},{type:'content_block_stop',index:0},{type:'message_delta',delta:{stop_reason:'end_turn'},usage:{output_tokens:2}},{type:'message_stop'}]:[{choices:[{delta:{content:answer},finish_reason:'stop'}],usage:usage.C}];res.end(events.map(v=>'data: '+JSON.stringify(v)+'\n\n').join('')+(!a&&!g&&!r?'data: [DONE]\n\n':''));}
+      else res.end(JSON.stringify(a?{model:'remote-alias',content:[{type:'text',text:answer}],stop_reason:'end_turn',usage:usage.A}:{model:'remote-alias',choices:[{message:{content:answer},finish_reason:'stop'}],usage:usage.C}));
+    });await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    const baseUrl='http://127.0.0.1:'+server.address().port+'/owned%2Fzen';
+    try{
+      assert.equal(OPENCODE_MODELS.length,83);assert.equal(OPENCODE_MODELS.filter(p=>p.pricing).length,72);assert.equal(OPENCODE_CLASSIFIER_MODELS.length,2);assert.equal(ProviderFactory.has('opencode'),false);
+      for(const[model,api,rates]of[['claude-haiku-5-5','anthropic-messages',[.1,.5,.01,.125]],['gemini-3.1-pro','google-generative-ai',[2,12,.2,0]],['glm-5.3','openai-completions',[1.4,4.4,.26,0]],['gpt-6-luna','openai-responses',[.1,.5,.01,.125]]]){
+        const google=api==='google-generative-ai',provider=new OpenCodeProvider({type:'anthropic',apiKey:key,model,baseUrl}),options={model:'',thinking:'high',sessionId:'installed-zen',cacheRetention:'long'},cost=((google?6:5)*rates[0]+(google?5:2)*rates[1]+4*rates[2]+(google?0:rates[3]))/1e6;
+        assert.equal(provider.getModelApi(model),api);assert.equal(provider.canDiscoverModels(),false);assert.equal((await provider.getAvailableModels()).length,83);assert.equal(getProviderPublishedModel('anthropic',model,provider).api,api);
+        const first=await provider.chat([input],options);let final;await provider.streamChat([input],async()=>{await Promise.resolve();provider.setConfiguredModel(model==='glm-5.3'?'claude-haiku-5-5':'glm-5.3');},v=>{final=v;},undefined,options);
+        for(const result of[first,final]){assert.equal(result.model,model);assert.equal(result.api,api);assert.equal(result.usage.costUsd,cost);assert.equal(result.content,'Ready');}
+        for(const call of calls.slice(-2)){assert.equal(call.model,model);assert.equal(call.headers['x-opencode-session'],'installed-zen');assert.equal(call.headers['session-id'],undefined);if(google){assert.equal(call.url,'/owned%2Fzen/v1/models/'+encodeURIComponent(model)+':streamGenerateContent?alt=sse');assert.equal(call.headers['x-goog-api-key'],key);}else assert.equal(call.url,'/owned%2Fzen/v1/'+(api==='anthropic-messages'?'messages':api==='openai-completions'?'chat/completions':'responses'));}
+        provider.setConfiguredModel(model);const label=await new SpecializedModels(provider).classify({model:model+':classifier',input:'Approve',labels:['safe','review']});assert.equal(label.label,'safe');assert.equal(label.usage.inputTokens,google?6:5);assert.equal(label.usage.outputTokens,google?5:2);assert.equal(google?calls.at(-1).body.generationConfig.maxOutputTokens:calls.at(-1).body[api==='openai-responses'?'max_output_tokens':'max_tokens'],512);
+      }
+      const provider=new OpenCodeProvider({type:'operator-zen',apiKey:key,baseUrl}),sdk=new SpecializedModels(provider);assert.equal(sdk.getModelsOfType('classifier').filter(p=>p.api==='typesafe-system-one').length,2);
+      for(const model of['jev-1.13','jev-1.13-free']){const result=await provider.classifyNativeQuestions({model,state:{},questions:{approved:{type:'bool',instructions:'Approved?',criteria:{true:'Approved',false:'Not approved'}},level:{type:'score',instructions:'Level',criteria:['Low','High']}}});assert.equal(result.stopReason,'stop');assert.deepEqual(result.answers.approved,{type:'bool',probability:.75});assert.deepEqual(result.answers.level,{type:'score',score:3.5,confidence:.8});assert.equal(result.usage.costUsd,model==='jev-1.13'?10*.042/1e6:undefined);assert.equal((await sdk.classify({model,input:'Approve',labels:['safe','review']})).label,'safe');for(const call of calls.slice(-2)){assert.equal(call.url,'/owned%2Fzen/v1/systemone');assert.equal(call.headers['x-opencode-session'],undefined);assert.equal(call.headers.authorization,'Bearer '+key);}}
+      malformed=true;const finite={model:'jev-1.13',state:{},questions:{approved:{type:'boolean',prompt:'Approved?'}}};const failed=await runCodemode({code:'store("bad",true); await models.classifyQuestions('+JSON.stringify(finite)+')',context:{provider},tools:()=>[],execute:async()=>{throw Error('Unexpected tool');}});assert.equal(failed.isError,true);assert.equal(failed.details.store,undefined);assert.equal(failed.details.nestedCalls.length,1);assert.equal(failed.details.usage.totalTokens,12);assert.equal(failed.details.usage.costUsd,10*.042/1e6);assert.equal(failed.details.costComplete,true);
+      malformed=false;const unpriced=await runCodemode({code:'await models.classify('+JSON.stringify({model:'jev-1.13-free',input:'Approve',labels:['safe','review']})+')',context:{provider},tools:()=>[],execute:async()=>{throw Error('Unexpected tool');}});assert.equal(unpriced.isError,false);assert.equal(unpriced.details.usage.totalTokens,12);assert.equal(unpriced.details.costComplete,false);assert.equal(unpriced.details.nestedCalls.length,1);
+      assert.equal(getProviderPublishedModel('operator-zen','space-bunny-free',provider).pricing,undefined);assert.equal((await provider.chat([input],{model:'space-bunny-free'})).usage.costUsd,undefined);assert.equal(calls.length,19);console.log('native opencode zen installed OK');
+    }finally{await closeProviderNetworkDispatchers();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+  `);
+  expect(await run(process.execPath, ['opencode-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'native opencode zen installed OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native MiniMax CN through installed public declarations and captured A policies', async () => {
+  await writeFile(path.join(consumer, 'minimax-cn-public.ts'), `
+    import { MiniMaxCnProvider, MINIMAX_CN_MODELS, type MiniMaxProfile, type AiProvider, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
+    const profile: MiniMaxProfile = MINIMAX_CN_MODELS[0];
+    const provider: AiProvider = new MiniMaxCnProvider({ type: 'operator-cn', apiKey: 'disposable' });
+    const version: 1 = AI_HARNESS_CORE_API_VERSION; void version; void provider;
+    // @ts-expect-error pinned declarations are readonly
+    profile.contextWindow = 1;
+    // @ts-expect-error prices are readonly
+    profile.pricing.inputPerMillion = 1;
+    // @ts-expect-error native model lists are readonly
+    MINIMAX_CN_MODELS.push(profile);
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'minimax-cn-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'minimax-cn-public.mjs'), String.raw`
+    import assert from 'node:assert/strict'; import { createServer } from 'node:http'; import { fileURLToPath } from 'node:url';
+    import { MiniMaxCnProvider, MINIMAX_CN_MODELS, MINIMAX_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).includes('/node_modules/@ai-harness/core/'));
+    assert.equal(MINIMAX_CN_MODELS, MINIMAX_MODELS); assert.equal(MINIMAX_CN_MODELS.length, 3); assert(Object.isFrozen(MINIMAX_CN_MODELS)); assert.equal(ProviderFactory.has('minimax-cn'), false);
+    const calls=[],usage={input_tokens:5,output_tokens:2,cache_read_input_tokens:4,cache_creation_input_tokens:1},input={id:'u',role:'user',content:'Hello',timestamp:new Date(0)};
+    const server=createServer(async(req,res)=>{let text='';for await(const value of req)text+=value;const body=JSON.parse(text);calls.push({url:req.url,headers:req.headers,body});const answer=body.max_tokens===512?' {"label":"safe"} ':'CN ready';
+      if(body.stream){res.setHeader('content-type','text/event-stream');res.end([{type:'message_start',message:{id:'answer',model:body.model,usage:{...usage,output_tokens:0}}},{type:'content_block_start',index:0,content_block:{type:'text',text:''}},{type:'content_block_delta',index:0,delta:{type:'text_delta',text:answer}},{type:'content_block_stop',index:0},{type:'message_delta',delta:{stop_reason:'end_turn'},usage:{output_tokens:2}},{type:'message_stop'}].map(v=>'data: '+JSON.stringify(v)+'\n\n').join(''));}
+      else res.end(JSON.stringify({model:body.model,stop_reason:'end_turn',content:[{type:'text',text:answer}],usage}));});
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    try{const provider=new MiniMaxCnProvider({type:'google',apiKey:'disposable-installed-cn',baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fcn/anthropic'});
+      for(const profile of MINIMAX_CN_MODELS){provider.setConfiguredModel(profile.id);assert.equal(getProviderPublishedModel('google',profile.id,provider).contextWindow,profile.contextWindow);assert.equal(provider.canDiscoverModels(),false);assert.equal(getProviderPublishedModel('google','gemini-2.5-pro',provider),undefined);
+        const result=await provider.chat([input],{thinking:'off',cacheRetention:'long',systemPrompt:'System'});let complete;await provider.streamChat([input],()=>{},value=>{complete=value;},undefined,{thinking:'high',maxTokens:32768});
+        for(const response of[result,complete]){assert.equal(response.content,'CN ready');assert.equal(response.api,'anthropic-messages');assert.equal(response.provider,'google');assert.equal(response.model,profile.id);assert.equal(response.usage.totalTokens,12);assert.equal(response.usage.costUsd,(5*profile.pricing.inputPerMillion+2*profile.pricing.outputPerMillion+4*profile.pricing.cacheReadPerMillion+profile.pricing.cacheWritePerMillion)/1e6);}
+        assert.equal(calls.at(-2).body.max_tokens,profile.maxOutputTokens);assert.equal(calls.at(-1).body.max_tokens,32768);assert.deepEqual(calls.at(-2).body.thinking,{type:'disabled'});assert.deepEqual(calls.at(-1).body.thinking,{type:'enabled',budget_tokens:16384,display:'summarized'});
+        const sdk=new SpecializedModels(provider);assert.deepEqual(sdk.getModelsOfType('image'),[]);const answer=await sdk.classify({model:profile.id+':classifier',input:'Approve',labels:['safe','review']});assert.equal(answer.label,'safe');assert.equal(answer.usage.totalTokens,12);assert.equal(calls.at(-1).body.max_tokens,512);
+      }
+      assert.equal(calls.length,9);for(const call of calls){assert.equal(call.url,'/owned%2Fcn/anthropic/v1/messages');assert.equal(call.headers['x-api-key'],'disposable-installed-cn');assert.equal(call.headers.authorization,undefined);assert.equal(call.headers['anthropic-version'],'2023-06-01');}
+    }finally{await closeProviderNetworkDispatchers();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+    console.log('installed MiniMax CN OK');
+  `);
+  expect(await run(process.execPath, ['minimax-cn-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed MiniMax CN OK\n', stderr: '' });
+}, 60_000);
+
+it('dispatches native Moonshot CN through installed public declarations and captured C policies', async () => {
+  await writeFile(path.join(consumer, 'moonshot-cn-public.ts'), `
+    import { MoonshotCnProvider, MOONSHOT_CN_MODELS, AI_HARNESS_CORE_API_VERSION, type MoonshotProfile } from '@ai-harness/core';
+    const profile: MoonshotProfile = MOONSHOT_CN_MODELS[0]; const provider = new MoonshotCnProvider({ type: 'operator', apiKey: 'disposable' });
+    provider.setConfiguredModel(profile.id); void provider.getPublishedModels(); void AI_HARNESS_CORE_API_VERSION;
+    // @ts-expect-error native profile limits are readonly
+    profile.maxOutputTokens = 1;
+    // @ts-expect-error native prices are readonly
+    profile.pricing.inputPerMillion = 999;
+    // @ts-expect-error native maps are readonly
+    profile.thinkingLevelMap!.high = 'foreign';
+    // @ts-expect-error declared resize limits are readonly,not an effective pipeline
+    profile.declaredInputLimits!.images.resize.maxWidth = 1;
+    // @ts-expect-error catalogue rows are readonly
+    MOONSHOT_CN_MODELS.push(profile);
+  `);
+  const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'moonshot-cn-public.ts'], consumer, environment);
+  expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'moonshot-cn-public.mjs'), String.raw`
+    import assert from 'node:assert/strict'; import { createServer } from 'node:http';
+    import { MoonshotCnProvider, MOONSHOT_CN_MODELS, MOONSHOT_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, getSupportedThinkingLevels, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
+    const calls=[],key='disposable-installed-moonshot-cn',input={id:'u',role:'user',content:'Hello',timestamp:new Date(0)},usage={prompt_tokens:10,completion_tokens:2,prompt_tokens_details:{cached_tokens:4}};
+    const server=createServer(async(req,res)=>{let text='';for await(const b of req)text+=b;const body=JSON.parse(text),answer=body.max_tokens===512?' {"label":"safe"} ':'Ready';calls.push({url:req.url,headers:req.headers,body});
+      if(body.stream){res.setHeader('content-type','text/event-stream');res.end([{choices:[{delta:{reasoning_content:'Thought',content:answer},finish_reason:'stop'}]},{choices:[],usage}].map(v=>'data: '+JSON.stringify(v)+'\n\n').join('')+'data: [DONE]\n\n');}
+      else res.end(JSON.stringify({model:'remote-alias',choices:[{message:{content:answer,reasoning_content:'Thought'},finish_reason:'stop'}],usage}));
+    });await new Promise(r=>server.listen(0,'127.0.0.1',r));
+    try {
+      assert.equal(AI_HARNESS_CORE_API_VERSION,1);assert.equal(MOONSHOT_CN_MODELS,MOONSHOT_MODELS);assert.equal(MOONSHOT_CN_MODELS.length,4);
+      assert.equal(Object.isFrozen(MOONSHOT_CN_MODELS),true);assert.equal(MOONSHOT_CN_MODELS.every(p=>Object.isFrozen(p)&&Object.isFrozen(p.pricing)&&Object.isFrozen(p.declaredInputLimits.images.resize)),true);assert.equal(ProviderFactory.has('moonshotai-cn'),false);
+      const provider=new MoonshotCnProvider({type:'google',apiKey:key,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fcn/v1'});
+      assert.equal(provider.canDiscoverModels(),false);assert.deepEqual(await provider.getAvailableModels(),MOONSHOT_CN_MODELS.map(p=>p.id));assert.equal(getProviderPublishedModel('google','gemini-2.5-pro',provider),undefined);
+      assert.equal(getProviderPublishedModel('google','kimi-k3',provider).contextWindow,1048576);assert.deepEqual(getSupportedThinkingLevels('google','kimi-k3',undefined,provider),['low','high','max']);
+      for(const profile of MOONSHOT_CN_MODELS){provider.setConfiguredModel(profile.id);const cost=(6*profile.pricing.inputPerMillion+2*profile.pricing.outputPerMillion+4*profile.pricing.cacheReadPerMillion)/1e6;
+        const result=await provider.chat([input],{model:'',thinking:'high',maxTokens:64,systemPrompt:'System',tools:[{name:'read',description:'Read',parameters:{type:'object'}}]});
+        assert.equal(result.model,profile.id);assert.equal(result.provider,'google');assert.equal(result.api,'openai-completions');assert.equal(result.usage.costUsd,cost);assert.equal(result.usage.promptTokens,6);assert.equal(result.usage.totalTokens,12);
+        let final;const events=[];await provider.streamChat([input],async(_text,event)=>{await Promise.resolve();events.push(event.type);provider.setConfiguredModel('kimi-k3');},value=>{final=value;},error=>{throw error;},{model:'',thinking:'off',maxTokens:64});
+        assert.deepEqual(events,['reasoning_delta','text_delta']);assert.equal(final.model,profile.id);assert.equal(final.api,'openai-completions');assert.equal(final.usage.costUsd,cost);
+      }
+      const label=await new SpecializedModels(provider).classify({model:'kimi-k3:classifier',input:'Approve',labels:['safe','review']});assert.equal(label.label,'safe');assert.equal(label.usage.inputTokens,6);assert.equal(label.usage.outputTokens,2);assert.equal(calls.at(-1).body.max_tokens,512);assert.equal(calls.at(-1).body.reasoning_effort,'low');assert.equal(calls.length,9);
+      for(const[index,call]of calls.entries()){assert.equal(call.url,'/owned%2Fcn/v1/chat/completions');assert.equal(call.headers.authorization,'Bearer '+key);assert.equal(call.headers['x-api-key'],undefined);assert.equal(call.headers['anthropic-version'],undefined);for(const f of['store','max_completion_tokens','tool_stream'])assert.equal(call.body[f],undefined);
+        if(index<8){const profile=MOONSHOT_CN_MODELS[Math.floor(index/2)];assert.equal(call.body.model,profile.id);assert.equal(call.body.max_tokens,64);
+          if(profile.id==='kimi-k3'){assert.equal(call.body.reasoning_effort,index%2?'low':'high');assert.equal(call.body.thinking,undefined);}else{assert.deepEqual(call.body.thinking,{type:index%2&&profile.id==='kimi-k2.6'?'disabled':'enabled'});assert.equal(call.body.reasoning_effort,undefined);}
+          if(index%2===0){assert.equal(call.body.messages[0].role,'system');assert.equal(call.body.tools[0].function.strict,undefined);}
+        }
+      }
+      console.log('native moonshot CN installed OK');
+    } finally {server.closeAllConnections();await new Promise(r=>server.close(r));}
+  `);
+  expect(await run(process.execPath, ['moonshot-cn-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'native moonshot CN installed OK\n', stderr: '' });
 }, 60_000);

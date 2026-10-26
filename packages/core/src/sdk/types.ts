@@ -15,7 +15,7 @@ export type AgentModel = ModelCatalogEntry;
 export type AgentCredential = ProviderCredential;
 export type AgentAuthDescriptor = ProviderCredentialDescriptor;
 
-export type AgentBuiltinProvider = 'openai' | 'anthropic' | 'google' | 'azure' | 'vertex' | 'bedrock' | 'local' | 'mock';
+export type AgentBuiltinProvider = 'openai' | 'anthropic' | 'google' | 'cerebras' | 'mistral-conversations' | 'azure' | 'vertex' | 'bedrock' | 'local' | 'mock';
 export type AgentProviderConfig = ProviderConfig & { type: AgentBuiltinProvider };
 export type AgentProvider =
   | { kind: 'config'; config: AgentProviderConfig }

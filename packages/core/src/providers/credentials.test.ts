@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { EncryptedCredentialStore } from '../security/credential-store.js';
+import { getKimiCodingOAuthConfig } from './kimi-coding-oauth.js';
 import type {
   ProviderCredentialError} from './credentials.js';
 import {
@@ -99,6 +100,129 @@ describe('ProviderCredentialService', () => {
 
     const again = await credentials.resolve('openai', { env: {}, now: 101_000 });
     expect(again?.credential).toMatchObject({ accessToken: 'fresh-access' });
+  });
+
+  it('exposes explicit Kimi issuer endpoints and refuses unsafe host configuration', () => {
+    expect(getKimiCodingOAuthConfig()).toEqual({ deviceAuthorizationUrl: 'https://auth.kimi.com/api/oauth/device_authorization',
+      tokenUrl: 'https://auth.kimi.com/api/oauth/token', clientId: '17e5f671-d194-4dfb-9706-5516cb48c098', responseProfile: 'kimi-coding' });
+    expect(Object.isFrozen(getKimiCodingOAuthConfig())).toBe(true);
+    expect(getKimiCodingOAuthConfig('https://operator.example/prefix/').tokenUrl).toBe('https://operator.example/prefix/api/oauth/token');
+    expect(getKimiCodingOAuthConfig('https://operator.example/%3F%23/').tokenUrl).toBe('https://operator.example/%3F%23/api/oauth/token');
+    for (const host of ['http://operator.example', 'https://secret@operator.example', 'https://operator.example?secret=value',
+      'https://operator.example?', 'https://operator.example#', 'https://operator.example#secret', 'https://operator.example\n', 'x'.repeat(4097)]) {
+      expect(() => getKimiCodingOAuthConfig(host)).toThrow('Kimi Coding OAuth host is invalid.');
+    }
+  });
+
+  it('refreshes an explicitly selected Kimi issuer under an operator-owned label', async () => {
+    const { service: credentials, filePath } = await service();
+    await credentials.setOAuth('team-code', { accessToken: 'old-kimi-access', refreshToken: 'old-kimi-refresh', expiresAt: 1 });
+    const config = getKimiCodingOAuthConfig();
+    const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(url).toBe('https://auth.kimi.com/api/oauth/token');
+      expect(init?.redirect).toBe('manual');
+      expect(Object.fromEntries(new URLSearchParams(String(init?.body)))).toEqual({
+        client_id: '17e5f671-d194-4dfb-9706-5516cb48c098', grant_type: 'refresh_token', refresh_token: 'old-kimi-refresh',
+      });
+      return new Response(JSON.stringify({ access_token: 'new-kimi-access', refresh_token: 'new-kimi-refresh', expires_in: 3600 }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const result = await credentials.resolve('team-code', { env: {}, now: 100_000, oauth: config, fetcher });
+    expect(result).toMatchObject({ descriptor: { provider: 'team-code', source: 'encrypted-store', type: 'oauth' },
+      credential: { accessToken: 'new-kimi-access', refreshToken: 'new-kimi-refresh', expiresAt: 3_700_000 } });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect((await credentials.resolve('team-code', { env: {}, now: 101_000 }))?.credential).toMatchObject({ accessToken: 'new-kimi-access' });
+    const bytes = await readFile(filePath, 'utf8');
+    for (const value of ['old-kimi-access', 'old-kimi-refresh', 'new-kimi-access', 'new-kimi-refresh']) expect(bytes).not.toContain(value);
+    expect(credentials.list().map(item => item.provider)).toEqual(['team-code']);
+  });
+
+  it('refuses incomplete Kimi refresh responses without changing encrypted credentials', async () => {
+    const { service: credentials, filePath } = await service();
+    await credentials.setOAuth('team-code', { accessToken: 'old-kimi-access', refreshToken: 'old-kimi-refresh', expiresAt: 1 });
+    const before = await readFile(filePath);
+    for (const body of [
+      { refresh_token: 'missing-access-refresh', expires_in: 3600 },
+      { access_token: 'rejected-kimi-access', expires_in: 3600 },
+      { access_token: 'rejected-kimi-access', refresh_token: 'rejected-kimi-refresh' },
+      { access_token: 'rejected-kimi-access', refresh_token: 'rejected-kimi-refresh', expires_in: 0 },
+      { access_token: 'rejected-kimi-access', refresh_token: 'rejected-kimi-refresh', expires_in: -1 },
+    ]) {
+      const fetcher = vi.fn(async () => new Response(JSON.stringify(body), { status: 200 })) as unknown as typeof fetch;
+      await expect(credentials.resolve('team-code', { env: {}, now: 100_000, oauth: getKimiCodingOAuthConfig(), fetcher }))
+        .rejects.toMatchObject({ code: 'refresh-failed', message: 'The provider credential could not be refreshed.' });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(await readFile(filePath)).toEqual(before);
+      for (const value of [body.access_token, body.refresh_token]) {
+        if (typeof value === 'string') expect(credentials.redactor.redact(value)).toBe('[REDACTED]');
+      }
+    }
+  });
+
+  it('redacts returned Kimi tokens on an HTTP refusal without changing encrypted credentials', async () => {
+    const { service: credentials, filePath } = await service();
+    await credentials.setOAuth('team-code', { accessToken: 'old-kimi-access', refreshToken: 'old-kimi-refresh', expiresAt: 1 });
+    const before = await readFile(filePath);
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      access_token: 'refused-kimi-access', refresh_token: 'refused-kimi-refresh', expires_in: 3600,
+    }), { status: 400 })) as unknown as typeof fetch;
+    await expect(credentials.resolve('team-code', { env: {}, now: 100_000, oauth: getKimiCodingOAuthConfig(), fetcher }))
+      .rejects.toMatchObject({ code: 'refresh-failed', message: 'The provider credential could not be refreshed.' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(await readFile(filePath)).toEqual(before);
+    for (const value of ['refused-kimi-access', 'refused-kimi-refresh']) expect(credentials.redactor.redact(value)).toBe('[REDACTED]');
+  });
+
+  it('refuses Kimi refresh publication when bounded token registration is exhausted', async () => {
+    const { service: credentials, filePath } = await service();
+    await credentials.setOAuth('team-code', { accessToken: 'budget-old-access', refreshToken: 'budget-old-refresh', expiresAt: 1 });
+    const before = await readFile(filePath);
+    // The two stored OAuth values already occupy two of the existing 2,048 slots.
+    for (let index = 0; index < 2_046; index++) credentials.redactor.add(`active-credential-${index}`);
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      access_token: 'budget-refused-access', refresh_token: 'budget-refused-refresh', expires_in: 3600,
+    }), { status: 400 })) as unknown as typeof fetch;
+    await expect(credentials.resolve('team-code', { env: {}, now: 100_000, oauth: getKimiCodingOAuthConfig(), fetcher }))
+      .rejects.toMatchObject({ code: 'invalid-credential', message: 'Too many provider credentials are active.' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(await readFile(filePath)).toEqual(before);
+  });
+
+  it('refuses invalid explicit Kimi refresh configuration before dispatch', async () => {
+    const credentials = new ProviderCredentialService();
+    await credentials.setOAuth('team-code', { accessToken: 'old-access', refreshToken: 'old-refresh', expiresAt: 1 }, false);
+    for (const overrides of [{ responseProfile: 'unknown' }, { responseProfile: null }, { clientId: 'foreign-client' },
+      { clientSecret: 'must-not-dispatch' }, { tokenUrl: 'https://auth.kimi.com/token' },
+      { tokenUrl: 'https://auth.kimi.com/api/oauth/token?secret=must-not-dispatch' },
+      { tokenUrl: 'https://auth.kimi.com/api/oauth/token?' }, { tokenUrl: 'https://auth.kimi.com/api/oauth/token#' }]) {
+      const config = { ...getKimiCodingOAuthConfig(), ...overrides } as unknown as ReturnType<typeof getKimiCodingOAuthConfig>;
+      const fetcher = vi.fn(async () => new Response('{}')) as unknown as typeof fetch;
+      await expect(credentials.resolve('team-code', { env: {}, now: 100_000, oauth: config, fetcher }))
+        .rejects.toMatchObject({ code: 'refresh-unavailable', message: 'OAuth refresh is not configured safely.' });
+      expect(fetcher).not.toHaveBeenCalled();
+    }
+  });
+
+  it('refuses an accessor-backed issuer selection without invoking it or dispatching', async () => {
+    const credentials = new ProviderCredentialService();
+    await credentials.setOAuth('team-code', { accessToken: 'old-access', refreshToken: 'old-refresh', expiresAt: 1 }, false);
+    const getter = vi.fn(() => 'kimi-coding');
+    const config = { ...getKimiCodingOAuthConfig() };
+    Object.defineProperty(config, 'responseProfile', { get: getter });
+    const fetcher = vi.fn(async () => new Response('{}')) as unknown as typeof fetch;
+    await expect(credentials.resolve('team-code', { env: {}, now: 100_000, oauth: config, fetcher }))
+      .rejects.toMatchObject({ code: 'refresh-unavailable', message: 'OAuth refresh is not configured safely.' });
+    expect(getter).not.toHaveBeenCalled();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('retains generic refresh fallback without inferring a Kimi issuer from the label', async () => {
+    const credentials = new ProviderCredentialService();
+    await credentials.setOAuth('kimi-coding', { accessToken: 'old-access', refreshToken: 'retained-refresh', expiresAt: 1 }, false);
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ access_token: 'generic-access' }), { status: 200 })) as unknown as typeof fetch;
+    const result = await credentials.resolve('kimi-coding', { env: {}, now: 100_000,
+      oauth: { tokenUrl: 'https://operator.example/token', clientId: 'operator-client' }, fetcher });
+    expect(result?.credential).toEqual({ version: 1, type: 'oauth', accessToken: 'generic-access', refreshToken: 'retained-refresh' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it('bounds OAuth refresh even when a custom fetcher or response body ignores its signal', async () => {

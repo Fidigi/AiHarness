@@ -18,7 +18,7 @@ import type {
   AgentSession, AgentSessionCapabilities, AgentSessionOwnership, CreateAgentSessionOptions,
 } from './types.js';
 
-const BUILTINS = new Set(['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local', 'mock']);
+const BUILTINS = new Set(['openai', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'azure', 'vertex', 'bedrock', 'local', 'mock']);
 const terminal = (run: AgentRunSnapshot): boolean => ['completed', 'failed', 'stopped'].includes(run.phase);
 
 /** Compose Core API v1 primitives. Never loads executable resources or discovers models. */

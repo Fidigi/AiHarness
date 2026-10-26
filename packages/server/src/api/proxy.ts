@@ -9,6 +9,7 @@ import path from 'node:path';
 import {
   AnthropicProvider as CoreAnthropicProvider,
   azureEnvironmentConfig,
+  bedrockCredentialConfig,
   atomicWriteStableFile,
   assertCompactionTranscript,
   getSummaryModelMessages,
@@ -496,10 +497,11 @@ export class AiProxyServer {
       this.vertexProxy = new CoreProviderProxy(provider);
       this.agentProviders.set('vertex', provider);
     }
-    if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+    if (process.env.AWS_BEARER_TOKEN_BEDROCK || process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
       const provider = new BedrockProvider({
         ...network,
         type: ProviderType.BEDROCK,
+        ...(process.env.AWS_BEARER_TOKEN_BEDROCK ? { apiKey: process.env.AWS_BEARER_TOKEN_BEDROCK } : {}),
         region: process.env.AWS_REGION,
         model: process.env.BEDROCK_MODEL,
       });
@@ -535,9 +537,9 @@ export class AiProxyServer {
   /** Set provider API keys dynamically and refresh both chat and agent adapters. */
   setApiKey(type: 'openai' | 'anthropic' | 'google' | 'azure' | 'vertex' | 'bedrock' | 'local', apiKey: string, baseUrl?: string, model?: string): void {
     if (apiKey) this.redactor.add(apiKey);
-    const bedrockCredential = type === 'bedrock' ? parseBedrockCredential(apiKey) : undefined;
+    const bedrockCredential = type === 'bedrock' ? bedrockCredentialConfig(apiKey) : undefined;
     if (type === 'bedrock' && !bedrockCredential) throw new Error('Invalid provider credential.');
-    if (bedrockCredential) this.redactor.addAll(bedrockCredential);
+    if (bedrockCredential) this.redactor.addAll(Object.values(bedrockCredential));
     let provider: AiProvider;
     const network = providerNetworkConfig(this.network, this.networkScope);
     if (type === 'openai') {
@@ -570,13 +572,10 @@ export class AiProxyServer {
       });
       this.vertexProxy = new CoreProviderProxy(provider);
     } else if (type === 'bedrock') {
-      const [accessKeyId, secretAccessKey, sessionToken] = bedrockCredential!;
       const config: ProviderConfig = {
         ...network,
+        ...bedrockCredential,
         type: ProviderType.BEDROCK,
-        accessKeyId,
-        secretAccessKey,
-        sessionToken,
         ...(baseUrl ? { baseUrl } : {}),
         model,
       };
@@ -1045,15 +1044,6 @@ function normalizeLocalBaseUrl(baseUrl: string): string {
   return normalized.endsWith('/v1') ? normalized : `${normalized}/v1`;
 }
 
-function parseBedrockCredential(value: string): [string, string, string?] | undefined {
-  const parts = value.split(':');
-  if ((parts.length !== 2 && parts.length !== 3)
-    || !/^[A-Za-z0-9]{1,128}$/u.test(parts[0] ?? '')
-    || !/^[A-Za-z0-9/+=]{1,4096}$/u.test(parts[1] ?? '')
-    || (parts[2] !== undefined && !/^[A-Za-z0-9/+=]{1,61440}$/u.test(parts[2]))) return undefined;
-  return [parts[0], parts[1], parts[2]];
-}
-
 function textToSSE(eventType: string, data: Record<string, unknown>): Uint8Array {
   return new TextEncoder().encode(`event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`);
 }
@@ -1338,7 +1328,7 @@ export function createProxyRoutes(
         res.status(400).json({ error: 'Invalid provider type' });
         return;
       }
-      if (providerType === 'bedrock' && (!apiKey || !parseBedrockCredential(apiKey))) {
+      if (providerType === 'bedrock' && (!apiKey || !bedrockCredentialConfig(apiKey))) {
         res.status(400).json({ error: 'Invalid provider credential' });
         return;
       }

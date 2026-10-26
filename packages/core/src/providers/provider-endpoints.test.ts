@@ -25,6 +25,44 @@ async function fixture(body: unknown = { data: [{ id: 'model-a' }] }) {
 }
 
 describe('provider discovery endpoint resolution', () => {
+  it('refuses native mixed OpenAI discovery without changing legacy Responses endpoint resolution', () => {
+    expect(() => resolveProviderDiscoveryEndpoint('openai', 'https://example.test/proxy%2Fowned/v1/responses'))
+      .toThrow('Provider does not support connection discovery.');
+    expect(resolveProviderDiscoveryEndpoint('openai-responses', 'https://example.test/proxy%2Fowned/v1/responses'))
+      .toBe('https://example.test/proxy%2Fowned/v1/models');
+  });
+  it('refuses native NVIDIA discovery instead of treating static profiles as a connection test', () => {
+    expect(() => resolveProviderDiscoveryEndpoint('nvidia', 'https://example.test/proxy%2Fowned/v1/chat/completions'))
+      .toThrow('Provider does not support connection discovery.');
+  });
+  it('refuses native Moonshot discovery instead of treating static profiles as a connection test', () => {
+    expect(() => resolveProviderDiscoveryEndpoint('moonshot', 'https://example.test/proxy%2Fowned/v1/chat/completions'))
+      .toThrow('Provider does not support connection discovery.');
+  });
+  it('refuses native Z.ai discovery instead of treating static profiles as a connection test', () => {
+    expect(() => resolveProviderDiscoveryEndpoint('zai', 'https://example.test/proxy%2Fowned/v1/chat/completions'))
+      .toThrow('Provider does not support connection discovery.');
+  });
+  it('refuses native Groq discovery instead of treating static profiles as a connection test', () => {
+    expect(() => resolveProviderDiscoveryEndpoint('groq', 'https://example.test/proxy%2Fowned/v1/chat/completions'))
+      .toThrow('Provider does not support connection discovery.');
+  });
+  it('refuses native DeepSeek discovery instead of treating static profiles as a connection test', () => {
+    expect(() => resolveProviderDiscoveryEndpoint('deepseek', 'https://example.test/proxy%2Fowned/v1/chat/completions'))
+      .toThrow('Provider does not support connection discovery.');
+  });
+  it('refuses native Cerebras discovery instead of treating a static profile list as a connection test', () => {
+    expect(() => resolveProviderDiscoveryEndpoint('cerebras', 'https://example.test/proxy%2Fowned/v1/chat/completions'))
+      .toThrow('Provider does not support connection discovery.');
+  });
+  it('refuses mixed Cloudflare discovery instead of interpreting the dialect as Google', () => {
+    expect(() => resolveProviderDiscoveryEndpoint('cloudflare-workers-ai', 'https://example.test/accounts/owned/ai/v1'))
+      .toThrow('Provider does not support connection discovery.');
+  });
+  it('refuses mixed OpenRouter discovery instead of interpreting the dialect as Google', () => {
+    expect(() => resolveProviderDiscoveryEndpoint('openrouter', 'https://example.test/api/v1/messages'))
+      .toThrow('Provider does not support connection discovery.');
+  });
   it.each<[ProviderDialect, string, string]>([
     ['openai-completions', '/gateway/v1/chat/completions///', '/gateway/v1/models'],
     ['openai-responses', '/gateway/v1/responses', '/gateway/v1/models'],

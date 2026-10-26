@@ -59,6 +59,10 @@ describe('credential-private specialized model SDK', () => {
     const bridge = new SpecializedModels(provider);
     vi.spyOn(provider, 'classify').mockResolvedValue({ label: 'not-in-labels' });
     await expect(bridge.classify({ model: 'virtual-chat:classifier', input: 'x', labels: ['a'] })).rejects.toThrow('operation failed');
+    vi.spyOn(provider, 'classify').mockRejectedValue(Object.assign(new Error('Authorization: secret-example'), { usage: { totalTokens: 999 } }));
+    const failure = await bridge.classify({ model: 'virtual-chat:classifier', input: 'x', labels: ['a'] }).catch(error => error);
+    expect(failure.usage).toBeUndefined();
+    expect(failure.message).not.toContain('secret-example');
     vi.spyOn(provider, 'generateImages').mockRejectedValue(new Error('Authorization: secret-example'));
     await expect(bridge.generateImages({ model: 'mock-image', prompt: 'pixel' })).rejects.toThrow('Specialized model operation failed');
     for (const images of [[{ mediaType: 'image/svg+xml', data: png }], [{ mediaType: 'image/png', data: 'AAAA' }],

@@ -1,11 +1,14 @@
 import {
   azureEnvironmentConfig,
+  bedrockCredentialConfig,
   buildProviderModelCatalog,
   collectProviderModelCatalog,
   flattenModelCatalog,
   getPublishedProviders,
+  getProviderPublishedModels,
   PUBLISHED_THINKING_LEVELS,
   ProviderFactory,
+  providerCredentialEnvironmentKeys,
   resolveModelReference,
   resolveModelScope,
   type AiProvider,
@@ -125,9 +128,16 @@ export function createConfiguredProviders(
   const openAiKey = configuredCredential('openai', env.OPENAI_API_KEY, options.credentials);
   const anthropicKey = configuredCredential('anthropic', env.ANTHROPIC_API_KEY, options.credentials);
   const googleKey = configuredCredential('google', env.GEMINI_API_KEY || env.GOOGLE_API_KEY, options.credentials);
+  const cerebrasKey = configuredCredential('cerebras', providerCredentialEnvironmentKeys('cerebras').map(name => env[name]).find(Boolean), options.credentials);
   const azureKey = configuredCredential('azure', env.AZURE_OPENAI_API_KEY, options.credentials);
   const vertexKey = configuredCredential('vertex', env.GOOGLE_VERTEX_ACCESS_TOKEN, options.credentials);
   const localKey = configuredCredential('local', env.LOCAL_API_KEY || env.LLAMA_API_KEY, options.credentials);
+  const bedrockKey = configuredCredential('bedrock', env.AWS_BEARER_TOKEN_BEDROCK, options.credentials);
+  const bedrockCredential = bedrockKey !== undefined
+    ? env.AWS_BEARER_TOKEN_BEDROCK ? { apiKey: bedrockKey } : bedrockCredentialConfig(bedrockKey)
+    : env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
+      ? { accessKeyId: env.AWS_ACCESS_KEY_ID, secretAccessKey: env.AWS_SECRET_ACCESS_KEY, sessionToken: env.AWS_SESSION_TOKEN }
+      : undefined;
 
   attempt(providers, 'mock', { ...network, type: 'mock', apiKey: '', model: env.MOCK_MODEL || 'mock-model' });
   attempt(providers, 'openai', openAiKey
@@ -138,6 +148,9 @@ export function createConfiguredProviders(
     : undefined);
   attempt(providers, 'google', googleKey
     ? { ...network, type: 'google', apiKey: googleKey, model: env.GEMINI_MODEL || 'gemini-2.0-flash' }
+    : undefined);
+  attempt(providers, 'cerebras', cerebrasKey
+    ? { ...network, type: 'cerebras', apiKey: cerebrasKey, model: env.CEREBRAS_MODEL, baseUrl: env.CEREBRAS_BASE_URL }
     : undefined);
   const azure = azureEnvironmentConfig(env, azureKey);
   attempt(providers, 'azure', azure ? { ...network, ...azure } : undefined);
@@ -151,8 +164,8 @@ export function createConfiguredProviders(
         model: env.VERTEX_MODEL || 'gemini-2.0-flash',
       }
     : undefined);
-  attempt(providers, 'bedrock', env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
-    ? { ...network, type: 'bedrock', region: env.AWS_REGION, model: env.BEDROCK_MODEL }
+  attempt(providers, 'bedrock', bedrockCredential
+    ? { ...network, ...bedrockCredential, type: 'bedrock', region: env.AWS_REGION, model: env.BEDROCK_MODEL }
     : undefined);
   attempt(providers, 'local', {
     ...network,
@@ -212,6 +225,8 @@ export async function resolveStartupProvider(
             provider,
             configured: instance.validateConfig(),
             configuredModel: instance.getConfiguredModel(),
+            publishedModels: getProviderPublishedModels(instance),
+            getModelApi: (model: string) => instance.getModelApi?.(model),
           })),
           ...getPublishedProviders()
             .filter(provider => !providers.has(provider))

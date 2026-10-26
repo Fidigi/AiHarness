@@ -1,5 +1,5 @@
-import { getPublishedModelMetadata, getSessionAccounting } from '@ai-harness/core';
-import type { SessionManager, SessionUsageAccounting } from '@ai-harness/core';
+import { getProviderPublishedModel, getSessionAccounting } from '@ai-harness/core';
+import type { AiProvider, SessionManager, SessionUsageAccounting } from '@ai-harness/core';
 import { terminalText, wrapTerminalText } from './terminal-text.js';
 
 export interface TerminalResources {
@@ -28,6 +28,7 @@ export interface TerminalStatus {
 }
 export interface TerminalStatusSource {
   sessionManager: Pick<SessionManager, 'get' | 'getRawEntries' | 'estimateContextTokens'>;
+  providerInstance?: Pick<AiProvider, 'getPublishedModels' | 'getModelApi'>;
   sessionId: string;
   cwd: string;
   sessionFile?: string;
@@ -53,7 +54,7 @@ export async function createTerminalStatus(source: TerminalStatusSource): Promis
     accounting.active.cost = accounting.active.knownCostUsd === undefined ? 'unknown' : 'partial';
   }
   const metadata = source.provider && source.model
-    ? getPublishedModelMetadata(source.provider, source.model) : undefined;
+    ? getProviderPublishedModel(source.provider, source.model, source.providerInstance) : undefined;
   const estimate = session ? source.sessionManager.estimateContextTokens(source.sessionId) : undefined;
   return {
     cwd: source.cwd,

@@ -1,6 +1,7 @@
 import path from 'node:path';
 import {
   CredentialRedactor,
+  bedrockCredentialConfig,
   EncryptedCredentialStore,
   ProviderCredentialService,
   resolveAgentProviderNetworkSettings,
@@ -10,7 +11,7 @@ import {
 } from '@ai-harness/core';
 
 export const CLI_CREDENTIAL_PROVIDERS = [
-  'openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local',
+  'openai', 'anthropic', 'google', 'cerebras', 'azure', 'vertex', 'bedrock', 'local',
 ] as const;
 
 export interface CliProviderRuntime {
@@ -81,8 +82,12 @@ export async function createCliProviderRuntime(
       oauth: oauthRefreshConfigFromEnv(provider, env),
     });
     if (!resolved) continue;
-    values.set(provider, resolved.credential.type === 'api-key'
-      ? resolved.credential.apiKey : resolved.credential.accessToken);
+    const value = resolved.credential.type === 'api-key' ? resolved.credential.apiKey : resolved.credential.accessToken;
+    if (provider === 'bedrock') {
+      const config = bedrockCredentialConfig(value);
+      if (config) redactor.addAll(Object.values(config));
+    }
+    values.set(provider, value);
   }
   return {
     credentials,

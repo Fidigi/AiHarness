@@ -1,8 +1,12 @@
+import { getKimiCodingOAuthConfig } from '@ai-harness/core';
+import type { ProviderOAuthRefreshConfig } from '@ai-harness/core';
+
 export interface OAuthDeviceConfig {
   deviceAuthorizationUrl: string;
   tokenUrl: string;
   clientId: string;
   scope?: string;
+  responseProfile?: ProviderOAuthRefreshConfig['responseProfile'];
 }
 
 export interface OAuthDevicePrompt {
@@ -105,8 +109,19 @@ function oauthDelay(milliseconds: number, signal?: AbortSignal): Promise<void> {
 
 export class OAuthDeviceClient {
   constructor(private readonly config: OAuthDeviceConfig) {
-    safeEndpoint(config.deviceAuthorizationUrl);
-    safeEndpoint(config.tokenUrl);
+    const deviceUrl = safeEndpoint(config.deviceAuthorizationUrl);
+    const tokenUrl = safeEndpoint(config.tokenUrl);
+    if (config.responseProfile !== undefined && config.responseProfile !== 'kimi-coding') {
+      throw new Error('La configuration OAuth Kimi Coding est invalide.');
+    }
+    if (config.responseProfile === 'kimi-coding') {
+      const suffix = '/api/oauth/token';
+      if (!tokenUrl.endsWith(suffix)) throw new Error('La configuration OAuth Kimi Coding est invalide.');
+      const expected = getKimiCodingOAuthConfig(tokenUrl.slice(0, -suffix.length));
+      if (config.clientId !== expected.clientId || deviceUrl !== expected.deviceAuthorizationUrl || config.scope !== undefined) {
+        throw new Error('La configuration OAuth Kimi Coding est invalide.');
+      }
+    }
     if (!config.clientId || Buffer.byteLength(config.clientId) > 4_096 || config.clientId.includes('\0')) {
       throw new Error('La configuration OAuth contient un identifiant client invalide.');
     }
@@ -141,6 +156,8 @@ export class OAuthDeviceClient {
     const interval = data.interval === undefined ? 5 : data.interval;
     if (!validOAuthText(data.device_code, 4_000) || !validOAuthText(data.user_code, 500)
       || !validOAuthText(verificationUri, 4_096)
+      || (this.config.responseProfile === 'kimi-coding' && (!validOAuthText(data.verification_uri, 4_096)
+        || !validOAuthText(data.verification_uri_complete, 4_096)))
       || (data.verification_uri_complete !== undefined
         && !validOAuthText(data.verification_uri_complete, 4_096))
       || typeof expiresIn !== 'number' || !Number.isFinite(expiresIn) || expiresIn < 1 || expiresIn > 3_600
@@ -195,6 +212,8 @@ export class OAuthDeviceClient {
       const data = await boundedJson(response, requestSignal);
       if (response.ok && typeof data.access_token === 'string' && data.access_token) {
         if (!validOAuthText(data.access_token, 64 * 1024)
+          || (this.config.responseProfile === 'kimi-coding' && (!validOAuthText(data.refresh_token, 64 * 1024)
+            || typeof data.expires_in !== 'number' || data.expires_in <= 0))
           || (data.refresh_token !== undefined && !validOAuthText(data.refresh_token, 64 * 1024))
           || (data.token_type !== undefined && !validOAuthText(data.token_type, 128))
           || (data.expires_in !== undefined && (typeof data.expires_in !== 'number'

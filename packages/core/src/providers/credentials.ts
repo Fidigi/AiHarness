@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { KIMI_CODING_OAUTH_CLIENT_ID } from './kimi-coding-oauth.js';
 import type { EncryptedCredentialStore } from '../security/credential-store.js';
 import {
   executeShellCommand,
@@ -65,6 +66,8 @@ export interface ProviderOAuthRefreshConfig {
   tokenUrl: string;
   clientId: string;
   clientSecret?: string;
+  /** Explicit issuer response contract, never inferred from the credential label. */
+  responseProfile?: 'kimi-coding';
 }
 
 export interface ResolveProviderCredentialOptions {
@@ -275,6 +278,12 @@ function safeOAuthConfig(config: ProviderOAuthRefreshConfig): ProviderOAuthRefre
   const tokenUrl = own('tokenUrl');
   const clientId = own('clientId');
   const clientSecret = own('clientSecret');
+  let profileDescriptor: PropertyDescriptor | undefined;
+  try { profileDescriptor = Object.getOwnPropertyDescriptor(config, 'responseProfile'); }
+  catch { return invalid(); }
+  if (profileDescriptor && !('value' in profileDescriptor)) invalid();
+  const responseProfile: unknown = profileDescriptor?.value;
+  if (responseProfile !== undefined && responseProfile !== 'kimi-coding') invalid();
   if (typeof tokenUrl !== 'string' || !tokenUrl || Buffer.byteLength(tokenUrl) > 4_096
     || /[\u0000-\u001f\u007f-\u009f]/u.test(tokenUrl)) invalid();
   const safeTokenUrl = tokenUrl as string;
@@ -291,10 +300,14 @@ function safeOAuthConfig(config: ProviderOAuthRefreshConfig): ProviderOAuthRefre
     safeClientSecret = clientSecret as string;
     secret(safeClientSecret);
   }
+  if (responseProfile === 'kimi-coding' && (safeClientId !== KIMI_CODING_OAUTH_CLIENT_ID
+    || clientSecret !== undefined || safeTokenUrl.includes('?') || safeTokenUrl.includes('#')
+    || !endpoint.pathname.endsWith('/api/oauth/token'))) invalid();
   return {
     tokenUrl: endpoint.toString(),
     clientId: safeClientId,
     ...(safeClientSecret === undefined ? {} : { clientSecret: safeClientSecret }),
+    ...(responseProfile === 'kimi-coding' ? { responseProfile: 'kimi-coding' as const } : {}),
   };
 }
 
@@ -959,8 +972,19 @@ export class ProviderCredentialService {
       if (error instanceof ProviderCredentialError) throw error;
       throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');
     }
+    if (config.responseProfile === 'kimi-coding') {
+      this.redactor.add(typeof body.access_token === 'string' ? body.access_token : undefined);
+      this.redactor.add(typeof body.refresh_token === 'string' ? body.refresh_token : undefined);
+    }
     if (!response.ok || typeof body.access_token !== 'string' || !body.access_token) {
       throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');
+    }
+    if (config.responseProfile === 'kimi-coding') {
+      if (typeof body.refresh_token !== 'string' || !body.refresh_token
+        || typeof body.expires_in !== 'number' || !Number.isFinite(body.expires_in)
+        || body.expires_in <= 0 || body.expires_in > 365 * 24 * 60 * 60) {
+        throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');
+      }
     }
     const expiresIn = typeof body.expires_in === 'number' && Number.isFinite(body.expires_in)
       ? Math.max(0, Math.min(body.expires_in, 365 * 24 * 60 * 60)) : undefined;

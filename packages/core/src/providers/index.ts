@@ -6,18 +6,75 @@
 
 import type { Message, ProviderConfig, ToolCall, TokenUsage } from '../types/index.js';
 import { ProviderType } from '../types/index.js';
-import { calculateModelCost, getPublishedModelMetadata, type PublishedModelMetadata } from './model-metadata.js';
+import { calculateModelCost, calculatePublishedModelCost, clampPublishedThinkingLevel, getPublishedModelMetadata, getPublishedModels, getSupportedThinkingLevels, type PublishedModelMetadata } from './model-metadata.js';
 import { getProviderPublishedModel } from './provider-model-metadata.js';
 import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
 import { azureIdentifier, normalizeAzureResponsesBaseUrl, usesAzureResponses } from './azure-config.js';
 import { parseProviderToolArguments } from './tool-arguments.js';
-import { rejectProviderHttpResponse } from './context-overflow.js';
+import { consumeBedrockStream } from './bedrock-converse-stream.js';
+import { OPENAI_DECISIONS_MODEL, decisionsBody, decisionsAnswers, type NativeWireQuestion } from './openai-decisions.js';
+export { OPENAI_DECISIONS_MODEL } from './openai-decisions.js';
+import { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
+export { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
+import { openAiMixedBase, openAiResponseProfile, prepareOpenAiResponse, openAiResponseUsage } from './openai-responses.js';
+import { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
+export { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
+import { cloudflareAiBase, cloudflareChatEndpoint, cloudflareChatProfile, cloudflareMixedBases, prepareCloudflareChat, cloudflareChatUsage, validateCloudflareChat } from './cloudflare-completions.js';
+import { OPENROUTER_COMPLETION_MODELS } from './openrouter-completions-metadata.js';
+export { OPENROUTER_COMPLETION_MODELS } from './openrouter-completions-metadata.js';
+import { openRouterCompletionProfile, prepareOpenRouterCompletion, openRouterCompletionReasoning, openRouterCompletionUsage, validateOpenRouterCompletion } from './openrouter-completions.js';
+import { FIREWORKS_MODELS, fireworksProfile, fireworksBase, fireworksHeaders, prepareFireworksMessage, prepareFireworksChat, prepareFireworksOutputBudget, fireworksUsage, mergeFireworksUsage, fireworksReasoning, validateFireworksMessage, validateFireworksChat, fireworksMessageText, fireworksStreamValidator, fireworksFailure } from './fireworks.js';
+export { FIREWORKS_MODELS } from './fireworks.js';
+import { TOGETHER_MODELS, togetherProfile, prepareTogetherChat, togetherUsage, togetherReasoning, validateTogetherChat, togetherStreamValidator } from './together.js';
+export { TOGETHER_MODELS } from './together.js';
+import { HUGGINGFACE_MODELS, huggingfaceProfile, prepareHuggingFaceChat, huggingfaceUsage, huggingfaceReasoning, validateHuggingFaceChat, huggingfaceStreamValidator } from './huggingface.js';
+export { HUGGINGFACE_MODELS } from './huggingface.js';
+import { XIAOMI_MODELS, xiaomiProfile, prepareXiaomiChat, xiaomiUsage, xiaomiReasoning, validateXiaomiChat, xiaomiStreamValidator } from './xiaomi.js';
+export { XIAOMI_MODELS } from './xiaomi.js';
+import { BASETEN_MODELS, basetenProfile, prepareBasetenChat, basetenUsage, basetenReasoning, validateBasetenChat, basetenStreamValidator } from './baseten.js';
+export { BASETEN_MODELS } from './baseten.js';
+import { ANT_LING_MODELS, antLingProfile, prepareAntLingChat, antLingUsage, antLingReasoning, validateAntLingChat, antLingStreamValidator } from './ant-ling.js';
+export { ANT_LING_MODELS } from './ant-ling.js';
+import { CEREBRAS_MODELS, cerebrasProfile, prepareCerebrasChat, cerebrasUsage, cerebrasReasoning, validateCerebrasChat, cerebrasStreamValidator } from './cerebras.js';
+export { CEREBRAS_MODELS } from './cerebras.js';
+import { DEEPSEEK_MODELS, deepSeekProfile, prepareDeepSeekChat, deepSeekUsage, deepSeekReasoning, validateDeepSeekChat, deepSeekStreamValidator } from './deepseek.js';
+export { DEEPSEEK_MODELS } from './deepseek.js';
+import { GROQ_MODELS, groqProfile, prepareGroqChat, groqUsage, groqReasoning, validateGroqChat, groqStreamValidator } from './groq.js';
+export { GROQ_MODELS } from './groq.js';
+import { ZAI_MODELS, zaiProfile, prepareZaiChat, zaiUsage, zaiReasoning, validateZaiChat, zaiStreamValidator } from './zai.js';
+export { ZAI_MODELS } from './zai.js';
+import { MOONSHOT_MODELS, moonshotProfile, prepareMoonshotChat, moonshotUsage, moonshotReasoning, validateMoonshotChat, moonshotStreamValidator } from './moonshot.js';
+export { MOONSHOT_MODELS, MOONSHOT_MODELS as MOONSHOT_CN_MODELS } from './moonshot.js';
+import { NVIDIA_MODELS, nvidiaProfile, prepareNvidiaChat, nvidiaUsage, nvidiaReasoning, validateNvidiaChat, nvidiaStreamValidator } from './nvidia.js';
+export { NVIDIA_MODELS } from './nvidia.js';
+import { MINIMAX_MODELS, miniMaxProfile, miniMaxEndpoint, miniMaxThinking, prepareMiniMaxMessage, prepareMiniMaxOutputBudget, miniMaxUsage, mergeMiniMaxUsage, validateMiniMaxMessage, miniMaxMessageText, miniMaxStreamValidator } from './minimax.js';
+export { MINIMAX_MODELS, MINIMAX_MODELS as MINIMAX_CN_MODELS } from './minimax.js';
+import { OPENCODE_GO_MODELS, opencodeGoProfile, opencodeGoBase, opencodeGoHeaders, prepareOpenCodeGoMessage, prepareOpenCodeGoChat, prepareOpenCodeGoResponse, prepareOpenCodeGoOutputBudget, opencodeGoUsage, mergeOpenCodeGoUsage, opencodeGoReasoning, validateOpenCodeGoMessage, validateOpenCodeGoChat, opencodeGoMessageText, opencodeGoStreamValidator, opencodeGoFailure } from './opencode-go.js';
+export { OPENCODE_GO_MODELS } from './opencode-go.js';
+import { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS, opencodeProfile, opencodeBase, opencodeHeaders, prepareOpenCodeMessage, prepareOpenCodeChat, prepareOpenCodeResponse, prepareOpenCodeOutputBudget, opencodeUsage, mergeOpenCodeUsage, opencodeReasoning, validateOpenCodeMessage, validateOpenCodeChat, opencodeMessageText, opencodeStreamValidator, opencodeFailure, opencodeGoogleBody } from './opencode.js';
+export { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS } from './opencode.js';
+import { KIMI_CODING_MODELS, kimiCodingProfile, kimiCodingEndpoint, prepareKimiCodingMessage, prepareKimiCodingOutputBudget, kimiCodingUsage, mergeKimiCodingUsage, validateKimiCodingMessage, kimiCodingMessageText, kimiCodingStreamValidator } from './kimi-coding.js';
+export { KIMI_CODING_MODELS } from './kimi-coding.js';
+import { META_MODELS, metaProfile, metaBase, prepareMetaResponse, metaUsage } from './meta.js';
+export { META_MODELS } from './meta.js';
+import { XAI_MODELS, xaiProfile, xaiBase, prepareXaiResponse, xaiUsage } from './xai.js';
+export { XAI_MODELS } from './xai.js';
+import { OPENROUTER_MESSAGE_MODELS } from './openrouter-messages-metadata.js';
+export { OPENROUTER_MESSAGE_MODELS } from './openrouter-messages-metadata.js';
+import { openRouterMessageProfile, openRouterMessagesEndpoint, prepareOpenRouterMessage, openRouterMessageBetas, openRouterMessageUsage, validateOpenRouterMessage, openRouterMessageText, mergeOpenRouterMessageUsage } from './openrouter-messages.js';
+import { OPENROUTER_CLASSIFIER_MODELS } from './openrouter-classifiers-metadata.js';
+export { OPENROUTER_CLASSIFIER_MODELS } from './openrouter-classifiers-metadata.js';
+import { OPENROUTER_IMAGE_MODELS, openRouterImagePricing } from './openrouter-images-metadata.js';
+export { OPENROUTER_IMAGE_MODELS } from './openrouter-images-metadata.js';
+import { copyNativeImageRequest, openRouterImagesBody, openRouterImagesOutput, openRouterImagesUsage, type NativeImageRequest, type NativeImageResult } from './openrouter-images.js';
+import { copyNativeClassifierRequest, parseSystemOneAnswers, type NativeClassifierRequest, type NativeClassifierResult } from './native-classification.js';
+import { ProviderContextOverflowError, rejectProviderHttpResponse } from './context-overflow.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, prepareAnthropicOutputBudget } from './anthropic-thinking.js';
 import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
 export type { ThinkingBudgets } from './thinking-budgets.js';
 import {
-  validateClassificationRequest, validateImageGenerationRequest, validateGeneratedImages,
+  validateClassificationRequest, validateImageGenerationRequest, validateGeneratedImages, SpecializedModelError,
   type SpecializedModel, type ClassificationRequest, type ClassificationResult,
   type ImageGenerationRequest, type ImageGenerationResult, type SpecializedModelOptions,
 } from './specialized-models.js';
@@ -105,6 +162,11 @@ function configuredHeaders(config: ProviderConfig): Record<string, string> {
     Object.defineProperty(result, name, { value, enumerable: true, configurable: true, writable: true });
   }
   return result;
+}
+
+function validBearerApiKey(value: unknown): boolean {
+  if (typeof value !== 'string' || !value.trim()) return false;
+  try { new Headers({ Authorization: `Bearer ${value}` }); return true; } catch { return false; }
 }
 
 const MAX_PROVIDER_JSON_BYTES = 16 * 1024 * 1024;
@@ -213,6 +275,8 @@ async function readProviderJson<T>(response: Response): Promise<T> {
 
 export interface ChatResponse {
   content: string;
+  /** Native API that produced this response; absent for legacy/undeclared providers. */
+  api?: string;
   /** Physical dispatch identity, distinct from a virtual selection. */
   provider?: string;
   thinkingLevel?: ThinkingLevel;
@@ -312,9 +376,9 @@ export abstract class AiProvider {
   }
 
   /** Shared request path for proxy, timeout, idle and provider-level retry policy. */
-  protected request(url: string | URL, init: RequestInit = {}): Promise<Response> {
+  protected request(url: string | URL, init: RequestInit = {}, noRetryStatuses?: readonly number[]): Promise<Response> {
     return fetchProviderResponse(url, init, providerNetworkSettings(this.config), {
-      scope: providerNetworkScope(this.config),
+      scope: providerNetworkScope(this.config), noRetryStatuses,
     });
   }
 
@@ -471,6 +535,10 @@ export class ProviderFactory {
         return new AnthropicProvider(config);
       case 'google':
         return new GeminiProvider(config);
+      case 'cerebras':
+        return new CerebrasProvider(config);
+      case 'mistral-conversations':
+        return new MistralProvider({ ...config, model: config.model || this.getDefaultModel(ProviderType.MISTRAL_CONVERSATIONS) });
       case 'azure':
         return usesAzureResponses(config) ? new AzureResponsesProvider(config) : new OpenAiProvider(config);
       case 'vertex':
@@ -492,7 +560,7 @@ export class ProviderFactory {
   /** Register a provider factory at runtime. Built-in names cannot be replaced. */
   static register(type: string, factory: (config: ProviderConfig) => AiProvider): () => void {
     const normalized = type.trim().toLowerCase();
-    if (!normalized || ['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local', 'mock'].includes(normalized)) {
+    if (!normalized || ['openai', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'azure', 'vertex', 'bedrock', 'local', 'mock'].includes(normalized)) {
       throw new Error(`Cannot register reserved provider type: ${type}`);
     }
     if (this.dynamicProviders.has(normalized)) {
@@ -503,7 +571,7 @@ export class ProviderFactory {
   }
 
   static has(type: string): boolean {
-    return ['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local', 'mock'].includes(type.toLowerCase())
+    return ['openai', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'azure', 'vertex', 'bedrock', 'local', 'mock'].includes(type.toLowerCase())
       || this.dynamicProviders.has(type.toLowerCase());
   }
 
@@ -517,6 +585,8 @@ export class ProviderFactory {
       case 'openai': return 'gpt-4o';
       case 'anthropic': return 'claude-3-haiku-20240307';
       case 'google': return 'gemini-2.0-flash';
+      case 'cerebras': return CEREBRAS_MODELS[0].id;
+      case 'mistral-conversations': return 'mistral-small-latest';
       case 'azure': return 'gpt-4o';
       case 'vertex': return 'gemini-2.0-flash';
       case 'bedrock': return 'anthropic.claude-3-haiku-20240307-v1:0';
@@ -560,6 +630,8 @@ function normalizeOpenAiUsage(
 }
 
 export class OpenAiProvider extends AiProvider {
+  override getModelApi(): string { return 'openai-completions'; }
+
   private readonly baseUrl: string;
   private readonly azure: boolean;
   static readonly DEFAULT_BASE_URL = 'https://api.openai.com/v1';
@@ -592,7 +664,7 @@ export class OpenAiProvider extends AiProvider {
     return { images: validateGeneratedImages(data.data?.map(image => ({ mediaType: 'image/png', data: image.b64_json })), request.count ?? 1) };
   }
 
-  private getChatUrl(): string {
+  protected getChatUrl(): string {
     if (!this.azure) return `${this.baseUrl}/chat/completions`;
     const deployment = String(this.config.deployment || this.config.model || 'gpt-4o');
     const apiVersion = String(this.config.apiVersion || '2024-10-21');
@@ -600,7 +672,7 @@ export class OpenAiProvider extends AiProvider {
     return `${this.baseUrl}/openai/deployments/${encodeURIComponent(deployment)}/chat/completions?api-version=${encodeURIComponent(apiVersion)}`;
   }
 
-  private getHeaders(): Record<string, string> {
+  protected getHeaders(_options?: ChatOptions): Record<string, string> {
     return {
       ...configuredHeaders(this.config),
       'Content-Type': 'application/json',
@@ -622,6 +694,17 @@ export class OpenAiProvider extends AiProvider {
     if (!response.ok) rejectProviderResponse(response, `Model discovery failed (${response.status}).`);
     const data = await readProviderJson<{ data?: Array<{ id?: unknown }> }>(response);
     return boundedModelIds(data.data, model => (model as { id?: unknown })?.id);
+  }
+
+  protected prepareChatBody(body: Record<string, unknown>, _options?: ChatOptions, _messages?: Message[]): Record<string, unknown> { return body; }
+  protected validateChatResponse(_value: unknown): void {}
+  /** Optional per-request native completion validation; legacy compatible streams retain their policy. */
+  protected createStreamValidator(): (value?: unknown) => void { return () => {}; }
+  protected responseUsage(usage: NonNullable<OpenAiResponse['usage']> | NonNullable<OpenAiStreamChunk['usage']>, _model: string): ChatResponse['usage'] { return normalizeOpenAiUsage(usage); }
+  protected responseReasoning(value: unknown, stream = false): string | undefined {
+    const message = value as { reasoning_content?: string; reasoning_summary?: string } | undefined;
+    return stream ? typeof message?.reasoning_content === 'string' ? message.reasoning_content : undefined
+      : message?.reasoning_content || message?.reasoning_summary;
   }
 
   private buildMessages(messages: Message[]): Array<Record<string, unknown>> {
@@ -687,8 +770,8 @@ export class OpenAiProvider extends AiProvider {
 
     const response = await this.request(this.getChatUrl(), {
       method: 'POST',
-      headers: this.getHeaders(),
-      body: serializeProviderBody({
+      headers: this.getHeaders(options),
+      body: serializeProviderBody(this.prepareChatBody({
         model,
         messages: finalMessages,
         stream: false,
@@ -705,25 +788,26 @@ export class OpenAiProvider extends AiProvider {
           })),
           tool_choice: 'auto',
         } : {}),
-      }),
+      }, options, messages)),
       signal: options?.signal,
     });
 
     if (!response.ok) await rejectProviderHttpResponse(response, `OpenAI API error (${response.status}).`);
 
     const data = await readProviderJson<OpenAiResponse>(response);
+    this.validateChatResponse(data);
     const choice = data.choices?.[0];
     if (!choice?.message) {
       throw new Error('No content in OpenAI response');
     }
 
+    const reasoning = this.responseReasoning(choice.message);
     return {
       content: choice.message.content || '',
       ...lengthStop(choice.finish_reason),
-      ...(choice.message.reasoning_content || choice.message.reasoning_summary
-        ? { reasoning: choice.message.reasoning_content || choice.message.reasoning_summary } : {}),
+      ...(reasoning ? { reasoning } : {}),
       model: data.model,
-      usage: data.usage ? normalizeOpenAiUsage(data.usage) : undefined,
+      usage: data.usage ? this.responseUsage(data.usage, model) : undefined,
       toolCalls: this.parseToolCalls(choice.message.tool_calls),
     };
   }
@@ -768,10 +852,10 @@ export class OpenAiProvider extends AiProvider {
     }
 
     try {
-      const serializedBody = serializeProviderBody(body);
+      const serializedBody = serializeProviderBody(this.prepareChatBody(body, options, messages));
       const response = await this.request(this.getChatUrl(), {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: this.getHeaders(options),
         body: serializedBody,
         signal: options?.signal,
       });
@@ -779,6 +863,7 @@ export class OpenAiProvider extends AiProvider {
       if (!response.ok) await rejectProviderHttpResponse(response, `OpenAI API error (${response.status}).`);
       if (!response.body) throw new Error('OpenAI streaming response has no body');
 
+      const validateStream = this.createStreamValidator();
       let fullContent = '';
       let fullReasoning = '';
       let streamModel = model;
@@ -824,6 +909,7 @@ export class OpenAiProvider extends AiProvider {
           const dataStr = trimmed.slice(6); // Remove "data: " prefix
           if (++streamEvents > MAX_PROVIDER_STREAM_EVENTS) throw new Error('The provider response exceeded its event limit.');
           if (dataStr === '[DONE]') {
+            validateStream();
             const toolCalls = collectToolCalls();
             for (const call of toolCalls ?? []) await onChunk('', { type: 'tool_call', data: call });
             onComplete?.({
@@ -843,12 +929,14 @@ export class OpenAiProvider extends AiProvider {
           if (data && Object.hasOwn(data, 'error') && data.error) {
             throw new Error('The provider reported a streaming error.');
           }
+          validateStream(data);
           stopReason = lengthStop(data.choices?.[0]?.finish_reason).stopReason ?? stopReason;
           const delta = data.choices?.[0]?.delta;
-          if (typeof delta?.reasoning_content === 'string' && delta.reasoning_content) {
-            addOutput(delta.reasoning_content);
-            fullReasoning += delta.reasoning_content;
-            await onChunk('', { type: 'reasoning_delta', data: { content: delta.reasoning_content } });
+          const reasoning = this.responseReasoning(delta, true);
+          if (reasoning) {
+            addOutput(reasoning);
+            fullReasoning += reasoning;
+            await onChunk('', { type: 'reasoning_delta', data: { content: reasoning } });
           }
           if (typeof delta?.content === 'string' && delta.content) {
             addOutput(delta.content);
@@ -889,11 +977,12 @@ export class OpenAiProvider extends AiProvider {
             streamModel = data.model;
           }
           // OpenAI emits usage in a final empty-choices chunk when include_usage is enabled.
-          if (data.usage) usage = normalizeOpenAiUsage(data.usage);
+          if (data.usage) usage = this.responseUsage(data.usage, model);
         }
       }
       buffer += decoder.decode();
       if (buffer.trim()) throw new Error('The provider streaming response was invalid.');
+      validateStream();
 
       const toolCalls = collectToolCalls();
       for (const call of toolCalls ?? []) await onChunk('', { type: 'tool_call', data: call });
@@ -1026,6 +1115,1380 @@ interface OpenAiStreamChunk {
     total_tokens?: number;
     prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
   };
+}
+
+// ===================================================================
+// Native Mistral Chat/Conversations dialect
+// ===================================================================
+
+export const TYPESAFE_CLASSIFIER_MODEL = Object.freeze({ id: 'jev-latest', type: 'classifier' as const, name: 'Jev',
+  api: 'typesafe-system-one', contextWindow: 64_000,
+  pricing: Object.freeze({ inputPerMillion: 0, outputPerMillion: 0, cacheReadPerMillion: 0, cacheWritePerMillion: 0 }),
+});
+
+export const CLOUDFLARE_CLASSIFIER_MODELS = Object.freeze([
+  { id: '@cf/cloudflare/clef', name: 'Clef', contextWindow: 65_536, inputPerMillion: 0.24 },
+  { id: '@cf/cloudflare/clef-flash', name: 'Clef Flash', contextWindow: 65_536, inputPerMillion: 0.09 },
+  { id: 'typesafe/jev', name: 'Jev', contextWindow: 32_000, inputPerMillion: 0 },
+].map(({ inputPerMillion, ...model }) => Object.freeze({ ...model, type: 'classifier' as const, api: 'cloudflare-workers-ai-system-one',
+  pricing: Object.freeze({ inputPerMillion, outputPerMillion: 0, cacheReadPerMillion: 0, cacheWritePerMillion: 0 }),
+})));
+
+function systemOneEndpoint(baseUrl: string, operation: string, label: string): string {
+  try {
+    const url = new URL(baseUrl);
+    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error();
+    const path = url.pathname.replace(/\/+$/u, '');
+    url.pathname = path.endsWith(`/${operation}`) ? path : `${path}/${operation}`;
+    return url.href;
+  } catch { throw new Error(`Invalid ${label} endpoint.`); }
+}
+
+/** Explicit supplied-key Xiaomi C SDK; regional plans and routed identities remain separate. */
+export class XiaomiProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? XIAOMI_MODELS[0].id; xiaomiProfile(model);
+    const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://api.xiaomimimo.com/v1', 'chat/completions', 'Xiaomi');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+  }
+  override getModelApi(_model?: string): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { xiaomiProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return XIAOMI_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return XIAOMI_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      maxOutputTokens: profile.maxOutputTokens, pricing: { ...profile.pricing }, thinkingLevelMap: { ...profile.thinkingLevelMap },
+      capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = xiaomiProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, model: profile.id, name: profile.name, provider: this.getProviderType(), type: 'classifier', virtual: true,
+      api: profile.api, contextWindow: profile.contextWindow, pricing: { ...profile.pricing }, imageInput: profile.declaredInput.includes('image') }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> { throw new Error('Image model or options are not supported.'); }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(): Record<string, string> {
+    try { const headers = new Headers(configuredHeaders(this.config)); headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`); return Object.fromEntries(headers.entries()); }
+    catch { throw new Error('Invalid Xiaomi request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareXiaomiChat(body, options, messages); }
+  protected override validateChatResponse(value: unknown): void { validateXiaomiChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return xiaomiStreamValidator(); }
+  protected override responseReasoning(value: unknown): string | undefined { return xiaomiReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return xiaomiUsage(value, model); }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Xiaomi request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['Xiaomi API key is required.', 'Xiaomi chat model is not supported.', 'Invalid Xiaomi thinking level.',
+      'Invalid Xiaomi output limit.', 'Xiaomi chat model does not support images.', 'Invalid Xiaomi request headers.',
+      'Invalid Xiaomi session identity.', 'Invalid Xiaomi chat response.', 'Unsupported Xiaomi reasoning replay.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Xiaomi chat request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel();
+    try { if (!this.validateConfig()) throw new Error('Xiaomi API key is required.'); const result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('Xiaomi request aborted.'); return { ...result, provider, model, api: 'openai-completions' };
+    } catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel(), active = () => { if (options?.signal?.aborted) throw new Error('Xiaomi request aborted.'); };
+    try { if (!this.validateConfig()) throw new Error('Xiaomi API key is required.'); active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider, model, api: 'openai-completions' } : response); }, error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Explicit supplied-token Hugging Face C SDK; aliases and shared IDs never select foreign policy. */
+export class HuggingFaceProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? HUGGINGFACE_MODELS[0].id; huggingfaceProfile(model);
+    const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://router.huggingface.co/v1', 'chat/completions', 'Hugging Face');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+  }
+  override getModelApi(_model?: string): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { huggingfaceProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return HUGGINGFACE_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return HUGGINGFACE_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      maxOutputTokens: profile.maxOutputTokens, ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}), thinkingLevelMap: { ...profile.thinkingLevelMap },
+      capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = huggingfaceProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, model: profile.id, name: profile.name, provider: this.getProviderType(), type: 'classifier', virtual: true,
+      api: profile.api, contextWindow: profile.contextWindow, ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}), imageInput: profile.declaredInput.includes('image') }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> { throw new Error('Image model or options are not supported.'); }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(): Record<string, string> {
+    try { const headers = new Headers(configuredHeaders(this.config)); headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`); return Object.fromEntries(headers.entries()); }
+    catch { throw new Error('Invalid Hugging Face request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareHuggingFaceChat(body, options, messages); }
+  protected override validateChatResponse(value: unknown): void { validateHuggingFaceChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return huggingfaceStreamValidator(); }
+  protected override responseReasoning(value: unknown): string | undefined { return huggingfaceReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return huggingfaceUsage(value, model); }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Hugging Face request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['Hugging Face API key is required.', 'Hugging Face chat model is not supported.', 'Invalid Hugging Face thinking level.',
+      'Invalid Hugging Face output limit.', 'Hugging Face chat model does not support images.', 'Invalid Hugging Face request headers.',
+      'Invalid Hugging Face session identity.', 'Invalid Hugging Face chat response.', 'Unsupported Hugging Face reasoning replay.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Hugging Face chat request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel();
+    try { if (!this.validateConfig()) throw new Error('Hugging Face API key is required.'); const result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('Hugging Face request aborted.'); return { ...result, provider, model, api: 'openai-completions' };
+    } catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel(), active = () => { if (options?.signal?.aborted) throw new Error('Hugging Face request aborted.'); };
+    try { if (!this.validateConfig()) throw new Error('Hugging Face API key is required.'); active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider, model, api: 'openai-completions' } : response); }, error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Explicit supplied-key Together C SDK; shared model IDs never select another adapter's policy. */
+export class TogetherProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? TOGETHER_MODELS[0].id; togetherProfile(model);
+    const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://api.together.ai/v1', 'chat/completions', 'Together');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+  }
+  override getModelApi(_model?: string): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { togetherProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return TOGETHER_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return TOGETHER_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      maxOutputTokens: profile.maxOutputTokens, pricing: { ...profile.pricing }, thinkingLevelMap: { ...profile.thinkingLevelMap },
+      capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = togetherProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, model: profile.id, name: profile.name, provider: this.getProviderType(), type: 'classifier', virtual: true,
+      api: profile.api, contextWindow: profile.contextWindow, pricing: { ...profile.pricing }, imageInput: profile.declaredInput.includes('image') }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> { throw new Error('Image model or options are not supported.'); }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(): Record<string, string> {
+    try { const headers = new Headers(configuredHeaders(this.config)); headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`); return Object.fromEntries(headers.entries()); }
+    catch { throw new Error('Invalid Together request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareTogetherChat(body, options, messages); }
+  protected override validateChatResponse(value: unknown): void { validateTogetherChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return togetherStreamValidator(); }
+  protected override responseReasoning(value: unknown): string | undefined { return togetherReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return togetherUsage(value, model); }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Together request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['Together API key is required.', 'Together chat model is not supported.', 'Invalid Together thinking level.',
+      'Invalid Together output limit.', 'Together chat model does not support images.', 'Invalid Together request headers.',
+      'Invalid Together chat response.', 'Unsupported Together reasoning replay.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Together chat request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel();
+    try { if (!this.validateConfig()) throw new Error('Together API key is required.'); const result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('Together request aborted.'); return { ...result, provider, model, api: 'openai-completions' };
+    } catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('Together request aborted.'); };
+    try { if (!this.validateConfig()) throw new Error('Together API key is required.'); active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); }, error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Explicit supplied-key Baseten C SDK; template and effort policy belongs to this adapter. */
+export class BasetenProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? BASETEN_MODELS[0].id; basetenProfile(model);
+    const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://inference.baseten.co/v1', 'chat/completions', 'Baseten');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+  }
+  override getModelApi(_model?: string): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { basetenProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return BASETEN_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return BASETEN_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      maxOutputTokens: profile.maxOutputTokens, pricing: { ...profile.pricing }, thinkingLevelMap: { ...profile.thinkingLevelMap },
+      capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = basetenProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, model: profile.id, name: profile.name, provider: this.getProviderType(), type: 'classifier', virtual: true,
+      api: profile.api, contextWindow: profile.contextWindow, pricing: { ...profile.pricing }, imageInput: profile.declaredInput.includes('image') }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> { throw new Error('Image model or options are not supported.'); }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(options?: ChatOptions): Record<string, string> {
+    const identity = options?.cacheRetention === 'none' ? undefined : options?.sessionId;
+    if (identity !== undefined && (typeof identity !== 'string' || identity.length > 500 || /[^\u0020-\u007e]/u.test(identity))) throw new Error('Invalid Baseten session identity.');
+    try {
+      const headers = new Headers();
+      if (identity) for (const name of ['session_id', 'x-client-request-id', 'x-session-affinity']) headers.set(name, identity);
+      for (const [name, value] of Object.entries(configuredHeaders(this.config))) headers.set(name, value);
+      headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`);
+      return Object.fromEntries(headers.entries());
+    } catch { throw new Error('Invalid Baseten request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareBasetenChat(body, options, messages); }
+  protected override validateChatResponse(value: unknown): void { validateBasetenChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return basetenStreamValidator(); }
+  protected override responseReasoning(value: unknown): string | undefined { return basetenReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return basetenUsage(value, model); }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Baseten request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['Baseten API key is required.', 'Baseten chat model is not supported.', 'Invalid Baseten thinking level.',
+      'Invalid Baseten output limit.', 'Baseten chat model does not support images.', 'Invalid Baseten request headers.',
+      'Invalid Baseten session identity.', 'Invalid Baseten chat response.', 'Unsupported Baseten reasoning replay.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Baseten chat request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel();
+    try { if (!this.validateConfig()) throw new Error('Baseten API key is required.'); const result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('Baseten request aborted.'); return { ...result, provider, model, api: 'openai-completions' };
+    } catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('Baseten request aborted.'); };
+    try { if (!this.validateConfig()) throw new Error('Baseten API key is required.'); active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); }, error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Explicit supplied-key Ant Ling C SDK; no alias-selected policy, factory or automatic host. */
+export class AntLingProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? ANT_LING_MODELS[0].id; antLingProfile(model);
+    const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://api.ant-ling.com/v1', 'chat/completions', 'Ant Ling');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+  }
+  override getModelApi(_model?: string): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { antLingProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return ANT_LING_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return ANT_LING_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      maxOutputTokens: profile.maxOutputTokens, pricing: { ...profile.pricing },
+      ...(profile.thinkingLevelMap ? { thinkingLevelMap: { ...profile.thinkingLevelMap } } : {}),
+      capabilities: { reasoning: profile.reasoning, imageInput: false, toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = antLingProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, model: profile.id, name: profile.name, provider: this.getProviderType(), type: 'classifier', virtual: true,
+      api: profile.api, contextWindow: profile.contextWindow, pricing: { ...profile.pricing }, imageInput: false }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> { throw new Error('Image model or options are not supported.'); }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(): Record<string, string> {
+    try { const headers = new Headers(configuredHeaders(this.config)); headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`); return Object.fromEntries(headers.entries()); }
+    catch { throw new Error('Invalid Ant Ling request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareAntLingChat(body, options); }
+  protected override validateChatResponse(value: unknown): void { validateAntLingChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return antLingStreamValidator(); }
+  protected override responseReasoning(value: unknown): string | undefined { return antLingReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return antLingUsage(value, model); }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Ant Ling request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['Ant Ling API key is required.', 'Ant Ling chat model is not supported.', 'Invalid Ant Ling thinking level.',
+      'Invalid Ant Ling output limit.', 'Ant Ling chat model does not support images.', 'Invalid Ant Ling request headers.',
+      'Invalid Ant Ling chat response.', 'Unsupported Ant Ling reasoning replay.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Ant Ling chat request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel();
+    try { if (!this.validateConfig()) throw new Error('Ant Ling API key is required.'); const result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('Ant Ling request aborted.'); return { ...result, provider, model, api: 'openai-completions' };
+    } catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('Ant Ling request aborted.'); };
+    try { if (!this.validateConfig()) throw new Error('Ant Ling API key is required.'); active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); }, error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Explicit reviewed Cerebras C SDK; operator identities never select compatibility or credentials. */
+export class CerebrasProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? CEREBRAS_MODELS[0].id; cerebrasProfile(model);
+    const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://api.cerebras.ai/v1', 'chat/completions', 'Cerebras');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+  }
+  override getModelApi(_model?: string): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { cerebrasProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return CEREBRAS_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return CEREBRAS_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      thinkingLevelMap: { ...profile.thinkingLevelMap }, maxOutputTokens: profile.maxOutputTokens, pricing: { ...profile.pricing },
+      capabilities: { reasoning: true, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = cerebrasProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, type: 'classifier', provider: this.getProviderType(), model: profile.id, virtual: true,
+      name: profile.name, api: profile.api, contextWindow: profile.contextWindow, pricing: { ...profile.pricing },
+      ...(profile.declaredInput.includes('image') ? { imageInput: true } : {}) }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> {
+    throw new Error('Image model or options are not supported.');
+  }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(): Record<string, string> {
+    try {
+      const headers = new Headers(configuredHeaders(this.config));
+      headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`);
+      return Object.fromEntries(headers.entries());
+    } catch { throw new Error('Invalid Cerebras request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareCerebrasChat(body, options); }
+  protected override validateChatResponse(value: unknown): void { validateCerebrasChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return cerebrasStreamValidator(); }
+  protected override responseReasoning(value: unknown): string | undefined { return cerebrasReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return cerebrasUsage(value, model); }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Cerebras request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['Cerebras API key is required.', 'Cerebras chat model is not supported.', 'Invalid Cerebras thinking level.',
+      'Invalid Cerebras output limit.', 'Cerebras chat model does not support images.', 'Invalid Cerebras request headers.',
+      'Invalid Cerebras chat response.', 'Invalid Cerebras session identity.', 'Unsupported Cerebras reasoning replay.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Cerebras chat request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const provider = this.getProviderType();
+    try {
+      if (!this.validateConfig()) throw new Error('Cerebras API key is required.');
+      const result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('Cerebras request aborted.');
+      return { ...result, provider, api: 'openai-completions' };
+    } catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('Cerebras request aborted.'); };
+    try {
+      if (!this.validateConfig()) throw new Error('Cerebras API key is required.');
+      active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); },
+        error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Explicit native DeepSeek C policy; aliases and proxy hosts never select compatibility. */
+export class DeepSeekProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? DEEPSEEK_MODELS[0].id; deepSeekProfile(model);
+    const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://api.deepseek.com', 'chat/completions', 'DeepSeek');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+  }
+  override getModelApi(_model?: string): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { deepSeekProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return DEEPSEEK_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return DEEPSEEK_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      thinkingLevelMap: { ...profile.thinkingLevelMap }, maxOutputTokens: profile.maxOutputTokens, pricing: { ...profile.pricing },
+      capabilities: { reasoning: true, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = deepSeekProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, type: 'classifier', provider: this.getProviderType(), model: profile.id, virtual: true,
+      name: profile.name, api: profile.api, contextWindow: profile.contextWindow, pricing: { ...profile.pricing },
+      ...(profile.declaredInput.includes('image') ? { imageInput: true } : {}) }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> {
+    throw new Error('Image model or options are not supported.');
+  }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(): Record<string, string> {
+    try {
+      const headers = new Headers(configuredHeaders(this.config));
+      headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`);
+      return Object.fromEntries(headers.entries());
+    } catch { throw new Error('Invalid DeepSeek request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareDeepSeekChat(body, options, messages); }
+  protected override validateChatResponse(value: unknown): void { validateDeepSeekChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return deepSeekStreamValidator(); }
+  protected override responseReasoning(value: unknown): string | undefined { return deepSeekReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return deepSeekUsage(value, model); }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('DeepSeek request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['DeepSeek API key is required.', 'DeepSeek chat model is not supported.', 'Invalid DeepSeek thinking level.',
+      'Invalid DeepSeek output limit.', 'DeepSeek chat model does not support images.', 'Invalid DeepSeek request headers.',
+      'Invalid DeepSeek chat response.', 'Invalid DeepSeek session identity.', 'Unsupported DeepSeek reasoning replay.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'DeepSeek chat request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const provider = this.getProviderType();
+    try {
+      if (!this.validateConfig()) throw new Error('DeepSeek API key is required.');
+      const result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('DeepSeek request aborted.');
+      return { ...result, provider, api: 'openai-completions' };
+    } catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('DeepSeek request aborted.'); };
+    try {
+      if (!this.validateConfig()) throw new Error('DeepSeek API key is required.');
+      active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); },
+        error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Explicit native Groq C policy; logical aliases and proxy URLs do not select compatibility. */
+export class GroqProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? GROQ_MODELS[0].id; groqProfile(model);
+    const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://api.groq.com/openai/v1', 'chat/completions', 'Groq');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+  }
+  override getModelApi(_model?: string): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { groqProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return GROQ_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return GROQ_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      ...(profile.thinkingLevelMap ? { thinkingLevelMap: { ...profile.thinkingLevelMap } } : {}), maxOutputTokens: profile.maxOutputTokens, pricing: { ...profile.pricing },
+      capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = groqProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, type: 'classifier', provider: this.getProviderType(), model: profile.id, virtual: true,
+      name: profile.name, api: profile.api, contextWindow: profile.contextWindow, pricing: { ...profile.pricing },
+      imageInput: profile.declaredInput.includes('image') }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> {
+    throw new Error('Image model or options are not supported.');
+  }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(): Record<string, string> {
+    try {
+      const headers = new Headers(configuredHeaders(this.config));
+      headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`);
+      return Object.fromEntries(headers.entries());
+    } catch { throw new Error('Invalid Groq request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareGroqChat(body, options, messages); }
+  protected override validateChatResponse(value: unknown): void { validateGroqChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return groqStreamValidator(); }
+  protected override responseReasoning(value: unknown): string | undefined { return groqReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return groqUsage(value, model); }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Groq request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['Groq API key is required.', 'Groq chat model is not supported.', 'Invalid Groq thinking level.',
+      'Invalid Groq output limit.', 'Groq chat model does not support images.', 'Invalid Groq request headers.',
+      'Invalid Groq chat response.', 'Invalid Groq session identity.', 'Unsupported Groq reasoning replay.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Groq chat request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const provider = this.getProviderType();
+    try {
+      if (!this.validateConfig()) throw new Error('Groq API key is required.');
+      const result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('Groq request aborted.');
+      return { ...result, provider, api: 'openai-completions' };
+    } catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('Groq request aborted.'); };
+    try {
+      if (!this.validateConfig()) throw new Error('Groq API key is required.');
+      active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); },
+        error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Explicit native Z.ai coding C policy, never inferred from an alias or compatible URL. */
+export class ZaiProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? ZAI_MODELS[0].id; zaiProfile(model);
+    const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://api.z.ai/api/coding/paas/v4', 'chat/completions', 'Z.ai');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+  }
+  override getModelApi(_model?: string): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { zaiProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return ZAI_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return ZAI_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      ...(profile.thinkingLevelMap ? { thinkingLevelMap: { ...profile.thinkingLevelMap } } : {}), maxOutputTokens: profile.maxOutputTokens,
+      ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
+      capabilities: { reasoning: true, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = zaiProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, type: 'classifier', provider: this.getProviderType(), model: profile.id, virtual: true,
+      name: profile.name, api: profile.api, contextWindow: profile.contextWindow, ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
+      imageInput: profile.declaredInput.includes('image') }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> {
+    throw new Error('Image model or options are not supported.');
+  }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(): Record<string, string> {
+    try {
+      const headers = new Headers(configuredHeaders(this.config));
+      headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`);
+      return Object.fromEntries(headers.entries());
+    } catch { throw new Error('Invalid Z.ai request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareZaiChat(body, options, messages); }
+  protected override validateChatResponse(value: unknown): void { validateZaiChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return zaiStreamValidator(); }
+  protected override responseReasoning(value: unknown): string | undefined { return zaiReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return zaiUsage(value, model); }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Z.ai request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['Z.ai API key is required.', 'Z.ai chat model is not supported.', 'Invalid Z.ai thinking level.',
+      'Invalid Z.ai output limit.', 'Z.ai chat model does not support images.', 'Invalid Z.ai request headers.',
+      'Invalid Z.ai chat response.', 'Invalid Z.ai session identity.', 'Unsupported Z.ai reasoning replay.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Z.ai chat request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const provider = this.getProviderType();
+    try {
+      if (!this.validateConfig()) throw new Error('Z.ai API key is required.');
+      const result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('Z.ai request aborted.');
+      return { ...result, provider, api: 'openai-completions' };
+    } catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('Z.ai request aborted.'); };
+    try {
+      if (!this.validateConfig()) throw new Error('Z.ai API key is required.');
+      active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); },
+        error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Explicit native Moonshot C policy, never inferred from an alias or compatible URL. */
+export class MoonshotProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? MOONSHOT_MODELS[0].id; moonshotProfile(model);
+    const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://api.moonshot.ai/v1', 'chat/completions', 'Moonshot');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+  }
+  override getModelApi(_model?: string): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { moonshotProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return MOONSHOT_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return MOONSHOT_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      ...(profile.thinkingLevelMap ? { thinkingLevelMap: { ...profile.thinkingLevelMap } } : {}), maxOutputTokens: profile.maxOutputTokens,
+      ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
+      capabilities: { reasoning: true, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = moonshotProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, type: 'classifier', provider: this.getProviderType(), model: profile.id, virtual: true,
+      name: profile.name, api: profile.api, contextWindow: profile.contextWindow, ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
+      imageInput: profile.declaredInput.includes('image') }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> {
+    throw new Error('Image model or options are not supported.');
+  }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(): Record<string, string> {
+    try {
+      const headers = new Headers(configuredHeaders(this.config));
+      headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`);
+      return Object.fromEntries(headers.entries());
+    } catch { throw new Error('Invalid Moonshot request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareMoonshotChat(body, options, messages); }
+  protected override validateChatResponse(value: unknown): void { validateMoonshotChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return moonshotStreamValidator(); }
+  protected override responseReasoning(value: unknown): string | undefined { return moonshotReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return moonshotUsage(value, model); }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Moonshot request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['Moonshot API key is required.', 'Moonshot chat model is not supported.', 'Invalid Moonshot thinking level.',
+      'Invalid Moonshot output limit.', 'Moonshot chat model does not support images.', 'Invalid Moonshot request headers.',
+      'Invalid Moonshot chat response.', 'Invalid Moonshot session identity.', 'Unsupported Moonshot reasoning replay.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Moonshot chat request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel()!;
+    try {
+      if (!this.validateConfig()) throw new Error('Moonshot API key is required.');
+      const result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('Moonshot request aborted.');
+      return { ...result, provider, model, api: 'openai-completions' };
+    } catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel()!, active = () => { if (options?.signal?.aborted) throw new Error('Moonshot request aborted.'); };
+    try {
+      if (!this.validateConfig()) throw new Error('Moonshot API key is required.');
+      active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider, model, api: 'openai-completions' } : response); },
+        error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Pinned CN rows share Moonshot policy/metadata; only explicit construction selects the regional base. */
+export class MoonshotCnProvider extends MoonshotProvider {
+  constructor(config: ProviderConfig) {
+    super({ ...config, baseUrl: config.baseUrl ?? 'https://api.moonshot.cn/v1' });
+  }
+}
+
+/** Explicit native Nvidia C policy, never inferred from an alias or compatible URL. */
+export class NvidiaProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? NVIDIA_MODELS[0].id; nvidiaProfile(model);
+    const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://integrate.api.nvidia.com/v1', 'chat/completions', 'Nvidia');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+  }
+  override getModelApi(_model?: string): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { nvidiaProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return NVIDIA_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return NVIDIA_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      ...(profile.thinkingLevelMap ? { thinkingLevelMap: { ...profile.thinkingLevelMap } } : {}), maxOutputTokens: profile.maxOutputTokens,
+      ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
+      capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = nvidiaProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, type: 'classifier', provider: this.getProviderType(), model: profile.id, virtual: true,
+      name: profile.name, api: profile.api, contextWindow: profile.contextWindow, ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
+      imageInput: profile.declaredInput.includes('image') }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> {
+    throw new Error('Image model or options are not supported.');
+  }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(): Record<string, string> {
+    try {
+      const headers = new Headers(configuredHeaders(this.config));
+      if (!headers.has('nvcf-poll-seconds')) headers.set('nvcf-poll-seconds', '3600');
+      headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`);
+      return Object.fromEntries(headers.entries());
+    } catch { throw new Error('Invalid Nvidia request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareNvidiaChat(body, options, messages); }
+  protected override validateChatResponse(value: unknown): void { validateNvidiaChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return nvidiaStreamValidator(); }
+  protected override responseReasoning(value: unknown): string | undefined { return nvidiaReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return nvidiaUsage(value, model); }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Nvidia request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['Nvidia API key is required.', 'Nvidia chat model is not supported.', 'Invalid Nvidia thinking level.',
+      'Invalid Nvidia output limit.', 'Nvidia chat model does not support images.', 'Invalid Nvidia request headers.',
+      'Invalid Nvidia chat response.', 'Unsupported Nvidia reasoning replay.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Nvidia chat request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const provider = this.getProviderType();
+    try {
+      if (!this.validateConfig()) throw new Error('Nvidia API key is required.');
+      const result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('Nvidia request aborted.');
+      return { ...result, provider, api: 'openai-completions' };
+    } catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('Nvidia request aborted.'); };
+    try {
+      if (!this.validateConfig()) throw new Error('Nvidia API key is required.');
+      active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); },
+        error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Explicit native C transport, separate from OpenRouter A, image and System One APIs. */
+export class OpenRouterCompletionsProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model || 'openai/gpt-4o';
+    openRouterCompletionProfile(model);
+    const endpoint = systemOneEndpoint(config.baseUrl || 'https://openrouter.ai/api/v1/', 'chat/completions', 'OpenRouter completions');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+  }
+  override getModelApi(): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { openRouterCompletionProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return OPENROUTER_COMPLETION_MODELS.map(profile => profile.id); }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = openRouterCompletionProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, type: 'classifier', provider: this.getProviderType(), model: profile.id, virtual: true,
+      name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      ...(profile.declaredInput.includes('image') ? { imageInput: true } : {}),
+      ...(profile.pricing ? { pricing: { inputPerMillion: profile.pricing.inputPerMillion, outputPerMillion: profile.pricing.outputPerMillion,
+        cacheReadPerMillion: profile.pricing.cacheReadPerMillion, cacheWritePerMillion: profile.pricing.cacheWritePerMillion } } : {}),
+    }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> {
+    throw new Error('Image model or options are not supported.');
+  }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(options?: ChatOptions): Record<string, string> {
+    try {
+      const headers = new Headers(configuredHeaders(this.config));
+      headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`);
+      if (options?.cacheRetention === 'none') headers.delete('x-session-id');
+      else if (options?.sessionId) {
+        if (typeof options.sessionId !== 'string' || Buffer.byteLength(options.sessionId) > 500) throw new Error();
+        headers.set('x-session-id', options.sessionId);
+      }
+      return Object.fromEntries(headers.entries());
+    } catch { throw new Error('Invalid OpenRouter request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> {
+    return prepareOpenRouterCompletion(body, options, messages);
+  }
+  protected override validateChatResponse(value: unknown): void { validateOpenRouterCompletion(value); }
+  protected override responseReasoning(value: unknown): string | undefined { return openRouterCompletionReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return openRouterCompletionUsage(value, model); }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    if (!this.validateConfig()) throw new Error('OpenRouter API key is required.');
+    const result = await super.chat(messages, options);
+    if (options?.signal?.aborted) throw new Error('OpenRouter request aborted.');
+    return { ...result, api: this.getModelApi() };
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const active = (): void => { if (options?.signal?.aborted) throw new Error('OpenRouter request aborted.'); };
+    try {
+      if (!this.validateConfig()) throw new Error('OpenRouter API key is required.');
+      active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, api: this.getModelApi() } : response); },
+        error => { throw error; }, options);
+    } catch (error) {
+      const failure = options?.signal?.aborted ? new Error('OpenRouter request aborted.') : error instanceof Error ? error : new Error('OpenRouter chat request failed.');
+      if (onError) onError(failure); else throw failure;
+    }
+  }
+}
+
+/** Explicit Workers AI C SDK; the native S classifier and gateway remain separate services. */
+export class CloudflareWorkersAiChatProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(config: CloudflareWorkersAiConfig) {
+    const model = config.model || CLOUDFLARE_CHAT_MODELS[0].id;
+    cloudflareChatProfile(model);
+    const endpoint = cloudflareChatEndpoint(config);
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+  }
+  override getModelApi(_model?: string): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { cloudflareChatProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return CLOUDFLARE_CHAT_MODELS.map(profile => profile.id); }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = cloudflareChatProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, type: 'classifier', provider: this.getProviderType(), model: profile.id, virtual: true,
+      name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      ...(profile.declaredInput.includes('image') ? { imageInput: true } : {}), pricing: { ...profile.pricing } }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> {
+    throw new Error('Image model or options are not supported.');
+  }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(options?: ChatOptions): Record<string, string> {
+    try {
+      const headers = new Headers(configuredHeaders(this.config));
+      headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`);
+      for (const name of ['session_id', 'x-client-request-id', 'x-session-affinity']) {
+        if (options?.cacheRetention === 'none') headers.delete(name);
+        else if (options?.sessionId) {
+          if (typeof options.sessionId !== 'string' || Buffer.byteLength(options.sessionId) > 500) throw new Error();
+          headers.set(name, options.sessionId);
+        }
+      }
+      return Object.fromEntries(headers.entries());
+    } catch { throw new Error('Invalid Cloudflare request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareCloudflareChat(body, options, messages); }
+  protected override validateChatResponse(value: unknown): void { validateCloudflareChat(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return cloudflareChatUsage(value, model); }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    if (!this.validateConfig()) throw new Error('Cloudflare API key is required.');
+    const provider = this.getProviderType(), result = await super.chat(messages, options);
+    if (options?.signal?.aborted) throw new Error('Cloudflare request aborted.');
+    return { ...result, provider, api: this.getModelApi() };
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const active = (): void => { if (options?.signal?.aborted) throw new Error('Cloudflare request aborted.'); };
+    const provider = this.getProviderType();
+    try {
+      if (!this.validateConfig()) throw new Error('Cloudflare API key is required.');
+      active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider, api: this.getModelApi() } : response); },
+        error => { throw error; }, options);
+    } catch (error) {
+      const failure = options?.signal?.aborted ? new Error('Cloudflare request aborted.') : error instanceof Error ? error : new Error('Cloudflare chat request failed.');
+      if (onError) onError(failure); else throw failure;
+    }
+  }
+}
+
+/** Shared bounded native questions/answers; service identity owns wire shape and pricing. */
+class NativeClassifierProvider extends AiProvider {
+  protected constructor(config: ProviderConfig, private readonly service: 'TypeSafe' | 'Cloudflare Workers AI' | 'OpenAI Decisions' | 'OpenRouter classifiers' | 'OpenCode classifiers', private readonly endpoint: string) { super(config); }
+  private profiles() {
+    if (this.service === 'TypeSafe') return [TYPESAFE_CLASSIFIER_MODEL];
+    if (this.service === 'OpenRouter classifiers') return OPENROUTER_CLASSIFIER_MODELS;
+    if (this.service === 'OpenCode classifiers') return OPENCODE_CLASSIFIER_MODELS;
+    return this.service === 'Cloudflare Workers AI' ? CLOUDFLARE_CLASSIFIER_MODELS : [OPENAI_DECISIONS_MODEL];
+  }
+  private defaultModel(): string { return this.profiles()[0].id; }
+  private errorLabel(): string { return this.service === 'OpenAI Decisions' ? this.service : 'System One'; }
+  override getModelApi(_model?: string): string { return this.profiles()[0].api; }
+  override getConfiguredModel(): undefined { return undefined; }
+  override canDiscoverModels(): boolean { return false; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override getSpecializedModels(): SpecializedModel[] {
+    const model = this.config.model?.trim();
+    const profiles = model ? [this.profiles().find(profile => profile.id === model) ?? { id: model, type: 'classifier' as const, api: this.getModelApi() }] : this.profiles();
+    return profiles.map(profile => ({ ...profile, ...('pricing' in profile ? { pricing: { ...profile.pricing } } : {}), provider: this.getProviderType(), model: profile.id }));
+  }
+  override async chat(_messages: Message[]): Promise<ChatResponse> { throw new Error(`${this.service} is classifier-only.`); }
+  override async streamChat(_messages: Message[], _chunk: StreamChunkCallback, _complete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void): Promise<void> { onError?.(new Error(`${this.service} is classifier-only.`)); }
+
+  /** Direct SDK native question/result contract; the finite SDK/guest method remains distinct. */
+  async classifyNativeQuestions(request: NativeClassifierRequest, options: SpecializedModelOptions = {}): Promise<NativeClassifierResult> {
+    const result: NativeClassifierResult = { api: this.getModelApi(), provider: this.getProviderType(),
+      model: this.config.model?.trim() || this.defaultModel(), answers: {}, stopReason: 'stop', timestamp: Date.now() };
+    let phase: 'request' | 'dispatch' | 'answers' = 'request';
+    try {
+      if (options.signal?.aborted) throw new Error('Cancelled.');
+      request = copyNativeClassifierRequest(request);
+      result.model = request.model;
+      const images = request.images?.length ? this.images(request.model, request.images) : undefined;
+      const questions = Object.fromEntries(Object.entries(request.questions).map(([id, question]) => [id,
+        question.type === 'bool' ? { ...question, type: 'noul' } : question]));
+      phase = 'dispatch';
+      const body = await this.classifyNative(request.model, request.state, questions, options.signal, images);
+      const usage = this.usage(body.usage, request.model);
+      if (usage) result.usage = usage;
+      phase = 'answers';
+      result.answers = parseSystemOneAnswers(this.answers(body.answers), request.questions);
+      return result;
+    } catch (error) {
+      if (error instanceof SpecializedModelError && error.usage) result.usage = { ...error.usage };
+      result.answers = {};
+      result.stopReason = options.signal?.aborted ? 'aborted' : 'error';
+      result.errorMessage = result.stopReason === 'aborted' ? `${this.errorLabel()} request cancelled.`
+        : phase === 'request' ? 'Invalid native classifier request.'
+          : phase === 'answers' ? `Invalid ${this.errorLabel()} response.` : `${this.errorLabel()} classification failed.`;
+      return result;
+    }
+  }
+
+  private images(model: string, images: unknown): import('./specialized-models.js').GeneratedImage[] {
+    const profile = this.profiles().find(profile => profile.id === model);
+    if (!profile || !('imageInput' in profile) || profile.imageInput !== true) throw new Error(`${this.errorLabel()} does not support image input.`);
+    return validateGeneratedImages(images);
+  }
+  private answers(value: unknown): unknown { return this.service === 'OpenAI Decisions' ? decisionsAnswers(value) : value; }
+  private async classifyNative(model: string, state: unknown, questions: Record<string, NativeWireQuestion>, signal?: AbortSignal,
+    images?: import('./specialized-models.js').GeneratedImage[]): Promise<Record<string, unknown>> {
+    if (signal?.aborted) throw new Error(`${this.errorLabel()} request cancelled.`);
+    if (!this.validateConfig()) throw new Error(`${this.service} API key is required.`);
+    if (!this.getSpecializedModels().some(profile => profile.id === model)) throw new Error('Classification model is not available.');
+    let headers: Headers;
+    try {
+      headers = new Headers(configuredHeaders(this.config));
+      headers.set('Content-Type', 'application/json'); headers.set('Accept', 'application/json');
+      headers.set('Authorization', `Bearer ${this.config.apiKey}`);
+    } catch { throw new Error(`Invalid ${this.service} request headers.`); }
+    const payload = this.service === 'OpenAI Decisions' ? decisionsBody(model, state, questions, images)
+      : this.service === 'Cloudflare Workers AI' ? { model, input: { state, questions } } : { model, state, questions };
+    const response = await this.request(this.endpoint, { method: 'POST', headers, signal, body: serializeProviderBody(payload) },
+      this.service === 'OpenAI Decisions' ? [504] : undefined);
+    if (!response.ok) rejectProviderResponse(response, `${this.errorLabel()} API error (${response.status}).`);
+    const body = await readProviderJson<unknown>(response);
+    if (!this.record(body)) this.invalid();
+    let result = body;
+    if (this.service === 'Cloudflare Workers AI') {
+      if (body.success !== true || !this.record(body.result)) throw new Error('Invalid Cloudflare Workers AI response.');
+      const envelope = body.result;
+      if (Object.hasOwn(envelope, 'answers')) result = envelope;
+      else if (envelope.state === 'Completed' && this.record(envelope.result)) result = envelope.result;
+      else throw new Error('Invalid Cloudflare Workers AI response.');
+    }
+    if (signal?.aborted) throw new SpecializedModelError(`${this.errorLabel()} request cancelled.`, this.usage(result.usage, model));
+    return result;
+  }
+  private decode<T extends object>(result: Record<string, unknown>, model: string, count: number,
+    read: (answers: Record<string, unknown>) => T): T & { usage?: TokenUsage } {
+    const usage = this.usage(result.usage, model);
+    try {
+      const answers = this.answers(result.answers);
+      if (!this.record(answers) || Object.keys(answers).length !== count) this.invalid();
+      return { ...read(answers), usage };
+    } catch { throw new SpecializedModelError(`Invalid ${this.errorLabel()} response.`, usage); }
+  }
+  private record(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+  private invalid(): never { throw new Error(`Invalid ${this.errorLabel()} response.`); }
+  private probability(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1; }
+  private choice(value: unknown, values: string[]): { value: string; probabilities: Array<{ value: string; probability: number }> } {
+    if (!this.record(value) || value.type !== 'choice' || typeof value.choice !== 'string' || !values.includes(value.choice)
+      || !this.probability(value.confidence) || !this.record(value.probabilities) || Object.keys(value.probabilities).length !== values.length) this.invalid();
+    const probabilities = value.probabilities;
+    const result = values.map(item => {
+      const probability = probabilities[item];
+      if (!Object.hasOwn(probabilities, item) || !this.probability(probability)) this.invalid();
+      return { value: item, probability };
+    });
+    if (Math.abs(result.reduce((sum, item) => sum + item.probability, 0) - 1) > 0.000001) this.invalid();
+    return { value: value.choice, probabilities: result };
+  }
+  private usage(value: unknown, model: string): TokenUsage | undefined {
+    if (!this.record(value)) return undefined;
+    const token = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+    const inputTokens = token(value.input_tokens), outputTokens = token(value.output_tokens);
+    if (inputTokens === undefined && outputTokens === undefined) return undefined;
+    let pricing: { inputPerMillion: number; outputPerMillion: number } | undefined = this.profiles().find(profile => profile.id === model)?.pricing;
+    if (this.service === 'OpenAI Decisions' && model === OPENAI_DECISIONS_MODEL.id && inputTokens !== undefined
+      && inputTokens > OPENAI_DECISIONS_MODEL.pricingTiers[0].inputTokensAbove) pricing = OPENAI_DECISIONS_MODEL.pricingTiers[0];
+    return { ...(inputTokens === undefined ? {} : { inputTokens }), ...(outputTokens === undefined ? {} : { outputTokens }),
+      ...(inputTokens === undefined || outputTokens === undefined ? {} : { totalTokens: Math.min(Number.MAX_SAFE_INTEGER, inputTokens + outputTokens),
+        ...(pricing ? { costUsd: (inputTokens * pricing.inputPerMillion + outputTokens * pricing.outputPerMillion) / 1_000_000 } : {}) }) };
+  }
+  override async classify(request: ClassificationRequest, options: SpecializedModelOptions = {}): Promise<ClassificationResult> {
+    validateClassificationRequest(request);
+    const images = request.images ? this.images(request.model, request.images) : undefined;
+    request = { model: request.model, input: request.input, labels: [...request.labels] };
+    const result = await this.classifyNative(request.model, { input: request.input }, { label: { type: 'choice', instructions: 'Select the label for the input.',
+      criteria: Object.fromEntries(request.labels.map(label => [label, label])) } }, options.signal, images);
+    return this.decode(result, request.model, 1, answers => ({ label: this.choice(answers.label, request.labels).value }));
+  }
+  override async classifyQuestions(request: QuestionClassificationRequest, options: SpecializedModelOptions = {}): Promise<QuestionClassificationResult> {
+    request = copyQuestionClassificationRequest(request);
+    const images = request.images ? this.images(request.model, request.images) : undefined;
+    const questions = Object.fromEntries(Object.entries(request.questions).map(([id, question]) => [id, {
+      type: question.type === 'boolean' ? 'noul' : 'choice', instructions: question.prompt,
+      criteria: Object.fromEntries(questionValues(question).map(value => [String(value), String(value)])),
+    }]));
+    const state = this.service === 'OpenAI Decisions' || this.record(request.state) ? request.state : { input: request.state };
+    const result = await this.classifyNative(request.model, state, questions, options.signal, images);
+    return this.decode(result, request.model, Object.keys(questions).length, native => {
+      const answers = Object.fromEntries(Object.entries(request.questions).map(([id, question]) => {
+        const value = native[id];
+        if (question.type === 'boolean') {
+          if (!this.record(value) || value.type !== 'noul' || !this.probability(value.noul)) this.invalid();
+          return [id, { value: value.noul >= 0.5, probabilities: [{ value: true, probability: value.noul }, { value: false, probability: 1 - value.noul }] }];
+        }
+        // Finite numeric questions use choices: scalar score confidence is not a distribution.
+        const answer = this.choice(value, questionValues(question).map(String));
+        return [id, question.type === 'score' ? { value: Number(answer.value), probabilities: answer.probabilities.map(item => ({ value: Number(item.value), probability: item.probability })) } : answer];
+      }));
+      return { answers: copyQuestionAnswers(answers, request.questions) };
+    });
+  }
+}
+
+/** Native TypeSafe classification only; never advertises a chat model. */
+export class TypesafeProvider extends NativeClassifierProvider {
+  constructor(config: ProviderConfig) { super(config, 'TypeSafe', systemOneEndpoint(config.baseUrl || 'https://api.typesafe.ai/v1/', 'systemone', 'TypeSafe')); }
+}
+
+export interface CloudflareWorkersAiConfig extends ProviderConfig { accountId?: string }
+/** Explicit native Workers AI classifiers; no implicit account/env loading or chat composition. */
+export class CloudflareWorkersAiProvider extends NativeClassifierProvider {
+  constructor(config: CloudflareWorkersAiConfig) {
+    super(config, 'Cloudflare Workers AI', systemOneEndpoint(cloudflareAiBase(config), 'run', 'Cloudflare Workers AI'));
+  }
+}
+
+/** API-key-only native Decisions classifier; never loads ChatGPT subscriptions or ambient credentials. */
+export class OpenAiDecisionsProvider extends NativeClassifierProvider {
+  constructor(config: ProviderConfig) { super(config, 'OpenAI Decisions', systemOneEndpoint(config.baseUrl || 'https://api.openai.com/v1/', 'decisions', 'OpenAI Decisions')); }
+}
+
+/** Native OpenRouter System One classifiers; text only even where catalogue input declares images. */
+export class OpenRouterClassifiersProvider extends NativeClassifierProvider {
+  constructor(config: ProviderConfig) { super(config, 'OpenRouter classifiers', systemOneEndpoint(config.baseUrl || 'https://openrouter.ai/api/v1/', 'systemone', 'OpenRouter classifiers')); }
+}
+
+/** Explicit native image SDK; no chat fallback, ambient credentials or model discovery. */
+export class OpenRouterImagesProvider extends AiProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    super(config);
+    this.endpoint = systemOneEndpoint(config.baseUrl || 'https://openrouter.ai/api/v1/', 'chat/completions', 'OpenRouter images');
+  }
+  override getModelApi(_model?: string): string { return 'openrouter-images'; }
+  override getConfiguredModel(): undefined { return undefined; }
+  override canDiscoverModels(): boolean { return false; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override getSpecializedModels(): SpecializedModel[] {
+    const model = this.config.model?.trim();
+    const profiles = model ? [OPENROUTER_IMAGE_MODELS.find(profile => profile.id === model) ?? { id: model, type: 'image' as const, api: this.getModelApi() }] : OPENROUTER_IMAGE_MODELS;
+    return profiles.map(profile => ({ id: profile.id, model: profile.id, type: 'image', api: profile.api,
+      provider: this.getProviderType(), ...('name' in profile ? { name: profile.name } : {}),
+      ...('input' in profile && profile.input.includes('image') ? { imageInput: true } : {}),
+      ...(openRouterImagePricing(profile.id) ? { pricing: { ...openRouterImagePricing(profile.id)! } } : {}),
+    }));
+  }
+  override async chat(_messages: Message[]): Promise<ChatResponse> { throw new Error('OpenRouter images is image-only.'); }
+  override async streamChat(_messages: Message[], _chunk: StreamChunkCallback, _complete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void): Promise<void> { onError?.(new Error('OpenRouter images is image-only.')); }
+
+  async generateNativeImages(request: NativeImageRequest, options: SpecializedModelOptions = {}): Promise<NativeImageResult> {
+    const result: NativeImageResult = { api: this.getModelApi(), provider: this.getProviderType(), model: this.config.model?.trim() || OPENROUTER_IMAGE_MODELS[0].id,
+      output: [], timestamp: Date.now(), stopReason: 'stop' };
+    let phase: 'request' | 'dispatch' | 'output' = 'request';
+    try {
+      if (options.signal?.aborted) throw new Error('Cancelled.');
+      request = copyNativeImageRequest(request); result.model = request.model;
+      const model = this.getSpecializedModels().find(profile => profile.id === request.model);
+      if (!model || (request.input.some(part => part.type === 'image') && model.imageInput !== true)) throw new Error('Unsupported image model.');
+      phase = 'dispatch';
+      if (!this.validateConfig()) throw new Error('OpenRouter images API key is required.');
+      let headers: Headers;
+      try {
+        headers = new Headers(configuredHeaders(this.config));
+        headers.set('Content-Type', 'application/json'); headers.set('Accept', 'application/json'); headers.set('Authorization', `Bearer ${this.config.apiKey}`);
+      } catch { throw new Error('Invalid OpenRouter images request headers.'); }
+      const profile = OPENROUTER_IMAGE_MODELS.find(profile => profile.id === request.model);
+      const response = await this.request(this.endpoint, { method: 'POST', headers, signal: options.signal,
+        body: serializeProviderBody(openRouterImagesBody(request, profile?.output.includes('text') === true)) });
+      if (!response.ok) rejectProviderResponse(response, 'OpenRouter image generation failed.');
+      const body = await readProviderJson<unknown>(response);
+      result.usage = openRouterImagesUsage(body && typeof body === 'object' ? (body as Record<string, unknown>).usage : undefined, request.model);
+      if (options.signal?.aborted) throw new Error('Cancelled.');
+      phase = 'output'; Object.assign(result, openRouterImagesOutput(body)); return result;
+    } catch {
+      result.output = []; result.stopReason = options.signal?.aborted ? 'aborted' : 'error';
+      result.errorMessage = result.stopReason === 'aborted' ? 'OpenRouter image request cancelled.'
+        : phase === 'request' ? 'Invalid native image request.' : phase === 'output' ? 'Invalid OpenRouter image response.' : 'OpenRouter image generation failed.';
+      return result;
+    }
+  }
+  override async generateImages(request: ImageGenerationRequest, options: SpecializedModelOptions = {}): Promise<ImageGenerationResult> {
+    validateImageGenerationRequest(request);
+    if ((request.count ?? 1) !== 1 || request.size !== undefined) throw new Error('Image model or options are not supported.');
+    const result = await this.generateNativeImages({ model: request.model, input: [{ type: 'text', text: request.prompt }] }, options);
+    if (result.stopReason !== 'stop') throw new SpecializedModelError(result.errorMessage!, result.usage);
+    try { return { images: validateGeneratedImages(result.output.filter(part => part.type === 'image'), 1), usage: result.usage }; }
+    catch { throw new SpecializedModelError('Invalid OpenRouter image response.', result.usage); }
+  }
+}
+
+/** Explicit native dialect, usable under an operator-selected custom provider ID. */
+export class MistralProvider extends AiProvider {
+  override getModelApi(): string { return 'mistral-conversations'; }
+
+  override getPublishedModels(): readonly PublishedModelMetadata[] { return getPublishedModels('mistral'); }
+
+  private readonly baseUrl: string;
+
+  constructor(config: ProviderConfig) {
+    super(config);
+    this.baseUrl = resolveProviderDiscoveryEndpoint('mistral-conversations', config.baseUrl || 'https://api.mistral.ai').replace(/\/models$/, '');
+  }
+
+  validateConfig(): boolean {
+    return validBearerApiKey(this.config.apiKey);
+  }
+
+  override getSpecializedModels(): SpecializedModel[] {
+    const model = this.getConfiguredModel();
+    return model ? [{ id: `${model}:classifier`, type: 'classifier', provider: this.getProviderType(), model, virtual: true,
+      ...(getPublishedModelMetadata('mistral', model)?.capabilities.imageInput ? { imageInput: true } : {}),
+    }] : [];
+  }
+
+  private headers(options?: ChatOptions): Record<string, string> {
+    try {
+      const headers = new Headers(configuredHeaders(this.config));
+      headers.set('Content-Type', 'application/json'); headers.set('Accept', 'text/event-stream');
+      headers.set('Authorization', `Bearer ${this.config.apiKey}`);
+      if (options?.cacheRetention === 'none') headers.delete('x-affinity');
+      else if (options?.sessionId && !headers.has('x-affinity')) headers.set('x-affinity', options.sessionId);
+      return Object.fromEntries(headers);
+    } catch { throw new Error('Invalid Mistral request headers.'); }
+  }
+
+  override async getAvailableModels(): Promise<string[]> {
+    if (!this.validateConfig()) return [];
+    const response = await this.request(`${this.baseUrl}/models`, { headers: { ...this.headers(), accept: 'application/json' } });
+    if (!response.ok) rejectProviderResponse(response, `Model discovery failed (${response.status}).`);
+    const data = await readProviderJson<{ data?: unknown[] }>(response);
+    return boundedModelIds(data.data, value => (value as { id?: unknown })?.id);
+  }
+
+  private body(messages: Message[], options?: ChatOptions): Record<string, unknown> {
+    const model = options?.model || this.getConfiguredModel() || 'mistral-small-latest';
+    const metadata = getPublishedModelMetadata('mistral', model);
+    const imagesAllowed = metadata?.capabilities.imageInput === true;
+    const ids = new Map<string, string>(), owners = new Map<string, string>();
+    const toolId = (id: string): string => {
+      const prior = ids.get(id); if (prior) return prior;
+      for (let attempt = 0; ; attempt++) {
+        const candidate = attempt === 0 && /^[a-zA-Z0-9]{9}$/u.test(id) ? id
+          : createHash('sha256').update(JSON.stringify([id, attempt])).digest('hex').slice(0, 9);
+        if (!owners.has(candidate)) { ids.set(id, candidate); owners.set(candidate, id); return candidate; }
+      }
+    };
+    // Reserve already-valid IDs before mapping foreign IDs, preserving replay pairs.
+    for (const message of messages) for (const call of message.toolCalls ?? []) if (/^[a-zA-Z0-9]{9}$/u.test(call.id)) toolId(call.id);
+    const input: Array<Record<string, unknown>> = [];
+    if (options?.systemPrompt) input.push({ role: 'system', content: options.systemPrompt });
+    for (const message of messages) {
+      const images = messageImages(message);
+      if (message.role === 'assistant') {
+        const content = message.blocks?.some(block => block.type === 'text' || block.type === 'reasoning')
+          ? message.blocks.flatMap<Record<string, unknown>>(block => block.type === 'text' ? [{ type: 'text', text: block.text }]
+            : block.type === 'reasoning' ? [{ type: 'thinking', thinking: [{ type: 'text', text: block.text }] }] : [])
+          : (message.content ? [{ type: 'text', text: message.content }] : []);
+        input.push({ role: 'assistant', prefix: false, ...(content.length ? { content } : {}),
+          ...(message.toolCalls?.length ? { tool_calls: message.toolCalls.map((call, index) => ({
+            id: toolId(call.id), type: 'function', index, function: { name: call.name, arguments: serializeProviderBody(call.input) },
+          })) } : {}),
+        });
+      } else if (message.role === 'tool') {
+        input.push({ role: 'tool', tool_call_id: toolId(message.toolCallId ?? message.id), ...(message.name ? { name: message.name } : {}),
+          content: [{ type: 'text', text: (message.isError ? '[tool error] ' : '')
+            + (message.content || (images.length && imagesAllowed ? '(see attached image)' : '(no tool output)')) },
+            ...images.map(image => imagesAllowed ? { type: 'image_url', image_url: image.url }
+              : { type: 'text', text: '(image omitted: model does not support images)' })],
+        });
+      } else {
+        input.push({ role: message.role, content: images.length && imagesAllowed
+          ? [...(message.content ? [{ type: 'text', text: message.content }] : []), ...images.map(image => ({ type: 'image_url', image_url: image.url }))]
+          : message.content + (images.length ? '\n(image omitted: model does not support images)' : '') });
+      }
+    }
+    let effort: string | undefined;
+    if (metadata?.capabilities.reasoning) {
+      const level = clampPublishedThinkingLevel(options?.thinking ?? 'off', getSupportedThinkingLevels('mistral', model));
+      effort = metadata.thinkingLevelMap?.[level] ?? undefined;
+    }
+    if (options?.tools && (!Array.isArray(options.tools) || options.tools.length > MAX_PROVIDER_STREAM_TOOL_CALLS)) {
+      throw new Error('The provider request exceeded the tool-call limit.');
+    }
+    return { model, messages: input, stream: true,
+      ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+      ...(options?.maxTokens !== undefined ? { max_tokens: options.maxTokens } : {}),
+      ...(effort ? { reasoning_effort: effort } : {}),
+      ...(options?.sessionId && options.cacheRetention !== 'none' ? { prompt_cache_key: options.sessionId } : {}),
+      ...(options?.tools?.length ? { tool_choice: 'auto', tools: options.tools.map(tool => ({ type: 'function',
+        function: { name: tool.name, description: tool.description, parameters: tool.parameters, strict: false },
+      })) } : {}),
+    };
+  }
+
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    let result: ChatResponse | undefined, failure: Error | undefined;
+    await this.streamChat(messages, () => undefined, response => { result = response; }, error => { failure = error; }, options);
+    if (failure) throw failure;
+    if (!result) throw new Error('The provider response was invalid.');
+    return result;
+  }
+
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback,
+    onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    try {
+      if (!this.validateConfig()) throw new Error('Mistral API key is required.');
+      const checkCancellation = (): void => {
+        if (options?.signal?.aborted) throw new Error('The provider request was cancelled.');
+      };
+      checkCancellation();
+      const body = this.body(messages, options);
+      const response = await this.request(`${this.baseUrl}/chat/completions`, { method: 'POST', headers: this.headers(options),
+        body: serializeProviderBody(body), signal: options?.signal });
+      if (!response.ok) await rejectProviderHttpResponse(response, `Mistral API error (${response.status}).`);
+      if (!response.body) throw new Error('The provider response was invalid.');
+      let content = '', reasoning = '', model = String(body.model), finish = '', outputBytes = 0, events = 0, transportBytes = 0;
+      let usage: ChatResponse['usage'];
+      const tools = new Map<number, OpenAiToolCall>();
+      const toolIndexes = new Map<string, number>();
+      const addOutput = (text: string): void => {
+        outputBytes += Buffer.byteLength(text);
+        if (outputBytes > MAX_PROVIDER_STREAM_OUTPUT_BYTES) throw new Error('The provider response exceeded the output limit.');
+      };
+      const consume = async (raw: string): Promise<boolean> => {
+        checkCancellation();
+        const dataText = raw.split(/\r\n|\r|\n/u).filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n').trim();
+        if (!dataText) return false;
+        if (++events > MAX_PROVIDER_STREAM_EVENTS) throw new Error('The provider response exceeded its event limit.');
+        if (dataText === '[DONE]') return true;
+        let data: Record<string, unknown>;
+        try { data = JSON.parse(dataText); } catch { throw new Error('The provider streaming response was invalid.'); }
+        if (!data || typeof data !== 'object' || data.error || !Array.isArray(data.choices)) throw new Error('The provider reported a streaming error.');
+        const choice = data.choices[0] as { delta?: Record<string, unknown>; finish_reason?: string } | undefined;
+        if (choice?.finish_reason) {
+          if (!['stop', 'length', 'model_length', 'tool_calls'].includes(choice.finish_reason)) throw new Error('The provider reported a streaming error.');
+          finish = choice.finish_reason;
+        }
+        const delta = choice?.delta;
+        const parts = typeof delta?.content === 'string' ? [{ type: 'text', text: delta.content }] : delta?.content;
+        if (parts !== undefined && parts !== null && !Array.isArray(parts)) throw new Error('The provider streaming response was invalid.');
+        for (const part of parts ?? []) {
+          checkCancellation();
+          const text = part?.type === 'thinking' && Array.isArray(part.thinking)
+            ? part.thinking.map((item: { text?: string }) => typeof item?.text === 'string' ? item.text : '').join('')
+            : part?.type === 'text' && typeof part.text === 'string' ? part.text : '';
+          if (!text) continue; addOutput(text);
+          if (part.type === 'thinking') { reasoning += text; await onChunk('', { type: 'reasoning_delta', data: { content: text } }); }
+          else { content += text; await onChunk(text, { type: 'text_delta' }); }
+        }
+        if (delta?.tool_calls !== undefined && delta.tool_calls !== null && !Array.isArray(delta.tool_calls)) throw new Error('The provider streaming response was invalid.');
+        for (const fragment of (delta?.tool_calls ?? []) as OpenAiStreamToolCallFragment[]) {
+          let index: number | undefined = fragment.index;
+          if (index === undefined) {
+            index = fragment.id ? toolIndexes.get(fragment.id) : tools.size === 1 ? tools.keys().next().value : undefined;
+            if (index === undefined) {
+              if (!fragment.id && tools.size > 1) throw new Error('The provider tool call was ambiguous.');
+              index = 0; while (tools.has(index)) index++;
+            }
+          }
+          if (!Number.isSafeInteger(index) || index < 0 || index >= MAX_PROVIDER_STREAM_TOOL_CALLS) throw new Error('The provider response exceeded the tool-call limit.');
+          if (fragment.id && toolIndexes.has(fragment.id) && toolIndexes.get(fragment.id) !== index) throw new Error('The provider tool call was ambiguous.');
+          if (fragment.id && !toolIndexes.has(fragment.id)) toolIndexes.set(fragment.id, index);
+          const call = tools.get(index) ?? { id: `tool-${index}`, type: 'function' as const, function: { name: '', arguments: '' } };
+          if (typeof fragment.id === 'string' && fragment.id && fragment.id !== 'null') { addOutput(fragment.id); call.id = fragment.id; }
+          if (typeof fragment.function?.name === 'string' && fragment.function.name) { addOutput(fragment.function.name); call.function.name = fragment.function.name; }
+          const args = fragment.function?.arguments;
+          if (args !== undefined) {
+            const text = typeof args === 'string' ? args : serializeProviderBody(args);
+            addOutput(text); call.function.arguments += text;
+          }
+          tools.set(index, call);
+        }
+        if (typeof data.model === 'string' && data.model.length <= 500 && !/[\u0000-\u001f\u007f]/u.test(data.model)) model = data.model;
+        if (data.usage && typeof data.usage === 'object') {
+          const rawUsage = data.usage as Record<string, unknown>;
+          const details = rawUsage.prompt_tokens_details ?? rawUsage.prompt_token_details ?? rawUsage.promptTokensDetails ?? rawUsage.promptTokenDetails;
+          const cached = details && typeof details === 'object' ? (details as Record<string, unknown>).cached_tokens ?? (details as Record<string, unknown>).cachedTokens : undefined;
+          usage = normalizeOpenAiUsage({ prompt_tokens: rawUsage.prompt_tokens as number, completion_tokens: rawUsage.completion_tokens as number,
+            prompt_tokens_details: { cached_tokens: (cached ?? rawUsage.num_cached_tokens ?? rawUsage.numCachedTokens) as number } });
+        }
+        return false;
+      };
+      const reader = response.body.getReader(), decoder = new TextDecoder('utf-8', { fatal: true });
+      let buffer = '', doneEvent = false;
+      try {
+        while (!doneEvent) {
+          checkCancellation();
+          const item = await reader.read();
+          transportBytes += item.value?.byteLength ?? 0;
+          if (transportBytes > MAX_PROVIDER_STREAM_TRANSPORT_BYTES) throw new Error('The provider response exceeded the output limit.');
+          buffer += item.done ? decoder.decode() : decoder.decode(item.value, { stream: true });
+          let boundary: RegExpExecArray | null;
+          while ((boundary = /\r\n\r\n|\n\n|\r\r/u.exec(buffer))) {
+            const raw = buffer.slice(0, boundary.index); buffer = buffer.slice(boundary.index + boundary[0].length);
+            if (Buffer.byteLength(raw) > MAX_PROVIDER_STREAM_EVENT_BYTES) throw new Error('The provider streaming event exceeded the output limit.');
+            doneEvent = await consume(raw); if (doneEvent) break;
+          }
+          if (Buffer.byteLength(buffer) > MAX_PROVIDER_STREAM_EVENT_BYTES) throw new Error('The provider streaming event exceeded the output limit.');
+          if (item.done) { if (!doneEvent && buffer.trim()) await consume(buffer); break; }
+        }
+      } finally {
+        void reader.cancel('provider-stream-finished').catch(() => undefined);
+        try { reader.releaseLock(); } catch { /* Pending reads may retain the lock. */ }
+      }
+      checkCancellation();
+      if (!finish) throw new Error('The provider response ended without a finish reason.');
+      const toolCalls = [...tools.entries()].sort(([a], [b]) => a - b).map(([, call]) => {
+        if (!call.function.name) throw new Error('The provider tool call was invalid.');
+        return { id: call.id, name: call.function.name, input: parseProviderToolArguments(call.function.arguments) };
+      });
+      for (const call of toolCalls) {
+        checkCancellation();
+        await onChunk('', { type: 'tool_call', data: call });
+      }
+      checkCancellation();
+      if (usage) {
+        const costUsd = calculatePublishedModelCost('mistral', String(body.model), {
+          inputTokens: usage.promptTokens, outputTokens: usage.completionTokens,
+          cacheReadTokens: usage.cacheReadTokens, cacheWriteTokens: usage.cacheWriteTokens,
+        });
+        if (costUsd !== undefined) usage = { ...usage, costUsd };
+      }
+      onComplete?.({ content, api: this.getModelApi(), ...(reasoning ? { reasoning } : {}), provider: this.getProviderType(), model, usage,
+        ...(['length', 'model_length'].includes(finish) ? { stopReason: 'length' as const } : {}), ...(toolCalls.length ? { toolCalls } : {}) });
+    } catch (error) {
+      onError?.(options?.signal?.aborted ? new Error('The provider request was cancelled.')
+        : error instanceof Error ? error : new Error('The provider request failed.'));
+    }
+  }
 }
 
 // ===================================================================
@@ -1243,6 +2706,7 @@ async function applyResponsesEvent(
   event: ProviderResponseRecord,
   state: ResponsesAccumulator,
   onChunk: StreamChunkCallback,
+  usage: (value: unknown) => ChatResponse['usage'] = responsesUsage,
 ): Promise<void> {
   if (++state.events > 1_024) throw new ResponsesProtocolError('too_many_events');
   const type = typeof event.type === 'string' ? event.type : '';
@@ -1298,7 +2762,7 @@ async function applyResponsesEvent(
     const response = providerResponseRecord(event.response) ?? {};
     state.responseId = typeof response.id === 'string' ? response.id : state.responseId;
     state.model = typeof response.model === 'string' ? response.model : state.model;
-    state.usage = responsesUsage(response.usage) ?? state.usage;
+    state.usage = usage(response.usage) ?? state.usage;
     state.stopReason = lengthStop(providerResponseRecord(response.incomplete_details)?.reason).stopReason;
     for (const [index, item] of (Array.isArray(response.output) ? response.output : []).entries()) {
       const tool = parseResponsesTool(item);
@@ -1486,6 +2950,8 @@ function markResponsesFallback(key: string): void {
 }
 
 export class OpenAiResponsesProvider extends AiProvider {
+  override getModelApi(): string { return 'openai-responses'; }
+
   private readonly baseUrl: string;
   private readonly customHeaders: Record<string, string>;
 
@@ -1584,6 +3050,12 @@ export class OpenAiResponsesProvider extends AiProvider {
       onError?.(error instanceof Error ? error : new Error(String(error)));
     }
   }
+
+  protected responseUsage(value: unknown, _model: string): ChatResponse['usage'] { return responsesUsage(value); }
+
+  protected requiresCompleteSseResponse(): boolean { return this.config.type === 'azure'; }
+
+  protected acceptsJsonResponse(): boolean { return false; }
 
   protected responseTransport(): ProviderConfig['transport'] { return this.config.transport ?? 'auto'; }
 
@@ -1698,7 +3170,7 @@ export class OpenAiResponsesProvider extends AiProvider {
       try {
         lease.socket.send(serializeProviderBody({ type: 'response.create', ...body }));
         for await (const event of responsesWebSocketEvents(lease.socket, signal, network.httpIdleTimeoutMs)) {
-          await applyResponsesEvent(event, state, onChunk);
+          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, fullBody.model));
         }
         if (!state.completed) throw new ResponsesProtocolError('incomplete_websocket_response');
         const response = finalizeResponses(state);
@@ -1750,6 +3222,16 @@ export class OpenAiResponsesProvider extends AiProvider {
     const state: ResponsesAccumulator = {
       content: '', reasoning: '', tools: new Map(), outputBytes: 0, events: 0, completed: false, started: false,
     };
+    if (this.acceptsJsonResponse() && /^application\/json\b/iu.test(response.headers.get('content-type') ?? '')) {
+      const value = await this.boundedJson(response);
+      if (value.error || !['completed', 'incomplete'].includes(String(value.status)) || !Array.isArray(value.output)
+        || (value.status === 'incomplete' && !lengthStop(providerResponseRecord(value.incomplete_details)?.reason).stopReason)) {
+        throw new ResponsesProtocolError('invalid_json_response');
+      }
+      await applyResponsesEvent({ type: value.status === 'completed' ? 'response.completed' : 'response.incomplete', response: value },
+        state, onChunk, usage => this.responseUsage(usage, body.model));
+      return finalizeResponses(state);
+    }
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8', { fatal: true });
     let buffer = '';
@@ -1775,7 +3257,7 @@ export class OpenAiResponsesProvider extends AiProvider {
           let event: ProviderResponseRecord;
           try { event = JSON.parse(payload) as ProviderResponseRecord; }
           catch { throw new ResponsesProtocolError('invalid_sse_json'); }
-          await applyResponsesEvent(event, state, onChunk);
+          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model));
         }
       }
       buffer += decoder.decode();
@@ -1785,14 +3267,14 @@ export class OpenAiResponsesProvider extends AiProvider {
           let event: ProviderResponseRecord;
           try { event = JSON.parse(payload) as ProviderResponseRecord; }
           catch { throw new ResponsesProtocolError('invalid_sse_json'); }
-          await applyResponsesEvent(event, state, onChunk);
+          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model));
         }
       }
     } finally {
       void reader.cancel('provider-stream-finished').catch(() => undefined);
       try { reader.releaseLock(); } catch { /* A hostile pending read may retain the lock. */ }
     }
-    if (!state.completed && (this.config.type === 'azure' || !state.content && !state.tools.size)) {
+    if (!state.completed && (this.requiresCompleteSseResponse() || !state.content && !state.tools.size)) {
       throw new ResponsesProtocolError('incomplete_sse_response');
     }
     return finalizeResponses(state);
@@ -1864,6 +3346,8 @@ export class OpenAiResponsesProvider extends AiProvider {
 }
 
 export class AzureResponsesProvider extends OpenAiResponsesProvider {
+  override getModelApi(): string { return 'azure-openai-responses'; }
+
   private readonly deployments: ReadonlyMap<string, string>;
 
   constructor(config: ProviderConfig) {
@@ -1916,6 +3400,247 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
   }
 }
 
+/** Explicit Meta SSE policy; encrypted replay and Muse subscription auth remain separate qualification gaps. */
+class ReviewedMetaResponsesProvider extends OpenAiResponsesProvider {
+  constructor(config: ProviderConfig, private readonly retention?: ChatOptions['cacheRetention']) { super(config); }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey) && super.validateConfig(); }
+  protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
+  protected override requiresCompleteSseResponse(): boolean { return true; }
+  protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
+    const body = super.requestBody(messages, options); prepareMetaResponse(body, options); return body;
+  }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return metaUsage(value, model); }
+  protected override headers(websocket: boolean, sessionId?: string): Record<string, string> {
+    const headers = super.headers(websocket, this.retention === 'none' ? undefined : sessionId);
+    if (headers['session-id']) { headers.session_id = headers['session-id']; delete headers['session-id']; }
+    return headers;
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), model = options?.model ?? this.getConfiguredModel();
+    const active = () => { if (options?.signal?.aborted) throw new Error('Meta request aborted.'); };
+    const report = (error: Error) => {
+      const fixed = ['Meta API key is required.', 'Meta response model is not supported.', 'Invalid Meta thinking level.', 'Invalid Meta output limit.'];
+      const safe = options?.signal?.aborted ? new Error('Meta request aborted.')
+        : error instanceof ProviderContextOverflowError ? new ProviderContextOverflowError()
+          : new Error(fixed.includes(error.message) ? error.message : 'Meta response request failed.');
+      if (onError) onError(safe); else throw safe;
+    };
+    if (!this.validateConfig()) { report(new Error('Meta API key is required.')); return; }
+    await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+      response => { active(); onComplete?.(response ? { ...response, provider, model, api: 'openai-responses' } : response); }, report, options);
+  }
+}
+
+/** Supplied-key Meta SDK; no factory reservation, ambient auth, OAuth or Server/Settings composition. */
+export class MetaProvider extends AiProvider {
+  private readonly baseUrl: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? META_MODELS[0].id; metaProfile(model);
+    const baseUrl = metaBase(config.baseUrl); super({ ...config, model }); this.baseUrl = baseUrl;
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { metaProfile(model); super.setConfiguredModel(model); }
+  override getModelApi(model = this.getConfiguredModel()): string | undefined { return META_MODELS.some(profile => profile.id === model) ? 'openai-responses' : undefined; }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return META_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return META_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      maxOutputTokens: profile.maxOutputTokens, thinkingLevelMap: { ...profile.thinkingLevelMap }, ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
+      capabilities: { reasoning: true, imageInput: true, toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = metaProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, model: profile.id, provider: this.getProviderType(), type: 'classifier', virtual: true,
+      api: profile.api, contextWindow: profile.contextWindow, ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}), imageInput: true }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> {
+    throw new Error('Image model or options are not supported.');
+  }
+  private conversation(model = this.getConfiguredModel(), options?: ChatOptions): ReviewedMetaResponsesProvider {
+    metaProfile(String(model)); return new ReviewedMetaResponsesProvider({ ...this.config, model, baseUrl: this.baseUrl }, options?.cacheRetention);
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    if (!this.validateConfig()) throw new Error('Meta API key is required.');
+    return this.conversation(options?.model ?? this.getConfiguredModel(), options).chat(messages, options);
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    let delegate: ReviewedMetaResponsesProvider;
+    try { delegate = this.conversation(options?.model ?? this.getConfiguredModel(), options); }
+    catch { const error = new Error('Meta response model is not supported.'); if (onError) { onError(error); return; } throw error; }
+    await delegate.streamChat(messages, onChunk, onComplete, onError, options);
+  }
+}
+
+/** Explicit xAI SSE policy; encrypted replay and subscription auth remain separate qualification gaps. */
+class ReviewedXaiResponsesProvider extends OpenAiResponsesProvider {
+  constructor(config: ProviderConfig, private readonly retention?: ChatOptions['cacheRetention']) { super(config); }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey) && super.validateConfig(); }
+  protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
+  protected override requiresCompleteSseResponse(): boolean { return true; }
+  protected override acceptsJsonResponse(): boolean { return true; }
+  protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
+    const body = super.requestBody(messages, options); prepareXaiResponse(body, options); return body;
+  }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return xaiUsage(value, model); }
+  protected override headers(websocket: boolean, sessionId?: string): Record<string, string> {
+    const headers = super.headers(websocket, this.retention === 'none' ? undefined : sessionId);
+    if (headers['session-id']) { headers.session_id = headers['session-id']; delete headers['session-id']; }
+    return headers;
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), model = options?.model ?? this.getConfiguredModel();
+    const active = () => { if (options?.signal?.aborted) throw new Error('xAI request aborted.'); };
+    const report = (error: Error) => {
+      const fixed = ['xAI API key is required.', 'xAI response model is not supported.', 'Invalid xAI thinking level.', 'Invalid xAI output limit.'];
+      const safe = options?.signal?.aborted ? new Error('xAI request aborted.')
+        : error instanceof ProviderContextOverflowError ? new ProviderContextOverflowError()
+          : new Error(fixed.includes(error.message) ? error.message : 'xAI response request failed.');
+      if (onError) onError(safe); else throw safe;
+    };
+    if (!this.validateConfig()) { report(new Error('xAI API key is required.')); return; }
+    await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+      response => { active(); onComplete?.(response ? { ...response, provider, model, api: 'openai-responses' } : response); }, report, options);
+  }
+}
+
+/** Supplied-key xAI SDK; no factory reservation, ambient auth, OAuth or Server/Settings composition. */
+export class XaiProvider extends AiProvider {
+  private readonly baseUrl: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? XAI_MODELS[0].id; xaiProfile(model);
+    const baseUrl = xaiBase(config.baseUrl); super({ ...config, model }); this.baseUrl = baseUrl;
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { xaiProfile(model); super.setConfiguredModel(model); }
+  override getModelApi(model = this.getConfiguredModel()): string | undefined { return XAI_MODELS.some(profile => profile.id === model) ? 'openai-responses' : undefined; }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return XAI_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return XAI_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      maxOutputTokens: profile.maxOutputTokens, thinkingLevelMap: { ...profile.thinkingLevelMap }, pricing: { ...profile.pricing },
+      capabilities: { reasoning: true, imageInput: true, toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = xaiProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, model: profile.id, provider: this.getProviderType(), type: 'classifier', virtual: true,
+      api: profile.api, contextWindow: profile.contextWindow, pricing: { ...profile.pricing }, imageInput: true }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> {
+    throw new Error('Image model or options are not supported.');
+  }
+  private conversation(model = this.getConfiguredModel(), options?: ChatOptions): ReviewedXaiResponsesProvider {
+    xaiProfile(String(model)); return new ReviewedXaiResponsesProvider({ ...this.config, model, baseUrl: this.baseUrl }, options?.cacheRetention);
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    if (!this.validateConfig()) throw new Error('xAI API key is required.');
+    return this.conversation(options?.model ?? this.getConfiguredModel(), options).chat(messages, options);
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    let delegate: ReviewedXaiResponsesProvider;
+    try { delegate = this.conversation(options?.model ?? this.getConfiguredModel(), options); }
+    catch { const error = new Error('xAI response model is not supported.'); if (onError) { onError(error); return; } throw error; }
+    await delegate.streamChat(messages, onChunk, onComplete, onError, options);
+  }
+}
+
+/** Reviewed native R policy, isolated from the legacy Responses/Azure entry points. */
+class ReviewedOpenAiResponsesProvider extends OpenAiResponsesProvider {
+  constructor(config: ProviderConfig, private readonly retention?: ChatOptions['cacheRetention']) { super(config); }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey) && super.validateConfig(); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return OPENAI_RESPONSE_MODELS.map(profile => profile.id); }
+  override getSpecializedModels(): SpecializedModel[] {
+    const model = this.getConfiguredModel(); if (!model) return [];
+    const profile = openAiResponseProfile(model);
+    return [{ id: `${model}:classifier`, model, type: 'classifier', provider: this.getProviderType(), virtual: true,
+      api: profile.api, contextWindow: profile.contextWindow, pricing: { ...profile.pricing },
+      ...(profile.declaredInput.includes('image') ? { imageInput: true } : {}) }];
+  }
+  protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
+    const body = super.requestBody(messages, options); prepareOpenAiResponse(body, options); return body;
+  }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return openAiResponseUsage(value, model); }
+  protected override requiresCompleteSseResponse(): boolean { return true; }
+  protected override headers(websocket: boolean, sessionId?: string): Record<string, string> {
+    const headers = super.headers(websocket, this.retention === 'none' ? undefined : sessionId);
+    if (headers['session-id']) { headers.session_id = headers['session-id']; delete headers['session-id']; }
+    return headers;
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), model = options?.model ?? this.getConfiguredModel();
+    const aborted = () => { if (options?.signal?.aborted) throw new Error('OpenAI request aborted.'); };
+    const report = (error: Error) => {
+      const fixed = ['OpenAI API key is required.', 'OpenAI response model is not supported.', 'Invalid OpenAI thinking level.',
+        'OpenAI response model does not support images.', 'Invalid OpenAI output limit.'];
+      const safe = options?.signal?.aborted ? new Error('OpenAI request aborted.')
+        : error instanceof ProviderContextOverflowError ? new ProviderContextOverflowError()
+          : new Error(fixed.includes(error.message) ? error.message : 'OpenAI response request failed.');
+      if (onError) onError(safe); else throw safe;
+    };
+    if (!this.validateConfig()) { report(new Error('OpenAI API key is required.')); return; }
+    await super.streamChat(messages, async (chunk, event) => { aborted(); await onChunk(chunk, event); aborted(); },
+      response => { aborted(); onComplete?.(response ? { ...response, provider, model, api: 'openai-responses' } : response); }, report, options);
+  }
+}
+
+/** API-key-only native R/D composition; neither reserves a factory nor loads ChatGPT credentials. */
+export class OpenAiMixedProvider extends AiProvider {
+  private readonly baseUrl: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? 'gpt-4o'; openAiResponseProfile(model);
+    const baseUrl = openAiMixedBase(config.baseUrl); super({ ...config, model }); this.baseUrl = baseUrl;
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return OPENAI_RESPONSE_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return OPENAI_RESPONSE_MODELS.map(profile => ({ id: profile.id, api: 'openai-responses', name: profile.name,
+      ...(profile.thinkingLevelMap === undefined ? {} : { thinkingLevelMap: profile.thinkingLevelMap === null ? null : { ...profile.thinkingLevelMap } }),
+      capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true },
+      contextWindow: profile.contextWindow, maxOutputTokens: profile.maxOutputTokens,
+      pricing: { ...profile.pricing } }));
+  }
+  override setConfiguredModel(model: string): void { openAiResponseProfile(model); super.setConfiguredModel(model); }
+  override getModelApi(model = this.getConfiguredModel()): string | undefined { return OPENAI_RESPONSE_MODELS.some(profile => profile.id === model) ? 'openai-responses' : undefined; }
+  private conversation(model = this.getConfiguredModel(), options?: ChatOptions): ReviewedOpenAiResponsesProvider {
+    openAiResponseProfile(String(model));
+    return new ReviewedOpenAiResponsesProvider({ ...this.config, model, baseUrl: this.baseUrl }, options?.cacheRetention);
+  }
+  private classifier(): OpenAiDecisionsProvider { return new OpenAiDecisionsProvider({ ...this.config, model: undefined, baseUrl: this.baseUrl }); }
+  override getSpecializedModels(): SpecializedModel[] { return [...this.conversation().getSpecializedModels(), ...this.classifier().getSpecializedModels()]; }
+  async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const child = this.conversation(options?.model ?? this.getConfiguredModel(), options); return child.chat(messages, options);
+  }
+  async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    let child: ReviewedOpenAiResponsesProvider;
+    try { child = this.conversation(options?.model ?? this.getConfiguredModel(), options); }
+    catch (error) { if (onError) { onError(error as Error); return; } throw error; }
+    await child.streamChat(messages, onChunk, onComplete, onError, options);
+  }
+  private classificationProvider(model: string, options: SpecializedModelOptions): AiProvider {
+    if (options.api !== undefined && !['openai-responses', 'openai-decisions'].includes(options.api)) throw new Error('OpenAI classification API is not supported.');
+    if (options.api !== 'openai-responses' && model === OPENAI_DECISIONS_MODEL.id) return this.classifier();
+    if (options.api === 'openai-decisions') throw new Error('OpenAI classification model is not supported.');
+    return this.conversation(model);
+  }
+  override async classify(request: ClassificationRequest, options: SpecializedModelOptions = {}): Promise<ClassificationResult> {
+    validateClassificationRequest(request); const child = this.classificationProvider(request.model, options); return child.classify(request, options);
+  }
+  override async classifyQuestions(request: QuestionClassificationRequest, options: SpecializedModelOptions = {}): Promise<QuestionClassificationResult> {
+    request = copyQuestionClassificationRequest(request); const child = this.classificationProvider(request.model, options); return child.classifyQuestions(request, options);
+  }
+  async classifyNativeQuestions(request: NativeClassifierRequest, options: SpecializedModelOptions = {}): Promise<NativeClassifierResult> {
+    return this.classifier().classifyNativeQuestions(request, options);
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> { throw new Error('Image model or options are not supported.'); }
+}
+
 // ===================================================================
 // Google Gemini Provider
 // ===================================================================
@@ -1938,6 +3663,8 @@ interface GeminiResponse {
 }
 
 export class GeminiProvider extends AiProvider {
+  override getModelApi(): string { return 'google-generative-ai'; }
+
   static readonly DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
   private readonly baseUrl: string;
 
@@ -2187,6 +3914,8 @@ export class GeminiProvider extends AiProvider {
 
 /** Google Vertex AI variant using an OAuth access token. */
 export class VertexGeminiProvider extends GeminiProvider {
+  override getModelApi(): string { return 'google-vertex'; }
+
   constructor(config: ProviderConfig) {
     const project = String(config.project || process.env.GOOGLE_CLOUD_PROJECT || '');
     const location = String(config.location || process.env.GOOGLE_CLOUD_LOCATION || 'us-central1');
@@ -2219,8 +3948,34 @@ interface BedrockResponse {
   usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
 }
 
-/** AWS Bedrock Converse provider with native SigV4 authentication. */
+/** Decode stored/administrator Bedrock secrets; direct ProviderConfig.apiKey is always an opaque Bearer. */
+export function bedrockCredentialConfig(value: unknown): { apiKey: string } | { accessKeyId: string; secretAccessKey: string; sessionToken?: string } | undefined {
+  if (typeof value !== 'string') return undefined;
+  if (value.trimStart().startsWith('{')) {
+    try {
+      const data: unknown = JSON.parse(value);
+      if (data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 1
+        && Object.hasOwn(data, 'bearerToken') && validBearerApiKey((data as { bearerToken?: unknown }).bearerToken)) {
+        return { apiKey: (data as { bearerToken: string }).bearerToken };
+      }
+    } catch { /* Invalid serialized credentials refuse without parser diagnostics. */ }
+    return undefined;
+  }
+  if (value.includes(':')) {
+    const parts = value.split(':');
+    if ((parts.length !== 2 && parts.length !== 3)
+      || !/^[A-Za-z0-9]{1,128}$/u.test(parts[0] ?? '')
+      || !/^[A-Za-z0-9/+=]{1,4096}$/u.test(parts[1] ?? '')
+      || (parts[2] !== undefined && !/^[A-Za-z0-9/+=]{1,61440}$/u.test(parts[2]))) return undefined;
+    return { accessKeyId: parts[0], secretAccessKey: parts[1], ...(parts[2] !== undefined ? { sessionToken: parts[2] } : {}) };
+  }
+  return validBearerApiKey(value) ? { apiKey: value } : undefined;
+}
+
+/** AWS Bedrock Converse provider with explicit Bearer or native SigV4 authentication. */
 export class BedrockProvider extends AiProvider {
+  override getModelApi(): string { return 'bedrock-converse-stream'; }
+
   private readonly region: string;
 
   constructor(config: ProviderConfig) {
@@ -2236,7 +3991,27 @@ export class BedrockProvider extends AiProvider {
   }
 
   validateConfig(): boolean {
-    return Boolean(this.config.accessKeyId && this.config.secretAccessKey);
+    if (this.config.apiKey !== undefined) return validBearerApiKey(this.config.apiKey);
+    if (typeof this.config.accessKeyId !== 'string' || !this.config.accessKeyId.trim()
+      || typeof this.config.secretAccessKey !== 'string' || !this.config.secretAccessKey.trim()) return false;
+    try {
+      new Headers({ Authorization: `AWS4-HMAC-SHA256 Credential=${this.config.accessKeyId}/`,
+        ...(this.config.sessionToken ? { 'x-amz-security-token': String(this.config.sessionToken) } : {}) });
+      return true;
+    } catch { return false; }
+  }
+
+  private streamEndpoint(model: string): URL {
+    let url: URL;
+    try { url = new URL(String(this.config.baseUrl || `https://bedrock-runtime.${this.region}.amazonaws.com`)); }
+    catch { throw new Error('Invalid Bedrock endpoint.'); }
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+      throw new Error('Invalid Bedrock endpoint.');
+    }
+    const path = url.pathname.replace(/\/+$/u, '');
+    const root = path.replace(/\/model\/[^/]+\/converse(?:-stream)?$/u, '');
+    url.pathname = `${root}/model/${encodeURIComponent(model)}/converse-stream`;
+    return url;
   }
 
   private requestBody(messages: Message[], options?: ChatOptions): Record<string, unknown> {
@@ -2278,7 +4053,8 @@ export class BedrockProvider extends AiProvider {
     };
   }
 
-  private async signedHeaders(url: URL, body: string, now = new Date()): Promise<Record<string, string>> {
+  private async requestHeaders(url: URL, body: string, now = new Date()): Promise<Record<string, string>> {
+    if (this.config.apiKey !== undefined) return { 'content-type': 'application/json', Authorization: `Bearer ${this.config.apiKey}` };
     const { createHash, createHmac } = await import('node:crypto');
     const accessKey = String(this.config.accessKeyId);
     const secret = String(this.config.secretAccessKey);
@@ -2294,7 +4070,13 @@ export class BedrockProvider extends AiProvider {
     if (this.config.sessionToken) headers['x-amz-security-token'] = String(this.config.sessionToken);
     const names = Object.keys(headers).sort();
     const canonicalHeaders = names.map(name => `${name}:${headers[name].trim()}\n`).join('');
-    const canonicalRequest = ['POST', url.pathname, url.searchParams.toString(), canonicalHeaders, names.join(';'), payloadHash].join('\n');
+    // SigV4 (unlike S3) URI-escapes the already encoded HTTP path, including model ARN/colon escapes.
+    const escape = (value: string) => encodeURIComponent(value).replace(/[!'()*]/gu, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+    const canonicalPath = `/${url.pathname.split('/').filter(Boolean).map(escape).join('/')}${url.pathname.endsWith('/') && url.pathname !== '/' ? '/' : ''}`;
+    const canonicalQuery = [...url.searchParams].map(([key, value]) => [escape(key), escape(value)])
+      .sort(([ak, av], [bk, bv]) => ak < bk ? -1 : ak > bk ? 1 : av < bv ? -1 : av > bv ? 1 : 0)
+      .map(([key, value]) => `${key}=${value}`).join('&');
+    const canonicalRequest = ['POST', canonicalPath, canonicalQuery, canonicalHeaders, names.join(';'), payloadHash].join('\n');
     const scope = `${date}/${this.region}/bedrock/aws4_request`;
     const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, createHash('sha256').update(canonicalRequest).digest('hex')].join('\n');
     const hmac = (key: Buffer | string, value: string): Buffer => createHmac('sha256', key).update(value).digest();
@@ -2307,10 +4089,15 @@ export class BedrockProvider extends AiProvider {
   async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     if (!this.validateConfig()) throw new Error('AWS Bedrock credentials are required');
     const model = encodeURIComponent(String(this.config.model));
-    const url = new URL(String(this.config.baseUrl || `https://bedrock-runtime.${this.region}.amazonaws.com/model/${model}/converse`));
+    let url: URL;
+    try { url = new URL(String(this.config.baseUrl || `https://bedrock-runtime.${this.region}.amazonaws.com/model/${model}/converse`)); }
+    catch { throw new Error('Invalid Bedrock endpoint.'); }
+    if (this.config.apiKey !== undefined && (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)) {
+      throw new Error('Invalid Bedrock endpoint.');
+    }
     const body = serializeProviderBody(this.requestBody(messages, options));
     const response = await this.request(url, {
-      method: 'POST', headers: await this.signedHeaders(url, body), body, signal: options?.signal,
+      method: 'POST', headers: await this.requestHeaders(url, body), body, signal: options?.signal,
     });
     if (!response.ok) await rejectProviderHttpResponse(response, `Bedrock API error (${response.status}).`);
     const data = await readProviderJson<BedrockResponse>(response);
@@ -2355,10 +4142,19 @@ export class BedrockProvider extends AiProvider {
     options?: ChatOptions,
   ): Promise<void> {
     try {
-      const response = await this.chat(messages, options);
-      if (response.content) await onChunk(response.content, { type: 'text_delta', data: response.content });
-      for (const call of response.toolCalls ?? []) await onChunk('', { type: 'tool_call', data: call });
-      onComplete?.(response);
+      if (!this.validateConfig()) throw new Error('AWS Bedrock credentials are required');
+      if (options?.signal?.aborted) throw new Error('Bedrock request aborted.');
+      const model = options?.model || String(this.config.model);
+      const url = this.streamEndpoint(model);
+      const body = serializeProviderBody(this.requestBody(messages, options));
+      const response = await this.request(url, {
+        method: 'POST', headers: { ...await this.requestHeaders(url, body), Accept: 'application/vnd.amazon.eventstream' },
+        body, signal: options?.signal,
+      });
+      if (!response.ok) await rejectProviderHttpResponse(response, `Bedrock API error (${response.status}).`);
+      const result = await consumeBedrockStream(response, model, onChunk, options?.signal);
+      if (options?.signal?.aborted) throw new Error('Bedrock request aborted.');
+      onComplete?.(result);
     } catch (error) {
       const normalized = error instanceof Error ? error : new Error(String(error));
       onError?.(normalized);
@@ -2386,6 +4182,8 @@ function applyAnthropicPromptCache(body: Record<string, unknown>, retention: Cha
 }
 
 export class AnthropicProvider extends AiProvider {
+  override getModelApi(): string { return 'anthropic-messages'; }
+
   private readonly baseUrl: string;
   static readonly DEFAULT_BASE_URL = 'https://api.anthropic.com';
   static readonly API_VERSION = '2023-06-01';
@@ -2416,6 +4214,18 @@ export class AnthropicProvider extends AiProvider {
     return boundedModelIds(data.data, model => (model as { id?: unknown })?.id);
   }
 
+  protected getMessagesUrl(): string { return `${this.baseUrl}/v1/messages`; }
+  protected messageHeaders(_options?: ChatOptions): Record<string, string> {
+    return { ...configuredHeaders(this.config), 'Content-Type': 'application/json',
+      'x-api-key': this.config.apiKey as string, 'anthropic-version': AnthropicProvider.API_VERSION };
+  }
+  protected prepareMessageBody(body: Record<string, unknown>, _options?: ChatOptions): Record<string, unknown> { return body; }
+  protected applyMessageThinking(body: Record<string, unknown>, options?: ChatOptions): void { applyAnthropicThinking(body, options); }
+  protected validateMessageResponse(_value: unknown): void {}
+  protected createMessageStreamValidator(): (value?: unknown) => void { return () => {}; }
+  protected messageText(content: AnthropicResponse['content']): string {
+    return (content?.find(block => block.type === 'text') as AnthropicTextContent | undefined)?.text || '';
+  }
   protected updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown {
     const prior = previous as AnthropicUsage | undefined, usage = value as AnthropicUsage | undefined;
     return { ...prior, ...usage, ...(start ? { output_tokens: prior?.output_tokens ?? usage?.output_tokens } : {}),
@@ -2441,7 +4251,7 @@ export class AnthropicProvider extends AiProvider {
       ...(costUsd !== undefined ? { costUsd } : {}) };
   }
 
-  private buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+  protected buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
     messages = toolImageMessages(messages);
     return messages.filter(message => message.role !== 'system').map(message => {
       if (message.role === 'tool') {
@@ -2509,7 +4319,7 @@ export class AnthropicProvider extends AiProvider {
 
     if (systemPrompt) body.system = systemPrompt;
     if (options?.temperature !== undefined && (!options.thinking || options.thinking === 'off')) body.temperature = options.temperature;
-    applyAnthropicThinking(body, options);
+    this.applyMessageThinking(body, options);
     if (options?.tools?.length) {
       body.tools = options.tools.map(tool => ({
         name: tool.name,
@@ -2519,15 +4329,10 @@ export class AnthropicProvider extends AiProvider {
     }
 
     applyAnthropicPromptCache(body, options?.cacheRetention);
-    const response = await this.request(`${this.baseUrl}/v1/messages`, {
+    const response = await this.request(this.getMessagesUrl(), {
       method: 'POST',
-      headers: {
-        ...configuredHeaders(this.config),
-        'Content-Type': 'application/json',
-        'x-api-key': this.config.apiKey as string,
-        'anthropic-version': AnthropicProvider.API_VERSION,
-      },
-      body: serializeProviderBody(body),
+      headers: this.messageHeaders(options),
+      body: serializeProviderBody(this.prepareMessageBody(body, options)),
       signal: options?.signal,
     });
 
@@ -2537,6 +4342,7 @@ export class AnthropicProvider extends AiProvider {
     if (data.content && (!Array.isArray(data.content) || data.content.length > MAX_PROVIDER_STREAM_TOOL_CALLS)) {
       throw new Error('The provider response exceeded the content-block limit.');
     }
+    this.validateMessageResponse(data);
     const contentBlock = data.content?.find(c => c.type === 'text') as AnthropicTextContent | undefined;
     const reasoning = data.content
       ?.filter((block): block is AnthropicThinkingContent => block.type === 'thinking')
@@ -2550,11 +4356,11 @@ export class AnthropicProvider extends AiProvider {
     }
 
     return {
-      content: contentBlock?.text || '',
+      content: this.messageText(data.content),
       ...lengthStop(data.stop_reason),
       ...(reasoning ? { reasoning } : {}),
       model: data.model,
-      usage: this.messageUsage(data.usage, model, false, options?.cacheRetention),
+      usage: data.usage ? this.messageUsage(data.usage, model, false, options?.cacheRetention) : undefined,
       toolCalls,
     };
   }
@@ -2571,7 +4377,7 @@ export class AnthropicProvider extends AiProvider {
     }
 
     const model = options?.model || (this.config.model as string) || ANTHROPIC_DEFAULT_MODEL;
-    const url = `${this.baseUrl}/v1/messages`;
+    const url = this.getMessagesUrl();
 
     const systemPrompt = options?.systemPrompt || '';
     const anthropicMessages = this.buildAnthropicMessages(messages);
@@ -2590,7 +4396,7 @@ export class AnthropicProvider extends AiProvider {
 
     if (systemPrompt) body.system = systemPrompt;
     if (options?.temperature !== undefined && (!options.thinking || options.thinking === 'off')) body.temperature = options.temperature;
-    applyAnthropicThinking(body, options);
+    this.applyMessageThinking(body, options);
     if (options?.tools?.length) {
       body.tools = options.tools.map(tool => ({
         name: tool.name,
@@ -2603,13 +4409,8 @@ export class AnthropicProvider extends AiProvider {
     try {
       const response = await this.request(url, {
         method: 'POST',
-        headers: {
-          ...configuredHeaders(this.config),
-          'Content-Type': 'application/json',
-          'x-api-key': this.config.apiKey as string,
-          'anthropic-version': AnthropicProvider.API_VERSION,
-        },
-        body: serializeProviderBody(body),
+        headers: this.messageHeaders(options),
+        body: serializeProviderBody(this.prepareMessageBody(body, options)),
         signal: options?.signal,
       });
 
@@ -2618,13 +4419,14 @@ export class AnthropicProvider extends AiProvider {
       let fullContent = '';
       let fullReasoning = '';
       let stopReason: ChatResponse['stopReason'];
-      let usage: unknown;
+      let reportedUsage: unknown;
       let outputBytes = 0;
       let transportBytes = 0;
       let streamEvents = 0;
       const toolCallFragments = new Map<number, { id: string; name: string; json: string }>();
 
       if (!response.body) throw new Error('Anthropic streaming response has no body');
+      const validateStream = this.createMessageStreamValidator();
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8', { fatal: true });
       let buffer = '';
@@ -2663,6 +4465,7 @@ export class AnthropicProvider extends AiProvider {
           let eventData: AnthropicStreamEvent;
           try { eventData = JSON.parse(dataStr) as AnthropicStreamEvent; }
           catch { throw new Error('The provider streaming response was invalid.'); }
+          validateStream(eventData);
 
           switch (eventData.type) {
             case 'content_block_start': {
@@ -2702,14 +4505,14 @@ export class AnthropicProvider extends AiProvider {
             case 'message_start': {
               const msgStart = eventData.message as AnthropicStreamMessage | undefined;
               if (msgStart?.usage) {
-                usage = this.updateMessageUsage(usage, msgStart.usage, true);
+                reportedUsage = this.updateMessageUsage(reportedUsage, msgStart.usage, true);
               }
               await onChunk('', { type: 'message_start', data: eventData });
               break;
             }
             case 'message_delta': {
               stopReason = lengthStop(eventData.delta?.stop_reason ?? eventData.stop_reason).stopReason ?? stopReason;
-              if (eventData.usage) usage = this.updateMessageUsage(usage, eventData.usage, false);
+              if (eventData.usage) reportedUsage = this.updateMessageUsage(reportedUsage, eventData.usage, false);
               break;
             }
             case 'error':
@@ -2720,6 +4523,7 @@ export class AnthropicProvider extends AiProvider {
       buffer += decoder.decode();
       if (buffer.trim()) throw new Error('The provider streaming response was invalid.');
 
+      validateStream();
       const toolCalls = [...toolCallFragments.values()].map(fragment => ({
         id: fragment.id, name: fragment.name, input: parseProviderToolArguments(fragment.json),
       }));
@@ -2729,7 +4533,7 @@ export class AnthropicProvider extends AiProvider {
           ...(fullReasoning ? { reasoning: fullReasoning } : {}),
           model,
           ...(stopReason ? { stopReason } : {}),
-          usage: this.messageUsage(usage, model, true, options?.cacheRetention),
+          usage: this.messageUsage(reportedUsage, model, true, options?.cacheRetention),
           toolCalls: toolCalls.length ? toolCalls : undefined,
         });
       } finally {
@@ -2739,6 +4543,759 @@ export class AnthropicProvider extends AiProvider {
     } catch (error) {
       onError?.(error instanceof Error ? error : new Error(String(error)));
     }
+  }
+}
+
+/** Private native C delegate; only the explicit mixed Fireworks adapter publishes profiles. */
+class FireworksCompletionsProvider extends OpenAiProvider {
+  protected override getChatUrl(): string { return `${this.config.baseUrl}/chat/completions`; }
+  protected override getHeaders(options?: ChatOptions): Record<string, string> { return fireworksHeaders(this.config, options, 'openai-completions'); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareFireworksChat(body, options, messages); }
+  protected override validateChatResponse(value: unknown): void { validateFireworksChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return fireworksStreamValidator('openai-completions'); }
+  protected override responseReasoning(value: unknown): string | undefined { return fireworksReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return fireworksUsage(value, model); }
+}
+
+/** Private native A delegate; no Claude-name inference or Fireworks ambient authentication. */
+class FireworksMessagesProvider extends AnthropicProvider {
+  protected override getMessagesUrl(): string { return `${this.config.baseUrl}/messages`; }
+  protected override messageHeaders(options?: ChatOptions): Record<string, string> { return fireworksHeaders(this.config, options, 'anthropic-messages'); }
+  protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
+  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareFireworksMessage(body, options); }
+  protected override validateMessageResponse(value: unknown): void { validateFireworksMessage(value); }
+  protected override createMessageStreamValidator(): (value?: unknown) => void { return fireworksStreamValidator('anthropic-messages'); }
+  protected override messageText(content: unknown): string { return fireworksMessageText(content); }
+  protected override updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown { return mergeFireworksUsage(previous, value, start); }
+  protected override messageUsage(value: unknown, model: string): ChatResponse['usage'] { return fireworksUsage(value, model); }
+  protected override buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    const converted = super.buildAnthropicMessages(messages), original = toolImageMessages(messages).filter(message => message.role !== 'system');
+    for (let index = 0; index < original.length; index++) {
+      const message = original[index], reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
+      if (!reasoning) continue; const content = converted[index].content;
+      converted[index].content = [{ type: 'text', text: reasoning }, ...(typeof content === 'string' ? content ? [{ type: 'text', text: content }] : [] : Array.isArray(content) ? content : [])];
+    }
+    return converted;
+  }
+}
+
+/** Explicit supplied-key mixed Fireworks A/C SDK; no factory, dialect or automatic host. */
+export class FireworksProvider extends AiProvider {
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? FIREWORKS_MODELS[0].id; fireworksProfile(model);
+    super({ ...config, model, baseUrl: fireworksBase(config.baseUrl ?? 'https://api.fireworks.ai/inference') });
+    registerNativeOutputBudget(this, () => { const selected = captureNativeConfiguredModel(this.config, FIREWORKS_MODELS[0].id); return options => prepareFireworksOutputBudget(options, selected); });
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return FIREWORKS_MODELS.map(profile => profile.id); }
+  override setConfiguredModel(model: string): void { fireworksProfile(model); super.setConfiguredModel(model); }
+  override getModelApi(model = this.getConfiguredModel()!): string | undefined { return FIREWORKS_MODELS.find(profile => profile.id === model)?.api; }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return FIREWORKS_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      maxOutputTokens: profile.maxOutputTokens, pricing: { ...profile.pricing }, thinkingLevelMap: { ...profile.thinkingLevelMap },
+      capabilities: { reasoning: true, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = fireworksProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, model: profile.id, name: profile.name, provider: this.getProviderType(), type: 'classifier', virtual: true,
+      api: profile.api, contextWindow: profile.contextWindow, pricing: { ...profile.pricing }, imageInput: profile.declaredInput.includes('image') }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> { throw new Error('Image model or options are not supported.'); }
+  private conversation(messages: Message[], model: string): AiProvider {
+    if (!this.validateConfig()) throw new Error('Fireworks API key is required.');
+    const profile = fireworksProfile(model);
+    for (const message of messages) for (const image of messageImages(message)) {
+      if (!profile.declaredInput.includes('image')) throw new Error('Fireworks chat model does not support images.');
+      if (profile.api === 'anthropic-messages' && !parseDataImage(image.url)) throw new Error('Invalid Fireworks image input.');
+    }
+    const config = { ...this.config, model };
+    return profile.api === 'anthropic-messages' ? new FireworksMessagesProvider(config) : new FireworksCompletionsProvider(config);
+  }
+  private conversationOptions(messages: Message[], model: string, options?: ChatOptions): ChatOptions {
+    const owned = { ...options, model };
+    if (fireworksProfile(model).api === 'anthropic-messages' && owned.systemPrompt === undefined) { const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n'); if (system) owned.systemPrompt = system; }
+    return owned;
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const model = options?.model ?? this.getConfiguredModel()!, providerName = this.getProviderType();
+    try { const provider = this.conversation(messages, model), api = fireworksProfile(model).api;
+      const result = await provider.chat(messages, this.conversationOptions(messages, model, options));
+      if (options?.signal?.aborted) throw new Error('Fireworks request aborted.'); return { ...result, provider: providerName, model, api };
+    } catch (error) { throw fireworksFailure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const model = options?.model ?? this.getConfiguredModel()!, providerName = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('Fireworks request aborted.'); };
+    try { const provider = this.conversation(messages, model), api = fireworksProfile(model).api; active();
+      await provider.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, this.conversationOptions(messages, model, options));
+    } catch (error) { const failure = fireworksFailure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Private A/C/R delegates; only the explicit routed adapter publishes OpenCode Go profiles. */
+class OpenCodeGoCompletionsProvider extends OpenAiProvider {
+  protected override getChatUrl(): string { return `${this.config.baseUrl}/chat/completions`; }
+  protected override getHeaders(options?: ChatOptions): Record<string, string> { return opencodeGoHeaders(this.config, options, 'openai-completions'); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareOpenCodeGoChat(body, options, messages); }
+  protected override validateChatResponse(value: unknown): void { validateOpenCodeGoChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return opencodeGoStreamValidator('openai-completions'); }
+  protected override responseReasoning(value: unknown): string | undefined { return opencodeGoReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return opencodeGoUsage(value, model); }
+}
+class OpenCodeGoMessagesProvider extends AnthropicProvider {
+  protected override getMessagesUrl(): string { return `${this.config.baseUrl}/messages`; }
+  protected override messageHeaders(options?: ChatOptions): Record<string, string> { return opencodeGoHeaders(this.config, options, 'anthropic-messages'); }
+  protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
+  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareOpenCodeGoMessage(body, options); }
+  protected override validateMessageResponse(value: unknown): void { validateOpenCodeGoMessage(value); }
+  protected override createMessageStreamValidator(): (value?: unknown) => void { return opencodeGoStreamValidator('anthropic-messages'); }
+  protected override messageText(content: unknown): string { return opencodeGoMessageText(content); }
+  protected override updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown { return mergeOpenCodeGoUsage(previous, value, start); }
+  protected override messageUsage(value: unknown, model: string): ChatResponse['usage'] { return opencodeGoUsage(value, model); }
+  protected override buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    const converted = super.buildAnthropicMessages(messages), original = toolImageMessages(messages).filter(message => message.role !== 'system');
+    for (let index = 0; index < original.length; index++) { const message = original[index], reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
+      if (!reasoning) continue; const content = converted[index].content;
+      converted[index].content = [{ type: 'thinking', thinking: reasoning, signature: '' }, ...(typeof content === 'string' ? content ? [{ type: 'text', text: content }] : [] : Array.isArray(content) ? content : [])];
+    }
+    return converted;
+  }
+}
+class OpenCodeGoResponsesProvider extends OpenAiResponsesProvider {
+  constructor(config: ProviderConfig, private readonly options?: ChatOptions) { super(config); }
+  protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
+  protected override requiresCompleteSseResponse(): boolean { return true; }
+  protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest { const body = super.requestBody(messages, options); prepareOpenCodeGoResponse(body, options); return body; }
+  protected override headers(_websocket: boolean, _sessionId?: string): Record<string, string> { return opencodeGoHeaders(this.config, this.options, 'openai-responses'); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return opencodeGoUsage(value, model); }
+}
+
+/** Supplied-key mixed OpenCode Go SDK; no ambient auth, factory, dialect or Server/Settings composition. */
+export class OpenCodeGoProvider extends AiProvider {
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? OPENCODE_GO_MODELS[0].id; opencodeGoProfile(model);
+    super({ ...config, model, baseUrl: opencodeGoBase(config.baseUrl ?? 'https://opencode.ai/zen/go') });
+    registerNativeOutputBudget(this, () => { const selected = captureNativeConfiguredModel(this.config, OPENCODE_GO_MODELS[0].id); return options => prepareOpenCodeGoOutputBudget(options, selected); });
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return OPENCODE_GO_MODELS.map(profile => profile.id); }
+  override setConfiguredModel(model: string): void { opencodeGoProfile(model); super.setConfiguredModel(model); }
+  override getModelApi(model = this.getConfiguredModel()!): string | undefined { return OPENCODE_GO_MODELS.find(profile => profile.id === model)?.api; }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return OPENCODE_GO_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow, maxOutputTokens: profile.maxOutputTokens,
+      ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}), thinkingLevelMap: { ...profile.thinkingLevelMap }, capabilities: { reasoning: true, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = opencodeGoProfile(this.getConfiguredModel()!); return [{ id: `${profile.id}:classifier`, model: profile.id, name: profile.name, provider: this.getProviderType(), type: 'classifier', virtual: true, api: profile.api,
+      contextWindow: profile.contextWindow, ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}), imageInput: profile.declaredInput.includes('image') }];
+  }
+  private conversation(messages: Message[], model: string, options?: ChatOptions): AiProvider {
+    if (!this.validateConfig()) throw new Error('OpenCode Go API key is required.'); const profile = opencodeGoProfile(model);
+    for (const message of messages) for (const image of messageImages(message)) { if (!profile.declaredInput.includes('image')) throw new Error('OpenCode Go chat model does not support images.'); if (!parseDataImage(image.url)) throw new Error('Invalid OpenCode Go image input.'); }
+    const config = { ...this.config, model }; return profile.api === 'anthropic-messages' ? new OpenCodeGoMessagesProvider(config) : profile.api === 'openai-completions' ? new OpenCodeGoCompletionsProvider(config) : new OpenCodeGoResponsesProvider(config, options);
+  }
+  private conversationOptions(messages: Message[], model: string, options?: ChatOptions): ChatOptions {
+    const owned = { ...options, model }; if (opencodeGoProfile(model).api === 'anthropic-messages' && owned.systemPrompt === undefined) { const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n'); if (system) owned.systemPrompt = system; } return owned;
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const model = options?.model || this.getConfiguredModel()!, providerName = this.getProviderType();
+    try { const owned = this.conversationOptions(messages, model, options), delegate = this.conversation(messages, model, owned), api = opencodeGoProfile(model).api; const result = await delegate.chat(messages, owned);
+      if (options?.signal?.aborted) throw new Error('OpenCode Go request aborted.'); return { ...result, provider: providerName, model, api };
+    } catch (error) { throw opencodeGoFailure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const model = options?.model || this.getConfiguredModel()!, providerName = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('OpenCode Go request aborted.'); };
+    try { const owned = this.conversationOptions(messages, model, options), delegate = this.conversation(messages, model, owned), api = opencodeGoProfile(model).api; active();
+      await delegate.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); }, response => { active(); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, owned);
+    } catch (error) { const failure = opencodeGoFailure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+class OpenCodeCompletionsProvider extends OpenAiProvider {
+  protected override getChatUrl(): string { return `${this.config.baseUrl}/chat/completions`; }
+  protected override getHeaders(options?: ChatOptions): Record<string, string> { return opencodeHeaders(this.config, options, 'openai-completions'); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareOpenCodeChat(body, options, messages); }
+  protected override validateChatResponse(value: unknown): void { validateOpenCodeChat(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return opencodeStreamValidator('openai-completions'); }
+  protected override responseReasoning(value: unknown): string | undefined { return opencodeReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return opencodeUsage(value, model); }
+}
+class OpenCodeMessagesProvider extends AnthropicProvider {
+  protected override getMessagesUrl(): string { return `${this.config.baseUrl}/messages`; }
+  protected override messageHeaders(options?: ChatOptions): Record<string, string> { return opencodeHeaders(this.config, options, 'anthropic-messages'); }
+  protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
+  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareOpenCodeMessage(body, options); }
+  protected override validateMessageResponse(value: unknown): void { validateOpenCodeMessage(value); }
+  protected override createMessageStreamValidator(): (value?: unknown) => void { return opencodeStreamValidator('anthropic-messages'); }
+  protected override messageText(content: unknown): string { return opencodeMessageText(content); }
+  protected override updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown { return mergeOpenCodeUsage(previous, value, start); }
+  protected override messageUsage(value: unknown, model: string): ChatResponse['usage'] { return opencodeUsage(value, model); }
+  protected override buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    const converted = super.buildAnthropicMessages(messages), original = toolImageMessages(messages).filter(message => message.role !== 'system');
+    for (let index = 0; index < original.length; index++) { const message = original[index], reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
+      if (!reasoning) continue; const content = converted[index].content;
+      converted[index].content = [{ type: 'thinking', thinking: reasoning, signature: '' }, ...(typeof content === 'string' ? content ? [{ type: 'text', text: content }] : [] : Array.isArray(content) ? content : [])];
+    }
+    return converted;
+  }
+}
+class OpenCodeResponsesProvider extends OpenAiResponsesProvider {
+  constructor(config: ProviderConfig, private readonly options?: ChatOptions) { super(config); }
+  protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
+  protected override requiresCompleteSseResponse(): boolean { return true; }
+  protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest { const body = super.requestBody(messages, options); prepareOpenCodeResponse(body, options); return body; }
+  protected override headers(_websocket: boolean, _sessionId?: string): Record<string, string> { return opencodeHeaders(this.config, this.options, 'openai-responses'); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return opencodeUsage(value, model); }
+}
+class OpenCodeNativeClassifierProvider extends NativeClassifierProvider {
+  constructor(config: ProviderConfig) { super(config, 'OpenCode classifiers', `${config.baseUrl}/systemone`); }
+}
+
+/** Zen Google REST owns native levels/auth/terminal authority;generic Gemini remains unchanged. */
+class OpenCodeGoogleProvider extends AiProvider {
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override getModelApi(): string { return 'google-generative-ai'; }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> { return this.execute(messages, options); }
+  override async streamChat(messages: Message[], chunk: StreamChunkCallback, complete?: (response?: ChatResponse) => void, error?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    try { const response = await this.execute(messages, options, chunk); complete?.(response); }
+    catch (failure) { if (error) error(failure instanceof Error ? failure : new Error('Invalid OpenCode response.')); else throw failure; }
+  }
+  private async execute(messages: Message[], options?: ChatOptions, chunk?: StreamChunkCallback): Promise<ChatResponse> {
+    const model = options?.model || this.config.model!, active = () => { if (options?.signal?.aborted) throw new Error('OpenCode request aborted.'); }; const invalid: () => never = () => { throw new Error('Invalid OpenCode response.'); };
+    const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
+    active(); const body = opencodeGoogleBody(model, toolImageMessages(messages), options), response = await this.request(`${this.config.baseUrl}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, { method: 'POST', headers: opencodeHeaders(this.config, options, 'google-generative-ai'), body: serializeProviderBody(body), signal: options?.signal });
+    if (!response.ok) rejectProviderResponse(response, `OpenCode API error (${response.status}).`);
+    if (!response.headers.get('content-type')?.toLowerCase().includes('text/event-stream') || !response.body) { void response.body?.cancel().catch(() => undefined); invalid(); }
+    const reader = response.body!.getReader(), decoder = new TextDecoder('utf-8', { fatal: true }); let buffer = '', transportBytes = 0, outputBytes = 0, events = 0, content = '', reasoning = '', finished = false, length = false, rawUsage: unknown;
+    const tools: ToolCall[] = [];
+    const add = (value: string) => { outputBytes += Buffer.byteLength(value); if (outputBytes > MAX_PROVIDER_STREAM_OUTPUT_BYTES) throw new Error('OpenCode response exceeded the output limit.'); };
+    const consume = async (frame: string) => {
+      if (Buffer.byteLength(frame) > MAX_PROVIDER_STREAM_EVENT_BYTES || ++events > MAX_PROVIDER_STREAM_EVENTS) throw new Error('OpenCode response exceeded the output limit.');
+      const data = frame.split(/\r\n|\n|\r/u).filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n'); if (!data || data === '[DONE]') return;
+      let value: unknown; try { value = JSON.parse(data); } catch { invalid(); } if (!record(value) || value.error !== undefined) invalid();
+      if (Object.hasOwn(value, 'usageMetadata')) rawUsage = value.usageMetadata;
+      if (value.candidates === undefined) return; if (!Array.isArray(value.candidates) || value.candidates.length > 1 || finished && value.candidates.length) invalid();
+      for (const candidate of value.candidates) {
+        if (!record(candidate)) invalid(); const terminal = candidate.finishReason;
+        if (terminal !== undefined && terminal !== 'STOP' && terminal !== 'MAX_TOKENS') invalid();
+        if (candidate.content !== undefined && !record(candidate.content)) invalid(); const parts = record(candidate.content) ? candidate.content.parts : undefined;
+        if (parts !== undefined && !Array.isArray(parts)) invalid();
+        for (const part of (parts ?? []) as unknown[]) {
+          active(); if (!record(part)) invalid(); if (part.thoughtSignature !== undefined && part.thoughtSignature !== '') throw new Error('Unsupported OpenCode reasoning replay.');
+          if (part.text !== undefined) { if (typeof part.text !== 'string') invalid(); add(part.text);
+            if (part.thought === true) { reasoning += part.text; await chunk?.('', { type: 'reasoning_delta', data: { content: part.text } }); }
+            else { content += part.text; await chunk?.(part.text, { type: 'text_delta', data: part.text }); } active();
+          } else if (part.functionCall !== undefined) { const call = part.functionCall; if (!record(call) || typeof call.name !== 'string' || !call.name || call.name.length > 256 || !record(call.args) || tools.length >= MAX_PROVIDER_STREAM_TOOL_CALLS) invalid();
+            add(JSON.stringify(call.args)); const id = typeof call.id === 'string' && call.id.length > 0 && call.id.length <= 256 ? call.id : `google-tool-${tools.length}`; tools.push({ id, name: call.name, input: call.args });
+          } else invalid();
+        }
+        if (terminal !== undefined) { finished = true; length = terminal === 'MAX_TOKENS'; }
+      }
+    };
+    try {
+      while (true) { active(); const item = await reader.read(); active(); if (item.done) break; transportBytes += item.value.byteLength; if (transportBytes > MAX_PROVIDER_STREAM_TRANSPORT_BYTES) throw new Error('OpenCode response exceeded the output limit.'); buffer += decoder.decode(item.value, { stream: true });
+        let boundary: RegExpExecArray | null; while ((boundary = /\r\n\r\n|\n\n|\r\r/u.exec(buffer))) { const frame = buffer.slice(0, boundary.index); buffer = buffer.slice(boundary.index + boundary[0].length); await consume(frame); }
+        if (Buffer.byteLength(buffer) > MAX_PROVIDER_STREAM_EVENT_BYTES) throw new Error('OpenCode response exceeded the output limit.');
+      }
+      buffer += decoder.decode(); if (buffer.trim()) await consume(buffer); active(); if (!finished) invalid();
+      for (const tool of tools) { active(); await chunk?.('', { type: 'tool_call', data: tool }); active(); }
+      return { content, ...(reasoning ? { reasoning } : {}), ...(tools.length ? { toolCalls: tools } : {}), model, provider: this.getProviderType(), api: 'google-generative-ai', usage: opencodeUsage(rawUsage, model), ...(length ? { stopReason: 'length' as const } : {}) };
+    } finally { try { await reader.cancel(); } catch { /* Preserve the owned failure,including abort. */ } reader.releaseLock(); }
+  }
+}
+
+/** Supplied-key mixed OpenCode SDK; no ambient auth, factory, dialect or Server/Settings composition. */
+export class OpenCodeProvider extends AiProvider {
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? OPENCODE_MODELS[0].id; if (!OPENCODE_CLASSIFIER_MODELS.some(profile => profile.id === model)) opencodeProfile(model);
+    super({ ...config, model, baseUrl: opencodeBase(config.baseUrl ?? 'https://opencode.ai/zen') });
+    registerNativeOutputBudget(this, () => { const selected = captureNativeConfiguredModel(this.config, OPENCODE_MODELS[0].id); return options => prepareOpenCodeOutputBudget(options, selected); });
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return OPENCODE_MODELS.map(profile => profile.id); }
+  override setConfiguredModel(model: string): void { if (!OPENCODE_CLASSIFIER_MODELS.some(profile => profile.id === model)) opencodeProfile(model); super.setConfiguredModel(model); }
+  override getConfiguredModel(): string | undefined { return OPENCODE_CLASSIFIER_MODELS.some(profile => profile.id === this.config.model) ? undefined : super.getConfiguredModel(); }
+  override getModelApi(model = this.config.model!): string | undefined { return OPENCODE_MODELS.find(profile => profile.id === model)?.api ?? OPENCODE_CLASSIFIER_MODELS.find(profile => profile.id === model)?.api; }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return OPENCODE_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow, maxOutputTokens: profile.maxOutputTokens,
+      ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}), thinkingLevelMap: { ...profile.thinkingLevelMap }, capabilities: { reasoning: true, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  private classifiers(): OpenCodeNativeClassifierProvider { return new OpenCodeNativeClassifierProvider({ ...this.config, model: undefined }); }
+  override getSpecializedModels(): SpecializedModel[] {
+    const native = this.classifiers().getSpecializedModels(), model = this.getConfiguredModel(); if (!model) return native;
+    const profile = opencodeProfile(model); return [...native, { id: `${profile.id}:classifier`, model: profile.id, name: profile.name, provider: this.getProviderType(), type: 'classifier', virtual: true, api: profile.api,
+      contextWindow: profile.contextWindow, ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}), imageInput: profile.declaredInput.includes('image') }];
+  }
+  async classifyNativeQuestions(request: NativeClassifierRequest, options?: SpecializedModelOptions): Promise<NativeClassifierResult> { return this.classifiers().classifyNativeQuestions(request, options); }
+  override async classify(request: ClassificationRequest, options?: SpecializedModelOptions): Promise<ClassificationResult> {
+    return OPENCODE_CLASSIFIER_MODELS.some(profile => profile.id === request.model) ? this.classifiers().classify(request, options) : super.classify(request, options);
+  }
+  override async classifyQuestions(request: QuestionClassificationRequest, options?: SpecializedModelOptions): Promise<QuestionClassificationResult> {
+    return OPENCODE_CLASSIFIER_MODELS.some(profile => profile.id === request.model) ? this.classifiers().classifyQuestions(request, options) : super.classifyQuestions(request, options);
+  }
+  private conversation(messages: Message[], model: string, options?: ChatOptions): AiProvider {
+    if (!this.validateConfig()) throw new Error('OpenCode API key is required.'); const profile = opencodeProfile(model);
+    for (const message of messages) for (const image of messageImages(message)) { if (!profile.declaredInput.includes('image')) throw new Error('OpenCode chat model does not support images.'); if (!parseDataImage(image.url)) throw new Error('Invalid OpenCode image input.'); }
+    const config = { ...this.config, model }; return profile.api === 'anthropic-messages' ? new OpenCodeMessagesProvider(config) : profile.api === 'google-generative-ai' ? new OpenCodeGoogleProvider(config) : profile.api === 'openai-completions' ? new OpenCodeCompletionsProvider(config) : new OpenCodeResponsesProvider(config, options);
+  }
+  private conversationOptions(messages: Message[], model: string, options?: ChatOptions): ChatOptions {
+    const owned = { ...options, model }; if (opencodeProfile(model).api === 'anthropic-messages' && owned.systemPrompt === undefined) { const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n'); if (system) owned.systemPrompt = system; } return owned;
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const model = options?.model || this.getConfiguredModel()!, providerName = this.getProviderType();
+    try { const owned = this.conversationOptions(messages, model, options), delegate = this.conversation(messages, model, owned), api = opencodeProfile(model).api; const result = await delegate.chat(messages, owned);
+      if (options?.signal?.aborted) throw new Error('OpenCode request aborted.'); return { ...result, provider: providerName, model, api };
+    } catch (error) { throw opencodeFailure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const model = options?.model || this.getConfiguredModel()!, providerName = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('OpenCode request aborted.'); };
+    try { const owned = this.conversationOptions(messages, model, options), delegate = this.conversation(messages, model, owned), api = opencodeProfile(model).api; active();
+      await delegate.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); }, response => { active(); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, owned);
+    } catch (error) { const failure = opencodeFailure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Explicit MiniMax A policy; no alias/URL inference or automatic credentials. */
+export class KimiCodingProvider extends AnthropicProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? KIMI_CODING_MODELS[0].id; kimiCodingProfile(model);
+    const endpoint = kimiCodingEndpoint(config.baseUrl ?? 'https://api.kimi.com/coding');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+    registerNativeOutputBudget(this, () => { const selected = captureNativeConfiguredModel(this.config, KIMI_CODING_MODELS[0].id); return options => prepareKimiCodingOutputBudget(options, selected); });
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { kimiCodingProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return KIMI_CODING_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return KIMI_CODING_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow, maxOutputTokens: profile.maxOutputTokens,
+      ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}), ...(profile.thinkingLevelMap ? { thinkingLevelMap: { ...profile.thinkingLevelMap } } : {}),
+      capabilities: { reasoning: true, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = kimiCodingProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, type: 'classifier', provider: this.getProviderType(), model: profile.id, virtual: true, name: profile.name,
+      api: profile.api, contextWindow: profile.contextWindow, ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}), imageInput: profile.declaredInput.includes('image') }];
+  }
+  protected override getMessagesUrl(): string { return this.endpoint; }
+  protected override messageHeaders(_options?: ChatOptions): Record<string, string> {
+    try {
+      const supplied = Object.getOwnPropertyDescriptor(this.config, 'customHeaders');
+      if (supplied) {
+        if (!('value' in supplied)) throw new Error();
+        const raw: unknown = supplied.value;
+        if (raw !== undefined) {
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error();
+          const entries = Object.entries(Object.getOwnPropertyDescriptors(raw));
+          if (entries.length > 256 || Reflect.ownKeys(raw).length !== entries.length) throw new Error();
+          let bytes = 0;
+          const checked = entries.map(([name, descriptor]): [string, string] => {
+            const value: unknown = descriptor.value;
+            if (!('value' in descriptor) || typeof value !== 'string' || value.length > 8000 || /[\r\n]/u.test(value)
+              || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$/u.test(name)) throw new Error();
+            bytes += Buffer.byteLength(name) + Buffer.byteLength(value); if (bytes > 64 * 1024) throw new Error(); return [name, value];
+          });
+          new Headers(checked);
+        }
+      }
+      const mode = this.config.kimiAuthMode;
+      if (mode !== undefined && mode !== 'api-key' && mode !== 'oauth') throw new Error();
+      const headers = new Headers(configuredHeaders(this.config)); headers.set('content-type', 'application/json');
+      if (mode === 'oauth') {
+        headers.delete('x-api-key');
+        headers.set('authorization', `Bearer ${this.config.apiKey}`);
+      } else headers.set('x-api-key', String(this.config.apiKey));
+      headers.set('anthropic-version', AnthropicProvider.API_VERSION);
+      return Object.fromEntries(headers.entries());
+    } catch { throw new Error('Invalid Kimi Coding request headers.'); }
+  }
+  protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
+  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareKimiCodingMessage(body, options); }
+  protected override buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    const converted = super.buildAnthropicMessages(messages), original = toolImageMessages(messages).filter(message => message.role !== 'system');
+    for (let index = 0; index < original.length; index++) {
+      const message = original[index], reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
+      if (!reasoning) continue;
+      const content = converted[index].content;
+      // Select empty-signature versus plain replay later,from the request body's physical model.
+      converted[index].content = [{ type: 'thinking', thinking: reasoning, signature: '' }, ...(typeof content === 'string' ? content ? [{ type: 'text', text: content }] : [] : Array.isArray(content) ? content : [])];
+    }
+    return converted;
+  }
+  protected override validateMessageResponse(value: unknown): void { validateKimiCodingMessage(value); }
+  protected override createMessageStreamValidator(): (value?: unknown) => void { return kimiCodingStreamValidator(); }
+  protected override messageText(content: unknown): string { return kimiCodingMessageText(content); }
+  protected override updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown { return mergeKimiCodingUsage(previous, value, start); }
+  protected override messageUsage(value: unknown, model: string): ChatResponse['usage'] { return kimiCodingUsage(value, model); }
+  private checkInput(messages: Message[], options?: ChatOptions): void {
+    const profile = kimiCodingProfile(options?.model || this.getConfiguredModel()!);
+    for (const message of messages) for (const image of messageImages(message)) {
+      if (!profile.declaredInput.includes('image')) throw new Error('Kimi Coding chat model does not support images.');
+      if (!parseDataImage(image.url)) throw new Error('Invalid Kimi Coding image input.');
+    }
+  }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Kimi Coding request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['Kimi Coding API key is required.', 'Kimi Coding chat model is not supported.', 'Invalid Kimi Coding thinking level.', 'Invalid Kimi Coding output limit.',
+      'Kimi Coding chat model does not support images.', 'Invalid Kimi Coding image input.', 'Invalid Kimi Coding request headers.', 'Invalid Kimi Coding chat response.', 'Unsupported Kimi Coding reasoning replay.', 'Unsupported Kimi Coding message content.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Kimi Coding chat request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const model = options?.model || this.getConfiguredModel()!, provider = this.getProviderType();
+    try {
+      if (!this.validateConfig()) throw new Error('Kimi Coding API key is required.'); this.checkInput(messages, options);
+      const result = await super.chat(messages, options); if (options?.signal?.aborted) throw new Error('Kimi Coding request aborted.');
+      return { ...result, model, provider, api: 'anthropic-messages' };
+    } catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const model = options?.model || this.getConfiguredModel()!, provider = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('Kimi Coding request aborted.'); };
+    try {
+      if (!this.validateConfig()) throw new Error('Kimi Coding API key is required.'); this.checkInput(messages, options); active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, model, provider, api: 'anthropic-messages' } : response); }, error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+export class MiniMaxProvider extends AnthropicProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? MINIMAX_MODELS[0].id; miniMaxProfile(model);
+    const endpoint = miniMaxEndpoint(config.baseUrl ?? 'https://api.minimax.io/anthropic');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+    registerNativeOutputBudget(this, () => {
+      const selected = captureNativeConfiguredModel(this.config, MINIMAX_MODELS[0].id);
+      return options => prepareMiniMaxOutputBudget(options, selected);
+    });
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { miniMaxProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return MINIMAX_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return MINIMAX_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      maxOutputTokens: profile.maxOutputTokens, pricing: { ...profile.pricing },
+      capabilities: { reasoning: true, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = miniMaxProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, type: 'classifier', provider: this.getProviderType(), model: profile.id, virtual: true,
+      name: profile.name, api: profile.api, contextWindow: profile.contextWindow, pricing: { ...profile.pricing }, imageInput: profile.declaredInput.includes('image') }];
+  }
+  protected override getMessagesUrl(): string { return this.endpoint; }
+  protected override messageHeaders(options?: ChatOptions): Record<string, string> {
+    try {
+      const supplied = Object.getOwnPropertyDescriptor(this.config, 'customHeaders');
+      if (supplied) {
+        if (!('value' in supplied)) throw new Error();
+        const raw: unknown = supplied.value;
+        if (raw !== undefined) {
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error();
+          const entries = Object.entries(Object.getOwnPropertyDescriptors(raw));
+          if (entries.length > 256 || Reflect.ownKeys(raw).length !== entries.length) throw new Error();
+          let bytes = 0;
+          const checked = entries.map(([name, descriptor]): [string, string] => {
+            const value: unknown = descriptor.value;
+            if (!('value' in descriptor) || typeof value !== 'string' || value.length > 8000 || /[\r\n]/u.test(value)
+              || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$/u.test(name)) throw new Error();
+            bytes += Buffer.byteLength(name) + Buffer.byteLength(value); if (bytes > 64 * 1024) throw new Error();
+            return [name, value];
+          });
+          new Headers(checked);
+        }
+      }
+      const headers = new Headers(configuredHeaders(this.config));
+      headers.set('content-type', 'application/json'); headers.set('x-api-key', String(this.config.apiKey));
+      headers.set('anthropic-version', AnthropicProvider.API_VERSION);
+      if (miniMaxThinking(options) !== 'off' && !headers.has('anthropic-beta')) headers.set('anthropic-beta', 'interleaved-thinking-2025-05-14');
+      return Object.fromEntries(headers.entries());
+    } catch { throw new Error('Invalid MiniMax request headers.'); }
+  }
+  protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
+  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareMiniMaxMessage(body, options); }
+  protected override buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    const converted = super.buildAnthropicMessages(messages), original = toolImageMessages(messages).filter(message => message.role !== 'system');
+    for (let index = 0; index < original.length; index++) {
+      const message = original[index];
+      const reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
+      if (!reasoning) continue;
+      const content = converted[index].content;
+      converted[index].content = [{ type: 'text', text: reasoning }, ...(typeof content === 'string' ? content ? [{ type: 'text', text: content }] : [] : Array.isArray(content) ? content : [])];
+    }
+    return converted;
+  }
+  protected override validateMessageResponse(value: unknown): void { validateMiniMaxMessage(value); }
+  protected override createMessageStreamValidator(): (value?: unknown) => void { return miniMaxStreamValidator(); }
+  protected override messageText(content: unknown): string { return miniMaxMessageText(content); }
+  protected override updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown { return mergeMiniMaxUsage(previous, value, start); }
+  protected override messageUsage(value: unknown, model: string): ChatResponse['usage'] { return miniMaxUsage(value, model); }
+  private checkInput(messages: Message[], options?: ChatOptions): void {
+    const profile = miniMaxProfile(options?.model || this.getConfiguredModel()!);
+    for (const message of messages) for (const image of messageImages(message)) {
+      if (!profile.declaredInput.includes('image')) throw new Error('MiniMax chat model does not support images.');
+      if (!parseDataImage(image.url)) throw new Error('Invalid MiniMax image input.');
+    }
+  }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('MiniMax request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['MiniMax API key is required.', 'MiniMax chat model is not supported.', 'Invalid MiniMax thinking level.',
+      'Invalid MiniMax output limit.', 'MiniMax chat model does not support images.', 'Invalid MiniMax image input.', 'Invalid MiniMax request headers.',
+      'Invalid MiniMax chat response.', 'Unsupported MiniMax reasoning replay.', 'Unsupported MiniMax message content.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'MiniMax chat request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const provider = this.getProviderType();
+    try {
+      if (!this.validateConfig()) throw new Error('MiniMax API key is required.');
+      this.checkInput(messages, options);
+      const result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('MiniMax request aborted.');
+      return { ...result, provider, api: 'anthropic-messages' };
+    } catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const provider = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('MiniMax request aborted.'); };
+    try {
+      if (!this.validateConfig()) throw new Error('MiniMax API key is required.');
+      this.checkInput(messages, options); active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, provider, api: 'anthropic-messages' } : response); },
+        error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+/** Pinned CN rows share MiniMax policy/metadata; only explicit construction selects the regional base. */
+export class MiniMaxCnProvider extends MiniMaxProvider {
+  constructor(config: ProviderConfig) {
+    super({ ...config, baseUrl: config.baseUrl ?? 'https://api.minimaxi.com/anthropic' });
+  }
+}
+
+/** Explicit native OpenRouter A API; C, images and System One remain distinct transports. */
+export class OpenRouterMessagesProvider extends AnthropicProvider {
+  private readonly endpoint: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model || 'anthropic/claude-sonnet-4.6';
+    openRouterMessageProfile(model);
+    const endpoint = openRouterMessagesEndpoint(config.baseUrl || 'https://openrouter.ai/api');
+    super({ ...config, model }); this.endpoint = endpoint;
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { openRouterMessageProfile(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return OPENROUTER_MESSAGE_MODELS.map(profile => profile.id); }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = openRouterMessageProfile(this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, type: 'classifier', provider: this.getProviderType(), model: profile.id, virtual: true,
+      name: profile.name, api: profile.api, contextWindow: profile.contextWindow, imageInput: true,
+      pricing: { inputPerMillion: profile.pricing.inputPerMillion, outputPerMillion: profile.pricing.outputPerMillion,
+        cacheReadPerMillion: profile.pricing.cacheReadPerMillion, cacheWritePerMillion: profile.pricing.cacheWritePerMillion } }];
+  }
+  protected override getMessagesUrl(): string { return this.endpoint; }
+  protected override messageHeaders(options?: ChatOptions): Record<string, string> {
+    const betas = openRouterMessageBetas(options?.model || this.getConfiguredModel()!, options);
+    try {
+      const headers = new Headers(configuredHeaders(this.config));
+      headers.set('content-type', 'application/json'); headers.set('x-api-key', String(this.config.apiKey));
+      headers.set('anthropic-version', AnthropicProvider.API_VERSION);
+      if (betas.length && !headers.has('anthropic-beta')) headers.set('anthropic-beta', betas.join(','));
+      if (options?.cacheRetention === 'none') headers.delete('x-session-id');
+      else if (options?.sessionId) {
+        if (typeof options.sessionId !== 'string' || Buffer.byteLength(options.sessionId) > 500) throw new Error();
+        headers.set('x-session-id', options.sessionId);
+      }
+      return Object.fromEntries(headers.entries());
+    } catch { throw new Error('Invalid OpenRouter request headers.'); }
+  }
+  protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
+  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> {
+    return prepareOpenRouterMessage(body, options);
+  }
+  protected override validateMessageResponse(value: unknown): void { validateOpenRouterMessage(value); }
+  protected override messageText(content: unknown): string { return openRouterMessageText(content); }
+  protected override updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown { return mergeOpenRouterMessageUsage(previous, value, start); }
+  protected override messageUsage(value: unknown, model: string): ChatResponse['usage'] { return openRouterMessageUsage(value, model); }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    if (!this.validateConfig()) throw new Error('OpenRouter API key is required.');
+    const result = await super.chat(messages, options);
+    if (options?.signal?.aborted) throw new Error('OpenRouter request aborted.');
+    return { ...result, api: this.getModelApi() };
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const active = (): void => { if (options?.signal?.aborted) throw new Error('OpenRouter request aborted.'); };
+    try {
+      if (!this.validateConfig()) throw new Error('OpenRouter API key is required.');
+      active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); onComplete?.(response ? { ...response, api: this.getModelApi() } : response); }, error => { throw error; }, options);
+    } catch (error) {
+      const failure = options?.signal?.aborted ? new Error('OpenRouter request aborted.') : error instanceof Error ? error : new Error('OpenRouter message request failed.');
+      if (onError) onError(failure); else throw failure;
+    }
+  }
+}
+
+function openRouterConversationApi(model: string): 'anthropic-messages' | 'openai-completions' {
+  if (OPENROUTER_MESSAGE_MODELS.some(profile => profile.id === model)) return 'anthropic-messages';
+  if (OPENROUTER_COMPLETION_MODELS.some(profile => profile.id === model)) return 'openai-completions';
+  throw new Error('OpenRouter chat model is not supported.');
+}
+function openRouterApiBase(value: unknown): string {
+  try {
+    if (typeof value !== 'string') throw new Error();
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error();
+    let path = url.pathname.replace(/\/+$/, '').replace(/\/(?:chat\/completions|messages|systemone)$/, '');
+    if (!/\/v\d+$/.test(path)) path += '/v1';
+    url.pathname = path; return url.toString().replace(/\/$/, '');
+  } catch { throw new Error('Invalid OpenRouter API base URL.'); }
+}
+
+/** Explicit Workers AI C/S composition; the older classifier-only SDK remains distinct. */
+export class CloudflareWorkersAiMixedProvider extends AiProvider {
+  private readonly bases: { chat: string; classifier: string };
+  constructor(config: CloudflareWorkersAiConfig) {
+    const model = config.model ?? CLOUDFLARE_CHAT_MODELS[0].id;
+    cloudflareChatProfile(model);
+    const bases = cloudflareMixedBases(config);
+    super({ ...config, model });
+    this.bases = bases;
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return CLOUDFLARE_CHAT_MODELS.map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return CLOUDFLARE_CHAT_MODELS.map(profile => ({ id: profile.id, api: profile.api, name: profile.name,
+      ...(profile.thinkingLevelMap === undefined ? {} : { thinkingLevelMap: profile.thinkingLevelMap === null ? null : { ...profile.thinkingLevelMap } }),
+      capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true },
+      contextWindow: profile.contextWindow, maxOutputTokens: profile.maxOutputTokens, pricing: { ...profile.pricing } }));
+  }
+  override setConfiguredModel(model: string): void { cloudflareChatProfile(model); super.setConfiguredModel(model); }
+  override getModelApi(model = this.getConfiguredModel()!): string | undefined {
+    if (CLOUDFLARE_CHAT_MODELS.some(profile => profile.id === model)) return 'openai-completions';
+    if (CLOUDFLARE_CLASSIFIER_MODELS.some(profile => profile.id === model)) return 'cloudflare-workers-ai-system-one';
+    return undefined;
+  }
+  private conversation(model: string): CloudflareWorkersAiChatProvider {
+    return new CloudflareWorkersAiChatProvider({ ...this.config, model, baseUrl: this.bases.chat });
+  }
+  private classifier(model?: string): CloudflareWorkersAiProvider {
+    return new CloudflareWorkersAiProvider({ ...this.config, model, baseUrl: this.bases.classifier });
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    return [...this.conversation(this.getConfiguredModel()!).getSpecializedModels(), ...this.classifier().getSpecializedModels()];
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const model = options?.model ?? this.getConfiguredModel()!;
+    return this.conversation(model).chat(messages, { ...options, model });
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const model = options?.model ?? this.getConfiguredModel()!;
+    let provider: CloudflareWorkersAiChatProvider;
+    try { provider = this.conversation(model); }
+    catch (error) {
+      const failure = error instanceof Error ? error : new Error('Cloudflare chat request failed.');
+      if (onError) { onError(failure); return; }
+      throw failure;
+    }
+    return provider.streamChat(messages, onChunk, onComplete, onError, { ...options, model });
+  }
+  override async classify(request: ClassificationRequest, options?: SpecializedModelOptions): Promise<ClassificationResult> {
+    validateClassificationRequest(request);
+    const provider = CLOUDFLARE_CLASSIFIER_MODELS.some(profile => profile.id === request.model) ? this.classifier(request.model) : this.conversation(request.model);
+    return provider.classify(request, options);
+  }
+  override async classifyQuestions(request: QuestionClassificationRequest, options?: SpecializedModelOptions): Promise<QuestionClassificationResult> {
+    request = copyQuestionClassificationRequest(request);
+    const provider = CLOUDFLARE_CLASSIFIER_MODELS.some(profile => profile.id === request.model) ? this.classifier(request.model) : this.conversation(request.model);
+    return provider.classifyQuestions(request, options);
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> {
+    throw new Error('Image model or options are not supported.');
+  }
+}
+
+/** Explicit API-key-only composition; the operation owns overlapping C/I identities. */
+export class OpenRouterProvider extends AiProvider {
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? 'openai/gpt-4o';
+    openRouterConversationApi(model);
+    super({ ...config, model, baseUrl: openRouterApiBase(config.baseUrl ?? 'https://openrouter.ai/api/v1') });
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return [...OPENROUTER_COMPLETION_MODELS, ...OPENROUTER_MESSAGE_MODELS].map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return [...OPENROUTER_COMPLETION_MODELS, ...OPENROUTER_MESSAGE_MODELS].map(profile => ({ id: profile.id, api: profile.api, name: profile.name,
+      ...(profile.thinkingLevelMap === undefined ? {} : { thinkingLevelMap: profile.thinkingLevelMap === null ? null : { ...profile.thinkingLevelMap } }),
+      capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true },
+      contextWindow: profile.contextWindow, maxOutputTokens: profile.maxOutputTokens,
+      ...(profile.pricing ? { pricing: { inputPerMillion: profile.pricing.inputPerMillion, outputPerMillion: profile.pricing.outputPerMillion,
+        cacheReadPerMillion: profile.pricing.cacheReadPerMillion, cacheWritePerMillion: profile.pricing.cacheWritePerMillion } } : {}) }));
+  }
+  override setConfiguredModel(model: string): void { openRouterConversationApi(model); super.setConfiguredModel(model); }
+  override getModelApi(model = this.getConfiguredModel()!): string | undefined {
+    if (OPENROUTER_MESSAGE_MODELS.some(profile => profile.id === model)) return 'anthropic-messages';
+    if (OPENROUTER_COMPLETION_MODELS.some(profile => profile.id === model)) return 'openai-completions';
+    if (OPENROUTER_CLASSIFIER_MODELS.some(profile => profile.id === model)) return 'typesafe-system-one';
+    if (OPENROUTER_IMAGE_MODELS.some(profile => profile.id === model)) return 'openrouter-images';
+    return undefined;
+  }
+  private conversation(model: string): AiProvider {
+    const config = { ...this.config, model };
+    return openRouterConversationApi(model) === 'anthropic-messages' ? new OpenRouterMessagesProvider(config) : new OpenRouterCompletionsProvider(config);
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const native = { ...this.config, model: undefined };
+    return [...this.conversation(this.getConfiguredModel()!).getSpecializedModels(),
+      ...new OpenRouterClassifiersProvider(native).getSpecializedModels(), ...new OpenRouterImagesProvider(native).getSpecializedModels()];
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const model = options?.model ?? this.getConfiguredModel()!, providerName = this.getProviderType();
+    return { ...await this.conversation(model).chat(messages, { ...options, model }), provider: providerName };
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const model = options?.model ?? this.getConfiguredModel()!;
+    let provider: AiProvider;
+    try { provider = this.conversation(model); }
+    catch (error) {
+      const failure = error instanceof Error ? error : new Error('OpenRouter message request failed.');
+      if (onError) { onError(failure); return; }
+      throw failure;
+    }
+    const providerName = this.getProviderType();
+    return provider.streamChat(messages, onChunk, response => onComplete?.(response ? { ...response, provider: providerName } : response),
+      onError, { ...options, model });
+  }
+  override async classify(request: ClassificationRequest, options?: SpecializedModelOptions): Promise<ClassificationResult> {
+    validateClassificationRequest(request);
+    const provider = OPENROUTER_CLASSIFIER_MODELS.some(profile => profile.id === request.model)
+      ? new OpenRouterClassifiersProvider({ ...this.config, model: request.model }) : this.conversation(request.model);
+    return provider.classify(request, options);
+  }
+  override async classifyQuestions(request: QuestionClassificationRequest, options?: SpecializedModelOptions): Promise<QuestionClassificationResult> {
+    request = copyQuestionClassificationRequest(request);
+    const provider = OPENROUTER_CLASSIFIER_MODELS.some(profile => profile.id === request.model)
+      ? new OpenRouterClassifiersProvider({ ...this.config, model: request.model }) : this.conversation(request.model);
+    return provider.classifyQuestions(request, options);
+  }
+  override async generateImages(request: ImageGenerationRequest, options?: SpecializedModelOptions): Promise<ImageGenerationResult> {
+    validateImageGenerationRequest(request);
+    if (!OPENROUTER_IMAGE_MODELS.some(profile => profile.id === request.model)) throw new Error('Image model or options are not supported.');
+    return new OpenRouterImagesProvider({ ...this.config, model: request.model }).generateImages(request, options);
   }
 }
 

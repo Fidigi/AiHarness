@@ -2,6 +2,7 @@ import {
   buildProviderModelCatalog,
   discoverProviderModelIds,
   getPublishedModelMetadata,
+  getProviderPublishedModels,
   inferModelCapabilities,
   type PublishedModelMetadata,
   type AiProvider,
@@ -53,7 +54,7 @@ export class ModelCatalogService {
     if (!model) return undefined;
     const custom = this.customModels().find(candidate => candidate.provider === provider && candidate.id === model);
     if (custom) return { ...custom.capabilities };
-    const published = getPublishedModelMetadata(provider, model);
+    const published = this.publishedModel(provider, model);
     return published ? { ...published.capabilities } : inferModelCapabilities(provider, model);
   }
 
@@ -61,8 +62,14 @@ export class ModelCatalogService {
     if (!model) return undefined;
     const custom = this.customModels().find(candidate => candidate.provider === provider && candidate.id === model);
     if (custom?.pricing) return { ...custom.pricing };
-    const published = getPublishedModelMetadata(provider, model);
+    const published = this.publishedModel(provider, model);
     return published?.pricing ? { ...published.pricing } : undefined;
+  }
+
+  private publishedModel(provider: string, model: string): PublishedModelMetadata | undefined {
+    const instance = this.proxy.getAgentProvider(provider);
+    const models = instance ? getProviderPublishedModels(instance) : undefined;
+    return models === undefined ? getPublishedModelMetadata(provider, model) : models.find(candidate => candidate.id === model);
   }
 
   /** Drop source-bound discovery after provider replacement/removal/rename. */
@@ -113,6 +120,8 @@ export class ModelCatalogService {
       provider,
       configured,
       configuredModel: this.proxy.getAgentProvider(provider)?.getConfiguredModel(),
+      publishedModels: this.proxy.getAgentProvider(provider) ? getProviderPublishedModels(this.proxy.getAgentProvider(provider)!) : undefined,
+      getModelApi: (model: string) => this.proxy.getAgentProvider(provider)?.getModelApi?.(model),
       discoveredModels: this.discoverySources.get(provider) === this.proxy.getAgentProvider(provider)
         ? this.discovered.get(provider) : undefined,
     })), this.customModels());

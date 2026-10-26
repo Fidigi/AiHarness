@@ -13,20 +13,106 @@ export * from './sdk/index.js';
 
 // Providers
 export { azureEnvironmentConfig } from './providers/azure-config.js';
+export type { CloudflareWorkersAiConfig } from './providers/index.js';
 export * from './providers/specialized-models.js';
 export type { ClassificationQuestion, QuestionClassificationRequest, QuestionClassificationResult } from './providers/classification-questions.js';
+export type { NativeClassifierQuestion, NativeClassifierRequest, NativeClassifierAnswer, NativeClassifierResult } from './providers/native-classification.js';
+export type { NativeImageContent, NativeImageRequest, NativeImageResult } from './providers/openrouter-images.js';
+export type { CerebrasProfile } from './providers/cerebras.js';
+export type { DeepSeekProfile } from './providers/deepseek.js';
+export type { GroqProfile } from './providers/groq.js';
+export type { ZaiProfile } from './providers/zai.js';
+export type { MoonshotProfile } from './providers/moonshot.js';
+export type { NvidiaProfile } from './providers/nvidia.js';
+export type { MiniMaxProfile } from './providers/minimax.js';
+export type { OpenCodeGoProfile } from './providers/opencode-go.js';
+export type { OpenCodeProfile } from './providers/opencode.js';
+export type { KimiCodingProfile } from './providers/kimi-coding.js';
+export { getKimiCodingOAuthConfig } from './providers/kimi-coding-oauth.js';
+export type { KimiCodingOAuthConfig } from './providers/kimi-coding-oauth.js';
+export type { MetaProfile } from './providers/meta.js';
+export type { XaiProfile } from './providers/xai.js';
+export type { AntLingProfile } from './providers/ant-ling.js';
+export type { HuggingFaceProfile } from './providers/huggingface.js';
+export type { XiaomiProfile } from './providers/xiaomi.js';
+export type { FireworksProfile } from './providers/fireworks.js';
+export type { TogetherProfile } from './providers/together.js';
+export type { BasetenProfile } from './providers/baseten.js';
 export {
   AiProvider,
   ProviderFactory,
   OpenAiProvider,
   OpenAiResponsesProvider,
+  OpenAiMixedProvider,
+  OPENAI_RESPONSE_MODELS,
   AzureResponsesProvider,
+  MistralProvider,
+  TypesafeProvider,
+  TYPESAFE_CLASSIFIER_MODEL,
+  CloudflareWorkersAiProvider,
+  CLOUDFLARE_CLASSIFIER_MODELS,
+  CloudflareWorkersAiChatProvider,
+  CloudflareWorkersAiMixedProvider,
+  CLOUDFLARE_CHAT_MODELS,
+  OpenAiDecisionsProvider,
+  OPENAI_DECISIONS_MODEL,
+  OpenRouterCompletionsProvider,
+  OPENROUTER_COMPLETION_MODELS,
+  XiaomiProvider,
+  XIAOMI_MODELS,
+  HuggingFaceProvider,
+  HUGGINGFACE_MODELS,
+  FireworksProvider,
+  FIREWORKS_MODELS,
+  TogetherProvider,
+  TOGETHER_MODELS,
+  BasetenProvider,
+  BASETEN_MODELS,
+  AntLingProvider,
+  ANT_LING_MODELS,
+  CerebrasProvider,
+  CEREBRAS_MODELS,
+  DeepSeekProvider,
+  DEEPSEEK_MODELS,
+  GroqProvider,
+  GROQ_MODELS,
+  ZaiProvider,
+  MoonshotProvider,
+  MoonshotCnProvider,
+  NvidiaProvider,
+  MiniMaxProvider,
+  MINIMAX_MODELS,
+  MiniMaxCnProvider,
+  MINIMAX_CN_MODELS,
+  OpenCodeGoProvider,
+  OPENCODE_GO_MODELS,
+  OpenCodeProvider,
+  OPENCODE_MODELS,
+  OPENCODE_CLASSIFIER_MODELS,
+  KimiCodingProvider,
+  KIMI_CODING_MODELS,
+  MetaProvider,
+  META_MODELS,
+  XaiProvider,
+  XAI_MODELS,
+  ZAI_MODELS,
+  MOONSHOT_MODELS,
+  MOONSHOT_CN_MODELS,
+  NVIDIA_MODELS,
+  OpenRouterMessagesProvider,
+  OPENROUTER_MESSAGE_MODELS,
+  OpenRouterProvider,
+  OpenRouterImagesProvider,
+  OPENROUTER_IMAGE_MODELS,
+  OpenRouterClassifiersProvider,
+  OPENROUTER_CLASSIFIER_MODELS,
   getOpenAiResponsesTransportStats,
   resetOpenAiResponsesTransportStats,
   AnthropicProvider,
   GeminiProvider,
   VertexGeminiProvider,
   BedrockProvider,
+  bedrockCredentialConfig,
   LocalProvider,
   MockProvider,
   normalizeProviderUsage,
@@ -96,8 +182,8 @@ export {
   clampPublishedThinkingLevel,
   inferModelCapabilities,
 } from './providers/model-metadata.js';
-export { getProviderPublishedModels, getProviderPublishedModel } from './providers/provider-model-metadata.js';
 export { getCustomModelEditorSchema } from './providers/model-editor-schema.js';
+export { getProviderPublishedModel, getProviderPublishedModels } from './providers/provider-model-metadata.js';
 export type {
   PublishedModelMetadata,
   PublishedThinkingLevel,

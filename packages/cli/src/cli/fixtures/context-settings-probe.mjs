@@ -10,13 +10,16 @@ import { JsonlSessionStore, ProjectTrustManager, SessionManager } from '@ai-harn
 
 const cli = process.env.AIH_CONTEXT_CLI ?? fileURLToPath(new URL('../../../dist/index.js', import.meta.url));
 const all = ['thresholds', 'gates', 'untrusted', 'trusted', 'saved-trust', 'abort', 'eof',
-  'print-below', 'print-above', 'json-below', 'json-above'];
+  'print-below', 'print-above', 'json-below', 'json-above', 'native-rpc', 'native-print', 'native-json'];
 const scenarios = process.argv[2] ? [process.argv[2]] : all;
 assert.ok(scenarios.every(value => all.includes(value)));
 const outcomes = [];
 for (const scenario of scenarios) {
-  const headless = scenario.startsWith('print-') ? 'print' : scenario.startsWith('json-') ? 'json' : undefined;
-  const bigContext = headless !== undefined || ['thresholds', 'gates'].includes(scenario);
+  const native = scenario.startsWith('native-');
+  const headless = scenario.startsWith('print-') || scenario === 'native-print' ? 'print'
+    : scenario.startsWith('json-') || scenario === 'native-json' ? 'json' : undefined;
+  const bigContext = native || headless !== undefined || ['thresholds', 'gates'].includes(scenario);
+  const provider = native ? 'native-r' : 'local', model = native ? 'gpt-6-luna' : 'fixture-model';
   const root = await mkdtemp(path.join(tmpdir(), 'context-settings-process-'));
   const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
   const globalFile = path.join(agent, 'settings.json'), projectFile = path.join(cwd, '.ai-harness', 'settings.json');
@@ -26,9 +29,19 @@ for (const scenario of scenarios) {
     try {
       let text = '';
       for await (const chunk of request) { text += chunk; assert.ok(Buffer.byteLength(text) <= 2 * 1024 * 1024); }
-      assert.equal(request.method, 'POST'); assert.equal(request.url, '/v1/chat/completions');
+      assert.equal(request.method, 'POST'); assert.equal(request.url, native ? '/v1/responses' : '/v1/chat/completions');
       const body = JSON.parse(text); requests.push(body);
-      assert.equal(body.model, 'fixture-model'); assert.ok(!body.tools?.length);
+      assert.equal(body.model, model); assert.ok(!body.tools?.length);
+      if (native) {
+        const result = { id: 'fixture-response', status: 'completed', model, output: [{ id: 'fixture-message', type: 'message',
+          role: 'assistant', content: [{ type: 'output_text', text: body.stream ? 'Done' : 'Summary' }] }],
+          usage: { input_tokens: 23, output_tokens: 3, total_tokens: 26,
+            input_tokens_details: { cached_tokens: 0, cache_creation_tokens: 0 } } };
+        response.writeHead(200, { 'content-type': body.stream ? 'text/event-stream' : 'application/json' });
+        response.end(body.stream ? [{ type: 'response.output_text.delta', delta: 'Done' },
+          { type: 'response.completed', response: result }].map(event => `data: ${JSON.stringify(event)}\n\n`).join('') : JSON.stringify(result));
+        return;
+      }
       const usage = { prompt_tokens: 23, completion_tokens: 3, total_tokens: 26 };
       if (body.stream) {
         response.writeHead(200, { 'content-type': 'text/event-stream' });
@@ -44,6 +57,8 @@ for (const scenario of scenarios) {
     } catch (error) { serverError = error; response.writeHead(500); response.end('Fixture rejected request'); }
   });
   server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
+  // Exercise existing Responses fallback, not a new WebSocket protocol.
+  server.on('upgrade', (_request, socket) => socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n'));
   const deadline = (promise, label) => {
     let timer;
     return Promise.race([promise, new Promise((_, reject) => {
@@ -55,10 +70,13 @@ for (const scenario of scenarios) {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const initialEnabled = !['gates', 'untrusted', 'trusted', 'saved-trust'].includes(scenario);
     const settings = (enabled, reserve = 10_000) => ({ quietStartup: true, sessionDir: sessions,
-      enabledModels: ['local/*'], compaction: { enabled, reserveTokens: reserve === 10_000 ? 30_000 : 10_000,
-        keepRecentTokens: 1_000, modelOverrides: { 'local/fixture-model': { reserveTokens: reserve, keepRecentTokens: 1_000 } } },
+      enabledModels: native ? ['native-r/gpt-6-luna', 'native-r/o3-mini'] : ['local/*'], compaction: { enabled, reserveTokens: reserve === 10_000 ? 30_000 : 10_000,
+        keepRecentTokens: 1_000, modelOverrides: { [`${provider}/${model}`]: { reserveTokens: reserve, keepRecentTokens: 1_000 } } },
       branchSummary: { reserveTokens: 8_192 } });
-    await writeFile(globalFile, JSON.stringify(settings(initialEnabled, headless && scenario.endsWith('above') ? 30_000 : 10_000)));
+    await writeFile(globalFile, JSON.stringify(settings(initialEnabled, native || headless && scenario.endsWith('above') ? 30_000 : 10_000)));
+    const extension = path.join(agent, 'native-provider.mjs');
+    if (native) await writeFile(extension, `import { OpenAiMixedProvider } from '@ai-harness/core';
+      export default api => api.registerProvider('native-r', { defaultConfig: { model: 'gpt-6-luna', baseUrl: ${JSON.stringify(`http://127.0.0.1:${server.address().port}/v1`)} }, create: config => new OpenAiMixedProvider(config) });`);
     const savedTrust = new ProjectTrustManager(path.join(agent, 'trust.json'));
     if (scenario === 'trusted' || scenario === 'saved-trust') await writeFile(projectFile, JSON.stringify({ compaction: { enabled: true } }));
     if (scenario === 'saved-trust') await savedTrust.trust(cwd);
@@ -76,7 +94,8 @@ for (const scenario of scenarios) {
     child = spawn(command ?? process.execPath, [...(command ? [] : [cli]), ...modeFlags, '--offline',
       ...(scenario === 'saved-trust' ? [] : [scenario === 'trusted' ? '--approve' : '--no-approve']),
       '--no-context-files', '--no-tools',
-      '--model', 'local/fixture-model', '--session-id', session.id, ...(headless ? ['NextHeadless'] : [])], {
+      ...(native ? ['-e', extension, '--api-key', 'disposable-native-context-key'] : []),
+      '--model', `${provider}/${model}`, '--session-id', session.id, ...(headless ? ['NextHeadless'] : [])], {
       cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), AI_HARNESS_AGENT_DIR: agent,
         LOCAL_BASE_URL: `http://127.0.0.1:${server.address().port}/v1`, LOCAL_MODEL: 'fixture-model', NO_COLOR: '1' },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -134,7 +153,23 @@ for (const scenario of scenarios) {
     assert.equal(initial.sessionFile, path.join(sessions, `${session.id}.jsonl`));
     assert.equal(initial.autoCompactionEnabled, scenario === 'trusted' || scenario === 'saved-trust' || initialEnabled);
     assert.equal(requests.length, 0, 'Startup is passive');
-    if (scenario === 'thresholds') {
+    if (native) {
+      const stats = async (id, window) => {
+        const response = await rpc({ type: 'get_session_stats', id });
+        assert.equal(response.success, true, JSON.stringify({ response, stderr }));
+        assert.equal(response.data.contextUsage.contextWindow, window);
+      };
+      await stats('native-startup', 272_000);
+      await turn('native-without-premature-compaction');
+      assert.equal(requests.length, 1); assert.equal(requests[0].stream, true);
+      assert.equal((await rpc({ type: 'set_model', id: 'native-select', provider, modelId: 'o3-mini' })).success, true);
+      await stats('native-selected', 200_000);
+      assert.equal((await rpc({ type: 'cycle_model', id: 'native-cycle' })).success, true);
+      await stats('native-cycled', 272_000);
+      await writeFile(globalFile, JSON.stringify(settings(true, 10_000))); await reload('native-context-reload');
+      await stats('native-reloaded', 272_000);
+      assert.equal(requests.length, 1, 'Model/settings reads remain passive');
+    } else if (scenario === 'thresholds') {
       const trap = path.join(agent, 'trap.mjs'), marker = path.join(root, 'executed-marker');
       await writeFile(trap, `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'EXECUTED'); throw new Error('Must not execute');`);
       const next = { ...settings(true, 30_000), branchSummary: { reserveTokens: 300, skipPrompt: true },
@@ -214,7 +249,8 @@ for (const scenario of scenarios) {
     const summaries = raw.filter(entry => entry.type === 'branch_summary').length;
     assert.equal(compactions, ['thresholds', 'gates'].includes(scenario) ? 1 : 0);
     assert.equal(summaries, scenario === 'thresholds' ? 1 : 0);
-    if (!['thresholds', 'gates'].includes(scenario)) assert.equal(requests.length, 0);
+    if (!native && !['thresholds', 'gates'].includes(scenario)) assert.equal(requests.length, 0);
+    assert.ok(!JSON.stringify(raw).includes('disposable-native-context-key'));
     outcomes.push({ scenario, requests: requests.length, compactions, summaries, exit: 0 });
     console.log(JSON.stringify(outcomes.at(-1))); passed = true;
   } finally {

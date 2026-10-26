@@ -13,6 +13,7 @@ import {
   ExtensionRegistry,
   JsonlSessionStore,
   MockProvider,
+  OpenAiMixedProvider,
   type AgentSettings,
   ProviderCredentialService,
   SessionManager,
@@ -558,6 +559,25 @@ describe('/export command', () => {
       await handler.execute('/provider other');
       expect(ctx.provider?.getProviderType()).toBe('other');
       expect(manager.getCompactionSettings().keepRecentTokens).toBe(1_000);
+      ctx.providers.set('native-r', new OpenAiMixedProvider({ type: 'native-r', apiKey: 'disposable', baseUrl: 'http://127.0.0.1:1/v1' }));
+      ctx.currentSessionId = manager.list()[0]!.id;
+      manager.setCompactionContextWindow(90_000, ctx.currentSessionId);
+      ctx.thinkingLevel = 'high';
+      await handler.execute('/model native-r/gpt-6-luna');
+      expect(ctx.thinkingLevel).toBe('high');
+      await handler.execute('/thinking max');
+      expect(ctx.thinkingLevel).toBe('max');
+      expect(manager.getCompactionContextWindow()).toBe(272_000);
+      expect(manager.getCompactionContextWindow(ctx.currentSessionId)).toBe(272_000);
+      ctx.modelPatterns = ['native-r/gpt-6-luna', 'native-r/o3-mini'];
+      await handler.execute('/model cycle');
+      expect(manager.getCompactionContextWindow()).toBe(200_000);
+      expect(manager.getCompactionContextWindow(ctx.currentSessionId)).toBe(200_000);
+      expect(ctx.thinkingLevel).toBe('high');
+      manager.setCompactionContextWindow(80_000, ctx.currentSessionId);
+      await handler.execute('/model not-reviewed/invalid');
+      expect(manager.getCompactionContextWindow(ctx.currentSessionId)).toBe(80_000);
+      expect(manager.getCompactionSettings()).toEqual({ enabled: true, reserveTokens: 100, keepRecentTokens: 1_000 });
     });
 
     it('uses the latest settings snapshot for manual compaction targets without losing disabled thresholds', async () => {

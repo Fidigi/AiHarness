@@ -858,16 +858,20 @@ async function main(): Promise<void> {
         ?? refreshedStartup.thinkingLevel
         ?? resolveAgentThinkingLevel(settingsResolution.settings, refreshedStartup.providerName, refreshedModel)
         ?? commandContext.thinkingLevel,
-      getSupportedThinkingLevels(refreshedStartup.providerName, refreshedModel, extensionRegistry.virtualModels),
+      getSupportedThinkingLevels(refreshedStartup.providerName, refreshedModel, extensionRegistry.virtualModels, refreshedStartup.provider),
     );
     sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
       settingsResolution.settings,
       refreshedStartup.providerName,
       refreshedModel,
     ));
-    sessionManager.setCompactionContextWindow(resolveAgentCompactionContextWindow(
-      refreshedStartup.providerName, refreshedModel,
-    ));
+    const refreshedWindow = resolveAgentCompactionContextWindow(
+      refreshedStartup.providerName, refreshedModel, refreshedStartup.provider,
+    );
+    sessionManager.setCompactionContextWindow(refreshedWindow);
+    if (commandContext.currentSessionId && sessionManager.get(commandContext.currentSessionId)) {
+      sessionManager.setCompactionContextWindow(refreshedWindow, commandContext.currentSessionId);
+    }
     interactiveQueue.setMode('steer', settingsResolution.settings.steeringMode ?? 'one-at-a-time');
     interactiveQueue.setMode('follow-up', settingsResolution.settings.followUpMode ?? 'one-at-a-time');
     await reloadInstructionPrompt();
@@ -1094,14 +1098,14 @@ async function main(): Promise<void> {
       ?? ctx.thinkingLevel;
     ctx.thinkingLevel = clampPublishedThinkingLevel(
       requestedThinking,
-      getSupportedThinkingLevels(startup.providerName, startupModel, extensionRegistry.virtualModels),
+      getSupportedThinkingLevels(startup.providerName, startupModel, extensionRegistry.virtualModels, startup.provider),
     );
     sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
       settingsResolution.settings,
       startup.providerName,
       startupModel,
     ));
-    sessionManager.setCompactionContextWindow(resolveAgentCompactionContextWindow(startup.providerName, startupModel));
+    sessionManager.setCompactionContextWindow(resolveAgentCompactionContextWindow(startup.providerName, startupModel, startup.provider));
   } catch (error) {
     if (!(error instanceof StartupSessionSelectionCancelledError)) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1192,6 +1196,7 @@ async function main(): Promise<void> {
       sessionManager, sessionId, cwd: workspaceCwd,
       sessionFile: cliArguments.noSession ? undefined : path.join(path.resolve(sessionDirectory || path.join(process.env.HOME || '.', '.ai-harness', 'sessions')), `${sessionId}.jsonl`),
       provider: effectiveStatusModel?.provider ?? provider?.getProviderType(),
+      providerInstance: effectiveStatusModel ? ctx.providers.get(effectiveStatusModel.provider) : provider,
       model: effectiveStatusModel?.model ?? provider?.getConfiguredModel(),
       thinking: ctx.thinkingLevel,
       resources: {

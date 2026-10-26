@@ -8,29 +8,29 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 
 | Domain | File | Context Load |
 |---|---|---|
-| Project overview | [`project-map.md`](./project-map.md) | ~610 lines — load first for global navigation |
-| AI Providers | [`topics/providers.md`](./topics/providers.md) | ~240 lines — native Azure Responses selection and shared environment/deployment composition |
-| Model Dispatch Policies | [`topics/model-dispatch-policies.md`](./topics/model-dispatch-policies.md) | ~90 lines — virtual routing, physical provenance, billable warming and historical notices |
-| Pinned Provider / Configuration Matrix | [`topics/provider-matrix.md`](./topics/provider-matrix.md) | ~110 lines — 42 factory identities, API/auth gaps and numeric host composition |
-| Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~225 lines |
+| Project overview | [`project-map.md`](./project-map.md) | ~660 lines — load first for global navigation |
+| AI Providers | [`topics/providers.md`](./topics/providers.md) | ~855 lines — explicit Kimi issuer/Bearer selection (not account/subscription acceptance); E78 explicit Moonshot CN constructor/shared pinned C policy and native global/CN JSON/SSE requested-model capture (297 loopback/three intercepted defaults/four RPC prompts;preserved provenance failure,not ambient auth,Settings or regional accounts),E77 explicit MiniMax CN constructor/default/shared pinned A policy (259 loopback/three intercepted endpoint controls;no ambient key,factory,Settings or regional account certificate),E76 explicit Zen83-chat/two-native-classifier A/G/C/R/T supplied-key SDK/private Google REST/83 local RPC prompts (owning CLI SIGSEGV/Hugging Face emitted child-code:null failures retained;not whole acceptance),E75 explicit OpenCode Go mixed A/C/R key SDK/31 local RPC prompts (genuine temperature defect/correction preserved;selected setup/unit/parity failures remain despite112 artifact/17 browser passes),E74 explicit Kimi Coding A key SDK/four local RPC prompts (selected/unit/parity failed;110 artifact/17 retained browser passes do not repair them;subscription OAuth remains separate),E73 Xiaomi C SDK (failed unit/production and54 not-run families retained),E72 Together/Baseten/Ant Ling JSON fallback capture,native Bedrock/Azure/Mistral,explicit Hugging Face C (E71 fallback capture;failed gates/history retained),mixed Fireworks A/C and Together/Baseten/Meta/Ant Ling/xAI/MiniMax SDKs,explicit NVIDIA/Moonshot/Z.ai/Groq/DeepSeek/Cerebras SDKs/custom hosts,NVIDIA poll-header override priority,mixed OpenAI R/D/Cloudflare C/S/OpenRouter SDKs/custom hosts,adapter-owned metadata/windows/thinking,private lifecycle and API-specific accounting/provenance |
+| Model Dispatch Policies | [`topics/model-dispatch-policies.md`](./topics/model-dispatch-policies.md) | ~105 lines — virtual routing, actual-adapter physical thinking clamps, provenance, billable warming and historical notices |
+| Pinned Provider / Configuration Matrix | [`topics/provider-matrix.md`](./topics/provider-matrix.md) | 170 lines — E78 explicit Moonshot CN C SDK (24 groups/824 projections,not full42-factory composition),E77 explicit MiniMax CN A SDK (23 groups/820 projections,not unique usable models or full composition),E76 Zen83-chat/two-native-classifier mixed key SDK (22 groups/817 projections,not42-factory/full-profile/account composition),E75 31-profile OpenCode Go mixed A/C/R key SDK (not factory/Server/Settings/account or full-profile qualification),E74 four-profile Kimi Coding A key SDK/subscription gap,E73 Xiaomi C SDK/three regional-plan gaps (failed unit/production and54 not-run families retained),E72 JSON fallback capture,42 factories,API/auth gaps,pinned explicit Hugging Face C (E71 fallback capture;failed gates/history retained),mixed Fireworks A/C and Together/Baseten/Meta/Ant Ling/xAI/MiniMax SDKs,explicit NVIDIA/Moonshot/Z.ai/Groq/DeepSeek/Cerebras SDKs/custom hosts,NVIDIA poll-header ownership,mixed custom hosts,adapter-owned R/A-C/C/Cerebras/DeepSeek/Groq/Z.ai/Moonshot/Mistral metadata/thinking plus NVIDIA declarations,preserved native discovery and numeric host composition |
+| Sessions & Persistence | [`topics/sessions.md`](./topics/sessions.md) | ~230 lines — native journals, actual-adapter compaction windows and independent session scopes |
 | Session Context State | [`topics/session-context-state.md`](./topics/session-context-state.md) | ~100 lines |
 | TypeScript Session SDK | [`topics/session-sdk.md`](./topics/session-sdk.md) | ~75 lines |
 | Native Run Lifecycle | [`topics/run-lifecycle.md`](./topics/run-lifecycle.md) | ~130 lines — lifetime, queues, bounded recovery and parallel/nested/rich results |
 | Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~270 lines — owned MCP registration and generation retirement |
 | Native Extension / SDK Contract | [`topics/native-extension-contract.md`](./topics/native-extension-contract.md) | ~110 lines — host/import/event/UI/package adaptation |
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~430 lines |
-| CLI Invocation Contract | [`topics/cli-invocation-contract.md`](./topics/cli-invocation-contract.md) | ~140 lines |
+| CLI Invocation Contract | [`topics/cli-invocation-contract.md`](./topics/cli-invocation-contract.md) | ~150 lines — explicit issuer/storage-label separation and post-loading authorization deadline |
 | Native Terminal Contract | [`topics/terminal-contract.md`](./topics/terminal-contract.md) | ~140 lines — capabilities, 90 pinned/29 native actions, stored-only settings and PTY boundaries |
 | Terminal Themes | [`topics/themes.md`](./topics/themes.md) | ~80 lines |
 | Native Editor Schemas | [`topics/editor-schemas.md`](./topics/editor-schemas.md) | ~85 lines |
-| QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~145 lines — trusted limits, native questions/images and sandbox |
+| QuickJS Code Mode | [`topics/codemode.md`](./topics/codemode.md) | ~155 lines — trusted limits, native questions/images, explicit OpenRouter classifiers and sandbox |
 | Server API and lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~240 lines |
 | Web Application (React) | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~210 lines |
 | Detached Stream Reconstruction | [`topics/detached-streams.md`](./topics/detached-streams.md) | ~90 lines |
 | Static Demonstration | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
 | Linked-Directory Consent | [topics/linked-directories.md](./topics/linked-directories.md) | ~66 lines |
-| Security & Trust | [`topics/security.md`](./topics/security.md) | ~220 lines |
-| Native Security Contract | [`topics/native-security-contract.md`](./topics/native-security-contract.md) | ~100 lines |
+| Security & Trust | [`topics/security.md`](./topics/security.md) | ~225 lines — explicit provider issuer, bounded registration and publication versus later rejection |
+| Native Security Contract | [`topics/native-security-contract.md`](./topics/native-security-contract.md) | ~105 lines — explicit issuer, bounded token registration and CAS/publication versus later rejection |
 | Child Agents | [`topics/child-agents.md`](./topics/child-agents.md) | ~115 lines |
 
 ### Reference Documentation

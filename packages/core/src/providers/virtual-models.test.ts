@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
 import { SessionManager } from '../sessions/session-manager.js';
-import { ProviderFactory, type AiProvider, type ChatOptions } from './index.js';
+import { CerebrasProvider, ProviderFactory, type AiProvider, type ChatOptions } from './index.js';
 import { streamProviderTurn } from '../agent/provider-turn.js';
 import { runToolLoop } from '../agent/tool-loop.js';
 import { VirtualModelRegistry, VirtualModelRoutingError, type VirtualModelRequest } from './virtual-models.js';
@@ -26,6 +26,13 @@ async function fixture() {
 }
 
 describe('native selectable virtual models', () => {
+  it.each(['high', 'max'] as const)('clamps physical %s against the resolved adapter rather than the operator alias', async thinkingLevel => {
+    const registry = new VirtualModelRegistry(), provider = new CerebrasProvider({ type: 'operator-native', model: 'qwen-3.8-27b', apiKey: 'disposable', baseUrl: 'http://127.0.0.1:1/v1' });
+    registry.register({ provider: 'router', id: 'owned', thinkingLevels: ['high'], route: () => ({ provider: 'operator-native', id: 'qwen-3.8-27b', thinkingLevel }) });
+    const result = await registry.resolve({ definition: registry.get('router', 'owned')!, messages: [], reason: 'direct', thinking: 'high', context: { resolveProvider: () => provider } });
+    expect(result.provider).toBe(provider);
+    expect(result.selection).toEqual({ provider: 'operator-native', id: 'qwen-3.8-27b', thinkingLevel: 'high' });
+  });
   it('separates selection, physical options, provenance and private branch state', async () => {
     const f = await fixture();
     const requests: VirtualModelRequest[] = [];

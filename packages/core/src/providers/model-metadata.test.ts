@@ -8,7 +8,53 @@ import {
   inferModelCapabilities,
 } from './model-metadata.js';
 
+import { CerebrasProvider, MistralProvider, OpenAiMixedProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider } from './index.js';
+import { getProviderPublishedModel } from './provider-model-metadata.js';
+
 describe('shared model metadata', () => {
+  it('uses the actual native effort map across operator and conflicting aliases', () => {
+    for (const alias of ['operator-window', 'mistral', 'anthropic', 'openai']) {
+      const scenarios = [
+        { provider: new MistralProvider({ type: alias, apiKey: 'private-fixture', model: 'magistral-medium-latest' }), id: 'magistral-medium-latest', expected: ['off', 'high'] },
+        { provider: new CerebrasProvider({ type: alias, apiKey: 'private-fixture', model: 'qwen-3.8-27b' }), id: 'qwen-3.8-27b', expected: ['off', 'low', 'medium', 'high'] },
+        { provider: new OpenAiMixedProvider({ type: alias, apiKey: 'private-fixture', model: 'gpt-6-luna' }), id: 'gpt-6-luna', expected: ['off', 'low', 'medium', 'high', 'xhigh', 'max'] },
+        { provider: new OpenRouterProvider({ type: alias, apiKey: 'private-fixture', model: 'anthropic/claude-sonnet-4.6' }), id: 'anthropic/claude-sonnet-4.6', expected: ['off', 'low', 'medium', 'high', 'max'] },
+        { provider: new CloudflareWorkersAiMixedProvider({ type: alias, apiKey: 'private-fixture', accountId: 'explicit' }), id: '@cf/google/gemma-4-26b-a4b-it', expected: ['off', 'high'] },
+      ];
+      for (const { provider, id, expected } of scenarios) {
+        expect(getSupportedThinkingLevels(alias, id, undefined, provider)).toEqual(expected);
+        const owned = getProviderPublishedModel(alias, id, provider)!;
+        expect(owned.thinkingLevelMap?.high).toBe('high');
+        owned.thinkingLevelMap!.high = null;
+        expect(getSupportedThinkingLevels(alias, id, undefined, provider)).toEqual(expected);
+        expect(getSupportedThinkingLevels('anthropic', 'claude-sonnet-4-6', undefined, provider)).toEqual(['off']);
+      }
+    }
+  });
+
+  it('preserves undeclared legacy and virtual authority, but cannot borrow through empty or failing declarations', () => {
+    expect(getSupportedThinkingLevels('openai', 'o3', undefined, {})).toEqual(['low', 'medium', 'high']);
+    for (const source of [{ getPublishedModels: () => [] }, { getPublishedModels: () => { throw Error('private-fixture'); } }, { getPublishedModels: () => ({ secret: 'private-fixture' }) as never }]) {
+      expect(getSupportedThinkingLevels('openai', 'o3', undefined, source)).toEqual(['off']);
+      expect(getSupportedThinkingLevels('openai', 'o3', { get: () => ({ thinkingLevels: ['max'] as const }) }, source)).toEqual(['max']);
+    }
+    const source = { getPublishedModels: () => [{ id: 'o3', name: 'No thinking', thinkingLevelMap: null, capabilities: { reasoning: true, imageInput: false, toolCalls: true } }] };
+    expect(getSupportedThinkingLevels('openai', 'o3', undefined, source)).toEqual(['off']);
+  });
+
+  it('copies only bounded own thinking-map data without invoking map or row accessors', () => {
+    let getters = 0;
+    const map = Object.assign(Object.create({ xhigh: 'max' }), { off: null, minimal: null, low: null, medium: null, high: 'high', max: 'max', secret: 'private-fixture' });
+    const row = { id: 'owned', name: 'Owned', capabilities: { reasoning: true, imageInput: false, toolCalls: true }, thinkingLevelMap: map };
+    const source = { getPublishedModels: () => [row] };
+    expect(getSupportedThinkingLevels('openai', 'owned', undefined, source)).toEqual(['high', 'max']);
+    expect(getProviderPublishedModel('openai', 'owned', source)?.thinkingLevelMap).toEqual({ off: null, minimal: null, low: null, medium: null, high: 'high', max: 'max' });
+    Object.defineProperty(map, 'high', { get() { getters++; throw Error('private-fixture'); } });
+    expect(getProviderPublishedModel('openai', 'owned', source)?.thinkingLevelMap).not.toHaveProperty('high');
+    Object.defineProperty(row, 'thinkingLevelMap', { get() { getters++; throw Error('private-fixture'); } });
+    expect(getProviderPublishedModel('openai', 'owned', source)?.thinkingLevelMap).toBeUndefined();
+    expect(getters).toBe(0);
+  });
   it('returns non-secret capability, limit, and pricing metadata as defensive copies', () => {
     const first = getPublishedModelMetadata('openai', 'o3');
     expect(first).toMatchObject({
@@ -42,6 +88,21 @@ describe('shared model metadata', () => {
     expect(getSupportedThinkingLevels('openai', 'gpt-4o')).toEqual(['off']);
     expect(getSupportedThinkingLevels('anthropic', 'claude-sonnet-4-6'))
       .toEqual(['off', 'minimal', 'low', 'medium', 'high', 'max']);
+  });
+
+  it('publishes the pinned forty-model Mistral projection with owned exact effort/media/price fields', () => {
+    const models = getPublishedModels('mistral');
+    expect(models).toHaveLength(40); expect(new Set(models.map(model => model.id)).size).toBe(40);
+    expect(models.every(model => model.api === 'mistral-conversations')).toBe(true);
+    expect(models.filter(model => model.capabilities.imageInput)).toHaveLength(21);
+    expect(models.filter(model => model.capabilities.reasoning)).toHaveLength(11);
+    expect(getPublishedModelMetadata('mistral', 'magistral-medium-latest')).toMatchObject({ contextWindow: 262144, maxOutputTokens: 16384,
+      capabilities: { imageInput: true, reasoning: true }, pricing: { inputPerMillion: 2, outputPerMillion: 5, cacheReadPerMillion: 0.2 } });
+    expect(getSupportedThinkingLevels('mistral', 'magistral-medium-latest')).toEqual(['off', 'high']);
+    expect(getSupportedThinkingLevels('mistral', 'zai-glm-5-3')).toEqual(['low', 'high', 'max']);
+    models.find(model => model.id === 'magistral-medium-latest')!.thinkingLevelMap!.high = null;
+    expect(getSupportedThinkingLevels('mistral', 'magistral-medium-latest')).toEqual(['off', 'high']);
+    expect(calculatePublishedModelCost('mistral', 'magistral-medium-latest', { inputTokens: 1_000_000, outputTokens: 100_000, cacheReadTokens: 200_000 })).toBe(2.54);
   });
 
   it('prices normalized cache-aware usage only for published models', () => {

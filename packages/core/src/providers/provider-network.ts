@@ -63,6 +63,8 @@ const WEBSOCKET_MAX_AGE_MS = 55 * 60_000;
 export interface ProviderFetchOptions {
   fetcher?: typeof fetch;
   scope?: ProviderNetworkScope;
+  /** Native routes may exclude specific HTTP failures without disabling other retries. */
+  noRetryStatuses?: readonly number[];
   sleep?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
   now?: () => number;
 }
@@ -523,7 +525,7 @@ export async function fetchProviderResponse(
         ...(proxy ? { dispatcher: proxyDispatcher(proxy, scope) as Dispatcher } : {}),
       } as RequestInit;
       const response = await abortable(fetcher(endpoint.toString(), requestInit), timeout.signal);
-      if (!RETRYABLE_STATUSES.has(response.status) || attempt >= maxRetries) {
+      if (options.noRetryStatuses?.includes(response.status) || !RETRYABLE_STATUSES.has(response.status) || attempt >= maxRetries) {
         return idleTimeoutResponse(response, policy.httpIdleTimeoutMs);
       }
       // Do not let a non-cooperative body prevent the bounded retry policy from progressing.

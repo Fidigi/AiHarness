@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SessionManager } from '@ai-harness/core';
+import { OpenAiMixedProvider, SessionManager } from '@ai-harness/core';
 import type { SessionEntry, TokenUsage } from '@ai-harness/core';
 import { createTerminalStatus, statusLines, statusText } from './status.js';
 import { terminalWidth } from './terminal-text.js';
@@ -39,6 +39,18 @@ describe('terminal status accounting', () => {
     expect(status.history.cost).toBe('known');
     expect(status.history.knownCostUsd).toBe(0.01);
     expect(statusText(status, 'ready').join('\n')).toContain('memory (not saved)');
+  });
+
+  it('shows adapter-owned limits without presenting a fallback as published metadata', async () => {
+    const manager = new SessionManager(), session = await manager.create();
+    const provider = new OpenAiMixedProvider({ type: 'anthropic', apiKey: 'disposable' });
+    const source = { sessionManager: manager, sessionId: session.id, cwd: '/work', provider: 'anthropic',
+      providerInstance: provider, model: 'gpt-6-luna', resources };
+    expect((await createTerminalStatus(source)).contextWindow).toBe(272_000);
+    source.model = 'claude-sonnet-4-6';
+    expect((await createTerminalStatus(source)).contextWindow).toBeUndefined();
+    const { providerInstance: _provider, ...legacy } = source;
+    expect((await createTerminalStatus(legacy)).contextWindow).toBe(1_000_000);
   });
 
   it('distinguishes ancestor accounting, pre-compaction work, and all abandoned history', async () => {

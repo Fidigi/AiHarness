@@ -64,6 +64,7 @@ export interface MessageEntry extends SessionEntryBase {
   isError?: boolean;
   provider?: string;
   model?: string;
+  api?: string;
   usage?: Message['usage'];
   durationMs?: number;
   parentMessageId?: string;
@@ -219,6 +220,7 @@ function isSessionEntry(value: unknown): value is SessionEntry {
         && (entry.parentMessageId === undefined || typeof entry.parentMessageId === 'string')
         && (entry.provider === undefined || typeof entry.provider === 'string')
         && (entry.model === undefined || typeof entry.model === 'string')
+        && (entry.api === undefined || (typeof entry.api === 'string' && /^[a-z][a-z0-9-]{0,63}$/.test(entry.api)))
         && (entry.usage === undefined || isPersistedUsage(entry.usage))
         && (entry.blocks === undefined || Array.isArray(entry.blocks));
     case 'command':
@@ -273,6 +275,7 @@ function messageFromEntry(entry: MessageEntry): Message | undefined {
     isError: entry.isError,
     provider: entry.provider,
     model: entry.model,
+    ...(entry.api ? { api: entry.api } : {}),
     usage: entry.usage,
     durationMs: entry.durationMs,
     parentMessageId: entry.parentMessageId,
@@ -323,6 +326,7 @@ function messageToEntry(message: Message): MessageEntry {
     ...(message.isError !== undefined ? { isError: message.isError } : {}),
     ...(message.provider ? { provider: message.provider } : {}),
     ...(message.model ? { model: message.model } : {}),
+    ...(message.api ? { api: message.api } : {}),
     ...(message.usage ? { usage: message.usage } : {}),
     ...(message.durationMs !== undefined ? { durationMs: message.durationMs } : {}),
     ...(message.parentMessageId ? { parentMessageId: message.parentMessageId } : {}),
@@ -1929,6 +1933,7 @@ export class SessionManager {
         || (message.parentMessageId !== undefined && !isValidEntryId(message.parentMessageId))
         || (message.provider !== undefined && !isBoundedSessionString(message.provider, 128))
         || (message.model !== undefined && !isBoundedSessionString(message.model, 500))
+        || (message.api !== undefined && (typeof message.api !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(message.api)))
         || (message.toolCallId !== undefined && !isBoundedSessionString(message.toolCallId, 256))
         || (message.name !== undefined && !isBoundedSessionString(message.name, 256))
         || (message.blocks !== undefined && (!Array.isArray(message.blocks) || message.blocks.length > 1_024))
@@ -2031,6 +2036,7 @@ export class SessionManager {
       || (message.parentMessageId !== undefined && !isValidEntryId(message.parentMessageId))
       || (message.provider !== undefined && !isBoundedSessionString(message.provider, 128))
       || (message.model !== undefined && !isBoundedSessionString(message.model, 500))
+      || (message.api !== undefined && (typeof message.api !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(message.api)))
       || (message.toolCallId !== undefined && !isBoundedSessionString(message.toolCallId, 256))
       || (message.name !== undefined && !isBoundedSessionString(message.name, 256))
       || (message.isError !== undefined && typeof message.isError !== 'boolean')

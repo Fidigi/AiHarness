@@ -230,7 +230,8 @@ function initializeCredentials(
       if (!resolved) continue;
       const value = resolved.credential.type === 'api-key'
         ? resolved.credential.apiKey : resolved.credential.accessToken;
-      proxy.setApiKey(type, value);
+      proxy.setApiKey(type, type === 'bedrock' && resolved.descriptor.source === 'environment'
+        ? JSON.stringify({ bearerToken: value }) : value);
     }
     if (runtime.closed) throw new Error('Application runtime is no longer active.');
     let mcpOAuth: McpOAuthCredentialManager | undefined;

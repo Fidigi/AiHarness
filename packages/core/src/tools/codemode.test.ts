@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ExtensionRegistry, type ExtensionRuntimeContext } from '../extensions/extension-registry.js';
 import { SessionManager } from '../sessions/session-manager.js';
 import { MockProvider } from '../providers/index.js';
+import { SpecializedModelError } from '../providers/specialized-models.js';
 import type { CodemodeProgress } from '../types/index.js';
 import { runToolLoop } from '../agent/tool-loop.js';
 import { collectCodemodeStore, runCodemode, testCodemodeSandbox } from './codemode.js';
@@ -261,13 +262,18 @@ describe('bounded QuickJS codemode', () => {
 
   it('settles outstanding calls as cancelled without late progress or model output', async () => {
     const provider = new MockProvider({ type: 'mock', model: 'virtual-chat' });
-    vi.spyOn(provider, 'classify').mockImplementation(() => new Promise(() => {}));
+    let reject!: (error: Error) => void;
+    vi.spyOn(provider, 'classify').mockImplementation(() => new Promise((_resolve, fail) => { reject = fail; }));
     const progress = vi.fn();
     const result = await run(`await models.classify({model:'virtual-chat:classifier',input:'x',labels:['a']});`, {
       context: { ...context, provider, toolCallId: 'outer', onCodemodeProgress: progress }, limits: { timeoutMs: 500 },
     });
     expect(result.isError).toBe(true);
     expect(result.details?.nestedCalls).toMatchObject([{ state: 'cancelled', parentId: 'outer' }]);
+    reject(new SpecializedModelError('private late failure', { totalTokens: 99, costUsd: 1 }));
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(result.details?.usage).toBeUndefined();
+    expect(result.details?.nestedCalls[0]?.usage).toBeUndefined();
     expect(progress.mock.calls.map(call => call[0].call.state)).toEqual(['running', 'cancelled']);
   });
 

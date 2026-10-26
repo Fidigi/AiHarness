@@ -26,6 +26,7 @@ export function compactionMessagesFromEntries(entries: readonly SessionEntry[]):
     ...(entry.isError !== undefined ? { isError: entry.isError } : {}),
     ...(entry.provider !== undefined ? { provider: entry.provider } : {}),
     ...(entry.model !== undefined ? { model: entry.model } : {}),
+    ...(entry.api !== undefined ? { api: entry.api } : {}),
     ...(entry.usage !== undefined ? { usage: entry.usage } : {}),
     ...(entry.durationMs !== undefined ? { durationMs: entry.durationMs } : {}),
     ...(entry.parentMessageId !== undefined ? { parentMessageId: entry.parentMessageId } : {}),

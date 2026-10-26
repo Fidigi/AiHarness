@@ -50,6 +50,8 @@ const version: 1 = AI_HARNESS_CORE_API_VERSION;
 declare const provider: AiProvider;
 const binding: AgentProvider = { kind: 'instance', name: 'custom', provider };
 const config: AgentProviderConfig = { type: 'openai', apiKey: 'disposable', httpIdleTimeoutMs: 100, transport: 'sse' };
+const cerebrasBinding: AgentProvider = { kind: 'config', config: { type: 'cerebras', apiKey: 'disposable', model: 'qwen-3.8-27b' } };
+const mistralBinding: AgentProvider = { kind: 'config', config: { type: 'mistral-conversations', apiKey: 'disposable', model: 'mistral-small-latest' } };
 const store: SessionStore = new JsonlSessionStore('/tmp/disposable-sdk-declarations');
 const credential: AgentCredential = { version: 1, type: 'oauth', accessToken: 'disposable', expiresAt: 123 };
 const descriptor: AgentAuthDescriptor = { provider: 'openai', type: 'oauth', source: 'memory', refreshable: false };

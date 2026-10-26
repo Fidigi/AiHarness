@@ -409,12 +409,12 @@ async function selectCommandModel(
   if (thinkingLevel) {
     ctx.thinkingLevel = clampPublishedThinkingLevel(
       thinkingLevel,
-      getSupportedThinkingLevels(model.provider, model.id, ctx.extensionRegistry?.virtualModels),
+      getSupportedThinkingLevels(model.provider, model.id, ctx.extensionRegistry?.virtualModels, provider),
     );
   } else {
     ctx.thinkingLevel = clampPublishedThinkingLevel(
       ctx.thinkingLevel,
-      getSupportedThinkingLevels(model.provider, model.id, ctx.extensionRegistry?.virtualModels),
+      getSupportedThinkingLevels(model.provider, model.id, ctx.extensionRegistry?.virtualModels, provider),
     );
   }
 }
@@ -793,6 +793,7 @@ const commands: CommandEntry[] = [
         ctx.provider?.getProviderType() ?? 'unknown',
         ctx.provider?.getConfiguredModel(),
         ctx.extensionRegistry?.virtualModels,
+        ctx.provider,
       );
       ctx.thinkingLevel = clampPublishedThinkingLevel(level, available);
       return chalk.green(`Niveau de raisonnement défini sur ${ctx.thinkingLevel}.`);
@@ -1683,9 +1684,12 @@ export class CommandHandler {
       const commandContext = selectedCommand.name === 'credential' && commandName !== 'credential'
         ? { ...this.ctx, allowCredentialReveal: false }
         : this.ctx;
+      const previousProvider = this.ctx.provider, previousModel = previousProvider?.getConfiguredModel();
+      const previousSession = this.ctx.currentSessionId;
       this.refreshCompactionSettings();
       const output = await selectedCommand.handler(args, commandContext);
-      this.refreshCompactionSettings();
+      this.refreshCompactionSettings(previousProvider !== this.ctx.provider
+        || previousModel !== this.ctx.provider?.getConfiguredModel() || previousSession !== this.ctx.currentSessionId);
       if (typeof output === 'string') {
         if (output) this.writeOutput(output);
       } else if (output.text) {
@@ -1699,14 +1703,18 @@ export class CommandHandler {
     }
   }
 
-  private refreshCompactionSettings(): void {
+  private refreshCompactionSettings(resetSessionWindow = false): void {
     if (!this.ctx.agentSettings) return;
     const provider = this.ctx.provider?.getProviderType();
     const model = this.ctx.provider?.getConfiguredModel();
     this.ctx.sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
       this.ctx.agentSettings(), provider, model,
     ));
-    this.ctx.sessionManager.setCompactionContextWindow(resolveAgentCompactionContextWindow(provider, model));
+    const window = resolveAgentCompactionContextWindow(provider, model, this.ctx.provider);
+    this.ctx.sessionManager.setCompactionContextWindow(window);
+    if (resetSessionWindow && this.ctx.currentSessionId && this.ctx.sessionManager.get(this.ctx.currentSessionId)) {
+      this.ctx.sessionManager.setCompactionContextWindow(window, this.ctx.currentSessionId);
+    }
   }
 
   private writeOutput(output: string, sensitive = false): void {

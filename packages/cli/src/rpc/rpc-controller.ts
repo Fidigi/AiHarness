@@ -24,6 +24,8 @@ import {
   createTemporaryProcessOutput,
   discoverProviderModelIds,
   getPublishedModelMetadata,
+  getProviderPublishedModel,
+  getProviderPublishedModels,
   getSupportedThinkingLevels,
   normalizeProviderUsage,
   resolveAgentCompactionContextWindow,
@@ -323,8 +325,8 @@ function protocolUsage(
   };
 }
 
-function supportedThinkingLevels(provider: string, model: string | undefined, registry: ExtensionRegistry): RpcThinkingLevel[] {
-  return getSupportedThinkingLevels(provider, model, registry.virtualModels);
+function supportedThinkingLevels(provider: string, model: string | undefined, registry: ExtensionRegistry, source: AiProvider): RpcThinkingLevel[] {
+  return getSupportedThinkingLevels(provider, model, registry.virtualModels, source);
 }
 
 function clampThinkingLevel(
@@ -424,7 +426,7 @@ export class RpcController {
     if (!session) {
       this.thinking = clampThinkingLevel(
         this.thinking,
-        supportedThinkingLevels(this.context.providerName, this.model, this.context.extensionRegistry),
+        supportedThinkingLevels(this.context.providerName, this.model, this.context.extensionRegistry, this.context.provider),
       );
       await this.context.sessionManager.create({
         id: this.currentSessionId,
@@ -436,11 +438,11 @@ export class RpcController {
       this.model = this.model ?? session.model;
       this.thinking = clampThinkingLevel(
         rpcThinkingLevel(session.thinking ?? this.thinking),
-        supportedThinkingLevels(this.context.providerName, this.model, this.context.extensionRegistry),
+        supportedThinkingLevels(this.context.providerName, this.model, this.context.extensionRegistry, this.context.provider),
       );
     }
 
-    this.refreshCompactionSettings();
+    this.refreshCompactionSettings(true);
     this.context.sessionManager.setAutoCompactionCallback(async (_sessionId, toCompact, _keptEntries, signal) => {
       assertCompactionTranscript(toCompact);
       const messages = getSummaryModelMessages(compactionMessagesFromEntries(toCompact));
@@ -735,7 +737,7 @@ export class RpcController {
             return failure(id, command, `Model not found: ${provider}/${modelId}`);
           }
           await this.selectModel(provider, modelId, selected);
-          return success(id, command, createProtocolModelDescriptor(provider, modelId));
+          return success(id, command, createProtocolModelDescriptor(provider, modelId, selected.getModelApi?.(modelId), getProviderPublishedModels(selected)));
         }
         case 'cycle_model': {
           const available = await this.availableModels();
@@ -764,7 +766,7 @@ export class RpcController {
           await this.selectModel(next.model.provider, next.model.id, selected);
           if (next.thinkingLevel) await this.selectThinking(next.thinkingLevel);
           return success(id, command, {
-            model: createProtocolModelDescriptor(next.model.provider, next.model.id),
+            model: createProtocolModelDescriptor(next.model.provider, next.model.id, this.context.provider.getModelApi?.(next.model.id), getProviderPublishedModels(this.context.provider)),
             thinkingLevel: this.thinking,
             isScoped: hasScope,
           });
@@ -969,7 +971,7 @@ export class RpcController {
           }
           this.model = fallback?.selection.id ?? session.model ?? this.model;
           if (this.model) this.context.provider.setConfiguredModel(this.model);
-          this.refreshCompactionSettings();
+          this.refreshCompactionSettings(true);
           this.thinking = clampThinkingLevel(
             rpcThinkingLevel(fallback?.selection.thinkingLevel ?? session.thinking ?? this.thinking),
             this.availableThinkingLevels(),
@@ -1872,7 +1874,7 @@ export class RpcController {
   }
 
   private availableThinkingLevels(): RpcThinkingLevel[] {
-    return supportedThinkingLevels(this.context.providerName, this.model, this.context.extensionRegistry);
+    return supportedThinkingLevels(this.context.providerName, this.model, this.context.extensionRegistry, this.context.provider);
   }
 
   private configuredProvider(name: string): AiProvider | undefined {
@@ -1925,6 +1927,8 @@ export class RpcController {
           ? this.model
           : provider.getConfiguredModel(),
         discoveredModels,
+        publishedModels: getProviderPublishedModels(provider),
+        getModelApi: (model: string) => provider.getModelApi?.(model),
       };
     }));
     return this.context.extensionRegistry.virtualModels.overlayCatalog(buildProviderModelCatalog(states)).flatMap(provider => (
@@ -1947,11 +1951,11 @@ export class RpcController {
     this.context.toolContext.provider = provider;
     this.context.toolContext.providerName = providerName;
     this.model = modelId;
-    this.refreshCompactionSettings();
+    this.refreshCompactionSettings(true);
     const previousThinking = this.thinking;
     this.thinking = clampThinkingLevel(
       this.thinking,
-      supportedThinkingLevels(providerName, modelId, this.context.extensionRegistry),
+      supportedThinkingLevels(providerName, modelId, this.context.extensionRegistry, provider),
     );
     await this.context.sessionManager.update(this.currentSessionId, {
       model: modelId,
@@ -1963,22 +1967,22 @@ export class RpcController {
     }
   }
 
-  private refreshCompactionSettings(): void {
+  private refreshCompactionSettings(resetSessionWindow = false): void {
     if (!this.context.agentSettings) return;
     this.context.sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
       this.context.agentSettings(),
       this.context.providerName,
       this.model,
     ));
-    this.context.sessionManager.setCompactionContextWindow(resolveAgentCompactionContextWindow(
-      this.context.providerName, this.model,
-    ));
+    const window = resolveAgentCompactionContextWindow(this.context.providerName, this.model, this.context.provider);
+    this.context.sessionManager.setCompactionContextWindow(window);
+    if (resetSessionWindow) this.context.sessionManager.setCompactionContextWindow(window, this.currentSessionId);
   }
 
   private state(): Record<string, unknown> {
     const session = this.session();
     return {
-      model: this.model ? createProtocolModelDescriptor(this.context.providerName, this.model) : null,
+      model: this.model ? createProtocolModelDescriptor(this.context.providerName, this.model, this.context.provider.getModelApi?.(this.model), getProviderPublishedModels(this.context.provider)) : null,
       thinkingLevel: this.thinking,
       isStreaming: this.activeRun !== undefined,
       isCompacting: this.compacting,
@@ -1999,7 +2003,7 @@ export class RpcController {
     const accounting = getSessionAccounting(rawEntries, session.activeLeafId);
     const history = accounting.history;
     const usage = history.usage;
-    const metadata = this.model ? getPublishedModelMetadata(this.context.providerName, this.model) : undefined;
+    const metadata = this.model ? getProviderPublishedModel(this.context.providerName, this.model, this.context.provider) : undefined;
     const contextWindow = metadata?.contextWindow;
     const contextTokens = this.context.sessionManager.estimateContextTokens(session.id);
     return {

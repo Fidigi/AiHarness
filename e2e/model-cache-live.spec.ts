@@ -160,7 +160,10 @@ for (const [locale, theme, width] of [['en', 'light', 1280], ['fr', 'dark', 390]
       expect(paid.messages).toHaveLength(2); expect(paid.cacheNotices).toEqual([]);
       expect(JSON.stringify(paid)).not.toContain('WARM_ONLY_DO_NOT_PUBLISH');
       expect(getProxy().getUsage('mock')).toMatchObject({ requests: 2, cacheReadTokens: 1000 });
-      expect(getProxy().getUsage('mock')?.costUsd).toBeCloseTo(0.00002, 12);
+      // Adapter-owned prices apply to both the foreground turn and its cache warming.
+      const foregroundCost = (1000 * 1000 + 10) / 1_000_000;
+      const warmingCost = (1000 * 0.01 + 10) / 1_000_000;
+      expect(getProxy().getUsage('mock')?.costUsd).toBeCloseTo(foregroundCost + warmingCost, 12);
       expect((await page.request.patch(`${base}/api/configuration/scope`, { data: { scope: 'global', values: {
         showCacheMissNotices: true,
       } } })).status()).toBe(200);

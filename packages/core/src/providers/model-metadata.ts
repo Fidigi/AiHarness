@@ -1,4 +1,5 @@
 import type { ModelCapabilities, ModelPricing } from '../types/index.js';
+import { MISTRAL_MODELS } from './mistral-metadata.js';
 import type { AiProvider } from './index.js';
 import { getProviderPublishedModels } from './provider-model-metadata.js';
 
@@ -79,6 +80,7 @@ const PUBLISHED_MODELS: Readonly<Record<string, readonly PublishedModelMetadata[
     { id: 'mock-model', name: 'Mock model', capabilities: { reasoning: false, imageInput: false, toolCalls: true } },
     { id: 'mock-model-v1', name: 'Mock model v1', capabilities: { reasoning: false, imageInput: false, toolCalls: true } },
   ],
+  mistral: MISTRAL_MODELS.map(model => ({ ...model, api: 'mistral-conversations' })),
 };
 
 function cloneMetadata(model: PublishedModelMetadata): PublishedModelMetadata {

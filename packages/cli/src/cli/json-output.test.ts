@@ -49,6 +49,13 @@ describe('JSON process output', () => {
 });
 
 describe('JsonEventStream', () => {
+  it('replays recorded APIs without retroactively binding legacy history to the current provider dialect', () => {
+    const message = { id: 'api', role: 'assistant' as const, content: 'reply', timestamp: new Date(0), provider: 'mistral' };
+    expect(toJsonProtocolMessage({ ...message, api: 'mistral-conversations' })).toMatchObject({ api: 'mistral-conversations' });
+    // Preserve the old compatibility projection, not a new claim about the historical wire.
+    expect(toJsonProtocolMessage(message)).toMatchObject({ api: 'openai-completions' });
+  });
+
   it('projects normalized persisted usage with shared model pricing', () => {
     expect(toJsonProtocolMessage({
       id: 'assistant-1',

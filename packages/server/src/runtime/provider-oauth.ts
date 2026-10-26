@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { ProviderCredentialService, ProviderType } from '@ai-harness/core';
+import type { ProviderCredentialService } from '@ai-harness/core';
 import type { AiProxyServer } from '../api/proxy.js';
 
 const SUPPORTED = new Set(['openai', 'anthropic', 'google', 'azure', 'vertex', 'local']);
@@ -321,7 +321,7 @@ export class ProviderOAuthService {
             ...(expiresIn === undefined ? {} : { expiresAt: Date.now() + Math.floor(expiresIn * 1_000) }),
             ...(tokenType ? { tokenType } : {}),
           });
-          this.proxy.setApiKey(flow.provider as Exclude<ProviderType, 'mock' | 'custom'>, accessToken);
+          this.proxy.setApiKey(flow.provider as Parameters<AiProxyServer['setApiKey']>[0], accessToken);
           flow.state = 'connected';
           flow.deviceCode = '';
           return;

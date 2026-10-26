@@ -893,6 +893,7 @@ export class AgentRuntime {
         isError: entry.isError,
         provider: entry.provider,
         model: entry.model,
+        ...(entry.api ? { api: entry.api } : {}),
         usage: entry.usage,
         durationMs: entry.durationMs,
         parentMessageId: entry.parentMessageId,

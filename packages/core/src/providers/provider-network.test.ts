@@ -179,6 +179,20 @@ describe('provider network policy', () => {
     expect(fetcher.mock.calls[0]?.[1]).toHaveProperty('dispatcher');
   });
 
+  it('keeps native HTTP retry exclusions request-local without disabling the default 504 policy', async () => {
+    for (const noRetryStatuses of [[504], undefined]) {
+      const fetcher = vi.fn().mockResolvedValue(new Response('gateway', { status: 504 }));
+      const delays: number[] = [];
+      const response = await fetchProviderResponse('https://provider.test', {}, policy({ maxRetries: 2 }), {
+        fetcher, noRetryStatuses, sleep: async delay => { delays.push(delay); },
+      });
+      expect(response.status).toBe(504);
+      expect(fetcher).toHaveBeenCalledTimes(noRetryStatuses ? 1 : 3);
+      expect(delays).toHaveLength(noRetryStatuses ? 0 : 2);
+      await response.body?.cancel();
+    }
+  });
+
   it('bounds the whole request and streamed response idle interval independently', async () => {
     vi.useFakeTimers();
     const pendingFetch = vi.fn(() => new Promise<Response>(() => undefined));

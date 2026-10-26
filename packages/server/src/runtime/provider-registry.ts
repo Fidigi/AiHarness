@@ -8,9 +8,30 @@ import {
   AnthropicProvider,
   atomicWriteStableFile,
   discoverProviderModelIds,
+  getProviderPublishedModels,
   GeminiProvider,
   OpenAiProvider,
   OpenAiResponsesProvider,
+  OpenAiMixedProvider,
+  OPENAI_RESPONSE_MODELS,
+  MistralProvider,
+  CerebrasProvider,
+  CEREBRAS_MODELS,
+  DeepSeekProvider,
+  DEEPSEEK_MODELS,
+  GroqProvider,
+  GROQ_MODELS,
+  ZaiProvider,
+  ZAI_MODELS,
+  MoonshotProvider,
+  MOONSHOT_MODELS,
+  NvidiaProvider,
+  NVIDIA_MODELS,
+  OpenRouterProvider,
+  CloudflareWorkersAiMixedProvider,
+  CLOUDFLARE_CHAT_MODELS,
+  OPENROUTER_MESSAGE_MODELS,
+  OPENROUTER_COMPLETION_MODELS,
   ProviderCredentialService,
   readBoundedResourceText,
   type CustomModelDefinition,
@@ -90,10 +111,41 @@ function baseUrl(value: unknown): string {
 }
 
 function dialect(value: unknown): ProviderDialect {
-  if (!['openai-completions', 'openai-responses', 'anthropic', 'google'].includes(String(value))) {
+  if (!['openai', 'openai-completions', 'openai-responses', 'anthropic', 'google', 'mistral-conversations', 'openrouter', 'cloudflare-workers-ai', 'cerebras', 'deepseek', 'groq', 'zai', 'moonshot', 'nvidia'].includes(String(value))) {
     badRequest('Unsupported provider dialect.');
   }
   return value as ProviderDialect;
+}
+
+function validateDialectModel(dialect: ProviderDialect | undefined, id: string): void {
+  if (dialect === 'openai' && !OPENAI_RESPONSE_MODELS.some(model => model.id === id)) {
+    badRequest('OpenAI response model is not supported.', 'INVALID_MODEL');
+  }
+  if (dialect === 'cerebras' && !CEREBRAS_MODELS.some(model => model.id === id)) {
+    badRequest('Cerebras chat model is not supported.', 'INVALID_MODEL');
+  }
+  if (dialect === 'deepseek' && !DEEPSEEK_MODELS.some(model => model.id === id)) {
+    badRequest('DeepSeek chat model is not supported.', 'INVALID_MODEL');
+  }
+  if (dialect === 'nvidia' && !NVIDIA_MODELS.some(model => model.id === id)) {
+    badRequest('Nvidia chat model is not supported.', 'INVALID_MODEL');
+  }
+  if (dialect === 'moonshot' && !MOONSHOT_MODELS.some(model => model.id === id)) {
+    badRequest('Moonshot chat model is not supported.', 'INVALID_MODEL');
+  }
+  if (dialect === 'zai' && !ZAI_MODELS.some(model => model.id === id)) {
+    badRequest('Z.ai chat model is not supported.', 'INVALID_MODEL');
+  }
+  if (dialect === 'groq' && !GROQ_MODELS.some(model => model.id === id)) {
+    badRequest('Groq chat model is not supported.', 'INVALID_MODEL');
+  }
+  if (dialect === 'cloudflare-workers-ai' && !CLOUDFLARE_CHAT_MODELS.some(model => model.id === id)) {
+    badRequest('Cloudflare chat model is not supported.', 'INVALID_MODEL');
+  }
+  if (dialect === 'openrouter' && !OPENROUTER_MESSAGE_MODELS.some(model => model.id === id)
+    && !OPENROUTER_COMPLETION_MODELS.some(model => model.id === id)) {
+    badRequest('OpenRouter chat model is not supported.', 'INVALID_MODEL');
+  }
 }
 
 function headers(value: unknown): Record<string, string> {
@@ -201,6 +253,7 @@ function parseRegistryState(value: unknown): RegistryState {
       badRequest('Provider registry is invalid.', 'INVALID_MODEL');
     }
     const id = boundedString(raw.id, 'model id', 500);
+    validateDialectModel(providers.find(item => item.id === provider)?.dialect, id);
     if (raw.key !== `${provider}:${id}`) badRequest('Provider registry is invalid.', 'INVALID_MODEL');
     const pricingInput = raw.pricing === undefined ? undefined : raw.pricing;
     if (pricingInput !== undefined && !isRecord(pricingInput)) {
@@ -280,14 +333,15 @@ export class ProviderRegistryService {
   async load(): Promise<void> {
     try {
       const { source, identity } = await this.readSource();
-      if (source !== undefined) {
-        const state = parseRegistryState(JSON.parse(source));
-        this.source = source;
-        this.sourceIdentity = identity;
-        this.state = state;
-      }
+      const state: RegistryState = source === undefined ? { version: 1, providers: [], models: [] } : parseRegistryState(JSON.parse(source));
+      this.source = source;
+      this.sourceIdentity = identity;
+      this.state = state;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      this.state = { version: 1, providers: [], models: [] };
+      this.source = undefined;
+      this.sourceIdentity = undefined;
     }
     await this.secretStore?.load();
     await this.migrateLegacySecrets();
@@ -302,13 +356,10 @@ export class ProviderRegistryService {
   async reload(): Promise<void> {
     return this.withMutation(async () => {
       const before = this.state.providers.map(provider => provider.id);
-      // Missing metadata is a canonical empty registry, not a stale memory copy.
+      // Keep the last known metadata during the read; load publishes an observed missing source as empty.
       const previous = this.state;
       const source = this.source;
       const identity = this.sourceIdentity;
-      this.state = { version: 1, providers: [], models: [] };
-      this.source = undefined;
-      this.sourceIdentity = undefined;
       try { await this.load(); }
       catch (error) { this.state = previous; this.source = source; this.sourceIdentity = identity; throw error; }
       for (const id of before) {
@@ -368,6 +419,9 @@ export class ProviderRegistryService {
       createdAt: previous?.createdAt ?? now,
       updatedAt: now,
     };
+    for (const model of this.state.models.filter(model => model.provider === id)) {
+      validateDialectModel(record.dialect, model.id);
+    }
     const currentSecrets = this.readSecrets(id) ?? { headers: {} };
     if (!previous && this.state.providers.length >= MAX_CUSTOM_PROVIDERS) {
       badRequest('Too many custom providers are configured.');
@@ -541,6 +595,9 @@ export class ProviderRegistryService {
     const id = providerId(idValue);
     const provider = this.proxy.getAgentProvider(id);
     if (!provider) throw Object.assign(new Error('Provider is not connected.'), { status: 409 });
+    if (!provider.canDiscoverModels()) {
+      throw Object.assign(new Error('Provider does not support connection discovery.'), { status: 409 });
+    }
     const models = await discoverProviderModelIds(provider);
     return { ok: true, models: models.slice(0, 500), checkedAt: new Date().toISOString() };
   }
@@ -556,6 +613,7 @@ export class ProviderRegistryService {
       badRequest('Unknown model provider.', 'INVALID_MODEL');
     }
     const id = boundedString(input.id ?? existingKey?.slice(provider.length + 1), 'model id', 500);
+    validateDialectModel(this.state.providers.find(item => item.id === provider)?.dialect, id);
     const key = `${provider}:${id}`;
     const previous = this.state.models.find(model => model.key === (existingKey ?? key));
     const published = getPublishedModelMetadata(provider, id);
@@ -638,12 +696,15 @@ export class ProviderRegistryService {
         });
       }
       const imported: CustomModelDefinition[] = [];
+      const profiles = new Map((getProviderPublishedModels(provider) ?? []).map(model => [model.id, model]));
       for (const id of models) {
         const key = `${providerId}:${id}`;
         const existing = this.state.models.find(model => model.key === key);
         if (existing) { imported.push(existing); continue; }
+        const profile = profiles.get(id);
         imported.push(await this.upsertModelUnlocked({
-          provider: providerId, id, name: id, capabilities: { toolCalls: true },
+          provider: providerId, id, name: profile?.name ?? id, capabilities: profile?.capabilities ?? { toolCalls: true },
+          contextWindow: profile?.contextWindow, maxOutputTokens: profile?.maxOutputTokens, pricing: profile?.pricing,
         }));
       }
       return imported;
@@ -770,8 +831,18 @@ export class ProviderRegistryService {
     };
     const provider = record.dialect === 'openai-completions' ? new OpenAiProvider(config)
       : record.dialect === 'openai-responses' ? new OpenAiResponsesProvider(config)
-        : record.dialect === 'anthropic' ? new AnthropicProvider(config)
-          : new GeminiProvider(config);
+        : record.dialect === 'mistral-conversations' ? new MistralProvider(config)
+          : record.dialect === 'openrouter' ? new OpenRouterProvider(config)
+            : record.dialect === 'cloudflare-workers-ai' ? new CloudflareWorkersAiMixedProvider(config)
+              : record.dialect === 'openai' ? new OpenAiMixedProvider(config)
+                : record.dialect === 'cerebras' ? new CerebrasProvider(config)
+                  : record.dialect === 'deepseek' ? new DeepSeekProvider(config)
+                    : record.dialect === 'nvidia' ? new NvidiaProvider(config)
+                      : record.dialect === 'moonshot' ? new MoonshotProvider(config)
+                        : record.dialect === 'zai' ? new ZaiProvider(config)
+                          : record.dialect === 'groq' ? new GroqProvider(config)
+                            : record.dialect === 'anthropic' ? new AnthropicProvider(config)
+                              : new GeminiProvider(config);
     this.proxy.setCustomProvider(record.id, provider);
   }
 

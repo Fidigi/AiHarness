@@ -12,6 +12,8 @@ describe('Types', () => {
       expect(ProviderType.OPENAI).toBe('openai');
       expect(ProviderType.ANTHROPIC).toBe('anthropic');
       expect(ProviderType.GOOGLE).toBe('google');
+      expect(ProviderType.CEREBRAS).toBe('cerebras');
+      expect(ProviderType.MISTRAL_CONVERSATIONS).toBe('mistral-conversations');
       expect(ProviderType.LOCAL).toBe('local');
       expect(ProviderType.CUSTOM).toBe('custom');
     });

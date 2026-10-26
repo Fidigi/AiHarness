@@ -3,8 +3,8 @@ import { lstat, open } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { CONFIGURABLE_CODEMODE_LIMITS, type ConfiguredCodemodeLimits } from './codemode-limits.js';
-import type { ThinkingBudgets, ThinkingLevel } from '../providers/index.js';
-import { getPublishedModelMetadata } from '../providers/model-metadata.js';
+import type { AiProvider, ThinkingBudgets, ThinkingLevel } from '../providers/index.js';
+import { getProviderPublishedModel } from '../providers/provider-model-metadata.js';
 import type { ResourceFileSelector } from '../resources/resource-manager.js';
 import {
   resolveAgentDirectory,
@@ -857,13 +857,16 @@ export function resolveAgentCompactionSettings(
   };
 }
 
-/** Resolve passive model limits; the synthetic mock retains its legacy host policy. */
-export function resolveAgentCompactionContextWindow(provider?: string, model?: string): number | undefined {
+/** Resolve passive adapter-owned limits, retaining legacy aliases/fallback and synthetic mock policy. */
+export function resolveAgentCompactionContextWindow(
+  provider?: string, model?: string, source?: Pick<AiProvider, 'getPublishedModels' | 'getModelApi'>,
+): number | undefined {
   if (provider !== undefined && typeof provider !== 'string' || model !== undefined && typeof model !== 'string') {
     throw new Error('Compaction model identity is invalid.');
   }
-  if (!provider || provider === 'mock') return undefined;
-  return (model ? getPublishedModelMetadata(provider, model)?.contextWindow : undefined) ?? 128_000;
+  if (!provider) return undefined;
+  return (model ? getProviderPublishedModel(provider, model, source)?.contextWindow : undefined)
+    ?? (provider === 'mock' ? undefined : 128_000);
 }
 
 export function resolveAgentThinkingLevel(

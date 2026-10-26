@@ -185,7 +185,7 @@ export function toJsonProtocolMessage(message: Message): JsonMessage {
     return {
       role: 'assistant',
       content,
-      api: providerApi(message.provider ?? 'unknown'),
+      api: message.api ?? providerApi(message.provider ?? 'unknown'),
       provider: message.provider ?? 'unknown',
       model: message.model ?? 'unknown',
       usage: persistedUsage(message),
@@ -623,7 +623,7 @@ export class JsonEventStream {
     return {
       role: 'assistant',
       content,
-      api: providerApi(provider),
+      api: response?.api ?? providerApi(provider),
       provider,
       model: response?.model ?? state.model ?? 'unknown',
       usage: usageOf(response?.usage, provider, response?.model ?? state.model),

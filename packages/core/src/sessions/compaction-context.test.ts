@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { resolveAgentCompactionContextWindow } from '../config/agent-settings.js';
 import { SessionManager } from './session-manager.js';
+import { CloudflareWorkersAiMixedProvider, OpenAiMixedProvider, OpenRouterProvider } from '../providers/index.js';
 
 async function fixture() {
   const manager = new SessionManager();
@@ -104,6 +105,25 @@ describe('passive configured-model window resolution', () => {
     ['mock', 'mock-model', undefined], [undefined, undefined, undefined],
   ])('resolves %s/%s without discovery', (provider, model, expected) => {
     expect(resolveAgentCompactionContextWindow(provider, model)).toBe(expected);
+  });
+
+  it.each([
+    [() => new OpenAiMixedProvider({ type: 'mistral', apiKey: 'disposable' }), 'gpt-6-luna', 272_000],
+    [() => new OpenRouterProvider({ type: 'mistral', apiKey: 'disposable' }), 'anthropic/claude-sonnet-4.6', 1_000_000],
+    [() => new CloudflareWorkersAiMixedProvider({ type: 'mistral', apiKey: 'disposable', accountId: 'explicit' }), '@cf/google/gemma-4-26b-a4b-it', 256_000],
+  ] as const)('uses adapter-owned limits instead of a logical alias table', (create, model, expected) => {
+    const provider = create();
+    expect(resolveAgentCompactionContextWindow('mistral', model, provider)).toBe(expected);
+  });
+
+  it('does not borrow legacy limits after an authoritative missing, invalid or throwing declaration', () => {
+    const provider = new OpenAiMixedProvider({ type: 'anthropic', apiKey: 'disposable' });
+    expect(resolveAgentCompactionContextWindow('anthropic', 'claude-sonnet-4-6', provider)).toBe(128_000);
+    vi.spyOn(provider, 'getPublishedModels').mockReturnValue([]);
+    expect(resolveAgentCompactionContextWindow('anthropic', 'claude-sonnet-4-6', provider)).toBe(128_000);
+    vi.mocked(provider.getPublishedModels).mockImplementation(() => { throw new Error('Private metadata'); });
+    expect(resolveAgentCompactionContextWindow('anthropic', 'claude-sonnet-4-6', provider)).toBe(128_000);
+    expect(resolveAgentCompactionContextWindow('anthropic', 'claude-sonnet-4-6')).toBe(1_000_000);
   });
 
   it('rejects non-string identities without coercion', () => {

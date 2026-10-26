@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MockProvider } from '@ai-harness/core';
+import { BedrockProvider, CerebrasProvider, MockProvider } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -7,6 +7,29 @@ import {
 } from './configured-providers.js';
 
 describe('configured CLI providers', () => {
+  it('composes native Cerebras credentials, defaults and scoped settings without an extension', async () => {
+    expect(createConfiguredProviders({}).has('cerebras')).toBe(false);
+    const providers = createConfiguredProviders({
+      CEREBRAS_API_KEY: 'cerebras-environment',
+      AI_HARNESS_CEREBRAS_API_KEY: 'cerebras-conventional-first',
+      CEREBRAS_MODEL: 'qwen-3.8-27b', CEREBRAS_BASE_URL: 'http://127.0.0.1/owned/v1',
+    }, { credentials: { cerebras: 'cerebras-stored' } });
+    const provider = providers.get('cerebras');
+    expect(provider).toBeInstanceOf(CerebrasProvider);
+    expect((provider as unknown as { config: Record<string, unknown> }).config).toMatchObject({
+      apiKey: 'cerebras-conventional-first', model: 'qwen-3.8-27b', baseUrl: 'http://127.0.0.1/owned/v1/chat/completions',
+    });
+    const stored = createConfiguredProviders({}, { credentials: new Map([['cerebras', 'cerebras-stored']]) });
+    expect(stored.get('cerebras')).toBeInstanceOf(CerebrasProvider);
+    expect(stored.get('cerebras')?.getConfiguredModel()).toBe('gpt-oss-120b');
+    expect(stored.get('cerebras')?.validateConfig()).toBe(true);
+    const { selection } = applyAgentModelSettings({}, { defaultProvider: 'cerebras', defaultModel: 'qwen-3.8-27b' });
+    await expect(resolveStartupProvider(stored, selection, {})).resolves.toMatchObject({ providerName: 'cerebras', model: 'qwen-3.8-27b' });
+    await expect(resolveStartupProvider(providers, { models: ['cerebras/*:high'], preferredProvider: 'cerebras', preferredModel: 'qwen-3.8-27b' }, {}))
+      .resolves.toMatchObject({ providerName: 'cerebras', model: 'qwen-3.8-27b', thinkingLevel: 'high' });
+    expect(createConfiguredProviders({ CEREBRAS_API_KEY: 'synthetic', CEREBRAS_MODEL: 'unknown' }).has('cerebras')).toBe(false);
+  });
+
   it('shares one bounded environment resolver across CLI modes', () => {
     const providers = createConfiguredProviders({
       OPENAI_API_KEY: 'test-openai',
@@ -38,6 +61,24 @@ describe('configured CLI providers', () => {
     });
     expect(JSON.stringify(provider?.getNetworkSettings())).not.toContain('proxy.test');
     expect(JSON.stringify(provider?.getNetworkSettings())).not.toContain('stored-secret');
+  });
+
+  it('selects Bedrock Bearers by source while preserving stored SigV4 and refusing malformed selected credentials', () => {
+    const token = 'ACCESS:opaque:token';
+    const config = (provider: unknown) => (provider as { config: Record<string, unknown> }).config;
+    const fromEnvironment = createConfiguredProviders({ AWS_BEARER_TOKEN_BEDROCK: token, AWS_ACCESS_KEY_ID: 'OLD', AWS_SECRET_ACCESS_KEY: 'old' }).get('bedrock');
+    expect(fromEnvironment).toBeInstanceOf(BedrockProvider);
+    expect(config(fromEnvironment).apiKey).toBe(token);
+    expect(fromEnvironment?.validateConfig()).toBe(true);
+    const stored = createConfiguredProviders({}, { credentials: { bedrock: JSON.stringify({ bearerToken: token }) } }).get('bedrock');
+    expect(config(stored).apiKey).toBe(token);
+    expect(stored?.validateConfig()).toBe(true);
+    const legacy = createConfiguredProviders({}, { credentials: { bedrock: 'ACCESS:secret:session' } }).get('bedrock');
+    expect(config(legacy)).toMatchObject({ accessKeyId: 'ACCESS', secretAccessKey: 'secret', sessionToken: 'session' });
+    expect(config(legacy).apiKey).toBeUndefined(); expect(legacy?.validateConfig()).toBe(true);
+    const sigv4 = createConfiguredProviders({ AWS_ACCESS_KEY_ID: 'EXPLICIT', AWS_SECRET_ACCESS_KEY: 'explicit', AWS_SESSION_TOKEN: 'session' }).get('bedrock');
+    expect(config(sigv4)).toMatchObject({ accessKeyId: 'EXPLICIT', secretAccessKey: 'explicit', sessionToken: 'session' });
+    expect(createConfiguredProviders({ AWS_ACCESS_KEY_ID: 'OLD', AWS_SECRET_ACCESS_KEY: 'old' }, { credentials: { bedrock: 'ACCESS:' } }).has('bedrock')).toBe(false);
   });
 
   it('resolves qualified and fuzzy models with thinking suffixes and rejects conflicts', async () => {

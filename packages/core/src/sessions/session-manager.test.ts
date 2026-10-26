@@ -259,6 +259,8 @@ describe('JsonlSessionStore', () => {
         '{ valid: json }',
         JSON.stringify({ id: 'msg-1', type: 'message', role: 'user', content: 'Valid', timestamp: Date.now() }),
         JSON.stringify({ id: 'incomplete', type: 'message' }),
+        JSON.stringify({ id: 'invalid-api-url', type: 'message', role: 'assistant', content: 'Invalid', timestamp: Date.now(), api: 'https://private.example/token' }),
+        JSON.stringify({ id: 'invalid-api-type', type: 'message', role: 'assistant', content: 'Invalid', timestamp: Date.now(), api: false }),
         'null',
       ].join('\n'));
 
@@ -598,6 +600,24 @@ describe('SessionManager with JSONL Persistence', () => {
       expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
       const durable = await store.loadSession('contended-session');
       expect(['First', 'Second']).toContain(durable?.title);
+    });
+
+    it('preserves declared message APIs without guessing legacy history and refuses invalid API fields before persistence', async () => {
+      const timestamp = new Date();
+      const session = await manager.create({ messages: [
+        { id: 'native-api', role: 'assistant', content: 'new', timestamp, api: 'mistral-conversations' },
+        { id: 'legacy-api', role: 'assistant', content: 'old', timestamp },
+      ] });
+      const loaded = await store.loadSession(session.id);
+      expect(loaded?.messages[0].api).toBe('mistral-conversations');
+      expect(loaded?.messages[1].api).toBeUndefined();
+      await expect(manager.addMessage(session.id, { role: 'assistant', content: 'invalid', api: 'https://private.example/token' }))
+        .rejects.toThrow('Session message is invalid.');
+      await expect(manager.create({ id: 'invalid-api', messages: [
+        { id: 'bad-api', role: 'assistant', content: 'invalid', timestamp, api: 'private\nvalue' },
+      ] })).rejects.toThrow('Session message is invalid.');
+      expect((await store.loadSession(session.id))?.messages).toHaveLength(2);
+      await expect(store.loadSession('invalid-api')).resolves.toBeNull();
     });
 
     it('rejects duplicate imported entry IDs before persistence', async () => {

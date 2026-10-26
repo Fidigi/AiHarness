@@ -1,4 +1,5 @@
 import type { AiProvider } from './index.js';
+import { getProviderPublishedModels } from './provider-model-metadata.js';
 import type { VirtualModelRegistry } from './virtual-models.js';
 import {
   getPublishedModelMetadata,
@@ -6,6 +7,7 @@ import {
   getPublishedProviders,
   inferModelCapabilities,
   PUBLISHED_THINKING_LEVELS,
+  type PublishedModelMetadata,
   type PublishedThinkingLevel,
 } from './model-metadata.js';
 import type {
@@ -19,7 +21,9 @@ export interface ProviderModelState {
   provider: string;
   configured: boolean;
   configuredModel?: string;
+  publishedModels?: readonly PublishedModelMetadata[];
   discoveredModels?: readonly string[];
+  getModelApi?: (model: string) => string | undefined;
 }
 
 export interface ModelIdentity {
@@ -85,6 +89,7 @@ function catalogEntry(
   model: {
     id: string;
     name: string;
+    api?: string;
     capabilities: ModelCatalogEntry['capabilities'];
     contextWindow?: number;
     maxOutputTokens?: number;
@@ -103,6 +108,7 @@ function catalogEntry(
     available: configured,
     enabled: true,
     source,
+    ...(model.api ? { api: model.api } : {}),
     capabilities: { ...model.capabilities },
     ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
     ...(model.maxOutputTokens === undefined ? {} : { maxOutputTokens: model.maxOutputTokens }),
@@ -130,7 +136,8 @@ export function buildProviderModelCatalog(
 
   return [...states.values()].map(state => {
     const models = new Map<string, ModelCatalogEntry>();
-    for (const published of getPublishedModels(state.provider)) {
+    const publishedModels = getProviderPublishedModels({ getPublishedModels: () => state.publishedModels, getModelApi: state.getModelApi });
+    for (const published of publishedModels ?? getPublishedModels(state.provider)) {
       models.set(published.id, catalogEntry(state.provider, published, state.configured, 'published'));
     }
 
@@ -160,6 +167,14 @@ export function buildProviderModelCatalog(
       models.set(custom.id, catalogEntry(state.provider, custom, state.configured, 'custom', custom.key));
     }
 
+    for (const model of models.values()) {
+      // Published APIs do not establish the dialect of an undeclared live adapter.
+      if (state.configured) delete model.api;
+      try {
+        const api = state.getModelApi?.(model.id);
+        if (typeof api === 'string' && /^[a-z][a-z0-9-]{0,63}$/.test(api)) model.api = api;
+      } catch { /* Optional provider declarations cannot prevent catalogue use. */ }
+    }
     return { provider: state.provider, configured: state.configured, models: [...models.values()] };
   });
 }
@@ -245,7 +260,9 @@ export async function collectProviderModelCatalog(
       provider: providerName,
       configured,
       configuredModel: provider.getConfiguredModel(),
+      publishedModels: getProviderPublishedModels(provider),
       discoveredModels,
+      getModelApi: model => provider.getModelApi?.(model),
     } satisfies ProviderModelState;
   }));
 
@@ -566,19 +583,19 @@ export function filterModels<T extends ModelIdentity>(models: readonly T[], sear
 
 /** Convert shared catalogue metadata to the RPC model descriptor. */
 export function toProtocolModelDescriptor(
-  model: Pick<ModelCatalogEntry, 'provider' | 'id' | 'name' | 'capabilities' | 'contextWindow' | 'maxOutputTokens' | 'pricing'>,
+  model: Pick<ModelCatalogEntry, 'provider' | 'id' | 'name' | 'api' | 'capabilities' | 'contextWindow' | 'maxOutputTokens' | 'pricing'>,
 ): ProtocolModelDescriptor {
-  const standardBaseUrl = model.provider === 'openai' ? 'https://api.openai.com/v1'
-    : model.provider === 'anthropic' ? 'https://api.anthropic.com'
-      : model.provider === 'google' ? 'https://generativelanguage.googleapis.com/v1beta'
+  const api = model.api ?? (model.provider === 'anthropic' ? 'anthropic-messages'
+    : model.provider === 'google' || model.provider === 'vertex' ? 'google-generative-ai' : 'openai-completions');
+  const standardBaseUrl = model.provider === 'openai' && (api === 'openai-completions' || api === 'openai-responses') ? 'https://api.openai.com/v1'
+    : model.provider === 'anthropic' && api === 'anthropic-messages' ? 'https://api.anthropic.com'
+      : model.provider === 'google' && api === 'google-generative-ai' ? 'https://generativelanguage.googleapis.com/v1beta'
         : undefined;
   return {
     provider: model.provider,
     id: model.id,
     name: model.name,
-    api: model.provider === 'anthropic' ? 'anthropic-messages'
-      : model.provider === 'google' || model.provider === 'vertex' ? 'google-generative-ai'
-        : 'openai-completions',
+    api,
     ...(standardBaseUrl ? { baseUrl: standardBaseUrl } : {}),
     reasoning: model.capabilities.reasoning,
     input: model.capabilities.imageInput ? ['text', 'image'] : ['text'],
@@ -595,12 +612,15 @@ export function toProtocolModelDescriptor(
   };
 }
 
-export function createProtocolModelDescriptor(provider: string, id: string): ProtocolModelDescriptor {
-  const published = getPublishedModelMetadata(provider, id);
+export function createProtocolModelDescriptor(provider: string, id: string, api?: string, publishedModels?: readonly PublishedModelMetadata[]): ProtocolModelDescriptor {
+  const owned = getProviderPublishedModels({ getPublishedModels: () => publishedModels, getModelApi: () => api });
+  const published = owned === undefined ? getPublishedModelMetadata(provider, id) : owned.find(model => model.id === id);
+  const modelApi = typeof api === 'string' && /^[a-z][a-z0-9-]{0,63}$/.test(api) ? api : undefined;
   return toProtocolModelDescriptor({
     provider,
     id,
     name: published?.name ?? id,
+    ...(modelApi ? { api: modelApi } : {}),
     capabilities: published?.capabilities ?? inferModelCapabilities(provider, id),
     ...(published?.contextWindow === undefined ? {} : { contextWindow: published.contextWindow }),
     ...(published?.maxOutputTokens === undefined ? {} : { maxOutputTokens: published.maxOutputTokens }),

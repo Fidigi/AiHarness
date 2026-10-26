@@ -1,7 +1,7 @@
 import path from 'node:path';
 import {
   CredentialRedactor, EncryptedCredentialStore, ProviderCredentialService,
-  resolvePreTrustAgentDirectory,
+  getKimiCodingOAuthConfig, resolvePreTrustAgentDirectory,
 } from '@ai-harness/core';
 import { CLI_CREDENTIAL_PROVIDERS } from '../providers/provider-runtime.js';
 import { OAuthDeviceClient, oauthConfigFromEnv } from '../security/oauth-device.js';
@@ -9,12 +9,13 @@ import { terminalText } from '../tui/terminal-text.js';
 
 export const PROVIDER_AUTH_HELP = `Usage: ai-harness auth <help|list|login|logout> [options]
   list [--json]                      Stored credential metadata only (no refresh/commands)
-  login <provider> [--timeout <1..300>]
-                                     Explicit operator-configured HTTPS device flow
+  login <provider> [--timeout <1..300>] [--issuer kimi-coding]
+                                     Explicit HTTPS device flow; provider is the storage label
   logout <provider>                  Delete local stored credentials; no remote revocation
   -h, --help                         Show help without startup
 Login/logout require AI_HARNESS_MASTER_KEY and the independent encrypted credential store.
 Device endpoints: AI_HARNESS_OAUTH_<PROVIDER>_{DEVICE_URL,TOKEN_URL,CLIENT_ID,SCOPE}.
+--issuer kimi-coding selects the Kimi public client; optional KIMI_CODE_OAUTH_HOST/KIMI_OAUTH_HOST.
 Authorization instructions go to stderr; tokens and device codes are never printed.
 Exits: 0 success/help, 2 usage, 1 operation failure, 124 deadline, 130 cancellation.
 `;
@@ -32,7 +33,7 @@ export async function loadTopLevelCredentialService(cwd: string, redactor: Crede
 
 class AuthUsageError extends Error {}
 
-function parse(args: readonly string[]): { action: string; provider?: string; json: boolean; timeout: number; help: boolean } {
+function parse(args: readonly string[]): { action: string; provider?: string; issuer?: 'kimi-coding'; json: boolean; timeout: number; help: boolean } {
   if (args.length > 16 || args.some(arg => Buffer.byteLength(arg) > 4096 || /[\x00-\x1f\x7f-\x9f]/u.test(arg))) throw new AuthUsageError();
   const action = args[0] ?? 'help';
   if (['help', '-h', '--help'].includes(action)) {
@@ -41,6 +42,7 @@ function parse(args: readonly string[]): { action: string; provider?: string; js
   }
   if (!['list', 'login', 'logout'].includes(action)) throw new AuthUsageError();
   let provider: string | undefined;
+  let issuer: 'kimi-coding' | undefined;
   let json = false, timeout = 300, help = false;
   const seen = new Set<string>();
   for (let i = 1; i < args.length; i++) {
@@ -60,6 +62,10 @@ function parse(args: readonly string[]): { action: string; provider?: string; js
         const value = equal < 0 ? args[++i] : raw.slice(equal + 1);
         if (!value || !/^(?:[1-9]\d{0,2})$/u.test(value) || Number(value) > 300) throw new AuthUsageError();
         timeout = Number(value);
+      } else if (key === '--issuer' && action === 'login') {
+        const value = equal < 0 ? args[++i] : raw.slice(equal + 1);
+        if (value !== 'kimi-coding') throw new AuthUsageError();
+        issuer = value;
       } else throw new AuthUsageError();
     } else {
       if (action === 'list' || provider || !/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(raw)) throw new AuthUsageError();
@@ -67,7 +73,7 @@ function parse(args: readonly string[]): { action: string; provider?: string; js
     }
   }
   if (!help && action !== 'list' && !provider) throw new AuthUsageError();
-  return { action, provider, json, timeout, help };
+  return { action, provider, issuer, json, timeout, help };
 }
 
 /** Standalone process adapter; deliberately not the all-provider runtime factory. */
@@ -105,7 +111,9 @@ export async function runProviderAuthCommand(args: readonly string[]): Promise<n
       process.stdout.write('Stored provider credentials removed (environment/command credentials are unchanged).\n');
       return 0;
     }
-    const config = oauthConfigFromEnv(parsed.provider!);
+    const config = parsed.issuer === 'kimi-coding'
+      ? getKimiCodingOAuthConfig(process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST)
+      : oauthConfigFromEnv(parsed.provider!);
     if (!config) { process.stderr.write('Auth unavailable: operator device flow is not configured.\n'); return 1; }
     const client = new OAuthDeviceClient(config);
     process.on('SIGINT', cancel);

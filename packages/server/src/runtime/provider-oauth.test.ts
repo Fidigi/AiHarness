@@ -17,6 +17,18 @@ afterEach(() => {
 });
 
 describe('ProviderOAuthService', () => {
+  it('does not activate OAuth for the API-key-only Core Cerebras builtin', async () => {
+    configure();
+    vi.stubEnv('AI_HARNESS_OAUTH_CEREBRAS_DEVICE_URL', 'http://oauth.test/device');
+    vi.stubEnv('AI_HARNESS_OAUTH_CEREBRAS_TOKEN_URL', 'http://oauth.test/token');
+    vi.stubEnv('AI_HARNESS_OAUTH_CEREBRAS_CLIENT_ID', 'client-id');
+    const fetcher = vi.fn();
+    const service = new ProviderOAuthService(new AiProxyServer(), () => undefined, fetcher as typeof fetch);
+    expect(service.isSupported('cerebras')).toBe(false);
+    await expect(service.start('cerebras')).rejects.toMatchObject({ status: 404, message: 'OAuth is unavailable for this provider.' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('returns only public device metadata and supports explicit cancellation', async () => {
     configure();
     const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({

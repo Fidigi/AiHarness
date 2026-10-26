@@ -124,6 +124,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       isError: entry.isError,
       provider: entry.provider,
       model: entry.model,
+      ...(entry.api ? { api: entry.api } : {}),
       usage: entry.usage,
       durationMs: entry.durationMs,
       parentMessageId: entry.parentMessageId,
@@ -220,7 +221,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       // or is retired. Conserve authentic evidence, never execute pending calls.
       await options.sessionManager.addMessage(options.sessionId, {
         role: 'assistant', content: response.content, provider: response.provider ?? options.provider, model: response.model,
-        usage: normalizeUsage(response.usage), durationMs,
+        ...(response.api ? { api: response.api } : {}), usage: normalizeUsage(response.usage), durationMs,
         metadata: { outputError: 'Extension message publication refused.' },
       }, { skipAutoCompaction: true });
       throw error;
@@ -239,6 +240,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
           ],
           provider: response.provider ?? options.provider,
           model: response.model,
+          ...(response.api ? { api: response.api } : {}),
           usage: normalizeUsage(response.usage),
           ...((response.stopReason === 'length' || response.selection) ? { metadata: {
             ...(response.stopReason === 'length' ? { stopReason: 'length' } : {}),
@@ -281,6 +283,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       toolCalls,
       provider: response.provider ?? options.provider,
       model: response.model,
+      ...(response.api ? { api: response.api } : {}),
       usage: normalizeUsage(response.usage),
       ...((response.stopReason === 'length' || response.selection) ? { metadata: {
         ...(response.stopReason === 'length' ? { stopReason: 'length' } : {}),

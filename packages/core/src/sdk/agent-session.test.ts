@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { AiProvider, AnthropicProvider, MockProvider, ProviderFactory, type ChatOptions, type ChatResponse, type StreamChunkCallback } from '../providers/index.js';
+import { createServer } from 'node:http';
+import { AiProvider, AnthropicProvider, CerebrasProvider, MistralProvider, MockProvider, ProviderFactory, type ChatOptions, type ChatResponse, type StreamChunkCallback } from '../providers/index.js';
 import { JsonlSessionStore } from '../sessions/session-manager.js';
 import { PROVIDER_NETWORK_SCOPE, fetchProviderResponse, type ProviderNetworkScope } from '../providers/provider-network.js';
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
@@ -64,6 +65,115 @@ function customStore(delegate: JsonlSessionStore): SessionStore {
 }
 
 describe('high-level Core session SDK', () => {
+  it('composes Cerebras through SDK config with owned streaming and redaction', async () => {
+    const cwd = await root(), key = 'disposable-sdk-cerebras-factory-key';
+    const calls: Array<{ url?: string; authorization?: string; body: Record<string, unknown> }> = [];
+    let fixtureError: unknown;
+    const wire = createServer(async (request, response) => {
+      try {
+        if (request.method !== 'POST' || request.url !== '/owned-sdk-cerebras/v1/chat/completions') throw new Error('Unexpected owned request.');
+        let text = ''; for await (const chunk of request) text += chunk;
+        const body = JSON.parse(text) as Record<string, unknown>;
+        calls.push({ url: request.url, authorization: request.headers.authorization, body });
+        response.setHeader('content-type', 'text/event-stream');
+        response.end([
+          { model: body.model, choices: [{ delta: { content: `factory-sdk-${body.model} ${key}` }, finish_reason: 'stop' }] },
+          { choices: [], usage: { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 1 } } },
+        ].map(event => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n');
+      } catch (error) { fixtureError = error; response.statusCode = 500; response.end('Owned fixture failed.'); }
+    });
+    await new Promise<void>(resolve => wire.listen(0, '127.0.0.1', resolve));
+    let sdk: AgentSession | undefined;
+    try {
+      const construct = vi.spyOn(ProviderFactory, 'create');
+      sdk = await session(cwd, undefined, { provider: { kind: 'config', config: {
+        type: 'cerebras', apiKey: key, baseUrl: `http://127.0.0.1:${(wire.address() as { port: number }).port}/owned-sdk-cerebras/v1`,
+      } } });
+      expect(construct).not.toHaveBeenCalled(); expect(calls).toEqual([]);
+      expect(sdk.capabilities).toMatchObject({ coreApiVersion: 1, modelDiscovery: false, oauthLogin: false });
+      expect((await sdk.promptAndWait('First owned turn')).phase).toBe('completed');
+      await sdk.setModel('qwen-3.8-27b'); await sdk.setThinking('high');
+      expect((await sdk.promptAndWait('Second owned turn')).phase).toBe('completed');
+      expect(construct).toHaveBeenCalledTimes(1);
+      expect(construct.mock.results[0].value).toBeInstanceOf(CerebrasProvider);
+      expect(fixtureError).toBeUndefined(); expect(calls).toHaveLength(2);
+      expect(calls.map(call => call.body.model)).toEqual(['gpt-oss-120b', 'qwen-3.8-27b']);
+      expect(calls.map(call => call.body.reasoning_effort)).toEqual(['low', 'high']);
+      for (const call of calls) {
+        expect(call.authorization).toBe(`Bearer ${key}`);
+        expect(call.body).toMatchObject({ stream: true, stream_options: { include_usage: true } });
+        expect(Number.isSafeInteger(call.body.max_completion_tokens)).toBe(true);
+        expect(call.body.max_completion_tokens as number).toBeGreaterThan(0);
+        expect(call.body.max_completion_tokens as number).toBeLessThanOrEqual(40960);
+        expect(call.body).not.toHaveProperty('max_tokens');
+      }
+      expect(sdk.messages().filter(message => message.role === 'assistant').map(message => message.content)).toEqual([
+        'factory-sdk-gpt-oss-120b [REDACTED]', 'factory-sdk-qwen-3.8-27b [REDACTED]',
+      ]);
+      expect(sdk.snapshot().usage).toMatchObject({ inputTokens: 18, outputTokens: 4, cacheReadTokens: 2, totalTokens: 24 });
+      expect(JSON.stringify([sdk.snapshot(), sdk.exportSession(), sdk.events(), await sdk.history()])).not.toContain(key);
+    } finally {
+      try { await sdk?.dispose(); } finally {
+        wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve()));
+      }
+    }
+  });
+
+  it('composes Mistral through SDK config with lazy native streaming and redaction', async () => {
+    const cwd = await root(), key = 'disposable-sdk-mistral-factory-key';
+    const calls: Array<{ authorization?: string; body: Record<string, unknown> }> = [];
+    let fixtureError: unknown;
+    const wire = createServer(async (request, response) => {
+      try {
+        if (request.method !== 'POST' || request.url !== '/v1/chat/completions') throw new Error('Unexpected owned request.');
+        let text = ''; for await (const chunk of request) text += chunk;
+        const body = JSON.parse(text) as Record<string, unknown>;
+        calls.push({ authorization: request.headers.authorization, body });
+        response.setHeader('content-type', 'text/event-stream');
+        response.end('data: ' + JSON.stringify({ model: body.model, choices: [{ delta: {
+          content: [{ type: 'thinking', thinking: [{ type: 'text', text: 'thought' }] },
+            { type: 'text', text: `factory-sdk-${body.model} ${key}` }],
+        }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, num_cached_tokens: 1, completion_tokens: 2, total_tokens: 12 } })
+          + '\n\ndata: [DONE]\n\n');
+      } catch (error) { fixtureError = error; response.statusCode = 500; response.end('Owned fixture failed.'); }
+    });
+    await new Promise<void>(resolve => wire.listen(0, '127.0.0.1', resolve));
+    let sdk: AgentSession | undefined;
+    try {
+      const construct = vi.spyOn(ProviderFactory, 'create');
+      sdk = await session(cwd, undefined, { provider: { kind: 'config', config: {
+        type: 'mistral-conversations', apiKey: key, baseUrl: `http://127.0.0.1:${(wire.address() as { port: number }).port}`,
+      } } });
+      expect(construct).not.toHaveBeenCalled(); expect(calls).toEqual([]);
+      expect(sdk.capabilities).toMatchObject({ coreApiVersion: 1, modelDiscovery: false, oauthLogin: false });
+      expect((await sdk.promptAndWait('First owned turn')).phase).toBe('completed');
+      await sdk.setModel('magistral-medium-latest'); await sdk.setThinking('high');
+      expect((await sdk.promptAndWait('Second owned turn')).phase).toBe('completed');
+      expect(construct).toHaveBeenCalledTimes(1);
+      expect(construct.mock.results[0].value).toBeInstanceOf(MistralProvider);
+      expect(fixtureError).toBeUndefined(); expect(calls).toHaveLength(2);
+      expect(calls.map(call => call.body.model)).toEqual(['mistral-small-latest', 'magistral-medium-latest']);
+      expect(calls.map(call => call.body.reasoning_effort)).toEqual(['none', 'high']);
+      for (const call of calls) {
+        expect(call.authorization).toBe(`Bearer ${key}`);
+        expect(call.body.stream).toBe(true);
+        // Native Mistral omits an unset cap; explicit caps have separate transport/installed controls.
+        expect(call.body).not.toHaveProperty('max_tokens');
+        expect(call.body).not.toHaveProperty('max_completion_tokens');
+      }
+      expect(sdk.messages().filter(message => message.role === 'assistant').map(message => message.content)).toEqual([
+        'factory-sdk-mistral-small-latest [REDACTED]', 'factory-sdk-magistral-medium-latest [REDACTED]',
+      ]);
+      expect(sdk.snapshot().usage).toMatchObject({ inputTokens: 18, outputTokens: 4, cacheReadTokens: 2, totalTokens: 24 });
+      expect(sdk.snapshot().usage.costUsd).toBeCloseTo((9 * 0.15 + 0.015 + 2 * 0.6 + 9 * 2 + 0.2 + 2 * 5) / 1e6, 12);
+      expect(JSON.stringify([sdk.snapshot(), sdk.exportSession(), sdk.events(), await sdk.history()])).not.toContain(key);
+    } finally {
+      try { await sdk?.dispose(); } finally {
+        wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve()));
+      }
+    }
+  });
+
   it('keeps factories/reads passive and true memory operation never opens a disk store', async () => {
     const cwd = await root();
     const disk = vi.spyOn(JsonlSessionStore.prototype, 'ensureDir');

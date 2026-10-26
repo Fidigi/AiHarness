@@ -4,14 +4,16 @@ import type { ProviderDialect } from '../types/index.js';
  * Accept API bases or full request endpoints; reject URL credential/query state.
  */
 export function resolveProviderDiscoveryEndpoint(dialect: ProviderDialect, baseUrl: string): string {
+  if (dialect === 'openai' || dialect === 'openrouter' || dialect === 'cloudflare-workers-ai' || dialect === 'cerebras' || dialect === 'deepseek' || dialect === 'groq' || dialect === 'zai' || dialect === 'moonshot' || dialect === 'nvidia') throw new Error('Provider does not support connection discovery.');
   let url: URL;
   try { url = new URL(baseUrl); } catch { throw new Error('Invalid provider endpoint.'); }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
     throw new Error('Invalid provider endpoint.');
   }
   let pathname = url.pathname.replace(/\/+$/, '');
-  if (dialect === 'openai-completions' || dialect === 'openai-responses') {
+  if (dialect === 'openai-completions' || dialect === 'openai-responses' || dialect === 'mistral-conversations') {
     pathname = pathname.replace(/\/(?:chat\/completions|responses|models)$/, '');
+    if (dialect === 'mistral-conversations' && !pathname.endsWith('/v1')) pathname += '/v1';
   } else if (dialect === 'anthropic') {
     pathname = pathname.replace(/\/(?:messages|models)$/, '');
     if (!pathname.endsWith('/v1')) pathname += '/v1';

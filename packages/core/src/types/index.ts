@@ -97,6 +97,8 @@ export interface Message {
   isError?: boolean;
   provider?: string;
   model?: string;
+  /** API recorded at generation time, never inferred when replaying legacy history. */
+  api?: string;
   usage?: TokenUsage;
   durationMs?: number;
   parentMessageId?: string;
@@ -109,6 +111,8 @@ export interface ProviderConfig {
   /** Built-in provider type or an operator-defined provider id. */
   type: ProviderType | string;
   apiKey?: string;
+  /** Explicit Kimi Coding credential transport; absent keeps API-key authentication. */
+  kimiAuthMode?: 'api-key' | 'oauth';
   model?: string;
   baseUrl?: string;
   /** Explicit Azure protocol; absent preserves legacy endpoints and recognizes /openai/v1. */
@@ -139,7 +143,7 @@ export interface ModelPricing {
   cacheWritePerMillion?: number;
 }
 
-export type ProviderDialect = 'openai-completions' | 'openai-responses' | 'anthropic' | 'google';
+export type ProviderDialect = 'openai' | 'openai-completions' | 'openai-responses' | 'anthropic' | 'google' | 'mistral-conversations' | 'openrouter' | 'cloudflare-workers-ai' | 'cerebras' | 'deepseek' | 'groq' | 'zai' | 'moonshot' | 'nvidia';
 
 /** Public metadata for an operator-managed provider. Header values and credentials never cross the API. */
 export interface CustomProviderDefinition {
@@ -204,6 +208,8 @@ export interface ModelCatalogEntry {
   available: boolean;
   enabled: boolean;
   source: ModelCatalogSource;
+  /** Published API, overridden by a declared live provider binding when configured. */
+  api?: string;
   capabilities: ModelCapabilities;
   contextWindow?: number;
   maxOutputTokens?: number;
@@ -477,6 +483,8 @@ export enum ProviderType {
   OPENAI = 'openai',
   ANTHROPIC = 'anthropic',
   GOOGLE = 'google',
+  CEREBRAS = 'cerebras',
+  MISTRAL_CONVERSATIONS = 'mistral-conversations',
   AZURE = 'azure',
   BEDROCK = 'bedrock',
   VERTEX = 'vertex',

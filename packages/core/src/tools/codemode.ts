@@ -1,7 +1,7 @@
 import type { QuestionClassificationRequest } from '../providers/classification-questions.js';
 import { Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
-import { SpecializedModels, validateGeneratedImages, type ClassificationRequest, type ImageGenerationRequest, type SpecializedModelType } from '../providers/specialized-models.js';
+import { SpecializedModelError, SpecializedModels, validateGeneratedImages, type ClassificationRequest, type ImageGenerationRequest, type SpecializedModelType } from '../providers/specialized-models.js';
 import type { CodemodeCall, CodemodeDetails, MessageContentBlock, TokenUsage } from '../types/index.js';
 export type { CodemodeDetails } from '../types/index.js';
 import { createRequire } from 'node:module';
@@ -299,6 +299,7 @@ export async function runCodemode(options: RunCodemodeOptions): Promise<Extensio
           } catch (failure) {
             error = redact(failure instanceof Error ? failure.message : 'Nested call failed.').slice(0, 2_000);
             if (!settled) {
+              if (activity && activity.kind !== 'tool' && failure instanceof SpecializedModelError) activity.usage = failure.usage;
               if (activity) { activity.state = 'failed'; activity.isError = true; activity.durationMs = Math.max(0, Math.round(performance.now() - callStarted)); progress(activity); }
               worker.postMessage({ type: 'response', id: message.id, error });
             }

@@ -39,11 +39,25 @@ A saved refusal must remain a refusal; the SDK never grants or persists trust.
 - **cwd / allowedRoots**: existing directory and canonical path boundary. No Git,
   shell or instruction discovery occurs at construction.
 - **provider**: `{kind:'config', config}` accepts only named Core built-ins
-  (OpenAI, Anthropic, Google, Azure, Vertex, Bedrock, local, mock). Construction
+  (OpenAI, Anthropic, Google, Cerebras, Mistral Conversations, Azure, Vertex, Bedrock, local, mock). Construction
   is deferred until an explicit prompt. Network/transport/proxy/deadline/retry
   fields pass unchanged to Core. `{kind:'instance', name, provider}` borrows an
   `AiProvider`; custom adapters must use Core's network policy and honor abort
   and awaited stream callbacks. There is no global dynamic-factory fallback.
+  The `cerebras` config requires an explicit `apiKey`, accepts the adapter's two
+  physical models and optional `baseUrl`, and defaults to `gpt-oss-120b`. Core
+  factory registration reserves that name. SDK config adds no implicit
+  environment credential resolution or OAuth. Native CLI composition separately
+  supports Cerebras environment/command/encrypted credentials; Server/Settings
+  retain their existing eight configured builtin identities.
+  Native Mistral uses `type: 'mistral-conversations'` (also
+  `ProviderType.MISTRAL_CONVERSATIONS`), an explicit `apiKey`, optional `baseUrl`,
+  and the existing `mistral-small-latest` default. Bare `mistral` remains available
+  for explicit extension registrations, not SDK config; borrow an instance for
+  custom adapters. Known costs use the requested physical model's pinned prices
+  and disjoint measured cache usage; unknown models remain unpriced. An unset
+  output cap is omitted, not a promise of default output-limit enforcement.
+  No automatic Mistral CLI credentials or Server/Settings identity is activated.
 - **auth**: optional borrowed `CredentialRedactor` and explicit `secrets`. API
   keys, configured headers/proxy/cloud keys and sensitive ambient environment
   values join the Core redactor before creation/loading. Register other secrets
@@ -140,11 +154,31 @@ usage accounting or overflow recovery. No new facade/store capability is require
 Native reload/copies/navigation retain custom/summary/command boundaries and remap
 known projected command links, never IDs inside private payloads.
 
-The passive root helper `resolveAgentCompactionContextWindow(provider?, model?)`
-uses published limits, or a 128,000-token fallback for other non-mock providers;
-mock/unspecified hosts retain legacy policy. CLI/RPC apply it after model changes.
-The fallback is not authoritative vendor metadata; estimates omit system/tool
-wire overhead and are not exact tokenization or overflow recovery.
+The passive root helper `resolveAgentCompactionContextWindow(provider?, model?, source?)`
+uses the optional actual adapter's sanitized static declaration before legacy
+alias tables. An undeclared source preserves legacy behavior; an authoritative
+missing/invalid declaration cannot borrow another provider's limit. Unknown
+non-mock models retain the 128,000-token host fallback, not certified metadata;
+unpublished mock/unspecified hosts retain legacy policy. CLI/RPC supply their
+actual adapter at startup/model selection/reload. Explicit model/session changes
+rebind only the active session's window, preserving independent scoped windows.
+Public `getProviderPublishedModel(provider, model, source?)` returns an owned
+published row (or undefined), not that fallback. RPC statistics and regular/
+fullscreen status keep unknown limits unknown. The SDK facade still infers no
+window; reserves, keep rules, estimates, exact tokenization, physical virtual
+routing and full system/tool/media/default/overflow policies remain separate.
+
+The passive root helper `getSupportedThinkingLevels(provider, model, virtualModels?,
+source?)` optionally reads the actual adapter's sanitized own-data thinking map
+and capabilities. Virtual definitions keep their explicit priority. An undeclared
+source preserves legacy tables/inference; an authoritative empty/invalid/throwing
+or missing-model declaration yields only off instead of borrowing an alias's
+levels. Native per-level nulls and aliases retain the existing ordered/upward-then-
+downward clamp. Map rows/values are owned bounded data, never row/map getters.
+CLI startup/reload, commands, RPC selection/level controls and resolved physical
+virtual selections supply the actual adapter. This does not configure the SDK
+facade, invent effective defaults or bypass native request validation; media,
+reserves, transport, complete profiles and account qualification remain separate.
 
 ### Session lifecycle
 
@@ -382,6 +416,10 @@ les alias d'authentification/modèle réutilisent les types Core. Aucun login,
 rafraîchissement OAuth, commande de credentials ou accès au magasin chiffré
 n'est déclenché par la fabrique. Les adaptateurs cloud peuvent utiliser leurs
 credentials ambiants uniquement lors du prompt explicite.
+Pour Mistral natif, utilisez `type: 'mistral-conversations'` et une `apiKey` explicite ;
+le modèle par défaut reste `mistral-small-latest`. Le nom `mistral` reste disponible
+aux extensions explicites. Aucun hôte CLI/Server/Settings automatique n’est activé ;
+les modèles inconnus restent sans prix et une limite de sortie non fournie est omise.
 
 `runDefaults`, `onUsage` et `compaction` composent les contrats existants du
 runtime/gestionnaire. Les arguments des callbacks et résultats de résumé sont
@@ -436,11 +474,19 @@ comptabilité ou récupération d’overflow ne sont ajoutés. Aucune nouvelle c
 obligatoire de façade/stockage. Rechargement/copie/navigation conservent les bornes
 custom/résumé/commande et remappent les liens de commandes connus, pas les IDs privés.
 
-L’utilitaire passif `resolveAgentCompactionContextWindow(provider?, model?)` utilise
-la limite publiée ou un repli de 128 000 tokens hors mock ; sans provider ou pour
-mock, l’ancienne politique est conservée. CLI/RPC l’appliquent après changement de
-modèle. Ce repli n’est pas une métadonnée fournisseur certifiée ; l’estimation
-n’inclut pas tout le payload système/outils et n’est pas une récupération d’overflow.
+L’utilitaire passif `resolveAgentCompactionContextWindow(provider?, model?, source?)`
+préfère la déclaration statique assainie de l’adaptateur réel aux tables par alias.
+Sans déclaration, le comportement historique reste conservé ; une déclaration
+autoritaire absente/invalide ne peut emprunter la limite d’un autre fournisseur.
+Le repli hôte de 128 000 tokens hors mock reste distinct d’une métadonnée certifiée ;
+mock non publié et absence de provider gardent leur politique. CLI/RPC transmettent
+l’adaptateur réel au démarrage, à la sélection et au rechargement. Un changement
+explicite de modèle/session relie la fenêtre de la seule session active, sans
+modifier les fenêtres indépendantes. `getProviderPublishedModel(provider, model,
+source?)` retourne une ligne publiée possédée ou undefined, pas ce repli ; les
+statistiques RPC et statuts terminaux conservent les limites inconnues. La façade
+n’infère toujours aucune fenêtre. Réserves, coupe, estimation, routage physique
+virtuel et politiques complètes système/outils/médias/défauts/overflow restent séparés.
 
 `prompt` démarre le run détaché, `promptAndWait` attend exactement ce run.
 `stop` accuse réception de l'annulation : **attendez `wait()`** avant de considérer

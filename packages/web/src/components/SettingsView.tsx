@@ -644,7 +644,7 @@ function SettingsView({ entryRelease, entryEpoch }: {
 
 /** Get the translated short label for a provider type. */
 function getTypeLabel(type: ProviderType, t: TranslationFunction): string {
-  const key = {
+  const keys: Partial<Record<ProviderType, string>> = {
     openai: 'provider.label.openai',
     anthropic: 'provider.label.anthropic',
     google: 'provider.label.google',
@@ -654,13 +654,14 @@ function getTypeLabel(type: ProviderType, t: TranslationFunction): string {
     local: 'provider.label.local',
     mock: 'provider.label.mock',
     custom: 'provider.label.custom',
-  }[type];
+  };
+  const key = keys[type];
   return key ? t(key) : type;
 }
 
 /** Get the translated provider selector label. */
 function getProviderOptionLabel(type: ProviderType, t: TranslationFunction): string {
-  const key = {
+  const keys: Partial<Record<ProviderType, string>> = {
     openai: 'provider.option.openai',
     anthropic: 'provider.option.anthropic',
     google: 'provider.option.google',
@@ -670,13 +671,14 @@ function getProviderOptionLabel(type: ProviderType, t: TranslationFunction): str
     local: 'provider.option.local',
     mock: 'provider.option.mock',
     custom: 'provider.option.custom',
-  }[type];
+  };
+  const key = keys[type];
   return key ? t(key) : type;
 }
 
 /** Get environment variable name for provider */
 function getTypeEnvVar(type: ProviderType): string {
-  return {
+  const variables: Partial<Record<ProviderType, string>> = {
     openai: 'OPENAI_API_KEY',
     anthropic: 'ANTHROPIC_API_KEY',
     google: 'GEMINI_API_KEY',
@@ -686,7 +688,8 @@ function getTypeEnvVar(type: ProviderType): string {
     local: '',
     mock: '',
     custom: 'CUSTOM_API_KEY',
-  }[type] || '';
+  };
+  return variables[type] || '';
 }
 
 /** Get model options for a provider. */

@@ -10,6 +10,28 @@ afterEach(async () => {
 });
 
 describe('CLI provider runtime', () => {
+  it('resolves native Cerebras environment, command and encrypted credentials without registration', async () => {
+    const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-cerebras-credentials-'));
+    roots.push(agentDir);
+    const key = 'synthetic-cerebras-env';
+    const environment = await createCliProviderRuntime(agentDir, {}, { CEREBRAS_API_KEY: key });
+    expect(environment.values.get('cerebras')).toBe(key);
+    expect(environment.redactor.redact(key)).toBe('[REDACTED]');
+    const env = { AI_HARNESS_MASTER_KEY: 'sufficiently long synthetic Cerebras master key' };
+    const first = await createCliProviderRuntime(agentDir, {}, env);
+    await first.credentials.setApiKey('cerebras', 'synthetic-cerebras-stored');
+    const settings = { providerApiKeyCommands: { cerebras: `${JSON.stringify(process.execPath)} -e "process.stdout.write('synthetic-cerebras-command')"` } };
+    const command = await createCliProviderRuntime(agentDir, settings, env);
+    expect(command.values.get('cerebras')).toBe('synthetic-cerebras-command');
+    const override = await createCliProviderRuntime(agentDir, settings, { ...env, CEREBRAS_API_KEY: key, AI_HARNESS_CEREBRAS_API_KEY: 'synthetic-cerebras-first' });
+    expect(override.values.get('cerebras')).toBe('synthetic-cerebras-first');
+    const restored = await createCliProviderRuntime(agentDir, {}, env);
+    expect(restored.values.get('cerebras')).toBe('synthetic-cerebras-stored');
+    expect(restored.redactor.redact('synthetic-cerebras-stored')).toBe('[REDACTED]');
+    const bytes = await readFile(path.join(agentDir, 'credentials.enc'), 'utf8');
+    for (const secret of [key, 'synthetic-cerebras-stored', 'synthetic-cerebras-command', 'synthetic-cerebras-first']) expect(bytes).not.toContain(secret);
+  });
+
   it('persists credentials encrypted and resolves only their process-local value', async () => {
     const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-credentials-'));
     roots.push(agentDir);
@@ -18,10 +40,14 @@ describe('CLI provider runtime', () => {
     const descriptor = await first.credentials.setApiKey('openai', 'private-cli-secret');
     expect(descriptor).toMatchObject({ provider: 'openai', source: 'encrypted-store' });
     expect(JSON.stringify(descriptor)).not.toContain('private-cli-secret');
+    await first.credentials.setApiKey('bedrock', JSON.stringify({ bearerToken: 'private:bedrock:bearer' }));
 
     const restored = await createCliProviderRuntime(agentDir, {}, env);
     expect(restored.values.get('openai')).toBe('private-cli-secret');
     expect(await readFile(path.join(agentDir, 'credentials.enc'), 'utf8')).not.toContain('private-cli-secret');
+    expect(restored.values.get('bedrock')).toBe(JSON.stringify({ bearerToken: 'private:bedrock:bearer' }));
+    expect(restored.redactor.redact('private:bedrock:bearer')).toBe('[REDACTED]');
+    expect(await readFile(path.join(agentDir, 'credentials.enc'), 'utf8')).not.toContain('private:bedrock:bearer');
   });
 
   it('resolves trusted configured commands and bounded network settings', async () => {

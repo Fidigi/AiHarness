@@ -1,6 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type AiProvider, AnthropicProvider, BedrockProvider, GeminiProvider, OpenAiProvider, OpenAiResponsesProvider, type ChatResponse } from './index.js';
+import { bedrockText } from '../../../../tests/fixtures/bedrock-event-stream.js';
 
 const servers: Server[] = [];
 afterEach(async () => {
@@ -22,9 +23,10 @@ const cases = [
       : JSON.stringify({ content: [{ type: 'text', text: 'fragment' }], stop_reason: length ? 'max_tokens' : 'end_turn' }) },
   { name: 'Gemini', make: (baseUrl: string): AiProvider => new GeminiProvider({ type: 'google', apiKey: 'disposable', baseUrl, model: 'gemini-test' }),
     body: (stream: boolean, length: boolean) => { const data = { candidates: [{ content: { parts: [{ text: 'fragment' }] }, finishReason: length ? 'MAX_TOKENS' : 'STOP' }] }; return stream ? sse(data) : JSON.stringify(data); } },
-  { name: 'Bedrock Converse and streaming facade', make: (baseUrl: string): AiProvider => new BedrockProvider({ type: 'bedrock', baseUrl,
+  { name: 'Bedrock Converse and native binary streaming', make: (baseUrl: string): AiProvider => new BedrockProvider({ type: 'bedrock', baseUrl,
     accessKeyId: 'DISPOSABLE', secretAccessKey: 'disposable-secret', model: 'bedrock-test' }),
-    body: (_stream: boolean, length: boolean) => JSON.stringify({ output: { message: { content: [{ text: 'fragment' }] } }, stopReason: length ? 'max_tokens' : 'end_turn' }) },
+    body: (stream: boolean, length: boolean) => stream ? bedrockText('fragment', length ? 'max_tokens' : 'end_turn')
+      : JSON.stringify({ output: { message: { content: [{ text: 'fragment' }] } }, stopReason: length ? 'max_tokens' : 'end_turn' }) },
 ];
 
 for (const scenario of cases) describe(scenario.name, () => {
@@ -33,9 +35,9 @@ for (const scenario of cases) describe(scenario.name, () => {
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(Buffer.from(chunk));
       const body = JSON.parse(Buffer.concat(chunks).toString()) as { stream?: boolean };
-      const stream = body.stream === true || request.url!.includes('streamGenerateContent');
+      const stream = body.stream === true || request.url!.includes('streamGenerateContent') || request.url!.endsWith('/converse-stream');
       const text = scenario.body(stream, length);
-      response.writeHead(200, { 'Content-Type': text.startsWith('data:') ? 'text/event-stream' : 'application/json' });
+      response.writeHead(200, { 'Content-Type': Buffer.isBuffer(text) ? 'application/vnd.amazon.eventstream' : text.startsWith('data:') ? 'text/event-stream' : 'application/json' });
       response.end(text);
     });
     servers.push(server);

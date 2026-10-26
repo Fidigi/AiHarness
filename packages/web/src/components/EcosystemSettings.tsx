@@ -231,6 +231,16 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
           onChange={event => setForm(current => ({ ...current, dialect: event.target.value }))}>
           <option value="openai-completions">OpenAI Chat Completions</option>
           <option value="openai-responses">OpenAI Responses</option>
+          <option value="openai">OpenAI mixed Responses / Decisions</option>
+          <option value="mistral-conversations">Mistral Chat / Conversations</option>
+          <option value="openrouter">OpenRouter mixed A/C/I/T</option>
+          <option value="cloudflare-workers-ai">Cloudflare Workers AI mixed C/S</option>
+          <option value="cerebras">Cerebras Chat Completions</option>
+          <option value="deepseek">DeepSeek Chat Completions</option>
+          <option value="groq">Groq Chat Completions</option>
+          <option value="zai">Z.ai Coding Chat Completions</option>
+          <option value="moonshot">Moonshot Chat Completions</option>
+          <option value="nvidia">NVIDIA Chat Completions</option>
           <option value="anthropic">Anthropic Messages</option>
           <option value="google">Google Generative Language</option>
         </select></label>
