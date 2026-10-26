@@ -187,3 +187,120 @@ test('commit-phase open-file intent survives actual pane mount', async ({ page }
   await expect(pane(page).locator('.file-viewer > header')).toContainText('app.ts');
   await expect(pane(page).locator('#source-line-2')).toHaveClass(/target-line/);
 });
+
+// The palette is also reachable while the optional workspace asset is pending.
+// Exercise its own real production chunk here, using the same owning preview.
+const paletteJs = /\/assets\/CommandPalette-[^/]+\.js$/;
+const palette = (page: Page) => page.getByRole('dialog', { name: 'Command palette', exact: true });
+
+test('palette optional asset: closed shell fetches none; first open and cached reopen preserve focus and commands', async ({ page }) => {
+  await product(page);
+  const assets: string[] = [];
+  page.on('request', request => { if (paletteJs.test(request.url())) assets.push(request.url()); });
+  await page.goto(url);
+  await expect(composer(page)).toBeVisible();
+  expect(assets).toEqual([]);
+  await composer(page).focus();
+  await page.keyboard.press('Control+k');
+  await expect(palette(page)).toBeVisible();
+  await expect(palette(page).getByRole('textbox')).toBeFocused();
+  expect(assets).toHaveLength(1);
+  await page.keyboard.press('Escape');
+  await expect(palette(page)).toHaveCount(0);
+  await expect(composer(page)).toBeFocused();
+  await page.keyboard.press('Control+k');
+  await expect(palette(page).getByRole('textbox')).toBeFocused();
+  expect(assets).toHaveLength(1);
+  await palette(page).getByRole('option').filter({ hasText: 'Appearance' }).click();
+  await expect(page).toHaveURL(/\/settings#appearance$/);
+  await expect(palette(page)).toHaveCount(0);
+});
+
+for (const close of ['Escape', 'Control+k'] as const) {
+  test(`palette optional asset: delayed import cancels with ${close} without suspending composer or stopping its run`, async ({ page }) => {
+    let held: Route | undefined;
+    await page.route(paletteJs, route => { held = route; });
+    await product(page);
+    await page.goto(url);
+    await composer(page).fill('Keep this run active while the palette loads');
+    await composer(page).press('Enter');
+    await expect(page.locator('.stop-button')).toBeEnabled();
+    await composer(page).focus();
+    await page.keyboard.press('Control+k');
+    await expect.poll(() => Boolean(held)).toBe(true);
+    await expect(composer(page)).toBeVisible();
+    await expect(page.locator('.stop-button')).toBeEnabled();
+    await composer(page).fill('Unsent draft survives optional loading');
+    await page.keyboard.press(close);
+    await expect(page.locator('.stop-button')).toBeEnabled();
+    await expect(composer(page)).toHaveValue('Unsent draft survives optional loading');
+    const loaded = page.waitForResponse(response => paletteJs.test(response.url()));
+    await held!.continue(); await loaded; await settle(page);
+    await expect(palette(page)).toHaveCount(0);
+    await expect(composer(page)).toBeFocused();
+    await page.locator('.stop-button').click();
+    await page.keyboard.press('Control+k');
+    await expect(palette(page).getByRole('textbox')).toBeFocused();
+  });
+}
+
+for (const locale of ['en', 'fr'] as const) {
+  test(`palette optional asset: rejected import (${locale}) reports locally, stays rejected until reload and leaves chat usable`, async ({ page }) => {
+    await page.addInitScript(locale => localStorage.setItem('ai-harness-locale', locale), locale);
+    await page.route(paletteJs, route => route.abort('failed'));
+    await product(page);
+    const assets: string[] = [];
+    const errors: string[] = [];
+    page.on('request', request => { if (paletteJs.test(request.url())) assets.push(request.url()); });
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(url);
+    const input = page.locator('.input-container textarea');
+    await expect(input).toBeVisible();
+    await input.fill('Preserve my draft');
+    await input.focus();
+    await page.keyboard.press('Control+k');
+    const message = locale === 'fr'
+      ? 'La palette de commandes n’a pas pu être chargée. Rechargez la page pour réessayer.'
+      : 'The command palette could not load. Reload the page to try again.';
+    const notice = page.getByRole('alert').filter({ hasText: message });
+    await expect(notice).toBeVisible();
+    await expect(input).toHaveValue('Preserve my draft');
+    await expect(input).toBeFocused();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(assets).toHaveLength(1);
+    await notice.getByRole('button', { name: locale === 'fr' ? 'Fermer' : 'Close', exact: true }).click();
+    await page.keyboard.press('Control+k');
+    await expect(notice).toBeVisible();
+    expect(assets).toHaveLength(1);
+    expect(errors).toEqual([]);
+    await page.unroute(paletteJs);
+    // A real document reload resets ESM failure; no retry of the failed promise.
+    await page.reload();
+    await expect(input).toBeVisible();
+    await page.keyboard.press('Control+k');
+    await expect(page.getByRole('dialog', { name: locale === 'fr' ? 'Palette de commandes' : 'Command palette', exact: true })).toBeVisible();
+    expect(assets).toHaveLength(2);
+  });
+}
+
+test('palette optional asset: navigation retires a pending import without reopening or stealing focus', async ({ page }) => {
+  let held: Route | undefined;
+  await page.route(paletteJs, route => { held = route; });
+  await product(page);
+  await page.goto(url);
+  await expect(composer(page)).toBeVisible();
+  await page.keyboard.press('Control+k');
+  await expect.poll(() => Boolean(held)).toBe(true);
+  await page.evaluate(() => {
+    history.pushState(null, '', '/chat/other?cwd=%2Fworkspace');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page).toHaveURL(/\/chat\/other/);
+  await composer(page).fill('New conversation draft');
+  await composer(page).focus();
+  const loaded = page.waitForResponse(response => paletteJs.test(response.url()));
+  await held!.continue(); await loaded; await settle(page);
+  await expect(palette(page)).toHaveCount(0);
+  await expect(composer(page)).toHaveValue('New conversation draft');
+  await expect(composer(page)).toBeFocused();
+});

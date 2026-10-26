@@ -8,7 +8,7 @@ import ChatView from './components/ChatView';
 import WorkspacePanelBoundary from './components/WorkspacePanelBoundary';
 import LoginView from './components/LoginView';
 import PwaStatus from './components/PwaStatus';
-import CommandPalette from './components/CommandPalette';
+import CommandPaletteBoundary from './components/CommandPaletteBoundary';
 import StatusCenter from './components/StatusCenter';
 import { SubagentMonitor } from './components/SubagentMonitor';
 import { useI18n } from './hooks/useI18n';
@@ -235,7 +235,9 @@ function App() {
   }, [location.pathname]);
 
   useEscapeLayer(true, 'navigation', () => {
-    if (sidebarOpen) setSidebarOpen(false);
+    // The real modal owns Escape once loaded; pending imports still cancel here.
+    if (paletteOpen) setPaletteOpen(false);
+    else if (sidebarOpen) setSidebarOpen(false);
     else if (filesOpen && isNarrow) setFilesOpen(false);
     else if (location.pathname.startsWith('/settings')) navigate(lastChatAddress.current);
     else return false;
@@ -276,7 +278,7 @@ function App() {
           aria-label={t('terminal.open')}>⌘</button>}
       {!location.pathname.startsWith('/settings') && workspace && terminalWorkspaceId === workspace.id
         && <Suspense fallback={null}><TerminalPanel key={workspace.id} initialOpen /></Suspense>}
-      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
+      {paletteOpen && <CommandPaletteBoundary onClose={() => setPaletteOpen(false)} />}
       <SubagentMonitor />
       <StatusCenter />
       <PwaStatus />
