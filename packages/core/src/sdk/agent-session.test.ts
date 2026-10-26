@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { AiProvider, MockProvider, ProviderFactory, type ChatOptions, type ChatResponse, type StreamChunkCallback } from '../providers/index.js';
+import { AiProvider, AnthropicProvider, MockProvider, ProviderFactory, type ChatOptions, type ChatResponse, type StreamChunkCallback } from '../providers/index.js';
 import { JsonlSessionStore } from '../sessions/session-manager.js';
 import { PROVIDER_NETWORK_SCOPE, fetchProviderResponse, type ProviderNetworkScope } from '../providers/provider-network.js';
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
@@ -410,6 +410,53 @@ describe('high-level Core session SDK', () => {
     expect(sdk.messages().at(-1)).toEqual(result);
     await registry.unloadAll();
   }, 15_000);
+
+  it('retires an eligible idle cache after the last copied handle without unloading a borrowed registry', async () => {
+    const cwd = await root(), model = 'claude-sonnet-4-6';
+    const provider = new AnthropicProvider({ type: 'anthropic', model, apiKey: 'disposable-sdk-idle-key' });
+    const stream = vi.spyOn(provider, 'streamChat').mockImplementation(async (_messages, _chunk, complete) => {
+      complete?.({ content: 'owned idle answer', model,
+        usage: { promptTokens: 400_000, completionTokens: 1, totalTokens: 400_001 } });
+    });
+    const registry = new ExtensionRegistry();
+    const cleanup = vi.fn();
+    await registry.load('caller-idle-sentinel', () => cleanup);
+    const tracked = vi.spyOn(registry, 'trackProviderCache');
+    const messages: Message[] = Array.from({ length: 4 }, (_, index) => ({
+      id: `idle-prefix-${index}`, role: index % 2 ? 'assistant' : 'user',
+      content: 'x'.repeat(400_000), timestamp: new Date(100 + index),
+    }));
+    let sdk: AgentSession | undefined, copy: AgentSession | undefined;
+    try {
+      sdk = await session(cwd, provider, {
+        provider: { kind: 'instance', name: 'anthropic', provider }, extensionRegistry: registry,
+        session: { kind: 'new', options: { messages } },
+      });
+      await sdk.setModel(model);
+      copy = await sdk.clone(); handles.push(copy);
+      expect((await sdk.promptAndWait('Prepare the owned idle prefix.', { cacheWarming: 'idle' })).phase).toBe('completed');
+      expect(tracked).toHaveBeenCalledTimes(1);
+      const warmer = tracked.mock.calls[0][0];
+      expect(warmer.mode).toBe('idle');
+      expect(warmer.status).toMatchObject({ state: 'scheduled',
+        decision: { phase: 'idle', action: 'warm', continuationProbability: 0.15 } });
+      expect(warmer.status.extensionOverride).toBeUndefined();
+      await sdk.dispose();
+      expect(cleanup).not.toHaveBeenCalled();
+      expect((await copy.promptAndWait('The copied handle remains usable.', { cacheWarming: 'off' })).phase).toBe('completed');
+      expect(stream).toHaveBeenCalledTimes(2);
+      await copy.dispose();
+      expect(cleanup).not.toHaveBeenCalled();
+      expect(registry.list().map(extension => extension.id)).toEqual(['caller-idle-sentinel']);
+      expect(warmer.status.state).toBe('inactive');
+    } finally {
+      try { await Promise.all([sdk?.dispose(), copy?.dispose()]); } finally {
+        // Failed controls must not retain this test's idle timer; this is not product cleanup evidence.
+        await Promise.all([...new Set(tracked.mock.calls.map(([warmer]) => warmer))].map(warmer => warmer.dispose()));
+        await registry.unloadAll();
+      }
+    }
+  });
 
   it('disposes idempotently without unloading a caller registry/provider/store', async () => {
     const cwd = await root();

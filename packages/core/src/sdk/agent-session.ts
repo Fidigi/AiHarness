@@ -2,6 +2,7 @@ import { AgentRuntime } from '../agent/runtime.js';
 import { AgentAbortError } from '../agent/tool-loop.js';
 import { AGENT_EVENT_PROTOCOL_VERSION, type AgentRunSnapshot } from '../agent/events.js';
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
+import { disposeSessionCacheWarmers } from '../providers/cache-warmer.js';
 import { CredentialRedactor } from '../providers/credentials.js';
 import { ProviderFactory, type AiProvider } from '../providers/index.js';
 import { closeProviderNetworkDispatchers, createProviderNetworkScope, PROVIDER_NETWORK_SCOPE } from '../providers/provider-network.js';
@@ -347,6 +348,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions): Pr
           runtime.journal.clear(sessionId);
           handles--;
           if (handles === 0) {
+            await disposeSessionCacheWarmers(manager);
             detachBranchHooks();
             manager.removeAllListeners();
             if (!options.extensionRegistry) await registry.unloadAll();
