@@ -25,16 +25,22 @@ describe('trusted native code-mode limits', () => {
   });
 
   it('enforces reduced output/call/memory/time budgets without publishing failed stores', async () => {
+    const memoryCode = 'store("bad",1); const bytes = new ArrayBuffer(12 * 1024 * 1024); store("allocatedBytes",bytes.byteLength);';
+    const defaultLoadout = createAgentToolLoadout({ staticTools: [], codemode: { enabled: true } });
+    const defaultResult = await defaultLoadout.executeCodemode({ code: memoryCode }, {} as ExtensionRuntimeContext, vi.fn());
+    expect(defaultResult.isError).toBe(false);
+    expect(defaultLoadout.resultMetadata('codemode', defaultResult)).toHaveProperty('codemode.store', { bad: 1, allocatedBytes: 12 * 1024 * 1024 });
     for (const [limits, code] of [
       [{ outputBytes: 4 }, 'store("bad",1); text("12345");'],
       [{ calls: 1 }, 'store("bad",1); await describeTool("read"); await describeTool("read");'],
-      [{ memoryBytes: 8 * 1024 * 1024 }, 'store("bad",1); const a=[]; while(true) a.push("x".repeat(100000));'],
+      [{ memoryBytes: 8 * 1024 * 1024 }, memoryCode],
       [{ timeoutMs: 200 }, 'store("bad",1); /(a+)+$/.test("a".repeat(10000)+"!");'],
     ] as const) {
       const loadout = createAgentToolLoadout({ staticTools: [], codemode: { enabled: true, limits } });
       const result = await loadout.executeCodemode({ code }, {} as ExtensionRuntimeContext, vi.fn());
       expect(result.isError).toBe(true);
       if ('timeoutMs' in limits) expect(result.content).toContain('Codemode deadline exceeded.');
+      if ('memoryBytes' in limits) expect(result.content).toContain('out of memory');
       expect(loadout.resultMetadata('codemode', result)?.codemode).not.toHaveProperty('store');
     }
   });
