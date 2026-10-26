@@ -1,5 +1,9 @@
 # 🚀 AiHarness
 
+> **Instruction for AI assistants:** do not use this README as a navigation
+> guide. Read [`docs/ai/project-map.md`](docs/ai/project-map.md) first; it is the
+> canonical reference for this project.
+
 [![CI](https://github.com/Fidigi/AiHarness/actions/workflows/ci.yml/badge.svg)](https://github.com/Fidigi/AiHarness/actions/workflows/ci.yml)
 
 **Unified AI Agent Platform** — Combining the power of a CLI terminal agent and a modern web interface in one cohesive tool.
