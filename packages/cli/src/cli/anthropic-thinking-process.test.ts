@@ -8,7 +8,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 const cli = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 const adaptive = 'claude-sonnet-4-6'; const classic = 'claude-3-7-sonnet-latest';
-type Body = { model: string; thinking?: { type: string; budget_tokens?: number }; output_config?: { effort: string }; max_tokens: number };
+type Body = { model: string; thinking?: { type: string; budget_tokens?: number }; output_config?: { effort: string }; max_tokens: number;
+  messages: Array<{ role: string; content: unknown; output_config?: { effort: string } }> };
+const managed = new Set(['claude-fable-5-1', 'claude-haiku-5-5', 'claude-opus-5', 'claude-opus-5-5', 'claude-sonnet-5-5']);
+const numeric = new Set(['claude-haiku-4-5', 'claude-haiku-4-5-20251001', 'claude-opus-4-5', 'claude-opus-4-5-20251101', 'claude-sonnet-4-5', 'claude-sonnet-4-5-20250929']);
 async function fixture(model = adaptive) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-adaptive-process-'));
   const cwd = path.join(root, 'project'); const agent = path.join(root, 'agent'); const preload = path.join(root, 'network.mjs');
@@ -43,7 +46,7 @@ async function fixture(model = adaptive) {
   return { bodies, start, close };
 }
 
-describe('emitted built-in Anthropic adaptive selection', () => {
+describe('emitted built-in Anthropic reasoning selection', () => {
   for (const mode of ['print', 'json', 'rpc'] as const) for (const [model, level, effort, maximum] of [
     [adaptive, 'minimal', 'low', 2048], [adaptive, 'max', 'max', 33792],
     [adaptive, 'xhigh', 'max', 33792], [adaptive, 'off', undefined, 1024],
@@ -54,6 +57,17 @@ describe('emitted built-in Anthropic adaptive selection', () => {
     ['claude-sonnet-4-6', 'high', 'high', 9216],
     ['claude-sonnet-5', 'xhigh', 'xhigh', 17408],
     ['claude-fable-5', 'off', 'low', 2048],
+    ['claude-fable-5-1', 'off', 'low', 1024],
+    ['claude-haiku-5-5', 'off', 'low', 1024],
+    ['claude-opus-5', 'xhigh', 'xhigh', 1024],
+    ['claude-opus-5-5', 'max', 'max', 1024],
+    ['claude-sonnet-5-5', 'low', 'low', 1024],
+    ['claude-haiku-4-5', 'high', undefined, 64000],
+    ['claude-haiku-4-5-20251001', 'high', undefined, 64000],
+    ['claude-opus-4-5', 'high', undefined, 64000],
+    ['claude-opus-4-5-20251101', 'high', undefined, 64000],
+    ['claude-sonnet-4-5', 'high', undefined, 64000],
+    ['claude-sonnet-4-5-20250929', 'high', undefined, 64000],
   ] as const) {
     it(`${mode}: ${model}/${level} reaches the actual built-in payload`, async () => {
       const test = await fixture(model); const child = test.start(mode, level);
@@ -64,10 +78,19 @@ describe('emitted built-in Anthropic adaptive selection', () => {
         const ended = new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
         child.stdin.end(mode === 'rpc' ? JSON.stringify({ type: 'prompt', id: 'probe', message: 'Probe native effort.' }) + '\n' : '');
         expect(await ended, stderr).toEqual({ code: 0, signal: null }); expect(stdout).toContain('adaptive-ok');
-        if (mode !== 'print') expect(stdout.trim().split('\n').map(line => JSON.parse(line) as { type: string }).every(record => typeof record.type === 'string')).toBe(true);
+        if (mode !== 'print') {
+          const records = stdout.trim().split('\n').map(line => JSON.parse(line) as { type: string; message?: { role: string; providerThinkingLevel?: string } });
+          expect(records.every(record => typeof record.type === 'string')).toBe(true);
+          const assistant = records.find(record => record.type === 'message_end' && record.message?.role === 'assistant')?.message;
+          expect(assistant?.providerThinkingLevel).toBe(managed.has(model) ? effort : undefined);
+        }
         expect(test.bodies).toHaveLength(1);
-        expect(test.bodies[0]?.thinking).toEqual(effort ? { type: 'adaptive', display: 'summarized' } : { type: 'disabled' });
-        expect(test.bodies[0]?.output_config).toEqual(effort ? { effort } : undefined);
+        expect(test.bodies[0]?.thinking).toEqual(numeric.has(model)
+          ? { type: 'enabled', budget_tokens: 62976, display: 'summarized' } : managed.has(model)
+          ? { type: 'adaptive', display: 'summarized', block_binding: { prefix_mismatch_behavior: 'drop_block' } }
+          : effort ? { type: 'adaptive', display: 'summarized' } : { type: 'disabled' });
+        expect(test.bodies[0]?.output_config).toEqual(effort ? { effort: managed.has(model) ? 'high' : effort } : undefined);
+        if (managed.has(model)) expect(test.bodies[0]?.messages.at(-1)).toEqual({ role: 'system', content: [], output_config: { effort } });
         expect(test.bodies[0]?.model).toBe(model); expect(test.bodies[0]?.max_tokens).toBe(maximum);
       } finally { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); await test.close(); }
     }, 30_000);

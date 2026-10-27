@@ -54,6 +54,10 @@ describe('JsonEventStream', () => {
     expect(toJsonProtocolMessage({ ...message, api: 'mistral-conversations' })).toMatchObject({ api: 'mistral-conversations' });
     // Preserve the old compatibility projection, not a new claim about the historical wire.
     expect(toJsonProtocolMessage(message)).toMatchObject({ api: 'openai-completions' });
+    expect(toJsonProtocolMessage({ ...message, metadata: { providerThinkingLevel: 'low' } })).toMatchObject({ providerThinkingLevel: 'low' });
+    for (const metadata of [{ thinkingLevel: 'high' }, { providerThinkingLevel: 'PRIVATE-invalid' }, { providerThinkingLevel: { value: 'high' } }]) {
+      expect(toJsonProtocolMessage({ ...message, metadata })).not.toHaveProperty('providerThinkingLevel');
+    }
   });
 
   it('projects normalized persisted usage with shared model pricing', () => {

@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnthropicProvider, type ChatOptions, type ChatResponse } from './index.js';
+import type { Message } from '../types/index.js';
+import { SessionManager } from '../sessions/session-manager.js';
+import { ExtensionRegistry } from '../extensions/extension-registry.js';
+import { runToolLoop } from '../agent/tool-loop.js';
+import { streamProviderTurn } from '../agent/provider-turn.js';
 import { captureNativeOutputBudget, ProviderOutputBudgetError } from './provider-output-budget.js';
 import { getProviderPublishedModels, getProviderPublishedModel } from './provider-model-metadata.js';
 import { getSupportedThinkingLevels, PUBLISHED_THINKING_LEVELS, type PublishedThinkingLevel } from './model-metadata.js';
@@ -15,6 +20,8 @@ const profiles = Object.values(JSON.parse(bytes.toString())['anthropic-messages'
   compat?: { forceAdaptiveThinking?: boolean; supportsMidConvoEffort?: boolean; supportsTemperature?: boolean };
 }>;
 const adaptiveProfiles = profiles.filter(profile => profile.compat?.forceAdaptiveThinking && !profile.compat.supportsMidConvoEffort);
+const managedProfiles = profiles.filter(profile => profile.compat?.supportsMidConvoEffort);
+const numericProfiles = profiles.filter(profile => !profile.compat?.forceAdaptiveThinking && !profile.compat?.supportsMidConvoEffort);
 const supported = (profile: typeof profiles[number]) => PUBLISHED_THINKING_LEVELS.filter(level =>
   profile.thinkingLevelMap?.[level] !== null && (!['xhigh', 'max'].includes(level) || profile.thinkingLevelMap?.[level] !== undefined));
 // Independent expected native efforts, in published level order; sparse xhigh clamps upward.
@@ -32,26 +39,28 @@ const observed = { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4
 afterEach(() => vi.restoreAllMocks());
 function fixture(model: string, responseModel = 'untrusted-response-alias', Provider = AnthropicProvider) {
   const provider = new Provider({ type: 'operator-alias', model, apiKey: 'disposable-profile-key' });
-  let usage: Record<string, unknown> = structuredClone(observed), delta: Record<string, unknown> | undefined;
+  let usage: Record<string, unknown> = structuredClone(observed), delta: Record<string, unknown> | undefined, tool = false;
   const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
     const body = JSON.parse(String(init?.body));
     if (!body.stream) return new Response(JSON.stringify({ model: responseModel,
-      content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn', usage }));
+      content: [{ type: 'text', text: 'ok' }, ...(tool ? [{ type: 'tool_use', id: 'echo-call', name: 'echo', input: {} }] : [])], stop_reason: tool ? 'tool_use' : 'end_turn', usage }));
     return new Response([
       { type: 'message_start', message: { usage } },
       { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'ok' } },
-      { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: delta ?? usage },
+      ...(tool ? [{ type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'echo-call', name: 'echo' } },
+        { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{}' } }] : []),
+      { type: 'message_delta', delta: { stop_reason: tool ? 'tool_use' : 'end_turn' }, usage: delta ?? usage },
       { type: 'message_stop' },
     ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'Content-Type': 'text/event-stream' } });
   });
-  const call = async (stream: boolean, retention: 'none' | 'short' | 'long' = 'short', options?: ChatOptions) => {
-    if (!stream) return provider.chat(input, { maxTokens: 64, cacheRetention: retention, ...options });
+  const call = async (stream: boolean, retention: 'none' | 'short' | 'long' = 'short', options?: ChatOptions, messages: Message[] = input) => {
+    if (!stream) return provider.chat(messages, { maxTokens: 64, cacheRetention: retention, ...options });
     let result: ChatResponse | undefined, failure: Error | undefined;
-    await provider.streamChat(input, () => {}, value => { result = value; }, error => { failure = error; },
+    await provider.streamChat(messages, () => {}, value => { result = value; }, error => { failure = error; },
       { maxTokens: 64, cacheRetention: retention, ...options });
     if (failure) throw failure; return result!;
   };
-  return { provider, fetch, call, usage: (value: Record<string, unknown>, next?: Record<string, unknown>) => { usage = value; delta = next; } };
+  return { provider, fetch, call, tool: (enabled: boolean) => { tool = enabled; }, usage: (value: Record<string, unknown>, next?: Record<string, unknown>) => { usage = value; delta = next; } };
 }
 
 describe('pinned original Anthropic metadata and observed accounting', () => {
@@ -69,7 +78,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
         cacheReadPerMillion: profile.cost.cacheRead, cacheWritePerMillion: profile.cost.cacheWrite } });
     for (const stream of [false, true]) for (const retention of ['short', 'long'] as const) {
       const result = await f.call(stream, retention);
-      expect(result.api).toBe('anthropic-messages'); expect(result.content).toBe('ok');
+      expect(result.api).toBe('anthropic-messages'); expect(result.model).toBe(profile.id); expect(result.content).toBe('ok');
       expect(result.usage).toMatchObject({ promptTokens: 5, completionTokens: 2, cacheReadTokens: 4, cacheWriteTokens: 3, totalTokens: 14 });
       expect(result.usage?.costUsd).toBeCloseTo((5 * profile.cost.input + 2 * profile.cost.output
         + 4 * profile.cost.cacheRead + 2 * profile.cost.cacheWrite + 2 * profile.cost.input) / 1e6, 12);
@@ -79,7 +88,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
   for (const profile of profiles) it(`${profile.id}: enforces the owned output ceiling on SDK and preflight`, async () => {
     const f = fixture(profile.id), policy = captureNativeOutputBudget(f.provider)!;
     for (const maxTokens of [undefined, 1, profile.maxTokens]) {
-      const options = { maxTokens }, expected = maxTokens ?? 1024;
+      const options = { maxTokens }, expected = maxTokens ?? (numericProfiles.includes(profile) ? profile.maxTokens : 1024);
       const prepared = policy(options);
       expect(prepared.maxTokens).toBe(expected); expect(options).toEqual({ maxTokens });
       for (const stream of [false, true]) {
@@ -140,6 +149,178 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
     }
     expect(f.fetch).toHaveBeenCalledTimes(count);
   });
+  for (const profile of numericProfiles) for (const thinking of [undefined, ...PUBLISHED_THINKING_LEVELS]) {
+    it(`${profile.id}/${thinking}: owns numeric budgets and published output defaults`, async () => {
+      const f = fixture(profile.id), options: ChatOptions = { thinking, maxTokens: undefined, temperature: 0.25 };
+      const expectedBudget = thinking === undefined || thinking === 'off' ? undefined
+        : ({ minimal: 1024, low: 2048, medium: 8192, high: 16384, xhigh: 16384, max: 16384 } as const)[thinking];
+      const prepared = captureNativeOutputBudget(f.provider)!(options);
+      expect(prepared.maxTokens).toBe(profile.maxTokens);
+      expect(getSupportedThinkingLevels('operator-alias', profile.id, undefined, f.provider)).toEqual(supported(profile));
+      for (const stream of [false, true]) {
+        await f.call(stream, 'none', prepared.options);
+        const [, init] = f.fetch.mock.calls.at(-1)!, body = JSON.parse(String(init?.body));
+        expect(body.max_tokens).toBe(profile.maxTokens);
+        expect(body.thinking).toEqual(expectedBudget === undefined ? thinking === 'off' ? { type: 'disabled' } : undefined
+          : { type: 'enabled', budget_tokens: expectedBudget, display: 'summarized' });
+        expect(body.temperature).toBe(expectedBudget === undefined ? 0.25 : undefined);
+        expect(body.output_config).toBeUndefined();
+        expect(new Headers(init?.headers).get('anthropic-beta')).toBe(expectedBudget === undefined ? null : 'interleaved-thinking-2025-05-14');
+      }
+      expect(options).toEqual({ thinking, maxTokens: undefined, temperature: 0.25 });
+    });
+  }
+  for (const profile of numericProfiles) it(`${profile.id}: accepts minimal thinking with a small valid explicit answer allocation`, async () => {
+    const f = fixture(profile.id), prepare = captureNativeOutputBudget(f.provider)!;
+    // The pinned helper reserves 1024 only when reasoning reaches the total ceiling.
+    for (const maxTokens of [1, 64]) {
+      const options: ChatOptions = { maxTokens, thinking: 'minimal' }, prepared = prepare(options);
+      expect(prepared.maxTokens).toBe(maxTokens + 1024);
+      expect(prepare(prepared.options).maxTokens).toBe(maxTokens + 1024);
+      for (const stream of [false, true]) {
+        await f.call(stream, 'none', prepared.options);
+        const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+        expect(body.max_tokens).toBe(maxTokens + 1024);
+        expect(body.thinking).toMatchObject({ budget_tokens: 1024 });
+      }
+      expect(options.maxTokens).toBe(maxTokens);
+    }
+  });
+  for (const profile of numericProfiles) it(`${profile.id}: fits numeric answer room without double allocation or borrowing mutable metadata`, async () => {
+    const f = fixture(profile.id), prepare = captureNativeOutputBudget(f.provider)!;
+    const published = f.provider.getPublishedModels().find(row => row.id === profile.id)!;
+    published.thinkingLevelMap!.high = 'off'; published.maxOutputTokens = Number.MAX_SAFE_INTEGER;
+    for (const [maxTokens, high, maximum, budget] of [[64, undefined, 16448, 16384], [1, undefined, 16385, 16384],
+      [64000, undefined, 64000, 16384], [64, 32000, 32064, 32000], [64, Number.MAX_SAFE_INTEGER, 64000, 62976], [64000, 0, 64000, 1024]] as const) {
+      const options: ChatOptions = { maxTokens, thinking: 'high', ...(high === undefined ? {} : { thinkingBudgets: { high } }) };
+      const prepared = prepare(options), again = prepare(prepared.options);
+      expect(prepared.maxTokens).toBe(maximum); expect(again.maxTokens).toBe(maximum);
+      for (const stream of [false, true]) {
+        await f.call(stream, 'none', prepared.options);
+        const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+        expect(body.max_tokens).toBe(maximum); expect(body.thinking).toMatchObject({ budget_tokens: budget });
+      }
+      expect(options.maxTokens).toBe(maxTokens); expect(options.thinkingBudgets?.high).toBe(high);
+    }
+    const count = f.fetch.mock.calls.length;
+    for (const options of [{ maxTokens: 64, thinking: 'minimal', thinkingBudgets: { minimal: 1 } }, { maxTokens: 64, thinking: 'high', thinkingBudgets: { high: 0 } }]) {
+      expect(() => prepare(options as ChatOptions)).toThrow(ProviderOutputBudgetError);
+      for (const stream of [false, true]) await expect(f.call(stream, 'none', options as ChatOptions)).rejects.toThrow('Invalid Anthropic thinking allocation.');
+    }
+    for (const thinking of [null, 'PRIVATE-invalid', 1]) {
+      const options = { thinking: thinking as PublishedThinkingLevel };
+      expect(() => prepare(options)).toThrow(ProviderOutputBudgetError);
+      for (const stream of [false, true]) await expect(f.call(stream, 'none', options)).rejects.toThrow('Invalid Anthropic thinking level.');
+    }
+    expect(f.fetch).toHaveBeenCalledTimes(count);
+    const get = vi.fn(() => { throw new Error('PRIVATE-unused'); }), thinkingBudgets = Object.defineProperty({}, 'high', { enumerable: true, get });
+    for (const thinking of [undefined, 'off'] as const) {
+      const options = prepare({ thinking, thinkingBudgets });
+      await f.call(false, 'none', options.options);
+    }
+    expect(get).not.toHaveBeenCalled();
+    expect(() => prepare({ thinking: 'high', thinkingBudgets })).toThrow(ProviderOutputBudgetError);
+    expect(get).not.toHaveBeenCalled();
+    class Compatible extends AnthropicProvider {}
+    const compatible = fixture(profile.id, 'alias', Compatible);
+    await compatible.call(false, 'none', { thinking: 'high' });
+    const body = JSON.parse(String(compatible.fetch.mock.calls.at(-1)?.[1]?.body));
+    expect(body.thinking).toEqual({ type: 'enabled', budget_tokens: 8192 }); expect(body.max_tokens).toBe(9216);
+  });
+  for (const profile of managedProfiles) for (const thinking of [undefined, ...PUBLISHED_THINKING_LEVELS]) {
+    it(`${profile.id}/${thinking}: emits managed active effort, binding controls and native betas`, async () => {
+      const f = fixture(profile.id), get = vi.fn(() => { throw new Error('UNUSED'); });
+      const thinkingBudgets = Object.defineProperty({}, 'high', { enumerable: true, get });
+      const levels = supported(profile), requested = thinking ?? 'high';
+      const selected = levels.includes(requested) ? requested : levels.find(level => PUBLISHED_THINKING_LEVELS.indexOf(level) > PUBLISHED_THINKING_LEVELS.indexOf(requested))!;
+      const effort = selected === 'minimal' ? 'low' : selected;
+      const options = { thinking, thinkingBudgets, temperature: 0.25, maxTokens: 64 };
+      const prepared = captureNativeOutputBudget(f.provider)!(options);
+      expect(prepared.maxTokens).toBe(64); expect(prepared.options.thinkingBudgets).toBe(thinkingBudgets);
+      expect(getSupportedThinkingLevels('operator-alias', profile.id, undefined, f.provider)).toEqual(levels);
+      for (const stream of [false, true]) {
+        const result = await f.call(stream, 'none', prepared.options);
+        const [, init] = f.fetch.mock.calls.at(-1)!, body = JSON.parse(String(init?.body));
+        expect(body.thinking).toEqual({ type: 'adaptive', display: 'summarized', block_binding: { prefix_mismatch_behavior: 'drop_block' } });
+        expect(body.output_config).toEqual({ effort: 'high' }); expect(body.temperature).toBeUndefined();
+        expect(body.messages).toEqual([{ role: 'user', content: 'probe' }, { role: 'system', content: [], output_config: { effort } }]);
+        expect(new Headers(init?.headers).get('anthropic-beta')?.split(',')).toEqual(expect.arrayContaining([
+          'mid-conversation-output-config-2026-07-01', 'thinking-binding-controls-2026-08-01',
+        ]));
+        expect(result.providerThinkingLevel).toBe(effort); expect(result.thinkingLevel).toBeUndefined(); expect(result.model).toBe(profile.id);
+      }
+      expect(get).not.toHaveBeenCalled(); expect(options.thinkingBudgets).toBe(thinkingBudgets);
+    });
+  }
+  for (const profile of managedProfiles) it(`${profile.id}: replays only owned historical efforts and keeps tool pairs adjacent`, async () => {
+    const f = fixture(profile.id), timestamp = new Date(0);
+    const history: Message[] = [input[0],
+      { id: 'assistant', role: 'assistant', content: 'prior', timestamp, provider: 'operator-alias', model: profile.id,
+        api: 'anthropic-messages', metadata: { providerThinkingLevel: 'xhigh' }, toolCalls: [{ id: 'call', name: 'echo', input: {} }] },
+      { id: 'tool', role: 'tool', content: 'result', timestamp, toolCallId: 'call' },
+      { id: 'foreign-api', role: 'assistant', content: 'foreign-api', timestamp, provider: 'operator-alias', api: 'openai-responses', metadata: { providerThinkingLevel: 'max' } },
+      { id: 'foreign-provider', role: 'assistant', content: 'foreign-provider', timestamp, provider: 'other', api: 'anthropic-messages', metadata: { providerThinkingLevel: 'max' } },
+      { id: 'legacy', role: 'assistant', content: 'legacy', timestamp, provider: 'operator-alias', api: 'anthropic-messages', metadata: { providerThinkingLevel: 'PRIVATE-invalid' } },
+      { id: 'logical', role: 'assistant', content: 'logical', timestamp, provider: 'operator-alias', model: profile.id,
+        api: 'anthropic-messages', metadata: { thinkingLevel: 'high' } },
+      { ...input[0], id: 'next' }];
+    for (const stream of [false, true]) {
+      await f.call(stream, 'none', { thinking: 'max' }, history);
+      const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+      expect(body.messages.filter((message: { role: string }) => message.role === 'system')).toEqual([
+        { role: 'system', content: [], output_config: { effort: 'xhigh' } },
+        { role: 'system', content: [], output_config: { effort: 'max' } },
+      ]);
+      const assistant = body.messages.findIndex((message: { role: string }) => message.role === 'assistant');
+      expect(body.messages[assistant + 1]).toEqual({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call', content: 'result' }] });
+      expect(JSON.stringify(body)).not.toContain('PRIVATE-invalid');
+    }
+    expect(history[1].metadata).toEqual({ providerThinkingLevel: 'xhigh' });
+    const count = f.fetch.mock.calls.length;
+    for (const thinking of [null, 'PRIVATE-invalid', 1, {}]) {
+      const options = { thinking: thinking as PublishedThinkingLevel };
+      expect(() => captureNativeOutputBudget(f.provider)!(options)).toThrow(ProviderOutputBudgetError);
+      for (const stream of [false, true]) await expect(f.call(stream, 'none', options)).rejects.toThrow('Invalid Anthropic thinking level.');
+    }
+    expect(f.fetch).toHaveBeenCalledTimes(count);
+    class Compatible extends AnthropicProvider {}
+    const compatible = fixture(profile.id, 'alias', Compatible);
+    for (const stream of [false, true]) {
+      await compatible.call(stream, 'none', { thinking: 'high' });
+      const [, init] = compatible.fetch.mock.calls.at(-1)!, body = JSON.parse(String(init?.body));
+      expect(body.thinking).toEqual({ type: 'enabled', budget_tokens: 8192 });
+      expect(body.output_config).toBeUndefined(); expect(new Headers(init?.headers).get('anthropic-beta')).toBeNull();
+    }
+  });
+  it('persists physical managed effort on both tool and final responses for the next native turn', async () => {
+    const f = fixture('claude-haiku-5-5'), manager = new SessionManager(), session = await manager.create({ title: 'Managed effort' });
+    const registry = new ExtensionRegistry(), tools = [{ name: 'echo', description: 'Echo', parameters: { type: 'object' } }];
+    await manager.addMessage(session.id, input[0]);
+    await registry.load('echo', api => api.registerTool({ name: 'echo', description: 'Echo', execute: async () => ({ content: 'result' }) }));
+    let turn = 0;
+    try {
+      await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry, provider: 'operator-alias', tools,
+        toolContext: { sessionManager: manager, notify: () => {} }, streamTurn: async messages => {
+          f.tool(turn === 0);
+          return f.call(true, 'none', { thinking: turn++ === 0 ? 'max' : 'low', tools }, messages);
+        } });
+      const history = session.messages.filter(message => message.role === 'assistant');
+      expect(history.map(message => message.metadata?.providerThinkingLevel)).toEqual(['max', 'low']);
+      expect(history.map(message => message.metadata?.thinkingLevel)).toEqual([undefined, undefined]);
+      expect(history.map(message => message.api)).toEqual(['anthropic-messages', 'anthropic-messages']);
+      expect(history[0].toolCalls).toHaveLength(1); expect(history[1].toolCalls).toBeUndefined();
+      const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+      expect(body.messages.filter((message: { role: string }) => message.role === 'system')).toEqual([
+        { role: 'system', content: [], output_config: { effort: 'max' } }, { role: 'system', content: [], output_config: { effort: 'low' } },
+      ]);
+      registry.virtualModels.register({ provider: 'router', id: 'auto', maxOutputTokens: 64,
+        route: () => ({ provider: 'operator-alias', id: 'claude-fable-5-1', thinkingLevel: 'minimal' }) });
+      const routed = await streamProviderTurn({ provider: registry.getVirtualProvider('router')!, providerName: 'router', model: 'auto',
+        messages: input, tools: [], extensionRegistry: registry, resolveProvider: name => name === 'operator-alias' ? f.provider : undefined, maxRetries: 0 });
+      expect(routed.providerThinkingLevel).toBe('low'); expect(routed.thinkingLevel).toBe('minimal');
+      expect(routed.selection).toMatchObject({ provider: 'router', id: 'auto' });
+    } finally { await registry.shutdown(); }
+  });
   it('captures the adaptive dialect independently of public metadata, later model changes and derived transports', async () => {
     const f = fixture('claude-opus-4-7'), policy = captureNativeOutputBudget(f.provider)!;
     const row = getProviderPublishedModel('operator-alias', 'claude-opus-4-7', f.provider)!;
@@ -149,7 +330,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       await f.call(stream, 'short', policy({ thinking: 'xhigh', maxTokens: 64 }).options);
       expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).output_config).toEqual({ effort: 'xhigh' });
       await f.call(stream, 'short', policy({ model: 'claude-haiku-4-5', thinking: 'high', maxTokens: 64 }).options);
-      expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).thinking).toEqual({ type: 'enabled', budget_tokens: 8192 });
+      expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).thinking).toEqual({ type: 'enabled', budget_tokens: 16384, display: 'summarized' });
     }
     class Compatible extends AnthropicProvider {}
     for (const model of ['claude-opus-4-7', 'claude-opus-4-7-unverified']) {
@@ -177,13 +358,13 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
     expect(() => pinned({ maxTokens: 64001 })).toThrow(ProviderOutputBudgetError);
     expect(f.fetch).toHaveBeenCalledTimes(2);
   });
-  it('preserves numeric allocation while rejecting invalid explicit caps before thinking can raise them', async () => {
+  it('rejects invalid explicit caps before native numeric allocation can raise them', async () => {
     const f = fixture('claude-haiku-4-5'), policy = captureNativeOutputBudget(f.provider)!;
     const options = { maxTokens: 64, thinking: 'high' as const };
-    expect(policy(options).maxTokens).toBe(9216);
+    expect(policy(options).maxTokens).toBe(16448);
     for (const stream of [false, true]) {
       await f.call(stream, 'short', options);
-      expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).max_tokens).toBe(9216);
+      expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).max_tokens).toBe(16448);
       await expect(f.call(stream, 'short', { maxTokens: 0, thinking: 'high' })).rejects.toThrow('Invalid Anthropic output limit.');
     }
     expect(() => policy({ maxTokens: 0, thinking: 'high' })).toThrow(ProviderOutputBudgetError);
@@ -233,9 +414,6 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
     const first = getProviderPublishedModels(f.provider)!;
     const native = first.filter(row => profiles.some(profile => profile.id === row.id)); expect(native).toHaveLength(17);
     expect(native.filter(row => row.promptCache).map(row => row.id)).toEqual(['claude-sonnet-4-6']);
-    for (const row of native.filter(row => !adaptiveProfiles.some(profile => profile.id === row.id))) {
-      expect(getSupportedThinkingLevels('operator-alias', row.id, undefined, f.provider)).toEqual(['off']);
-    }
     first.find(row => row.id === 'claude-fable-5')!.pricing!.inputPerMillion = 999;
     expect(getProviderPublishedModel('operator-alias', 'claude-fable-5', f.provider)?.pricing?.inputPerMillion).toBe(10);
     expect(getProviderPublishedModel('anthropic', 'claude-fable-5-unverified', f.provider)).toBeUndefined();

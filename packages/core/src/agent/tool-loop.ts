@@ -242,8 +242,9 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
           model: response.model,
           ...(response.api ? { api: response.api } : {}),
           usage: normalizeUsage(response.usage),
-          ...((response.stopReason === 'length' || response.selection) ? { metadata: {
+          ...((response.stopReason === 'length' || response.selection || response.providerThinkingLevel !== undefined) ? { metadata: {
             ...(response.stopReason === 'length' ? { stopReason: 'length' } : {}),
+            ...(response.providerThinkingLevel !== undefined ? { providerThinkingLevel: response.providerThinkingLevel } : {}),
             ...(response.selection ? { selection: response.selection, thinkingLevel: response.thinkingLevel } : {}),
           } } : {}),
           durationMs,
@@ -285,8 +286,9 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
       model: response.model,
       ...(response.api ? { api: response.api } : {}),
       usage: normalizeUsage(response.usage),
-      ...((response.stopReason === 'length' || response.selection) ? { metadata: {
+      ...((response.stopReason === 'length' || response.selection || response.providerThinkingLevel !== undefined) ? { metadata: {
         ...(response.stopReason === 'length' ? { stopReason: 'length' } : {}),
+        ...(response.providerThinkingLevel !== undefined ? { providerThinkingLevel: response.providerThinkingLevel } : {}),
         ...(response.selection ? { selection: response.selection, thinkingLevel: response.thinkingLevel } : {}),
       } } : {}),
       durationMs,

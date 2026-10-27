@@ -1576,7 +1576,7 @@ it('hosts and withdraws owned MCP registrations through installed declarations a
 it('validates installed public provider discovery declarations and keyless based-path runtime', async () => {
   await writeFile(path.join(consumer, 'provider-public.ts'), `
     import { OpenAiProvider, AnthropicProvider, AiProvider, copyThinkingBudgets,
-      type ThinkingBudgets, type StartAgentRunRequest, type ScopedConfigurationValues } from '@ai-harness/core';
+      type ThinkingBudgets, type StartAgentRunRequest, type ScopedConfigurationValues, type ChatResponse } from '@ai-harness/core';
     const budgets: ThinkingBudgets = Object.freeze({ low: 2000 });
     const request: StartAgentRunRequest = { sessionId: 'declaration-only', provider: 'mock', cwd: '.', input: 'budget', thinkingBudgets: budgets };
     const scoped: ScopedConfigurationValues = { thinkingBudgets: copyThinkingBudgets(budgets) };
@@ -1587,6 +1587,12 @@ it('validates installed public provider discovery declarations and keyless based
     const eligible: boolean = provider.canDiscoverModels();
     const anthropic: boolean = new AnthropicProvider({ type: 'anthropic', baseUrl: 'http://127.0.0.1:1/proxy/v1/messages' }).canDiscoverModels();
     void eligible; void anthropic;
+    const legacyReply: ChatResponse = { content: 'legacy' };
+    const managedReply: ChatResponse = { content: 'managed', providerThinkingLevel: 'low' };
+    const effort: ChatResponse['providerThinkingLevel'] = managedReply.providerThinkingLevel;
+    // @ts-expect-error logical minimal is not a physical managed effort
+    const logicalReply: ChatResponse = { content: 'logical', providerThinkingLevel: 'minimal' };
+    void legacyReply; void effort; void logicalReply;
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'provider-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
@@ -1615,8 +1621,19 @@ it('validates installed public provider discovery declarations and keyless based
     assert.equal((await runtime.wait(run.id)).phase, 'completed'); assert.equal(calls, 1);
     assert.ok(!JSON.stringify(session.messages).includes('thinkingBudgets'));
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
-    const paths = [];
-    const server = createServer((req, res) => { paths.push(req.url); assert.equal(req.headers.authorization, undefined); assert.equal(req.headers['x-api-key'], undefined); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ data: [{ id: 'public-model' }] })); });
+    const paths = [], bodies = [];
+    const server = createServer(async (req, res) => {
+      paths.push(req.url);
+      if (req.url === '/managed/v1/messages') {
+        assert.equal(req.method, 'POST'); assert.equal(req.headers['x-api-key'], 'disposable-managed');
+        assert.ok(req.headers['anthropic-beta'].includes('mid-conversation-output-config-2026-07-01'));
+        assert.ok(req.headers['anthropic-beta'].includes('thinking-binding-controls-2026-08-01'));
+        const chunks = []; for await (const chunk of req) chunks.push(chunk); bodies.push(JSON.parse(Buffer.concat(chunks).toString()));
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ model: 'untrusted-response-alias', content: [{ type: 'text', text: 'managed' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 2 } })); return;
+      }
+      assert.equal(req.headers.authorization, undefined); assert.equal(req.headers['x-api-key'], undefined); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ data: [{ id: 'public-model' }] }));
+    });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const base = 'http://127.0.0.1:' + server.address().port;
     try {
@@ -1624,6 +1641,21 @@ it('validates installed public provider discovery declarations and keyless based
         assert.equal(provider.canDiscoverModels(), true); assert.deepEqual(await provider.getAvailableModels(), ['public-model']);
       }
       assert.deepEqual(paths, ['/gateway/v1/models', '/proxy/v1/models']);
+      const input = { id: 'user', role: 'user', content: 'managed', timestamp: new Date(0) };
+      for (const model of ['claude-fable-5-1', 'claude-haiku-5-5', 'claude-opus-5', 'claude-opus-5-5', 'claude-sonnet-5-5']) {
+        const provider = new AnthropicProvider({ type: 'operator-managed', apiKey: 'disposable-managed', model, baseUrl: base + '/managed' });
+        const reply = await provider.chat([input], { thinking: 'minimal', maxTokens: 64, cacheRetention: 'none' });
+        assert.equal(reply.providerThinkingLevel, 'low'); assert.equal(reply.thinkingLevel, undefined);
+        assert.equal(reply.api, 'anthropic-messages'); assert.equal(reply.model, model);
+        assert.deepEqual(bodies.at(-1).thinking, { type: 'adaptive', display: 'summarized', block_binding: { prefix_mismatch_behavior: 'drop_block' } });
+        assert.deepEqual(bodies.at(-1).output_config, { effort: 'high' }); assert.equal(bodies.at(-1).max_tokens, 64);
+        await provider.chat([input, { id: 'prior', role: 'assistant', content: reply.content, timestamp: new Date(0), provider: 'operator-managed', model, api: reply.api,
+          metadata: { providerThinkingLevel: reply.providerThinkingLevel, thinkingLevel: 'max' } }, { ...input, id: 'next' }], { thinking: 'max', maxTokens: 64, cacheRetention: 'none' });
+        assert.deepEqual(bodies.at(-1).messages.filter(message => message.role === 'system'), [
+          { role: 'system', content: [], output_config: { effort: 'low' } }, { role: 'system', content: [], output_config: { effort: 'max' } }]);
+      }
+      assert.equal(bodies.length, 10);
+      assert.deepEqual(paths.slice(2), Array(10).fill('/managed/v1/messages'));
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('fresh installed provider declarations/runtime OK');
   `);

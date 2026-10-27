@@ -29,28 +29,39 @@ const profiles = new Map(rows.map(([id, name, contextWindow, maxOutputTokens, in
   [id, { id, name, api: 'anthropic-messages', contextWindow, maxOutputTokens,
     capabilities: { reasoning: true, imageInput: true, toolCalls: true },
     pricing: { inputPerMillion, outputPerMillion, cacheReadPerMillion, cacheWritePerMillion } }]));
-// Only the six non-managed adaptive profiles are migrated here. Managed effort
-// requires mid-conversation control messages; numeric profiles retain legacy allocation.
+// Native reasoning maps remain independent of mutable public metadata.
 interface AdaptivePolicy {
   readonly thinkingLevelMap: Readonly<Record<PublishedThinkingLevel, string | null>>;
   readonly supportsTemperature: boolean;
+  readonly managed: boolean;
 }
-// ID, native xhigh, supports temperature, supports off.
+// ID, native xhigh, supports temperature, supports off, managed effort, supports minimal.
 const adaptivePolicies = new Map<string, AdaptivePolicy>(([
-  ['claude-fable-5', true, true, false],
-  ['claude-opus-4-6', false, true, true],
-  ['claude-opus-4-7', true, false, true],
-  ['claude-opus-4-8', true, false, true],
-  ['claude-sonnet-4-6', false, true, true],
-  ['claude-sonnet-5', true, true, true],
-] as const).map(([id, xhigh, supportsTemperature, off]) => [id, Object.freeze({ supportsTemperature,
-  thinkingLevelMap: Object.freeze({ off: off ? 'off' : null, minimal: 'low', low: 'low', medium: 'medium', high: 'high',
+  ['claude-fable-5', true, true, false, false, true],
+  ['claude-opus-4-6', false, true, true, false, true],
+  ['claude-opus-4-7', true, false, true, false, true],
+  ['claude-opus-4-8', true, false, true, false, true],
+  ['claude-sonnet-4-6', false, true, true, false, true],
+  ['claude-sonnet-5', true, true, true, false, true],
+  ['claude-fable-5-1', true, true, false, true, true],
+  ['claude-haiku-5-5', true, false, false, true, false],
+  ['claude-opus-5', true, false, false, true, true],
+  ['claude-opus-5-5', true, false, false, true, false],
+  ['claude-sonnet-5-5', true, false, false, true, false],
+] as const).map(([id, xhigh, supportsTemperature, off, managed, minimal]) => [id, Object.freeze({ supportsTemperature, managed,
+  thinkingLevelMap: Object.freeze({ off: off ? 'off' : null, minimal: minimal ? 'low' : null, low: 'low', medium: 'medium', high: 'high',
     xhigh: xhigh ? 'xhigh' : null, max: 'max' }) })] as const));
 export function anthropicAdaptivePolicy(model: string): AdaptivePolicy | undefined { return adaptivePolicies.get(model); }
+const numericIds = new Set(['claude-haiku-4-5', 'claude-haiku-4-5-20251001', 'claude-opus-4-5',
+  'claude-opus-4-5-20251101', 'claude-sonnet-4-5', 'claude-sonnet-4-5-20250929']);
+const numericPolicy = Object.freeze({ maxTokens: 64000, thinkingLevelMap: Object.freeze({
+  off: 'off', minimal: 'minimal', low: 'low', medium: 'medium', high: 'high', xhigh: null, max: null,
+}) });
+export function anthropicNumericPolicy(model: string): typeof numericPolicy | undefined { return numericIds.has(model) ? numericPolicy : undefined; }
 export function hasAnthropicProfile(model: string): boolean { return profiles.has(model); }
 export function anthropicPublishedProfiles(): PublishedModelMetadata[] {
   return [...profiles.values()].map(profile => ({ ...profile, capabilities: { ...profile.capabilities }, pricing: { ...profile.pricing },
-    thinkingLevelMap: adaptivePolicies.has(profile.id) ? { ...adaptivePolicies.get(profile.id)!.thinkingLevelMap } : null }));
+    thinkingLevelMap: { ...(adaptivePolicies.get(profile.id)?.thinkingLevelMap ?? anthropicNumericPolicy(profile.id)!.thinkingLevelMap) } }));
 }
 /** Direct native owner only: reject invalid caller/effective ceilings without truncating explicit requests. */
 export function validateAnthropicProfileOutput(body: Record<string, unknown>, requested: unknown): void {

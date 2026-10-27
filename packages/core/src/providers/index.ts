@@ -70,7 +70,7 @@ import { copyNativeImageRequest, openRouterImagesBody, openRouterImagesOutput, o
 import { copyNativeClassifierRequest, parseSystemOneAnswers, type NativeClassifierRequest, type NativeClassifierResult } from './native-classification.js';
 import { ProviderContextOverflowError, rejectProviderHttpResponse } from './context-overflow.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
-import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget } from './anthropic-thinking.js';
+import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget, anthropicManagedEffort, anthropicThinkingBetas, applyAnthropicManagedHistory } from './anthropic-thinking.js';
 import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage } from './anthropic-profiles.js';
 import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
 export type { ThinkingBudgets } from './thinking-budgets.js';
@@ -281,6 +281,8 @@ export interface ChatResponse {
   /** Physical dispatch identity, distinct from a virtual selection. */
   provider?: string;
   thinkingLevel?: ThinkingLevel;
+  /** Physical managed effort for replay, never inferred from a virtual/logical selection. */
+  providerThinkingLevel?: Exclude<ThinkingLevel, 'off' | 'minimal'>;
   selection?: { provider: string; id: string; thinkingLevel: ThinkingLevel };
   /** Explicit provider length exhaustion; never inferred from prose or missing output. */
   stopReason?: 'length';
@@ -4227,11 +4229,19 @@ export class AnthropicProvider extends AiProvider {
   }
 
   protected getMessagesUrl(): string { return `${this.baseUrl}/v1/messages`; }
-  protected messageHeaders(_options?: ChatOptions): Record<string, string> {
-    return { ...configuredHeaders(this.config), 'Content-Type': 'application/json',
+  protected messageHeaders(_options?: ChatOptions, model?: string): Record<string, string> {
+    const headers = { ...configuredHeaders(this.config), 'Content-Type': 'application/json',
       'x-api-key': this.config.apiKey as string, 'anthropic-version': AnthropicProvider.API_VERSION };
+    const betas = this.ownsNativeProfiles ? anthropicThinkingBetas(model ?? '', _options) : [];
+    if (!betas.length) return headers;
+    const merged = new Headers(headers);
+    merged.set('anthropic-beta', [...new Set([...(merged.get('anthropic-beta')?.split(',').map(value => value.trim()).filter(Boolean) ?? []), ...betas])].join(','));
+    return Object.fromEntries(merged.entries());
   }
-  protected prepareMessageBody(body: Record<string, unknown>, _options?: ChatOptions): Record<string, unknown> { return body; }
+  protected prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    if (this.ownsNativeProfiles) applyAnthropicManagedHistory(body, options, toolImageMessages(messages).filter(message => message.role !== 'system'), this.config.type);
+    return body;
+  }
   protected applyMessageThinking(body: Record<string, unknown>, options?: ChatOptions): void {
     if (this.ownsNativeProfiles) applyNativeAnthropicOutputPolicy(body, options);
     else applyAnthropicThinking(body, options);
@@ -4346,10 +4356,11 @@ export class AnthropicProvider extends AiProvider {
     }
 
     applyAnthropicPromptCache(body, options?.cacheRetention);
+    const providerThinkingLevel = this.ownsNativeProfiles ? anthropicManagedEffort(model, options) : undefined;
     const response = await this.request(this.getMessagesUrl(), {
       method: 'POST',
-      headers: this.messageHeaders(options),
-      body: serializeProviderBody(this.prepareMessageBody(body, options)),
+      headers: this.messageHeaders(options, model),
+      body: serializeProviderBody(this.prepareMessageBody(body, options, messages)),
       signal: options?.signal,
     });
 
@@ -4377,7 +4388,8 @@ export class AnthropicProvider extends AiProvider {
       ...(this.ownsNativeProfiles && hasAnthropicProfile(model) ? { api: 'anthropic-messages' } : {}),
       ...lengthStop(data.stop_reason),
       ...(reasoning ? { reasoning } : {}),
-      model: data.model,
+      model: this.ownsNativeProfiles && hasAnthropicProfile(model) ? model : data.model,
+      ...(providerThinkingLevel !== undefined ? { providerThinkingLevel } : {}),
       usage: data.usage ? this.messageUsage(data.usage, model, false, options?.cacheRetention) : undefined,
       toolCalls,
     };
@@ -4424,11 +4436,12 @@ export class AnthropicProvider extends AiProvider {
     }
 
     applyAnthropicPromptCache(body, options?.cacheRetention);
+    const providerThinkingLevel = this.ownsNativeProfiles ? anthropicManagedEffort(model, options) : undefined;
     try {
       const response = await this.request(url, {
         method: 'POST',
-        headers: this.messageHeaders(options),
-        body: serializeProviderBody(this.prepareMessageBody(body, options)),
+        headers: this.messageHeaders(options, model),
+        body: serializeProviderBody(this.prepareMessageBody(body, options, messages)),
         signal: options?.signal,
       });
 
@@ -4549,6 +4562,7 @@ export class AnthropicProvider extends AiProvider {
         onComplete?.({
           content: fullContent,
           ...(this.ownsNativeProfiles && hasAnthropicProfile(model) ? { api: 'anthropic-messages' } : {}),
+          ...(providerThinkingLevel !== undefined ? { providerThinkingLevel } : {}),
           ...(fullReasoning ? { reasoning: fullReasoning } : {}),
           model,
           ...(stopReason ? { stopReason } : {}),

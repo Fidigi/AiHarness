@@ -11,6 +11,10 @@ import type {
   ToolProgressSnapshot,
 } from '@ai-harness/core';
 
+function providerEffort(value: unknown): string | undefined {
+  return typeof value === 'string' && ['low', 'medium', 'high', 'xhigh', 'max'].includes(value) ? value : undefined;
+}
+
 interface JsonRecord {
   type: string;
   [key: string]: unknown;
@@ -182,12 +186,14 @@ export function toJsonProtocolMessage(message: Message): JsonMessage {
     if (content.length === 0 && message.content) content.push({ type: 'text', text: message.content });
     const outputError = typeof message.metadata?.outputError === 'string' ? message.metadata.outputError : undefined;
     const failed = message.isError || outputError !== undefined;
+    const effort = providerEffort(message.metadata?.providerThinkingLevel);
     return {
       role: 'assistant',
       content,
       api: message.api ?? providerApi(message.provider ?? 'unknown'),
       provider: message.provider ?? 'unknown',
       model: message.model ?? 'unknown',
+      ...(effort ? { providerThinkingLevel: effort } : {}),
       usage: persistedUsage(message),
       stopReason: failed ? 'error' : message.metadata?.stopReason === 'length'
         ? 'length' : message.toolCalls?.length ? 'toolUse' : 'stop',
@@ -620,12 +626,14 @@ export class JsonEventStream {
     const content = indexedContent.sort((left, right) => left.index - right.index).map(entry => entry.block);
     for (const call of response?.toolCalls ?? []) content.push(toolCallBlock(call));
     const provider = state.provider;
+    const effort = providerEffort(response?.providerThinkingLevel);
     return {
       role: 'assistant',
       content,
       api: response?.api ?? providerApi(provider),
       provider,
       model: response?.model ?? state.model ?? 'unknown',
+      ...(effort ? { providerThinkingLevel: effort } : {}),
       usage: usageOf(response?.usage, provider, response?.model ?? state.model),
       stopReason,
       ...(errorMessage ? { errorMessage } : {}),
