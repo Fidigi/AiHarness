@@ -40,18 +40,22 @@ afterEach(() => vi.restoreAllMocks());
 function fixture(model: string, responseModel = 'untrusted-response-alias', Provider = AnthropicProvider) {
   const provider = new Provider({ type: 'operator-alias', model, apiKey: 'disposable-profile-key' });
   let usage: Record<string, unknown> = structuredClone(observed), delta: Record<string, unknown> | undefined, tool = false;
+  let reply: { json: unknown; events: unknown[] } | undefined;
   const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
     const body = JSON.parse(String(init?.body));
-    if (!body.stream) return new Response(JSON.stringify({ model: responseModel,
+    if (!body.stream) return new Response(JSON.stringify(reply ? reply.json : { model: responseModel,
       content: [{ type: 'text', text: 'ok' }, ...(tool ? [{ type: 'tool_use', id: 'echo-call', name: 'echo', input: {} }] : [])], stop_reason: tool ? 'tool_use' : 'end_turn', usage }));
-    return new Response([
+    return new Response((reply?.events ?? [
       { type: 'message_start', message: { usage } },
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
       { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'ok' } },
-      ...(tool ? [{ type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'echo-call', name: 'echo' } },
-        { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{}' } }] : []),
+      { type: 'content_block_stop', index: 0 },
+      ...(tool ? [{ type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'echo-call', name: 'echo', input: {} } },
+        { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{}' } },
+        { type: 'content_block_stop', index: 1 }] : []),
       { type: 'message_delta', delta: { stop_reason: tool ? 'tool_use' : 'end_turn' }, usage: delta ?? usage },
       { type: 'message_stop' },
-    ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'Content-Type': 'text/event-stream' } });
+    ]).map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'Content-Type': 'text/event-stream' } });
   });
   const call = async (stream: boolean, retention: 'none' | 'short' | 'long' = 'short', options?: ChatOptions, messages: Message[] = input) => {
     if (!stream) return provider.chat(messages, { maxTokens: 64, cacheRetention: retention, ...options });
@@ -60,8 +64,119 @@ function fixture(model: string, responseModel = 'untrusted-response-alias', Prov
       { maxTokens: 64, cacheRetention: retention, ...options });
     if (failure) throw failure; return result!;
   };
-  return { provider, fetch, call, tool: (enabled: boolean) => { tool = enabled; }, usage: (value: Record<string, unknown>, next?: Record<string, unknown>) => { usage = value; delta = next; } };
+  return { provider, fetch, call, reply: (json: unknown, events: unknown[] = []) => { reply = { json, events }; },
+    tool: (enabled: boolean) => { tool = enabled; }, usage: (value: Record<string, unknown>, next?: Record<string, unknown>) => { usage = value; delta = next; } };
 }
+
+function responseEvents(stop_reason = 'end_turn'): Array<Record<string, unknown>> {
+  return [
+    { type: 'message_start', message: { usage: observed } },
+    { type: 'content_block_start', index: 0, content_block: { type: 'text', text: 'left' } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '!' } },
+    { type: 'content_block_stop', index: 0 },
+    { type: 'content_block_start', index: 1, content_block: { type: 'thinking', thinking: 'first', signature: 'opaque-signature' } },
+    { type: 'content_block_delta', index: 1, delta: { type: 'thinking_delta', thinking: 'second' } },
+    { type: 'content_block_delta', index: 1, delta: { type: 'signature_delta', signature: 'opaque-signature' } },
+    { type: 'content_block_stop', index: 1 },
+    { type: 'content_block_start', index: 2, content_block: { type: 'text', text: 'right?' } },
+    { type: 'content_block_stop', index: 2 },
+    { type: 'content_block_start', index: 3, content_block: { type: 'tool_use', id: 'call', name: 'echo', input: { x: 1 } } },
+    { type: 'content_block_stop', index: 3 },
+    { type: 'message_delta', delta: { stop_reason }, usage: observed },
+    { type: 'message_stop' },
+  ];
+}
+
+describe('owned Anthropic response authority', () => {
+  for (const profile of profiles) it(`${profile.id}: normalizes all text/thinking and accepts only successful terminal reasons`, async () => {
+    const f = fixture(profile.id);
+    for (const finish of ['end_turn', 'stop_sequence', 'tool_use', 'max_tokens', 'pause_turn']) {
+      f.reply({ model: 'response-alias', stop_reason: finish, usage: observed, content: [
+        { type: 'text', text: 'left!' }, { type: 'thinking', thinking: 'firstsecond', signature: 'opaque-signature' },
+        { type: 'redacted_thinking', data: 'opaque-redacted' }, { type: 'text', text: 'right?' },
+        { type: 'tool_use', id: 'call', name: 'echo', input: { x: 1 } },
+      ] }, responseEvents(finish));
+      for (const stream of [false, true]) {
+        const result = await f.call(stream);
+        expect(result).toMatchObject({ model: profile.id, api: 'anthropic-messages', content: 'left!right?',
+          reasoning: 'firstsecond', toolCalls: [{ id: 'call', name: 'echo', input: { x: 1 } }] });
+        expect(result.stopReason).toBe(finish === 'max_tokens' ? 'length' : undefined);
+        expect(JSON.stringify(result)).not.toContain('opaque-');
+      }
+    }
+    for (const content of [[], [{ type: 'thinking', thinking: 'only-reasoning', signature: 'opaque' }]]) {
+      f.reply({ content, stop_reason: 'end_turn' });
+      expect(await f.call(false)).toMatchObject({ content: '', model: profile.id });
+    }
+  });
+  for (const profile of profiles) it(`${profile.id}: rejects malformed/error/incomplete native responses before tools or completion`, async () => {
+    const f = fixture(profile.id), content = [{ type: 'text', text: 'untrusted' }];
+    for (const json of [null, [], { content }, { content, stop_reason: null },
+      { content: 'SECRET', stop_reason: 'end_turn' }, { content: {}, stop_reason: 'end_turn' },
+      { content, stop_reason: 'end_turn', type: 'other' }, { content, stop_reason: 'end_turn', role: 'user' },
+      ...['refusal', 'sensitive', 'unknown'].map(stop_reason => ({ content, stop_reason })),
+      { content, stop_reason: 'end_turn', error: { message: 'SECRET' } },
+      ...[null, { type: 'text', text: 1 }, { type: 'thinking', thinking: [] },
+        { type: 'thinking', thinking: '', signature: 1 }, { type: 'redacted_thinking', data: 1 },
+        { type: 'tool_use', id: '', name: 'echo', input: {} }, { type: 'tool_use', id: 'x', name: '', input: {} },
+        { type: 'tool_use', id: 'x', name: 'echo', input: [] }, { type: 'unknown' }]
+        .map(block => ({ content: [block], stop_reason: 'end_turn' })),
+    ]) {
+      f.reply(json); await expect(f.call(false)).rejects.toThrow('Invalid Anthropic response.');
+    }
+    const events = responseEvents(), start = events[0]!;
+    const malformed = [[], events.slice(0, -1), events.filter(event => event.type !== 'message_delta'),
+      events.slice(1), [start, ...events], [...events, events[1]], [null], [{ type: 'message_start', message: null }],
+      [start, { type: 'message_stop' }], [...events.slice(0, -1), events.at(-2), events.at(-1)],
+      [{ type: 'message_start', message: { type: 'error' } }, ...events.slice(1)],
+      [...events.slice(0, -3), { type: 'content_block_delta', index: 3, delta: { type: 'input_json_delta', partial_json: '[]' } }, ...events.slice(-3)],
+      [...events.slice(0, -1), events[2], events.at(-1)],
+      ...['refusal', 'sensitive', 'unknown'].map(finish => responseEvents(finish)),
+      [start, { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 1 } }],
+      [start, { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: '', name: 'echo' } }],
+      [start, { type: 'error', error: { message: 'SECRET' } }],
+    ];
+    for (const records of malformed) {
+      f.reply(null, records); const complete = vi.fn(), error = vi.fn(), chunk = vi.fn();
+      await f.provider.streamChat(input, chunk, complete, error, { maxTokens: 64 });
+      expect(error).toHaveBeenCalledOnce(); expect(error.mock.calls[0]?.[0].message).toBe('Invalid Anthropic response.');
+      expect(complete).not.toHaveBeenCalled();
+      expect(chunk.mock.calls.some(([, event]) => event?.type === 'tool_call')).toBe(false);
+    }
+    // Even a valid first tool is not published when a later final argument is malformed.
+    f.reply(null, [...events.slice(0, -2),
+      { type: 'content_block_start', index: 4, content_block: { type: 'tool_use', id: 'bad', name: 'echo', input: {} } },
+      { type: 'content_block_delta', index: 4, delta: { type: 'input_json_delta', partial_json: '{' } }, ...events.slice(-2)]);
+    const complete = vi.fn(), error = vi.fn(), chunk = vi.fn();
+    await f.provider.streamChat(input, chunk, complete, error, { maxTokens: 64 });
+    expect(error).toHaveBeenCalledOnce(); expect(complete).not.toHaveBeenCalled();
+    expect(chunk.mock.calls.some(([, event]) => event?.type === 'tool_call')).toBe(false);
+  });
+  for (const boundary of ['text_delta', 'tool_call']) it(`awaits ${boundary} withdrawal before later output/completion`, async () => {
+    const f = fixture(profiles[0]!.id), controller = new AbortController(), complete = vi.fn(), error = vi.fn();
+    f.reply(null, responseEvents()); const seen: string[] = [];
+    await f.provider.streamChat(input, async (text, event) => {
+      if (event?.type === 'text_delta') seen.push(text);
+      if (event?.type === boundary) { await Promise.resolve(); controller.abort(); }
+    }, complete, error, { signal: controller.signal, maxTokens: 64 });
+    expect(complete).not.toHaveBeenCalled(); expect(error).toHaveBeenCalledOnce();
+    expect(error.mock.calls[0]?.[0].message).toBe('Anthropic request aborted.');
+    expect(seen).toEqual(boundary === 'text_delta' ? ['left'] : ['left', '!', 'right?']);
+  });
+  it('does not grant native response authority to compatible, unknown or per-call unknown models', async () => {
+    class Compatible extends AnthropicProvider {}
+    for (const [model, Provider, override] of [
+      [profiles[0]!.id, Compatible, undefined], ['unknown-model', AnthropicProvider, undefined],
+      [profiles[0]!.id, AnthropicProvider, 'unknown-model'],
+    ] as const) {
+      const f = fixture(model, 'legacy-response', Provider);
+      f.reply({ model: 'legacy-response', content: [{ type: 'text', text: 'first' }, { type: 'text', text: 'second' }] },
+        [{ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'legacy' } }]);
+      expect((await f.call(false, 'none', { model: override })).content).toBe('first');
+      expect((await f.call(true, 'none', { model: override })).content).toBe('legacy');
+    }
+  });
+});
 
 describe('pinned original Anthropic metadata and observed accounting', () => {
   it('binds the independent seventeen-profile fixture to the approved catalogue hash', () => {

@@ -25,14 +25,17 @@ async function fixture(failWarm = false) {
     const body = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>; bodies.push(body);
     if (failWarm && body.max_tokens === 1) { response.writeHead(503); response.end('unavailable'); return; }
     if (!body.stream) { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({
-      model: body.model, content: [{ type: 'text', text: 'ok' }], usage,
+      model: body.model, content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn', usage,
     })); return; }
     response.setHeader('Content-Type', 'text/event-stream');
     const events = [
       { type: 'message_start', message: { usage: { ...usage, cache_creation_input_tokens: 0,
         cache_creation: { ephemeral_1h_input_tokens: 0 } } } },
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
       { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'ok' } },
-      { type: 'message_delta', usage: { ...usage, output_tokens: body.max_tokens === 1 ? 1 : 2 } },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { ...usage, output_tokens: body.max_tokens === 1 ? 1 : 2 } },
+      { type: 'message_stop' },
     ];
     response.end(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
   });

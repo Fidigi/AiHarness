@@ -21,11 +21,17 @@ async function fixture(model = adaptive, Provider = AnthropicProvider) {
     response.writeHead(200, { 'Content-Type': body.stream ? 'text/event-stream' : 'application/json' });
     if (body.stream) {
       const events = [
-        ...(enabled ? [{ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'reason' } }] : []),
+        { type: 'message_start', message: { model: body.model } },
+        ...(enabled ? [{ type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } },
+          { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'reason' } },
+          { type: 'content_block_stop', index: 0 }] : []),
+        { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } },
         { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'ok' } },
+        { type: 'content_block_stop', index: 1 },
+        { type: 'message_delta', delta: { stop_reason: 'end_turn' } }, { type: 'message_stop' },
       ];
       response.end(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
-    } else response.end(JSON.stringify({ model: body.model, content: [
+    } else response.end(JSON.stringify({ model: body.model, stop_reason: 'end_turn', content: [
       ...(enabled ? [{ type: 'thinking', thinking: 'reason', signature: 'fixture-signature' }] : []),
       { type: 'text', text: 'ok' },
     ] }));

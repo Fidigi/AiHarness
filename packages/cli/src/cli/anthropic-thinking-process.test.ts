@@ -25,7 +25,13 @@ async function fixture(model = adaptive) {
     const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
     bodies.push(JSON.parse(Buffer.concat(chunks).toString()) as Body);
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
-    response.end('data: ' + JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'adaptive-ok' } }) + '\n\n');
+    response.end([
+      { type: 'message_start', message: {} },
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'adaptive-ok' } },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'message_delta', delta: { stop_reason: 'end_turn' } }, { type: 'message_stop' },
+    ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;

@@ -72,6 +72,7 @@ import { ProviderContextOverflowError, rejectProviderHttpResponse } from './cont
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget, anthropicManagedEffort, anthropicThinkingBetas, applyAnthropicManagedHistory } from './anthropic-thinking.js';
 import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage } from './anthropic-profiles.js';
+import { validateAnthropicResponse, anthropicResponseStreamValidator, anthropicResponseToolInput, assertAnthropicResponseActive } from './anthropic-response.js';
 import { applyGoogleNativeGenerationConfig, googlePublishedProfiles, hasGoogleProfile, googleProfileUsage, type GoogleNativeScope } from './google-profiles.js';
 import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
 export type { ThinkingBudgets } from './thinking-budgets.js';
@@ -4400,6 +4401,7 @@ export class AnthropicProvider extends AiProvider {
     }
 
     const model = options?.model || (this.config.model as string) || ANTHROPIC_DEFAULT_MODEL;
+    const native = this.ownsNativeProfiles && hasAnthropicProfile(model);
 
     const systemPrompt = options?.systemPrompt || '';
     const anthropicMessages = this.buildAnthropicMessages(messages);
@@ -4441,10 +4443,12 @@ export class AnthropicProvider extends AiProvider {
     if (!response.ok) await rejectProviderHttpResponse(response, `Anthropic API error (${response.status}).`);
 
     const data = await readProviderJson<AnthropicResponse>(response);
-    if (data.content && (!Array.isArray(data.content) || data.content.length > MAX_PROVIDER_STREAM_TOOL_CALLS)) {
+    const responseContent = native ? data?.content : data.content;
+    if (responseContent && ((!native && !Array.isArray(responseContent)) || responseContent.length > MAX_PROVIDER_STREAM_TOOL_CALLS)) {
       throw new Error('The provider response exceeded the content-block limit.');
     }
-    this.validateMessageResponse(data);
+    if (native) { assertAnthropicResponseActive(options?.signal); validateAnthropicResponse(data); }
+    else this.validateMessageResponse(data);
     const contentBlock = data.content?.find(c => c.type === 'text') as AnthropicTextContent | undefined;
     const reasoning = data.content
       ?.filter((block): block is AnthropicThinkingContent => block.type === 'thinking')
@@ -4453,12 +4457,13 @@ export class AnthropicProvider extends AiProvider {
     const toolCalls = data.content
       ?.filter((block): block is AnthropicToolUseContent => block.type === 'tool_use')
       .map(block => ({ id: block.id, name: block.name, input: block.input }));
-    if (!contentBlock && !toolCalls?.length) {
+    if (!native && !contentBlock && !toolCalls?.length) {
       throw new Error('No text or tool content in Anthropic response');
     }
 
     return {
-      content: this.messageText(data.content),
+      content: native ? data.content?.filter(block => block.type === 'text').map(block => (block as AnthropicTextContent).text ?? '').join('') ?? ''
+        : this.messageText(data.content),
       ...(this.ownsNativeProfiles && hasAnthropicProfile(model) ? { api: 'anthropic-messages' } : {}),
       ...lengthStop(data.stop_reason),
       ...(reasoning ? { reasoning } : {}),
@@ -4481,6 +4486,8 @@ export class AnthropicProvider extends AiProvider {
     }
 
     const model = options?.model || (this.config.model as string) || ANTHROPIC_DEFAULT_MODEL;
+    const native = this.ownsNativeProfiles && hasAnthropicProfile(model);
+    const checkCancellation = () => { if (native) assertAnthropicResponseActive(options?.signal); };
     const url = this.getMessagesUrl();
 
     const systemPrompt = options?.systemPrompt || '';
@@ -4528,17 +4535,19 @@ export class AnthropicProvider extends AiProvider {
       let outputBytes = 0;
       let transportBytes = 0;
       let streamEvents = 0;
-      const toolCallFragments = new Map<number, { id: string; name: string; json: string }>();
+      const toolCallFragments = new Map<number, { id: string; name: string; json: string; input?: unknown }>();
 
       if (!response.body) throw new Error('Anthropic streaming response has no body');
-      const validateStream = this.createMessageStreamValidator();
+      const validateStream = native ? anthropicResponseStreamValidator() : this.createMessageStreamValidator();
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8', { fatal: true });
       let buffer = '';
 
       try {
         while (true) {
+        checkCancellation();
         const { done, value } = await reader.read();
+        checkCancellation();
         if (done) break;
         transportBytes += value.byteLength;
         if (value.byteLength > MAX_PROVIDER_STREAM_EVENT_BYTES
@@ -4567,6 +4576,7 @@ export class AnthropicProvider extends AiProvider {
             throw new Error('The provider response exceeded the output limit.');
           }
           outputBytes += eventBytes;
+          checkCancellation();
           let eventData: AnthropicStreamEvent;
           try { eventData = JSON.parse(dataStr) as AnthropicStreamEvent; }
           catch { throw new Error('The provider streaming response was invalid.'); }
@@ -4574,6 +4584,14 @@ export class AnthropicProvider extends AiProvider {
 
           switch (eventData.type) {
             case 'content_block_start': {
+              const block = eventData.content_block;
+              if (native && block?.type === 'text' && block.text) {
+                fullContent += block.text;
+                await onChunk(block.text, { type: 'text_delta', data: eventData });
+              } else if (native && block?.type === 'thinking' && block.thinking) {
+                fullReasoning += block.thinking;
+                await onChunk('', { type: 'reasoning_delta', data: { content: block.thinking } });
+              }
               if (eventData.content_block?.type === 'tool_use') {
                 if (!Number.isSafeInteger(eventData.index) || eventData.index < 0
                   || eventData.index >= MAX_PROVIDER_STREAM_TOOL_CALLS
@@ -4589,6 +4607,7 @@ export class AnthropicProvider extends AiProvider {
                   id: eventData.content_block.id,
                   name: eventData.content_block.name,
                   json: '',
+                  ...(native ? { input: eventData.content_block.input } : {}),
                 });
               }
               break;
@@ -4628,21 +4647,29 @@ export class AnthropicProvider extends AiProvider {
       buffer += decoder.decode();
       if (buffer.trim()) throw new Error('The provider streaming response was invalid.');
 
+      checkCancellation();
       validateStream();
-      const toolCalls = [...toolCallFragments.values()].map(fragment => ({
-        id: fragment.id, name: fragment.name, input: parseProviderToolArguments(fragment.json),
-      }));
-      for (const call of toolCalls) await onChunk('', { type: 'tool_call', data: call });
-        onComplete?.({
-          content: fullContent,
-          ...(this.ownsNativeProfiles && hasAnthropicProfile(model) ? { api: 'anthropic-messages' } : {}),
-          ...(providerThinkingLevel !== undefined ? { providerThinkingLevel } : {}),
-          ...(fullReasoning ? { reasoning: fullReasoning } : {}),
-          model,
-          ...(stopReason ? { stopReason } : {}),
-          usage: this.messageUsage(reportedUsage, model, true, options?.cacheRetention),
-          toolCalls: toolCalls.length ? toolCalls : undefined,
-        });
+      const toolCalls = [...toolCallFragments.values()].map(fragment => {
+        const input = native && !fragment.json ? fragment.input ?? {} : parseProviderToolArguments(fragment.json);
+        return { id: fragment.id, name: fragment.name, input: native ? anthropicResponseToolInput(input) : input };
+      });
+      for (const call of toolCalls) {
+        checkCancellation();
+        await onChunk('', { type: 'tool_call', data: call });
+      }
+      checkCancellation();
+      const result: ChatResponse = {
+        content: fullContent,
+        ...(this.ownsNativeProfiles && hasAnthropicProfile(model) ? { api: 'anthropic-messages' } : {}),
+        ...(providerThinkingLevel !== undefined ? { providerThinkingLevel } : {}),
+        ...(fullReasoning ? { reasoning: fullReasoning } : {}),
+        model,
+        ...(stopReason ? { stopReason } : {}),
+        usage: this.messageUsage(reportedUsage, model, true, options?.cacheRetention),
+        toolCalls: toolCalls.length ? toolCalls : undefined,
+      };
+      if (native) await onComplete?.(result);
+      else onComplete?.(result);
       } finally {
         void reader.cancel('provider-stream-finished').catch(() => undefined);
         try { reader.releaseLock(); } catch { /* A hostile pending read may retain the lock. */ }

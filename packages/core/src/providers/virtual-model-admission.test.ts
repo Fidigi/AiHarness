@@ -148,7 +148,12 @@ describe('virtual physical admission and missing-router resume', () => {
       bodies.push(JSON.parse(Buffer.concat(chunks).toString()));
       response.writeHead(200, { 'Content-Type': 'text/event-stream' });
       response.end(dialect === 'openai' ? 'data: {"choices":[{"delta":{"content":"wire answer"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
-        : 'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"wire answer"}}\n\n');
+        : [{ type: 'message_start', message: {} },
+          { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+          { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'wire answer' } },
+          { type: 'content_block_stop', index: 0 },
+          { type: 'message_delta', delta: { stop_reason: 'end_turn' } }, { type: 'message_stop' },
+        ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
     });
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     try {
