@@ -28,7 +28,7 @@ Each task requires implementation, focused regression evidence, documentation an
 
 | Task | Work | Local acceptance |
 |---|---|---|
-| MOD-01.01a | Reconcile every pinned `(provider, model, API, type)` row with the actual native adapter, supported operations, metadata and host admission. Start from the existing 42-row inventory and adapter declarations. | Exhaustive missing/implemented mapping against pinned data and hashes; distinguish shared IDs across APIs and declared versus executable media. |
+| MOD-01.01a | Reconcile every pinned `(provider, model, API, type)` row with the actual native adapter, supported operations, metadata and host admission. Start from the existing 42-row inventory and adapter declarations. | Delivered local reconciliation (2026-10-27), with exhaustive typed identities/hashes, separate API/media/host projections and focused regressions; receipt below. This does not close native wire/profile qualification or the failing shared typecheck/parity gates. |
 | MOD-01.01b | Complete the remaining original built-in model policies: OpenAI, Anthropic, Google, Azure, Vertex and Bedrock. | Per-model request/response fixtures for physical APIs, caps, reasoning, tools, usage and defaults; API identity must not depend on an operator alias. |
 | MOD-01.01c | Implement native Radius/Pi Messages and Codex Responses paths. | Bounded native framing, terminal/error authority, tools, cancellation and once-only observed accounting; genuine public package controls. |
 | MOD-01.01d | Implement GitHub Copilot's per-model A/C/R dispatch and gateway dispatch for Cloudflare AI Gateway and Vercel AI Gateway. | Exact operation-owned paths/headers and mixed-API overlap fixtures; no generic compatible-endpoint claim. |
@@ -85,3 +85,68 @@ The existing [linked-modal regression](../../../e2e/linked-modal-boundary.spec.t
 The first isolated `make test-e2e E2E_ARGS='--config=e2e/linked-modal-boundary.config.ts'` fails before tests: Core's compiler reports `code=null, signal=SIGTRAP`, with V8's `predecessors.size()` assertion and no TypeScript diagnostic. Its patch and make exit 2 remain retained. A newer combined source tree `099cb57f3634f85f98089a78ee7dabefee52b0ef` on `af3e718` includes the census's finite-question revision plus this unchanged oracle correction: the same canonical browser target passes **43/43**, one worker/zero retries. All 1,431 declared source hashes/modes match its image; that manifest is not a claim to hash every Docker-context input. Raw logs, image identity and browser artifacts are local at `test-results/mod01-tasks-20261027/00b/`.
 
 This closes only the linked-read oracle defect. Native crashes, original visual failures and the broader 00b acceptance remain open; later compilation/browser success is not a causal diagnosis or a replacement for the failed first attempt.
+
+## MOD-01.01a — Typed reconciliation receipt (2026-10-27)
+
+The derived [reference fixture](../../../tests/fixtures/provider-reference.json) retains all 42 factories and 1,649 `(provider, model, API, type)` identities: 1,554 chat, 34 classifier and 61 image. Generated catalogue bytes come from the pinned `@earendil-works/pi-ai@1.2.0` package, not generated files in the source checkout. The separate factory hashes match the checkout at the target commit above. [Capture and validation](../../../tests/functional-parity/provider-reference.mjs) verify every catalogue digest against the original schema-6 manifest, preserve its exact bytes and pin the factory/typed-row aggregate hashes. Manifest SHA-256 is `a4c0a81f2cc4323b81d4c5d3886b343dc226939168f33e8eb731c928a81cfce9`; derived rows SHA-256 is `458975f575e8c576c083fff689ce4b8dd3ade1af25745a1f2be14908359a6738`.
+
+The [census](../../../tests/functional-parity/provider-coverage.mjs) constructs the actual operation-specific public Core adapters, original Factory instances and automatic CLI compositions. Separately, it exercises actual builtin/custom-registry chat-record admission and custom-dialect construction with disposable encrypted storage and an inert structural proxy; it does not exercise HTTP or Settings. Each typed row records native metadata, API projection, operation descriptors and separate Factory/CLI/builtin-record/custom-host results. Builtin record admission does not prove a configured Server connection. Native scalar questions/image requests on specialized SDKs are separate from finite/guest contracts and are not credited to mixed custom hosts that do not expose them. Missing native ownership is never inferred from another provider's same model ID. CN custom routes are explicitly operator-URL-only, not automatic regional composition.
+
+The classifications below are **declarations, not implemented/usable-model certificates**. `Native declaration` means an API-matching adapter/profile declaration without an observed image-descriptor mismatch. `Partial` means transport-only/incomplete profile or declared-but-not-effective classifier vision. `Missing` means no owned native adapter/API projection. Effective defaults, media/continuation and operation-by-operation wire/public/HTTP/browser acceptance remain tasks 01b–06c. Absent pricing remains `null`, including nineteen NVIDIA rows. Preserved zero-only declarations are not a free-service certificate.
+
+| Pinned provider | Entries | Native declaration | Partial | Missing |
+|---|---:|---:|---:|---:|
+| amazon-bedrock | 193 | 0 | 193 | 0 |
+| ant-ling | 3 | 3 | 0 | 0 |
+| anthropic | 17 | 0 | 17 | 0 |
+| azure | 45 | 0 | 45 | 0 |
+| baseten | 22 | 22 | 0 | 0 |
+| cerebras | 2 | 2 | 0 | 0 |
+| cloudflare-ai-gateway | 57 | 0 | 0 | 57 |
+| cloudflare-workers-ai | 21 | 21 | 0 | 0 |
+| deepseek | 2 | 2 | 0 | 0 |
+| fireworks | 22 | 22 | 0 | 0 |
+| github-copilot | 35 | 0 | 0 | 35 |
+| google-vertex | 13 | 0 | 13 | 0 |
+| google | 22 | 0 | 22 | 0 |
+| groq | 7 | 7 | 0 | 0 |
+| huggingface | 78 | 78 | 0 | 0 |
+| kimi-coding | 4 | 4 | 0 | 0 |
+| meta | 6 | 6 | 0 | 0 |
+| minimax-cn | 3 | 3 | 0 | 0 |
+| minimax | 3 | 3 | 0 | 0 |
+| mistral | 40 | 40 | 0 | 0 |
+| moonshotai-cn | 4 | 4 | 0 | 0 |
+| moonshotai | 4 | 4 | 0 | 0 |
+| nvidia | 21 | 21 | 0 | 0 |
+| openai-codex | 9 | 0 | 0 | 9 |
+| openai | 45 | 45 | 0 | 0 |
+| opencode-go | 31 | 31 | 0 | 0 |
+| opencode | 85 | 85 | 0 | 0 |
+| openrouter | 475 | 469 | 6 | 0 |
+| qwen-token-plan-cn | 20 | 0 | 0 | 20 |
+| qwen-token-plan-individual | 9 | 0 | 0 | 9 |
+| qwen-token-plan | 20 | 0 | 0 | 20 |
+| radius | 29 | 0 | 0 | 29 |
+| together | 17 | 17 | 0 | 0 |
+| typesafe | 1 | 1 | 0 | 0 |
+| vercel-ai-gateway | 251 | 0 | 0 | 251 |
+| xai | 4 | 4 | 0 | 0 |
+| xiaomi-token-plan-ams | 4 | 0 | 0 | 4 |
+| xiaomi-token-plan-cn | 4 | 0 | 0 | 4 |
+| xiaomi-token-plan-sgp | 4 | 0 | 0 | 4 |
+| xiaomi | 6 | 6 | 0 | 0 |
+| zai-coding-cn | 4 | 0 | 0 | 4 |
+| zai | 7 | 7 | 0 | 0 |
+| **Total** | **1,649** | **907** | **296** | **446** |
+
+[Focused regressions](../../../tests/functional-parity/provider-coverage.test.mjs) retain overlapping OpenAI R/D and OpenRouter C/I IDs, the six effective vision refusals among OpenRouter classifiers, native scalar versus finite operations, absent Qwen ownership, Mistral's missing automatic CLI slot, Cerebras's existing automatic CLI/custom dialect but absent builtin Server record slot, and specialized SDK operations absent from mixed hosts. They also reject altered rows/provenance and assert zero fetches and no disposable-key disclosure. Root Vitest now discovers these `.test.mjs` cross-package probes; `make test-parity` includes them without another framework.
+
+Validation snapshots remain separate:
+
+- Initial tree `c53112626c9e34219b59edea8d247580bd4d1d15` on `af3e718`: canonical Docker `make test-parity` passes 362/362 across four files; `make typecheck` passes.
+- Finite-question tree `36e004ab68b18fd61a39808e851ac1706f982117`: parity again passes 362/362, but the new typecheck attempt **fails**, make exit 2: Server's no-emit compiler terminates with `code=null, signal=SIGSEGV`. No successful final typecheck is substituted for it.
+- Operation-specific SDK tree `b7ebb612f1398e5054a832db98c381ce3d4cf08d`: the three census cases pass, but the unfiltered parity gate **fails**, 360 pass/two fail/362, make exit 2. Installed strict consumers `dispatch-public.ts` and `minimax-public.ts` each terminate with `code=null, signal=SIGSEGV`. No retry or waiver of those failures.
+- Delivery tree `460b91e69d9e7fa0831cc40d68c5889ee3f4247d` on `bddfe50` additionally records builtin chat-record admission. A retained temporary Makefile driver invokes the unchanged canonical `build-test` target, then the existing Vitest selector in that freshly built image with network disabled: **3/3 census cases pass**, no filtered case credited. The final offline export has 1,649 rows, 28 native scalar-question and 61 native-image operation declarations, and the totals above. All 1,431 declared source hashes/modes match its image. This final focused result is not a replacement for failed typecheck/full parity or a full-context identity certificate.
+
+Local patches, source trees, raw successful/failed logs, Makefile driver, image identities and JSON exports are retained under `test-results/mod01-tasks-20261027/`. Full root, all nine browser suites and production build are not rerun for this census-only delivery; the 43 linked cases above qualify their own earlier captured input, not the later report refinements. Neither these results nor the earlier successes diagnose or erase native crashes, visual failures or absent E77/E78 originals. No real-provider or whole-platform acceptance is claimed.

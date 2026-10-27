@@ -13,6 +13,7 @@ export default defineConfig({
       'packages/server/src/**/*.test.ts',
       'packages/web/src/**/*.test.ts',
       'tests/functional-parity/**/*.test.ts',
+      'tests/functional-parity/**/*.test.mjs',
     ],
     exclude: [
       '**/node_modules/**',
