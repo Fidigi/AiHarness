@@ -21,7 +21,7 @@ async function fixture(kind: 'anthropic' | 'google' | 'vertex' | 'openai', model
     const stream = body.stream === true || request.url!.includes('streamGenerateContent');
     const data = kind === 'anthropic' ? { content: [{ type: 'text', text: 'ok' }] }
       : kind === 'openai' ? { choices: [{ message: { content: 'ok' } }] }
-        : { candidates: [{ content: { parts: [{ text: 'ok' }] } }] };
+        : { candidates: [{ content: { parts: [{ text: 'ok' }] }, finishReason: 'STOP' }] };
     const event = kind === 'anthropic' ? { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'ok' } }
       : kind === 'openai' ? { choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] } : data;
     response.writeHead(200, { 'Content-Type': stream ? 'text/event-stream' : 'application/json' });
@@ -51,7 +51,8 @@ describe('numeric thinking budgets on real HTTP payloads', () => {
         const expected = level === 'off' ? (kind === 'anthropic' ? undefined : 0)
           : level === 'minimal' ? (kind === 'anthropic' ? 1024 : 128)
             : level === 'low' ? 3333 : level === 'medium' ? (kind === 'anthropic' ? 1024 : 128)
-              : level === 'xhigh' && kind === 'anthropic' ? 16384 : 32768;
+              : level === 'xhigh' && kind === 'anthropic' ? 16384
+                : (level === 'xhigh' || level === 'max') && kind !== 'anthropic' ? 2222 : 32768;
         for (const stream of [false, true]) await test.call(stream, { thinking: level, thinkingBudgets: budgets, maxTokens: kind === 'anthropic' ? 64 : 65536, temperature: 0.3 });
         expect(test.bodies).toHaveLength(2);
         for (const body of test.bodies) {
@@ -70,6 +71,13 @@ describe('numeric thinking budgets on real HTTP payloads', () => {
     expect(test.bodies.map(body => body.generationConfig?.thinkingConfig?.thinkingBudget)).toEqual([maximum, maximum]);
     await test.call(false, { thinking: 'low', thinkingBudgets: { low: 0 } });
     expect(test.bodies.at(-1)?.generationConfig?.thinkingConfig?.thinkingBudget).toBe(0);
+  });
+  it('retains legacy extended-level budget fallback outside the owned Google catalogue', async () => {
+    const test = await fixture('google', 'gemini-other');
+    for (const thinking of ['xhigh', 'max'] as const) for (const stream of [false, true]) {
+      await test.call(stream, { thinking, thinkingBudgets: { high: 2222 } });
+      expect(test.bodies.at(-1)?.generationConfig?.thinkingConfig?.thinkingBudget).toBe(8192);
+    }
   });
   it('does not enable thinking without a level or send numeric fields to effort-only APIs', async () => {
     const anthropic = await fixture('anthropic'); const openai = await fixture('openai');

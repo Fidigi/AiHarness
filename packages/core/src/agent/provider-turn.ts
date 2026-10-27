@@ -537,7 +537,10 @@ async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
       },
     };
   }
-  if (response.usage && response.usage.costUsd === undefined) {
+  // A published tariff cannot attribute extra reported tokens; an observed cost still wins.
+  if (response.usage && response.usage.costUsd === undefined
+    && response.usage.totalTokens === response.usage.promptTokens + response.usage.completionTokens
+      + (response.usage.cacheReadTokens ?? 0) + (response.usage.cacheWriteTokens ?? 0)) {
     const costUsd = calculatePublishedModelCost(
       callLabels.provider,
       response.model ?? callLabels.model ?? '',

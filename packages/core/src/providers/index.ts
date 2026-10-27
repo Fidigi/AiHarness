@@ -72,6 +72,7 @@ import { ProviderContextOverflowError, rejectProviderHttpResponse } from './cont
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget, anthropicManagedEffort, anthropicThinkingBetas, applyAnthropicManagedHistory } from './anthropic-thinking.js';
 import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage } from './anthropic-profiles.js';
+import { applyGoogleNativeGenerationConfig, googlePublishedProfiles, hasGoogleProfile, googleProfileUsage, type GoogleNativeScope } from './google-profiles.js';
 import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
 export type { ThinkingBudgets } from './thinking-budgets.js';
 import {
@@ -3650,6 +3651,8 @@ export class OpenAiMixedProvider extends AiProvider {
 
 interface GeminiPart {
   text?: string;
+  thought?: boolean;
+  thoughtSignature?: string;
   functionCall?: { name: string; args?: unknown };
 }
 
@@ -3667,12 +3670,20 @@ interface GeminiResponse {
 
 export class GeminiProvider extends AiProvider {
   override getModelApi(): string { return 'google-generative-ai'; }
+  override getPublishedModels(): readonly PublishedModelMetadata[] | undefined {
+    if (!this.nativeScope) return super.getPublishedModels?.();
+    const legacy = getPublishedModels(this.nativeScope === 'google' ? 'google' : 'vertex');
+    return [...googlePublishedProfiles(this.nativeScope), ...legacy.filter(profile => !hasGoogleProfile(this.nativeScope!, profile.id))
+      .map(profile => ({ ...profile, api: this.nativeScope === 'google' ? 'google-generative-ai' : 'google-vertex' }))];
+  }
 
+  private readonly nativeScope: GoogleNativeScope | undefined;
   static readonly DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
   private readonly baseUrl: string;
 
   constructor(config: ProviderConfig) {
     super({ ...config, type: ProviderType.GOOGLE, model: config.model || 'gemini-2.0-flash' });
+    this.nativeScope = new.target === GeminiProvider ? 'google' : new.target === VertexGeminiProvider ? 'google-vertex' : undefined;
     this.baseUrl = (config.baseUrl || GeminiProvider.DEFAULT_BASE_URL).replace(/\/$/, '');
   }
 
@@ -3697,14 +3708,25 @@ export class GeminiProvider extends AiProvider {
     });
   }
 
-  protected endpoint(method: 'generateContent' | 'streamGenerateContent'): string {
-    const model = String(this.config.model || 'gemini-2.0-flash').replace(/^models\//, '');
+  protected endpoint(method: 'generateContent' | 'streamGenerateContent', requestedModel?: string): string {
+    const model = String(requestedModel || this.config.model || 'gemini-2.0-flash').replace(/^models\//, '');
+    if (this.nativeScope === 'google' && hasGoogleProfile(this.nativeScope, model)) {
+      return `${this.baseUrl}/models/${encodeURIComponent(model)}:${method}${method === 'streamGenerateContent' ? '?alt=sse' : ''}`;
+    }
     const suffix = method === 'streamGenerateContent' ? '?alt=sse&' : '?';
     return `${this.baseUrl}/models/${encodeURIComponent(model)}:${method}${suffix}key=${encodeURIComponent(String(this.config.apiKey || ''))}`;
   }
 
-  protected requestHeaders(): Record<string, string> {
-    return { 'Content-Type': 'application/json', ...configuredHeaders(this.config) };
+  protected nativeRequestHeaders(model?: string): Record<string, string> | undefined {
+    if (!this.nativeScope || !model || !hasGoogleProfile(this.nativeScope, model)) return undefined;
+    const headers = new Headers(configuredHeaders(this.config));
+    headers.set('Content-Type', 'application/json');
+    headers.set(this.nativeScope === 'google' ? 'x-goog-api-key' : 'Authorization',
+      this.nativeScope === 'google' ? String(this.config.apiKey) : `Bearer ${this.config.apiKey}`);
+    return Object.fromEntries(headers.entries());
+  }
+  protected requestHeaders(model?: string): Record<string, string> {
+    return this.nativeRequestHeaders(model) ?? { 'Content-Type': 'application/json', ...configuredHeaders(this.config) };
   }
 
   private buildBody(messages: Message[], options?: ChatOptions): Record<string, unknown> {
@@ -3735,6 +3757,7 @@ export class GeminiProvider extends AiProvider {
       return { role: message.role === 'assistant' ? 'model' : 'user', parts };
     });
     const thinkingModel = String(options?.model ?? this.config.model ?? '');
+    const native = this.nativeScope && hasGoogleProfile(this.nativeScope, thinkingModel) ? this.nativeScope : undefined;
     const highBudget = thinkingModel.includes('2.5-pro') ? 32768
       : thinkingModel.includes('2.5-flash') ? 24576 : 8192;
     const thinkingBudgets = {
@@ -3750,7 +3773,7 @@ export class GeminiProvider extends AiProvider {
       generationConfig: {
         ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
         ...(options?.maxTokens !== undefined ? { maxOutputTokens: options.maxTokens } : {}),
-        ...(options?.thinking
+        ...(!native && options?.thinking
           ? { thinkingConfig: { thinkingBudget: options.thinking === 'off' ? 0 : resolveThinkingBudget(
             options.thinking, options.thinkingBudgets, thinkingBudgets[options.thinking],
             thinkingModel.includes('2.5-pro') ? 128 : 0, highBudget,
@@ -3758,6 +3781,7 @@ export class GeminiProvider extends AiProvider {
           : {}),
       },
     };
+    if (native) applyGoogleNativeGenerationConfig(native, thinkingModel, body.generationConfig as Record<string, unknown>, options);
     if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
     if (options?.tools?.length) {
       body.tools = [{ functionDeclarations: options.tools.map(tool => ({
@@ -3769,18 +3793,42 @@ export class GeminiProvider extends AiProvider {
     return body;
   }
 
-  private normalize(response: GeminiResponse): ChatResponse {
+  private normalize(response: GeminiResponse, model: string, complete = false): ChatResponse {
+    const scope = this.nativeScope && hasGoogleProfile(this.nativeScope, model) ? this.nativeScope : undefined;
+    if (scope) {
+      if (!response || typeof response !== 'object' || Array.isArray(response) || Object.hasOwn(response, 'error')) throw new Error('Invalid Google response.');
+      const candidates = response.candidates;
+      if (candidates !== undefined && (!Array.isArray(candidates) || candidates.length > 1
+        || candidates.some(candidate => !candidate || typeof candidate !== 'object' || Array.isArray(candidate)))) throw new Error('Invalid Google response.');
+      const candidateContent = candidates?.[0]?.content;
+      if (candidateContent !== undefined && (!candidateContent || typeof candidateContent !== 'object' || Array.isArray(candidateContent))) throw new Error('Invalid Google response.');
+      const finish = candidates?.[0]?.finishReason;
+      if ((complete || finish !== undefined) && finish !== 'STOP' && finish !== 'MAX_TOKENS') throw new Error('Invalid Google response.');
+    }
     if (response.error?.message) throw new Error('Gemini API returned an error.');
     const token = (value: unknown): number => (
       typeof value === 'number' && Number.isFinite(value) && value > 0
         ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(value))
         : 0
     );
-    const parts = response.candidates?.[0]?.content?.parts ?? [];
+    const rawParts = response.candidates?.[0]?.content?.parts;
+    if (scope && rawParts !== undefined && !Array.isArray(rawParts)) throw new Error('Invalid Google response.');
+    const parts = rawParts ?? [];
     if (!Array.isArray(parts) || parts.length > MAX_PROVIDER_STREAM_TOOL_CALLS) {
       throw new Error('The provider response exceeded the content-block limit.');
     }
-    const content = parts.map(part => part.text ?? '').join('');
+    if (scope) for (const part of parts) {
+      if (!part || typeof part !== 'object' || Array.isArray(part)
+        || (part.text !== undefined && typeof part.text !== 'string')
+        || (part.thought !== undefined && typeof part.thought !== 'boolean')
+        || (part.thoughtSignature !== undefined && typeof part.thoughtSignature !== 'string')) throw new Error('Invalid Google response.');
+      const call = part.functionCall;
+      if (call !== undefined && (!call || typeof call !== 'object' || Array.isArray(call) || typeof call.name !== 'string' || !call.name
+        || (call.args !== undefined && call.args !== null && (typeof call.args !== 'object' || Array.isArray(call.args))))) throw new Error('Invalid Google response.');
+    }
+    // A thought signature can belong to ordinary text; only thought:true marks visible reasoning.
+    const content = parts.filter(part => !scope || part.thought !== true).map(part => part.text ?? '').join('');
+    const reasoning = scope ? parts.filter(part => part.thought === true).map(part => part.text ?? '').join('') : '';
     const toolCalls = parts.flatMap((part, index) => part.functionCall ? [{
       id: `gemini-${index}-${part.functionCall.name}`,
       name: part.functionCall.name,
@@ -3789,9 +3837,11 @@ export class GeminiProvider extends AiProvider {
     const usage = response.usageMetadata;
     return {
       content,
+      ...(reasoning ? { reasoning } : {}),
+      ...(scope ? { api: scope === 'google' ? 'google-generative-ai' : 'google-vertex' } : {}),
       ...lengthStop(response.candidates?.[0]?.finishReason),
-      model: String(this.config.model),
-      usage: usage ? (() => {
+      model,
+      usage: scope ? googleProfileUsage(scope, model, usage) : usage ? (() => {
         const prompt = token(usage.promptTokenCount);
         const cacheRead = Math.min(prompt, token(usage.cachedContentTokenCount));
         const completion = Math.min(
@@ -3814,14 +3864,15 @@ export class GeminiProvider extends AiProvider {
 
   async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     if (!this.validateConfig()) throw new Error('Gemini API key is required');
-    const response = await this.request(this.endpoint('generateContent'), {
+    const model = String(options?.model || this.config.model || 'gemini-2.0-flash').replace(/^models\//, '');
+    const response = await this.request(this.endpoint('generateContent', model), {
       method: 'POST',
-      headers: this.requestHeaders(),
-      body: serializeProviderBody(this.buildBody(messages, options)),
+      headers: this.requestHeaders(model),
+      body: serializeProviderBody(this.buildBody(messages, { ...options, model })),
       signal: options?.signal,
     });
     if (!response.ok) await rejectProviderHttpResponse(response, `Gemini API error (${response.status}).`);
-    return this.normalize(await readProviderJson<GeminiResponse>(response));
+    return this.normalize(await readProviderJson<GeminiResponse>(response), model, true);
   }
 
   async streamChat(
@@ -3833,10 +3884,12 @@ export class GeminiProvider extends AiProvider {
   ): Promise<void> {
     try {
       if (!this.validateConfig()) throw new Error('Gemini API key is required');
-      const response = await this.request(this.endpoint('streamGenerateContent'), {
+      const model = String(options?.model || this.config.model || 'gemini-2.0-flash').replace(/^models\//, '');
+      const scope = this.nativeScope && hasGoogleProfile(this.nativeScope, model) ? this.nativeScope : undefined;
+      const response = await this.request(this.endpoint('streamGenerateContent', model), {
         method: 'POST',
-        headers: this.requestHeaders(),
-        body: serializeProviderBody(this.buildBody(messages, options)),
+        headers: this.requestHeaders(model),
+        body: serializeProviderBody(this.buildBody(messages, { ...options, model })),
         signal: options?.signal,
       });
       if (!response.ok) await rejectProviderHttpResponse(response, `Gemini API error (${response.status}).`);
@@ -3851,9 +3904,13 @@ export class GeminiProvider extends AiProvider {
       let streamEvents = 0;
       const toolCalls: ToolCall[] = [];
       let usage: ChatResponse['usage'];
+      let observedUsage: unknown;
       let stopReason: ChatResponse['stopReason'];
+      let reasoning = '', finished = false;
+      const alive = (): void => { if (scope && options?.signal?.aborted) throw new Error('Gemini request aborted.'); };
 
       const consume = async (record: string): Promise<void> => {
+        alive();
         const data = record.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trim()).join('\n');
         if (!data || data === '[DONE]') return;
         if (++streamEvents > MAX_PROVIDER_STREAM_EVENTS) {
@@ -3868,9 +3925,20 @@ export class GeminiProvider extends AiProvider {
         let parsed: GeminiResponse;
         try { parsed = JSON.parse(data) as GeminiResponse; }
         catch { throw new Error('The provider streaming response was invalid.'); }
-        const normalized = this.normalize(parsed);
+        const normalized = this.normalize(parsed, model);
+        if (Object.hasOwn(parsed, 'usageMetadata')) observedUsage = parsed.usageMetadata;
         stopReason = normalized.stopReason ?? stopReason;
-        if (normalized.content) {
+        if (scope) {
+          const parts = parsed.candidates?.[0]?.content?.parts ?? [];
+          if (finished && parts.length) throw new Error('Invalid Google response.');
+          if (parsed.candidates?.[0]?.finishReason !== undefined) finished = true;
+          for (const part of parts) if (part.text) {
+            alive();
+            if (part.thought === true) { reasoning += part.text; await onChunk('', { type: 'reasoning_delta', data: { content: part.text } }); }
+            else { content += part.text; await onChunk(part.text, { type: 'text_delta', data: part.text }); }
+            alive();
+          }
+        } else if (normalized.content) {
           content += normalized.content;
           await onChunk(normalized.content, { type: 'text_delta', data: normalized.content });
         }
@@ -3885,7 +3953,9 @@ export class GeminiProvider extends AiProvider {
 
       try {
         while (true) {
+        alive();
         const { done, value } = await reader.read();
+        alive();
         if (!done) transportBytes += value.byteLength;
         if (!done && (value.byteLength > MAX_PROVIDER_STREAM_EVENT_BYTES
           || transportBytes > MAX_PROVIDER_STREAM_TRANSPORT_BYTES)) {
@@ -3901,8 +3971,12 @@ export class GeminiProvider extends AiProvider {
         if (done) break;
       }
       if (buffer.trim()) await consume(buffer);
-      for (const call of toolCalls) await onChunk('', { type: 'tool_call', data: call });
-        onComplete?.({ content, ...(stopReason ? { stopReason } : {}), model: String(this.config.model), usage, toolCalls: toolCalls.length ? toolCalls : undefined });
+      if (scope && !finished) throw new Error('Invalid Google response.');
+      for (const call of toolCalls) { alive(); await onChunk('', { type: 'tool_call', data: call }); alive(); }
+      alive();
+        onComplete?.({ content, ...(reasoning ? { reasoning } : {}), ...(stopReason ? { stopReason } : {}), model,
+          ...(scope ? { api: scope === 'google' ? 'google-generative-ai' : 'google-vertex' } : {}),
+          usage: scope ? googleProfileUsage(scope, model, observedUsage) : usage, toolCalls: toolCalls.length ? toolCalls : undefined });
       } finally {
         void reader.cancel('provider-stream-finished').catch(() => undefined);
         try { reader.releaseLock(); } catch { /* A hostile pending read may retain the lock. */ }
@@ -3927,14 +4001,14 @@ export class VertexGeminiProvider extends GeminiProvider {
     super({ ...config, type: ProviderType.VERTEX, baseUrl });
   }
 
-  protected endpoint(method: 'generateContent' | 'streamGenerateContent'): string {
-    const model = String(this.config.model || 'gemini-2.0-flash').replace(/^models\//, '');
+  protected endpoint(method: 'generateContent' | 'streamGenerateContent', requestedModel?: string): string {
+    const model = String(requestedModel || this.config.model || 'gemini-2.0-flash').replace(/^models\//, '');
     const suffix = method === 'streamGenerateContent' ? '?alt=sse' : '';
     return `${String(this.config.baseUrl).replace(/\/$/, '')}/models/${encodeURIComponent(model)}:${method}${suffix}`;
   }
 
-  protected requestHeaders(): Record<string, string> {
-    return {
+  protected requestHeaders(model?: string): Record<string, string> {
+    return this.nativeRequestHeaders(model) ?? {
       ...configuredHeaders(this.config),
       'Content-Type': 'application/json',
       Authorization: `Bearer ${this.config.apiKey}`,
