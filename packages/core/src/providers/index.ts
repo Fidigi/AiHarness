@@ -71,6 +71,7 @@ import { copyNativeClassifierRequest, parseSystemOneAnswers, type NativeClassifi
 import { ProviderContextOverflowError, rejectProviderHttpResponse } from './context-overflow.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, prepareAnthropicOutputBudget } from './anthropic-thinking.js';
+import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage } from './anthropic-profiles.js';
 import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
 export type { ThinkingBudgets } from './thinking-budgets.js';
 import {
@@ -4183,15 +4184,27 @@ function applyAnthropicPromptCache(body: Record<string, unknown>, retention: Cha
 
 export class AnthropicProvider extends AiProvider {
   override getModelApi(): string { return 'anthropic-messages'; }
+  override getPublishedModels(): readonly PublishedModelMetadata[] | undefined {
+    if (!this.ownsNativeProfiles) return super.getPublishedModels?.();
+    const legacy = getPublishedModels('anthropic');
+    return [...anthropicPublishedProfiles().map(profile => {
+      const previous = legacy.find(row => row.id === profile.id);
+      // New declarations must not enable paid warming or advertise unmigrated effort dialects.
+      return { ...profile, ...(previous?.promptCache ? { promptCache: previous.promptCache } : {}),
+        thinkingLevelMap: previous?.thinkingLevelMap ?? null };
+    }), ...legacy.filter(profile => !hasAnthropicProfile(profile.id)).map(profile => ({ ...profile, api: 'anthropic-messages' }))];
+  }
 
+  private readonly ownsNativeProfiles: boolean;
   private readonly baseUrl: string;
   static readonly DEFAULT_BASE_URL = 'https://api.anthropic.com';
   static readonly API_VERSION = '2023-06-01';
 
   constructor(config: ProviderConfig) {
     super(config);
+    this.ownsNativeProfiles = new.target === AnthropicProvider;
     this.baseUrl = config.baseUrl || AnthropicProvider.DEFAULT_BASE_URL;
-    if (new.target === AnthropicProvider) registerNativeOutputBudget(this, () => {
+    if (this.ownsNativeProfiles) registerNativeOutputBudget(this, () => {
       const model = captureNativeConfiguredModel(this.config, ANTHROPIC_DEFAULT_MODEL);
       return options => prepareAnthropicOutputBudget(options, model);
     });
@@ -4226,12 +4239,14 @@ export class AnthropicProvider extends AiProvider {
   protected messageText(content: AnthropicResponse['content']): string {
     return (content?.find(block => block.type === 'text') as AnthropicTextContent | undefined)?.text || '';
   }
-  protected updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown {
+  protected updateMessageUsage(previous: unknown, value: unknown, start: boolean, model?: string): unknown {
+    if (this.ownsNativeProfiles && model && hasAnthropicProfile(model)) return mergeAnthropicProfileUsage(previous, value, start);
     const prior = previous as AnthropicUsage | undefined, usage = value as AnthropicUsage | undefined;
     return { ...prior, ...usage, ...(start ? { output_tokens: prior?.output_tokens ?? usage?.output_tokens } : {}),
       ...(usage?.cache_creation ? { cache_creation: { ...prior?.cache_creation, ...usage.cache_creation } } : {}) };
   }
   protected messageUsage(value: unknown, model: string, stream = false, retention?: ChatOptions['cacheRetention']): ChatResponse['usage'] {
+    if (this.ownsNativeProfiles && hasAnthropicProfile(model)) return anthropicProfileUsage(value, model);
     const usage = value as AnthropicUsage | undefined;
     if (!usage) return undefined;
     const token = (value: unknown): number => typeof value === 'number' && Number.isFinite(value) && value > 0
@@ -4357,6 +4372,7 @@ export class AnthropicProvider extends AiProvider {
 
     return {
       content: this.messageText(data.content),
+      ...(this.ownsNativeProfiles && hasAnthropicProfile(model) ? { api: 'anthropic-messages' } : {}),
       ...lengthStop(data.stop_reason),
       ...(reasoning ? { reasoning } : {}),
       model: data.model,
@@ -4505,14 +4521,14 @@ export class AnthropicProvider extends AiProvider {
             case 'message_start': {
               const msgStart = eventData.message as AnthropicStreamMessage | undefined;
               if (msgStart?.usage) {
-                reportedUsage = this.updateMessageUsage(reportedUsage, msgStart.usage, true);
+                reportedUsage = this.updateMessageUsage(reportedUsage, msgStart.usage, true, model);
               }
               await onChunk('', { type: 'message_start', data: eventData });
               break;
             }
             case 'message_delta': {
               stopReason = lengthStop(eventData.delta?.stop_reason ?? eventData.stop_reason).stopReason ?? stopReason;
-              if (eventData.usage) reportedUsage = this.updateMessageUsage(reportedUsage, eventData.usage, false);
+              if (eventData.usage) reportedUsage = this.updateMessageUsage(reportedUsage, eventData.usage, false, model);
               break;
             }
             case 'error':
@@ -4530,6 +4546,7 @@ export class AnthropicProvider extends AiProvider {
       for (const call of toolCalls) await onChunk('', { type: 'tool_call', data: call });
         onComplete?.({
           content: fullContent,
+          ...(this.ownsNativeProfiles && hasAnthropicProfile(model) ? { api: 'anthropic-messages' } : {}),
           ...(fullReasoning ? { reasoning: fullReasoning } : {}),
           model,
           ...(stopReason ? { stopReason } : {}),
