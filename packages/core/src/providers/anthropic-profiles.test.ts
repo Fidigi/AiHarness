@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AnthropicProvider, type ChatResponse } from './index.js';
+import { AnthropicProvider, type ChatOptions, type ChatResponse } from './index.js';
+import { captureNativeOutputBudget, ProviderOutputBudgetError } from './provider-output-budget.js';
 import { getProviderPublishedModels, getProviderPublishedModel } from './provider-model-metadata.js';
 import { getSupportedThinkingLevels } from './model-metadata.js';
 
@@ -15,8 +16,8 @@ const input = [{ id: 'user', role: 'user' as const, content: 'probe', timestamp:
 const observed = { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4,
   cache_creation_input_tokens: 3, cache_creation: { ephemeral_1h_input_tokens: 1 } };
 afterEach(() => vi.restoreAllMocks());
-function fixture(model: string, responseModel = 'untrusted-response-alias') {
-  const provider = new AnthropicProvider({ type: 'operator-alias', model, apiKey: 'disposable-profile-key' });
+function fixture(model: string, responseModel = 'untrusted-response-alias', Provider = AnthropicProvider) {
+  const provider = new Provider({ type: 'operator-alias', model, apiKey: 'disposable-profile-key' });
   let usage: Record<string, unknown> = structuredClone(observed), delta: Record<string, unknown> | undefined;
   const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
     const body = JSON.parse(String(init?.body));
@@ -29,11 +30,11 @@ function fixture(model: string, responseModel = 'untrusted-response-alias') {
       { type: 'message_stop' },
     ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'Content-Type': 'text/event-stream' } });
   });
-  const call = async (stream: boolean, retention: 'short' | 'long' = 'short') => {
-    if (!stream) return provider.chat(input, { maxTokens: 64, cacheRetention: retention });
+  const call = async (stream: boolean, retention: 'short' | 'long' = 'short', options?: ChatOptions) => {
+    if (!stream) return provider.chat(input, { maxTokens: 64, cacheRetention: retention, ...options });
     let result: ChatResponse | undefined, failure: Error | undefined;
     await provider.streamChat(input, () => {}, value => { result = value; }, error => { failure = error; },
-      { maxTokens: 64, cacheRetention: retention });
+      { maxTokens: 64, cacheRetention: retention, ...options });
     if (failure) throw failure; return result!;
   };
   return { provider, fetch, call, usage: (value: Record<string, unknown>, next?: Record<string, unknown>) => { usage = value; delta = next; } };
@@ -59,6 +60,63 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
         + 4 * profile.cost.cacheRead + 2 * profile.cost.cacheWrite + 2 * profile.cost.input) / 1e6, 12);
     }
     expect(f.fetch).toHaveBeenCalledTimes(4);
+  });
+  for (const profile of profiles) it(`${profile.id}: enforces the owned output ceiling on SDK and preflight`, async () => {
+    const f = fixture(profile.id), policy = captureNativeOutputBudget(f.provider)!;
+    for (const maxTokens of [undefined, 1, profile.maxTokens]) {
+      const options = { maxTokens }, expected = maxTokens ?? 1024;
+      const prepared = policy(options);
+      expect(prepared.maxTokens).toBe(expected); expect(options).toEqual({ maxTokens });
+      for (const stream of [false, true]) {
+        await f.call(stream, 'short', options);
+        const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+        expect(body.model).toBe(profile.id); expect(body.max_tokens).toBe(expected);
+      }
+    }
+    const count = f.fetch.mock.calls.length;
+    for (const value of [profile.maxTokens + 1, 0, -1, 0.5, Number.NaN, Infinity, null, Number.MAX_SAFE_INTEGER + 1]) {
+      const options = { maxTokens: value as number };
+      expect(() => policy(options)).toThrow(ProviderOutputBudgetError);
+      for (const stream of [false, true]) await expect(f.call(stream, 'short', options)).rejects.toThrow('Invalid Anthropic output limit.');
+    }
+    expect(f.fetch).toHaveBeenCalledTimes(count);
+  });
+  it('captures configured ceiling before model changes but honors explicit per-call models', async () => {
+    const small = 'claude-haiku-4-5', large = 'claude-opus-5', f = fixture(small);
+    const pinned = captureNativeOutputBudget(f.provider)!;
+    f.provider.setConfiguredModel(large);
+    expect(() => pinned({ maxTokens: 64001 })).toThrow(ProviderOutputBudgetError);
+    expect(captureNativeOutputBudget(f.provider)!({ maxTokens: 64001 }).maxTokens).toBe(64001);
+    expect(pinned({ model: large, maxTokens: 64001 }).maxTokens).toBe(64001);
+    for (const stream of [false, true]) {
+      await f.call(stream, 'short', { maxTokens: 64001 });
+      await expect(f.call(stream, 'short', { model: small, maxTokens: 64001 })).rejects.toThrow('Invalid Anthropic output limit.');
+      await expect(f.call(stream, 'short', { model: small, maxTokens: 64001, thinking: 'high' })).rejects.toThrow('Invalid Anthropic output limit.');
+    }
+    const row = getProviderPublishedModel('operator-alias', small, f.provider)!; row.maxOutputTokens = 999999;
+    expect(() => pinned({ maxTokens: 64001 })).toThrow(ProviderOutputBudgetError);
+    expect(f.fetch).toHaveBeenCalledTimes(2);
+  });
+  it('preserves numeric allocation while rejecting invalid explicit caps before thinking can raise them', async () => {
+    const f = fixture('claude-haiku-4-5'), policy = captureNativeOutputBudget(f.provider)!;
+    const options = { maxTokens: 64, thinking: 'high' as const };
+    expect(policy(options).maxTokens).toBe(9216);
+    for (const stream of [false, true]) {
+      await f.call(stream, 'short', options);
+      expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).max_tokens).toBe(9216);
+      await expect(f.call(stream, 'short', { maxTokens: 0, thinking: 'high' })).rejects.toThrow('Invalid Anthropic output limit.');
+    }
+    expect(() => policy({ maxTokens: 0, thinking: 'high' })).toThrow(ProviderOutputBudgetError);
+    expect(f.fetch).toHaveBeenCalledTimes(2);
+  });
+  it('does not borrow ceilings by name for derived transports or unknown models', async () => {
+    class Compatible extends AnthropicProvider {}
+    const compatible = fixture('claude-haiku-4-5', 'alias', Compatible);
+    expect(captureNativeOutputBudget(compatible.provider)).toBeUndefined();
+    for (const stream of [false, true]) await compatible.call(stream, 'short', { maxTokens: 64001 });
+    const unknown = fixture('claude-opus-5-unverified');
+    expect(captureNativeOutputBudget(unknown.provider)!({ maxTokens: 128001 }).maxTokens).toBe(128001);
+    for (const stream of [false, true]) await unknown.call(stream, 'short', { maxTokens: 128001 });
   });
   it('uses gross input at the Haiku 5.5 boundary, not output tokens or response aliases', async () => {
     const f = fixture('claude-haiku-5-5');

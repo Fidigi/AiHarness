@@ -33,6 +33,14 @@ export function hasAnthropicProfile(model: string): boolean { return profiles.ha
 export function anthropicPublishedProfiles(): PublishedModelMetadata[] {
   return [...profiles.values()].map(profile => ({ ...profile, capabilities: { ...profile.capabilities }, pricing: { ...profile.pricing } }));
 }
+/** Direct native owner only: reject invalid caller/effective ceilings without truncating explicit requests. */
+export function validateAnthropicProfileOutput(body: Record<string, unknown>, requested: unknown): void {
+  const profile = typeof body.model === 'string' ? profiles.get(body.model) : undefined;
+  if (!profile) return;
+  const valid = (value: unknown): boolean => typeof value === 'number' && Number.isSafeInteger(value)
+    && value >= 1 && value <= profile.maxOutputTokens;
+  if ((requested !== undefined && !valid(requested)) || !valid(body.max_tokens)) throw new Error('Invalid Anthropic output limit.');
+}
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** Anthropic deltas replace observed counters; nullable fields do not erase a prior observation. */

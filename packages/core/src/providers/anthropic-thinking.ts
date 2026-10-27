@@ -1,6 +1,7 @@
 import type { ChatOptions } from './index.js';
 import { PUBLISHED_THINKING_LEVELS, clampPublishedThinkingLevel, getPublishedModelMetadata, getSupportedThinkingLevels } from './model-metadata.js';
 import { copyThinkingBudgets, resolveThinkingBudget } from './thinking-budgets.js';
+import { validateAnthropicProfileOutput } from './anthropic-profiles.js';
 import { ProviderOutputBudgetError, type PreparedNativeOutputBudget } from './provider-output-budget.js';
 
 export const ANTHROPIC_DEFAULT_MODEL = 'claude-3-haiku-20240307';
@@ -24,11 +25,18 @@ export function prepareAnthropicOutputBudget(ownedOptions: ChatOptions, configur
     catch { throw new ProviderOutputBudgetError('thinking'); }
   }
   const body: Record<string, unknown> = { model: options.model, max_tokens: options.maxTokens ?? ANTHROPIC_DEFAULT_MAX_TOKENS };
-  try { applyAnthropicThinking(body, options); }
+  try { applyNativeAnthropicOutputPolicy(body, options); }
   catch { throw new ProviderOutputBudgetError(); }
   const maxTokens = body.max_tokens;
   if (typeof maxTokens !== 'number' || !Number.isSafeInteger(maxTokens) || maxTokens < 1) throw new ProviderOutputBudgetError();
   return Object.freeze({ options, maxTokens });
+}
+
+/** Retain legacy allocation, but constrain direct-owner requests before and after thinking preparation. */
+export function applyNativeAnthropicOutputPolicy(body: Record<string, unknown>, options?: ChatOptions): void {
+  validateAnthropicProfileOutput(body, options?.maxTokens);
+  applyAnthropicThinking(body, options);
+  validateAnthropicProfileOutput(body, options?.maxTokens);
 }
 
 /** Apply per-call reasoning policy to the already selected request model. */

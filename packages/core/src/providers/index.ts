@@ -70,7 +70,7 @@ import { copyNativeImageRequest, openRouterImagesBody, openRouterImagesOutput, o
 import { copyNativeClassifierRequest, parseSystemOneAnswers, type NativeClassifierRequest, type NativeClassifierResult } from './native-classification.js';
 import { ProviderContextOverflowError, rejectProviderHttpResponse } from './context-overflow.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
-import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, prepareAnthropicOutputBudget } from './anthropic-thinking.js';
+import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget } from './anthropic-thinking.js';
 import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage } from './anthropic-profiles.js';
 import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
 export type { ThinkingBudgets } from './thinking-budgets.js';
@@ -4233,7 +4233,10 @@ export class AnthropicProvider extends AiProvider {
       'x-api-key': this.config.apiKey as string, 'anthropic-version': AnthropicProvider.API_VERSION };
   }
   protected prepareMessageBody(body: Record<string, unknown>, _options?: ChatOptions): Record<string, unknown> { return body; }
-  protected applyMessageThinking(body: Record<string, unknown>, options?: ChatOptions): void { applyAnthropicThinking(body, options); }
+  protected applyMessageThinking(body: Record<string, unknown>, options?: ChatOptions): void {
+    if (this.ownsNativeProfiles) applyNativeAnthropicOutputPolicy(body, options);
+    else applyAnthropicThinking(body, options);
+  }
   protected validateMessageResponse(_value: unknown): void {}
   protected createMessageStreamValidator(): (value?: unknown) => void { return () => {}; }
   protected messageText(content: AnthropicResponse['content']): string {
