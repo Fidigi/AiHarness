@@ -1,4 +1,5 @@
 import { createServer, type Server } from 'node:http';
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as providers from './index.js';
 import { SpecializedModels } from './specialized-models.js';
@@ -38,7 +39,29 @@ async function fixture() {
   return { calls, state, baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/proxy%2Ftenant/v1` };
 }
 
+const reasoningReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/openai-reasoning-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; rows: Array<{ model: string; cases: Array<{ thinking?: providers.ChatOptions['thinking']; fields: { reasoning?: unknown; include?: unknown } }> }>;
+};
+
 describe('explicit mixed OpenAI Responses/Decisions SDK', () => {
+  for (const profile of reasoningReference.rows) it(`${profile.model}: distinguishes omitted reasoning from explicit levels on chat and stream`, async () => {
+    expect(reasoningReference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
+    expect(reasoningReference.rows).toHaveLength(44); expect(profile.cases).toHaveLength(8);
+    const { calls, baseUrl } = await fixture();
+    const provider = new providers.OpenAiMixedProvider({ type: 'anthropic', apiKey: 'disposable-openai', baseUrl, model: profile.model, transport: 'sse' });
+    for (const example of profile.cases) for (const streaming of [false, true]) {
+      let result: providers.ChatResponse | undefined, failure: Error | undefined;
+      if (!streaming) result = await provider.chat([message], { thinking: example.thinking });
+      else await provider.streamChat([message], () => {}, response => { result = response; }, error => { failure = error; }, { thinking: example.thinking });
+      expect(failure).toBeUndefined(); expect(result).toMatchObject({ content: 'Ready', model: profile.model, api: 'openai-responses' });
+      const body = calls.at(-1)!.body;
+      expect(body.model).toBe(profile.model); expect(body.stream).toBe(true);
+      expect(body.reasoning).toEqual(example.fields.reasoning); expect(body.include).toEqual(example.fields.include);
+      // This increment does not replace the existing raw-transport omitted-output surface with streamSimple's context allocation.
+      expect(body.max_output_tokens).toBeUndefined();
+    }
+    expect(calls).toHaveLength(16);
+  });
   it('preserves recognized value-free context overflow authority without trusting arbitrary remote failure prose', async () => {
     const { state, baseUrl } = await fixture();
     const provider = new providers.OpenAiMixedProvider({ type: 'operator-openai', apiKey: 'disposable-openai', baseUrl, model, transport: 'sse' });
@@ -68,6 +91,10 @@ describe('explicit mixed OpenAI Responses/Decisions SDK', () => {
     expect(calls[2].headers.session_id).toBeUndefined(); expect(calls[2].headers['x-client-request-id']).toBeUndefined();
     for (const base of ['https://private:token@example.test/v1', 'file:///tmp', baseUrl + '?token=private', baseUrl + '#private']) expect(() => new providers.OpenAiMixedProvider({ type: 'x', baseUrl: base })).toThrow('Invalid OpenAI endpoint.');
     await expect(provider.chat([], { model: 'future' })).rejects.toThrow('OpenAI response model is not supported.'); expect(calls).toHaveLength(3);
+    const compatible = new providers.OpenAiResponsesProvider({ type: 'openai', apiKey: 'disposable-openai', baseUrl, model, transport: 'sse' });
+    await compatible.chat([message]); expect(calls[3].body.reasoning).toBeUndefined(); expect(calls[3].body.include).toBeUndefined();
+    await compatible.chat([message], { thinking: 'high' });
+    expect(calls[4].body.reasoning).toEqual({ effort: 'high' }); expect(calls[4].body.include).toBeUndefined();
   });
 
   it('keeps overlapping D/R guest operations distinct, exposes direct native bools and bills a failed D answer once without publishing its store', async () => {

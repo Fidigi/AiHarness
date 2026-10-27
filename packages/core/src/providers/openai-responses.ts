@@ -21,15 +21,20 @@ export function openAiMixedBase(value: string | undefined): string {
 }
 
 export function prepareOpenAiResponse(body: Record<string, unknown>, options?: ChatOptions): void {
-  const profile = openAiResponseProfile(String(body.model)), requested = options?.thinking ?? 'off';
-  if (!PUBLISHED_THINKING_LEVELS.includes(requested)) throw new Error('Invalid OpenAI thinking level.');
+  const profile = openAiResponseProfile(String(body.model)), requested = options?.thinking;
+  if (requested !== undefined && !PUBLISHED_THINKING_LEVELS.includes(requested)) throw new Error('Invalid OpenAI thinking level.');
   const levels = PUBLISHED_THINKING_LEVELS.filter(level => !profile.reasoning ? level === 'off'
     : profile.thinkingLevelMap?.[level] !== null && (!['xhigh', 'max'].includes(level) || profile.thinkingLevelMap?.[level] !== undefined));
-  const selected = clampPublishedThinkingLevel(requested, levels);
-  delete body.reasoning;
+  const selected = clampPublishedThinkingLevel(requested ?? 'off', levels);
+  delete body.reasoning; delete body.include;
   if (profile.reasoning) {
-    const effort = profile.thinkingLevelMap?.[selected] ?? (selected === 'off' ? undefined : selected);
-    if (effort !== undefined) body.reasoning = { effort, ...(selected === 'off' ? {} : { summary: 'auto' }) };
+    const enabled = requested !== undefined && selected !== 'off';
+    const effort = enabled ? profile.thinkingLevelMap?.[selected] ?? selected
+      : profile.thinkingLevelMap?.off === null ? undefined : profile.thinkingLevelMap?.off ?? 'none';
+    if (effort !== undefined) {
+      body.reasoning = { effort, ...(enabled ? { summary: 'auto' } : {}) };
+      if (enabled) body.include = ['reasoning.encrypted_content'];
+    }
   }
   if (Array.isArray(body.input)) {
     for (const item of body.input) {
