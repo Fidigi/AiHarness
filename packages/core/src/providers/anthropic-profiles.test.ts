@@ -88,7 +88,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
   for (const profile of profiles) it(`${profile.id}: enforces the owned output ceiling on SDK and preflight`, async () => {
     const f = fixture(profile.id), policy = captureNativeOutputBudget(f.provider)!;
     for (const maxTokens of [undefined, 1, profile.maxTokens]) {
-      const options = { maxTokens }, expected = maxTokens ?? (numericProfiles.includes(profile) ? profile.maxTokens : 1024);
+      const options = { maxTokens }, expected = maxTokens ?? profile.maxTokens;
       const prepared = policy(options);
       expect(prepared.maxTokens).toBe(expected); expect(options).toEqual({ maxTokens });
       for (const stream of [false, true]) {
@@ -125,11 +125,11 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       expect(Object.isFrozen(thinkingBudgets)).toBe(false);
     });
   }
-  for (const profile of adaptiveProfiles) it(`${profile.id}: retains omitted thinking and output allocation, rejects invalid levels before HTTP`, async () => {
+  for (const profile of adaptiveProfiles) it(`${profile.id}: retains omitted thinking and uses published output defaults, rejects invalid levels before HTTP`, async () => {
     const f = fixture(profile.id), policy = captureNativeOutputBudget(f.provider)!;
     for (const thinking of [undefined, 'high', 'xhigh', 'max'] as const) {
       const options = { thinking, maxTokens: undefined, temperature: 0.25 };
-      const maximum = thinking === undefined ? 1024 : thinking === 'high' ? 9216 : thinking === 'xhigh' ? 17408 : 33792;
+      const maximum = profile.maxTokens;
       expect(policy(options).maxTokens).toBe(maximum);
       for (const stream of [false, true]) {
         await f.call(stream, 'short', options);

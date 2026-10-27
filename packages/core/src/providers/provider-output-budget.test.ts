@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AnthropicProvider, MockProvider, type ChatOptions } from './index.js';
-import { applyAnthropicThinking, prepareAnthropicOutputBudget } from './anthropic-thinking.js';
+import { applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget } from './anthropic-thinking.js';
 import { captureNativeConfiguredModel, captureNativeOutputBudget, ProviderOutputBudgetError, registerNativeOutputBudget } from './provider-output-budget.js';
 import { ExtensionRegistry, type BeforeProviderData } from '../extensions/extension-registry.js';
 import { streamProviderTurn } from '../agent/provider-turn.js';
@@ -62,14 +62,14 @@ describe('Anthropic native output projection uses the actual thinking/default po
     [numeric, { thinking: 'low', maxTokens: 4096, thinkingBudgets: { low: 2048 } }, 4096],
     [numeric, { thinking: 'low', maxTokens: 64, thinkingBudgets: { low: 0 } }, 2048],
     [numeric, { thinking: 'high', thinkingBudgets: { high: 1_000_000 } }, 33792],
-    [adaptive, { thinking: 'high' }, 9216],
+    [adaptive, { thinking: 'high' }, 128000],
     [adaptive, { thinking: 'high', maxTokens: 64 }, 64],
-    [adaptive, { thinking: 'low' }, 2048],
-    [adaptive, { thinking: 'off' }, 1024],
+    [adaptive, { thinking: 'low' }, 128000],
+    [adaptive, { thinking: 'off' }, 128000],
   ];
   for (const [model, options, expected] of cases) it(`${model} ${JSON.stringify(options)} projects ${expected}`, () => {
     const prepared = prepareAnthropicOutputBudget(options, model), body: Record<string, unknown> = { model, max_tokens: options.maxTokens ?? 1024 };
-    applyAnthropicThinking(body, options);
+    applyNativeAnthropicOutputPolicy(body, options);
     expect(prepared.maxTokens).toBe(expected); expect(prepared.maxTokens).toBe(body.max_tokens); expect(Object.isFrozen(prepared)).toBe(true); expect(Object.isFrozen(prepared.options)).toBe(false); expect(prepared.options.maxTokens).toBe(options.maxTokens);
   });
   it('owns used numeric overrides after observers without freezing or mutating the caller map', () => {

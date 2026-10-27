@@ -31,6 +31,7 @@ const profiles = new Map(rows.map(([id, name, contextWindow, maxOutputTokens, in
     pricing: { inputPerMillion, outputPerMillion, cacheReadPerMillion, cacheWritePerMillion } }]));
 // Native reasoning maps remain independent of mutable public metadata.
 interface AdaptivePolicy {
+  readonly maxTokens: number;
   readonly thinkingLevelMap: Readonly<Record<PublishedThinkingLevel, string | null>>;
   readonly supportsTemperature: boolean;
   readonly managed: boolean;
@@ -48,7 +49,7 @@ const adaptivePolicies = new Map<string, AdaptivePolicy>(([
   ['claude-opus-5', true, false, false, true, true],
   ['claude-opus-5-5', true, false, false, true, false],
   ['claude-sonnet-5-5', true, false, false, true, false],
-] as const).map(([id, xhigh, supportsTemperature, off, managed, minimal]) => [id, Object.freeze({ supportsTemperature, managed,
+] as const).map(([id, xhigh, supportsTemperature, off, managed, minimal]) => [id, Object.freeze({ maxTokens: profiles.get(id)!.maxOutputTokens, supportsTemperature, managed,
   thinkingLevelMap: Object.freeze({ off: off ? 'off' : null, minimal: minimal ? 'low' : null, low: 'low', medium: 'medium', high: 'high',
     xhigh: xhigh ? 'xhigh' : null, max: 'max' }) })] as const));
 export function anthropicAdaptivePolicy(model: string): AdaptivePolicy | undefined { return adaptivePolicies.get(model); }

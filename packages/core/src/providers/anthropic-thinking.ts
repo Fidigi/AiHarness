@@ -40,6 +40,7 @@ export function applyNativeAnthropicOutputPolicy(body: Record<string, unknown>, 
   if (anthropicNumericPolicy(model)) applyNumericAnthropicThinking(body, options, model);
   else if (!policy) applyAnthropicThinking(body, options);
   else {
+    body.max_tokens = options?.maxTokens ?? policy.maxTokens;
     if (!policy.supportsTemperature || policy.managed) delete body.temperature;
     const level = options?.thinking;
     // Preserve the native SDK's omitted-thinking contract; explicit off is clamped
@@ -57,7 +58,6 @@ export function applyNativeAnthropicOutputPolicy(body: Record<string, unknown>, 
         body.thinking = { type: 'adaptive', display: 'summarized' };
         body.output_config = { effort: policy.thinkingLevelMap[selected] };
         delete body.temperature;
-        if (options?.maxTokens === undefined && level !== 'off') body.max_tokens = Math.max(Number(body.max_tokens), NUMERIC_BUDGETS[level] + 1024);
       }
     }
   }

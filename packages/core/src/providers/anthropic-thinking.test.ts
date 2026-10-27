@@ -12,7 +12,7 @@ const servers: Server[] = [];
 afterEach(async () => {
   await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()); })));
 });
-async function fixture(model = adaptive) {
+async function fixture(model = adaptive, Provider = AnthropicProvider) {
   const bodies: Body[] = [];
   const server = createServer(async (request, response) => {
     const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
@@ -31,7 +31,7 @@ async function fixture(model = adaptive) {
     ] }));
   });
   servers.push(server); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  const provider = new AnthropicProvider({ type: 'anthropic', model, apiKey: 'disposable', baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}` });
+  const provider = new Provider({ type: 'anthropic', model, apiKey: 'disposable', baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}` });
   const messages = [{ id: 'user', role: 'user' as const, content: 'probe', timestamp: new Date() }];
   const call = async (stream: boolean, options: ChatOptions): Promise<ChatResponse | undefined> => {
     if (!stream) return provider.chat(messages, options);
@@ -70,13 +70,16 @@ describe('published Anthropic adaptive request dialect', () => {
     }]);
   });
 
-  it('retains legacy per-level output defaults instead of reducing adaptive output to 1024', async () => {
-    const test = await fixture();
-    for (const [thinking, maximum] of [['minimal', 2048], ['low', 2048], ['medium', 5120], ['high', 9216], ['xhigh', 17408], ['max', 33792]] as const) {
-      for (const stream of [false, true]) {
-        await test.call(stream, { thinking, thinkingBudgets: { low: 1, medium: 1, high: Number.MAX_SAFE_INTEGER } });
-        expect(test.bodies.at(-1)?.max_tokens).toBe(maximum);
-        expect(test.bodies.at(-1)?.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
+  it('uses published native output defaults while retaining compatible per-level defaults', async () => {
+    class Compatible extends AnthropicProvider {}
+    for (const Provider of [AnthropicProvider, Compatible]) {
+      const test = await fixture(adaptive, Provider), native = Provider === AnthropicProvider;
+      for (const [thinking, maximum] of [['minimal', 2048], ['low', 2048], ['medium', 5120], ['high', 9216], ['xhigh', 17408], ['max', 33792]] as const) {
+        for (const stream of [false, true]) {
+          await test.call(stream, { thinking, thinkingBudgets: { low: 1, medium: 1, high: Number.MAX_SAFE_INTEGER } });
+          expect(test.bodies.at(-1)?.max_tokens).toBe(native ? 128000 : maximum);
+          expect(test.bodies.at(-1)?.thinking).toEqual(native ? { type: 'adaptive', display: 'summarized' } : { type: 'adaptive' });
+        }
       }
     }
   });

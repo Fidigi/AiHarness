@@ -48,20 +48,20 @@ async function fixture(model = adaptive) {
 
 describe('emitted built-in Anthropic reasoning selection', () => {
   for (const mode of ['print', 'json', 'rpc'] as const) for (const [model, level, effort, maximum] of [
-    [adaptive, 'minimal', 'low', 2048], [adaptive, 'max', 'max', 33792],
-    [adaptive, 'xhigh', 'max', 33792], [adaptive, 'off', undefined, 1024],
-    ['claude-fable-5', 'xhigh', 'xhigh', 17408],
-    ['claude-opus-4-6', 'xhigh', 'max', 33792],
-    ['claude-opus-4-7', 'xhigh', 'xhigh', 17408],
-    ['claude-opus-4-8', 'xhigh', 'xhigh', 17408],
-    ['claude-sonnet-4-6', 'high', 'high', 9216],
-    ['claude-sonnet-5', 'xhigh', 'xhigh', 17408],
-    ['claude-fable-5', 'off', 'low', 2048],
-    ['claude-fable-5-1', 'off', 'low', 1024],
-    ['claude-haiku-5-5', 'off', 'low', 1024],
-    ['claude-opus-5', 'xhigh', 'xhigh', 1024],
-    ['claude-opus-5-5', 'max', 'max', 1024],
-    ['claude-sonnet-5-5', 'low', 'low', 1024],
+    [adaptive, 'minimal', 'low', 128000], [adaptive, 'max', 'max', 128000],
+    [adaptive, 'xhigh', 'max', 128000], [adaptive, 'off', undefined, 128000],
+    ['claude-fable-5', 'xhigh', 'xhigh', 128000],
+    ['claude-opus-4-6', 'xhigh', 'max', 128000],
+    ['claude-opus-4-7', 'xhigh', 'xhigh', 128000],
+    ['claude-opus-4-8', 'xhigh', 'xhigh', 128000],
+    ['claude-sonnet-4-6', 'high', 'high', 128000],
+    ['claude-sonnet-5', 'xhigh', 'xhigh', 128000],
+    ['claude-fable-5', 'off', 'low', 128000],
+    ['claude-fable-5-1', 'off', 'low', 128000],
+    ['claude-haiku-5-5', 'off', 'low', 128000],
+    ['claude-opus-5', 'xhigh', 'xhigh', 128000],
+    ['claude-opus-5-5', 'max', 'max', 128000],
+    ['claude-sonnet-5-5', 'low', 'low', 128000],
     ['claude-haiku-4-5', 'high', undefined, 64000],
     ['claude-haiku-4-5-20251001', 'high', undefined, 64000],
     ['claude-opus-4-5', 'high', undefined, 64000],
@@ -124,11 +124,11 @@ describe('emitted built-in Anthropic reasoning selection', () => {
       await command({ type: 'set_model', id: 'adaptive', provider: 'anthropic', modelId: adaptive }); await prompt(4);
       await command({ type: 'set_thinking_level', id: 'off', level: 'off' }); await prompt(5);
       expect(test.bodies.map(body => [body.model, body.thinking, body.output_config, body.max_tokens])).toEqual([
-        [adaptive, { type: 'adaptive', display: 'summarized' }, { effort: 'low' }, 2048],
-        [adaptive, { type: 'adaptive', display: 'summarized' }, { effort: 'max' }, 33792],
+        [adaptive, { type: 'adaptive', display: 'summarized' }, { effort: 'low' }, 128000],
+        [adaptive, { type: 'adaptive', display: 'summarized' }, { effort: 'max' }, 128000],
         [classic, { type: 'enabled', budget_tokens: 32768 }, undefined, 33792],
-        [adaptive, { type: 'adaptive', display: 'summarized' }, { effort: 'high' }, 9216],
-        [adaptive, { type: 'disabled' }, undefined, 1024],
+        [adaptive, { type: 'adaptive', display: 'summarized' }, { effort: 'high' }, 128000],
+        [adaptive, { type: 'disabled' }, undefined, 128000],
       ]);
       child.stdin.end(); expect(await ended, stderr).toEqual({ code: 0, signal: null }); expect(buffer).toBe('');
     } finally { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); await test.close(); }
