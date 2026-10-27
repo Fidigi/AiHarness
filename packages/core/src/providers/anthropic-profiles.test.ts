@@ -4,14 +4,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnthropicProvider, type ChatOptions, type ChatResponse } from './index.js';
 import { captureNativeOutputBudget, ProviderOutputBudgetError } from './provider-output-budget.js';
 import { getProviderPublishedModels, getProviderPublishedModel } from './provider-model-metadata.js';
-import { getSupportedThinkingLevels } from './model-metadata.js';
+import { getSupportedThinkingLevels, PUBLISHED_THINKING_LEVELS, type PublishedThinkingLevel } from './model-metadata.js';
 
 const bytes = readFileSync(new URL('../../../../tests/fixtures/anthropic-reference.json', import.meta.url));
 const pin = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/provider-reference.json', import.meta.url), 'utf8'));
 const profiles = Object.values(JSON.parse(bytes.toString())['anthropic-messages']) as Array<{
   id: string; name: string; contextWindow: number; maxTokens: number;
   cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  thinkingLevelMap?: Partial<Record<PublishedThinkingLevel, string | null>>;
+  compat?: { forceAdaptiveThinking?: boolean; supportsMidConvoEffort?: boolean; supportsTemperature?: boolean };
 }>;
+const adaptiveProfiles = profiles.filter(profile => profile.compat?.forceAdaptiveThinking && !profile.compat.supportsMidConvoEffort);
+const supported = (profile: typeof profiles[number]) => PUBLISHED_THINKING_LEVELS.filter(level =>
+  profile.thinkingLevelMap?.[level] !== null && (!['xhigh', 'max'].includes(level) || profile.thinkingLevelMap?.[level] !== undefined));
+// Independent expected native efforts, in published level order; sparse xhigh clamps upward.
+const efforts: Record<string, readonly (string | undefined)[]> = {
+  'claude-fable-5': ['low', 'low', 'low', 'medium', 'high', 'xhigh', 'max'],
+  'claude-opus-4-6': [undefined, 'low', 'low', 'medium', 'high', 'max', 'max'],
+  'claude-opus-4-7': [undefined, 'low', 'low', 'medium', 'high', 'xhigh', 'max'],
+  'claude-opus-4-8': [undefined, 'low', 'low', 'medium', 'high', 'xhigh', 'max'],
+  'claude-sonnet-4-6': [undefined, 'low', 'low', 'medium', 'high', 'max', 'max'],
+  'claude-sonnet-5': [undefined, 'low', 'low', 'medium', 'high', 'xhigh', 'max'],
+};
 const input = [{ id: 'user', role: 'user' as const, content: 'probe', timestamp: new Date() }];
 const observed = { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4,
   cache_creation_input_tokens: 3, cache_creation: { ephemeral_1h_input_tokens: 1 } };
@@ -30,7 +44,7 @@ function fixture(model: string, responseModel = 'untrusted-response-alias', Prov
       { type: 'message_stop' },
     ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'Content-Type': 'text/event-stream' } });
   });
-  const call = async (stream: boolean, retention: 'short' | 'long' = 'short', options?: ChatOptions) => {
+  const call = async (stream: boolean, retention: 'none' | 'short' | 'long' = 'short', options?: ChatOptions) => {
     if (!stream) return provider.chat(input, { maxTokens: 64, cacheRetention: retention, ...options });
     let result: ChatResponse | undefined, failure: Error | undefined;
     await provider.streamChat(input, () => {}, value => { result = value; }, error => { failure = error; },
@@ -44,6 +58,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
   it('binds the independent seventeen-profile fixture to the approved catalogue hash', () => {
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(pin.files.anthropic.catalogue);
     expect(profiles).toHaveLength(17);
+    expect(adaptiveProfiles.map(profile => profile.id).sort()).toEqual(Object.keys(efforts).sort());
   });
   for (const profile of profiles) it(profile.id, async () => {
     const f = fixture(profile.id);
@@ -80,6 +95,71 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       for (const stream of [false, true]) await expect(f.call(stream, 'short', options)).rejects.toThrow('Invalid Anthropic output limit.');
     }
     expect(f.fetch).toHaveBeenCalledTimes(count);
+  });
+  for (const profile of adaptiveProfiles) for (const [index, thinking] of PUBLISHED_THINKING_LEVELS.entries()) {
+    it(`${profile.id}/${thinking}: owns adaptive wire policy without consuming numeric maps`, async () => {
+      const f = fixture(profile.id), get = vi.fn(() => { throw new Error('UNUSED'); });
+      const thinkingBudgets = Object.defineProperty({}, 'high', { enumerable: true, get });
+      const options: ChatOptions = { thinking, thinkingBudgets, maxTokens: 64, temperature: 0.25 };
+      const prepared = captureNativeOutputBudget(f.provider)!(options), effort = efforts[profile.id]![index];
+      expect(prepared.maxTokens).toBe(64); expect(prepared.options.thinkingBudgets).toBe(thinkingBudgets);
+      expect(getSupportedThinkingLevels('operator-alias', profile.id, undefined, f.provider)).toEqual(supported(profile));
+      for (const stream of [false, true]) {
+        await f.call(stream, 'none', prepared.options);
+        const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+        expect(body.model).toBe(profile.id); expect(body.max_tokens).toBe(prepared.maxTokens);
+        expect(body.thinking).toEqual(effort ? { type: 'adaptive', display: 'summarized' } : { type: 'disabled' });
+        expect(body.output_config).toEqual(effort ? { effort } : undefined);
+        expect(body.temperature).toBe(effort || profile.compat?.supportsTemperature === false ? undefined : 0.25);
+      }
+      expect(get).not.toHaveBeenCalled(); expect(options).toEqual({ thinking, thinkingBudgets, maxTokens: 64, temperature: 0.25 });
+      expect(Object.isFrozen(thinkingBudgets)).toBe(false);
+    });
+  }
+  for (const profile of adaptiveProfiles) it(`${profile.id}: retains omitted thinking and output allocation, rejects invalid levels before HTTP`, async () => {
+    const f = fixture(profile.id), policy = captureNativeOutputBudget(f.provider)!;
+    for (const thinking of [undefined, 'high', 'xhigh', 'max'] as const) {
+      const options = { thinking, maxTokens: undefined, temperature: 0.25 };
+      const maximum = thinking === undefined ? 1024 : thinking === 'high' ? 9216 : thinking === 'xhigh' ? 17408 : 33792;
+      expect(policy(options).maxTokens).toBe(maximum);
+      for (const stream of [false, true]) {
+        await f.call(stream, 'short', options);
+        const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+        expect(body.max_tokens).toBe(maximum);
+        if (thinking === undefined) {
+          expect(body.thinking).toBeUndefined(); expect(body.output_config).toBeUndefined();
+          expect(body.temperature).toBe(profile.compat?.supportsTemperature === false ? undefined : 0.25);
+        }
+      }
+    }
+    const count = f.fetch.mock.calls.length;
+    for (const thinking of [null, 'HIGH', 'fake', 1, {}]) {
+      const options = { thinking: thinking as PublishedThinkingLevel };
+      expect(() => policy(options)).toThrow(ProviderOutputBudgetError);
+      for (const stream of [false, true]) await expect(f.call(stream, 'short', options)).rejects.toThrow('Invalid Anthropic thinking level.');
+    }
+    expect(f.fetch).toHaveBeenCalledTimes(count);
+  });
+  it('captures the adaptive dialect independently of public metadata, later model changes and derived transports', async () => {
+    const f = fixture('claude-opus-4-7'), policy = captureNativeOutputBudget(f.provider)!;
+    const row = getProviderPublishedModel('operator-alias', 'claude-opus-4-7', f.provider)!;
+    row.thinkingLevelMap!.xhigh = 'not-an-effort'; row.thinkingLevelMap!.off = null;
+    f.provider.setConfiguredModel('claude-haiku-4-5');
+    for (const stream of [false, true]) {
+      await f.call(stream, 'short', policy({ thinking: 'xhigh', maxTokens: 64 }).options);
+      expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).output_config).toEqual({ effort: 'xhigh' });
+      await f.call(stream, 'short', policy({ model: 'claude-haiku-4-5', thinking: 'high', maxTokens: 64 }).options);
+      expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).thinking).toEqual({ type: 'enabled', budget_tokens: 8192 });
+    }
+    class Compatible extends AnthropicProvider {}
+    for (const model of ['claude-opus-4-7', 'claude-opus-4-7-unverified']) {
+      const derived = fixture(model, 'alias', model.endsWith('unverified') ? AnthropicProvider : Compatible);
+      for (const stream of [false, true]) {
+        await derived.call(stream, 'short', { thinking: 'xhigh', maxTokens: 64 });
+        const body = JSON.parse(String(derived.fetch.mock.calls.at(-1)?.[1]?.body));
+        expect(body.thinking).toEqual({ type: 'enabled', budget_tokens: 16384 }); expect(body.output_config).toBeUndefined();
+      }
+    }
   });
   it('captures configured ceiling before model changes but honors explicit per-call models', async () => {
     const small = 'claude-haiku-4-5', large = 'claude-opus-5', f = fixture(small);
@@ -153,7 +233,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
     const first = getProviderPublishedModels(f.provider)!;
     const native = first.filter(row => profiles.some(profile => profile.id === row.id)); expect(native).toHaveLength(17);
     expect(native.filter(row => row.promptCache).map(row => row.id)).toEqual(['claude-sonnet-4-6']);
-    for (const row of native.filter(row => row.id !== 'claude-sonnet-4-6')) {
+    for (const row of native.filter(row => !adaptiveProfiles.some(profile => profile.id === row.id))) {
       expect(getSupportedThinkingLevels('operator-alias', row.id, undefined, f.provider)).toEqual(['off']);
     }
     first.find(row => row.id === 'claude-fable-5')!.pricing!.inputPerMillion = 999;

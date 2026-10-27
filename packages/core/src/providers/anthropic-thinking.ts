@@ -1,13 +1,13 @@
 import type { ChatOptions } from './index.js';
 import { PUBLISHED_THINKING_LEVELS, clampPublishedThinkingLevel, getPublishedModelMetadata, getSupportedThinkingLevels } from './model-metadata.js';
 import { copyThinkingBudgets, resolveThinkingBudget } from './thinking-budgets.js';
-import { validateAnthropicProfileOutput } from './anthropic-profiles.js';
+import { anthropicAdaptivePolicy, validateAnthropicProfileOutput } from './anthropic-profiles.js';
 import { ProviderOutputBudgetError, type PreparedNativeOutputBudget } from './provider-output-budget.js';
 
 export const ANTHROPIC_DEFAULT_MODEL = 'claude-3-haiku-20240307';
 export const ANTHROPIC_DEFAULT_MAX_TOKENS = 1024;
 
-// Only a published, explicitly qualified profile selects a different wire dialect.
+// Legacy compatible-transport policy; new native dialects never extend this set.
 // Similar-looking custom IDs and unknown future models retain the legacy path.
 const ADAPTIVE_MODELS = new Set(['claude-sonnet-4-6']);
 const ADAPTIVE_EFFORTS = new Set(['low', 'medium', 'high', 'max']);
@@ -20,7 +20,7 @@ const NUMERIC_BUDGETS = { minimal: 1024, low: 1024, medium: 4096, high: 8192, xh
  */
 export function prepareAnthropicOutputBudget(ownedOptions: ChatOptions, configuredModel: string): Readonly<PreparedNativeOutputBudget> {
   const options: ChatOptions = { ...ownedOptions, model: ownedOptions.model || configuredModel };
-  if (options.thinking && options.thinking !== 'off' && !ADAPTIVE_MODELS.has(options.model!)) {
+  if (options.thinking && options.thinking !== 'off' && !anthropicAdaptivePolicy(options.model!)) {
     try { options.thinkingBudgets = copyThinkingBudgets(options.thinkingBudgets); }
     catch { throw new ProviderOutputBudgetError('thinking'); }
   }
@@ -35,7 +35,26 @@ export function prepareAnthropicOutputBudget(ownedOptions: ChatOptions, configur
 /** Retain legacy allocation, but constrain direct-owner requests before and after thinking preparation. */
 export function applyNativeAnthropicOutputPolicy(body: Record<string, unknown>, options?: ChatOptions): void {
   validateAnthropicProfileOutput(body, options?.maxTokens);
-  applyAnthropicThinking(body, options);
+  const model = typeof body.model === 'string' ? body.model : '', policy = anthropicAdaptivePolicy(model);
+  if (!policy) applyAnthropicThinking(body, options);
+  else {
+    if (!policy.supportsTemperature) delete body.temperature;
+    const level = options?.thinking;
+    // Preserve the native SDK's omitted-thinking contract; explicit off is clamped
+    // to the physical map (Fable cannot disable thinking). No numeric maps are read.
+    if (level !== undefined) {
+      if (!PUBLISHED_THINKING_LEVELS.includes(level)) throw new Error('Invalid Anthropic thinking level.');
+      const available = PUBLISHED_THINKING_LEVELS.filter(candidate => policy.thinkingLevelMap[candidate] !== null);
+      const selected = clampPublishedThinkingLevel(level, available);
+      if (selected === 'off') body.thinking = { type: 'disabled' };
+      else {
+        body.thinking = { type: 'adaptive', display: 'summarized' };
+        body.output_config = { effort: policy.thinkingLevelMap[selected] };
+        delete body.temperature;
+        if (options?.maxTokens === undefined && level !== 'off') body.max_tokens = Math.max(Number(body.max_tokens), NUMERIC_BUDGETS[level] + 1024);
+      }
+    }
+  }
   validateAnthropicProfileOutput(body, options?.maxTokens);
 }
 

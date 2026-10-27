@@ -4189,9 +4189,8 @@ export class AnthropicProvider extends AiProvider {
     const legacy = getPublishedModels('anthropic');
     return [...anthropicPublishedProfiles().map(profile => {
       const previous = legacy.find(row => row.id === profile.id);
-      // New declarations must not enable paid warming or advertise unmigrated effort dialects.
-      return { ...profile, ...(previous?.promptCache ? { promptCache: previous.promptCache } : {}),
-        thinkingLevelMap: previous?.thinkingLevelMap ?? null };
+      // New declarations must not enable paid warming; unmigrated dialects stay closed.
+      return { ...profile, ...(previous?.promptCache ? { promptCache: previous.promptCache } : {}) };
     }), ...legacy.filter(profile => !hasAnthropicProfile(profile.id)).map(profile => ({ ...profile, api: 'anthropic-messages' }))];
   }
 

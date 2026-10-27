@@ -1,5 +1,5 @@
 import type { ChatResponse } from './index.js';
-import type { PublishedModelMetadata } from './model-metadata.js';
+import type { PublishedModelMetadata, PublishedThinkingLevel } from './model-metadata.js';
 
 // Pi 1.2.0 / 06a466935536f8c9bcacb2d5efc0fc021be1bdff, generated catalogue
 // The anthropic.json digest is checked against the pinned manifest in the independent fixture.
@@ -29,9 +29,28 @@ const profiles = new Map(rows.map(([id, name, contextWindow, maxOutputTokens, in
   [id, { id, name, api: 'anthropic-messages', contextWindow, maxOutputTokens,
     capabilities: { reasoning: true, imageInput: true, toolCalls: true },
     pricing: { inputPerMillion, outputPerMillion, cacheReadPerMillion, cacheWritePerMillion } }]));
+// Only the six non-managed adaptive profiles are migrated here. Managed effort
+// requires mid-conversation control messages; numeric profiles retain legacy allocation.
+interface AdaptivePolicy {
+  readonly thinkingLevelMap: Readonly<Record<PublishedThinkingLevel, string | null>>;
+  readonly supportsTemperature: boolean;
+}
+// ID, native xhigh, supports temperature, supports off.
+const adaptivePolicies = new Map<string, AdaptivePolicy>(([
+  ['claude-fable-5', true, true, false],
+  ['claude-opus-4-6', false, true, true],
+  ['claude-opus-4-7', true, false, true],
+  ['claude-opus-4-8', true, false, true],
+  ['claude-sonnet-4-6', false, true, true],
+  ['claude-sonnet-5', true, true, true],
+] as const).map(([id, xhigh, supportsTemperature, off]) => [id, Object.freeze({ supportsTemperature,
+  thinkingLevelMap: Object.freeze({ off: off ? 'off' : null, minimal: 'low', low: 'low', medium: 'medium', high: 'high',
+    xhigh: xhigh ? 'xhigh' : null, max: 'max' }) })] as const));
+export function anthropicAdaptivePolicy(model: string): AdaptivePolicy | undefined { return adaptivePolicies.get(model); }
 export function hasAnthropicProfile(model: string): boolean { return profiles.has(model); }
 export function anthropicPublishedProfiles(): PublishedModelMetadata[] {
-  return [...profiles.values()].map(profile => ({ ...profile, capabilities: { ...profile.capabilities }, pricing: { ...profile.pricing } }));
+  return [...profiles.values()].map(profile => ({ ...profile, capabilities: { ...profile.capabilities }, pricing: { ...profile.pricing },
+    thinkingLevelMap: adaptivePolicies.has(profile.id) ? { ...adaptivePolicies.get(profile.id)!.thinkingLevelMap } : null }));
 }
 /** Direct native owner only: reject invalid caller/effective ceilings without truncating explicit requests. */
 export function validateAnthropicProfileOutput(body: Record<string, unknown>, requested: unknown): void {

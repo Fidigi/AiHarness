@@ -54,7 +54,7 @@ describe('published Anthropic adaptive request dialect', () => {
       }
       expect(test.bodies).toHaveLength(2);
       for (const body of test.bodies) {
-        expect(body.thinking).toEqual({ type: effort ? 'adaptive' : 'disabled' });
+        expect(body.thinking).toEqual(effort ? { type: 'adaptive', display: 'summarized' } : { type: 'disabled' });
         expect(body.output_config).toEqual(effort ? { effort } : undefined);
         expect(body.max_tokens).toBe(64); expect(body.temperature).toBe(effort ? undefined : 0.25);
         expect(body.system).toBe('system probe');
@@ -76,7 +76,7 @@ describe('published Anthropic adaptive request dialect', () => {
       for (const stream of [false, true]) {
         await test.call(stream, { thinking, thinkingBudgets: { low: 1, medium: 1, high: Number.MAX_SAFE_INTEGER } });
         expect(test.bodies.at(-1)?.max_tokens).toBe(maximum);
-        expect(test.bodies.at(-1)?.thinking).toEqual({ type: 'adaptive' });
+        expect(test.bodies.at(-1)?.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
       }
     }
   });
@@ -95,9 +95,9 @@ describe('published Anthropic adaptive request dialect', () => {
     await test.call(true, { model: adaptive, thinking: 'high', thinkingBudgets: { high: 4000 }, maxTokens: 64 });
     await test.call(false, { model: adaptive, thinking: 'off', maxTokens: 64 });
     expect(test.bodies.map(body => [body.model, body.thinking, body.output_config, body.max_tokens])).toEqual([
-      [adaptive, { type: 'adaptive' }, { effort: 'max' }, 64],
+      [adaptive, { type: 'adaptive', display: 'summarized' }, { effort: 'max' }, 64],
       [classic, { type: 'enabled', budget_tokens: 4000 }, undefined, 5024],
-      [adaptive, { type: 'adaptive' }, { effort: 'high' }, 64],
+      [adaptive, { type: 'adaptive', display: 'summarized' }, { effort: 'high' }, 64],
       [adaptive, { type: 'disabled' }, undefined, 64],
     ]);
     expect(test.provider.getConfiguredModel()).toBe(classic);

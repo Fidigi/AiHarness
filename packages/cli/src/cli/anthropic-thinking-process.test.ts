@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 const cli = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 const adaptive = 'claude-sonnet-4-6'; const classic = 'claude-3-7-sonnet-latest';
 type Body = { model: string; thinking?: { type: string; budget_tokens?: number }; output_config?: { effort: string }; max_tokens: number };
-async function fixture() {
+async function fixture(model = adaptive) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-adaptive-process-'));
   const cwd = path.join(root, 'project'); const agent = path.join(root, 'agent'); const preload = path.join(root, 'network.mjs');
   await Promise.all([mkdir(cwd), mkdir(agent)]);
@@ -37,16 +37,26 @@ async function fixture() {
     };`);
   const env = { ...process.env, HOME: path.join(root, 'home'), AI_HARNESS_AGENT_DIR: agent, AI_HARNESS_EXTENSIONS: '', ANTHROPIC_API_KEY: 'disposable', NO_COLOR: '1' };
   const start = (mode: 'print' | 'json' | 'rpc', thinking: string) => spawn(process.execPath, ['--import', preload, cli,
-    '--no-approve', '--no-session', '--model', `anthropic/${adaptive}`, '--thinking', thinking,
+    '--no-approve', '--no-session', '--model', `anthropic/${model}`, '--thinking', thinking,
     ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['Probe native effort.'])], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
   const close = async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true }); };
   return { bodies, start, close };
 }
 
 describe('emitted built-in Anthropic adaptive selection', () => {
-  for (const mode of ['print', 'json', 'rpc'] as const) for (const [level, effort] of [['minimal', 'low'], ['max', 'max'], ['xhigh', 'max'], ['off', undefined]] as const) {
-    it(`${mode}: ${level} reaches the actual built-in payload`, async () => {
-      const test = await fixture(); const child = test.start(mode, level);
+  for (const mode of ['print', 'json', 'rpc'] as const) for (const [model, level, effort, maximum] of [
+    [adaptive, 'minimal', 'low', 2048], [adaptive, 'max', 'max', 33792],
+    [adaptive, 'xhigh', 'max', 33792], [adaptive, 'off', undefined, 1024],
+    ['claude-fable-5', 'xhigh', 'xhigh', 17408],
+    ['claude-opus-4-6', 'xhigh', 'max', 33792],
+    ['claude-opus-4-7', 'xhigh', 'xhigh', 17408],
+    ['claude-opus-4-8', 'xhigh', 'xhigh', 17408],
+    ['claude-sonnet-4-6', 'high', 'high', 9216],
+    ['claude-sonnet-5', 'xhigh', 'xhigh', 17408],
+    ['claude-fable-5', 'off', 'low', 2048],
+  ] as const) {
+    it(`${mode}: ${model}/${level} reaches the actual built-in payload`, async () => {
+      const test = await fixture(model); const child = test.start(mode, level);
       let stdout = ''; let stderr = '';
       child.stdout.setEncoding('utf8').on('data', text => { stdout += text; }); child.stderr.setEncoding('utf8').on('data', text => { stderr += text; });
       const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
@@ -56,9 +66,9 @@ describe('emitted built-in Anthropic adaptive selection', () => {
         expect(await ended, stderr).toEqual({ code: 0, signal: null }); expect(stdout).toContain('adaptive-ok');
         if (mode !== 'print') expect(stdout.trim().split('\n').map(line => JSON.parse(line) as { type: string }).every(record => typeof record.type === 'string')).toBe(true);
         expect(test.bodies).toHaveLength(1);
-        expect(test.bodies[0]?.thinking).toEqual({ type: effort ? 'adaptive' : 'disabled' });
+        expect(test.bodies[0]?.thinking).toEqual(effort ? { type: 'adaptive', display: 'summarized' } : { type: 'disabled' });
         expect(test.bodies[0]?.output_config).toEqual(effort ? { effort } : undefined);
-        expect(test.bodies[0]?.max_tokens).toBe(level === 'off' ? 1024 : level === 'minimal' ? 2048 : 33792);
+        expect(test.bodies[0]?.model).toBe(model); expect(test.bodies[0]?.max_tokens).toBe(maximum);
       } finally { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); await test.close(); }
     }, 30_000);
   }
@@ -91,10 +101,10 @@ describe('emitted built-in Anthropic adaptive selection', () => {
       await command({ type: 'set_model', id: 'adaptive', provider: 'anthropic', modelId: adaptive }); await prompt(4);
       await command({ type: 'set_thinking_level', id: 'off', level: 'off' }); await prompt(5);
       expect(test.bodies.map(body => [body.model, body.thinking, body.output_config, body.max_tokens])).toEqual([
-        [adaptive, { type: 'adaptive' }, { effort: 'low' }, 2048],
-        [adaptive, { type: 'adaptive' }, { effort: 'max' }, 33792],
+        [adaptive, { type: 'adaptive', display: 'summarized' }, { effort: 'low' }, 2048],
+        [adaptive, { type: 'adaptive', display: 'summarized' }, { effort: 'max' }, 33792],
         [classic, { type: 'enabled', budget_tokens: 32768 }, undefined, 33792],
-        [adaptive, { type: 'adaptive' }, { effort: 'high' }, 9216],
+        [adaptive, { type: 'adaptive', display: 'summarized' }, { effort: 'high' }, 9216],
         [adaptive, { type: 'disabled' }, undefined, 1024],
       ]);
       child.stdin.end(); expect(await ended, stderr).toEqual({ code: 0, signal: null }); expect(buffer).toBe('');
