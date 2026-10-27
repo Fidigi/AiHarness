@@ -313,8 +313,9 @@ test('late refused ordinary link read cannot replace newer composer intent', asy
   await composer.fill('保留 ordinary unsent draft');
   await composer.focus();
   await held!.fulfill({ status: 404, json: { error: 'refused-linked-read' } });
-  // This visible owning result proves the delayed body was consumed, not merely replied.
-  await expect(panel.locator('.panel-error')).toContainText('refused-linked-read');
+  // The fixed error proves the delayed refusal settled without publishing server text.
+  await expect(panel.locator('.panel-error')).toHaveText('The file could not be read. Select it again to retry.');
+  await expect(panel.locator('.panel-error')).not.toContainText('refused-linked-read');
   await expect(composer).toBeFocused();
   await expect(composer).toHaveValue('保留 ordinary unsent draft');
   await expect(boundary(page)).toHaveCount(0);

@@ -1,6 +1,6 @@
 # MOD-01 — Delivery Tasks and Local Acceptance
 
-> **Status: IN PROGRESS** (2026-10-26)
+> **Status: IN PROGRESS** (2026-10-27)
 
 > **Authority:** [AUDIT-5](./AUDIT-5.md), MOD-01; [pinned provider/API/auth inventory](../../ai/topics/provider-matrix.md). Target Pi 1.2.0 commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, not the installed agent's moving release.
 
@@ -21,7 +21,7 @@ Each task requires implementation, focused regression evidence, documentation an
 | Task | Work and acceptance | State |
 |---|---|---|
 | MOD-01.00a | Select the pending native adapters, shared metadata/API provenance, SDK/CLI/custom Server/Settings composition and their existing tests. Exclude unrelated audit changes. Capture an isolated source tree before validation. | Done; frozen selection integrated as `cec97e5`, with the source receipt in AUDIT-5 |
-| MOD-01.00b | Run Docker typecheck, full root tests, independent public parity, browser suite and production build on that source. Diagnose concrete failures without loosening assertions, budgets or product safety controls. | Partial acceptance: all standard gates executed; native/visual/linked failures retained. Final typecheck, 16 owning browsers and production controls pass |
+| MOD-01.00b | Run Docker typecheck, full root tests, independent public parity, browser suite and production build on that source. Diagnose concrete failures without loosening assertions, budgets or product safety controls. | Partial acceptance: original standard-gate failures retained. The linked-read oracle is corrected and 43 linked browser cases pass on the 2026-10-27 input below; native crashes and visual failures remain unresolved |
 | MOD-01.00c | Commit the integrated implementation and documentation with actual gate outcomes and this remaining-work register. Do not mark the whole criterion DONE. | Delivered: `cec97e5` plus this audit/register delivery; criterion remains open |
 
 ### 1. Complete the executable catalogue and mapping
@@ -77,3 +77,11 @@ Each task requires implementation, focused regression evidence, documentation an
 ## Current limitations retained
 
 The supplied-key SDK increments and custom-host controls already in the tree are reusable delivery, not completion of tasks 1–6. The original E77/E78 evidence availability problem is historical and separate: do not reconstruct or seal their missing receipts from current source or later tests. A fresh receipt qualifies only its own captured inputs.
+
+## MOD-01.00b — Linked-read oracle follow-up (2026-10-27)
+
+The existing [linked-modal regression](../../../e2e/linked-modal-boundary.spec.ts) incorrectly expected the raw server error `refused-linked-read` in a notification. `WorkspacePanel.tsx` deliberately uses the fixed `readFailed` copy from `file-preview-messages.ts`. The test now requires that public message and explicitly rejects the raw server text, preserving newer-composer focus, draft and absence-of-dialogue assertions. No product behavior, baseline, budget or deadline changes.
+
+The first isolated `make test-e2e E2E_ARGS='--config=e2e/linked-modal-boundary.config.ts'` fails before tests: Core's compiler reports `code=null, signal=SIGTRAP`, with V8's `predecessors.size()` assertion and no TypeScript diagnostic. Its patch and make exit 2 remain retained. A newer combined source tree `099cb57f3634f85f98089a78ee7dabefee52b0ef` on `af3e718` includes the census's finite-question revision plus this unchanged oracle correction: the same canonical browser target passes **43/43**, one worker/zero retries. All 1,431 declared source hashes/modes match its image; that manifest is not a claim to hash every Docker-context input. Raw logs, image identity and browser artifacts are local at `test-results/mod01-tasks-20261027/00b/`.
+
+This closes only the linked-read oracle defect. Native crashes, original visual failures and the broader 00b acceptance remain open; later compilation/browser success is not a causal diagnosis or a replacement for the failed first attempt.
