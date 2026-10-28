@@ -1677,7 +1677,7 @@ it('validates installed public provider discovery declarations and keyless based
   }
 }, 60_000);
 
-it('binds original OpenAI/Azure unsigned response IDs, paired tool items and scoped JSON-schema/choice through installed declarations and runtime', async () => {
+it('binds original OpenAI/Azure unsigned response IDs, paired tool items, scoped schema/choice and scalar generation through installed declarations and runtime', async () => {
   await writeFile(path.join(consumer, 'responses-tools-public.ts'), `
     import { OpenAiMixedProvider, AzureProvider, AzureResponsesProvider, type AiProvider, type ChatOptions, type ChatToolDefinition, type ResponsesChatOptions, type Message, type ToolCall } from '@ai-harness/core';
     const providers: AiProvider[] = [new OpenAiMixedProvider({ type: 'openai', apiKey: 'sk-disposable', model: 'gpt-5', transport: 'sse' }),
@@ -1708,11 +1708,12 @@ it('binds original OpenAI/Azure unsigned response IDs, paired tool items and sco
   const vectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-tool-results-reference.json'), 'utf8')).rows;
   const policyVectors = (await Promise.all(['responses-tool-policy-reference.json', 'responses-tool-schema-boundaries-reference.json'].map(async file =>
     JSON.parse(await readFile(path.join(checkout, 'tests/fixtures', file), 'utf8')).rows))).flat();
+  const scalarVectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-scalar-generation-reference.json'), 'utf8')).rows;
   await writeFile(path.join(consumer, 'responses-tools-public.mjs'), `
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
     import { OpenAiMixedProvider, AzureProvider } from '@ai-harness/core';
-    const vectors = ${JSON.stringify(vectors)}, policyVectors = ${JSON.stringify(policyVectors)}, calls = []; let replyItems;
+    const vectors = ${JSON.stringify(vectors)}, policyVectors = ${JSON.stringify(policyVectors)}, scalarVectors = ${JSON.stringify(scalarVectors)}, calls = []; let replyItems;
     function events(items) {
       const output = items ?? [{ type: 'message', id: 'msg_owned', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'ok', annotations: [] }] }];
       const result = [{ type: 'response.created', response: { id: 'resp_owned', status: 'in_progress', output: [] } }];
@@ -1782,11 +1783,26 @@ it('binds original OpenAI/Azure unsigned response IDs, paired tool items and sco
         assert.equal(JSON.stringify({ messages, options }), before);
       }
       assert.equal(policyVectors.length, 1368); assert.equal(refusals, 296); assert.equal(calls.length, 5256);
-      console.log('installed original Responses unsigned tool items and scoped schema/choice OK');
+      for (const vector of scalarVectors) for (const stream of [false, true]) {
+        const provider = providers[vector.scope], options = { ...structuredClone(vector.options), model: vector.model };
+        const messages = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }], before = JSON.stringify({ messages, options }), count = calls.length;
+        let result, failure;
+        if (stream) await provider.streamChat(messages, () => {}, value => { result = value; }, error => { failure = error; }, options);
+        else result = await provider.chat(messages, options);
+        if (failure) throw failure;
+        assert.equal(result.content, 'ok'); assert.equal(result.model, vector.model); assert.equal(result.api, vector.api);
+        assert.equal(calls.length, count + 1); const call = calls.at(-1);
+        assert.deepEqual(Object.fromEntries(['max_output_tokens', 'temperature'].filter(key => Object.hasOwn(call.body, key)).map(key => [key, call.body[key]])), vector.fields);
+        assert.equal(call.body.model, vector.scope === 'azure' ? 'owned-deployment' : vector.model);
+        assert.equal(call.headers[vector.scope === 'azure' ? 'api-key' : 'authorization'], vector.scope === 'azure' ? key : 'Bearer ' + key);
+        assert.equal(JSON.stringify({ messages, options }), before);
+      }
+      assert.equal(scalarVectors.length, 176); assert.equal(calls.length, 5608); assert.equal(refusals, 296);
+      console.log('installed original Responses unsigned tools, scoped schema/choice and scalar generation OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);
   expect(await run(process.execPath, ['responses-tools-public.mjs'], consumer, environment))
-    .toEqual({ code: 0, stdout: 'installed original Responses unsigned tool items and scoped schema/choice OK\n', stderr: '' });
+    .toEqual({ code: 0, stdout: 'installed original Responses unsigned tools, scoped schema/choice and scalar generation OK\n', stderr: '' });
 }, 60_000);
 
 it('dispatches original Google/Vertex schema/generation/choice/history and regional Bearer construction through installed declarations and runtime', async () => {

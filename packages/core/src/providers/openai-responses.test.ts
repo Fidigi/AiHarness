@@ -14,6 +14,10 @@ type PolicyVector = { scope: Scope; model: string; api: string; case: string; op
 type PolicyReference = { pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; cases: number; requests: number; refusals: number; rows: PolicyVector[] };
 const policy = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/responses-tool-policy-reference.json', import.meta.url), 'utf8')) as PolicyReference;
 const boundaries = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/responses-tool-schema-boundaries-reference.json', import.meta.url), 'utf8')) as PolicyReference;
+const generation = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/responses-scalar-generation-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; cases: number; reusedCaptureRequests: number;
+  rows: Array<{ scope: Scope; model: string; api: string; sourceCase: string; options: ChatOptions; fields: Record<string, unknown> }>;
+};
 const user: Message[] = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
 afterEach(() => vi.restoreAllMocks());
 function reply(items?: Array<Record<string, unknown>>) {
@@ -56,9 +60,12 @@ describe('original OpenAI/Azure Responses unsigned call/item IDs and paired tool
       expect(reference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
       expect(reference.captureSha256).toBe('bd2ecd7d1f31612c828ce3a486352f4e501fa46a42e52a24012ab4498412e4bd');
       expect(reference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
-      for (const fixture of [policy, boundaries]) {
+      for (const fixture of [policy, boundaries, generation]) {
         expect(fixture.pinnedCommit).toBe(reference.pinnedCommit); expect(fixture.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
       }
+      expect(generation.captureSha256).toBe('637862c5e5ae2ae6c9729d4d8bdf7fc13130f15320fcaacaa680a8c93f782a8a');
+      expect([generation.modelProjections, generation.cases, generation.rows.length, generation.reusedCaptureRequests]).toEqual([88, 176, 176, 445]);
+      expect([...new Set(generation.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(models);
       expect(policy.captureSha256).toBe('c40d852cc39e1cf0e82cf32a7a2ebd8debd2d4a63b54ff73f43a337a98b4bb52');
       expect(boundaries.captureSha256).toBe('b86ff4a861db39d97aed796e77c7305bdfdb23ccbf74d3b54b56a32c2d9de566');
       expect([policy.modelProjections, policy.cases, policy.requests, policy.refusals, policy.rows.length]).toEqual([88, 1232, 1144, 88, 1232]);
@@ -135,8 +142,18 @@ describe('original Responses scoped JSON-schema and tool-choice construction', (
       }
       expect(options).toEqual(before);
     };
-    for (const model of models) it(`${scope}/${model}: binds executed strict/default/choice projections on both facades`, async () => {
+    for (const model of models) it(`${scope}/${model}: binds executed strict/default/choice and scalar generation projections on both facades`, async () => {
       const rows = policy.rows.filter(row => row.scope === scope && row.model === model), f = fixture(scope, model);
+      const scalars = generation.rows.filter(row => row.scope === scope && row.model === model);
+      expect(scalars.map(row => row.sourceCase)).toEqual(['raw-default', 'typed-tools-high-temperature']);
+      for (const vector of scalars) for (const stream of [false, true]) {
+        const messages = structuredClone(user), options = { ...structuredClone(vector.options), model }, before = structuredClone({ messages, options });
+        const count = f.fetch.mock.calls.length, response = await f.call(stream, messages, options);
+        expect(response).toMatchObject({ content: 'ok', model, api: vector.api }); expect(f.fetch.mock.calls).toHaveLength(count + 1);
+        const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
+        expect(Object.fromEntries(['max_output_tokens', 'temperature'].filter(key => Object.hasOwn(body, key)).map(key => [key, body[key]]))).toEqual(vector.fields);
+        expect(body.model).toBe(scope === 'azure' ? 'owned-deployment' : model); expect({ messages, options }).toEqual(before);
+      }
       expect(rows.map(row => row.case)).toEqual(['default', 'false', 'strict-prefer', 'strict-require', 'auto', 'none', 'required', 'named', 'strict-prefer-none', 'strict-require-required', 'mixed', 'no-tools-required', 'structured-prefer', 'structured-require']);
       for (const vector of rows) for (const stream of [false, true]) await compare(f, vector, stream);
     });
