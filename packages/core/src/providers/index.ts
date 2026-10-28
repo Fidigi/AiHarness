@@ -12,6 +12,7 @@ import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
 import { azureIdentifier, normalizeAzureResponsesBaseUrl, usesAzureResponses } from './azure-config.js';
 import { parseProviderToolArguments } from './tool-arguments.js';
 import { consumeBedrockStream } from './bedrock-converse-stream.js';
+import { bedrockProfileUsage, bedrockPublishedProfiles, hasBedrockProfile, validateBedrockProfileOutput } from './bedrock-profiles.js';
 import { OPENAI_DECISIONS_MODEL, decisionsBody, decisionsAnswers, type NativeWireQuestion } from './openai-decisions.js';
 export { OPENAI_DECISIONS_MODEL } from './openai-decisions.js';
 import { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
@@ -4053,8 +4054,12 @@ export function bedrockCredentialConfig(value: unknown): { apiKey: string } | { 
 /** AWS Bedrock Converse provider with explicit Bearer or native SigV4 authentication. */
 export class BedrockProvider extends AiProvider {
   override getModelApi(): string { return 'bedrock-converse-stream'; }
+  override getPublishedModels(): readonly PublishedModelMetadata[] | undefined {
+    return this.ownsNativeProfiles ? [...bedrockPublishedProfiles(), ...getPublishedModels('bedrock')] : undefined;
+  }
 
   private readonly region: string;
+  private readonly ownsNativeProfiles: boolean;
 
   constructor(config: ProviderConfig) {
     super({
@@ -4066,6 +4071,7 @@ export class BedrockProvider extends AiProvider {
       sessionToken: config.sessionToken || process.env.AWS_SESSION_TOKEN,
     });
     this.region = String(config.region || process.env.AWS_REGION || 'us-east-1');
+    this.ownsNativeProfiles = new.target === BedrockProvider;
   }
 
   validateConfig(): boolean {
@@ -4166,14 +4172,21 @@ export class BedrockProvider extends AiProvider {
 
   async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     if (!this.validateConfig()) throw new Error('AWS Bedrock credentials are required');
-    const model = encodeURIComponent(String(this.config.model));
+    const requestedModel = this.ownsNativeProfiles ? options?.model || String(this.config.model) : String(this.config.model);
+    const native = this.ownsNativeProfiles && hasBedrockProfile(requestedModel);
+    const model = encodeURIComponent(requestedModel);
     let url: URL;
-    try { url = new URL(String(this.config.baseUrl || `https://bedrock-runtime.${this.region}.amazonaws.com/model/${model}/converse`)); }
-    catch { throw new Error('Invalid Bedrock endpoint.'); }
+    try {
+      url = native ? this.streamEndpoint(requestedModel)
+        : new URL(String(this.config.baseUrl || `https://bedrock-runtime.${this.region}.amazonaws.com/model/${model}/converse`));
+      if (native) url.pathname = url.pathname.replace(/-stream$/u, '');
+    } catch { throw new Error('Invalid Bedrock endpoint.'); }
     if (this.config.apiKey !== undefined && (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)) {
       throw new Error('Invalid Bedrock endpoint.');
     }
-    const body = serializeProviderBody(this.requestBody(messages, options));
+    const prepared = this.requestBody(messages, options);
+    if (native) validateBedrockProfileOutput(requestedModel, prepared, options?.maxTokens);
+    const body = serializeProviderBody(prepared);
     const response = await this.request(url, {
       method: 'POST', headers: await this.requestHeaders(url, body), body, signal: options?.signal,
     });
@@ -4195,8 +4208,9 @@ export class BedrockProvider extends AiProvider {
     return {
       content,
       ...lengthStop(data.stopReason),
-      model: String(this.config.model),
-      usage: data.usage ? (() => {
+      ...(native ? { api: 'bedrock-converse-stream' } : {}),
+      model: this.ownsNativeProfiles ? requestedModel : String(this.config.model),
+      usage: native ? bedrockProfileUsage(data.usage, requestedModel) : data.usage ? (() => {
         const prompt = token(data.usage?.inputTokens);
         const completion = token(data.usage?.outputTokens);
         return {
@@ -4223,14 +4237,18 @@ export class BedrockProvider extends AiProvider {
       if (!this.validateConfig()) throw new Error('AWS Bedrock credentials are required');
       if (options?.signal?.aborted) throw new Error('Bedrock request aborted.');
       const model = options?.model || String(this.config.model);
+      const native = this.ownsNativeProfiles && hasBedrockProfile(model);
       const url = this.streamEndpoint(model);
-      const body = serializeProviderBody(this.requestBody(messages, options));
+      const prepared = this.requestBody(messages, options);
+      if (native) validateBedrockProfileOutput(model, prepared, options?.maxTokens);
+      const body = serializeProviderBody(prepared);
       const response = await this.request(url, {
         method: 'POST', headers: { ...await this.requestHeaders(url, body), Accept: 'application/vnd.amazon.eventstream' },
         body, signal: options?.signal,
       });
       if (!response.ok) await rejectProviderHttpResponse(response, `Bedrock API error (${response.status}).`);
-      const result = await consumeBedrockStream(response, model, onChunk, options?.signal);
+      const result = await consumeBedrockStream(response, model, onChunk, options?.signal,
+        native ? value => bedrockProfileUsage(value, model) : undefined);
       if (options?.signal?.aborted) throw new Error('Bedrock request aborted.');
       onComplete?.(result);
     } catch (error) {

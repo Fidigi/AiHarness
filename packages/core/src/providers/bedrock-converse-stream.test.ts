@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
+import { readFileSync } from 'node:fs';
 import { BedrockProvider, bedrockCredentialConfig, type ChatResponse } from './index.js';
 import { closeProviderNetworkDispatchers } from './provider-network.js';
 import { bedrockFrame as frame, bedrockText } from '../../../../tests/fixtures/bedrock-event-stream.js';
@@ -215,5 +216,126 @@ describe('native Bedrock ConverseStream', () => {
     expect(error).toHaveBeenCalledOnce(); expect(cancelled).toBe(true);
     const { crc32 } = await import('node:zlib'); const huge = Buffer.alloc(12); huge.writeUInt32BE(1024 * 1024 + 1); huge.writeUInt32BE(crc32(huge.subarray(0, 8)), 8);
     const result = await stream(huge); expect(result.complete).not.toHaveBeenCalled(); expect(result.error.mock.calls[0][0].message).toMatch(/limit/);
+  });
+});
+
+const reference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/bedrock-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; catalogueSha256: string; captureSha256: string;
+  models: Array<{ id: string; name: string; api: string; reasoning: boolean; input: string[]; contextWindow: number; maxTokens: number;
+    cost: { input: number; output: number; cacheRead: number; cacheWrite: number } }>;
+  cases: Array<{ model: string; case: string; observed: Record<string, unknown>; expected: NonNullable<ChatResponse['usage']> }>;
+};
+const known = reference.models[0];
+function observedResponse(value: unknown, binary: boolean): Response {
+  return binary ? response(bedrockText('ok', 'end_turn', value)) : new Response(JSON.stringify({
+    model: 'untrusted-response-alias', output: { message: { role: 'assistant', content: [{ text: 'ok' }] } }, stopReason: 'end_turn', usage: value,
+  }), { headers: { 'content-type': 'application/json' } });
+}
+
+describe('owned original Bedrock declarations, observed accounting and explicit ceilings', () => {
+  it('binds 193 approved declarations to the executed source, preserving the separate legacy default', () => {
+    expect(reference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
+    expect(reference.catalogueSha256).toBe('df227d426b678e44cd82deae1cf433855d6b27f36fedcff3ef4fb812fe882868');
+    expect(reference.captureSha256).toBe('6b27c0226ae372bde56def095c5ee06873385ff3ab52909add2f3db3f026b2bd');
+    expect(reference.models).toHaveLength(193); expect(reference.cases).toHaveLength(666);
+    const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+    const provider = create({ model: known.id });
+    const published = provider.getPublishedModels?.() ?? [];
+    expect(published.filter(row => reference.models.some(model => model.id === row.id))).toEqual(reference.models.map(model => ({
+      id: model.id, name: model.name, api: model.api, contextWindow: model.contextWindow, maxOutputTokens: model.maxTokens,
+      capabilities: { reasoning: model.reasoning, imageInput: model.input.includes('image'), toolCalls: true },
+      pricing: { inputPerMillion: model.cost.input, outputPerMillion: model.cost.output, cacheReadPerMillion: model.cost.cacheRead, cacheWritePerMillion: model.cost.cacheWrite },
+      thinkingLevelMap: null,
+    })));
+    expect(published.find(row => row.id === 'anthropic.claude-3-haiku-20240307-v1:0')).toMatchObject({ name: 'Claude 3 Haiku (Bedrock)' });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  for (const model of reference.models) it(`${model.id}: owns JSON/binary identity and pinned base/tier/1h/zero accounting`, async () => {
+    const provider = create({ apiKey: 'disposable-bedrock-reference', model: model.id });
+    for (const vector of reference.cases.filter(row => row.model === model.id)) for (const binary of [false, true]) {
+      const fetch = vi.fn(async (url: string | URL) => {
+        expect(String(url)).toBe(`https://bedrock-runtime.us-east-1.amazonaws.com/model/${encodeURIComponent(model.id)}/converse${binary ? '-stream' : ''}`);
+        return observedResponse(vector.observed, binary);
+      }); vi.stubGlobal('fetch', fetch);
+      let result: ChatResponse | undefined;
+      if (binary) await provider.streamChat(messages, () => {}, value => { result = value; }, undefined, { cacheRetention: 'long' });
+      else result = await provider.chat(messages, { cacheRetention: 'long' });
+      expect.soft(result).toMatchObject({ content: 'ok', model: model.id, api: model.api });
+      const { costUsd, ...counts } = vector.expected;
+      expect.soft(result?.usage).toMatchObject(counts);
+      expect.soft(result?.usage?.costUsd).toBeCloseTo(costUsd!, 12);
+      expect(fetch).toHaveBeenCalledOnce();
+    }
+  });
+
+  it('refuses invalid explicit or effective native ceilings before dispatch, independently of public metadata', async () => {
+    const fetch = vi.fn(async () => observedResponse({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }, false)); vi.stubGlobal('fetch', fetch);
+    for (const model of reference.models) {
+      const provider = create({ apiKey: 'disposable-bedrock-reference', model: model.id });
+      const published = provider.getPublishedModels?.()?.find(row => row.id === model.id);
+      if (published) published.maxOutputTokens = Number.MAX_SAFE_INTEGER;
+      for (const maxTokens of [0, -1, 1.5, NaN, Infinity, model.maxTokens + 1]) {
+        await expect(provider.chat(messages, { maxTokens })).rejects.toThrow('Invalid Bedrock output limit.');
+        const error = vi.fn(), complete = vi.fn();
+        await provider.streamChat(messages, () => {}, complete, error, { maxTokens });
+        expect(error.mock.calls[0]?.[0].message).toBe('Invalid Bedrock output limit.'); expect(complete).not.toHaveBeenCalled();
+      }
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('captures native per-call identity before callbacks and cannot price response aliases or forged public declarations', async () => {
+    const target = reference.models.find(model => model.cost.input !== known.cost.input)!;
+    const provider = create({ apiKey: 'disposable-bedrock-reference', model: known.id });
+    provider.getProviderType = () => 'operator-alias'; provider.getModelApi = () => 'forged-api';
+    provider.getPublishedModels = () => [{ id: target.id, name: 'forged', api: 'forged-api', capabilities: { reasoning: false, imageInput: false, toolCalls: false }, pricing: { inputPerMillion: 1e9 } }];
+    const vector = reference.cases.find(row => row.model === target.id && row.case === 'base-short')!;
+    for (const binary of [false, true]) {
+      vi.stubGlobal('fetch', vi.fn(async (url: string | URL) => {
+        expect(String(url)).toContain(`/model/${encodeURIComponent(target.id)}/converse`);
+        provider.setConfiguredModel('response-alias'); return observedResponse(vector.observed, binary);
+      }));
+      let result: ChatResponse | undefined;
+      if (binary) await provider.streamChat(messages, () => { provider.setConfiguredModel('callback-alias'); }, value => { result = value; }, undefined, { model: target.id });
+      else result = await provider.chat(messages, { model: target.id });
+      expect(result).toMatchObject({ model: target.id, api: 'bedrock-converse-stream' });
+      expect(result?.usage?.costUsd).toBeCloseTo(vector.expected.costUsd!, 12);
+    }
+  });
+
+  it('omits incomplete/malformed native usage instead of manufacturing counters or inferred TTL cost', async () => {
+    const provider = create({ apiKey: 'disposable-bedrock-reference', model: known.id });
+    for (const value of [undefined, null, {}, { inputTokens: 7 }, { inputTokens: 7, outputTokens: 2 },
+      { inputTokens: -1, outputTokens: 2, totalTokens: 1 }, { inputTokens: 1.5, outputTokens: 2, totalTokens: 4 },
+      { inputTokens: 7, outputTokens: 2, totalTokens: 8 }, { inputTokens: Number.MAX_SAFE_INTEGER, outputTokens: 2, totalTokens: Number.MAX_SAFE_INTEGER },
+      { inputTokens: 7, outputTokens: 2, totalTokens: 9, cacheReadInputTokens: null },
+      { inputTokens: 7, outputTokens: 2, totalTokens: 10, cacheWriteInputTokens: 1, cacheDetails: [{ ttl: '1h', inputTokens: 2 }] },
+      { inputTokens: 7, outputTokens: 2, totalTokens: 10, cacheWriteInputTokens: 1, cacheDetails: [{ ttl: 'private-ttl', inputTokens: 1 }] },
+      { inputTokens: 7, outputTokens: 2, totalTokens: 10, cacheWriteInputTokens: 1, cacheDetails: [{ ttl: { toString: 'private-ttl' }, inputTokens: 1 }] }]) {
+      for (const binary of [false, true]) {
+        vi.stubGlobal('fetch', vi.fn(async () => observedResponse(value, binary)));
+        let result: ChatResponse | undefined;
+        if (binary) await provider.streamChat(messages, () => {}, completed => { result = completed; }); else result = await provider.chat(messages);
+        expect.soft(result?.usage).toBeUndefined();
+      }
+    }
+  });
+
+  it('preserves unattributed totals without automatic base-rate cost and keeps derived/unknown transports legacy', async () => {
+    const provider = create({ model: known.id });
+    const value = { inputTokens: 7, outputTokens: 2, totalTokens: 11 };
+    for (const binary of [false, true]) {
+      vi.stubGlobal('fetch', vi.fn(async () => observedResponse(value, binary)));
+      let result: ChatResponse | undefined;
+      if (binary) await provider.streamChat(messages, () => {}, completed => { result = completed; }); else result = await provider.chat(messages);
+      expect(result?.usage).toEqual({ promptTokens: 7, completionTokens: 2, totalTokens: 11, cacheReadTokens: 0, cacheWriteTokens: 0 });
+    }
+    class Compatible extends BedrockProvider {}
+    const derived = new Compatible({ type: 'bedrock', apiKey: 'disposable-bedrock-reference', model: known.id });
+    expect(derived.getPublishedModels?.()).toBeUndefined();
+    vi.stubGlobal('fetch', vi.fn(async () => observedResponse({ inputTokens: 7, outputTokens: 2, totalTokens: 9 }, false)));
+    expect((await derived.chat(messages, { maxTokens: Number.MAX_SAFE_INTEGER })).usage).toEqual({ promptTokens: 7, completionTokens: 2, totalTokens: 9 });
+    expect((await create({ model: 'unknown', apiKey: 'disposable-bedrock-reference' }).chat(messages)).usage?.costUsd).toBeUndefined();
   });
 });

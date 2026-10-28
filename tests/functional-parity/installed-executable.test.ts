@@ -1695,20 +1695,29 @@ it('dispatches native Bedrock binary streams through installed public declaratio
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'bedrock-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
   const bytes = bedrockText('installed-bedrock-ok', 'end_turn', { inputTokens: 7, outputTokens: 2, cacheReadInputTokens: 3, totalTokens: 12 });
+  const originalReference = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-reference.json'), 'utf8'));
+  const originals = originalReference.models.map((model: { id: string; maxTokens: number }) => ({ id: model.id, maximum: model.maxTokens,
+    cost: originalReference.cases.find((row: { model: string; case: string }) => row.model === model.id && row.case === 'base-short').expected.costUsd }));
+  const nativeUsage = { inputTokens: 7, outputTokens: 2, cacheReadInputTokens: 3, cacheWriteInputTokens: 1, totalTokens: 13 };
+  const nativeBytes = bedrockText('installed-native-ok', 'end_turn', nativeUsage);
   await writeFile(path.join(consumer, 'bedrock-public.mjs'), `
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
     import { BedrockProvider, ProviderFactory, bedrockCredentialConfig, collectProviderModelCatalog, flattenModelCatalog } from '@ai-harness/core';
+    import { fileURLToPath } from 'node:url';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const originals = ${JSON.stringify(originals)}, nativeUsage = ${JSON.stringify(nativeUsage)};
     const calls = [];
     const server = createServer(async (request, reply) => {
       let body = ''; for await (const chunk of request) body += chunk;
       calls.push({ path: request.url, headers: request.headers, body: JSON.parse(body) });
+      const native = originals.some(model => request.url.startsWith('/proxy/model/' + encodeURIComponent(model.id) + '/'));
       if (request.url.endsWith('/converse')) {
         reply.writeHead(200, { 'content-type': 'application/json' });
-        reply.end(JSON.stringify({ output: { message: { content: [{ text: 'installed-bedrock-json-ok' }] } } }));
+        reply.end(JSON.stringify({ output: { message: { content: [{ text: 'installed-bedrock-json-ok' }] } }, ...(native ? { usage: nativeUsage } : {}) }));
       } else {
         reply.writeHead(200, { 'content-type': 'application/vnd.amazon.eventstream' });
-        reply.end(Buffer.from(${JSON.stringify(bytes.toString('base64'))}, 'base64'));
+        reply.end(Buffer.from(native ? ${JSON.stringify(nativeBytes.toString('base64'))} : ${JSON.stringify(bytes.toString('base64'))}, 'base64'));
       }
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -1736,6 +1745,26 @@ it('dispatches native Bedrock binary streams through installed public declaratio
         assert.equal(call.headers.authorization, 'Bearer installed:opaque:bearer');
         assert.deepEqual(Object.keys(call.headers).filter(name => name.startsWith('x-amz-')), []);
       }
+      const native = ProviderFactory.create({ type: 'bedrock', apiKey: 'installed-native-bearer', model: originals[0].id,
+        baseUrl: 'http://127.0.0.1:' + server.address().port + '/proxy' });
+      assert.equal(originals.length, 193);
+      assert.equal(native.getPublishedModels().filter(row => originals.some(model => model.id === row.id)).length, 193);
+      for (const model of originals) {
+        const json = await native.chat([], { model: model.id, maxTokens: 16 });
+        assert.equal(json.model, model.id); assert.equal(json.api, 'bedrock-converse-stream');
+        assert.ok(Math.abs(json.usage.costUsd - model.cost) < 1e-12);
+        await native.streamChat([], () => {}, value => { complete = value; }, undefined, { model: model.id, maxTokens: 16 });
+        assert.equal(complete.model, model.id); assert.equal(complete.api, 'bedrock-converse-stream');
+        assert.ok(Math.abs(complete.usage.costUsd - model.cost) < 1e-12);
+        const before = calls.length;
+        await assert.rejects(native.chat([], { model: model.id, maxTokens: model.maximum + 1 }), /Invalid Bedrock output limit/);
+        assert.equal(calls.length, before);
+        for (const call of calls.slice(-2)) {
+          assert.equal(call.headers.authorization, 'Bearer installed-native-bearer'); assert.equal(call.body.inferenceConfig.maxTokens, 16);
+          assert.ok(call.path.startsWith('/proxy/model/' + encodeURIComponent(model.id) + '/'));
+        }
+      }
+      assert.equal(calls.length, 3 + 193 * 2);
       console.log('installed Bedrock ConverseStream OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);

@@ -112,7 +112,8 @@ function usage(value: unknown): BedrockUsage | undefined {
 type Block = { kind?: 'text' | 'reasoning' | 'tool'; stopped: boolean; id?: string; name?: string; json: string; bytes: number };
 
 /** ConverseStream text/reasoning and deferred tool calls; no signed/encrypted thought replay claim. */
-export async function consumeBedrockStream(response: Response, model: string, onChunk: StreamChunkCallback, signal?: AbortSignal): Promise<ChatResponse> {
+export async function consumeBedrockStream(response: Response, model: string, onChunk: StreamChunkCallback, signal?: AbortSignal,
+  normalizeUsage: (value: unknown) => BedrockUsage | undefined = usage): Promise<ChatResponse> {
   let started = false, stopped = false, metadata = false, content = '', reasoning = '';
   let stopReason: ChatResponse['stopReason'], tokens: BedrockUsage | undefined;
   const blocks = new Map<number, Block>();
@@ -133,7 +134,7 @@ export async function consumeBedrockStream(response: Response, model: string, on
     if (!started) invalid();
     if (type === 'metadata') {
       if (!stopped || metadata) invalid();
-      metadata = true; tokens = usage(data.usage); continue;
+      metadata = true; tokens = normalizeUsage(data.usage); continue;
     }
     if (stopped) invalid();
     switch (type) {
