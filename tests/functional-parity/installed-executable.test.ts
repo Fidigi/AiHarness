@@ -1677,25 +1677,42 @@ it('validates installed public provider discovery declarations and keyless based
   }
 }, 60_000);
 
-it('binds original OpenAI/Azure unsigned response IDs and paired tool items through installed declarations and runtime', async () => {
+it('binds original OpenAI/Azure unsigned response IDs, paired tool items and scoped JSON-schema/choice through installed declarations and runtime', async () => {
   await writeFile(path.join(consumer, 'responses-tools-public.ts'), `
-    import { OpenAiMixedProvider, AzureProvider, type AiProvider, type ChatOptions, type Message, type ToolCall } from '@ai-harness/core';
+    import { OpenAiMixedProvider, AzureProvider, AzureResponsesProvider, type AiProvider, type ChatOptions, type ChatToolDefinition, type ResponsesChatOptions, type Message, type ToolCall } from '@ai-harness/core';
     const providers: AiProvider[] = [new OpenAiMixedProvider({ type: 'openai', apiKey: 'sk-disposable', model: 'gpt-5', transport: 'sse' }),
       new AzureProvider({ type: 'azure', apiKey: 'sk-disposable', model: 'gpt-5', baseUrl: 'https://owned.example/openai/v1' })];
     const call: ToolCall = { id: 'provided-call|fc_owned', name: 'echo', input: { x: 'owned' } };
     const messages: Message[] = [{ id: 'a', role: 'assistant', content: '', timestamp: new Date(0), provider: 'openai', api: 'openai-responses', model: 'gpt-5', toolCalls: [call] },
       { id: 't', role: 'tool', content: 'done', timestamp: new Date(0), toolCallId: call.id, name: 'echo', isError: false }];
     const options: ChatOptions = { maxTokens: 64, tools: [{ name: 'echo', description: 'Echo', parameters: { type: 'object', properties: { x: { type: 'string' } } } }] };
-    async function compile() { for (const provider of providers) { await provider.chat(messages, options); await provider.streamChat(messages, () => {}, undefined, undefined, options); } }
+    async function compile() {
+      const scoped: ResponsesChatOptions = { toolChoice: { type: 'function', name: 'echo' }, tools: [{ name: 'echo', description: 'Echo',
+        parameters: { type: 'object', properties: { x: { type: 'string' } } }, constrainedSampling: { type: 'json_schema', strict: 'require' } }] };
+      for (const provider of providers) { await provider.chat(messages, options); await provider.streamChat(messages, () => {}, undefined, undefined, options);
+        await provider.chat(messages, scoped); await provider.streamChat(messages, () => {}, undefined, undefined, scoped); }
+      const native = [new OpenAiMixedProvider({ type: 'openai', apiKey: 'sk-disposable', model: 'gpt-5', transport: 'sse' }),
+        new AzureResponsesProvider({ type: 'azure', apiKey: 'sk-disposable', model: 'gpt-5', baseUrl: 'https://owned.example/openai/v1' })];
+      for (const provider of native) { await provider.chat(messages, { toolChoice: 'none' }); await provider.streamChat(messages, () => {}, undefined, undefined, { toolChoice: 'required' }); }
+      // @ts-expect-error Responses choices are not generic host/provider controls.
+      const genericChoice: ChatOptions = { toolChoice: 'required' };
+      // @ts-expect-error Generic tool declarations do not gain constrained-sampling controls.
+      const genericTool: ChatToolDefinition = { name: 'echo', description: 'Echo', parameters: {}, constrainedSampling: false };
+      // @ts-expect-error Google ANY is not the Responses REQUIRED spelling.
+      const googleChoice: ResponsesChatOptions = { toolChoice: 'any' };
+      void genericChoice; void genericTool; void googleChoice;
+    }
     void compile;
   `);
   await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'responses-tools-public.ts'], consumer, environment);
   const vectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-tool-results-reference.json'), 'utf8')).rows;
+  const policyVectors = (await Promise.all(['responses-tool-policy-reference.json', 'responses-tool-schema-boundaries-reference.json'].map(async file =>
+    JSON.parse(await readFile(path.join(checkout, 'tests/fixtures', file), 'utf8')).rows))).flat();
   await writeFile(path.join(consumer, 'responses-tools-public.mjs'), `
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
     import { OpenAiMixedProvider, AzureProvider } from '@ai-harness/core';
-    const vectors = ${JSON.stringify(vectors)}, calls = []; let replyItems;
+    const vectors = ${JSON.stringify(vectors)}, policyVectors = ${JSON.stringify(policyVectors)}, calls = []; let replyItems;
     function events(items) {
       const output = items ?? [{ type: 'message', id: 'msg_owned', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'ok', annotations: [] }] }];
       const result = [{ type: 'response.created', response: { id: 'resp_owned', status: 'in_progress', output: [] } }];
@@ -1741,11 +1758,35 @@ it('binds original OpenAI/Azure unsigned response IDs and paired tool items thro
         assert.deepEqual(items, vector.items); assert.equal(JSON.stringify({ messages, tools: options.tools }), before);
       }
       assert.equal(vectors.length, 704); assert.equal(calls.length, 2816);
-      console.log('installed original Responses unsigned tool items OK');
+      let refusals = 0;
+      for (const vector of policyVectors) for (const stream of [false, true]) {
+        const provider = providers[vector.scope], options = { ...structuredClone(vector.options), model: vector.model, maxTokens: 64, systemPrompt: 'owned guard' };
+        const messages = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }], before = JSON.stringify({ messages, options }), count = calls.length;
+        let result, failure, completions = 0; const chunks = [];
+        if (vector.refusal) {
+          if (stream) {
+            await provider.streamChat(messages, (text, event) => { chunks.push({ text, event }); }, () => { completions++; }, error => { failure = error; }, options);
+            assert.equal(failure?.message, 'Responses tool requires unsupported constrained sampling.'); assert.equal(completions, 0); assert.deepEqual(chunks, []);
+          } else await assert.rejects(() => provider.chat(messages, options), { message: 'Responses tool requires unsupported constrained sampling.' });
+          assert.equal(calls.length, count); refusals++;
+        } else {
+          if (stream) await provider.streamChat(messages, () => {}, value => { result = value; }, error => { failure = error; }, options);
+          else result = await provider.chat(messages, options);
+          if (failure) throw failure;
+          assert.equal(result.content, 'ok'); assert.equal(result.model, vector.model); assert.equal(result.api, vector.api);
+          assert.equal(calls.length, count + 1); const call = calls.at(-1);
+          assert.deepEqual(Object.fromEntries(['tools', 'tool_choice'].filter(key => call.body[key] !== undefined).map(key => [key, call.body[key]])), vector.fields);
+          assert.equal(call.body.model, vector.scope === 'azure' ? 'owned-deployment' : vector.model);
+          assert.equal(call.headers[vector.scope === 'azure' ? 'api-key' : 'authorization'], vector.scope === 'azure' ? key : 'Bearer ' + key);
+        }
+        assert.equal(JSON.stringify({ messages, options }), before);
+      }
+      assert.equal(policyVectors.length, 1368); assert.equal(refusals, 296); assert.equal(calls.length, 5256);
+      console.log('installed original Responses unsigned tool items and scoped schema/choice OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);
   expect(await run(process.execPath, ['responses-tools-public.mjs'], consumer, environment))
-    .toEqual({ code: 0, stdout: 'installed original Responses unsigned tool items OK\n', stderr: '' });
+    .toEqual({ code: 0, stdout: 'installed original Responses unsigned tool items and scoped schema/choice OK\n', stderr: '' });
 }, 60_000);
 
 it('dispatches original Google/Vertex schema/generation/choice/history and regional Bearer construction through installed declarations and runtime', async () => {

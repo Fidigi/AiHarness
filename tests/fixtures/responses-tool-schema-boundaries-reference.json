@@ -1,0 +1,5867 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "b86ff4a861db39d97aed796e77c7305bdfdb23ccbf74d3b54b56a32c2d9de566",
+  "catalogueSha256": {
+    "openai": "f4c1ac9f8f84cb9f2a952b0ceec51c90a38b31b4cdf33200e018ece9d408e95f",
+    "azure": "46c4e25b84463c6475e706c581196d2735c35feb9612d2efca0ab932c917d727"
+  },
+  "modelProjections": 2,
+  "cases": 136,
+  "requests": 76,
+  "refusals": 60,
+  "rows": [
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/nested-optional-object-array/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "nested": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "list": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "n": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "nested": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "x"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "list": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "n": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "n"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "nested",
+                "list"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/nested-optional-object-array/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "nested": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "list": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "n": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "nested": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "x"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "list": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "n": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "n"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "nested",
+                "list"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/nullable-scalars/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "a": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "b": {
+                  "enum": [
+                    "a",
+                    null
+                  ]
+                },
+                "c": {
+                  "const": null
+                },
+                "d": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "a": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "b": {
+                  "enum": [
+                    "a",
+                    null
+                  ]
+                },
+                "c": {
+                  "const": null
+                },
+                "d": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "a",
+                "b",
+                "c",
+                "d"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/nullable-scalars/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "a": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "b": {
+                  "enum": [
+                    "a",
+                    null
+                  ]
+                },
+                "c": {
+                  "const": null
+                },
+                "d": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "a": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "b": {
+                  "enum": [
+                    "a",
+                    null
+                  ]
+                },
+                "c": {
+                  "const": null
+                },
+                "d": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "a",
+                "b",
+                "c",
+                "d"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/empty-object/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "required": [],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/empty-object/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "required": [],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/scalar-union-and-constraints/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "anyOf": [
+                    {
+                      "const": "a"
+                    },
+                    {
+                      "const": "b"
+                    }
+                  ]
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10
+                }
+              },
+              "required": [
+                "tag"
+              ],
+              "additionalProperties": false
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "anyOf": [
+                    {
+                      "const": "a"
+                    },
+                    {
+                      "const": "b"
+                    }
+                  ]
+                },
+                "count": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "tag",
+                "count"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/scalar-union-and-constraints/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "anyOf": [
+                    {
+                      "const": "a"
+                    },
+                    {
+                      "const": "b"
+                    }
+                  ]
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10
+                }
+              },
+              "required": [
+                "tag"
+              ],
+              "additionalProperties": false
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "anyOf": [
+                    {
+                      "const": "a"
+                    },
+                    {
+                      "const": "b"
+                    }
+                  ]
+                },
+                "count": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "tag",
+                "count"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unknown-required/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "missing"
+              ]
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "missing"
+              ]
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unknown-required/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "missing"
+              ]
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but required contains an unknown property."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/non-array-required/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": "x"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": "x"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/non-array-required/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": "x"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but object required must be a string array."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/non-string-required/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                1
+              ]
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                1
+              ]
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/non-string-required/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                1
+              ]
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but object required must be a string array."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/non-object-properties/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": []
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": []
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/non-object-properties/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": []
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but object properties must be a schema map."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/properties-without-object-type/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/properties-without-object-type/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but properties require type object."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/additional-properties-true/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": true
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": true
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/additional-properties-true/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": true
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but schema-valued or true additionalProperties is unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/additional-properties-schema/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/additional-properties-schema/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but schema-valued or true additionalProperties is unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/tuple-items/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "list": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "list": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/tuple-items/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "list": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but tuple schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/boolean-schema-child/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": false
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": false
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/boolean-schema-child/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": false
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but boolean schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/empty-anyof/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": []
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": []
+                }
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/empty-anyof/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": []
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but anyOf must contain at least one schema."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/non-array-anyof/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": {}
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": {}
+                }
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/non-array-anyof/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": {}
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but anyOf must contain at least one schema."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/structured-anyof-array/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/structured-anyof-array/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but object and array unions are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/structured-anyof-object/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/structured-anyof-object/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but object and array unions are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/non-object-root/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "string"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "string"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/non-object-root/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "string"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but root schema must have type object."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-$ref/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "$ref": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "$ref": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-$ref/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "$ref": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but $ref schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-$defs/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "$defs": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "$defs": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-$defs/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "$defs": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but $defs schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-definitions/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "definitions": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "definitions": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-definitions/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "definitions": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but definitions schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-allOf/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "allOf": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "allOf": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-allOf/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "allOf": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but allOf schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-oneOf/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "oneOf": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "oneOf": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-oneOf/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "oneOf": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but oneOf schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-patternProperties/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "patternProperties": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "patternProperties": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-patternProperties/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "patternProperties": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but patternProperties schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-dependentSchemas/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "dependentSchemas": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "dependentSchemas": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-dependentSchemas/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "dependentSchemas": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but dependentSchemas schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-dependencies/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "dependencies": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "dependencies": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-dependencies/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "dependencies": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but dependencies schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-unevaluatedProperties/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "unevaluatedProperties": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "unevaluatedProperties": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-unevaluatedProperties/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "unevaluatedProperties": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but unevaluatedProperties schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-propertyNames/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "propertyNames": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "propertyNames": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-propertyNames/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "propertyNames": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but propertyNames schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-contains/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "contains": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "contains": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-contains/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "contains": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but contains schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-prefixItems/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "prefixItems": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "prefixItems": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-prefixItems/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "prefixItems": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but prefixItems schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-not/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "not": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "not": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-not/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "not": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but not schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-if/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "if": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "if": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-if/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "if": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but if schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-then/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "then": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "then": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-then/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "then": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but then schemas are unsupported."
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-else/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "else": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "else": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "boundary/unsupported-else/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "else": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but else schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/nested-optional-object-array/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "nested": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "list": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "n": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "nested": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "x"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "list": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "n": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "n"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "nested",
+                "list"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/nested-optional-object-array/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "nested": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "list": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "n": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "nested": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "x"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "list": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "n": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "n"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "nested",
+                "list"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/nullable-scalars/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "a": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "b": {
+                  "enum": [
+                    "a",
+                    null
+                  ]
+                },
+                "c": {
+                  "const": null
+                },
+                "d": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "a": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "b": {
+                  "enum": [
+                    "a",
+                    null
+                  ]
+                },
+                "c": {
+                  "const": null
+                },
+                "d": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "a",
+                "b",
+                "c",
+                "d"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/nullable-scalars/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "a": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "b": {
+                  "enum": [
+                    "a",
+                    null
+                  ]
+                },
+                "c": {
+                  "const": null
+                },
+                "d": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "a": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "b": {
+                  "enum": [
+                    "a",
+                    null
+                  ]
+                },
+                "c": {
+                  "const": null
+                },
+                "d": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "a",
+                "b",
+                "c",
+                "d"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/empty-object/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "required": [],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/empty-object/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "required": [],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/scalar-union-and-constraints/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "anyOf": [
+                    {
+                      "const": "a"
+                    },
+                    {
+                      "const": "b"
+                    }
+                  ]
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10
+                }
+              },
+              "required": [
+                "tag"
+              ],
+              "additionalProperties": false
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "anyOf": [
+                    {
+                      "const": "a"
+                    },
+                    {
+                      "const": "b"
+                    }
+                  ]
+                },
+                "count": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "tag",
+                "count"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/scalar-union-and-constraints/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "anyOf": [
+                    {
+                      "const": "a"
+                    },
+                    {
+                      "const": "b"
+                    }
+                  ]
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10
+                }
+              },
+              "required": [
+                "tag"
+              ],
+              "additionalProperties": false
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "anyOf": [
+                    {
+                      "const": "a"
+                    },
+                    {
+                      "const": "b"
+                    }
+                  ]
+                },
+                "count": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "tag",
+                "count"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unknown-required/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "missing"
+              ]
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "missing"
+              ]
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unknown-required/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "missing"
+              ]
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but required contains an unknown property."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/non-array-required/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": "x"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": "x"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/non-array-required/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": "x"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but object required must be a string array."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/non-string-required/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                1
+              ]
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                1
+              ]
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/non-string-required/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                1
+              ]
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but object required must be a string array."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/non-object-properties/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": []
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": []
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/non-object-properties/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": []
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but object properties must be a schema map."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/properties-without-object-type/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/properties-without-object-type/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but properties require type object."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/additional-properties-true/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": true
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": true
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/additional-properties-true/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": true
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but schema-valued or true additionalProperties is unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/additional-properties-schema/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/additional-properties-schema/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but schema-valued or true additionalProperties is unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/tuple-items/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "list": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "list": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/tuple-items/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "list": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but tuple schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/boolean-schema-child/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": false
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": false
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/boolean-schema-child/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": false
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but boolean schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/empty-anyof/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": []
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": []
+                }
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/empty-anyof/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": []
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but anyOf must contain at least one schema."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/non-array-anyof/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": {}
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": {}
+                }
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/non-array-anyof/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": {}
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but anyOf must contain at least one schema."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/structured-anyof-array/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/structured-anyof-array/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but object and array unions are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/structured-anyof-object/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/structured-anyof-object/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but object and array unions are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/non-object-root/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "string"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "string"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/non-object-root/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "string"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but root schema must have type object."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-$ref/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "$ref": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "$ref": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-$ref/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "$ref": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but $ref schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-$defs/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "$defs": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "$defs": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-$defs/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "$defs": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but $defs schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-definitions/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "definitions": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "definitions": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-definitions/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "definitions": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but definitions schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-allOf/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "allOf": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "allOf": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-allOf/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "allOf": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but allOf schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-oneOf/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "oneOf": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "oneOf": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-oneOf/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "oneOf": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but oneOf schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-patternProperties/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "patternProperties": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "patternProperties": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-patternProperties/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "patternProperties": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but patternProperties schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-dependentSchemas/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "dependentSchemas": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "dependentSchemas": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-dependentSchemas/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "dependentSchemas": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but dependentSchemas schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-dependencies/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "dependencies": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "dependencies": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-dependencies/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "dependencies": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but dependencies schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-unevaluatedProperties/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "unevaluatedProperties": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "unevaluatedProperties": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-unevaluatedProperties/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "unevaluatedProperties": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but unevaluatedProperties schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-propertyNames/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "propertyNames": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "propertyNames": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-propertyNames/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "propertyNames": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but propertyNames schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-contains/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "contains": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "contains": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-contains/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "contains": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but contains schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-prefixItems/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "prefixItems": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "prefixItems": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-prefixItems/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "prefixItems": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but prefixItems schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-not/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "not": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "not": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-not/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "not": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but not schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-if/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "if": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "if": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-if/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "if": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but if schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-then/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "then": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "then": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-then/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "then": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but then schemas are unsupported."
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-else/prefer",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "else": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "prefer"
+            }
+          }
+        ]
+      },
+      "fields": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "else": "owned-runtime-control"
+            },
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "boundary/unsupported-else/require",
+      "options": {
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "else": "owned-runtime-control"
+            },
+            "constrainedSampling": {
+              "type": "json_schema",
+              "strict": "require"
+            }
+          }
+        ]
+      },
+      "refusal": true,
+      "sdkError": "Tool \"echo\" requires JSON-schema constrained sampling, but else schemas are unsupported."
+    }
+  ],
+  "limits": "Executed raw original Responses JSON-schema/choice construction projection only; supplied per-call SDK fetch and owned SSE, network none. Activation constructs actual TypeBox tools but is not a separate TypeScript TSchema caller certificate; schema boundaries are runtime JSON-schema probes on two gpt-5 projections. Default tool_choice omission is distinct from explicit auto; explicit none/required/named choice, strict prefer/require/false, mixed and no-tools choice controls are separately labelled. Synthetic required/named/no-tools text success does not certify fulfilment or schema/choice/service acceptance. No grammar/namespace/additional/tool-search, opaque/signed/cached replay, full lifecycle/context/default/simple/host/auth/account/cryptographic certificate or numeric change."
+}

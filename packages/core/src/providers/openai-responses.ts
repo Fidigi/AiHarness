@@ -1,4 +1,5 @@
-import type { ChatOptions, ChatResponse } from './index.js';
+import type { ChatOptions, ChatResponse, ResponsesChatOptions } from './index.js';
+import { makeStrictToolSchema, UnsupportedStrictToolSchema } from './strict-tool-schema.js';
 import { OPENAI_RESPONSE_MODELS, type OpenAiResponseProfile } from './openai-responses-metadata.js';
 import { PUBLISHED_THINKING_LEVELS, clampPublishedThinkingLevel } from './model-metadata.js';
 import type { Message } from '../types/index.js';
@@ -75,6 +76,30 @@ export function applyNativeResponsesToolHistory(body: Record<string, unknown>, m
   }
 }
 
+/** Called only after private native profile admission; generic/derived/unknown R policy stays legacy. */
+function applyNativeResponsesToolPolicy(body: Record<string, unknown>, options?: ResponsesChatOptions): void {
+  const invalid = (): never => { throw new Error('Invalid Responses tool policy.'); };
+  const choice: unknown = options?.toolChoice;
+  if (choice !== undefined && !((typeof choice === 'string' && ['auto', 'none', 'required'].includes(choice))
+    || (record(choice) && choice.type === 'function' && typeof choice.name === 'string'))) invalid();
+  if (Array.isArray(body.tools)) body.tools = body.tools.map((tool, index) => {
+    if (!record(tool)) return invalid();
+    const sampling = options?.tools?.[index]?.constrainedSampling;
+    let parameters = tool.parameters, strict = false;
+    if (sampling !== undefined && sampling !== false) {
+      if (!record(sampling) || sampling.type !== 'json_schema' || !['prefer', 'require'].includes(sampling.strict)) return invalid();
+      try { parameters = makeStrictToolSchema(parameters as Record<string, unknown>); strict = true; }
+      catch (error) {
+        if (!(error instanceof UnsupportedStrictToolSchema)) return invalid();
+        if (sampling.strict === 'require') throw new Error('Responses tool requires unsupported constrained sampling.');
+      }
+    }
+    return { ...tool, parameters, strict };
+  });
+  if (choice === undefined) delete body.tool_choice;
+  else body.tool_choice = record(choice) ? { type: 'function', name: choice.name } : choice;
+}
+
 /** Shared R protocol, with private profile authority supplied by the owning adapter. */
 export function prepareNativeResponses(body: Record<string, unknown>, options: ChatOptions | undefined,
   profile: NativeResponsesProfile, provider: 'OpenAI' | 'Azure'): void {
@@ -103,7 +128,7 @@ export function prepareNativeResponses(body: Record<string, unknown>, options: C
     }
     if (typeof body.instructions === 'string') { body.input.unshift({ role: systemRole, content: body.instructions }); delete body.instructions; }
   }
-  if (Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool)) tool.strict = false;
+  applyNativeResponsesToolPolicy(body, options);
   if (options?.maxTokens !== undefined) {
     if (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 1 || options.maxTokens > profile.maxOutputTokens) throw new Error(`Invalid ${provider} output limit.`);
     body.max_output_tokens = Math.max(16, options.maxTokens);

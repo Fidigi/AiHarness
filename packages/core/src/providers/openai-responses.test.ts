@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { OpenAiMixedProvider, OpenAiResponsesProvider, AzureProvider, AzureResponsesProvider, type AiProvider, type ChatOptions, type ChatResponse } from './index.js';
+import { OpenAiMixedProvider, OpenAiResponsesProvider, AzureProvider, AzureResponsesProvider, type AiProvider, type ChatOptions, type ChatResponse, type ResponsesChatOptions } from './index.js';
 import type { Message, ProviderConfig } from '../types/index.js';
 
 type Scope = 'openai' | 'azure';
@@ -10,6 +10,10 @@ const reference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/re
   rows: Array<{ scope: Scope; model: string; api: string; case: string; responseItems: Array<Record<string, unknown>>;
     calls: NonNullable<ChatResponse['toolCalls']>; messages: Array<Omit<Message, 'timestamp'>>; tools: NonNullable<ChatOptions['tools']>; items: unknown[] }>;
 };
+type PolicyVector = { scope: Scope; model: string; api: string; case: string; options: ResponsesChatOptions; refusal?: true; fields?: Record<string, unknown> };
+type PolicyReference = { pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; cases: number; requests: number; refusals: number; rows: PolicyVector[] };
+const policy = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/responses-tool-policy-reference.json', import.meta.url), 'utf8')) as PolicyReference;
+const boundaries = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/responses-tool-schema-boundaries-reference.json', import.meta.url), 'utf8')) as PolicyReference;
 const user: Message[] = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
 afterEach(() => vi.restoreAllMocks());
 function reply(items?: Array<Record<string, unknown>>) {
@@ -52,6 +56,14 @@ describe('original OpenAI/Azure Responses unsigned call/item IDs and paired tool
       expect(reference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
       expect(reference.captureSha256).toBe('bd2ecd7d1f31612c828ce3a486352f4e501fa46a42e52a24012ab4498412e4bd');
       expect(reference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
+      for (const fixture of [policy, boundaries]) {
+        expect(fixture.pinnedCommit).toBe(reference.pinnedCommit); expect(fixture.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
+      }
+      expect(policy.captureSha256).toBe('c40d852cc39e1cf0e82cf32a7a2ebd8debd2d4a63b54ff73f43a337a98b4bb52');
+      expect(boundaries.captureSha256).toBe('b86ff4a861db39d97aed796e77c7305bdfdb23ccbf74d3b54b56a32c2d9de566');
+      expect([policy.modelProjections, policy.cases, policy.requests, policy.refusals, policy.rows.length]).toEqual([88, 1232, 1144, 88, 1232]);
+      expect([boundaries.modelProjections, boundaries.cases, boundaries.requests, boundaries.refusals, boundaries.rows.length]).toEqual([2, 136, 76, 60, 136]);
+      expect([...new Set(policy.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(models);
       const identities = pin.rows.filter((row: string[]) => row[0] === scope && row[3] === 'chat'
         && row[2] === (scope === 'openai' ? 'openai-responses' : 'azure-openai-responses')).map((row: string[]) => row[1]);
       expect([...models].sort()).toEqual(identities.sort());
@@ -99,6 +111,66 @@ describe('original OpenAI/Azure Responses unsigned call/item IDs and paired tool
       }
       const f = fixture(scope, scope === 'azure' ? 'gpt-5-unreviewed' : 'gpt-4o'); f.items(vector.responseItems);
       for (const stream of [false, true]) expect((await f.call(stream, user, { model: 'gpt-5', maxTokens: 64 })).toolCalls).toEqual(vector.calls);
+    });
+  }
+});
+
+const toolFields = (body: Record<string, unknown>) => Object.fromEntries(['tools', 'tool_choice'].filter(key => body[key] !== undefined).map(key => [key, body[key]]));
+describe('original Responses scoped JSON-schema and tool-choice construction', () => {
+  for (const scope of ['openai', 'azure'] as const) {
+    const models = [...new Set(policy.rows.filter(row => row.scope === scope).map(row => row.model))];
+    const compare = async (f: ReturnType<typeof fixture>, vector: PolicyVector, stream: boolean) => {
+      const options: ResponsesChatOptions = { ...structuredClone(vector.options), model: vector.model, maxTokens: 64, systemPrompt: 'owned guard' };
+      const before = structuredClone(options), requests = f.fetch.mock.calls.length;
+      if (vector.refusal) {
+        await expect(f.call(stream, user, options)).rejects.toThrow('Responses tool requires unsupported constrained sampling.');
+        expect(f.fetch.mock.calls).toHaveLength(requests);
+      } else {
+        const response = await f.call(stream, user, options);
+        expect(response).toMatchObject({ content: 'ok', model: vector.model, api: vector.api });
+        expect(f.fetch.mock.calls).toHaveLength(requests + 1);
+        const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
+        expect(toolFields(body)).toEqual(vector.fields);
+        expect(body.model).toBe(scope === 'azure' ? 'owned-deployment' : vector.model);
+      }
+      expect(options).toEqual(before);
+    };
+    for (const model of models) it(`${scope}/${model}: binds executed strict/default/choice projections on both facades`, async () => {
+      const rows = policy.rows.filter(row => row.scope === scope && row.model === model), f = fixture(scope, model);
+      expect(rows.map(row => row.case)).toEqual(['default', 'false', 'strict-prefer', 'strict-require', 'auto', 'none', 'required', 'named', 'strict-prefer-none', 'strict-require-required', 'mixed', 'no-tools-required', 'structured-prefer', 'structured-require']);
+      for (const vector of rows) for (const stream of [false, true]) await compare(f, vector, stream);
+    });
+    it(`${scope}: binds runtime strict schema boundaries independently of the TypeBox activation cases`, async () => {
+      const f = fixture(scope, 'gpt-5'), rows = boundaries.rows.filter(row => row.scope === scope);
+      expect(rows).toHaveLength(68);
+      for (const vector of rows) for (const stream of [false, true]) await compare(f, vector, stream);
+    });
+    it(`${scope}: rejects malformed defined scoped controls before transport`, async () => {
+      const tool = policy.rows.find(row => row.scope === scope && row.case === 'default')!.options.tools![0]!, f = fixture(scope, 'gpt-5');
+      const controls = [{ toolChoice: 'any' }, { toolChoice: { type: 'function', name: 1 } },
+        { tools: [{ ...tool, constrainedSampling: { type: 'json_schema', strict: 'forced' } }] },
+        { tools: [{ ...tool, constrainedSampling: { type: 'grammar' } }] }];
+      for (const control of controls) for (const stream of [false, true]) {
+        const options = structuredClone(control) as unknown as ResponsesChatOptions, before = structuredClone(options);
+        await expect(f.call(stream, user, options)).rejects.toThrow('Invalid Responses tool policy.');
+        expect(f.fetch).not.toHaveBeenCalled(); expect(options).toEqual(before);
+      }
+    });
+    it(`${scope}: keeps legacy prefer schemas off-profile despite public API labels and admits reviewed per-call policy privately`, async () => {
+      const vector = policy.rows.find(row => row.scope === scope && row.model === 'gpt-5' && row.case === 'strict-prefer')!;
+      const controls = scope === 'openai' ? [['gpt-5', 'generic'], ['gpt-5-unreviewed', 'generic']] as const
+        : [['gpt-5', 'derived-azure'], ['gpt-5-unreviewed', 'unknown-azure']] as const;
+      for (const [model, legacy] of controls) {
+        const f = fixture(scope, model, legacy); f.provider.getModelApi = () => vector.api;
+        for (const stream of [false, true]) {
+          await f.call(stream, user, structuredClone(vector.options));
+          expect(toolFields(JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string))).toEqual({
+            tools: vector.options.tools!.map(tool => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.parameters })), tool_choice: 'auto',
+          });
+        }
+      }
+      const f = fixture(scope, scope === 'azure' ? 'gpt-5-unreviewed' : 'gpt-4o');
+      for (const stream of [false, true]) await compare(f, vector, stream);
     });
   }
 });

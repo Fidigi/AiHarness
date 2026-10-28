@@ -526,6 +526,12 @@ export interface ChatOptions {
   sessionId?: string;
 }
 
+/** JSON-schema/choice controls for reviewed original OpenAI/Azure R profiles, not generic or host tools. */
+export interface ResponsesChatOptions extends ChatOptions {
+  tools?: Array<ChatToolDefinition & { constrainedSampling?: false | { type: 'json_schema'; strict: 'prefer' | 'require' } }>;
+  toolChoice?: 'auto' | 'none' | 'required' | { type: 'function'; name: string };
+}
+
 /** JSON-schema tool controls for the reviewed Google/Vertex adapters, not a cross-provider or host-tool promise. */
 export interface GoogleChatOptions extends ChatOptions {
   tools?: Array<ChatToolDefinition & { constrainedSampling?: false | { type: 'json_schema'; strict: 'prefer' | 'require' } }>;
@@ -3394,9 +3400,11 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
 
   override validateConfig(): boolean { return Boolean(this.config.apiKey) && super.validateConfig(); }
 
+  override chat(messages: Message[], options?: ResponsesChatOptions): Promise<ChatResponse> { return super.chat(messages, options); }
+
   override async streamChat(
     messages: Message[], onChunk: StreamChunkCallback,
-    onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions,
+    onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ResponsesChatOptions,
   ): Promise<void> {
     const model = options?.model ?? this.getConfiguredModel() ?? 'gpt-4o';
     const native = this.ownsNativeProfiles && azureProfileApi(model) === 'azure-openai-responses';
@@ -3697,7 +3705,8 @@ class ReviewedOpenAiResponsesProvider extends OpenAiResponsesProvider {
     const aborted = () => { if (options?.signal?.aborted) throw new Error('OpenAI request aborted.'); };
     const report = (error: Error) => {
       const fixed = ['OpenAI API key is required.', 'OpenAI response model is not supported.', 'Invalid OpenAI thinking level.',
-        'OpenAI response model does not support images.', 'Invalid OpenAI output limit.'];
+        'OpenAI response model does not support images.', 'Invalid OpenAI output limit.',
+        'Invalid Responses tool policy.', 'Responses tool requires unsupported constrained sampling.'];
       const safe = options?.signal?.aborted ? new Error('OpenAI request aborted.')
         : error instanceof ProviderContextOverflowError ? new ProviderContextOverflowError()
           : new Error(fixed.includes(error.message) ? error.message : 'OpenAI response request failed.');
@@ -3734,11 +3743,11 @@ export class OpenAiMixedProvider extends AiProvider {
   }
   private classifier(): OpenAiDecisionsProvider { return new OpenAiDecisionsProvider({ ...this.config, model: undefined, baseUrl: this.baseUrl }); }
   override getSpecializedModels(): SpecializedModel[] { return [...this.conversation().getSpecializedModels(), ...this.classifier().getSpecializedModels()]; }
-  async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(messages: Message[], options?: ResponsesChatOptions): Promise<ChatResponse> {
     const child = this.conversation(options?.model ?? this.getConfiguredModel(), options); return child.chat(messages, options);
   }
   async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
-    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    onError?: (error: Error) => void, options?: ResponsesChatOptions): Promise<void> {
     let child: ReviewedOpenAiResponsesProvider;
     try { child = this.conversation(options?.model ?? this.getConfiguredModel(), options); }
     catch (error) { if (onError) { onError(error as Error); return; } throw error; }
