@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { BedrockProvider, bedrockCredentialConfig, type ChatResponse } from './index.js';
 import { closeProviderNetworkDispatchers } from './provider-network.js';
 import { bedrockFrame as frame, bedrockText } from '../../../../tests/fixtures/bedrock-event-stream.js';
@@ -229,6 +230,11 @@ const rawOutputReference = JSON.parse(readFileSync(new URL('../../../../tests/fi
   pinnedCommit: string; constructionCaptureSha256: string; successfulUsageCaptureSha256: string;
   rows: Array<{ id: string; maxTokens: number | null }>;
 };
+const outputBoundaryBytes = readFileSync(new URL('../../../../tests/fixtures/bedrock-output-boundaries-reference.json', import.meta.url));
+const outputBoundaryReference = JSON.parse(outputBoundaryBytes.toString()) as {
+  pinnedCommit: string; catalogueSha256: string; captureSha256: string; modelProjections: number; vectors: number; freshSdkRequests: number;
+  rows: Array<{ model: string; api: string; case: string; options: { maxTokens?: number; temperature?: number }; expectedInferenceConfig: { maxTokens?: number; temperature?: number } }>;
+};
 const known = reference.models[0];
 function observedResponse(value: unknown, binary: boolean): Response {
   return binary ? response(bedrockText('ok', 'end_turn', value)) : new Response(JSON.stringify({
@@ -242,6 +248,11 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
     expect(reference.catalogueSha256).toBe('df227d426b678e44cd82deae1cf433855d6b27f36fedcff3ef4fb812fe882868');
     expect(reference.captureSha256).toBe('6b27c0226ae372bde56def095c5ee06873385ff3ab52909add2f3db3f026b2bd');
     expect(reference.models).toHaveLength(193); expect(reference.cases).toHaveLength(666);
+    expect(createHash('sha256').update(outputBoundaryBytes).digest('hex')).toBe('716ec438933f21d1579054d122f95c089985553fbb17c02dcc9adabff6c8327c');
+    expect(outputBoundaryReference.pinnedCommit).toBe(reference.pinnedCommit); expect(outputBoundaryReference.catalogueSha256).toBe(reference.catalogueSha256);
+    expect(outputBoundaryReference.captureSha256).toBe('23e552940581dfd233e7c617f337481803f34f091a71a23dfd5ef79808dd4e2a');
+    expect(outputBoundaryReference.modelProjections).toBe(193); expect(outputBoundaryReference.vectors).toBe(1351); expect(outputBoundaryReference.freshSdkRequests).toBe(1351);
+    expect(outputBoundaryReference.rows).toHaveLength(1351); expect([...new Set(outputBoundaryReference.rows.map(row => row.model))]).toEqual(reference.models.map(model => model.id));
     expect(rawOutputReference.pinnedCommit).toBe(reference.pinnedCommit);
     expect(rawOutputReference.constructionCaptureSha256).toBe('2d160e9fa168b2eb2165c84a75e65cc09f0dda89acae34198266d690142aaca5');
     expect(rawOutputReference.successfulUsageCaptureSha256).toBe(reference.captureSha256);
@@ -261,7 +272,7 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  for (const model of reference.models) it(`${model.id}: owns JSON/binary identity and pinned base/tier/1h/zero accounting`, async () => {
+  for (const model of reference.models) it(`${model.id}: owns JSON/binary identity, pinned accounting and raw output/scalar boundaries`, async () => {
     const provider = create({ apiKey: 'disposable-bedrock-reference', model: model.id });
     for (const vector of reference.cases.filter(row => row.model === model.id)) for (const binary of [false, true]) {
       const fetch = vi.fn(async (url: string | URL, _init?: RequestInit) => {
@@ -280,6 +291,19 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       const config = JSON.parse(fetch.mock.calls[0][1]!.body as string).inferenceConfig;
       expect(Object.hasOwn(config, 'maxTokens')).toBe(expected.maxTokens !== null);
       expect(config.maxTokens).toBe(expected.maxTokens ?? undefined);
+    }
+    const vectors = outputBoundaryReference.rows.filter(row => row.model === model.id);
+    expect(vectors.map(row => row.case)).toEqual(['raw-omitted', 'raw-one', 'raw-fifteen', 'raw-sixteen', 'raw-maximum', 'raw-temperature-zero', 'raw-temperature-one']);
+    for (const vector of vectors) for (const binary of [false, true]) {
+      const fetch = vi.fn(async (_url: string | URL, _init?: RequestInit) => observedResponse({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }, binary));
+      vi.stubGlobal('fetch', fetch);
+      const input = structuredClone(messages), options = { ...vector.options, model: model.id }, before = structuredClone({ input, options });
+      let result: ChatResponse | undefined;
+      if (binary) await provider.streamChat(input, () => {}, value => { result = value; }, undefined, options);
+      else result = await provider.chat(input, options);
+      expect(result).toMatchObject({ content: 'ok', model: model.id, api: vector.api }); expect(fetch).toHaveBeenCalledOnce();
+      expect(JSON.parse(fetch.mock.calls[0][1]!.body as string).inferenceConfig, vector.case).toEqual(vector.expectedInferenceConfig);
+      expect({ input, options }).toEqual(before);
     }
   });
 
