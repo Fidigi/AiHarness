@@ -13,6 +13,13 @@ import { getSupportedThinkingLevels, PUBLISHED_THINKING_LEVELS, type PublishedTh
 
 const bytes = readFileSync(new URL('../../../../tests/fixtures/anthropic-reference.json', import.meta.url));
 const pin = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/provider-reference.json', import.meta.url), 'utf8'));
+const toolBytes = readFileSync(new URL('../../../../tests/fixtures/anthropic-tool-schema-reference.json', import.meta.url));
+const toolFixture = JSON.parse(toolBytes.toString()) as {
+  catalogueSha256: string; requests: number; callerDeclarations: number; capturedDeferredDeclarations: number;
+  rows: Array<{ model: string; case: string; tools: NonNullable<ChatOptions['tools']>;
+    callerDeclarations: Array<Record<string, unknown>> | null; capturedRequestTools: Array<Record<string, unknown>> | null;
+    capturedDeferredDeclarations: Array<Record<string, unknown>> }>;
+};
 const profiles = Object.values(JSON.parse(bytes.toString())['anthropic-messages']) as Array<{
   id: string; name: string; contextWindow: number; maxTokens: number;
   cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -163,7 +170,7 @@ describe('owned Anthropic response authority', () => {
     expect(error.mock.calls[0]?.[0].message).toBe('Anthropic request aborted.');
     expect(seen).toEqual(boundary === 'text_delta' ? ['left'] : ['left', '!', 'right?']);
   });
-  it('does not grant native response authority to compatible, unknown or per-call unknown models', async () => {
+  it('does not grant native response/tool-declaration authority to compatible, unknown or per-call unknown models', async () => {
     class Compatible extends AnthropicProvider {}
     for (const [model, Provider, override] of [
       [profiles[0]!.id, Compatible, undefined], ['unknown-model', AnthropicProvider, undefined],
@@ -172,8 +179,20 @@ describe('owned Anthropic response authority', () => {
       const f = fixture(model, 'legacy-response', Provider);
       f.reply({ model: 'legacy-response', content: [{ type: 'text', text: 'first' }, { type: 'text', text: 'second' }] },
         [{ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'legacy' } }]);
-      expect((await f.call(false, 'none', { model: override })).content).toBe('first');
-      expect((await f.call(true, 'none', { model: override })).content).toBe('legacy');
+      const tools = toolFixture.rows.find(row => row.case === 'required-object')!.tools;
+      expect((await f.call(false, 'none', { model: override, tools })).content).toBe('first');
+      expect((await f.call(true, 'none', { model: override, tools })).content).toBe('legacy');
+      for (const [, init] of f.fetch.mock.calls.slice(-2)) expect(JSON.parse(String(init?.body)).tools).toEqual(tools.map(tool => ({
+        name: tool.name, description: tool.description, input_schema: tool.parameters,
+      })));
+    }
+    const f = fixture('unknown-model'), vector = toolFixture.rows.find(row => row.model === profiles[0]!.id && row.case === 'required-object')!;
+    f.reply({ content: [{ type: 'text', text: 'reviewed' }], stop_reason: 'end_turn' }, responseEvents());
+    for (const stream of [false, true]) {
+      const options = { model: vector.model, tools: vector.tools }, before = structuredClone(options);
+      expect((await f.call(stream, 'none', options)).model).toBe(vector.model);
+      expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).tools).toEqual(vector.callerDeclarations);
+      expect(options).toEqual(before);
     }
   });
 });
@@ -183,6 +202,14 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(pin.files.anthropic.catalogue);
     expect(profiles).toHaveLength(17);
     expect(adaptiveProfiles.map(profile => profile.id).sort()).toEqual(Object.keys(efforts).sort());
+    expect(createHash('sha256').update(toolBytes).digest('hex')).toBe('b0fae1bf6ca652a5d4ea6ffc73fbfff4415620a559dae234265923cf63773dcc');
+    expect(toolFixture.catalogueSha256).toBe(createHash('sha256').update(bytes).digest('hex'));
+    expect(toolFixture.requests).toBe(68); expect(toolFixture.callerDeclarations).toBe(51); expect(toolFixture.capturedDeferredDeclarations).toBe(21);
+    expect(toolFixture.rows.map(row => [row.model, row.case])).toEqual(profiles.flatMap(profile =>
+      ['no-tools', 'required-object', 'optional-union', 'optional-only'].map(name => [profile.id, name])));
+    for (const vector of toolFixture.rows) expect(vector.capturedRequestTools ?? []).toEqual([
+      ...(vector.callerDeclarations ?? []), ...vector.capturedDeferredDeclarations,
+    ]); // Deferred SDK declarations stay visible but outside this bounded caller-declaration projection.
   });
   for (const profile of profiles) it(profile.id, async () => {
     const f = fixture(profile.id);
@@ -199,6 +226,17 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
         + 4 * profile.cost.cacheRead + 2 * profile.cost.cacheWrite + 2 * profile.cost.input) / 1e6, 12);
     }
     expect(f.fetch).toHaveBeenCalledTimes(4);
+    for (const vector of toolFixture.rows.filter(row => row.model === profile.id)) {
+      const options: ChatOptions = { systemPrompt: 'owned guard', tools: vector.tools }, before = structuredClone({ options, input });
+      for (const stream of [false, true]) {
+        const result = await f.call(stream, 'none', options), body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+        // Compare the whole Core tools array; never filter unexpected Core tools away.
+        expect(body.tools ?? null).toEqual(vector.callerDeclarations); expect(body.tool_choice).toBeUndefined();
+        expect(body.model).toBe(profile.id); expect(result).toMatchObject({ content: 'ok', model: profile.id, api: 'anthropic-messages' });
+      }
+      expect({ options, input }).toEqual(before);
+    }
+    expect(f.fetch).toHaveBeenCalledTimes(12);
   });
   for (const profile of profiles) it(`${profile.id}: enforces the owned output ceiling on SDK and preflight`, async () => {
     const f = fixture(profile.id), policy = captureNativeOutputBudget(f.provider)!;

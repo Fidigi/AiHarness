@@ -1573,10 +1573,11 @@ it('hosts and withdraws owned MCP registrations through installed declarations a
 
 // Provider addition: original installed executable/declaration/PATH probes above
 // remain intact. This case consumes only freshly packed, actually installed Core.
-it('validates installed public provider discovery declarations and keyless based-path runtime', async () => {
+it('validates installed public provider discovery declarations and keyless based-path runtime with original Anthropic caller tools', async () => {
+  await writeFile(path.join(consumer, 'anthropic-tool-schema.json'), await readFile(path.join(checkout, 'tests/fixtures/anthropic-tool-schema-reference.json')));
   await writeFile(path.join(consumer, 'provider-public.ts'), `
     import { OpenAiProvider, AnthropicProvider, AiProvider, copyThinkingBudgets,
-      type ThinkingBudgets, type StartAgentRunRequest, type ScopedConfigurationValues, type ChatResponse } from '@ai-harness/core';
+      type ThinkingBudgets, type StartAgentRunRequest, type ScopedConfigurationValues, type ChatResponse, type ChatOptions, type ChatToolDefinition } from '@ai-harness/core';
     const budgets: ThinkingBudgets = Object.freeze({ low: 2000 });
     const request: StartAgentRunRequest = { sessionId: 'declaration-only', provider: 'mock', cwd: '.', input: 'budget', thinkingBudgets: budgets };
     const scoped: ScopedConfigurationValues = { thinkingBudgets: copyThinkingBudgets(budgets) };
@@ -1593,11 +1594,20 @@ it('validates installed public provider discovery declarations and keyless based
     // @ts-expect-error logical minimal is not a physical managed effort
     const logicalReply: ChatResponse = { content: 'logical', providerThinkingLevel: 'minimal' };
     void legacyReply; void effort; void logicalReply;
+    const tools: ChatToolDefinition[] = [{ name: 'echo', description: 'Echo a value', parameters: {
+      type: 'object', properties: { value: { anyOf: [{ type: 'string' }, { type: 'number' }] }, note: { type: 'string' } }, required: ['value'], additionalProperties: false,
+    } }];
+    async function callerTools(provider: AiProvider): Promise<ChatResponse> {
+      const options: ChatOptions = { tools, maxTokens: 64, cacheRetention: 'none' };
+      const result = await provider.chat([], options); await provider.streamChat([], () => {}, undefined, undefined, options); return result;
+    }
+    void callerTools;
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'provider-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
   await writeFile(path.join(consumer, 'provider-public.mjs'), `
     import assert from 'node:assert/strict';
+    import { readFile } from 'node:fs/promises';
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
     import { OpenAiProvider, AnthropicProvider, MockProvider, copyThinkingBudgets,
@@ -1621,9 +1631,27 @@ it('validates installed public provider discovery declarations and keyless based
     assert.equal((await runtime.wait(run.id)).phase, 'completed'); assert.equal(calls, 1);
     assert.ok(!JSON.stringify(session.messages).includes('thinkingBudgets'));
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
-    const paths = [], bodies = [];
+    const paths = [], bodies = [], toolBodies = [];
+    const toolFixture = JSON.parse(await readFile('anthropic-tool-schema.json', 'utf8'));
+    assert.equal(toolFixture.rows.length, 68); assert.equal(toolFixture.callerDeclarations, 51); assert.equal(toolFixture.capturedDeferredDeclarations, 21);
     const server = createServer(async (req, res) => {
       paths.push(req.url);
+      if (req.url === '/caller-tools/v1/messages') {
+        assert.equal(req.method, 'POST'); assert.equal(req.headers['x-api-key'], 'disposable-caller-tools');
+        assert.equal(req.headers.authorization, undefined); assert.equal(req.headers['anthropic-version'], '2023-06-01');
+        const chunks = []; for await (const chunk of req) chunks.push(chunk); const body = JSON.parse(Buffer.concat(chunks).toString()); toolBodies.push(body);
+        if (body.stream) {
+          const events = [
+            { type: 'message_start', message: { id: 'owned', type: 'message', role: 'assistant', model: 'response-alias', content: [], usage: { input_tokens: 1, output_tokens: 0 } } },
+            { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+            { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'ok' } },
+            { type: 'content_block_stop', index: 0 },
+            { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 2 } }, { type: 'message_stop' },
+          ];
+          res.setHeader('content-type', 'text/event-stream'); res.end(events.map(event => 'data: ' + JSON.stringify(event) + '\\n\\n').join(''));
+        } else { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ model: 'response-alias', content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 2 } })); }
+        return;
+      }
       if (req.url === '/managed/v1/messages') {
         assert.equal(req.method, 'POST'); assert.equal(req.headers['x-api-key'], 'disposable-managed');
         assert.ok(req.headers['anthropic-beta'].includes('mid-conversation-output-config-2026-07-01'));
@@ -1656,11 +1684,28 @@ it('validates installed public provider discovery declarations and keyless based
       }
       assert.equal(bodies.length, 10);
       assert.deepEqual(paths.slice(2), Array(10).fill('/managed/v1/messages'));
+      for (const vector of toolFixture.rows) {
+        const provider = new AnthropicProvider({ type: 'operator-caller-tools', apiKey: 'disposable-caller-tools', model: vector.model, baseUrl: base + '/caller-tools' });
+        const message = { ...input, content: 'probe' }, options = { maxTokens: 64, cacheRetention: 'none', systemPrompt: 'owned guard', tools: vector.tools };
+        const before = structuredClone({ message, options });
+        for (const stream of [false, true]) {
+          let result, failure;
+          if (!stream) result = await provider.chat([message], options);
+          else { await provider.streamChat([message], async () => { await Promise.resolve(); }, value => { result = value; }, error => { failure = error; }, options); if (failure) throw failure; }
+          const body = toolBodies.at(-1);
+          assert.deepEqual(body.tools ?? null, vector.callerDeclarations); assert.equal(body.tool_choice, undefined);
+          assert.equal(body.model, vector.model); assert.equal(body.stream, stream);
+          assert.equal(result.content, 'ok'); assert.equal(result.api, 'anthropic-messages'); assert.equal(result.model, vector.model);
+        }
+        assert.deepEqual({ message, options }, before);
+      }
+      assert.equal(toolBodies.length, 136); assert.equal(paths.length, 148);
+      assert.deepEqual(paths.slice(12), Array(136).fill('/caller-tools/v1/messages'));
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
-    console.log('fresh installed provider declarations/runtime OK');
+    console.log('fresh installed provider declarations/runtime/Anthropic caller tools OK');
   `);
   const runtime = await run(process.execPath, ['provider-public.mjs'], consumer, environment);
-  expect(runtime).toEqual({ code: 0, stdout: 'fresh installed provider declarations/runtime OK\n', stderr: '' });
+  expect(runtime).toEqual({ code: 0, stdout: 'fresh installed provider declarations/runtime/Anthropic caller tools OK\n', stderr: '' });
   // Stronger separate declaration control; the original SDK probe remains intact.
   const sdkTypes = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'consumer.ts'], consumer, environment);
   expect(sdkTypes.stdout).toBe(''); expect(sdkTypes.stderr).toBe('');
@@ -1668,7 +1713,7 @@ it('validates installed public provider discovery declarations and keyless based
   if (evidence) {
     expect(outside(path.resolve(evidence), checkout)).toBe(true);
     for (const name of await readdir(artifactRoot)) if (name.endsWith('.tgz')) await cp(path.join(artifactRoot, name), path.join(evidence, name));
-    for (const name of ['provider-public.ts', 'provider-public.mjs', 'consumer.ts', 'consumer.mjs', 'package.json', 'package-lock.json']) await cp(path.join(consumer, name), path.join(evidence, name));
+    for (const name of ['provider-public.ts', 'provider-public.mjs', 'anthropic-tool-schema.json', 'consumer.ts', 'consumer.mjs', 'package.json', 'package-lock.json']) await cp(path.join(consumer, name), path.join(evidence, name));
     await cp(path.join(consumer, 'node_modules', '@ai-harness', 'core', 'dist'), path.join(evidence, 'installed-core-dist'), { recursive: true });
     await writeFile(path.join(evidence, 'provider-results.json'), JSON.stringify({ checkout, consumer, types, sdkTypes, runtime,
       strictTypeArguments: ['--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node'],

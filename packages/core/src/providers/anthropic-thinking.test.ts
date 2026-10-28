@@ -64,7 +64,7 @@ describe('published Anthropic adaptive request dialect', () => {
         expect(body.output_config).toEqual(effort ? { effort } : undefined);
         expect(body.max_tokens).toBe(64); expect(body.temperature).toBe(effort ? undefined : 0.25);
         expect(body.system).toBe('system probe');
-        expect(body.tools).toEqual([{ name: 'echo', description: 'Probe', input_schema: { type: 'object' } }]);
+        expect(body.tools).toEqual([{ name: 'echo', description: 'Probe', eager_input_streaming: true, input_schema: { type: 'object', properties: {}, required: [] } }]);
       }
     });
   }

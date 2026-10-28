@@ -60,6 +60,13 @@ const numericPolicy = Object.freeze({ maxTokens: 64000, thinkingLevelMap: Object
 }) });
 export function anthropicNumericPolicy(model: string): typeof numericPolicy | undefined { return numericIds.has(model) ? numericPolicy : undefined; }
 export function hasAnthropicProfile(model: string): boolean { return profiles.has(model); }
+/** Caller declarations only; native deferred/inline tool changes remain a separate policy. */
+export function applyAnthropicProfileToolDeclarations(body: Record<string, unknown>): void {
+  if (typeof body.model !== 'string' || !profiles.has(body.model) || !Array.isArray(body.tools)) return;
+  body.tools = body.tools.map(tool => ({ ...tool, eager_input_streaming: true,
+    input_schema: { type: 'object', properties: tool.input_schema.properties ?? {}, required: tool.input_schema.required ?? [] },
+  }));
+}
 export function anthropicPublishedProfiles(): PublishedModelMetadata[] {
   return [...profiles.values()].map(profile => ({ ...profile, capabilities: { ...profile.capabilities }, pricing: { ...profile.pricing },
     thinkingLevelMap: { ...(adaptivePolicies.get(profile.id)?.thinkingLevelMap ?? anthropicNumericPolicy(profile.id)!.thinkingLevelMap) } }));
