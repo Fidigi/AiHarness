@@ -1772,15 +1772,20 @@ it('dispatches native Bedrock binary streams through installed public declaratio
     .toEqual({ code: 0, stdout: 'installed Bedrock ConverseStream OK\n', stderr: '' });
 }, 60_000);
 
-it('dispatches Azure Responses through installed public declarations and runtime', async () => {
+it('dispatches Azure native v1 and explicit Responses through installed public declarations and runtime', async () => {
+  const profiles = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/azure-reference.json'), 'utf8')).profiles;
   await writeFile(path.join(consumer, 'azure-public.ts'), `
-    import { AzureResponsesProvider, ProviderFactory, azureEnvironmentConfig, type ProviderConfig, type AiProvider } from '@ai-harness/core';
+    import { AzureProvider, AzureResponsesProvider, AzureCompletionsProvider, ProviderFactory, azureEnvironmentConfig, type ProviderConfig, type AiProvider } from '@ai-harness/core';
     const config: ProviderConfig = { type: 'azure', azureApi: 'responses', apiKey: 'disposable', baseUrl: 'https://tenant.openai.azure.com', azureDeploymentMap: { logical: 'physical' } };
     const provider: AiProvider = new AzureResponsesProvider(config);
+    const native: AzureProvider = new AzureProvider({ ...config, azureApi: 'native' });
+    const nativeInterface: AiProvider = native;
+    const completions: AiProvider = new AzureCompletionsProvider({ ...config, azureApi: 'completions', model: 'deepseek-v4-pro' });
+    native.getModelApi('deepseek-v4-pro');
     ProviderFactory.create(azureEnvironmentConfig({ AZURE_OPENAI_RESOURCE_NAME: 'tenant' }, 'disposable')!);
-    // @ts-expect-error only the two native Azure protocols are admitted
+    // @ts-expect-error unknown Azure selections are not admitted
     const invalid: ProviderConfig = { type: 'azure', azureApi: 'unknown' };
-    void provider; void invalid;
+    void provider; void nativeInterface; void completions; void invalid;
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'azure-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
@@ -1788,25 +1793,60 @@ it('dispatches Azure Responses through installed public declarations and runtime
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
-    import { AzureResponsesProvider, ProviderFactory, azureEnvironmentConfig, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    import { AzureProvider, AzureResponsesProvider, AzureCompletionsProvider, ProviderFactory, azureEnvironmentConfig, closeProviderNetworkDispatchers } from '@ai-harness/core';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const profiles = ${JSON.stringify(profiles.map((row: { profile: { id: string; api: string; maxTokens: number }; expectedUsage: unknown }) => ({ id: row.profile.id, api: row.profile.api, max: row.profile.maxTokens, usage: row.expectedUsage })))};
     const calls = [];
     const server = createServer(async (request, response) => {
       let text = ''; for await (const chunk of request) text += chunk;
       calls.push({ url: request.url, key: request.headers['api-key'], authorization: request.headers.authorization, body: JSON.parse(text) });
-      response.setHeader('content-type', 'text/event-stream');
-      response.end('data: ' + JSON.stringify({ type: 'response.output_text.delta', delta: 'installed Azure' }) + '\\n\\n' + 'data: ' + JSON.stringify({ type: 'response.completed', response: { id: 'r', model: 'physical', usage: { input_tokens: 4, output_tokens: 1 } } }) + '\\n\\n');
+      const body = calls.at(-1).body, c = request.url.endsWith('/chat/completions');
+      const usage = c ? { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12, prompt_tokens_details: { cached_tokens: 3 } }
+        : body.model === 'physical' ? { input_tokens: 4, output_tokens: 1 }
+        : { input_tokens: 11, output_tokens: 2, total_tokens: 13, input_tokens_details: { cached_tokens: 3, cache_write_tokens: 1 } };
+      if (c && !body.stream) {
+        response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ id: 'c', model: 'physical-alias', usage,
+          choices: [{ message: { content: 'installed Azure', reasoning_content: 'thought' }, finish_reason: 'stop' }] }));
+      } else {
+        response.setHeader('content-type', 'text/event-stream');
+        const events = c ? [{ choices: [{ delta: { content: 'installed Azure', reasoning_content: 'thought' } }] },
+          { usage, choices: [{ delta: {}, finish_reason: 'stop' }] }]
+          : [{ type: 'response.output_text.delta', delta: 'installed Azure' },
+            { type: 'response.completed', response: { id: 'r', model: 'physical-alias', status: 'completed', usage } }];
+        response.end(events.map(event => 'data: ' + JSON.stringify(event) + '\\n\\n').join('') + 'data: [DONE]\\n\\n');
+      }
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     try {
       const provider = ProviderFactory.create(azureEnvironmentConfig({ AZURE_OPENAI_BASE_URL: 'http://127.0.0.1:' + server.address().port,
-        AZURE_OPENAI_MODEL: 'logical', AZURE_OPENAI_DEPLOYMENT_NAME_MAP: 'logical=physical' }, 'disposable-installed-key'));
-      assert.ok(provider instanceof AzureResponsesProvider);
+        AZURE_OPENAI_MODEL: 'logical', AZURE_OPENAI_DEPLOYMENT_NAME_MAP: ['logical=physical', ...profiles.map(row => row.id + '=owned-deployment')].join(',') }, 'disposable-installed-key'));
+      assert.ok(provider instanceof AzureProvider);
+      assert.equal(provider.getPublishedModels().length, 45);
+      const explicit = { type: 'azure', apiKey: 'disposable-installed-key', baseUrl: 'http://127.0.0.1:' + server.address().port + '/openai/v1' };
+      assert.ok(ProviderFactory.create({ ...explicit, azureApi: 'responses' }) instanceof AzureResponsesProvider);
+      assert.ok(ProviderFactory.create({ ...explicit, azureApi: 'completions', model: 'deepseek-v4-pro' }) instanceof AzureCompletionsProvider);
       const result = await provider.chat([{ id: 'u', role: 'user', content: 'hello', timestamp: new Date() }]);
       assert.equal(result.content, 'installed Azure'); assert.equal(result.usage.totalTokens, 5);
       assert.equal(calls.length, 1); assert.equal(calls[0].url, '/openai/v1/responses?api-version=v1');
       assert.equal(calls[0].key, 'disposable-installed-key'); assert.equal(calls[0].authorization, undefined);
       assert.equal(calls[0].body.model, 'physical'); assert.equal(provider.getConfiguredModel(), 'logical');
+      for (const row of profiles) for (const stream of [false, true]) {
+        let result;
+        if (stream) await provider.streamChat([{ id: 'u', role: 'user', content: 'hello', timestamp: new Date() }], () => {}, value => { result = value; },
+          error => { throw error; }, { model: row.id, maxTokens: 16 });
+        else result = await provider.chat([{ id: 'u', role: 'user', content: 'hello', timestamp: new Date() }], { model: row.id, maxTokens: 16 });
+        assert.equal(result.model, row.id); assert.equal(result.api, row.api); assert.equal(result.provider, 'azure');
+        assert.equal(result.usage.promptTokens, row.usage.promptTokens); assert.equal(result.usage.completionTokens, row.usage.completionTokens);
+        assert.equal(result.usage.cacheReadTokens, row.usage.cacheReadTokens); assert.equal(result.usage.cacheWriteTokens, row.usage.cacheWriteTokens);
+        assert.equal(result.usage.totalTokens, row.usage.totalTokens); assert.ok(Math.abs(result.usage.costUsd - row.usage.costUsd) < 1e-12);
+        const call = calls.at(-1), c = row.api === 'openai-completions';
+        assert.equal(call.url, c ? '/openai/v1/chat/completions' : '/openai/v1/responses?api-version=v1');
+        assert.equal(call.key, c ? undefined : 'disposable-installed-key'); assert.equal(call.authorization, c ? 'Bearer disposable-installed-key' : undefined);
+        assert.equal(call.body.model, 'owned-deployment'); assert.equal(call.body[c ? 'max_completion_tokens' : 'max_output_tokens'], 16);
+        await assert.rejects(provider.chat([], { model: row.id, maxTokens: row.max + 1 }), /Invalid Azure output limit/);
+        assert.equal(provider.getConfiguredModel(), 'logical');
+      }
+      assert.equal(calls.length, 91);
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed Azure Responses OK');
   `);

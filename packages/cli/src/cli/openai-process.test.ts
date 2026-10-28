@@ -23,7 +23,7 @@ describe('emitted CLI explicit native OpenAI composition', () => {
         calls.push({ url: request.url, headers: request.headers, body: JSON.parse(text) });
         response.writeHead(200, { 'content-type': 'text/event-stream' });
         response.end([{ type: 'response.output_text.delta', delta: 'native-oa-cli-ok' },
-          { type: 'response.completed', response: { id: 'native-oa-cli-response', model, usage: { input_tokens: 10, output_tokens: 2, input_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } } } },
+          { type: 'response.completed', response: { id: 'native-oa-cli-response', model, usage: { input_tokens: 10, output_tokens: 2, total_tokens: 12, input_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } } } },
         ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
       } catch (error) { fixtureError = error; response.statusCode = 500; response.end('Invalid OpenAI CLI fixture'); }
     });

@@ -14,7 +14,8 @@ const servers: Server[] = [];
 afterEach(async () => { for (const server of servers.splice(0)) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } });
 async function fixture() {
   const calls: Array<{ url?: string; headers: import('node:http').IncomingHttpHeaders; body: Record<string, any> }> = [];
-  const state = { malformed: false, httpFailure: 'none' as 'none' | 'overflow' | 'unrecognized' };
+  const state = { malformed: false, httpFailure: 'none' as 'none' | 'overflow' | 'unrecognized',
+    usage: { input_tokens: 10, output_tokens: 2, total_tokens: 12, input_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } } as unknown };
   const server = createServer(async (incoming, response) => {
     let text = ''; for await (const chunk of incoming) text += chunk;
     const body = JSON.parse(text); calls.push({ url: incoming.url, headers: incoming.headers, body });
@@ -32,7 +33,7 @@ async function fixture() {
       const content = system.includes('Classify the user input') ? JSON.stringify({ label: 'safe' })
         : system.includes('Answer these finite-domain questions') ? JSON.stringify({ answers: { approved: { value: true, probabilities: [{ value: false, probability: 0.2 }, { value: true, probability: 0.8 }] } } }) : 'Ready';
       response.setHeader('content-type', 'text/event-stream');
-      response.end(`data: ${JSON.stringify({ type: 'response.reasoning_summary_text.delta', delta: 'Thought' })}\n\ndata: ${JSON.stringify({ type: 'response.output_text.delta', delta: content })}\n\ndata: ${JSON.stringify({ type: 'response.completed', response: { id: 'response-1', model: body.model, usage: { input_tokens: 10, output_tokens: 2, total_tokens: 12, input_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } } } })}\n\n`);
+      response.end(`data: ${JSON.stringify({ type: 'response.reasoning_summary_text.delta', delta: 'Thought' })}\n\ndata: ${JSON.stringify({ type: 'response.output_text.delta', delta: content })}\n\ndata: ${JSON.stringify({ type: 'response.completed', response: { id: 'response-1', model: body.model, usage: state.usage } })}\n\n`);
     }
   });
   servers.push(server); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -43,18 +44,29 @@ const reasoningReference = JSON.parse(readFileSync(new URL('../../../../tests/fi
   pinnedCommit: string; rows: Array<{ model: string; cases: Array<{ thinking?: providers.ChatOptions['thinking']; fields: { reasoning?: unknown; include?: unknown } }> }>;
 };
 
+const physicalReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/openai-response-physical-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; rows: Array<{ model: string; systemRole: string; observed: unknown; expected: NonNullable<providers.ChatResponse['usage']> }>;
+};
+
 describe('explicit mixed OpenAI Responses/Decisions SDK', () => {
   for (const profile of reasoningReference.rows) it(`${profile.model}: distinguishes omitted reasoning from explicit levels on chat and stream`, async () => {
     expect(reasoningReference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
     expect(reasoningReference.rows).toHaveLength(44); expect(profile.cases).toHaveLength(8);
-    const { calls, baseUrl } = await fixture();
+    const physical = physicalReference.rows.find(row => row.model === profile.model)!;
+    expect(physicalReference.pinnedCommit).toBe(reasoningReference.pinnedCommit); expect(physicalReference.rows).toHaveLength(44);
+    const { calls, baseUrl, state } = await fixture(); state.usage = physical.observed;
     const provider = new providers.OpenAiMixedProvider({ type: 'anthropic', apiKey: 'disposable-openai', baseUrl, model: profile.model, transport: 'sse' });
     for (const example of profile.cases) for (const streaming of [false, true]) {
       let result: providers.ChatResponse | undefined, failure: Error | undefined;
-      if (!streaming) result = await provider.chat([message], { thinking: example.thinking });
-      else await provider.streamChat([message], () => {}, response => { result = response; }, error => { failure = error; }, { thinking: example.thinking });
+      const options = { thinking: example.thinking, systemPrompt: 'guard' };
+      if (!streaming) result = await provider.chat([message], options);
+      else await provider.streamChat([message], () => {}, response => { result = response; }, error => { failure = error; }, options);
       expect(failure).toBeUndefined(); expect(result).toMatchObject({ content: 'Ready', model: profile.model, api: 'openai-responses' });
+      expect(result?.usage).toMatchObject({ promptTokens: physical.expected.promptTokens, completionTokens: physical.expected.completionTokens,
+        cacheReadTokens: physical.expected.cacheReadTokens, cacheWriteTokens: physical.expected.cacheWriteTokens, totalTokens: physical.expected.totalTokens });
+      expect(result?.usage?.costUsd).toBeCloseTo(physical.expected.costUsd!, 12);
       const body = calls.at(-1)!.body;
+      expect(body.input[0]).toEqual({ role: physical.systemRole, content: 'guard' });
       expect(body.model).toBe(profile.model); expect(body.stream).toBe(true);
       expect(body.reasoning).toEqual(example.fields.reasoning); expect(body.include).toEqual(example.fields.include);
       // This increment does not replace the existing raw-transport omitted-output surface with streamSimple's context allocation.
@@ -62,6 +74,22 @@ describe('explicit mixed OpenAI Responses/Decisions SDK', () => {
     }
     expect(calls).toHaveLength(16);
   });
+  it('requires observed native total counters and leaves unattributed totals unpriced', async () => {
+    const { state, baseUrl } = await fixture();
+    const provider = new providers.OpenAiMixedProvider({ type: 'operator-openai', apiKey: 'disposable-openai', baseUrl, model, transport: 'sse' });
+    for (const usage of [{ input_tokens: 11, output_tokens: 2 }, { input_tokens: 11, output_tokens: 2, total_tokens: null },
+      { input_tokens: 11, output_tokens: 2, total_tokens: 12 }, { input_tokens: 11, output_tokens: 2, total_tokens: '13' }]) {
+      state.usage = usage;
+      expect((await provider.chat([message])).usage).toBeUndefined();
+    }
+    state.usage = { input_tokens: 11, output_tokens: 2, total_tokens: 14, input_tokens_details: { cached_tokens: 3, cache_write_tokens: 1 } };
+    const unattributed = (await provider.chat([message])).usage;
+    expect(unattributed).toMatchObject({ promptTokens: 7, completionTokens: 2, cacheReadTokens: 3, cacheWriteTokens: 1, totalTokens: 14 });
+    expect(unattributed?.costUsd).toBeUndefined();
+    state.usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+    expect((await provider.chat([message])).usage).toMatchObject({ promptTokens: 0, completionTokens: 0, totalTokens: 0, costUsd: 0 });
+  });
+
   it('preserves recognized value-free context overflow authority without trusting arbitrary remote failure prose', async () => {
     const { state, baseUrl } = await fixture();
     const provider = new providers.OpenAiMixedProvider({ type: 'operator-openai', apiKey: 'disposable-openai', baseUrl, model, transport: 'sse' });

@@ -115,8 +115,8 @@ export interface ProviderConfig {
   kimiAuthMode?: 'api-key' | 'oauth';
   model?: string;
   baseUrl?: string;
-  /** Explicit Azure protocol; absent preserves legacy endpoints and recognizes /openai/v1. */
-  azureApi?: 'completions' | 'responses';
+  /** Explicit Azure protocol or native per-model v1 dispatch; absence preserves legacy endpoints and recognizes /openai/v1. */
+  azureApi?: 'completions' | 'responses' | 'native';
   azureDeploymentMap?: Readonly<Record<string, string>>;
   /** Shared network settings resolved from agent settings. */
   transport?: 'auto' | 'sse' | 'websocket' | 'websocket-cached';

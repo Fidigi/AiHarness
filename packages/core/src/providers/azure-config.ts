@@ -4,7 +4,7 @@ function invalid(): never { throw new Error('Invalid Azure Responses configurati
 
 /** Native versioned Azure endpoints opt into Responses; unversioned legacy endpoints do not. */
 export function usesAzureResponses(config: ProviderConfig): boolean {
-  if (config.azureApi !== undefined && config.azureApi !== 'responses' && config.azureApi !== 'completions') {
+  if (config.azureApi !== undefined && !['responses', 'completions', 'native'].includes(config.azureApi)) {
     throw new Error('Invalid Azure API selection.');
   }
   if (config.azureApi !== undefined) return config.azureApi === 'responses';
@@ -23,6 +23,15 @@ export function normalizeAzureResponsesBaseUrl(value: unknown): string {
   else path = path.replace(/\/responses$/, '');
   url.pathname = path;
   return url.toString().replace(/\/$/, '');
+}
+
+/** Shared explicit deployment selection, not credential or model discovery. */
+export function azureDeployments(config: ProviderConfig): ReadonlyMap<string, string> {
+  if (config.apiVersion !== undefined) azureIdentifier(config.apiVersion);
+  if (config.deployment !== undefined) azureIdentifier(config.deployment);
+  const map = config.azureDeploymentMap;
+  if (map !== undefined && (!map || typeof map !== 'object' || Array.isArray(map) || Object.keys(map).length > 256)) invalid();
+  return new Map(Object.entries(map ?? {}).map(([model, deployment]) => [azureIdentifier(model), azureIdentifier(deployment)]));
 }
 
 export function azureIdentifier(value: unknown): string {
@@ -61,7 +70,7 @@ export function azureEnvironmentConfig(
   return {
     type: 'azure', apiKey,
     baseUrl: responses ? normalizeAzureResponsesBaseUrl(baseUrl) : baseUrl,
-    ...(responses ? { azureApi: 'responses' as const, azureDeploymentMap: deploymentMap } : {}),
+    ...(responses ? { azureApi: 'native' as const, azureDeploymentMap: deploymentMap } : {}),
     ...(env.AZURE_OPENAI_DEPLOYMENT ? { deployment: env.AZURE_OPENAI_DEPLOYMENT } : {}),
     model: env.AZURE_OPENAI_MODEL || env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o',
     ...(env.AZURE_OPENAI_API_VERSION ? { apiVersion: env.AZURE_OPENAI_API_VERSION } : {}),

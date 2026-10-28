@@ -20,9 +20,13 @@ export function openAiMixedBase(value: string | undefined): string {
   } catch { throw new Error('Invalid OpenAI endpoint.'); }
 }
 
-export function prepareOpenAiResponse(body: Record<string, unknown>, options?: ChatOptions): void {
-  const profile = openAiResponseProfile(String(body.model)), requested = options?.thinking;
-  if (requested !== undefined && !PUBLISHED_THINKING_LEVELS.includes(requested)) throw new Error('Invalid OpenAI thinking level.');
+export type NativeResponsesProfile = Pick<OpenAiResponseProfile, 'reasoning' | 'thinkingLevelMap' | 'declaredInput' | 'maxOutputTokens' | 'pricing' | 'pricingTiers'>;
+
+/** Shared R protocol, with private profile authority supplied by the owning adapter. */
+export function prepareNativeResponses(body: Record<string, unknown>, options: ChatOptions | undefined,
+  profile: NativeResponsesProfile, provider: 'OpenAI' | 'Azure'): void {
+  const requested = options?.thinking;
+  if (requested !== undefined && !PUBLISHED_THINKING_LEVELS.includes(requested)) throw new Error(`Invalid ${provider} thinking level.`);
   const levels = PUBLISHED_THINKING_LEVELS.filter(level => !profile.reasoning ? level === 'off'
     : profile.thinkingLevelMap?.[level] !== null && (!['xhigh', 'max'].includes(level) || profile.thinkingLevelMap?.[level] !== undefined));
   const selected = clampPublishedThinkingLevel(requested ?? 'off', levels);
@@ -36,20 +40,26 @@ export function prepareOpenAiResponse(body: Record<string, unknown>, options?: C
       if (enabled) body.include = ['reasoning.encrypted_content'];
     }
   }
+  const systemRole = profile.reasoning ? 'developer' : 'system';
   if (Array.isArray(body.input)) {
     for (const item of body.input) {
       if (!record(item)) continue;
-      if (item.role === 'system') item.role = 'developer';
+      if (item.role === 'system') item.role = systemRole;
       if (!profile.declaredInput.includes('image') && Array.isArray(item.content)
-        && item.content.some(part => record(part) && part.type === 'input_image')) throw new Error('OpenAI response model does not support images.');
+        && item.content.some(part => record(part) && part.type === 'input_image')) throw new Error(`${provider} response model does not support images.`);
     }
-    if (typeof body.instructions === 'string') { body.input.unshift({ role: 'developer', content: body.instructions }); delete body.instructions; }
+    if (typeof body.instructions === 'string') { body.input.unshift({ role: systemRole, content: body.instructions }); delete body.instructions; }
   }
   if (Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool)) tool.strict = false;
   if (options?.maxTokens !== undefined) {
-    if (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 1 || options.maxTokens > profile.maxOutputTokens) throw new Error('Invalid OpenAI output limit.');
+    if (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 1 || options.maxTokens > profile.maxOutputTokens) throw new Error(`Invalid ${provider} output limit.`);
     body.max_output_tokens = Math.max(16, options.maxTokens);
   }
+}
+
+export function prepareOpenAiResponse(body: Record<string, unknown>, options?: ChatOptions): void {
+  const profile = openAiResponseProfile(String(body.model));
+  prepareNativeResponses(body, options, profile, 'OpenAI');
   if (options?.cacheRetention !== 'none' && options?.sessionId) body.prompt_cache_key = Array.from(options.sessionId).slice(0, 64).join('');
   if (profile.compat.supportsExplicitPromptCacheMode) {
     if (options?.cacheRetention === 'none') body.prompt_cache_options = { mode: 'explicit' };
@@ -59,19 +69,27 @@ export function prepareOpenAiResponse(body: Record<string, unknown>, options?: C
 
 /** Native R primary input includes disjoint cache reads and writes; tiers use the genuine gross count. */
 export function openAiResponseUsage(value: unknown, model: string): ChatResponse['usage'] {
+  return nativeResponsesUsage(value, openAiResponseProfile(model));
+}
+
+export function nativeResponsesUsage(value: unknown, profile: Pick<NativeResponsesProfile, 'pricing' | 'pricingTiers'>): ChatResponse['usage'] {
   if (!record(value)) return undefined;
   const counter = (value: unknown): number | undefined => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
-  const prompt = counter(value.input_tokens), output = counter(value.output_tokens);
-  if (prompt === undefined || output === undefined || !Number.isSafeInteger(prompt + output)) return undefined;
+  const prompt = counter(value.input_tokens), output = counter(value.output_tokens), total = counter(value.total_tokens);
+  if (prompt === undefined || output === undefined || total === undefined || !Number.isSafeInteger(prompt + output) || total < prompt + output) return undefined;
   if (value.input_tokens_details !== undefined && !record(value.input_tokens_details)) return undefined;
   const details = record(value.input_tokens_details) ? value.input_tokens_details : {};
   const read = counter(details.cached_tokens), write = counter(details.cache_write_tokens);
   if ((details.cached_tokens !== undefined && read === undefined) || (details.cache_write_tokens !== undefined && write === undefined)
     || (read ?? 0) + (write ?? 0) > prompt) return undefined;
-  const input = prompt - (read ?? 0) - (write ?? 0), profile = openAiResponseProfile(model);
-  let pricing = profile.pricing;
-  for (const tier of profile.pricingTiers ?? []) if (prompt > tier.inputTokensAbove) pricing = tier;
-  return { promptTokens: input, completionTokens: output, totalTokens: prompt + output,
-    ...(read === undefined ? {} : { cacheReadTokens: read }), ...(write === undefined ? {} : { cacheWriteTokens: write }),
+  const input = prompt - (read ?? 0) - (write ?? 0);
+  const usage = { promptTokens: input, completionTokens: output, totalTokens: total,
+    ...(read === undefined ? {} : { cacheReadTokens: read }), ...(write === undefined ? {} : { cacheWriteTokens: write }) };
+  if (total !== prompt + output) return usage;
+  let pricing = profile.pricing, threshold = -1;
+  for (const tier of profile.pricingTiers ?? []) if (prompt > tier.inputTokensAbove && tier.inputTokensAbove > threshold) {
+    pricing = tier; threshold = tier.inputTokensAbove;
+  }
+  return { ...usage,
     costUsd: (input * pricing.inputPerMillion + output * pricing.outputPerMillion + (read ?? 0) * pricing.cacheReadPerMillion + (write ?? 0) * pricing.cacheWritePerMillion) / 1_000_000 };
 }

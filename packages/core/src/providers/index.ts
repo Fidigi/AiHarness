@@ -9,7 +9,8 @@ import { ProviderType } from '../types/index.js';
 import { calculateModelCost, calculatePublishedModelCost, clampPublishedThinkingLevel, getPublishedModelMetadata, getPublishedModels, getSupportedThinkingLevels, type PublishedModelMetadata } from './model-metadata.js';
 import { getProviderPublishedModel } from './provider-model-metadata.js';
 import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
-import { azureIdentifier, normalizeAzureResponsesBaseUrl, usesAzureResponses } from './azure-config.js';
+import { azureDeployments, normalizeAzureResponsesBaseUrl, usesAzureResponses } from './azure-config.js';
+import { azureProfileApi, azureProfileUsage, azurePublishedProfiles, prepareAzureCompletion, prepareAzureResponses } from './azure-profiles.js';
 import { parseProviderToolArguments } from './tool-arguments.js';
 import { consumeBedrockStream } from './bedrock-converse-stream.js';
 import { bedrockProfileUsage, bedrockPublishedProfiles, hasBedrockProfile, validateBedrockProfileOutput } from './bedrock-profiles.js';
@@ -546,7 +547,10 @@ export class ProviderFactory {
       case 'mistral-conversations':
         return new MistralProvider({ ...config, model: config.model || this.getDefaultModel(ProviderType.MISTRAL_CONVERSATIONS) });
       case 'azure':
-        return usesAzureResponses(config) ? new AzureResponsesProvider(config) : new OpenAiProvider(config);
+        if (config.azureApi === 'native' || (config.azureApi === undefined && usesAzureResponses(config))) return new AzureProvider(config);
+        if (usesAzureResponses(config)) return new AzureResponsesProvider(config);
+        if (config.azureApi === 'completions' && (usesAzureResponses({ ...config, azureApi: undefined }) || config.apiVersion === 'v1')) return new AzureCompletionsProvider(config);
+        return new OpenAiProvider(config);
       case 'vertex':
         return new VertexGeminiProvider(config);
       case 'bedrock':
@@ -3057,7 +3061,7 @@ export class OpenAiResponsesProvider extends AiProvider {
     }
   }
 
-  protected responseUsage(value: unknown, _model: string): ChatResponse['usage'] { return responsesUsage(value); }
+  protected responseUsage(value: unknown, _model: string, _body?: ResponsesRequest): ChatResponse['usage'] { return responsesUsage(value); }
 
   protected requiresCompleteSseResponse(): boolean { return this.config.type === 'azure'; }
 
@@ -3176,7 +3180,7 @@ export class OpenAiResponsesProvider extends AiProvider {
       try {
         lease.socket.send(serializeProviderBody({ type: 'response.create', ...body }));
         for await (const event of responsesWebSocketEvents(lease.socket, signal, network.httpIdleTimeoutMs)) {
-          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, fullBody.model));
+          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, fullBody.model, fullBody));
         }
         if (!state.completed) throw new ResponsesProtocolError('incomplete_websocket_response');
         const response = finalizeResponses(state);
@@ -3235,7 +3239,7 @@ export class OpenAiResponsesProvider extends AiProvider {
         throw new ResponsesProtocolError('invalid_json_response');
       }
       await applyResponsesEvent({ type: value.status === 'completed' ? 'response.completed' : 'response.incomplete', response: value },
-        state, onChunk, usage => this.responseUsage(usage, body.model));
+        state, onChunk, usage => this.responseUsage(usage, body.model, body));
       return finalizeResponses(state);
     }
     const reader = response.body.getReader();
@@ -3263,7 +3267,7 @@ export class OpenAiResponsesProvider extends AiProvider {
           let event: ProviderResponseRecord;
           try { event = JSON.parse(payload) as ProviderResponseRecord; }
           catch { throw new ResponsesProtocolError('invalid_sse_json'); }
-          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model));
+          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model, body));
         }
       }
       buffer += decoder.decode();
@@ -3273,7 +3277,7 @@ export class OpenAiResponsesProvider extends AiProvider {
           let event: ProviderResponseRecord;
           try { event = JSON.parse(payload) as ProviderResponseRecord; }
           catch { throw new ResponsesProtocolError('invalid_sse_json'); }
-          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model));
+          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model, body));
         }
       }
     } finally {
@@ -3351,20 +3355,33 @@ export class OpenAiResponsesProvider extends AiProvider {
   }
 }
 
+function azureRequestOptions(options: ChatOptions | undefined, model: string): ChatOptions {
+  // Pin only model; do not eagerly evaluate unrelated option/budget accessors.
+  return Object.create(options ?? null, { model: { value: model, enumerable: true } }) as ChatOptions;
+}
+
+function azureNativeChunk(onChunk: StreamChunkCallback, signal?: AbortSignal): StreamChunkCallback {
+  return async (text, event) => {
+    if (signal?.aborted) throw new Error('The provider request was cancelled.');
+    await onChunk(text, event);
+    if (signal?.aborted) throw new Error('The provider request was cancelled.');
+  };
+}
+
 export class AzureResponsesProvider extends OpenAiResponsesProvider {
   override getModelApi(): string { return 'azure-openai-responses'; }
+  override getPublishedModels(): readonly PublishedModelMetadata[] | undefined {
+    return this.ownsNativeProfiles ? azurePublishedProfiles('azure-openai-responses') : undefined;
+  }
 
   private readonly deployments: ReadonlyMap<string, string>;
+  private readonly ownsNativeProfiles: boolean;
+  private readonly requestedModels = new WeakMap<ResponsesRequest, string>();
 
   constructor(config: ProviderConfig) {
     super({ ...config, baseUrl: normalizeAzureResponsesBaseUrl(config.baseUrl) });
-    if (config.apiVersion !== undefined) azureIdentifier(config.apiVersion);
-    if (config.deployment !== undefined) azureIdentifier(config.deployment);
-    const map = config.azureDeploymentMap;
-    if (map !== undefined && (!map || typeof map !== 'object' || Array.isArray(map) || Object.keys(map).length > 256)) {
-      throw new Error('Invalid Azure Responses configuration.');
-    }
-    this.deployments = new Map(Object.entries(map ?? {}).map(([model, deployment]) => [azureIdentifier(model), azureIdentifier(deployment)]));
+    this.deployments = azureDeployments(config);
+    this.ownsNativeProfiles = new.target === AzureResponsesProvider;
   }
 
   override validateConfig(): boolean { return Boolean(this.config.apiKey) && super.validateConfig(); }
@@ -3373,9 +3390,11 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
     messages: Message[], onChunk: StreamChunkCallback,
     onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions,
   ): Promise<void> {
-    await super.streamChat(messages, onChunk,
-      response => onComplete?.(response ? { ...response, provider: 'azure' } : response),
-      error => onError?.(options?.signal?.aborted ? new Error('The provider request was cancelled.') : error), options);
+    const model = options?.model ?? this.getConfiguredModel() ?? 'gpt-4o';
+    const native = this.ownsNativeProfiles && azureProfileApi(model) === 'azure-openai-responses';
+    await super.streamChat(messages, native ? azureNativeChunk(onChunk, options?.signal) : onChunk,
+      response => onComplete?.(response ? { ...response, provider: 'azure', ...(native ? { model, api: 'azure-openai-responses' } : {}) } : response),
+      error => onError?.(options?.signal?.aborted ? new Error('The provider request was cancelled.') : error), azureRequestOptions(options, model));
   }
 
   // Azure deployments are operator-owned; generic OpenAI discovery is not an availability check.
@@ -3383,6 +3402,11 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
 
   // Azure's Responses contract is SSE, not OpenAI's session WebSocket protocol.
   protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
+  protected override requiresCompleteSseResponse(): boolean { return true; }
+  protected override responseUsage(value: unknown, model: string, body?: ResponsesRequest): ChatResponse['usage'] {
+    const requested = body && this.requestedModels.get(body);
+    return requested ? azureProfileUsage(value, requested) : super.responseUsage(value, model, body);
+  }
 
   protected override responseUrl(): string {
     const url = new URL(super.responseUrl());
@@ -3400,9 +3424,86 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
 
   protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
     const body = super.requestBody(messages, options);
+    if (this.ownsNativeProfiles && azureProfileApi(body.model) === 'azure-openai-responses') {
+      prepareAzureResponses(body, options); this.requestedModels.set(body, body.model);
+    }
     body.model = typeof this.config.deployment === 'string' ? this.config.deployment
       : this.deployments.get(body.model) ?? body.model;
     return body;
+  }
+}
+
+/** Azure's pinned C exception uses native v1/Bearer, not legacy deployment-path/api-key C. */
+export class AzureCompletionsProvider extends OpenAiProvider {
+  private readonly azureBaseUrl: string;
+  private readonly logicalProvider: string;
+  private readonly deployments: ReadonlyMap<string, string>;
+  private readonly ownsNativeProfiles: boolean;
+  constructor(config: ProviderConfig) {
+    const baseUrl = normalizeAzureResponsesBaseUrl(config.baseUrl);
+    super({ ...config, type: ProviderType.AZURE, model: config.model || 'deepseek-v4-pro', baseUrl });
+    this.azureBaseUrl = baseUrl; this.logicalProvider = String(config.type || ProviderType.AZURE); this.deployments = azureDeployments(config);
+    this.ownsNativeProfiles = new.target === AzureCompletionsProvider;
+  }
+  override getProviderType(): string { return this.logicalProvider; }
+  override getModelApi(): string { return 'openai-completions'; }
+  override getPublishedModels(): readonly PublishedModelMetadata[] | undefined {
+    return this.ownsNativeProfiles ? azurePublishedProfiles('openai-completions') : undefined;
+  }
+  override canDiscoverModels(): boolean { return false; }
+  protected override getChatUrl(): string { return `${this.azureBaseUrl}/chat/completions`; }
+  protected override getHeaders(options?: ChatOptions): Record<string, string> {
+    const headers = super.getHeaders(options);
+    for (const name of Object.keys(headers)) if (['authorization', 'api-key'].includes(name.toLowerCase())) delete headers[name];
+    return { ...headers, Authorization: `Bearer ${String(this.config.apiKey)}` };
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    if (this.ownsNativeProfiles) prepareAzureCompletion(body, options, messages, this.getProviderType());
+    body.model = typeof this.config.deployment === 'string' ? this.config.deployment : this.deployments.get(String(body.model)) ?? body.model;
+    return body;
+  }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] {
+    return this.ownsNativeProfiles && azureProfileApi(model) === 'openai-completions' ? azureProfileUsage(value, model) : super.responseUsage(value as NonNullable<OpenAiResponse['usage']>, model);
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const model = options?.model || this.getConfiguredModel() || 'deepseek-v4-pro', provider = this.getProviderType();
+    const native = this.ownsNativeProfiles && azureProfileApi(model) === 'openai-completions';
+    const result = await super.chat(messages, azureRequestOptions(options, model));
+    return native ? { ...result, provider, model, api: 'openai-completions' } : result;
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const model = options?.model || this.getConfiguredModel() || 'deepseek-v4-pro', provider = this.getProviderType();
+    const native = this.ownsNativeProfiles && azureProfileApi(model) === 'openai-completions';
+    await super.streamChat(messages, native ? azureNativeChunk(onChunk, options?.signal) : onChunk, response => onComplete?.(response && native ? { ...response, provider, model, api: 'openai-completions' } : response),
+      onError, azureRequestOptions(options, model));
+  }
+}
+
+/** Native Azure v1 composition; explicit single-API selectors and unversioned legacy C stay separate. */
+export class AzureProvider extends AiProvider {
+  private readonly ownsNativeProfiles: boolean;
+  constructor(config: ProviderConfig) {
+    super({ ...config, model: config.model || 'gpt-4o', baseUrl: normalizeAzureResponsesBaseUrl(config.baseUrl) });
+    azureDeployments(config); this.ownsNativeProfiles = new.target === AzureProvider;
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return []; }
+  override getModelApi(model = this.getConfiguredModel() ?? 'gpt-4o'): string { return azureProfileApi(model) ?? 'azure-openai-responses'; }
+  override getPublishedModels(): readonly PublishedModelMetadata[] | undefined { return this.ownsNativeProfiles ? azurePublishedProfiles() : undefined; }
+  private conversation(model: string, provider: string): AiProvider {
+    const config = { ...this.config, type: provider, model };
+    return azureProfileApi(model) === 'openai-completions' ? new AzureCompletionsProvider(config) : new AzureResponsesProvider(config);
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const model = options?.model || this.getConfiguredModel() || 'gpt-4o', provider = this.getProviderType();
+    return { ...await this.conversation(model, provider).chat(messages, azureRequestOptions(options, model)), provider };
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const model = options?.model || this.getConfiguredModel() || 'gpt-4o', provider = this.getProviderType();
+    await this.conversation(model, provider).streamChat(messages, onChunk, response => onComplete?.(response ? { ...response, provider } : response), onError, azureRequestOptions(options, model));
   }
 }
 

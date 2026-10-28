@@ -1,0 +1,931 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "637862c5e5ae2ae6c9729d4d8bdf7fc13130f15320fcaacaa680a8c93f782a8a",
+  "scope": "44 actual pinned OpenAI API-key factory successful synthetic SSE projections from the separately retained 445-request OpenAI/Azure probe. Observed raw counter semantics are reconstructed from actual SDK disjoint normalized counters and checked against the exact owned reply vector. System role and base costs are executed reference observations, not service acceptance, raw/simple defaults, malformed-counter equivalence, complete tools/media/context or encrypted continuation qualification.",
+  "rows": [
+    {
+      "model": "gpt-4",
+      "systemRole": "system",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00033
+      }
+    },
+    {
+      "model": "gpt-4-turbo",
+      "systemRole": "system",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00013000000000000002
+      }
+    },
+    {
+      "model": "gpt-4.1",
+      "systemRole": "system",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000315
+      }
+    },
+    {
+      "model": "gpt-4.1-mini",
+      "systemRole": "system",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000063
+      }
+    },
+    {
+      "model": "gpt-4.1-nano",
+      "systemRole": "system",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000001575
+      }
+    },
+    {
+      "model": "gpt-4o",
+      "systemRole": "system",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000041250000000000007
+      }
+    },
+    {
+      "model": "gpt-4o-2024-05-13",
+      "systemRole": "system",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00006500000000000001
+      }
+    },
+    {
+      "model": "gpt-4o-2024-08-06",
+      "systemRole": "system",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000041250000000000007
+      }
+    },
+    {
+      "model": "gpt-4o-2024-11-20",
+      "systemRole": "system",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000041250000000000007
+      }
+    },
+    {
+      "model": "gpt-4o-mini",
+      "systemRole": "system",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000024749999999999996
+      }
+    },
+    {
+      "model": "gpt-5",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000029125
+      }
+    },
+    {
+      "model": "gpt-5-chat-latest",
+      "systemRole": "system",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000029125
+      }
+    },
+    {
+      "model": "gpt-5-mini",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000005825
+      }
+    },
+    {
+      "model": "gpt-5-nano",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000001165
+      }
+    },
+    {
+      "model": "gpt-5-pro",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00034500000000000004
+      }
+    },
+    {
+      "model": "gpt-5.1",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000029125
+      }
+    },
+    {
+      "model": "gpt-5.2",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "model": "gpt-5.2-chat-latest",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "model": "gpt-5.2-pro",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000483
+      }
+    },
+    {
+      "model": "gpt-5.3-chat-latest",
+      "systemRole": "system",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "model": "gpt-5.3-codex",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "model": "gpt-5.4",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00004825
+      }
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000014475000000000001
+      }
+    },
+    {
+      "model": "gpt-5.4-nano",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00000396
+      }
+    },
+    {
+      "model": "gpt-5.4-pro",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00057
+      }
+    },
+    {
+      "model": "gpt-5.5",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000965
+      }
+    },
+    {
+      "model": "gpt-5.5-pro",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00057
+      }
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000041100000000000005
+      }
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000742
+      }
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000411
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0001855
+      }
+    },
+    {
+      "model": "gpt-6-luna",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000001855
+      }
+    },
+    {
+      "model": "gpt-6-sol",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000371
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000368
+      }
+    },
+    {
+      "model": "gpt-daybreak-blue-latest",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000742
+      }
+    },
+    {
+      "model": "gpt-daybreak-red-latest",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000256875
+      }
+    },
+    {
+      "model": "gpt-realtime-2.1",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000772
+      }
+    },
+    {
+      "model": "o1",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0002475
+      }
+    },
+    {
+      "model": "o1-pro",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00225
+      }
+    },
+    {
+      "model": "o3",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000315
+      }
+    },
+    {
+      "model": "o3-mini",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00001815
+      }
+    },
+    {
+      "model": "o3-pro",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00030000000000000003
+      }
+    },
+    {
+      "model": "o4-mini",
+      "systemRole": "developer",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000017325
+      }
+    }
+  ]
+}

@@ -25,7 +25,9 @@ it('reloads encrypted native OpenAI hosts with operation-owned R/D guests and no
         response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ answers, usage: { input_tokens: 10, output_tokens: 2 } })); return;
       }
       expect(request.url).toBe('/proxy%2Fowned/v1/responses'); expect(body.stream).toBe(true);
-      const system = body.input.filter((item: { role?: string }) => item.role === 'developer').map((item: { content: string }) => item.content).join('\n');
+      const systemRole = body.model === 'gpt-6-luna' ? 'developer' : 'system';
+      expect(body.input.some((item: { role?: string }) => item.role === (systemRole === 'developer' ? 'system' : 'developer'))).toBe(false);
+      const system = body.input.filter((item: { role?: string }) => item.role === systemRole).map((item: { content: string }) => item.content).join('\n');
       const classification = system.includes('Classify the user input') || system.includes('Answer these finite-domain questions');
       const finished = body.input.some((item: { type?: string }) => item.type === 'function_call_output');
       const content = system.includes('Classify the user input') ? JSON.stringify({ label: 'safe' })
@@ -35,7 +37,7 @@ it('reloads encrypted native OpenAI hosts with operation-owned R/D guests and no
       const events = classification || finished ? [{ type: 'response.output_text.delta', delta: content }] : [];
       response.setHeader('content-type', 'text/event-stream');
       response.end([...events, { type: 'response.completed', response: { id: 'native-oa-http-response', model: body.model, output,
-        usage: { input_tokens: 10, output_tokens: 2, input_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } } } }]
+        usage: { input_tokens: 10, output_tokens: 2, total_tokens: 12, input_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } } } }]
         .map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
     } catch (error) { fixtureError = error; response.statusCode = 500; response.end('Invalid OpenAI HTTP fixture'); }
   });
