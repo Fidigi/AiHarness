@@ -73,7 +73,7 @@ import { copyNativeClassifierRequest, parseSystemOneAnswers, type NativeClassifi
 import { ProviderContextOverflowError, rejectProviderHttpResponse } from './context-overflow.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget, anthropicManagedEffort, anthropicThinkingBetas, applyAnthropicManagedHistory } from './anthropic-thinking.js';
-import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage, applyAnthropicProfileToolDeclarations } from './anthropic-profiles.js';
+import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage, applyAnthropicProfileToolDeclarations, applyAnthropicToolHistory } from './anthropic-profiles.js';
 import { validateAnthropicResponse, anthropicResponseStreamValidator, anthropicResponseToolInput, assertAnthropicResponseActive } from './anthropic-response.js';
 import { applyGoogleNativeGenerationConfig, applyGoogleToolPolicy, applyGoogleToolHistory, googlePublishedProfiles, hasGoogleProfile, googleProfileUsage, type GoogleNativeScope } from './google-profiles.js';
 import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
@@ -4493,7 +4493,12 @@ export class AnthropicProvider extends AiProvider {
   }
   protected prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
     applyAnthropicProfileToolDeclarations(body, this.ownsNativeProfiles, options);
-    if (this.ownsNativeProfiles) applyAnthropicManagedHistory(body, options, toolImageMessages(messages).filter(message => message.role !== 'system'), this.config.type);
+    const native = this.ownsNativeProfiles && typeof body.model === 'string' && hasAnthropicProfile(body.model);
+    if (this.ownsNativeProfiles) applyAnthropicManagedHistory(body, options, (native ? messages : toolImageMessages(messages)).filter(message => message.role !== 'system'), this.config.type);
+    if (native) applyAnthropicToolHistory(body, messages, this.config.type, message => messageImages(message).flatMap(image => {
+      const data = parseDataImage(image.url);
+      return data ? [{ type: 'image', source: { type: 'base64', media_type: data.mediaType, data: data.data } }] : [];
+    }));
     return body;
   }
   protected applyMessageThinking(body: Record<string, unknown>, options?: ChatOptions): void {
@@ -4532,8 +4537,8 @@ export class AnthropicProvider extends AiProvider {
       ...(costUsd !== undefined ? { costUsd } : {}) };
   }
 
-  protected buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
-    messages = toolImageMessages(messages);
+  protected buildAnthropicMessages(messages: Message[], nativeToolImages = false): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    messages = nativeToolImages ? messages : toolImageMessages(messages);
     return messages.filter(message => message.role !== 'system').map(message => {
       if (message.role === 'tool') {
         return {
@@ -4583,7 +4588,7 @@ export class AnthropicProvider extends AiProvider {
     const native = this.ownsNativeProfiles && hasAnthropicProfile(model);
 
     const systemPrompt = options?.systemPrompt || '';
-    const anthropicMessages = this.buildAnthropicMessages(messages);
+    const anthropicMessages = this.buildAnthropicMessages(messages, native);
 
     // Handle the case where first user message should be preceded by system prompt in messages
     const bodyMessages: Array<{ role: 'user' | 'assistant'; content: unknown }> = [...anthropicMessages];
@@ -4670,7 +4675,7 @@ export class AnthropicProvider extends AiProvider {
     const url = this.getMessagesUrl();
 
     const systemPrompt = options?.systemPrompt || '';
-    const anthropicMessages = this.buildAnthropicMessages(messages);
+    const anthropicMessages = this.buildAnthropicMessages(messages, native);
 
     let bodyMessages: Array<{ role: 'user' | 'assistant'; content: unknown }> = [...anthropicMessages];
     if (bodyMessages.length === 0) {

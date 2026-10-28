@@ -29,6 +29,33 @@ const policyFixtures = ['anthropic-tool-policy-reference.json', 'anthropic-tool-
     requests: number; refusals: number; capturedDeferredDeclarations: number; rows: ToolPolicyVector[] } };
 });
 const policyVectors = policyFixtures.flatMap(fixture => fixture.data.rows);
+const resultBytes = readFileSync(new URL('../../../../tests/fixtures/anthropic-tool-results-reference.json', import.meta.url));
+interface ToolResultVector { model: string; api: string; case: string; tools: NonNullable<ChatOptions['tools']>;
+  provided: Array<{ type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }>;
+  historyAssistant: { provider?: string; api?: string; model?: string; providerThinkingLevel?: string };
+  results: Array<{ toolCallId: string; toolName: string; isError: boolean; content: Array<{ type: 'text'; text: string } | { type: 'image'; mimeType: string; data: string }> }>;
+  expectedReplayMessages: Array<Record<string, unknown>>; capturedDeferredDeclarations: Array<Array<Record<string, unknown>>>; }
+const resultFixture = JSON.parse(resultBytes.toString()) as { catalogueSha256: string; modelProjections: number; vectors: number; requests: number;
+  textCases: number; imageCases: number; capturedDeferredDeclarations: number; rows: ToolResultVector[] };
+function resultHistory(vector: ToolResultVector, calls: NonNullable<ChatResponse['toolCalls']>): Message[] {
+  const source = vector.historyAssistant;
+  return [...input, { id: 'history', role: 'assistant', content: '', timestamp: new Date(0), toolCalls: calls,
+    provider: source.provider === 'anthropic' ? 'operator-alias' : source.provider, model: source.model, api: source.api,
+    metadata: { providerThinkingLevel: source.providerThinkingLevel } } as Message,
+  ...vector.results.map((result, index): Message => ({ id: `result-${index}`, role: 'tool', timestamp: new Date(0),
+    toolCallId: result.toolCallId, name: result.toolName, isError: result.isError,
+    content: result.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n'),
+    blocks: result.content.map(block => block.type === 'text' ? block : { type: 'image', url: `data:${block.mimeType};base64,${block.data}` }),
+  }))];
+}
+function providedToolEvents(vector: ToolResultVector): Array<Record<string, unknown>> {
+  return [{ type: 'message_start', message: { model: 'untrusted-response-alias', usage: observed } },
+    ...vector.provided.flatMap((block, index) => [
+      { type: 'content_block_start', index, content_block: { ...block, input: {} } },
+      { type: 'content_block_delta', index, delta: { type: 'input_json_delta', partial_json: JSON.stringify(block.input) } },
+      { type: 'content_block_stop', index },
+    ]), { type: 'message_delta', delta: { stop_reason: 'tool_use' }, usage: observed }, { type: 'message_stop' }];
+}
 const profiles = Object.values(JSON.parse(bytes.toString())['anthropic-messages']) as Array<{
   id: string; name: string; contextWindow: number; maxTokens: number;
   cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -124,6 +151,26 @@ describe('owned Anthropic response authority', () => {
       f.reply({ content, stop_reason: 'end_turn' });
       expect(await f.call(false)).toMatchObject({ content: '', model: profile.id });
     }
+    const start = f.fetch.mock.calls.length;
+    for (const vector of resultFixture.rows.filter(row => row.model === profile.id)) for (const stream of [false, true]) {
+      const options = { tools: vector.tools }, expected = vector.provided.map(({ id, name, input }) => ({ id, name, input }));
+      f.reply({ model: 'untrusted-response-alias', content: vector.provided, stop_reason: 'tool_use' }, providedToolEvents(vector));
+      const first = await f.call(stream, 'none', options);
+      expect(first.toolCalls, vector.case).toEqual(expected); expect(first).toMatchObject({ model: vector.model, api: vector.api });
+      const history = resultHistory(vector, first.toolCalls!), before = structuredClone({ history, options });
+      f.reply({ content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn' }, [
+        { type: 'message_start', message: { usage: observed } },
+        { type: 'content_block_start', index: 0, content_block: { type: 'text', text: 'ok' } },
+        { type: 'content_block_stop', index: 0 }, { type: 'message_delta', delta: { stop_reason: 'end_turn' } }, { type: 'message_stop' },
+      ]);
+      const second = await f.call(stream, 'none', options, history), body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+      expect(body.messages, vector.case).toEqual(vector.expectedReplayMessages); // Whole array, including managed controls and any extra attributed image turn.
+      expect(body.tools).toEqual(vector.tools.map(tool => ({ name: tool.name, description: tool.description, eager_input_streaming: true,
+        input_schema: { type: 'object', properties: tool.parameters.properties, required: tool.parameters.required } })));
+      expect(body.model).toBe(vector.model); expect(second).toMatchObject({ content: 'ok', model: vector.model, api: vector.api });
+      expect(second.toolCalls ?? []).toEqual([]); expect({ history, options }).toEqual(before);
+    }
+    expect(f.fetch.mock.calls.length - start).toBe(48);
   });
   for (const profile of profiles) it(`${profile.id}: rejects malformed/error/incomplete native responses before tools or completion`, async () => {
     const f = fixture(profile.id), content = [{ type: 'text', text: 'untrusted' }];
@@ -222,6 +269,25 @@ describe('owned Anthropic response authority', () => {
       const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
       expect(body.tools).toEqual(strict.callerDeclarations); expect(body.tool_choice ?? null).toEqual(strict.toolChoiceWire);
     }
+    // Native result projection cannot be borrowed by derived/unknown/forged public metadata.
+    for (const [model, Provider, override] of [[profiles[0]!.id, Compatible, undefined], ['unknown-model', AnthropicProvider, undefined],
+      [profiles[0]!.id, AnthropicProvider, 'unknown-model']] as const) {
+      const legacy = fixture(model, 'legacy-response', Provider);
+      legacy.provider.getPublishedModels = () => [{ id: model, name: 'Forged metadata', api: 'anthropic-messages', capabilities: { imageInput: true, toolCalls: true, reasoning: true } }];
+      const vector = resultFixture.rows.find(row => row.case === 'image-success')!, history = resultHistory(vector, vector.provided);
+      for (const stream of [false, true]) {
+        await legacy.call(stream, 'none', { model: override }, history);
+        const wire = JSON.parse(String(legacy.fetch.mock.calls.at(-1)?.[1]?.body)).messages;
+        expect(wire).toHaveLength(4); expect(wire[1].content[0].id).toBe(vector.provided[0]!.id);
+        expect(wire[2].content).toEqual([{ type: 'tool_result', tool_use_id: vector.provided[0]!.id, content: 'first' }]);
+        expect(wire[3].content[0].text).toBe(`Tool images for ${vector.provided[0]!.id}`);
+      }
+    }
+    const replay = resultFixture.rows.find(row => row.case === 'cross-provider')!, admitted = fixture('unknown-model');
+    for (const stream of [false, true]) {
+      await admitted.call(stream, 'none', { model: replay.model }, resultHistory(replay, replay.provided));
+      expect(JSON.parse(String(admitted.fetch.mock.calls.at(-1)?.[1]?.body)).messages).toEqual(replay.expectedReplayMessages);
+    }
     // Core-only malformed scoped controls, not additional executed SDK vectors.
     const native = fixture(profiles[0]!.id), tools = policyVectors[0]!.tools, invalidCount = native.fetch.mock.calls.length;
     for (const options of [...[null, 'required', {}, { type: 'function', name: 'echo' }, { type: 'tool', name: '' }].map(toolChoice => ({ tools, toolChoice })),
@@ -236,6 +302,14 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
   it('binds the independent seventeen-profile fixture to the approved catalogue hash', () => {
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(pin.files.anthropic.catalogue);
     expect(profiles).toHaveLength(17);
+    expect(createHash('sha256').update(resultBytes).digest('hex')).toBe('c844343d76116f68b29ec95b732a8fe8b545c0701467675f54d69c323bc13564');
+    expect(resultFixture.catalogueSha256).toBe(createHash('sha256').update(bytes).digest('hex'));
+    expect([resultFixture.modelProjections, resultFixture.vectors, resultFixture.requests, resultFixture.textCases, resultFixture.imageCases,
+      resultFixture.capturedDeferredDeclarations]).toEqual([17, 204, 408, 136, 68, 168]);
+    expect(resultFixture.rows.map(row => [row.model, row.case])).toEqual(profiles.flatMap(profile =>
+      ['success', 'error', 'empty', 'adjacent-two-results', 'cross-provider', 'cross-api', 'cross-model', 'legacy-missing-identity',
+        'image-success', 'image-error', 'image-only-success', 'image-only-error'].map(name => [profile.id, name])));
+    expect(resultFixture.rows.flatMap(row => row.capturedDeferredDeclarations.flat())).toHaveLength(168);
     expect(adaptiveProfiles.map(profile => profile.id).sort()).toEqual(Object.keys(efforts).sort());
     expect(createHash('sha256').update(toolBytes).digest('hex')).toBe('b0fae1bf6ca652a5d4ea6ffc73fbfff4415620a559dae234265923cf63773dcc');
     expect(toolFixture.catalogueSha256).toBe(createHash('sha256').update(bytes).digest('hex'));

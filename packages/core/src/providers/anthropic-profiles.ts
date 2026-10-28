@@ -1,4 +1,5 @@
 import type { AnthropicChatOptions, ChatResponse } from './index.js';
+import type { Message } from '../types/index.js';
 import { makeStrictToolSchema, UnsupportedStrictToolSchema } from './strict-tool-schema.js';
 import type { PublishedModelMetadata, PublishedThinkingLevel } from './model-metadata.js';
 
@@ -97,6 +98,41 @@ export function applyAnthropicProfileToolDeclarations(body: Record<string, unkno
     return { ...tool, eager_input_streaming: true, ...(strict ? { strict: true } : {}),
       input_schema: { ...(strict ? parameters : {}), type: 'object', properties: parameters.properties ?? {}, required: parameters.required ?? [] } };
   });
+}
+/** Supplied unsigned calls and paired results only; no generated/orphan/signature lifecycle. */
+export function applyAnthropicToolHistory(body: Record<string, unknown>, messages: readonly Message[], owner: string,
+  toolImageParts: (message: Message) => Array<Record<string, unknown>>): void {
+  if (typeof body.model !== 'string' || !profiles.has(body.model) || !Array.isArray(body.messages)) return;
+  const original = messages.filter(message => message.role !== 'system'), ids = new Map<string, string>();
+  const result: Array<{ role: string; content: unknown }> = [];
+  let index = 0, previousTool = false;
+  for (const message of body.messages as Array<{ role: string; content: unknown }>) {
+    // Managed effort controls have already been inserted; they consume no source turn.
+    if (message.role === 'system') { result.push(message); previousTool = false; continue; }
+    const source = original[index++];
+    if (source?.role === 'assistant' && source.toolCalls?.length && Array.isArray(message.content)) {
+      const same = source.provider === owner && source.model === body.model && source.api === 'anthropic-messages';
+      message.content = message.content.map(block => {
+        if (block.type !== 'tool_use') return block;
+        const id = same ? block.id : block.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
+        ids.set(block.id, id); return { ...block, id };
+      });
+    }
+    if (source?.role === 'tool' && Array.isArray(message.content)) {
+      const images = toolImageParts(source);
+      const content = message.content.map(block => ({ ...block, tool_use_id: ids.get(block.tool_use_id) ?? block.tool_use_id,
+        ...(source.isError !== undefined ? { is_error: source.isError } : {}),
+        ...(images.length ? { content: [{ type: 'text', text: source.content || '(see attached image)' }, ...images] } : {}),
+      }));
+      message.content = content;
+      if (previousTool) {
+        (result[result.length - 1]!.content as unknown[]).push(...content);
+        continue;
+      }
+    }
+    result.push(message); previousTool = source?.role === 'tool';
+  }
+  body.messages = result;
 }
 export function anthropicPublishedProfiles(): PublishedModelMetadata[] {
   return [...profiles.values()].map(profile => ({ ...profile, capabilities: { ...profile.capabilities }, pricing: { ...profile.pricing },
