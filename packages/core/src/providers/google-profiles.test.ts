@@ -32,6 +32,17 @@ const bearerReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtu
   rows: Array<{ model: string; api: string; origin: string; path: string; auth: string;
     tools: Array<{ functionDeclarations: Array<{ name: string; description: string; parametersJsonSchema: Record<string, unknown> }> }> }>;
 };
+const policyReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/google-tool-policy-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; vectors: number; requests: number; pretransportErrors: number;
+  strictProfiles: Array<{ scope: Scope; model: string }>;
+  rows: Array<{ scope: Scope; model: string; api: string; case: string; refused: boolean; toolChoice?: 'auto' | 'none' | 'any';
+    tools: Array<{ name: string; description: string; parameters: Record<string, unknown>; constrainedSampling?: false | { type: 'json_schema'; strict: 'prefer' | 'require' } }>;
+    wire: { tools: unknown[]; toolConfig: unknown } | null }>;
+};
+const boundaryReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/google-tool-schema-boundaries-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; schemaCases: number;
+  vectors: number; requests: number; pretransportErrors: number; rows: typeof policyReference.rows;
+};
 const input = [{ id: 'user', role: 'user' as const, content: 'probe', timestamp: new Date(0) }];
 const observed = { promptTokenCount: 12, candidatesTokenCount: 2, thoughtsTokenCount: 3, cachedContentTokenCount: 4, totalTokenCount: 17 };
 const known = (price: Price) => price.input > 0 || price.output > 0 || price.cacheRead > 0 || price.cacheWrite > 0;
@@ -71,6 +82,20 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
       expect(toolReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
       expect(toolReference.modelProjections).toBe(35); expect(toolReference.toolVectors).toBe(70); expect(toolReference.rows).toHaveLength(105);
       expect([...new Set(toolReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(profiles.map(row => row.id));
+      expect(boundaryReference.pinnedCommit).toBe(toolReference.pinnedCommit);
+      expect(boundaryReference.captureSha256).toBe('53b5cc7a8c669fd79d832d21c4ebbb29daf4f34044a9839c46a6886045c7dfa2');
+      expect(boundaryReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
+      expect(boundaryReference.modelProjections).toBe(2); expect(boundaryReference.schemaCases).toBe(34);
+      expect(boundaryReference.vectors).toBe(136); expect(boundaryReference.requests).toBe(76); expect(boundaryReference.pretransportErrors).toBe(60);
+      expect(boundaryReference.rows).toHaveLength(136);
+      expect([...new Set(boundaryReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(['gemini-3.1-pro-preview']);
+      expect(policyReference.pinnedCommit).toBe(toolReference.pinnedCommit);
+      expect(policyReference.captureSha256).toBe('75484e1ee214a7dde6fd2b4fce36dba563977dae47bbc7321e78fea780e833b8');
+      expect(policyReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
+      expect(policyReference.vectors).toBe(420); expect(policyReference.requests).toBe(372); expect(policyReference.pretransportErrors).toBe(48);
+      expect(policyReference.rows).toHaveLength(420); expect(policyReference.strictProfiles).toHaveLength(22);
+      expect(policyReference.strictProfiles.filter(row => row.scope === scope)).toHaveLength(scope === 'google' ? 12 : 10);
+      expect([...new Set(policyReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(profiles.map(row => row.id));
       expect(generationReference.pinnedCommit).toBe(toolReference.pinnedCommit);
       expect(generationReference.captureSha256).toBe('9aef98c62dee5c6993b55ca2415c2ea46af69ed364812e1014becf5d505280cd');
       expect(generationReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
@@ -146,6 +171,57 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
         expect(new Headers(init?.headers).get('authorization')).toBe('Bearer owned-exchanged-access');
         expect(new Headers(init?.headers).get('x-goog-api-key')).toBeNull();
         expect(JSON.parse(init!.body as string).tools).toEqual(physical.tools);
+      }
+    });
+    for (const profile of profiles) it(`${scope}/${profile.id}: binds raw strict/prefer/choice construction and pretransport refusals to executed SDK vectors`, async () => {
+      const f = fixture(scope, profile.id), vectors = policyReference.rows.filter(row => row.scope === scope && row.model === profile.id);
+      expect(vectors.map(row => row.case)).toEqual(['default', 'prefer', 'require', 'prefer-structured-union', 'require-structured-union',
+        'prefer-auto', 'prefer-none', 'prefer-any', 'off-auto', 'off-none', 'off-any', 'mixed-prefer-off']);
+      const boundaries = boundaryReference.rows.filter(row => row.scope === scope && row.model === profile.id);
+      expect(boundaries).toHaveLength(profile.id === 'gemini-3.1-pro-preview' ? 68 : 0);
+      for (const vector of [...vectors, ...boundaries]) for (const stream of [false, true]) {
+        const options = { maxTokens: 64, tools: structuredClone(vector.tools), toolChoice: vector.toolChoice };
+        const requests = f.fetch.mock.calls.length, chunks = f.chunks.length, completed = f.completed.length;
+        if (vector.refused) {
+          await expect(f.call(stream, options)).rejects.toThrow('Google tool requires unsupported constrained sampling.');
+          expect(f.fetch.mock.calls).toHaveLength(requests); expect(f.chunks).toHaveLength(chunks); expect(f.completed).toHaveLength(completed);
+        } else {
+          const result = await f.call(stream, options);
+          expect(result).toMatchObject({ content: 'ok', model: profile.id, api: vector.api });
+          const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
+          expect(body.tools).toEqual(vector.wire!.tools); expect(body.toolConfig ?? null).toEqual(vector.wire!.toolConfig);
+        }
+        expect(options.tools).toEqual(vector.tools);
+      }
+    });
+    it(`${scope}: keeps new tool controls private to owned models and rejects defined invalid controls before HTTP`, async () => {
+      const model = profiles.find(row => row.id === 'gemini-3.1-pro-preview')!.id;
+      const parameters = { type: 'object', properties: { x: { type: 'string' } }, required: ['x'], additionalProperties: false };
+      const tool = { name: 'echo', description: 'Echo', parameters, constrainedSampling: { type: 'json_schema', strict: 'require' } };
+      for (const f of [fixture(scope, model, true), fixture(scope, `${model}-unreviewed`)]) {
+        f.provider.getModelApi = () => scope === 'google' ? 'google-generative-ai' : 'google-vertex';
+        for (const stream of [false, true]) {
+          let requests = f.fetch.mock.calls.length;
+          const required = { maxTokens: 64, tools: [tool] };
+          await expect(f.call(stream, required)).rejects.toThrow('Google tool requires unsupported constrained sampling.');
+          expect(f.fetch.mock.calls).toHaveLength(requests);
+          const preferred = { maxTokens: 64, tools: [{ ...tool, constrainedSampling: { type: 'json_schema', strict: 'prefer' } }] };
+          await f.call(stream, preferred);
+          const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
+          expect(body.tools[0].functionDeclarations[0].parameters).toEqual(parameters);
+          expect(Object.hasOwn(body.tools[0].functionDeclarations[0], 'parametersJsonSchema')).toBe(false); expect(body.toolConfig).toBeUndefined();
+          requests = f.fetch.mock.calls.length;
+          const choice = { ...preferred, toolChoice: 'none' };
+          await expect(f.call(stream, choice)).rejects.toThrow('Invalid Google tool policy.'); expect(f.fetch.mock.calls).toHaveLength(requests);
+        }
+      }
+      const f = fixture(scope, model);
+      for (const options of [{ maxTokens: 64, tools: [tool], toolChoice: 'PRIVATE-invalid-choice' },
+        { maxTokens: 64, tools: [{ ...tool, constrainedSampling: { type: 'json_schema', strict: 'PRIVATE-invalid-strict' } }] }]) {
+        for (const stream of [false, true]) {
+          const requests = f.fetch.mock.calls.length;
+          await expect(f.call(stream, options)).rejects.toThrow('Invalid Google tool policy.'); expect(f.fetch.mock.calls).toHaveLength(requests);
+        }
       }
     });
     for (const profile of profiles.filter(row => row.cost.tiers?.length)) it(`${scope}/${profile.id}: uses strictly-above gross-input tiers, not output or mutable metadata`, async () => {

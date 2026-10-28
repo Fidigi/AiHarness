@@ -162,6 +162,7 @@ export type {
   StreamEvent,
   StreamChunkCallback,
   ChatOptions,
+  GoogleChatOptions,
   ChatToolDefinition,
   ThinkingLevel,
   ThinkingBudgets,

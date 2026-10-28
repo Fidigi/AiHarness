@@ -1,4 +1,4 @@
-import type { ChatOptions, ChatResponse } from './index.js';
+import type { ChatOptions, ChatResponse, GoogleChatOptions } from './index.js';
 import { clampPublishedThinkingLevel, PUBLISHED_THINKING_LEVELS, type PublishedModelMetadata, type PublishedThinkingLevel } from './model-metadata.js';
 import { copyThinkingBudgets, resolveThinkingBudget } from './thinking-budgets.js';
 
@@ -97,6 +97,83 @@ export function applyGoogleNativeGenerationConfig(scope: GoogleNativeScope, mode
   const budget = overrides?.[numericLevel] === undefined && fallback === -1 ? -1 : resolveThinkingBudget(numericLevel, overrides, fallback,
     model.includes('2.5-pro') ? 128 : 0, model.includes('2.5-pro') ? 32768 : model.includes('2.5-flash') ? 24576 : 8192);
   config.thinkingConfig = { thinkingBudget: budget, includeThoughts: true };
+}
+
+class UnsupportedGoogleStrictSchema extends Error {}
+const schemaRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
+const unsupportedStrictKeys = ['$ref', '$defs', 'definitions', 'allOf', 'oneOf', 'patternProperties', 'dependentSchemas', 'dependencies',
+  'unevaluatedProperties', 'propertyNames', 'contains', 'prefixItems', 'not', 'if', 'then', 'else'];
+function googleSchemaAllowsNull(value: unknown): boolean {
+  return schemaRecord(value) && (value.type === 'null' || (Array.isArray(value.type) && value.type.includes('null'))
+    || value.const === null || (Array.isArray(value.enum) && value.enum.includes(null))
+    || (Array.isArray(value.anyOf) && value.anyOf.some(googleSchemaAllowsNull)));
+}
+/** Pinned JSON-schema strict subset: close objects, require fields and make optional fields nullable without mutation. */
+function strictGoogleToolSchema(parameters: Record<string, unknown>): Record<string, unknown> {
+  const schema: unknown = structuredClone(parameters);
+  const unsupported = (): never => { throw new UnsupportedGoogleStrictSchema(); };
+  const visit = (value: unknown): void => {
+    if (!schemaRecord(value)) return unsupported();
+    if (unsupportedStrictKeys.some(key => value[key] !== undefined)) unsupported();
+    if (value.anyOf !== undefined) {
+      if (!Array.isArray(value.anyOf) || value.anyOf.length === 0) return unsupported();
+      for (const member of value.anyOf) {
+        if (schemaRecord(member)) {
+          const types = Array.isArray(member.type) ? member.type : [member.type];
+          if (types.includes('object') || types.includes('array') || member.properties !== undefined || member.items !== undefined) unsupported();
+        }
+        visit(member);
+      }
+    }
+    if (value.items !== undefined) { if (Array.isArray(value.items)) unsupported(); visit(value.items); }
+    if (value.properties !== undefined && value.type !== 'object') unsupported();
+    if (value.type !== 'object') return;
+    if (value.additionalProperties !== undefined && value.additionalProperties !== false) unsupported();
+    if (value.properties !== undefined && !schemaRecord(value.properties)) unsupported();
+    if (value.required !== undefined && (!Array.isArray(value.required) || value.required.some(key => typeof key !== 'string'))) unsupported();
+    const properties = (value.properties ?? {}) as Record<string, unknown>, names = Object.keys(properties);
+    const required = new Set((value.required ?? []) as string[]);
+    if ([...required].some(key => !names.includes(key))) unsupported();
+    for (const key of names) {
+      const property = properties[key]; visit(property);
+      if (!required.has(key) && !googleSchemaAllowsNull(property)) properties[key] = { anyOf: [property, { type: 'null' }] };
+    }
+    value.required = names; value.additionalProperties = false;
+  };
+  visit(schema);
+  if (!schemaRecord(schema) || schema.type !== 'object') return unsupported();
+  return schema;
+}
+/** Scope and exact private profile are supplied by the owning adapter, never public metadata or labels. */
+export function applyGoogleToolPolicy(scope: GoogleNativeScope | undefined, model: string, body: Record<string, unknown>, options?: GoogleChatOptions): void {
+  const tools = options?.tools;
+  if (!tools?.length) return;
+  const profile = scope ? profiles.get(`${scope}\0${model}`) : undefined, choice = options?.toolChoice;
+  const invalid = (): never => { throw new Error('Invalid Google tool policy.'); };
+  const unsupported = (): never => { throw new Error('Google tool requires unsupported constrained sampling.'); };
+  if (choice !== undefined && (!profile || !['auto', 'none', 'any'].includes(choice))) invalid();
+  // Admission precedes the major-version rule; latest aliases and unknown/derived models gain no strict authority.
+  const supportsStrict = !!profile && Number(/^gemini-(\d+)(?:[.-]|$)/.exec(profile.id)?.[1] ?? 0) >= 3;
+  let validated = false;
+  const declarations = tools.map(tool => {
+    let parameters = tool.parameters;
+    const sampling = tool.constrainedSampling;
+    if (sampling !== undefined && sampling !== false) {
+      if (!sampling || sampling.type !== 'json_schema' || !['prefer', 'require'].includes(sampling.strict)) return invalid();
+      if (!supportsStrict) { if (sampling.strict === 'require') unsupported(); }
+      else {
+        try { parameters = strictGoogleToolSchema(parameters); validated = true; }
+        catch (error) {
+          if (!(error instanceof UnsupportedGoogleStrictSchema)) return invalid();
+          if (sampling.strict === 'require') unsupported();
+        }
+      }
+    }
+    return { name: tool.name, description: tool.description, [profile ? 'parametersJsonSchema' : 'parameters']: parameters };
+  });
+  body.tools = [{ functionDeclarations: declarations }];
+  const mode = choice === 'none' ? 'NONE' : choice === 'any' ? 'ANY' : validated ? 'VALIDATED' : choice === 'auto' ? 'AUTO' : undefined;
+  if (profile && mode) body.toolConfig = { functionCallingConfig: { mode } };
 }
 
 /** Gross prompt selects a scoped tariff; thoughts are output, cache reads are a prompt subset. */

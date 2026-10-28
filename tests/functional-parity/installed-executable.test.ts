@@ -1677,13 +1677,14 @@ it('validates installed public provider discovery declarations and keyless based
   }
 }, 60_000);
 
-it('dispatches original Google/Vertex schema/generation and regional Bearer construction through installed declarations and runtime', async () => {
+it('dispatches original Google/Vertex schema/generation/choice and regional Bearer construction through installed declarations and runtime', async () => {
   await writeFile(path.join(consumer, 'google-tools-public.ts'), `
-    import { GeminiProvider, VertexGeminiProvider, type AiProvider, type ChatOptions } from '@ai-harness/core';
+    import { GeminiProvider, VertexGeminiProvider, type AiProvider, type GoogleChatOptions } from '@ai-harness/core';
     const providers: AiProvider[] = [new GeminiProvider({ type: 'google', apiKey: 'disposable', model: 'gemini-2.5-flash' }),
       new VertexGeminiProvider({ type: 'vertex', apiKey: 'disposable', project: 'owned-project', location: 'us-central1', model: 'gemini-2.5-flash' })];
     async function compile() {
-      const options: ChatOptions = { maxTokens: 64, thinking: 'high', thinkingBudgets: { high: 1 }, tools: [{ name: 'echo', description: 'Echo', parameters: { type: 'object', properties: { x: { type: 'string' } } } }] };
+      const options: GoogleChatOptions = { maxTokens: 64, thinking: 'high', thinkingBudgets: { high: 1 }, toolChoice: 'any',
+        tools: [{ name: 'echo', description: 'Echo', constrainedSampling: { type: 'json_schema', strict: 'prefer' }, parameters: { type: 'object', properties: { x: { type: 'string' } } } }] };
       for (const provider of providers) { await provider.chat([], options); await provider.streamChat([], () => {}, undefined, undefined, options); }
     }
     void compile;
@@ -1692,12 +1693,14 @@ it('dispatches original Google/Vertex schema/generation and regional Bearer cons
   const vectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/google-tool-schema-reference.json'), 'utf8')).rows;
   const generation = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/google-generation-reference.json'), 'utf8')).rows;
   const bearer = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/google-vertex-bearer-reference.json'), 'utf8')).rows;
+  const policy = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/google-tool-policy-reference.json'), 'utf8')).rows;
+  const boundaries = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/google-tool-schema-boundaries-reference.json'), 'utf8')).rows;
   await writeFile(path.join(consumer, 'google-tools-public.mjs'), `
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
     import { createHash } from 'node:crypto';
     import { GeminiProvider, VertexGeminiProvider } from '@ai-harness/core';
-    const vectors = ${JSON.stringify(vectors)}, generation = ${JSON.stringify(generation)}, bearer = ${JSON.stringify(bearer)}, calls = [];
+    const vectors = ${JSON.stringify(vectors)}, generation = ${JSON.stringify(generation)}, bearer = ${JSON.stringify(bearer)}, policy = ${JSON.stringify([...policy, ...boundaries])}, calls = [];
     const event = { candidates: [{ content: { role: 'model', parts: [{ text: 'ok' }] }, finishReason: 'STOP' }] };
     const server = createServer(async (request, reply) => {
       let body = ''; for await (const chunk of request) body += chunk;
@@ -1743,6 +1746,27 @@ it('dispatches original Google/Vertex schema/generation and regional Bearer cons
         } else assert.deepEqual(actual, vector.generationConfig);
       }
       assert.equal(generation.length, 210); assert.equal(calls.length, 630);
+      let refused = 0;
+      for (const vector of policy) for (const stream of [false, true]) {
+        const provider = providers[vector.scope], options = { model: vector.model, maxTokens: 64, tools: structuredClone(vector.tools), toolChoice: vector.toolChoice };
+        const before = JSON.stringify(options.tools), requests = calls.length, chunks = [];
+        let result, failure;
+        try {
+          const messages = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
+          if (stream) await provider.streamChat(messages, (text, event) => { chunks.push([text, event]); }, value => { result = value; }, undefined, options);
+          else result = await provider.chat(messages, options);
+        } catch (error) { failure = error; }
+        if (vector.refused) {
+          assert.ok(failure instanceof Error); assert.equal(failure.message, 'Google tool requires unsupported constrained sampling.');
+          assert.equal(calls.length, requests); assert.equal(chunks.length, 0); assert.equal(result, undefined); refused++;
+        } else {
+          if (failure) throw failure;
+          assert.equal(result.content, 'ok'); assert.equal(result.model, vector.model); assert.equal(result.api, vector.api);
+          assert.deepEqual(calls.at(-1).body.tools, vector.wire.tools); assert.deepEqual(calls.at(-1).body.toolConfig ?? null, vector.wire.toolConfig);
+        }
+        assert.equal(JSON.stringify(options.tools), before);
+      }
+      assert.equal(policy.length, 556); assert.equal(refused, 216); assert.equal(calls.length, 1526);
       const originalFetch = globalThis.fetch, regionalCalls = [];
       try {
         globalThis.fetch = async (input, init) => {
@@ -1763,7 +1787,7 @@ it('dispatches original Google/Vertex schema/generation and regional Bearer cons
           assert.deepEqual(call.body.tools, vector.tools);
         }
       } finally { globalThis.fetch = originalFetch; }
-      assert.equal(bearer.length, 13); assert.equal(regionalCalls.length, 13); assert.equal(calls.length + regionalCalls.length, 643);
+      assert.equal(bearer.length, 13); assert.equal(regionalCalls.length, 13); assert.equal(calls.length + regionalCalls.length, 1539);
       console.log('installed original Google policies OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);

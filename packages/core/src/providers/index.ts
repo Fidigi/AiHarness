@@ -75,7 +75,7 @@ import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget, anthropicManagedEffort, anthropicThinkingBetas, applyAnthropicManagedHistory } from './anthropic-thinking.js';
 import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage } from './anthropic-profiles.js';
 import { validateAnthropicResponse, anthropicResponseStreamValidator, anthropicResponseToolInput, assertAnthropicResponseActive } from './anthropic-response.js';
-import { applyGoogleNativeGenerationConfig, googlePublishedProfiles, hasGoogleProfile, googleProfileUsage, type GoogleNativeScope } from './google-profiles.js';
+import { applyGoogleNativeGenerationConfig, applyGoogleToolPolicy, googlePublishedProfiles, hasGoogleProfile, googleProfileUsage, type GoogleNativeScope } from './google-profiles.js';
 import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
 export type { ThinkingBudgets } from './thinking-budgets.js';
 import {
@@ -524,6 +524,12 @@ export interface ChatOptions {
   signal?: AbortSignal;
   /** Stable process-local conversation identity used only by compatible cached transports. */
   sessionId?: string;
+}
+
+/** JSON-schema tool controls for the reviewed Google/Vertex adapters, not a cross-provider or host-tool promise. */
+export interface GoogleChatOptions extends ChatOptions {
+  tools?: Array<ChatToolDefinition & { constrainedSampling?: false | { type: 'json_schema'; strict: 'prefer' | 'require' } }>;
+  toolChoice?: 'auto' | 'none' | 'any';
 }
 
 // ===================================================================
@@ -3832,7 +3838,7 @@ export class GeminiProvider extends AiProvider {
     return this.nativeRequestHeaders(model) ?? { 'Content-Type': 'application/json', ...configuredHeaders(this.config) };
   }
 
-  private buildBody(messages: Message[], options?: ChatOptions): Record<string, unknown> {
+  private buildBody(messages: Message[], options?: GoogleChatOptions): Record<string, unknown> {
     messages = toolImageMessages(messages);
     const systemText = [
       options?.systemPrompt,
@@ -3886,13 +3892,7 @@ export class GeminiProvider extends AiProvider {
     };
     if (native) applyGoogleNativeGenerationConfig(native, thinkingModel, body.generationConfig as Record<string, unknown>, options);
     if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
-    if (options?.tools?.length) {
-      body.tools = [{ functionDeclarations: options.tools.map(tool => ({
-        name: tool.name,
-        description: tool.description,
-        [native ? 'parametersJsonSchema' : 'parameters']: tool.parameters,
-      })) }];
-    }
+    applyGoogleToolPolicy(native, thinkingModel, body, options);
     return body;
   }
 
@@ -3965,7 +3965,7 @@ export class GeminiProvider extends AiProvider {
     };
   }
 
-  async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(messages: Message[], options?: GoogleChatOptions): Promise<ChatResponse> {
     if (!this.validateConfig()) throw new Error('Gemini API key is required');
     const model = String(options?.model || this.config.model || 'gemini-2.0-flash').replace(/^models\//, '');
     const response = await this.request(this.endpoint('generateContent', model), {
@@ -3983,7 +3983,7 @@ export class GeminiProvider extends AiProvider {
     onChunk: StreamChunkCallback,
     onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void,
-    options?: ChatOptions,
+    options?: GoogleChatOptions,
   ): Promise<void> {
     try {
       if (!this.validateConfig()) throw new Error('Gemini API key is required');
