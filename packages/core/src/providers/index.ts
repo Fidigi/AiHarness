@@ -18,7 +18,7 @@ import { OPENAI_DECISIONS_MODEL, decisionsBody, decisionsAnswers, type NativeWir
 export { OPENAI_DECISIONS_MODEL } from './openai-decisions.js';
 import { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
 export { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
-import { openAiMixedBase, openAiResponseProfile, prepareOpenAiResponse, openAiResponseUsage } from './openai-responses.js';
+import { applyNativeResponsesToolHistory, nativeResponsesToolId, openAiMixedBase, openAiResponseProfile, prepareOpenAiResponse, openAiResponseUsage } from './openai-responses.js';
 import { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
 export { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
 import { cloudflareAiBase, cloudflareChatEndpoint, cloudflareChatProfile, cloudflareMixedBases, prepareCloudflareChat, cloudflareChatUsage, validateCloudflareChat } from './cloudflare-completions.js';
@@ -2695,12 +2695,12 @@ function responsesUsage(value: unknown): ChatResponse['usage'] | undefined {
   };
 }
 
-function parseResponsesTool(item: unknown): ResponsesToolFragment | undefined {
+function parseResponsesTool(item: unknown, toolId?: (item: ProviderResponseRecord) => string): ResponsesToolFragment | undefined {
   if (!item || typeof item !== 'object') return undefined;
   const record = item as Record<string, unknown>;
   if (record.type !== 'function_call' || typeof record.name !== 'string') return undefined;
   return {
-    id: String(record.call_id ?? record.id ?? randomUUID()),
+    id: toolId ? toolId(record) : String(record.call_id ?? record.id ?? randomUUID()),
     name: record.name,
     arguments: typeof record.arguments === 'string' ? record.arguments : '',
   };
@@ -2723,6 +2723,7 @@ async function applyResponsesEvent(
   state: ResponsesAccumulator,
   onChunk: StreamChunkCallback,
   usage: (value: unknown) => ChatResponse['usage'] = responsesUsage,
+  toolId?: (item: ProviderResponseRecord) => string,
 ): Promise<void> {
   if (++state.events > 1_024) throw new ResponsesProtocolError('too_many_events');
   const type = typeof event.type === 'string' ? event.type : '';
@@ -2748,7 +2749,7 @@ async function applyResponsesEvent(
     await onChunk('', { type: 'reasoning_delta', data: { content: event.delta } });
   }
   if (type === 'response.output_item.added' || type === 'response.output_item.done') {
-    const tool = parseResponsesTool(event.item);
+    const tool = parseResponsesTool(event.item, toolId);
     if (tool) setResponsesTool(state, String(event.output_index ?? tool.id), tool);
   }
   if (type === 'response.function_call_arguments.delta' && typeof event.delta === 'string') {
@@ -2781,7 +2782,7 @@ async function applyResponsesEvent(
     state.usage = usage(response.usage) ?? state.usage;
     state.stopReason = lengthStop(providerResponseRecord(response.incomplete_details)?.reason).stopReason;
     for (const [index, item] of (Array.isArray(response.output) ? response.output : []).entries()) {
-      const tool = parseResponsesTool(item);
+      const tool = parseResponsesTool(item, toolId);
       if (tool) setResponsesTool(state, String(index), tool);
     }
     if (!state.content) {
@@ -3068,6 +3069,7 @@ export class OpenAiResponsesProvider extends AiProvider {
   }
 
   protected responseUsage(value: unknown, _model: string, _body?: ResponsesRequest): ChatResponse['usage'] { return responsesUsage(value); }
+  protected responseToolId(item: ProviderResponseRecord, _body: ResponsesRequest): string { return String(item.call_id ?? item.id ?? randomUUID()); }
 
   protected requiresCompleteSseResponse(): boolean { return this.config.type === 'azure'; }
 
@@ -3186,7 +3188,7 @@ export class OpenAiResponsesProvider extends AiProvider {
       try {
         lease.socket.send(serializeProviderBody({ type: 'response.create', ...body }));
         for await (const event of responsesWebSocketEvents(lease.socket, signal, network.httpIdleTimeoutMs)) {
-          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, fullBody.model, fullBody));
+          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, fullBody.model, fullBody), item => this.responseToolId(item, fullBody));
         }
         if (!state.completed) throw new ResponsesProtocolError('incomplete_websocket_response');
         const response = finalizeResponses(state);
@@ -3245,7 +3247,7 @@ export class OpenAiResponsesProvider extends AiProvider {
         throw new ResponsesProtocolError('invalid_json_response');
       }
       await applyResponsesEvent({ type: value.status === 'completed' ? 'response.completed' : 'response.incomplete', response: value },
-        state, onChunk, usage => this.responseUsage(usage, body.model, body));
+        state, onChunk, usage => this.responseUsage(usage, body.model, body), item => this.responseToolId(item, body));
       return finalizeResponses(state);
     }
     const reader = response.body.getReader();
@@ -3273,7 +3275,7 @@ export class OpenAiResponsesProvider extends AiProvider {
           let event: ProviderResponseRecord;
           try { event = JSON.parse(payload) as ProviderResponseRecord; }
           catch { throw new ResponsesProtocolError('invalid_sse_json'); }
-          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model, body));
+          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model, body), item => this.responseToolId(item, body));
         }
       }
       buffer += decoder.decode();
@@ -3283,7 +3285,7 @@ export class OpenAiResponsesProvider extends AiProvider {
           let event: ProviderResponseRecord;
           try { event = JSON.parse(payload) as ProviderResponseRecord; }
           catch { throw new ResponsesProtocolError('invalid_sse_json'); }
-          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model, body));
+          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model, body), item => this.responseToolId(item, body));
         }
       }
     } finally {
@@ -3413,6 +3415,9 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
     const requested = body && this.requestedModels.get(body);
     return requested ? azureProfileUsage(value, requested) : super.responseUsage(value, model, body);
   }
+  protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string {
+    return (this.requestedModels.has(body) ? nativeResponsesToolId(item) : undefined) ?? super.responseToolId(item, body);
+  }
 
   protected override responseUrl(): string {
     const url = new URL(super.responseUrl());
@@ -3432,6 +3437,7 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
     const body = super.requestBody(messages, options);
     if (this.ownsNativeProfiles && azureProfileApi(body.model) === 'azure-openai-responses') {
       prepareAzureResponses(body, options); this.requestedModels.set(body, body.model);
+      applyNativeResponsesToolHistory(body, messages, 'azure', body.model, 'azure-openai-responses');
     }
     body.model = typeof this.config.deployment === 'string' ? this.config.deployment
       : this.deployments.get(body.model) ?? body.model;
@@ -3674,8 +3680,10 @@ class ReviewedOpenAiResponsesProvider extends OpenAiResponsesProvider {
       ...(profile.declaredInput.includes('image') ? { imageInput: true } : {}) }];
   }
   protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
-    const body = super.requestBody(messages, options); prepareOpenAiResponse(body, options); return body;
+    const body = super.requestBody(messages, options); prepareOpenAiResponse(body, options);
+    applyNativeResponsesToolHistory(body, messages, 'openai', body.model, 'openai-responses'); return body;
   }
+  protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return nativeResponsesToolId(item) ?? super.responseToolId(item, body); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return openAiResponseUsage(value, model); }
   protected override requiresCompleteSseResponse(): boolean { return true; }
   protected override headers(websocket: boolean, sessionId?: string): Record<string, string> {

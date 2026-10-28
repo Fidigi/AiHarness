@@ -1,6 +1,7 @@
 import type { ChatOptions, ChatResponse } from './index.js';
 import { OPENAI_RESPONSE_MODELS, type OpenAiResponseProfile } from './openai-responses-metadata.js';
 import { PUBLISHED_THINKING_LEVELS, clampPublishedThinkingLevel } from './model-metadata.js';
+import type { Message } from '../types/index.js';
 
 const profiles = new Map(OPENAI_RESPONSE_MODELS.map(profile => [profile.id, profile]));
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -21,6 +22,58 @@ export function openAiMixedBase(value: string | undefined): string {
 }
 
 export type NativeResponsesProfile = Pick<OpenAiResponseProfile, 'reasoning' | 'thinkingLevelMap' | 'declaredInput' | 'maxOutputTokens' | 'pricing' | 'pricingTiers'>;
+
+/** Stable supplied IDs only; absent IDs retain the owning transport's existing fallback. */
+export function nativeResponsesToolId(item: Record<string, unknown>): string | undefined {
+  return typeof item.call_id === 'string' && item.call_id.length > 0 && typeof item.id === 'string' && item.id.length > 0
+    ? `${item.call_id}|${item.id}` : undefined;
+}
+
+// Pinned Responses foreign item IDs use this deterministic, non-cryptographic hash.
+function responseItemHash(value: string): string {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < value.length; i++) {
+    const ch = value.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(36) + (h1 >>> 0).toString(36);
+}
+
+/** Only private native owners call this on freshly converted bodies, before deployment rewriting. */
+export function applyNativeResponsesToolHistory(body: Record<string, unknown>, messages: Message[],
+  provider: 'openai' | 'azure', model: string, api: string): void {
+  if (!Array.isArray(body.input)) return;
+  const ids = new Map<string, { callId: string; itemId?: string }>();
+  const normalize = (id: string) => id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64).replace(/_+$/, '');
+  for (const message of messages) if (message.role === 'assistant') for (const call of message.toolCalls ?? []) {
+    const parts = call.id.split('|');
+    let callId = parts[0]!, itemId: string | undefined = parts[1];
+    const sameProviderApi = message.provider === provider && message.api === api;
+    if (!sameProviderApi || message.model !== model) {
+      callId = normalize(callId);
+      if (itemId !== undefined) {
+        itemId = sameProviderApi ? normalize(itemId) : `fc_${responseItemHash(itemId)}`;
+        if (!itemId.startsWith('fc_')) itemId = normalize(`fc_${itemId}`);
+      }
+    }
+    if ((sameProviderApi && message.model !== model) || !itemId?.startsWith('fc_')) itemId = undefined;
+    ids.set(call.id, { callId, itemId });
+  }
+  for (const item of body.input) {
+    if (!record(item) || typeof item.call_id !== 'string') continue;
+    const id = ids.get(item.call_id);
+    if (!id) continue;
+    if (item.type === 'function_call') {
+      item.call_id = id.callId;
+      if (id.itemId !== undefined) item.id = id.itemId;
+    } else if (item.type === 'function_call_output') {
+      item.call_id = id.callId;
+      if (item.output === '') item.output = '(no tool output)';
+    }
+  }
+}
 
 /** Shared R protocol, with private profile authority supplied by the owning adapter. */
 export function prepareNativeResponses(body: Record<string, unknown>, options: ChatOptions | undefined,

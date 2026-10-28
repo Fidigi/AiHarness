@@ -318,7 +318,7 @@ describe('native Azure Responses', () => {
       { id: 'assistant', role: 'assistant', content: '', timestamp: new Date(0), toolCalls: [{ id: 'old', name: 'echo', input: { text: 'old' } }] },
       { id: 'result', role: 'tool', content: 'old result', toolCallId: 'old', timestamp: new Date(0) },
     ]);
-    expect(response.toolCalls).toEqual([{ id: 'new', name: 'echo', input: { text: 'new' } }]);
+    expect(response.toolCalls).toEqual([{ id: 'new|item', name: 'echo', input: { text: 'new' } }]);
   });
 
   it.each(['https://name:secret@tenant.openai.azure.com', 'https://tenant.openai.azure.com?token=secret',

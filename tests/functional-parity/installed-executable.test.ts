@@ -1677,6 +1677,77 @@ it('validates installed public provider discovery declarations and keyless based
   }
 }, 60_000);
 
+it('binds original OpenAI/Azure unsigned response IDs and paired tool items through installed declarations and runtime', async () => {
+  await writeFile(path.join(consumer, 'responses-tools-public.ts'), `
+    import { OpenAiMixedProvider, AzureProvider, type AiProvider, type ChatOptions, type Message, type ToolCall } from '@ai-harness/core';
+    const providers: AiProvider[] = [new OpenAiMixedProvider({ type: 'openai', apiKey: 'sk-disposable', model: 'gpt-5', transport: 'sse' }),
+      new AzureProvider({ type: 'azure', apiKey: 'sk-disposable', model: 'gpt-5', baseUrl: 'https://owned.example/openai/v1' })];
+    const call: ToolCall = { id: 'provided-call|fc_owned', name: 'echo', input: { x: 'owned' } };
+    const messages: Message[] = [{ id: 'a', role: 'assistant', content: '', timestamp: new Date(0), provider: 'openai', api: 'openai-responses', model: 'gpt-5', toolCalls: [call] },
+      { id: 't', role: 'tool', content: 'done', timestamp: new Date(0), toolCallId: call.id, name: 'echo', isError: false }];
+    const options: ChatOptions = { maxTokens: 64, tools: [{ name: 'echo', description: 'Echo', parameters: { type: 'object', properties: { x: { type: 'string' } } } }] };
+    async function compile() { for (const provider of providers) { await provider.chat(messages, options); await provider.streamChat(messages, () => {}, undefined, undefined, options); } }
+    void compile;
+  `);
+  await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'responses-tools-public.ts'], consumer, environment);
+  const vectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-tool-results-reference.json'), 'utf8')).rows;
+  await writeFile(path.join(consumer, 'responses-tools-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { OpenAiMixedProvider, AzureProvider } from '@ai-harness/core';
+    const vectors = ${JSON.stringify(vectors)}, calls = []; let replyItems;
+    function events(items) {
+      const output = items ?? [{ type: 'message', id: 'msg_owned', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'ok', annotations: [] }] }];
+      const result = [{ type: 'response.created', response: { id: 'resp_owned', status: 'in_progress', output: [] } }];
+      for (const [index, item] of output.entries()) {
+        result.push({ type: 'response.output_item.added', output_index: index, item: { ...item, status: 'in_progress', ...(items ? { arguments: '' } : { content: [] }) } });
+        result.push(items ? { type: 'response.function_call_arguments.delta', output_index: index, delta: item.arguments }
+          : { type: 'response.output_text.delta', output_index: index, content_index: 0, delta: 'ok' });
+        result.push({ type: 'response.output_item.done', output_index: index, item });
+      }
+      result.push({ type: 'response.completed', response: { id: 'resp_owned', model: 'untrusted-response-alias', status: 'completed', output, usage: { input_tokens: 1, output_tokens: 2, total_tokens: 3 } } });
+      return result.map(event => 'data: ' + JSON.stringify(event) + '\\n\\n').join('') + 'data: [DONE]\\n\\n';
+    }
+    const server = createServer(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += chunk;
+      calls.push({ path: request.url, headers: request.headers, body: JSON.parse(text) });
+      response.writeHead(200, { 'content-type': 'text/event-stream' }); response.end(events(replyItems));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const baseUrl = 'http://127.0.0.1:' + server.address().port + '/owned/v1', key = 'sk-installed-disposable';
+      const deployment = Object.fromEntries(vectors.filter(row => row.scope === 'azure').map(row => [row.model, 'owned-deployment']));
+      const providers = { openai: new OpenAiMixedProvider({ type: 'operator-openai', model: 'gpt-4o', apiKey: key, baseUrl, transport: 'sse' }),
+        azure: new AzureProvider({ type: 'operator-azure', model: 'gpt-4o', apiKey: key, baseUrl, azureDeploymentMap: deployment }) };
+      for (const vector of vectors) for (const stream of [false, true]) {
+        const provider = providers[vector.scope], options = { model: vector.model, maxTokens: 64, systemPrompt: 'owned guard', tools: structuredClone(vector.tools) };
+        const perform = async messages => {
+          let result, failure; const chunks = [];
+          if (stream) await provider.streamChat(messages, (_text, event) => { if (event?.type === 'tool_call') chunks.push(event.data); }, value => { result = value; }, error => { failure = error; }, options);
+          else result = await provider.chat(messages, options);
+          if (failure) throw failure;
+          assert.equal(result.model, vector.model); assert.equal(result.api, vector.api);
+          const call = calls.at(-1); assert.equal(call.body.model, vector.scope === 'azure' ? 'owned-deployment' : vector.model);
+          assert.equal(call.headers[vector.scope === 'azure' ? 'api-key' : 'authorization'], vector.scope === 'azure' ? key : 'Bearer ' + key);
+          return { result, chunks, call };
+        };
+        replyItems = vector.responseItems;
+        const first = await perform([{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }]);
+        assert.equal(first.result.content, ''); assert.deepEqual(first.result.toolCalls, vector.calls); if (stream) assert.deepEqual(first.chunks, vector.calls);
+        replyItems = undefined;
+        const messages = structuredClone(vector.messages).map(message => ({ ...message, timestamp: new Date(0) })), before = JSON.stringify({ messages, tools: options.tools });
+        const second = await perform(messages); assert.equal(second.result.content, 'ok');
+        const items = second.call.body.input.filter(item => ['function_call', 'function_call_output'].includes(item.type));
+        assert.deepEqual(items, vector.items); assert.equal(JSON.stringify({ messages, tools: options.tools }), before);
+      }
+      assert.equal(vectors.length, 704); assert.equal(calls.length, 2816);
+      console.log('installed original Responses unsigned tool items OK');
+    } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+  `);
+  expect(await run(process.execPath, ['responses-tools-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed original Responses unsigned tool items OK\n', stderr: '' });
+}, 60_000);
+
 it('dispatches original Google/Vertex schema/generation/choice/history and regional Bearer construction through installed declarations and runtime', async () => {
   await writeFile(path.join(consumer, 'google-tools-public.ts'), `
     import { GeminiProvider, VertexGeminiProvider, type AiProvider, type GoogleChatOptions, type Message } from '@ai-harness/core';
