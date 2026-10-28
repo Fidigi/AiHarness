@@ -1696,7 +1696,9 @@ it('dispatches native Bedrock binary streams through installed public declaratio
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
   const bytes = bedrockText('installed-bedrock-ok', 'end_turn', { inputTokens: 7, outputTokens: 2, cacheReadInputTokens: 3, totalTokens: 12 });
   const originalReference = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-reference.json'), 'utf8'));
+  const rawOutputReference = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-raw-output-reference.json'), 'utf8'));
   const originals = originalReference.models.map((model: { id: string; maxTokens: number }) => ({ id: model.id, maximum: model.maxTokens,
+    rawDefault: rawOutputReference.rows.find((row: { id: string }) => row.id === model.id).maxTokens,
     cost: originalReference.cases.find((row: { model: string; case: string }) => row.model === model.id && row.case === 'base-short').expected.costUsd }));
   const nativeUsage = { inputTokens: 7, outputTokens: 2, cacheReadInputTokens: 3, cacheWriteInputTokens: 1, totalTokens: 13 };
   const nativeBytes = bedrockText('installed-native-ok', 'end_turn', nativeUsage);
@@ -1765,6 +1767,19 @@ it('dispatches native Bedrock binary streams through installed public declaratio
         }
       }
       assert.equal(calls.length, 3 + 193 * 2);
+      for (const model of originals) {
+        const json = await native.chat([], { model: model.id });
+        assert.equal(json.model, model.id); assert.equal(json.api, 'bedrock-converse-stream');
+        await native.streamChat([], () => {}, value => { complete = value; }, undefined, { model: model.id });
+        assert.equal(complete.model, model.id); assert.equal(complete.api, 'bedrock-converse-stream');
+        for (const call of calls.slice(-2)) {
+          assert.equal(call.headers.authorization, 'Bearer installed-native-bearer');
+          assert.ok(call.path.startsWith('/proxy/model/' + encodeURIComponent(model.id) + '/'));
+          assert.equal(Object.hasOwn(call.body.inferenceConfig, 'maxTokens'), model.rawDefault !== null);
+          assert.equal(call.body.inferenceConfig.maxTokens, model.rawDefault ?? undefined);
+        }
+      }
+      assert.equal(calls.length, 3 + 193 * 4);
       console.log('installed Bedrock ConverseStream OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);

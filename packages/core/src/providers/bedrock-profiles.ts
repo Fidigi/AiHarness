@@ -206,7 +206,7 @@ const profiles = new Map(rows.map(([id, name, contextWindow, maxOutputTokens, re
   const metadata: PublishedModelMetadata = { id, name, api: 'bedrock-converse-stream', contextWindow, maxOutputTokens,
     capabilities: { reasoning, imageInput, toolCalls: true }, thinkingLevelMap: null,
     ...(Object.values(pricing).some(rate => rate > 0) ? { pricing } : {}) };
-  return [id, { metadata, cost, maxOutputTokens }] as const;
+  return [id, { metadata, cost, maxOutputTokens, rawDefaultMaxTokens: id.includes('anthropic.claude') ? maxOutputTokens : undefined }] as const;
 }));
 export function hasBedrockProfile(model: string): boolean { return profiles.has(model); }
 export function bedrockPublishedProfiles(): PublishedModelMetadata[] {
@@ -216,13 +216,16 @@ export function bedrockPublishedProfiles(): PublishedModelMetadata[] {
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const counter = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
-/** SDK explicit/effective ceiling only; omitted defaults and host preparation are separate policies. */
-export function validateBedrockProfileOutput(model: string, body: Record<string, unknown>, requested: unknown): void {
+/** Raw native omitted-output defaults and explicit/effective ceilings; simple/context/host preparation remain separate. */
+export function applyBedrockProfileOutputPolicy(model: string, body: Record<string, unknown>, requested: unknown): void {
   const profile = profiles.get(model);
   if (!profile) return;
   const valid = (value: unknown): boolean => typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= profile.maxOutputTokens;
   if ((requested !== undefined && !valid(requested)) || !record(body.inferenceConfig)
     || (body.inferenceConfig.maxTokens !== undefined && !valid(body.inferenceConfig.maxTokens))) throw new Error('Invalid Bedrock output limit.');
+  if (requested === undefined && body.inferenceConfig.maxTokens === undefined && profile.rawDefaultMaxTokens !== undefined) {
+    body.inferenceConfig.maxTokens = profile.rawDefaultMaxTokens;
+  }
 }
 
 /** Input counters exclude cache reads/writes; tiers use their gross sum, never output. */

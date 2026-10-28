@@ -225,6 +225,10 @@ const reference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/be
     cost: { input: number; output: number; cacheRead: number; cacheWrite: number } }>;
   cases: Array<{ model: string; case: string; observed: Record<string, unknown>; expected: NonNullable<ChatResponse['usage']> }>;
 };
+const rawOutputReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/bedrock-raw-output-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; constructionCaptureSha256: string; successfulUsageCaptureSha256: string;
+  rows: Array<{ id: string; maxTokens: number | null }>;
+};
 const known = reference.models[0];
 function observedResponse(value: unknown, binary: boolean): Response {
   return binary ? response(bedrockText('ok', 'end_turn', value)) : new Response(JSON.stringify({
@@ -238,6 +242,12 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
     expect(reference.catalogueSha256).toBe('df227d426b678e44cd82deae1cf433855d6b27f36fedcff3ef4fb812fe882868');
     expect(reference.captureSha256).toBe('6b27c0226ae372bde56def095c5ee06873385ff3ab52909add2f3db3f026b2bd');
     expect(reference.models).toHaveLength(193); expect(reference.cases).toHaveLength(666);
+    expect(rawOutputReference.pinnedCommit).toBe(reference.pinnedCommit);
+    expect(rawOutputReference.constructionCaptureSha256).toBe('2d160e9fa168b2eb2165c84a75e65cc09f0dda89acae34198266d690142aaca5');
+    expect(rawOutputReference.successfulUsageCaptureSha256).toBe(reference.captureSha256);
+    expect(rawOutputReference.rows.map(row => row.id)).toEqual(reference.models.map(model => model.id));
+    expect(rawOutputReference.rows.filter(row => row.maxTokens === null)).toHaveLength(111);
+    expect(rawOutputReference.rows.filter(row => row.maxTokens !== null)).toHaveLength(82);
     const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
     const provider = create({ model: known.id });
     const published = provider.getPublishedModels?.() ?? [];
@@ -254,7 +264,7 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
   for (const model of reference.models) it(`${model.id}: owns JSON/binary identity and pinned base/tier/1h/zero accounting`, async () => {
     const provider = create({ apiKey: 'disposable-bedrock-reference', model: model.id });
     for (const vector of reference.cases.filter(row => row.model === model.id)) for (const binary of [false, true]) {
-      const fetch = vi.fn(async (url: string | URL) => {
+      const fetch = vi.fn(async (url: string | URL, _init?: RequestInit) => {
         expect(String(url)).toBe(`https://bedrock-runtime.us-east-1.amazonaws.com/model/${encodeURIComponent(model.id)}/converse${binary ? '-stream' : ''}`);
         return observedResponse(vector.observed, binary);
       }); vi.stubGlobal('fetch', fetch);
@@ -266,6 +276,36 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       expect.soft(result?.usage).toMatchObject(counts);
       expect.soft(result?.usage?.costUsd).toBeCloseTo(costUsd!, 12);
       expect(fetch).toHaveBeenCalledOnce();
+      const expected = rawOutputReference.rows.find(row => row.id === model.id)!;
+      const config = JSON.parse(fetch.mock.calls[0][1]!.body as string).inferenceConfig;
+      expect(Object.hasOwn(config, 'maxTokens')).toBe(expected.maxTokens !== null);
+      expect(config.maxTokens).toBe(expected.maxTokens ?? undefined);
+    }
+  });
+
+  it('keeps raw defaults private and per-turn without changing explicit caps, derived/unknown transports or the legacy default', async () => {
+    const target = rawOutputReference.rows.find(row => row.maxTokens !== null)!;
+    const native = create({ model: known.id });
+    const published = native.getPublishedModels()?.find(row => row.id === target.id)!;
+    published.maxOutputTokens = 1; native.getPublishedModels = () => [published]; native.getModelApi = () => 'forged';
+    const options = Object.defineProperty({ model: target.id }, 'thinkingBudgets', { get() { throw new Error('Unused budget map was read.'); } });
+    class Compatible extends BedrockProvider {}
+    for (const binary of [false, true]) for (const [provider, selected, maximum] of [
+      [native, options, target.maxTokens],
+      [native, { model: target.id, maxTokens: 1 }, 1],
+      [native, { model: target.id, maxTokens: target.maxTokens! }, target.maxTokens],
+      [new Compatible({ type: 'bedrock', apiKey: 'disposable-bedrock-reference', model: target.id }), undefined, undefined],
+      [create({ model: 'anthropic.claude-unreviewed' }), undefined, undefined],
+      [create({ model: undefined }), undefined, undefined],
+    ] as const) {
+      const fetch = vi.fn(async (_url: string | URL, _init?: RequestInit) => observedResponse({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }, binary));
+      vi.stubGlobal('fetch', fetch);
+      if (binary) await provider.streamChat(messages, () => {}, undefined, undefined, selected);
+      else await provider.chat(messages, selected);
+      expect(fetch).toHaveBeenCalledOnce();
+      const config = JSON.parse(fetch.mock.calls[0][1]!.body as string).inferenceConfig;
+      expect(Object.hasOwn(config, 'maxTokens')).toBe(maximum !== undefined);
+      expect(config.maxTokens).toBe(maximum);
     }
   });
 

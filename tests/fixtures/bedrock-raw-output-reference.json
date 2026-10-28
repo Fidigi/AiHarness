@@ -1,0 +1,780 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "constructionCaptureSha256": "2d160e9fa168b2eb2165c84a75e65cc09f0dda89acae34198266d690142aaca5",
+  "successfulUsageCaptureSha256": "6b27c0226ae372bde56def095c5ee06873385ff3ab52909add2f3db3f026b2bd",
+  "scope": "Raw omitted-output projection for 193 approved Bedrock models: 193 of 1544 intentional-400 construction observations, corroborated by all666 successful synthetic AWS SDK usage requests. Null means the wire property is absent. This is not full streamSimple/context/reasoning/default-model policy, a Pi JSON entrypoint, AWS acceptance, cap feasibility or account qualification.",
+  "rows": [
+    {
+      "id": "amazon.nova-2-lite-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "amazon.nova-lite-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "amazon.nova-micro-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "amazon.nova-pro-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "anthropic.claude-fable-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "anthropic.claude-fable-5-1",
+      "maxTokens": 128000
+    },
+    {
+      "id": "anthropic.claude-haiku-4-5-20251001-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "anthropic.claude-haiku-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "anthropic.claude-opus-4-1-20250805-v1:0",
+      "maxTokens": 32000
+    },
+    {
+      "id": "anthropic.claude-opus-4-5-20251101-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "anthropic.claude-opus-4-6-v1",
+      "maxTokens": 128000
+    },
+    {
+      "id": "anthropic.claude-opus-4-7",
+      "maxTokens": 128000
+    },
+    {
+      "id": "anthropic.claude-opus-4-8",
+      "maxTokens": 128000
+    },
+    {
+      "id": "anthropic.claude-opus-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "anthropic.claude-sonnet-4-6",
+      "maxTokens": 128000
+    },
+    {
+      "id": "anthropic.claude-sonnet-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "anthropic.claude-sonnet-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "apac.amazon.nova-lite-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "apac.amazon.nova-micro-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "apac.amazon.nova-pro-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "apac.anthropic.claude-sonnet-4-20250514-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "au.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "au.anthropic.claude-haiku-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "au.anthropic.claude-opus-4-6-v1",
+      "maxTokens": 128000
+    },
+    {
+      "id": "au.anthropic.claude-opus-4-7",
+      "maxTokens": 128000
+    },
+    {
+      "id": "au.anthropic.claude-opus-4-8",
+      "maxTokens": 128000
+    },
+    {
+      "id": "au.anthropic.claude-opus-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "au.anthropic.claude-opus-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "au.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "au.anthropic.claude-sonnet-4-6",
+      "maxTokens": 128000
+    },
+    {
+      "id": "au.anthropic.claude-sonnet-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "ca.amazon.nova-lite-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "deepseek.v3-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "deepseek.v3.2",
+      "maxTokens": null
+    },
+    {
+      "id": "eu.amazon.nova-2-lite-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "eu.amazon.nova-lite-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "eu.amazon.nova-micro-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "eu.amazon.nova-pro-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "eu.anthropic.claude-fable-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "eu.anthropic.claude-haiku-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "eu.anthropic.claude-opus-4-5-20251101-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "eu.anthropic.claude-opus-4-6-v1",
+      "maxTokens": 128000
+    },
+    {
+      "id": "eu.anthropic.claude-opus-4-7",
+      "maxTokens": 128000
+    },
+    {
+      "id": "eu.anthropic.claude-opus-4-8",
+      "maxTokens": 128000
+    },
+    {
+      "id": "eu.anthropic.claude-opus-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "eu.anthropic.claude-opus-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "eu.anthropic.claude-sonnet-4-20250514-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "eu.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "eu.anthropic.claude-sonnet-4-6",
+      "maxTokens": 128000
+    },
+    {
+      "id": "eu.anthropic.claude-sonnet-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "eu.anthropic.claude-sonnet-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "eu.mistral.pixtral-large-2502-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "global.amazon.nova-2-lite-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "global.anthropic.claude-fable-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "global.anthropic.claude-fable-5-1",
+      "maxTokens": 128000
+    },
+    {
+      "id": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "global.anthropic.claude-haiku-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "global.anthropic.claude-opus-4-5-20251101-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "global.anthropic.claude-opus-4-6-v1",
+      "maxTokens": 128000
+    },
+    {
+      "id": "global.anthropic.claude-opus-4-7",
+      "maxTokens": 128000
+    },
+    {
+      "id": "global.anthropic.claude-opus-4-8",
+      "maxTokens": 128000
+    },
+    {
+      "id": "global.anthropic.claude-opus-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "global.anthropic.claude-opus-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "global.anthropic.claude-sonnet-4-20250514-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "global.anthropic.claude-sonnet-4-6",
+      "maxTokens": 128000
+    },
+    {
+      "id": "global.anthropic.claude-sonnet-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "global.anthropic.claude-sonnet-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "global.moonshotai.kimi-k3",
+      "maxTokens": null
+    },
+    {
+      "id": "global.openai.gpt-5.6-luna",
+      "maxTokens": null
+    },
+    {
+      "id": "global.openai.gpt-5.6-sol",
+      "maxTokens": null
+    },
+    {
+      "id": "global.openai.gpt-5.6-terra",
+      "maxTokens": null
+    },
+    {
+      "id": "global.openai.gpt-6-astra",
+      "maxTokens": null
+    },
+    {
+      "id": "global.openai.gpt-6-luna",
+      "maxTokens": null
+    },
+    {
+      "id": "global.openai.gpt-6-sol",
+      "maxTokens": null
+    },
+    {
+      "id": "global.openai.gpt-6.1-sol",
+      "maxTokens": null
+    },
+    {
+      "id": "global.xai.grok-4.6",
+      "maxTokens": null
+    },
+    {
+      "id": "global.xai.grok-4.7",
+      "maxTokens": null
+    },
+    {
+      "id": "global.zai.glm-5.3",
+      "maxTokens": null
+    },
+    {
+      "id": "google.gemma-4-26b-a4b",
+      "maxTokens": null
+    },
+    {
+      "id": "google.gemma-4-31b",
+      "maxTokens": null
+    },
+    {
+      "id": "google.gemma-4-e2b",
+      "maxTokens": null
+    },
+    {
+      "id": "in.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "in.anthropic.claude-opus-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "in.anthropic.claude-sonnet-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "in.openai.gpt-5.6-luna",
+      "maxTokens": null
+    },
+    {
+      "id": "in.openai.gpt-5.6-terra",
+      "maxTokens": null
+    },
+    {
+      "id": "jp.amazon.nova-2-lite-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "jp.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "jp.anthropic.claude-haiku-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "jp.anthropic.claude-opus-4-7",
+      "maxTokens": 128000
+    },
+    {
+      "id": "jp.anthropic.claude-opus-4-8",
+      "maxTokens": 128000
+    },
+    {
+      "id": "jp.anthropic.claude-opus-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "jp.anthropic.claude-opus-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "jp.anthropic.claude-sonnet-4-6",
+      "maxTokens": 128000
+    },
+    {
+      "id": "jp.anthropic.claude-sonnet-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "meta.llama3-1-70b-instruct-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "meta.llama3-1-8b-instruct-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "meta.llama3-3-70b-instruct-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "meta.llama4-maverick-17b-instruct-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "meta.llama4-scout-17b-instruct-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "minimax.minimax-m2",
+      "maxTokens": null
+    },
+    {
+      "id": "minimax.minimax-m2.1",
+      "maxTokens": null
+    },
+    {
+      "id": "minimax.minimax-m2.5",
+      "maxTokens": null
+    },
+    {
+      "id": "mistral.devstral-2-123b",
+      "maxTokens": null
+    },
+    {
+      "id": "mistral.magistral-small-2509",
+      "maxTokens": null
+    },
+    {
+      "id": "mistral.ministral-3-14b-instruct",
+      "maxTokens": null
+    },
+    {
+      "id": "mistral.ministral-3-3b-instruct",
+      "maxTokens": null
+    },
+    {
+      "id": "mistral.ministral-3-8b-instruct",
+      "maxTokens": null
+    },
+    {
+      "id": "mistral.mistral-large-3-675b-instruct",
+      "maxTokens": null
+    },
+    {
+      "id": "mistral.pixtral-large-2502-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "mistral.voxtral-mini-3b-2507",
+      "maxTokens": null
+    },
+    {
+      "id": "mistral.voxtral-small-24b-2507",
+      "maxTokens": null
+    },
+    {
+      "id": "moonshot.kimi-k2-thinking",
+      "maxTokens": null
+    },
+    {
+      "id": "moonshotai.kimi-k2.5",
+      "maxTokens": null
+    },
+    {
+      "id": "nvidia.nemotron-nano-12b-v2",
+      "maxTokens": null
+    },
+    {
+      "id": "nvidia.nemotron-nano-3-30b",
+      "maxTokens": null
+    },
+    {
+      "id": "nvidia.nemotron-nano-9b-v2",
+      "maxTokens": null
+    },
+    {
+      "id": "nvidia.nemotron-super-3-120b",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-5.4",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-5.5",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-5.6-luna",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-5.6-sol",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-5.6-terra",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-6-astra",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-6-luna",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-6-sol",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-6.1-sol",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-oss-120b",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-oss-120b-1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-oss-20b",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-oss-20b-1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-oss-safeguard-120b",
+      "maxTokens": null
+    },
+    {
+      "id": "openai.gpt-oss-safeguard-20b",
+      "maxTokens": null
+    },
+    {
+      "id": "qwen.qwen3-235b-a22b-2507-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "qwen.qwen3-32b-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "qwen.qwen3-coder-30b-a3b-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "qwen.qwen3-coder-480b-a35b-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "qwen.qwen3-coder-next",
+      "maxTokens": null
+    },
+    {
+      "id": "qwen.qwen3-next-80b-a3b",
+      "maxTokens": null
+    },
+    {
+      "id": "qwen.qwen3-vl-235b-a22b",
+      "maxTokens": null
+    },
+    {
+      "id": "us-gov.openai.gpt-oss-120b-1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us-gov.openai.gpt-oss-20b-1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.amazon.nova-2-lite-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.amazon.nova-lite-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.amazon.nova-micro-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.amazon.nova-premier-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.amazon.nova-pro-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.anthropic.claude-fable-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "us.anthropic.claude-fable-5-1",
+      "maxTokens": 128000
+    },
+    {
+      "id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "us.anthropic.claude-haiku-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "us.anthropic.claude-opus-4-1-20250805-v1:0",
+      "maxTokens": 32000
+    },
+    {
+      "id": "us.anthropic.claude-opus-4-5-20251101-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "us.anthropic.claude-opus-4-6-v1",
+      "maxTokens": 128000
+    },
+    {
+      "id": "us.anthropic.claude-opus-4-7",
+      "maxTokens": 128000
+    },
+    {
+      "id": "us.anthropic.claude-opus-4-8",
+      "maxTokens": 128000
+    },
+    {
+      "id": "us.anthropic.claude-opus-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "us.anthropic.claude-opus-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "maxTokens": 64000
+    },
+    {
+      "id": "us.anthropic.claude-sonnet-4-6",
+      "maxTokens": 128000
+    },
+    {
+      "id": "us.anthropic.claude-sonnet-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "us.anthropic.claude-sonnet-5-5",
+      "maxTokens": 128000
+    },
+    {
+      "id": "us.meta.llama3-1-70b-instruct-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.meta.llama3-1-8b-instruct-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.meta.llama3-3-70b-instruct-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.meta.llama4-maverick-17b-instruct-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.meta.llama4-scout-17b-instruct-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.mistral.pixtral-large-2502-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.moonshotai.kimi-k3",
+      "maxTokens": null
+    },
+    {
+      "id": "us.openai.gpt-5.6-luna",
+      "maxTokens": null
+    },
+    {
+      "id": "us.openai.gpt-5.6-sol",
+      "maxTokens": null
+    },
+    {
+      "id": "us.openai.gpt-5.6-terra",
+      "maxTokens": null
+    },
+    {
+      "id": "us.openai.gpt-6-astra",
+      "maxTokens": null
+    },
+    {
+      "id": "us.openai.gpt-6-luna",
+      "maxTokens": null
+    },
+    {
+      "id": "us.openai.gpt-6-sol",
+      "maxTokens": null
+    },
+    {
+      "id": "us.openai.gpt-6.1-sol",
+      "maxTokens": null
+    },
+    {
+      "id": "us.writer.palmyra-x4-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.writer.palmyra-x5-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "us.xai.grok-4.6",
+      "maxTokens": null
+    },
+    {
+      "id": "us.xai.grok-4.7",
+      "maxTokens": null
+    },
+    {
+      "id": "us.zai.glm-5.3",
+      "maxTokens": null
+    },
+    {
+      "id": "writer.palmyra-x4-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "writer.palmyra-x5-v1:0",
+      "maxTokens": null
+    },
+    {
+      "id": "xai.grok-4.3",
+      "maxTokens": null
+    },
+    {
+      "id": "xai.grok-4.6",
+      "maxTokens": null
+    },
+    {
+      "id": "zai.glm-4.7",
+      "maxTokens": null
+    },
+    {
+      "id": "zai.glm-4.7-flash",
+      "maxTokens": null
+    },
+    {
+      "id": "zai.glm-5",
+      "maxTokens": null
+    }
+  ]
+}
