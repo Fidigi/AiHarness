@@ -16,6 +16,10 @@ const reference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/az
     expectedUsage: NonNullable<ChatResponse['usage']>;
   }>;
 };
+const usageReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/original-responses-usage-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; captureSha256: string; modelProjections: number; tieredModelProjections: number;
+  rows: Array<{ provider: string; model: string; api: string; case: string; observed: unknown; expected: NonNullable<ChatResponse['usage']> }>;
+};
 const messages: Message[] = [{ id: 'question', role: 'user', content: 'hello', timestamp: new Date(0) }];
 const completed = (output: unknown[] = []) => new Response([
   { type: 'response.output_text.delta', delta: 'Azure answer' },
@@ -186,10 +190,11 @@ describe('original Azure scoped declarations and physical policies', () => {
 
   for (const row of reference.profiles) it(`${row.profile.id}: owns eight request vectors, both facade modes, usage and logical/API identity`, async () => {
     const profile = row.profile, calls: Array<{ path: string; headers: Headers; body: Record<string, unknown> }> = [];
+    let observed: unknown;
     vi.stubGlobal('fetch', vi.fn(async (url, init) => {
       const body = JSON.parse(String(init.body));
       calls.push({ path: new URL(String(url)).pathname + new URL(String(url)).search, headers: new Headers(init.headers), body });
-      return response(profile.api, body.stream === true);
+      return response(profile.api, body.stream === true, observed);
     }));
     const provider = ProviderFactory.create(config(profile.id));
     const parameters = { type: 'object', required: ['x'], properties: { x: { type: 'string' } }, additionalProperties: false };
@@ -230,6 +235,21 @@ describe('original Azure scoped declarations and physical policies', () => {
     expect(calls.at(-1)!.body.prompt_cache_key ?? null).toBe(row.noneSessionKey);
     expect(calls.at(-1)!.body[profile.api === 'openai-completions' ? 'max_completion_tokens' : 'max_output_tokens'])
       .toBeUndefined(); // Raw omitted output is not the pinned simple maximum/context allocation.
+    expect(usageReference.pinnedCommit).toBe(reference.pinnedCommit);
+    expect(usageReference.captureSha256).toBe('8d0b14426afcce841415ad2489e8f17ffc8240865bb855310ada55b3f57cfa10');
+    expect(usageReference.modelProjections).toBe(89); expect(usageReference.tieredModelProjections).toBe(12); expect(usageReference.rows).toHaveLength(214);
+    const accounting = usageReference.rows.filter(vector => vector.provider === 'azure' && vector.model === profile.id);
+    expect(accounting.map(vector => vector.case)).toEqual(expect.arrayContaining(['zero', 'base']));
+    for (const vector of accounting) for (const streaming of [false, true]) {
+      observed = vector.observed;
+      let result: ChatResponse | undefined;
+      if (!streaming) result = await provider.chat(messages, { maxTokens: 16 });
+      else await provider.streamChat(messages, () => {}, value => { result = value; }, error => { throw error; }, { maxTokens: 16 });
+      expect(result).toMatchObject({ model: profile.id, api: vector.api, provider: 'azure' });
+      const { costUsd, ...counts } = vector.expected;
+      expect(result?.usage).toMatchObject(counts); expect(result?.usage?.costUsd).toBeCloseTo(costUsd!, 12);
+    }
+    expect(calls).toHaveLength(18 + accounting.length * 2);
   });
 });
 

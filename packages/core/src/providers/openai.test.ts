@@ -48,6 +48,11 @@ const physicalReference = JSON.parse(readFileSync(new URL('../../../../tests/fix
   pinnedCommit: string; rows: Array<{ model: string; systemRole: string; observed: unknown; expected: NonNullable<providers.ChatResponse['usage']> }>;
 };
 
+const usageReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/original-responses-usage-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; captureSha256: string; modelProjections: number; tieredModelProjections: number; requests: number;
+  rows: Array<{ provider: string; model: string; api: string; case: string; observed: unknown; expected: NonNullable<providers.ChatResponse['usage']> }>;
+};
+
 describe('explicit mixed OpenAI Responses/Decisions SDK', () => {
   for (const profile of reasoningReference.rows) it(`${profile.model}: distinguishes omitted reasoning from explicit levels on chat and stream`, async () => {
     expect(reasoningReference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
@@ -73,6 +78,21 @@ describe('explicit mixed OpenAI Responses/Decisions SDK', () => {
       expect(body.max_output_tokens).toBeUndefined();
     }
     expect(calls).toHaveLength(16);
+    expect(usageReference.pinnedCommit).toBe(reasoningReference.pinnedCommit);
+    expect(usageReference.captureSha256).toBe('8d0b14426afcce841415ad2489e8f17ffc8240865bb855310ada55b3f57cfa10');
+    expect(usageReference.modelProjections).toBe(89); expect(usageReference.tieredModelProjections).toBe(12); expect(usageReference.rows).toHaveLength(214);
+    const accounting = usageReference.rows.filter(row => row.provider === 'openai' && row.model === profile.model);
+    expect(accounting.map(row => row.case)).toEqual(expect.arrayContaining(['zero', 'base']));
+    for (const vector of accounting) for (const streaming of [false, true]) {
+      state.usage = vector.observed;
+      let result: providers.ChatResponse | undefined;
+      if (!streaming) result = await provider.chat([message], { maxTokens: 16 });
+      else await provider.streamChat([message], () => {}, value => { result = value; }, error => { throw error; }, { maxTokens: 16 });
+      expect(result).toMatchObject({ model: profile.model, api: vector.api });
+      const { costUsd, ...counts } = vector.expected;
+      expect(result?.usage).toMatchObject(counts); expect(result?.usage?.costUsd).toBeCloseTo(costUsd!, 12);
+    }
+    expect(calls).toHaveLength(16 + accounting.length * 2);
   });
   it('requires observed native total counters and leaves unattributed totals unpriced', async () => {
     const { state, baseUrl } = await fixture();
