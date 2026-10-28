@@ -1800,7 +1800,7 @@ it('validates installed public provider discovery declarations and keyless based
   }
 }, 60_000);
 
-it('binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choice, scalar generation, grammar and tool images through installed declarations and runtime', async () => {
+it('binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choice, scalar generation, grammar, tool images and output boundaries through installed declarations and runtime', async () => {
   await writeFile(path.join(consumer, 'responses-tools-public.ts'), `
     import { OpenAiMixedProvider, AzureProvider, AzureResponsesProvider, type AiProvider, type ChatOptions, type ChatToolDefinition, type ResponsesChatOptions, type Message, type ToolCall } from '@ai-harness/core';
     const providers: AiProvider[] = [new OpenAiMixedProvider({ type: 'openai', apiKey: 'sk-disposable', model: 'gpt-5', transport: 'sse' }),
@@ -1843,12 +1843,14 @@ it('binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choi
   const grammarVectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-grammar-reference.json'), 'utf8')).rows;
   const grammarReplays = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-grammar-tool-results-reference.json'), 'utf8')).rows;
   const imageVectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-tool-images-reference.json'), 'utf8')).rows;
+  const outputVectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-output-boundaries-reference.json'), 'utf8')).rows;
   await writeFile(path.join(consumer, 'responses-tools-public.mjs'), `
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
     import { OpenAiMixedProvider, AzureProvider } from '@ai-harness/core';
     const vectors = ${JSON.stringify(vectors)}, policyVectors = ${JSON.stringify(policyVectors)}, scalarVectors = ${JSON.stringify(scalarVectors)},
-      grammarVectors = ${JSON.stringify(grammarVectors)}, grammarReplays = ${JSON.stringify(grammarReplays)}, imageVectors = ${JSON.stringify(imageVectors)}, calls = []; let replyItems;
+      grammarVectors = ${JSON.stringify(grammarVectors)}, grammarReplays = ${JSON.stringify(grammarReplays)}, imageVectors = ${JSON.stringify(imageVectors)},
+      outputVectors = ${JSON.stringify(outputVectors)}, calls = []; let replyItems;
     function events(items) {
       const output = items ?? [{ type: 'message', id: 'msg_owned', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'ok', annotations: [] }] }];
       const result = [{ type: 'response.created', response: { id: 'resp_owned', status: 'in_progress', output: [] } }];
@@ -1982,11 +1984,43 @@ it('binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choi
         assert.equal(second.result.content, 'ok'); assert.deepEqual(second.call.body.input.slice(2), vector.items);
       }
       assert.equal(imageVectors.length, 704); assert.equal(calls.length, 12600); assert.equal(refusals, 696);
-      console.log('installed original Responses unsigned/schema/scalar/grammar/tool images OK');
+      for (const vector of outputVectors) for (const stream of [false, true]) {
+        const provider = providers[vector.scope], options = { ...structuredClone(vector.options), model: vector.model };
+        const messages = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }], before = structuredClone({ messages, options }), count = calls.length;
+        let result, failure;
+        if (stream) await provider.streamChat(messages, () => {}, value => { result = value; }, error => { failure = error; }, options);
+        else result = await provider.chat(messages, options);
+        if (failure) throw failure;
+        assert.equal(result.content, 'ok'); assert.equal(result.model, vector.model); assert.equal(result.api, vector.api);
+        assert.equal(calls.length, count + 1); const call = calls.at(-1);
+        assert.deepEqual(Object.fromEntries(['max_output_tokens', 'temperature'].filter(key => Object.hasOwn(call.body, key)).map(key => [key, call.body[key]])), vector.fields);
+        assert.equal(call.body.model, vector.scope === 'azure' ? 'owned-deployment' : vector.model); assert.equal(call.body.stream, true); assert.equal(call.body.tools, undefined);
+        assert.equal(call.path, '/owned/v1/responses' + (vector.scope === 'azure' ? '?api-version=v1' : ''));
+        assert.equal(call.headers[vector.scope === 'azure' ? 'api-key' : 'authorization'], vector.scope === 'azure' ? key : 'Bearer ' + key);
+        assert.equal(call.headers[vector.scope === 'azure' ? 'authorization' : 'api-key'], undefined);
+        assert.deepEqual({ messages, options }, before);
+      }
+      assert.equal(outputVectors.length, 616); assert.equal(calls.length, 13832);
+      // Core-only invalid-output refusals, separate from the616 valid raw SDK requests.
+      for (const vector of outputVectors.filter(row => row.case === 'raw-maximum')) {
+        const provider = providers[vector.scope], exposed = provider.getPublishedModels().find(row => row.id === vector.model);
+        assert.equal(exposed.maxOutputTokens, vector.maxOutputTokens); exposed.maxOutputTokens = Number.MAX_SAFE_INTEGER;
+        for (const maxTokens of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, vector.maxOutputTokens + 1]) for (const stream of [false, true]) {
+          const count = calls.length, chunks = [], options = { model: vector.model, maxTokens }; let failure, completions = 0;
+          const diagnostic = 'Invalid ' + (vector.scope === 'azure' ? 'Azure' : 'OpenAI') + ' output limit.';
+          if (stream) {
+            await provider.streamChat([], (text, event) => { chunks.push({ text, event }); }, () => { completions++; }, error => { failure = error; }, options);
+            assert.equal(failure?.message, diagnostic); assert.equal(completions, 0); assert.deepEqual(chunks, []);
+          } else await assert.rejects(() => provider.chat([], options), { message: diagnostic });
+          assert.equal(calls.length, count); refusals++;
+        }
+      }
+      assert.equal(calls.length, 13832); assert.equal(refusals, 1928);
+      console.log('installed original Responses unsigned/schema/scalar/grammar/tool images/output boundaries OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);
   expect(await run(process.execPath, ['responses-tools-public.mjs'], consumer, environment))
-    .toEqual({ code: 0, stdout: 'installed original Responses unsigned/schema/scalar/grammar/tool images OK\n', stderr: '' });
+    .toEqual({ code: 0, stdout: 'installed original Responses unsigned/schema/scalar/grammar/tool images/output boundaries OK\n', stderr: '' });
 }, 60_000);
 
 it('dispatches original Google/Vertex schema/generation/choice/history/images and regional Bearer construction through installed declarations and runtime', async () => {

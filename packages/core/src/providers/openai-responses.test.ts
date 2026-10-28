@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OpenAiMixedProvider, OpenAiResponsesProvider, AzureProvider, AzureResponsesProvider, type AiProvider, type ChatOptions, type ChatResponse, type ResponsesChatOptions } from './index.js';
@@ -17,6 +18,11 @@ const boundaries = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/r
 const generation = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/responses-scalar-generation-reference.json', import.meta.url), 'utf8')) as {
   pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; cases: number; reusedCaptureRequests: number;
   rows: Array<{ scope: Scope; model: string; api: string; sourceCase: string; options: ChatOptions; fields: Record<string, unknown> }>;
+};
+const outputBytes = readFileSync(new URL('../../../../tests/fixtures/responses-output-boundaries-reference.json', import.meta.url));
+const outputReference = JSON.parse(outputBytes.toString()) as {
+  pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; cases: number; freshSdkRequests: number;
+  rows: Array<{ scope: Scope; model: string; api: string; maxOutputTokens: number; case: string; options: ChatOptions; fields: Record<string, unknown> }>;
 };
 type GrammarVector = PolicyVector & { supportsGrammar: boolean };
 type GrammarReference = Omit<PolicyReference, 'rows'> & { grammarCapableProjections: number; fallbackProjections: number; rows: GrammarVector[] };
@@ -76,9 +82,13 @@ describe('original OpenAI/Azure Responses unsigned call/item IDs and paired tool
       expect(reference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
       expect(reference.captureSha256).toBe('bd2ecd7d1f31612c828ce3a486352f4e501fa46a42e52a24012ab4498412e4bd');
       expect(reference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
-      for (const fixture of [policy, boundaries, generation, imageReference]) {
+      for (const fixture of [policy, boundaries, generation, imageReference, outputReference]) {
         expect(fixture.pinnedCommit).toBe(reference.pinnedCommit); expect(fixture.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
       }
+      expect(createHash('sha256').update(outputBytes).digest('hex')).toBe('c23c5d2a68486f451e21f32ba5d9e721ba621b38a8302ee8d905dd96530822cd');
+      expect(outputReference.captureSha256).toBe('1711a9c726114bc8490f2c790e372c1f061a73c9845e3f93290908243a876b10');
+      expect([outputReference.modelProjections, outputReference.cases, outputReference.freshSdkRequests, outputReference.rows.length]).toEqual([88, 616, 616, 616]);
+      expect([...new Set(outputReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(models);
       expect(generation.captureSha256).toBe('637862c5e5ae2ae6c9729d4d8bdf7fc13130f15320fcaacaa680a8c93f782a8a');
       expect([generation.modelProjections, generation.cases, generation.rows.length, generation.reusedCaptureRequests]).toEqual([88, 176, 176, 445]);
       expect([...new Set(generation.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(models);
@@ -182,7 +192,7 @@ describe('original Responses scoped JSON-schema and tool-choice construction', (
       }
       expect(options).toEqual(before);
     };
-    for (const model of models) it(`${scope}/${model}: binds executed strict/default/choice and scalar generation projections on both facades`, async () => {
+    for (const model of models) it(`${scope}/${model}: binds executed strict/default/choice, scalar generation and output boundaries on both facades`, async () => {
       const rows = policy.rows.filter(row => row.scope === scope && row.model === model), f = fixture(scope, model);
       const scalars = generation.rows.filter(row => row.scope === scope && row.model === model);
       expect(scalars.map(row => row.sourceCase)).toEqual(['raw-default', 'typed-tools-high-temperature']);
@@ -194,6 +204,25 @@ describe('original Responses scoped JSON-schema and tool-choice construction', (
         expect(Object.fromEntries(['max_output_tokens', 'temperature'].filter(key => Object.hasOwn(body, key)).map(key => [key, body[key]]))).toEqual(vector.fields);
         expect(body.model).toBe(scope === 'azure' ? 'owned-deployment' : model); expect({ messages, options }).toEqual(before);
       }
+      const outputs = outputReference.rows.filter(row => row.scope === scope && row.model === model), outputStart = f.fetch.mock.calls.length;
+      expect(outputs.map(row => row.case)).toEqual(['raw-default', 'raw-answer1', 'raw-answer15', 'raw-answer16', 'raw-maximum', 'raw-temperature-zero', 'raw-temperature-one']);
+      for (const vector of outputs) for (const stream of [false, true]) {
+        const messages = structuredClone(user), options = { ...structuredClone(vector.options), model }, before = structuredClone({ messages, options });
+        const response = await f.call(stream, messages, options), body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
+        expect(response).toMatchObject({ content: 'ok', model, api: vector.api });
+        expect(Object.fromEntries(['max_output_tokens', 'temperature'].filter(key => Object.hasOwn(body, key)).map(key => [key, body[key]]))).toEqual(vector.fields);
+        expect(body.model).toBe(scope === 'azure' ? 'owned-deployment' : model); expect(body.stream).toBe(true); expect(body.tools).toBeUndefined();
+        expect({ messages, options }).toEqual(before);
+      }
+      expect(f.fetch.mock.calls).toHaveLength(outputStart + 14);
+      // Core-only safety controls: the valid raw SDK matrix does not establish invalid-input equivalence.
+      const maximum = outputs[0]!.maxOutputTokens, exposed = f.provider.getPublishedModels!()!.find(row => row.id === model)!;
+      expect(exposed.maxOutputTokens).toBe(maximum); exposed.maxOutputTokens = Number.MAX_SAFE_INTEGER;
+      const refusalStart = f.fetch.mock.calls.length, chunkStart = f.chunks.length;
+      for (const maxTokens of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1, maximum + 1]) for (const stream of [false, true]) {
+        await expect(f.call(stream, user, { model, maxTokens })).rejects.toThrow(`Invalid ${scope === 'azure' ? 'Azure' : 'OpenAI'} output limit.`);
+      }
+      expect(f.fetch.mock.calls).toHaveLength(refusalStart); expect(f.chunks).toHaveLength(chunkStart);
       expect(rows.map(row => row.case)).toEqual(['default', 'false', 'strict-prefer', 'strict-require', 'auto', 'none', 'required', 'named', 'strict-prefer-none', 'strict-require-required', 'mixed', 'no-tools-required', 'structured-prefer', 'structured-require']);
       for (const vector of rows) for (const stream of [false, true]) await compare(f, vector, stream);
     });
