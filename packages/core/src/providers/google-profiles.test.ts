@@ -50,6 +50,11 @@ const historyReference = JSON.parse(readFileSync(new URL('../../../../tests/fixt
   rows: Array<{ scope: Scope; model: string; api: string; case: string; responseParts: Array<Record<string, unknown>>;
     calls: NonNullable<ChatResponse['toolCalls']>; messages: Array<Omit<Message, 'timestamp'>>; tools: NonNullable<ChatOptions['tools']>; contents: unknown[] }>;
 };
+const imageReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/google-tool-images-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; catalogueSha256: Record<Scope, string>; modelProjections: number; selectedVectors: number; selectedRequests: number; newlyExecutedSdkRequests: number;
+  captures: Array<{ source: string; captureSha256: string; reusedExecution: boolean; selectedVectors: number; selectedRequests: number }>;
+  rows: typeof historyReference.rows;
+};
 const input = [{ id: 'user', role: 'user' as const, content: 'probe', timestamp: new Date(0) }];
 const observed = { promptTokenCount: 12, candidatesTokenCount: 2, thoughtsTokenCount: 3, cachedContentTokenCount: 4, totalTokenCount: 17 };
 const known = (price: Price) => price.input > 0 || price.output > 0 || price.cacheRead > 0 || price.cacheWrite > 0;
@@ -100,6 +105,14 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
         { preparation: 'cross-provenance', captureSha256: '6eb92181f28954ef5d6446dfe2d519be3facfd8f53d1a0c41295689c32d2b66c', cases: 140, requests: 280 },
       ]);
       expect([...new Set(historyReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(profiles.map(row => row.id));
+      expect(imageReference.pinnedCommit).toBe(toolReference.pinnedCommit); expect(imageReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
+      expect(imageReference.modelProjections).toBe(35); expect(imageReference.selectedVectors).toBe(140); expect(imageReference.selectedRequests).toBe(280);
+      expect(imageReference.newlyExecutedSdkRequests).toBe(140); expect(imageReference.rows).toHaveLength(140);
+      expect(imageReference.captures).toEqual([
+        { source: 'reused-reference', captureSha256: '7fe1bb81f869f8933c8dd797d8925cf08f7d8f86c79f9060b8aa27833b1ccb7f', reusedExecution: true, selectedVectors: 70, selectedRequests: 140 },
+        { source: 'empty-reference', captureSha256: '10651e9881f2890c9b2f51e700e961a78051f79548b5d51fec74d7fcf3b9d221', reusedExecution: false, selectedVectors: 70, selectedRequests: 140 },
+      ]);
+      expect([...new Set(imageReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(profiles.map(row => row.id));
       expect(boundaryReference.pinnedCommit).toBe(toolReference.pinnedCommit);
       expect(boundaryReference.captureSha256).toBe('53b5cc7a8c669fd79d832d21c4ebbb29daf4f34044a9839c46a6886045c7dfa2');
       expect(boundaryReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
@@ -191,10 +204,12 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
         expect(JSON.parse(init!.body as string).tools).toEqual(physical.tools);
       }
     });
-    for (const profile of profiles) it(`${scope}/${profile.id}: binds unsigned provided response IDs and tool-result history to actual same/cross identity SDK requests`, async () => {
+    for (const profile of profiles) it(`${scope}/${profile.id}: binds unsigned IDs, same/cross identity history and one-image results to actual SDK requests`, async () => {
       const f = fixture(scope, profile.id), vectors = historyReference.rows.filter(row => row.scope === scope && row.model === profile.id);
+      const images = imageReference.rows.filter(row => row.scope === scope && row.model === profile.id);
       expect(vectors.map(row => row.case)).toEqual(['success', 'error', 'empty', 'adjacent-two-results', 'cross-provider', 'cross-api', 'cross-model', 'legacy-missing-identity']);
-      for (const vector of vectors) for (const stream of [false, true]) {
+      expect(images.map(row => row.case)).toEqual(['image-success', 'image-error', 'image-only-success', 'image-only-error']);
+      for (const vector of [...vectors, ...images]) for (const stream of [false, true]) {
         const options = { model: profile.id, maxTokens: 64, tools: structuredClone(vector.tools) };
         f.parts(vector.responseParts);
         const first = await f.call(stream, options);
@@ -223,10 +238,22 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
             { role: 'user', parts: [{ functionResponse: { name: 'echo', response: { content: 'first', isError: false } } }] },
             { role: 'user', parts: [{ functionResponse: { name: 'other', response: { content: 'second', isError: true } } }] },
           ]);
+          const image = imageReference.rows.find(row => row.scope === scope && row.model === model && row.case === 'image-success')!;
+          const imageMessages: Message[] = structuredClone(image.messages).map(message => ({ ...message, timestamp: new Date(0) })), before = structuredClone(imageMessages);
+          await f.call(stream, { model: selected, maxTokens: 64 }, imageMessages);
+          const legacy = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string).contents;
+          expect(legacy[2]).toEqual({ role: 'user', parts: [{ functionResponse: { name: 'echo', response: { content: 'first', isError: false } } }] });
+          expect(legacy.at(-1).parts[0]).toEqual({ text: `Tool images for ${image.calls[0].id}` }); expect(imageMessages).toEqual(before);
         }
       }
       const f = fixture(scope, `${model}-unreviewed`); f.parts(vector.responseParts);
-      for (const stream of [false, true]) expect((await f.call(stream, { model, maxTokens: 64 })).toolCalls).toEqual(vector.calls);
+      for (const stream of [false, true]) {
+        expect((await f.call(stream, { model, maxTokens: 64 })).toolCalls).toEqual(vector.calls);
+        const image = imageReference.rows.find(row => row.scope === scope && row.model === model && row.case === 'image-success')!;
+        const messages: Message[] = structuredClone(image.messages).map(message => ({ ...message, timestamp: new Date(0) }));
+        f.parts([{ text: 'ok' }]); await f.call(stream, { model, maxTokens: 64 }, messages);
+        expect(JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string).contents).toEqual(image.contents); f.parts(vector.responseParts);
+      }
     });
     for (const profile of profiles) it(`${scope}/${profile.id}: binds raw strict/prefer/choice construction and pretransport refusals to executed SDK vectors`, async () => {
       const f = fixture(scope, profile.id), vectors = policyReference.rows.filter(row => row.scope === scope && row.model === profile.id);

@@ -134,9 +134,11 @@ export function applyGoogleToolPolicy(scope: GoogleNativeScope | undefined, mode
 }
 
 /** Patch only owned unsigned tool history; contents are the adapter's fresh, one-per-message conversion. */
-export function applyGoogleToolHistory(scope: GoogleNativeScope, model: string, body: Record<string, unknown>, messages: Message[]): void {
-  if (!hasGoogleProfile(scope, model)) return;
-  const requiresIds = Number(/^gemini(?:-live)?-(\d+)/i.exec(model)?.[1] ?? 0) >= 3;
+export function applyGoogleToolHistory(scope: GoogleNativeScope, model: string, body: Record<string, unknown>, messages: Message[],
+  toolImageParts: (message: Message) => Array<Record<string, unknown>>): void {
+  const profile = profiles.get(`${scope}\0${model}`); if (!profile) return;
+  const major = /^gemini(?:-live)?-(\d+)/i.exec(profile.id)?.[1], requiresIds = Number(major ?? 0) >= 3;
+  const nestedImages = major === undefined || requiresIds;
   const provider = scope === 'google' ? 'google' : 'vertex', api = scope === 'google' ? 'google-generative-ai' : 'google-vertex';
   const contents = body.contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>;
   const grouped: typeof contents = [], ids = new Map<string, string>();
@@ -152,11 +154,16 @@ export function applyGoogleToolHistory(scope: GoogleNativeScope, model: string, 
       }
     }
     if (message.role === 'tool') {
+      const images = profile.imageInput ? toolImageParts(message) : [];
       content.parts = [{ functionResponse: { name: message.name || 'tool',
-        response: { [message.isError ? 'error' : 'output']: message.content },
+        response: { [message.isError ? 'error' : 'output']: message.content || (images.length ? '(see attached image)' : '') },
+        ...(images.length && nestedImages ? { parts: images } : {}),
         ...(requiresIds && message.toolCallId !== undefined ? { id: ids.get(message.toolCallId) ?? message.toolCallId } : {}) } }];
       const previous = grouped.at(-1);
-      if (previous?.parts.some(part => part.functionResponse)) { previous.parts.push(...content.parts); continue; }
+      if (previous?.parts.some(part => part.functionResponse)) previous.parts.push(...content.parts);
+      else grouped.push(content);
+      if (images.length && !nestedImages) grouped.push({ role: 'user', parts: [{ text: 'Tool result image:' }, ...images] });
+      continue;
     }
     grouped.push(content);
   }

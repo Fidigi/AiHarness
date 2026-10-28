@@ -3886,7 +3886,9 @@ export class GeminiProvider extends AiProvider {
   }
 
   private buildBody(messages: Message[], options?: GoogleChatOptions): Record<string, unknown> {
-    messages = toolImageMessages(messages);
+    const thinkingModel = String(options?.model ?? this.config.model ?? '');
+    const native = this.nativeScope && hasGoogleProfile(this.nativeScope, thinkingModel) ? this.nativeScope : undefined;
+    if (!native) messages = toolImageMessages(messages);
     const systemText = [
       options?.systemPrompt,
       ...messages.filter(message => message.role === 'system').map(message => message.content),
@@ -3912,8 +3914,6 @@ export class GeminiProvider extends AiProvider {
       }
       return { role: message.role === 'assistant' ? 'model' : 'user', parts };
     });
-    const thinkingModel = String(options?.model ?? this.config.model ?? '');
-    const native = this.nativeScope && hasGoogleProfile(this.nativeScope, thinkingModel) ? this.nativeScope : undefined;
     const highBudget = thinkingModel.includes('2.5-pro') ? 32768
       : thinkingModel.includes('2.5-flash') ? 24576 : 8192;
     const thinkingBudgets = {
@@ -3940,7 +3940,10 @@ export class GeminiProvider extends AiProvider {
     if (native) applyGoogleNativeGenerationConfig(native, thinkingModel, body.generationConfig as Record<string, unknown>, options);
     if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
     applyGoogleToolPolicy(native, thinkingModel, body, options);
-    if (native) applyGoogleToolHistory(native, thinkingModel, body, messages);
+    if (native) applyGoogleToolHistory(native, thinkingModel, body, messages, message => messageImages(message).flatMap(image => {
+      const data = parseDataImage(image.url);
+      return data ? [{ inlineData: { mimeType: data.mediaType, data: data.data } }] : [];
+    }));
     return body;
   }
 
