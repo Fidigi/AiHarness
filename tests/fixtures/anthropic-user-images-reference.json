@@ -1,0 +1,2463 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "895812964de30bc6e343d421fe95a5c186a7c4a94c93318a62cb98115458fc9d",
+  "catalogueSha256": "327ea610aca64889902458243e9b6a440eb678671f5993b88ad32ac6e827b587",
+  "modelProjections": 17,
+  "vectors": 68,
+  "freshSdkRequests": 68,
+  "rows": [
+    {
+      "model": "claude-fable-5",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-fable-5",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-fable-5",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-fable-5",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-fable-5-1",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-fable-5-1",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-fable-5-1",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-fable-5-1",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-5",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-5",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-5",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-5",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-6",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-6",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-6",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-6",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-7",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-7",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-7",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-7",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-8",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-8",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-8",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-4-8",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-5",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-5",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-5",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-5",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-5-5",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-5-5",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-5-5",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-opus-5-5",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "api": "anthropic-messages",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "api": "anthropic-messages",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "api": "anthropic-messages",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "api": "anthropic-messages",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedMessages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "probe"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [],
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      ]
+    }
+  ],
+  "limits": "Whole raw native user-message arrays with nonempty/empty/whitespace text plus one opaque PNG projection,or nonempty text plus two distinct PNG projections.Existing five-model managed effort controls remain in20 complete arrays,without numeric-policy substitution.68 fresh successful SDK requests;the first failed oracle/preparation remains separate,with no vector credit.No image decoding/validity/normalization/resize/vendor acceptance,full media/context/tokenization/default/reasoning/tool/replay/host/auth/account/typed Pi/profile certificate.Core chat/streamChat are separate consumer boundaries,not upstream nonstreaming service evidence."
+}

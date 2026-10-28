@@ -4537,8 +4537,8 @@ export class AnthropicProvider extends AiProvider {
       ...(costUsd !== undefined ? { costUsd } : {}) };
   }
 
-  protected buildAnthropicMessages(messages: Message[], nativeToolImages = false): Array<{ role: 'user' | 'assistant'; content: unknown }> {
-    messages = nativeToolImages ? messages : toolImageMessages(messages);
+  protected buildAnthropicMessages(messages: Message[], nativeImages = false): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    messages = nativeImages ? messages : toolImageMessages(messages);
     return messages.filter(message => message.role !== 'system').map(message => {
       if (message.role === 'tool') {
         return {
@@ -4569,7 +4569,7 @@ export class AnthropicProvider extends AiProvider {
       return {
         role: message.role === 'assistant' ? 'assistant' : 'user',
         content: images.length ? [
-          ...(message.content ? [{ type: 'text', text: message.content }] : []),
+          ...(message.content && (!nativeImages || message.role !== 'user' || message.content.trim()) ? [{ type: 'text', text: message.content }] : []),
           ...images,
         ] : message.content,
       };

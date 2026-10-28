@@ -56,6 +56,10 @@ function providedToolEvents(vector: ToolResultVector): Array<Record<string, unkn
       { type: 'content_block_stop', index },
     ]), { type: 'message_delta', delta: { stop_reason: 'tool_use' }, usage: observed }, { type: 'message_stop' }];
 }
+const imageBytes = readFileSync(new URL('../../../../tests/fixtures/anthropic-user-images-reference.json', import.meta.url));
+const imageFixture = JSON.parse(imageBytes.toString()) as { catalogueSha256: string; modelProjections: number; vectors: number; freshSdkRequests: number;
+  rows: Array<{ model: string; api: string; case: string; provided: { text: string; images: Array<{ mimeType: string; data: string }> };
+    expectedMessages: Array<Record<string, unknown>> }> };
 const profiles = Object.values(JSON.parse(bytes.toString())['anthropic-messages']) as Array<{
   id: string; name: string; contextWindow: number; maxTokens: number;
   cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -171,6 +175,20 @@ describe('owned Anthropic response authority', () => {
       expect(second.toolCalls ?? []).toEqual([]); expect({ history, options }).toEqual(before);
     }
     expect(f.fetch.mock.calls.length - start).toBe(48);
+    const imageStart = f.fetch.mock.calls.length;
+    for (const vector of imageFixture.rows.filter(row => row.model === profile.id)) {
+      const messages: Message[] = [{ ...input[0], content: vector.provided.text, blocks: vector.provided.images.map(image => ({
+        type: 'image', url: `data:${image.mimeType};base64,${image.data}`,
+      })) }], options = { maxTokens: 64, cacheRetention: 'none' as const }, before = structuredClone({ messages, options });
+      for (const stream of [false, true]) {
+        const result = await f.call(stream, 'none', options, messages), body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+        expect(body.messages, vector.case).toEqual(vector.expectedMessages); // Whole array, including existing managed controls.
+        expect(body.tools).toBeUndefined(); expect(body.model).toBe(vector.model); expect(body.stream).toBe(stream);
+        expect(result).toMatchObject({ content: 'ok', model: vector.model, api: vector.api });
+      }
+      expect({ messages, options }).toEqual(before);
+    }
+    expect(f.fetch.mock.calls.length - imageStart).toBe(8);
   });
   for (const profile of profiles) it(`${profile.id}: rejects malformed/error/incomplete native responses before tools or completion`, async () => {
     const f = fixture(profile.id), content = [{ type: 'text', text: 'untrusted' }];
@@ -288,6 +306,29 @@ describe('owned Anthropic response authority', () => {
       await admitted.call(stream, 'none', { model: replay.model }, resultHistory(replay, replay.provided));
       expect(JSON.parse(String(admitted.fetch.mock.calls.at(-1)?.[1]?.body)).messages).toEqual(replay.expectedReplayMessages);
     }
+    const image = imageFixture.rows.find(row => row.case === 'whitespace-image')!;
+    const imageMessages: Message[] = [{ ...input[0], content: image.provided.text, blocks: image.provided.images.map(value => ({
+      type: 'image', url: `data:${value.mimeType};base64,${value.data}`,
+    })) }], imageBefore = structuredClone(imageMessages);
+    for (const [model, Provider, override] of [[image.model, Compatible, undefined], ['unknown-model', AnthropicProvider, undefined],
+      [image.model, AnthropicProvider, 'unknown-model']] as const) {
+      const legacy = fixture(model, 'legacy-response', Provider);
+      legacy.provider.getPublishedModels = () => [{ id: model, name: 'Forged image metadata', api: 'anthropic-messages', capabilities: { imageInput: true } }];
+      for (const stream of [false, true]) {
+        await legacy.call(stream, 'none', { model: override }, imageMessages);
+        expect(JSON.parse(String(legacy.fetch.mock.calls.at(-1)?.[1]?.body)).messages).toEqual([{ role: 'user', content: [
+          { type: 'text', text: image.provided.text }, ...image.provided.images.map(value => ({ type: 'image', source: {
+            type: 'base64', media_type: value.mimeType, data: value.data,
+          } })),
+        ] }]);
+      }
+    }
+    const imageOwner = fixture('unknown-model');
+    for (const stream of [false, true]) {
+      await imageOwner.call(stream, 'none', { model: image.model }, imageMessages);
+      expect(JSON.parse(String(imageOwner.fetch.mock.calls.at(-1)?.[1]?.body)).messages).toEqual(image.expectedMessages);
+    }
+    expect(imageMessages).toEqual(imageBefore);
     // Core-only malformed scoped controls, not additional executed SDK vectors.
     const native = fixture(profiles[0]!.id), tools = policyVectors[0]!.tools, invalidCount = native.fetch.mock.calls.length;
     for (const options of [...[null, 'required', {}, { type: 'function', name: 'echo' }, { type: 'tool', name: '' }].map(toolChoice => ({ tools, toolChoice })),
@@ -302,6 +343,12 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
   it('binds the independent seventeen-profile fixture to the approved catalogue hash', () => {
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(pin.files.anthropic.catalogue);
     expect(profiles).toHaveLength(17);
+    expect(createHash('sha256').update(imageBytes).digest('hex')).toBe('aeaf539973d6a9c0de9046045c8def52182ec515d4dcea3d85589e2c99cbb6f2');
+    expect(imageFixture.catalogueSha256).toBe(createHash('sha256').update(bytes).digest('hex'));
+    expect([imageFixture.modelProjections, imageFixture.vectors, imageFixture.freshSdkRequests]).toEqual([17, 68, 68]);
+    expect(imageFixture.rows.map(row => [row.model, row.case])).toEqual(profiles.flatMap(profile =>
+      ['text-image', 'image-only', 'whitespace-image', 'text-two-images'].map(name => [profile.id, name])));
+    expect(imageFixture.rows.flatMap(row => row.expectedMessages).filter(message => message.role === 'system')).toHaveLength(20);
     expect(createHash('sha256').update(resultBytes).digest('hex')).toBe('c844343d76116f68b29ec95b732a8fe8b545c0701467675f54d69c323bc13564');
     expect(resultFixture.catalogueSha256).toBe(createHash('sha256').update(bytes).digest('hex'));
     expect([resultFixture.modelProjections, resultFixture.vectors, resultFixture.requests, resultFixture.textCases, resultFixture.imageCases,

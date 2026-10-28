@@ -1573,9 +1573,9 @@ it('hosts and withdraws owned MCP registrations through installed declarations a
 
 // Provider addition: original installed executable/declaration/PATH probes above
 // remain intact. This case consumes only freshly packed, actually installed Core.
-it('validates installed public provider discovery declarations and keyless based-path runtime with original Anthropic caller tools, scoped strict policy and unsigned results', async () => {
+it('validates installed public provider discovery declarations and keyless based-path runtime with original Anthropic caller tools, scoped strict policy, unsigned results and user images', async () => {
   await writeFile(path.join(consumer, 'anthropic-tool-schema.json'), await readFile(path.join(checkout, 'tests/fixtures/anthropic-tool-schema-reference.json')));
-  for (const name of ['anthropic-tool-policy-reference.json', 'anthropic-tool-schema-boundaries-reference.json', 'anthropic-tool-results-reference.json']) await writeFile(path.join(consumer, name), await readFile(path.join(checkout, 'tests/fixtures', name)));
+  for (const name of ['anthropic-tool-policy-reference.json', 'anthropic-tool-schema-boundaries-reference.json', 'anthropic-tool-results-reference.json', 'anthropic-user-images-reference.json']) await writeFile(path.join(consumer, name), await readFile(path.join(checkout, 'tests/fixtures', name)));
   await writeFile(path.join(consumer, 'provider-public.ts'), `
     import { OpenAiProvider, AnthropicProvider, AiProvider, copyThinkingBudgets,
       type ThinkingBudgets, type StartAgentRunRequest, type ScopedConfigurationValues, type ChatResponse, type ChatOptions, type ChatToolDefinition, type AnthropicChatOptions } from '@ai-harness/core';
@@ -1646,6 +1646,8 @@ it('validates installed public provider discovery declarations and keyless based
     assert.ok(!JSON.stringify(session.messages).includes('thinkingBudgets'));
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
     const paths = [], bodies = [], toolBodies = []; let provided;
+    const imageFixture = JSON.parse(await readFile('anthropic-user-images-reference.json', 'utf8'));
+    assert.deepEqual([imageFixture.modelProjections, imageFixture.vectors, imageFixture.freshSdkRequests], [17, 68, 68]);
     const resultFixture = JSON.parse(await readFile('anthropic-tool-results-reference.json', 'utf8'));
     assert.deepEqual([resultFixture.modelProjections, resultFixture.vectors, resultFixture.requests, resultFixture.capturedDeferredDeclarations], [17, 204, 408, 168]);
     const toolFixture = JSON.parse(await readFile('anthropic-tool-schema.json', 'utf8'));
@@ -1779,11 +1781,29 @@ it('validates installed public provider discovery declarations and keyless based
       }
       assert.equal(toolBodies.length, 1840); assert.equal(paths.length, 1852);
       assert.deepEqual(paths.slice(12), Array(1840).fill('/caller-tools/v1/messages'));
+      for (const vector of imageFixture.rows) {
+        const provider = new AnthropicProvider({ type: 'operator-caller-tools', apiKey: 'disposable-caller-tools', model: vector.model, baseUrl: base + '/caller-tools' });
+        const messages = [{ ...input, content: vector.provided.text, blocks: vector.provided.images.map(image => ({
+          type: 'image', url: 'data:' + image.mimeType + ';base64,' + image.data,
+        })) }], options = { maxTokens: 64, cacheRetention: 'none' }, before = structuredClone({ messages, options });
+        for (const stream of [false, true]) {
+          let result, failure;
+          if (!stream) result = await provider.chat(messages, options);
+          else { await provider.streamChat(messages, async () => { await Promise.resolve(); }, value => { result = value; }, error => { failure = error; }, options); if (failure) throw failure; }
+          const body = toolBodies.at(-1);
+          assert.deepEqual(body.messages, vector.expectedMessages); // Whole array, not just the first user turn.
+          assert.equal(body.tools, undefined); assert.equal(body.model, vector.model); assert.equal(body.stream, stream);
+          assert.equal(result.content, 'ok'); assert.equal(result.model, vector.model); assert.equal(result.api, vector.api);
+        }
+        assert.deepEqual({ messages, options }, before);
+      }
+      assert.equal(toolBodies.length, 1976); assert.equal(paths.length, 1988); assert.equal(refusals, 268);
+      assert.deepEqual(paths.slice(12), Array(1976).fill('/caller-tools/v1/messages'));
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
-    console.log('fresh installed provider declarations/runtime/Anthropic caller tools/scoped strict policy/unsigned results OK');
+    console.log('fresh installed provider declarations/runtime/Anthropic caller tools/scoped strict policy/unsigned results/user images OK');
   `);
   const runtime = await run(process.execPath, ['provider-public.mjs'], consumer, environment);
-  expect(runtime).toEqual({ code: 0, stdout: 'fresh installed provider declarations/runtime/Anthropic caller tools/scoped strict policy/unsigned results OK\n', stderr: '' });
+  expect(runtime).toEqual({ code: 0, stdout: 'fresh installed provider declarations/runtime/Anthropic caller tools/scoped strict policy/unsigned results/user images OK\n', stderr: '' });
   // Stronger separate declaration control; the original SDK probe remains intact.
   const sdkTypes = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'consumer.ts'], consumer, environment);
   expect(sdkTypes.stdout).toBe(''); expect(sdkTypes.stderr).toBe('');
