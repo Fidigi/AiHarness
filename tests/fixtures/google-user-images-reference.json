@@ -1,0 +1,4776 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "595ef1fdd4173ce0c4f3b0ffa9de8df2729959a49dc04333101943daab00e9cb",
+  "programSha256": "58db1cdcb10cb8aa864d8958a8e7d0300c5d535c70d3023a71cb3cb2f896eefa",
+  "catalogueSha256": {
+    "google": "64bdd2563cee0e3598aec4d93a6735c189b6d7d14b9c03f061cc2824f3730528",
+    "google-vertex": "96ecc19bf20a706f99ae658b021a0ee5438146119e1e99de5fd824a01fcfd81b"
+  },
+  "modelProjections": 35,
+  "vectors": 140,
+  "freshSdkRequests": 140,
+  "orderedOpaqueImageProjections": 175,
+  "rows": [
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+                "mimeType": "image/png"
+              }
+            },
+            {
+              "inlineData": {
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII=",
+                "mimeType": "image/png"
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "case": "text-image",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "case": "image-only",
+      "provided": {
+        "text": "",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "case": "whitespace-image",
+      "provided": {
+        "text": " \t\n",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": " \t\n"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "case": "text-two-images",
+      "provided": {
+        "text": "probe",
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+          },
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "expectedContents": [
+        {
+          "parts": [
+            {
+              "text": "probe"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lHkAAAAASUVORK5CYII="
+              }
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    }
+  ],
+  "limits": "Actual pinned raw factories/stream/normalizeContext and owned SSE requests.Per-call custom fetch unsupported:isolated global fetch with finally restoration,disposable API keys,env {},network-none,maxRetries0,30-second deadline.Endpoint-only copies;whole contents and absence of tools/toolConfig/systemInstruction checked.Image-only is an image array without an empty text block;explicit empty text blocks,assistant/tool/history/signed parts,mixed MIME,user block ordering beyond these four vectors,decoding,validity,normalization,resize,service acceptance,defaults/context/reasoning/tools/continuation/automatic host/auth/account/typed Pi remain unqualified.SDK Vertex API-key construction is not Core opaque Bearer or ADC.No Core fixture/test/product/gate credit until independently linked and executed."
+}

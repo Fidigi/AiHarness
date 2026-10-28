@@ -55,6 +55,11 @@ const imageReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtur
   captures: Array<{ source: string; captureSha256: string; reusedExecution: boolean; selectedVectors: number; selectedRequests: number }>;
   rows: typeof historyReference.rows;
 };
+const userImageBytes = readFileSync(new URL('../../../../tests/fixtures/google-user-images-reference.json', import.meta.url));
+const userImageReference = JSON.parse(userImageBytes.toString()) as {
+  pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; vectors: number; freshSdkRequests: number; orderedOpaqueImageProjections: number;
+  rows: Array<{ scope: Scope; model: string; api: string; case: string; provided: { text: string; images: Array<{ mimeType: string; data: string }> }; expectedContents: unknown[] }>;
+};
 const input = [{ id: 'user', role: 'user' as const, content: 'probe', timestamp: new Date(0) }];
 const observed = { promptTokenCount: 12, candidatesTokenCount: 2, thoughtsTokenCount: 3, cachedContentTokenCount: 4, totalTokenCount: 17 };
 const known = (price: Price) => price.input > 0 || price.output > 0 || price.cacheRead > 0 || price.cacheWrite > 0;
@@ -113,6 +118,12 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
         { source: 'empty-reference', captureSha256: '10651e9881f2890c9b2f51e700e961a78051f79548b5d51fec74d7fcf3b9d221', reusedExecution: false, selectedVectors: 70, selectedRequests: 140 },
       ]);
       expect([...new Set(imageReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(profiles.map(row => row.id));
+      expect(createHash('sha256').update(userImageBytes).digest('hex')).toBe('6faa47170d4abe9000f3fa96ad450ecf20321ea81c2a053559d3d6af3d7fc12d');
+      expect(userImageReference.pinnedCommit).toBe(toolReference.pinnedCommit); expect(userImageReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
+      expect(userImageReference.captureSha256).toBe('595ef1fdd4173ce0c4f3b0ffa9de8df2729959a49dc04333101943daab00e9cb');
+      expect(userImageReference.modelProjections).toBe(35); expect(userImageReference.vectors).toBe(140); expect(userImageReference.freshSdkRequests).toBe(140);
+      expect(userImageReference.orderedOpaqueImageProjections).toBe(175); expect(userImageReference.rows).toHaveLength(140);
+      expect([...new Set(userImageReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(profiles.map(row => row.id));
       expect(boundaryReference.pinnedCommit).toBe(toolReference.pinnedCommit);
       expect(boundaryReference.captureSha256).toBe('53b5cc7a8c669fd79d832d21c4ebbb29daf4f34044a9839c46a6886045c7dfa2');
       expect(boundaryReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
@@ -204,7 +215,7 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
         expect(JSON.parse(init!.body as string).tools).toEqual(physical.tools);
       }
     });
-    for (const profile of profiles) it(`${scope}/${profile.id}: binds unsigned IDs, same/cross identity history and one-image results to actual SDK requests`, async () => {
+    for (const profile of profiles) it(`${scope}/${profile.id}: binds unsigned IDs, same/cross identity history, one-image results and user-image arrays to actual SDK requests`, async () => {
       const f = fixture(scope, profile.id), vectors = historyReference.rows.filter(row => row.scope === scope && row.model === profile.id);
       const images = imageReference.rows.filter(row => row.scope === scope && row.model === profile.id);
       expect(vectors.map(row => row.case)).toEqual(['success', 'error', 'empty', 'adjacent-two-results', 'cross-provider', 'cross-api', 'cross-model', 'legacy-missing-identity']);
@@ -221,6 +232,19 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
         expect(JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string).contents).toEqual(vector.contents);
         expect(messages).toEqual(before); expect(options.tools).toEqual(vector.tools);
       }
+      const users = userImageReference.rows.filter(row => row.scope === scope && row.model === profile.id), requests = f.fetch.mock.calls.length;
+      expect(users.map(row => row.case)).toEqual(['text-image', 'image-only', 'whitespace-image', 'text-two-images']);
+      for (const vector of users) for (const stream of [false, true]) {
+        const messages: Message[] = [{ id: 'u', role: 'user', content: vector.provided.text, timestamp: new Date(0),
+          blocks: vector.provided.images.map(image => ({ type: 'image', url: `data:${image.mimeType};base64,${image.data}` })) }];
+        const options = { model: profile.id, maxTokens: 64 }, before = structuredClone({ messages, options });
+        expect(await f.call(stream, options, messages)).toMatchObject({ content: 'ok', model: profile.id, api: vector.api });
+        const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
+        expect(body.contents, vector.case).toEqual(vector.expectedContents);
+        for (const field of ['tools', 'toolConfig', 'systemInstruction']) expect(Object.hasOwn(body, field)).toBe(false);
+        expect({ messages, options }).toEqual(before);
+      }
+      expect(f.fetch.mock.calls.length - requests).toBe(8);
     });
     it(`${scope}: does not lend native response IDs or history shapes to derived/unknown models or public API labels`, async () => {
       const model = 'gemini-3.1-pro-preview', vector = historyReference.rows.find(row => row.scope === scope && row.model === model && row.case === 'adjacent-two-results')!;

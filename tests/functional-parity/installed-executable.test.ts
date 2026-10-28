@@ -2043,7 +2043,7 @@ it('binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choi
     .toEqual({ code: 0, stdout: 'installed original Responses unsigned/schema/scalar/grammar/tool images/output boundaries OK\n', stderr: '' });
 }, 60_000);
 
-it('dispatches original Google/Vertex schema/generation/choice/history/images and regional Bearer construction through installed declarations and runtime', async () => {
+it('dispatches original Google/Vertex schema/generation/choice/history/tool and user images and regional Bearer construction through installed declarations and runtime', async () => {
   await writeFile(path.join(consumer, 'google-tools-public.ts'), `
     import { GeminiProvider, VertexGeminiProvider, type AiProvider, type GoogleChatOptions, type Message } from '@ai-harness/core';
     const providers: AiProvider[] = [new GeminiProvider({ type: 'google', apiKey: 'disposable', model: 'gemini-2.5-flash' }),
@@ -2070,12 +2070,13 @@ it('dispatches original Google/Vertex schema/generation/choice/history/images an
   const boundaries = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/google-tool-schema-boundaries-reference.json'), 'utf8')).rows;
   const history = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/google-tool-results-reference.json'), 'utf8')).rows;
   const images = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/google-tool-images-reference.json'), 'utf8')).rows;
+  const users = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/google-user-images-reference.json'), 'utf8')).rows;
   await writeFile(path.join(consumer, 'google-tools-public.mjs'), `
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
     import { createHash } from 'node:crypto';
     import { GeminiProvider, VertexGeminiProvider } from '@ai-harness/core';
-    const vectors = ${JSON.stringify(vectors)}, generation = ${JSON.stringify(generation)}, bearer = ${JSON.stringify(bearer)}, policy = ${JSON.stringify([...policy, ...boundaries])}, history = ${JSON.stringify(history)}, images = ${JSON.stringify(images)}, calls = [];
+    const vectors = ${JSON.stringify(vectors)}, generation = ${JSON.stringify(generation)}, bearer = ${JSON.stringify(bearer)}, policy = ${JSON.stringify([...policy, ...boundaries])}, history = ${JSON.stringify(history)}, images = ${JSON.stringify(images)}, users = ${JSON.stringify(users)}, calls = [];
     const event = { candidates: [{ content: { role: 'model', parts: [{ text: 'ok' }] }, finishReason: 'STOP' }] };
     let pendingParts;
     const server = createServer(async (request, reply) => {
@@ -2161,6 +2162,21 @@ it('dispatches original Google/Vertex schema/generation/choice/history/images an
         assert.equal(calls.length, total);
       }
       assert.equal(history.length, 280); assert.equal(images.length, 140);
+      for (const vector of users) for (const stream of [false, true]) {
+        const provider = providers[vector.scope], options = { model: vector.model, maxTokens: 64 };
+        const messages = [{ id: 'u', role: 'user', content: vector.provided.text, timestamp: new Date(0),
+          blocks: vector.provided.images.map(image => ({ type: 'image', url: 'data:' + image.mimeType + ';base64,' + image.data })) }];
+        const before = JSON.stringify({ messages, options }); let result;
+        if (stream) await provider.streamChat(messages, () => {}, value => { result = value; }, undefined, options);
+        else result = await provider.chat(messages, options);
+        assert.equal(result.content, 'ok'); assert.equal(result.model, vector.model); assert.equal(result.api, vector.api);
+        const call = calls.at(-1); assert.deepEqual(call.body.contents, vector.expectedContents);
+        assert.ok(call.path.includes('/models/' + encodeURIComponent(vector.model) + ':' + (stream ? 'streamGenerateContent' : 'generateContent')));
+        assert.equal(call.headers[vector.scope === 'google' ? 'x-goog-api-key' : 'authorization'], vector.scope === 'google' ? 'installed-google-disposable' : 'Bearer installed-google-disposable');
+        for (const field of ['tools', 'toolConfig', 'systemInstruction']) assert.equal(Object.hasOwn(call.body, field), false);
+        assert.equal(JSON.stringify({ messages, options }), before);
+      }
+      assert.equal(users.length, 140); assert.equal(calls.length, 3486);
       const originalFetch = globalThis.fetch, regionalCalls = [];
       try {
         globalThis.fetch = async (input, init) => {
@@ -2181,12 +2197,12 @@ it('dispatches original Google/Vertex schema/generation/choice/history/images an
           assert.deepEqual(call.body.tools, vector.tools);
         }
       } finally { globalThis.fetch = originalFetch; }
-      assert.equal(bearer.length, 13); assert.equal(regionalCalls.length, 13); assert.equal(calls.length + regionalCalls.length, 3219);
-      console.log('installed original Google policies/tool images OK');
+      assert.equal(bearer.length, 13); assert.equal(regionalCalls.length, 13); assert.equal(calls.length + regionalCalls.length, 3499);
+      console.log('installed original Google policies/tool and user images OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);
   expect(await run(process.execPath, ['google-tools-public.mjs'], consumer, environment))
-    .toEqual({ code: 0, stdout: 'installed original Google policies/tool images OK\n', stderr: '' });
+    .toEqual({ code: 0, stdout: 'installed original Google policies/tool and user images OK\n', stderr: '' });
 }, 60_000);
 
 it('dispatches native Bedrock binary streams through installed public declarations and runtime', async () => {
