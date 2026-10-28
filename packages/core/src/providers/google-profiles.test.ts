@@ -5,6 +5,7 @@ import { GeminiProvider, VertexGeminiProvider, MockProvider, type ChatOptions, t
 import { getSupportedThinkingLevels, PUBLISHED_THINKING_LEVELS } from './model-metadata.js';
 import { getProviderPublishedModel, getProviderPublishedModels } from './provider-model-metadata.js';
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
+import type { Message } from '../types/index.js';
 import { streamProviderTurn } from '../agent/provider-turn.js';
 
 const pin = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/provider-reference.json', import.meta.url), 'utf8'));
@@ -43,6 +44,12 @@ const boundaryReference = JSON.parse(readFileSync(new URL('../../../../tests/fix
   pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; schemaCases: number;
   vectors: number; requests: number; pretransportErrors: number; rows: typeof policyReference.rows;
 };
+const historyReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/google-tool-results-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; catalogueSha256: Record<Scope, string>; modelProjections: number; capturedCases: number; capturedRequests: number;
+  boundUnsignedReplayCases: number; unboundImageCases: number; captures: Array<{ preparation: string; captureSha256: string; cases: number; requests: number }>;
+  rows: Array<{ scope: Scope; model: string; api: string; case: string; responseParts: Array<Record<string, unknown>>;
+    calls: NonNullable<ChatResponse['toolCalls']>; messages: Array<Omit<Message, 'timestamp'>>; tools: NonNullable<ChatOptions['tools']>; contents: unknown[] }>;
+};
 const input = [{ id: 'user', role: 'user' as const, content: 'probe', timestamp: new Date(0) }];
 const observed = { promptTokenCount: 12, candidatesTokenCount: 2, thoughtsTokenCount: 3, cachedContentTokenCount: 4, totalTokenCount: 17 };
 const known = (price: Price) => price.input > 0 || price.output > 0 || price.cacheRead > 0 || price.cacheWrite > 0;
@@ -53,22 +60,24 @@ function fixture(scope: Scope, model: string, compatible = false) {
   const provider = new (compatible ? Compatible : Native)({ type: 'operator-alias', model, apiKey: 'disposable-google-key',
     baseUrl: 'http://127.0.0.1:1/owned/v1', project: 'disposable-project' });
   let usage: unknown = structuredClone(observed), beforeReply = () => {};
+  let parts: Array<Record<string, unknown>> = [{ text: 'ok' }];
   const chunks: Array<[string, string | undefined, unknown]> = [], completed: Array<ChatResponse | undefined> = [];
   const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
     beforeReply();
-    const event = { modelVersion: 'untrusted-response-alias', candidates: [{ content: { role: 'model', parts: [{ text: 'ok' }] }, finishReason: 'STOP' }], usageMetadata: usage };
+    const event = { modelVersion: 'untrusted-response-alias', candidates: [{ content: { role: 'model', parts }, finishReason: 'STOP' }], usageMetadata: usage };
     return String(_url).includes(':streamGenerateContent')
       ? new Response(`data: ${JSON.stringify(event)}\n\n`, { headers: { 'Content-Type': 'text/event-stream' } })
       : new Response(JSON.stringify(event), { headers: { 'Content-Type': 'application/json' } });
   });
-  const call = async (stream: boolean, options: ChatOptions = {}, messages = input) => {
+  const call = async (stream: boolean, options: ChatOptions = {}, messages: Message[] = input) => {
     if (!stream) return provider.chat(messages, options);
     let result: ChatResponse | undefined, failure: Error | undefined;
     await provider.streamChat(messages, (text, event) => { chunks.push([text, event?.type, event?.data]); },
       value => { result = value; completed.push(value); }, error => { failure = error; }, options);
     if (failure) throw failure; return result!;
   };
-  return { provider, fetch, call, chunks, completed, usage: (value: unknown) => { usage = value; }, beforeReply: (callback: () => void) => { beforeReply = callback; } };
+  return { provider, fetch, call, chunks, completed, parts: (value: Array<Record<string, unknown>>) => { parts = value; },
+    usage: (value: unknown) => { usage = value; }, beforeReply: (callback: () => void) => { beforeReply = callback; } };
 }
 
 describe('pinned original Google/Vertex declarations and observed accounting', () => {
@@ -82,6 +91,15 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
       expect(toolReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
       expect(toolReference.modelProjections).toBe(35); expect(toolReference.toolVectors).toBe(70); expect(toolReference.rows).toHaveLength(105);
       expect([...new Set(toolReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(profiles.map(row => row.id));
+      expect(historyReference.pinnedCommit).toBe(toolReference.pinnedCommit);
+      expect(historyReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
+      expect(historyReference.modelProjections).toBe(35); expect(historyReference.capturedCases).toBe(350); expect(historyReference.capturedRequests).toBe(700);
+      expect(historyReference.boundUnsignedReplayCases).toBe(280); expect(historyReference.unboundImageCases).toBe(70); expect(historyReference.rows).toHaveLength(280);
+      expect(historyReference.captures).toEqual([
+        { preparation: 'reference', captureSha256: '7fe1bb81f869f8933c8dd797d8925cf08f7d8f86c79f9060b8aa27833b1ccb7f', cases: 210, requests: 420 },
+        { preparation: 'cross-provenance', captureSha256: '6eb92181f28954ef5d6446dfe2d519be3facfd8f53d1a0c41295689c32d2b66c', cases: 140, requests: 280 },
+      ]);
+      expect([...new Set(historyReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(profiles.map(row => row.id));
       expect(boundaryReference.pinnedCommit).toBe(toolReference.pinnedCommit);
       expect(boundaryReference.captureSha256).toBe('53b5cc7a8c669fd79d832d21c4ebbb29daf4f34044a9839c46a6886045c7dfa2');
       expect(boundaryReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
@@ -172,6 +190,43 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
         expect(new Headers(init?.headers).get('x-goog-api-key')).toBeNull();
         expect(JSON.parse(init!.body as string).tools).toEqual(physical.tools);
       }
+    });
+    for (const profile of profiles) it(`${scope}/${profile.id}: binds unsigned provided response IDs and tool-result history to actual same/cross identity SDK requests`, async () => {
+      const f = fixture(scope, profile.id), vectors = historyReference.rows.filter(row => row.scope === scope && row.model === profile.id);
+      expect(vectors.map(row => row.case)).toEqual(['success', 'error', 'empty', 'adjacent-two-results', 'cross-provider', 'cross-api', 'cross-model', 'legacy-missing-identity']);
+      for (const vector of vectors) for (const stream of [false, true]) {
+        const options = { model: profile.id, maxTokens: 64, tools: structuredClone(vector.tools) };
+        f.parts(vector.responseParts);
+        const first = await f.call(stream, options);
+        expect(first).toMatchObject({ content: '', model: profile.id, api: vector.api }); expect(first.toolCalls).toEqual(vector.calls);
+        f.parts([{ text: 'ok' }]);
+        const messages: Message[] = structuredClone(vector.messages).map(message => ({ ...message, timestamp: new Date(0) })), before = structuredClone(messages);
+        const result = await f.call(stream, options, messages);
+        expect(result).toMatchObject({ content: 'ok', model: profile.id, api: vector.api });
+        expect(JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string).contents).toEqual(vector.contents);
+        expect(messages).toEqual(before); expect(options.tools).toEqual(vector.tools);
+      }
+    });
+    it(`${scope}: does not lend native response IDs or history shapes to derived/unknown models or public API labels`, async () => {
+      const model = 'gemini-3.1-pro-preview', vector = historyReference.rows.find(row => row.scope === scope && row.model === model && row.case === 'adjacent-two-results')!;
+      const messages: Message[] = structuredClone(vector.messages).map(message => ({ ...message, timestamp: new Date(0) }));
+      for (const [configured, compatible, selected] of [[model, true, model], [`${model}-unreviewed`, false, `${model}-unreviewed`],
+        [model, false, `${model}-unreviewed`]] as const) {
+        const f = fixture(scope, configured, compatible); f.provider.getModelApi = () => vector.api;
+        for (const stream of [false, true]) {
+          f.parts(vector.responseParts);
+          expect((await f.call(stream, { model: selected, maxTokens: 64 })).toolCalls?.map(call => call.id)).toEqual(['gemini-0-echo', 'gemini-1-other']);
+          f.parts([{ text: 'ok' }]); await f.call(stream, { model: selected, maxTokens: 64 }, messages);
+          const contents = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string).contents;
+          expect(contents[1].parts).toEqual(vector.calls.map(call => ({ functionCall: { name: call.name, args: call.input } })));
+          expect(contents.slice(2)).toEqual([
+            { role: 'user', parts: [{ functionResponse: { name: 'echo', response: { content: 'first', isError: false } } }] },
+            { role: 'user', parts: [{ functionResponse: { name: 'other', response: { content: 'second', isError: true } } }] },
+          ]);
+        }
+      }
+      const f = fixture(scope, `${model}-unreviewed`); f.parts(vector.responseParts);
+      for (const stream of [false, true]) expect((await f.call(stream, { model, maxTokens: 64 })).toolCalls).toEqual(vector.calls);
     });
     for (const profile of profiles) it(`${scope}/${profile.id}: binds raw strict/prefer/choice construction and pretransport refusals to executed SDK vectors`, async () => {
       const f = fixture(scope, profile.id), vectors = policyReference.rows.filter(row => row.scope === scope && row.model === profile.id);

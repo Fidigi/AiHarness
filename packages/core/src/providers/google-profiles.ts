@@ -1,4 +1,5 @@
 import type { ChatOptions, ChatResponse, GoogleChatOptions } from './index.js';
+import type { Message } from '../types/index.js';
 import { clampPublishedThinkingLevel, PUBLISHED_THINKING_LEVELS, type PublishedModelMetadata, type PublishedThinkingLevel } from './model-metadata.js';
 import { copyThinkingBudgets, resolveThinkingBudget } from './thinking-budgets.js';
 
@@ -174,6 +175,36 @@ export function applyGoogleToolPolicy(scope: GoogleNativeScope | undefined, mode
   body.tools = [{ functionDeclarations: declarations }];
   const mode = choice === 'none' ? 'NONE' : choice === 'any' ? 'ANY' : validated ? 'VALIDATED' : choice === 'auto' ? 'AUTO' : undefined;
   if (profile && mode) body.toolConfig = { functionCallingConfig: { mode } };
+}
+
+/** Patch only owned unsigned tool history; contents are the adapter's fresh, one-per-message conversion. */
+export function applyGoogleToolHistory(scope: GoogleNativeScope, model: string, body: Record<string, unknown>, messages: Message[]): void {
+  if (!hasGoogleProfile(scope, model)) return;
+  const requiresIds = Number(/^gemini(?:-live)?-(\d+)/i.exec(model)?.[1] ?? 0) >= 3;
+  const provider = scope === 'google' ? 'google' : 'vertex', api = scope === 'google' ? 'google-generative-ai' : 'google-vertex';
+  const contents = body.contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+  const grouped: typeof contents = [], ids = new Map<string, string>();
+  for (const [index, message] of messages.filter(message => message.role !== 'system').entries()) {
+    const content = contents[index];
+    if (requiresIds && message.role === 'assistant') {
+      const same = message.provider === provider && message.model === model && message.api === api;
+      const parts = content.parts.filter(part => part.functionCall);
+      for (const [offset, call] of (message.toolCalls ?? []).entries()) {
+        const id = same ? call.id : call.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
+        (parts[offset].functionCall as Record<string, unknown>).id = id;
+        ids.set(call.id, id);
+      }
+    }
+    if (message.role === 'tool') {
+      content.parts = [{ functionResponse: { name: message.name || 'tool',
+        response: { [message.isError ? 'error' : 'output']: message.content },
+        ...(requiresIds && message.toolCallId !== undefined ? { id: ids.get(message.toolCallId) ?? message.toolCallId } : {}) } }];
+      const previous = grouped.at(-1);
+      if (previous?.parts.some(part => part.functionResponse)) { previous.parts.push(...content.parts); continue; }
+    }
+    grouped.push(content);
+  }
+  body.contents = grouped;
 }
 
 /** Gross prompt selects a scoped tariff; thoughts are output, cache reads are a prompt subset. */

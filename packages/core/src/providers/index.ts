@@ -75,7 +75,7 @@ import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget, anthropicManagedEffort, anthropicThinkingBetas, applyAnthropicManagedHistory } from './anthropic-thinking.js';
 import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage } from './anthropic-profiles.js';
 import { validateAnthropicResponse, anthropicResponseStreamValidator, anthropicResponseToolInput, assertAnthropicResponseActive } from './anthropic-response.js';
-import { applyGoogleNativeGenerationConfig, applyGoogleToolPolicy, googlePublishedProfiles, hasGoogleProfile, googleProfileUsage, type GoogleNativeScope } from './google-profiles.js';
+import { applyGoogleNativeGenerationConfig, applyGoogleToolPolicy, applyGoogleToolHistory, googlePublishedProfiles, hasGoogleProfile, googleProfileUsage, type GoogleNativeScope } from './google-profiles.js';
 import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
 export type { ThinkingBudgets } from './thinking-budgets.js';
 import {
@@ -3762,7 +3762,7 @@ interface GeminiPart {
   text?: string;
   thought?: boolean;
   thoughtSignature?: string;
-  functionCall?: { name: string; args?: unknown };
+  functionCall?: { id?: string; name: string; args?: unknown };
 }
 
 interface GeminiResponse {
@@ -3893,6 +3893,7 @@ export class GeminiProvider extends AiProvider {
     if (native) applyGoogleNativeGenerationConfig(native, thinkingModel, body.generationConfig as Record<string, unknown>, options);
     if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
     applyGoogleToolPolicy(native, thinkingModel, body, options);
+    if (native) applyGoogleToolHistory(native, thinkingModel, body, messages);
     return body;
   }
 
@@ -3933,7 +3934,7 @@ export class GeminiProvider extends AiProvider {
     const content = parts.filter(part => !scope || part.thought !== true).map(part => part.text ?? '').join('');
     const reasoning = scope ? parts.filter(part => part.thought === true).map(part => part.text ?? '').join('') : '';
     const toolCalls = parts.flatMap((part, index) => part.functionCall ? [{
-      id: `gemini-${index}-${part.functionCall.name}`,
+      id: scope && typeof part.functionCall.id === 'string' && part.functionCall.id ? part.functionCall.id : `gemini-${index}-${part.functionCall.name}`,
       name: part.functionCall.name,
       input: part.functionCall.args ?? {},
     }] : []);
