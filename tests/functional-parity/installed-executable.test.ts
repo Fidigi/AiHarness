@@ -1677,6 +1677,59 @@ it('validates installed public provider discovery declarations and keyless based
   }
 }, 60_000);
 
+it('dispatches original Google/Vertex JSON-schema tools through installed declarations and runtime', async () => {
+  await writeFile(path.join(consumer, 'google-tools-public.ts'), `
+    import { GeminiProvider, VertexGeminiProvider, type AiProvider, type ChatOptions } from '@ai-harness/core';
+    const providers: AiProvider[] = [new GeminiProvider({ type: 'google', apiKey: 'disposable', model: 'gemini-2.5-flash' }),
+      new VertexGeminiProvider({ type: 'vertex', apiKey: 'disposable', project: 'owned-project', model: 'gemini-2.5-flash' })];
+    async function compile() {
+      const options: ChatOptions = { maxTokens: 64, tools: [{ name: 'echo', description: 'Echo', parameters: { type: 'object', properties: { x: { type: 'string' } } } }] };
+      for (const provider of providers) { await provider.chat([], options); await provider.streamChat([], () => {}, undefined, undefined, options); }
+    }
+    void compile;
+  `);
+  await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'google-tools-public.ts'], consumer, environment);
+  const vectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/google-tool-schema-reference.json'), 'utf8')).rows;
+  await writeFile(path.join(consumer, 'google-tools-public.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createServer } from 'node:http';
+    import { GeminiProvider, VertexGeminiProvider } from '@ai-harness/core';
+    const vectors = ${JSON.stringify(vectors)}, calls = [];
+    const event = { candidates: [{ content: { role: 'model', parts: [{ text: 'ok' }] }, finishReason: 'STOP' }] };
+    const server = createServer(async (request, reply) => {
+      let body = ''; for await (const chunk of request) body += chunk;
+      calls.push({ path: request.url, headers: request.headers, body: JSON.parse(body) });
+      const stream = request.url.includes(':streamGenerateContent');
+      reply.writeHead(200, { 'content-type': stream ? 'text/event-stream' : 'application/json' });
+      reply.end(stream ? 'data: ' + JSON.stringify(event) + '\\n\\n' : JSON.stringify(event));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const config = { apiKey: 'installed-google-disposable', project: 'owned-project', baseUrl: 'http://127.0.0.1:' + server.address().port + '/owned/v1', model: 'gemini-2.5-flash' };
+      const providers = { google: new GeminiProvider({ ...config, type: 'google' }), 'google-vertex': new VertexGeminiProvider({ ...config, type: 'vertex' }) };
+      for (const vector of vectors) for (const stream of [false, true]) {
+        const provider = providers[vector.scope], tools = vector.parameters ? [{ name: 'echo', description: 'Echo', parameters: vector.parameters }] : undefined;
+        const options = { model: vector.model, maxTokens: 64, temperature: 0.7, ...(tools ? { tools } : {}) };
+        const before = JSON.stringify(tools), messages = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
+        let result;
+        if (stream) await provider.streamChat(messages, () => {}, value => { result = value; }, undefined, options);
+        else result = await provider.chat(messages, options);
+        assert.equal(result.content, 'ok'); assert.equal(result.model, vector.model); assert.equal(result.api, vector.api);
+        assert.equal(JSON.stringify(tools), before);
+        const call = calls.at(-1);
+        assert.deepEqual(call.body.tools ?? null, vector.tools);
+        assert.ok(call.path.includes('/models/' + encodeURIComponent(vector.model) + ':' + (stream ? 'streamGenerateContent' : 'generateContent')));
+        // SDK Vertex API-key capture is not Core's existing Bearer authentication oracle.
+        assert.equal(call.headers[vector.scope === 'google' ? 'x-goog-api-key' : 'authorization'], vector.scope === 'google' ? 'installed-google-disposable' : 'Bearer installed-google-disposable');
+      }
+      assert.equal(vectors.length, 105); assert.equal(calls.length, 210);
+      console.log('installed original Google tools OK');
+    } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+  `);
+  expect(await run(process.execPath, ['google-tools-public.mjs'], consumer, environment))
+    .toEqual({ code: 0, stdout: 'installed original Google tools OK\n', stderr: '' });
+}, 60_000);
+
 it('dispatches native Bedrock binary streams through installed public declarations and runtime', async () => {
   await writeFile(path.join(consumer, 'bedrock-public.ts'), `
     import { BedrockProvider, ProviderFactory, bedrockCredentialConfig, type AiProvider, type ChatResponse, type ProviderConfig } from '@ai-harness/core';

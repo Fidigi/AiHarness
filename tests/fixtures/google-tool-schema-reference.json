@@ -1,0 +1,3899 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "d134d8ae6bfac529580aaaf778e2568b72a0f22c44c1c702a4e3e36588faa384",
+  "catalogueSha256": {
+    "google": "64bdd2563cee0e3598aec4d93a6735c189b6d7d14b9c03f061cc2824f3730528",
+    "google-vertex": "96ecc19bf20a706f99ae658b021a0ee5438146119e1e99de5fd824a01fcfd81b"
+  },
+  "modelProjections": 35,
+  "requests": 105,
+  "toolVectors": 70,
+  "rows": [
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "case": "raw-default",
+      "tools": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "case": "object",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "case": "union-optional",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "tag"
+        ],
+        "properties": {
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "a"
+              },
+              {
+                "type": "string",
+                "const": "b"
+              }
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "tag"
+                ],
+                "properties": {
+                  "tag": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "a"
+                      },
+                      {
+                        "type": "string",
+                        "const": "b"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "limits": "Raw tool schema projection only. Actual pinned normalizeContext is required by Provider.stream; the earlier unnormalized105-request preparation transmitted no tools/system and is uncredited for those facets. SDK Vertex API-key auth is distinct from Core Bearer. No strict/constrained sampling, tool choice, full defaults/context/reasoning/media/replay/host, Pi JSON-entrypoint or service/account/invoice/TLS/cap feasibility certificate; zero-only prices are not free-service evidence."
+}

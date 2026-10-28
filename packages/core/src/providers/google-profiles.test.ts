@@ -16,6 +16,10 @@ const reference = (scope: Scope) => {
   const bytes = readFileSync(new URL(`../../../../tests/fixtures/${scope}-reference.json`, import.meta.url));
   return { bytes, profiles: Object.values(JSON.parse(bytes.toString())).flatMap(group => Object.values(group as Record<string, Profile>)) };
 };
+const toolReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/google-tool-schema-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; toolVectors: number;
+  rows: Array<{ scope: Scope; model: string; api: string; case: string; parameters?: Record<string, unknown>; tools: unknown[] | null }>;
+};
 const input = [{ id: 'user', role: 'user' as const, content: 'probe', timestamp: new Date(0) }];
 const observed = { promptTokenCount: 12, candidatesTokenCount: 2, thoughtsTokenCount: 3, cachedContentTokenCount: 4, totalTokenCount: 17 };
 const known = (price: Price) => price.input > 0 || price.output > 0 || price.cacheRead > 0 || price.cacheWrite > 0;
@@ -50,6 +54,11 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
     it(`${scope}: binds independent package catalogue bytes without online discovery`, () => {
       expect(createHash('sha256').update(bytes).digest('hex')).toBe(pin.files[scope].catalogue);
       expect(profiles).toHaveLength(scope === 'google' ? 22 : 13);
+      expect(toolReference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
+      expect(toolReference.captureSha256).toBe('d134d8ae6bfac529580aaaf778e2568b72a0f22c44c1c702a4e3e36588faa384');
+      expect(toolReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
+      expect(toolReference.modelProjections).toBe(35); expect(toolReference.toolVectors).toBe(70); expect(toolReference.rows).toHaveLength(105);
+      expect([...new Set(toolReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(profiles.map(row => row.id));
       const f = fixture(scope, profiles[0].id);
       for (const profile of profiles) expect(getProviderPublishedModel('unrelated', profile.id, f.provider)?.api).toBe(profile.api);
       expect(f.fetch).not.toHaveBeenCalled();
@@ -71,6 +80,16 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
         expect(new Headers(init?.headers).get(scope === 'google' ? 'x-goog-api-key' : 'authorization'))
           .toBe(scope === 'google' ? 'disposable-google-key' : 'Bearer disposable-google-key');
         expect(new URL(String(url)).searchParams.has('key')).toBe(false);
+        expect(JSON.parse(init!.body as string).tools ?? null).toEqual(toolReference.rows.find(row => row.scope === scope && row.model === profile.id && row.case === 'raw-default')!.tools);
+      }
+      const vectors = toolReference.rows.filter(row => row.scope === scope && row.model === profile.id && row.case !== 'raw-default');
+      expect(vectors.map(row => row.case)).toEqual(['object', 'union-optional']);
+      for (const vector of vectors) for (const stream of [false, true]) {
+        const parameters = structuredClone(vector.parameters!);
+        const result = await f.call(stream, { maxTokens: 64, temperature: 0.7, tools: [{ name: 'echo', description: 'Echo', parameters }] });
+        expect(result).toMatchObject({ model: profile.id, api: vector.api });
+        const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
+        expect(body.tools).toEqual(vector.tools); expect(parameters).toEqual(vector.parameters);
       }
     });
     for (const profile of profiles.filter(row => row.cost.tiers?.length)) it(`${scope}/${profile.id}: uses strictly-above gross-input tiers, not output or mutable metadata`, async () => {
@@ -141,6 +160,17 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
       const unknown = fixture(scope, `${selected.id}-unverified`);
       expect(getProviderPublishedModel(scope, `${selected.id}-unverified`, unknown.provider)).toBeUndefined();
       expect((await unknown.call(false)).usage?.costUsd).toBeUndefined();
+      const vector = toolReference.rows.find(row => row.scope === scope && row.model === selected.id && row.case === 'union-optional')!;
+      for (const [adapter, model, native] of [
+        [compatible, selected.id, false], [unknown, `${selected.id}-unverified`, false],
+        [fixture(scope, 'unverified-configured-model'), selected.id, true],
+        [fixture(scope, selected.id), `${selected.id}-unverified`, false],
+      ] as const) for (const stream of [false, true]) {
+        await adapter.call(stream, { model, maxTokens: 64, tools: [{ name: 'echo', description: 'Echo', parameters: vector.parameters! }] });
+        const declaration = JSON.parse(adapter.fetch.mock.calls.at(-1)![1]!.body as string).tools[0].functionDeclarations[0];
+        expect(declaration[native ? 'parametersJsonSchema' : 'parameters']).toEqual(vector.parameters);
+        expect(Object.hasOwn(declaration, native ? 'parameters' : 'parametersJsonSchema')).toBe(false);
+      }
     });
   }
 });

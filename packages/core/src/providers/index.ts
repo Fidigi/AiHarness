@@ -3890,7 +3890,7 @@ export class GeminiProvider extends AiProvider {
       body.tools = [{ functionDeclarations: options.tools.map(tool => ({
         name: tool.name,
         description: tool.description,
-        parameters: tool.parameters,
+        [native ? 'parametersJsonSchema' : 'parameters']: tool.parameters,
       })) }];
     }
     return body;
