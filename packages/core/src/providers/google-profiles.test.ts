@@ -20,6 +20,18 @@ const toolReference = JSON.parse(readFileSync(new URL('../../../../tests/fixture
   pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; toolVectors: number;
   rows: Array<{ scope: Scope; model: string; api: string; case: string; parameters?: Record<string, unknown>; tools: unknown[] | null }>;
 };
+type GenerationConfig = { maxOutputTokens?: number; thinkingConfig?: { thinkingBudget?: number; thinkingLevel?: string; includeThoughts?: boolean } };
+const generationReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/google-generation-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; requestsCaptured: number;
+  rows: Array<{ scope: Scope; model: string; api: string; case: string; inputCharacters: number; inputSha256: string;
+    options: { reasoning?: Exclude<ThinkingLevel, 'off'>; maxTokens?: number; thinkingBudgets?: ThinkingBudgets }; generationConfig: GenerationConfig }>;
+  rawDefaults: Array<{ scope: Scope; model: string; generationConfig: GenerationConfig }>;
+};
+const bearerReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/google-vertex-bearer-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; captureSha256: string; catalogueSha256: string; requests: number; ownedTokenExchanges: number;
+  rows: Array<{ model: string; api: string; origin: string; path: string; auth: string;
+    tools: Array<{ functionDeclarations: Array<{ name: string; description: string; parametersJsonSchema: Record<string, unknown> }> }> }>;
+};
 const input = [{ id: 'user', role: 'user' as const, content: 'probe', timestamp: new Date(0) }];
 const observed = { promptTokenCount: 12, candidatesTokenCount: 2, thoughtsTokenCount: 3, cachedContentTokenCount: 4, totalTokenCount: 17 };
 const known = (price: Price) => price.input > 0 || price.output > 0 || price.cacheRead > 0 || price.cacheWrite > 0;
@@ -38,10 +50,10 @@ function fixture(scope: Scope, model: string, compatible = false) {
       ? new Response(`data: ${JSON.stringify(event)}\n\n`, { headers: { 'Content-Type': 'text/event-stream' } })
       : new Response(JSON.stringify(event), { headers: { 'Content-Type': 'application/json' } });
   });
-  const call = async (stream: boolean, options: ChatOptions = {}) => {
-    if (!stream) return provider.chat(input, options);
+  const call = async (stream: boolean, options: ChatOptions = {}, messages = input) => {
+    if (!stream) return provider.chat(messages, options);
     let result: ChatResponse | undefined, failure: Error | undefined;
-    await provider.streamChat(input, (text, event) => { chunks.push([text, event?.type, event?.data]); },
+    await provider.streamChat(messages, (text, event) => { chunks.push([text, event?.type, event?.data]); },
       value => { result = value; completed.push(value); }, error => { failure = error; }, options);
     if (failure) throw failure; return result!;
   };
@@ -59,6 +71,18 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
       expect(toolReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
       expect(toolReference.modelProjections).toBe(35); expect(toolReference.toolVectors).toBe(70); expect(toolReference.rows).toHaveLength(105);
       expect([...new Set(toolReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(profiles.map(row => row.id));
+      expect(generationReference.pinnedCommit).toBe(toolReference.pinnedCommit);
+      expect(generationReference.captureSha256).toBe('9aef98c62dee5c6993b55ca2415c2ea46af69ed364812e1014becf5d505280cd');
+      expect(generationReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
+      expect(generationReference.requestsCaptured).toBe(315); expect(generationReference.rows).toHaveLength(210); expect(generationReference.rawDefaults).toHaveLength(35);
+      expect([...new Set(generationReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(profiles.map(row => row.id));
+      if (scope === 'google-vertex') {
+        expect(bearerReference.pinnedCommit).toBe(toolReference.pinnedCommit);
+        expect(bearerReference.captureSha256).toBe('7cd1746e0c57581584e9c0ca9cc4c9916e2a9d330c968df1b7a72e786d13ad19');
+        expect(bearerReference.catalogueSha256).toBe(pin.files[scope].catalogue);
+        expect(bearerReference.requests).toBe(13); expect(bearerReference.ownedTokenExchanges).toBe(13);
+        expect(bearerReference.rows.map(row => row.model)).toEqual(profiles.map(row => row.id));
+      }
       const f = fixture(scope, profiles[0].id);
       for (const profile of profiles) expect(getProviderPublishedModel('unrelated', profile.id, f.provider)?.api).toBe(profile.api);
       expect(f.fetch).not.toHaveBeenCalled();
@@ -90,6 +114,38 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
         expect(result).toMatchObject({ model: profile.id, api: vector.api });
         const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
         expect(body.tools).toEqual(vector.tools); expect(parameters).toEqual(vector.parameters);
+      }
+      const generation = generationReference.rows.filter(row => row.scope === scope && row.model === profile.id);
+      expect(generation.map(row => row.case)).toEqual(['simple-default', 'simple-high', 'simple-minimal-answer64', 'simple-high-answer1', 'simple-high-budget1-answer64', 'simple-high-longer-context']);
+      expect(generationReference.rawDefaults.find(row => row.scope === scope && row.model === profile.id)!.generationConfig.maxOutputTokens).toBeUndefined();
+      for (const vector of generation) for (const stream of [false, true]) {
+        const content = vector.case === 'simple-high-longer-context' ? 'x'.repeat(12000) : 'probe';
+        expect(content.length).toBe(vector.inputCharacters); expect(createHash('sha256').update(content).digest('hex')).toBe(vector.inputSha256);
+        const result = await f.call(stream, { model: profile.id, systemPrompt: 'owned system', thinking: vector.options.reasoning,
+          maxTokens: vector.options.maxTokens, thinkingBudgets: vector.options.thinkingBudgets }, [{ ...input[0], content }]);
+        expect(result).toMatchObject({ content: 'ok', model: profile.id, api: vector.api });
+        const actual = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string).generationConfig;
+        if (profile.id === 'gemini-2.5-pro' && vector.case === 'simple-high-budget1-answer64') {
+          // Counter-evidence, not full-chain equivalence: keep the existing Core minimum safe guard.
+          expect(vector.generationConfig.thinkingConfig?.thinkingBudget).toBe(1);
+          expect(actual).not.toEqual(vector.generationConfig);
+          expect(actual).toEqual({ ...vector.generationConfig, thinkingConfig: { ...vector.generationConfig.thinkingConfig, thinkingBudget: 128 } });
+        } else expect(actual).toEqual(vector.generationConfig);
+      }
+      if (scope === 'google-vertex') {
+        const physical = bearerReference.rows.find(row => row.model === profile.id)!;
+        const provider = new VertexGeminiProvider({ type: 'vertex', model: profile.id, project: 'owned-project', location: 'us-central1', apiKey: 'owned-exchanged-access' });
+        const declaration = physical.tools[0].functionDeclarations[0];
+        let result: ChatResponse | undefined;
+        // Core receives a supplied opaque Bearer; it does not resolve the SDK's ADC credential file.
+        await provider.streamChat(input, () => {}, value => { result = value; }, undefined, { maxTokens: 64, systemPrompt: 'owned system',
+          tools: [{ name: declaration.name, description: declaration.description, parameters: declaration.parametersJsonSchema }] });
+        expect(result).toMatchObject({ content: 'ok', model: profile.id, api: physical.api });
+        const [url, init] = f.fetch.mock.calls.at(-1)!;
+        expect(String(url)).toBe(physical.origin + physical.path); expect(physical.auth).toBe('Bearer');
+        expect(new Headers(init?.headers).get('authorization')).toBe('Bearer owned-exchanged-access');
+        expect(new Headers(init?.headers).get('x-goog-api-key')).toBeNull();
+        expect(JSON.parse(init!.body as string).tools).toEqual(physical.tools);
       }
     });
     for (const profile of profiles.filter(row => row.cost.tiers?.length)) it(`${scope}/${profile.id}: uses strictly-above gross-input tiers, not output or mutable metadata`, async () => {

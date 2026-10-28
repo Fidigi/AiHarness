@@ -1,0 +1,388 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "7cd1746e0c57581584e9c0ca9cc4c9916e2a9d330c968df1b7a72e786d13ad19",
+  "catalogueSha256": "96ecc19bf20a706f99ae658b021a0ee5438146119e1e99de5fd824a01fcfd81b",
+  "modelProjections": 13,
+  "requests": 13,
+  "ownedTokenExchanges": 13,
+  "rows": [
+    {
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "origin": "https://us-central1-aiplatform.googleapis.com",
+      "path": "/v1/projects/owned-project/locations/us-central1/publishers/google/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
+      "auth": "Bearer",
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "origin": "https://us-central1-aiplatform.googleapis.com",
+      "path": "/v1/projects/owned-project/locations/us-central1/publishers/google/models/gemini-2.5-flash-lite:streamGenerateContent?alt=sse",
+      "auth": "Bearer",
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "origin": "https://us-central1-aiplatform.googleapis.com",
+      "path": "/v1/projects/owned-project/locations/us-central1/publishers/google/models/gemini-2.5-pro:streamGenerateContent?alt=sse",
+      "auth": "Bearer",
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "origin": "https://us-central1-aiplatform.googleapis.com",
+      "path": "/v1/projects/owned-project/locations/us-central1/publishers/google/models/gemini-3-flash-preview:streamGenerateContent?alt=sse",
+      "auth": "Bearer",
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "origin": "https://us-central1-aiplatform.googleapis.com",
+      "path": "/v1/projects/owned-project/locations/us-central1/publishers/google/models/gemini-3.1-flash-lite:streamGenerateContent?alt=sse",
+      "auth": "Bearer",
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "origin": "https://us-central1-aiplatform.googleapis.com",
+      "path": "/v1/projects/owned-project/locations/us-central1/publishers/google/models/gemini-3.1-flash-lite-image:streamGenerateContent?alt=sse",
+      "auth": "Bearer",
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "origin": "https://us-central1-aiplatform.googleapis.com",
+      "path": "/v1/projects/owned-project/locations/us-central1/publishers/google/models/gemini-3.1-pro-preview:streamGenerateContent?alt=sse",
+      "auth": "Bearer",
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "origin": "https://us-central1-aiplatform.googleapis.com",
+      "path": "/v1/projects/owned-project/locations/us-central1/publishers/google/models/gemini-3.1-pro-preview-customtools:streamGenerateContent?alt=sse",
+      "auth": "Bearer",
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "origin": "https://us-central1-aiplatform.googleapis.com",
+      "path": "/v1/projects/owned-project/locations/us-central1/publishers/google/models/gemini-3.5-flash:streamGenerateContent?alt=sse",
+      "auth": "Bearer",
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "origin": "https://us-central1-aiplatform.googleapis.com",
+      "path": "/v1/projects/owned-project/locations/us-central1/publishers/google/models/gemini-3.5-flash-lite:streamGenerateContent?alt=sse",
+      "auth": "Bearer",
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "origin": "https://us-central1-aiplatform.googleapis.com",
+      "path": "/v1/projects/owned-project/locations/us-central1/publishers/google/models/gemini-3.6-flash:streamGenerateContent?alt=sse",
+      "auth": "Bearer",
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "origin": "https://us-central1-aiplatform.googleapis.com",
+      "path": "/v1/projects/owned-project/locations/us-central1/publishers/google/models/gemini-3.7-flash:streamGenerateContent?alt=sse",
+      "auth": "Bearer",
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "origin": "https://us-central1-aiplatform.googleapis.com",
+      "path": "/v1/projects/owned-project/locations/us-central1/publishers/google/models/gemini-3.8-flash:streamGenerateContent?alt=sse",
+      "auth": "Bearer",
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "echo",
+              "description": "Echo",
+              "parametersJsonSchema": {
+                "type": "object",
+                "required": [
+                  "x"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "limits": "Actual pinned ADC external-account resolver/GenAI with an owned HTTPS token endpoint, trusted ephemeral CA and closed intercepted default regional model URLs; network none, no TLS bypass. Core consumes an explicitly supplied opaque Bearer and does not implement this ADC file/token-resolution flow. Only requested model/API/header scheme/default regional project/location path/non-strict schema construction are compared. Initial gaxios-global-fetch DNS failure and injected-custom-base path failure remain uncredited. No Google issuer/account/token validity, regional TLS, full defaults/auth/profile or service interoperability certificate."
+}
