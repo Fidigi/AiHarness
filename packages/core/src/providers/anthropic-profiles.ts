@@ -1,4 +1,5 @@
-import type { ChatResponse } from './index.js';
+import type { AnthropicChatOptions, ChatResponse } from './index.js';
+import { makeStrictToolSchema, UnsupportedStrictToolSchema } from './strict-tool-schema.js';
 import type { PublishedModelMetadata, PublishedThinkingLevel } from './model-metadata.js';
 
 // Pi 1.2.0 / 06a466935536f8c9bcacb2d5efc0fc021be1bdff, generated catalogue
@@ -60,12 +61,42 @@ const numericPolicy = Object.freeze({ maxTokens: 64000, thinkingLevelMap: Object
 }) });
 export function anthropicNumericPolicy(model: string): typeof numericPolicy | undefined { return numericIds.has(model) ? numericPolicy : undefined; }
 export function hasAnthropicProfile(model: string): boolean { return profiles.has(model); }
+const strictUnsupportedKeys = new Set(['minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'maxItems',
+  'uniqueItems', 'minContains', 'maxContains', 'minProperties', 'maxProperties']);
+const strictFormats = new Set(['date-time', 'time', 'date', 'duration', 'email', 'hostname', 'uri', 'ipv4', 'ipv6', 'uuid']);
+const unsupportedStrictKeyword = (key: string, value: unknown): boolean => strictUnsupportedKeys.has(key)
+  || (key === 'minItems' && value !== 0 && value !== 1) || (key === 'format' && (typeof value !== 'string' || !strictFormats.has(value)));
 /** Caller declarations only; native deferred/inline tool changes remain a separate policy. */
-export function applyAnthropicProfileToolDeclarations(body: Record<string, unknown>): void {
-  if (typeof body.model !== 'string' || !profiles.has(body.model) || !Array.isArray(body.tools)) return;
-  body.tools = body.tools.map(tool => ({ ...tool, eager_input_streaming: true,
-    input_schema: { type: 'object', properties: tool.input_schema.properties ?? {}, required: tool.input_schema.required ?? [] },
-  }));
+export function applyAnthropicProfileToolDeclarations(body: Record<string, unknown>, owned: boolean, options?: AnthropicChatOptions): void {
+  const admitted = owned && typeof body.model === 'string' && profiles.has(body.model), choice = options?.toolChoice;
+  const invalid = (): never => { throw new Error('Invalid Anthropic tool policy.'); };
+  const unsupported = (): never => { throw new Error('Anthropic tool requires unsupported constrained sampling.'); };
+  if (choice !== undefined) {
+    if (!admitted) invalid();
+    if (typeof choice === 'string' && ['auto', 'none', 'any'].includes(choice)) body.tool_choice = { type: choice };
+    else if (choice && typeof choice === 'object' && choice.type === 'tool' && typeof choice.name === 'string' && choice.name.trim()) {
+      body.tool_choice = { type: 'tool', name: choice.name };
+    } else invalid();
+  }
+  if (!Array.isArray(body.tools)) return;
+  body.tools = body.tools.map((tool, index) => {
+    let parameters = tool.input_schema, strict = false;
+    const sampling = options?.tools?.[index]?.constrainedSampling;
+    if (sampling !== undefined && sampling !== false) {
+      if (!sampling || sampling.type !== 'json_schema' || !['prefer', 'require'].includes(sampling.strict)) return invalid();
+      if (!admitted) { if (sampling.strict === 'require') unsupported(); }
+      else {
+        try { parameters = makeStrictToolSchema(parameters, unsupportedStrictKeyword); strict = true; }
+        catch (error) {
+          if (!(error instanceof UnsupportedStrictToolSchema)) return invalid();
+          if (sampling.strict === 'require') unsupported();
+        }
+      }
+    }
+    if (!admitted) return tool;
+    return { ...tool, eager_input_streaming: true, ...(strict ? { strict: true } : {}),
+      input_schema: { ...(strict ? parameters : {}), type: 'object', properties: parameters.properties ?? {}, required: parameters.required ?? [] } };
+  });
 }
 export function anthropicPublishedProfiles(): PublishedModelMetadata[] {
   return [...profiles.values()].map(profile => ({ ...profile, capabilities: { ...profile.capabilities }, pricing: { ...profile.pricing },

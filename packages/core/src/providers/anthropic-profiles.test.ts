@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AnthropicProvider, type ChatOptions, type ChatResponse } from './index.js';
+import { AnthropicProvider, type AnthropicChatOptions, type ChatOptions, type ChatResponse } from './index.js';
 import type { Message } from '../types/index.js';
 import { SessionManager } from '../sessions/session-manager.js';
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
@@ -20,6 +20,15 @@ const toolFixture = JSON.parse(toolBytes.toString()) as {
     callerDeclarations: Array<Record<string, unknown>> | null; capturedRequestTools: Array<Record<string, unknown>> | null;
     capturedDeferredDeclarations: Array<Record<string, unknown>> }>;
 };
+interface ToolPolicyVector { model: string; case: string; tools: NonNullable<AnthropicChatOptions['tools']>; toolChoice?: AnthropicChatOptions['toolChoice'];
+  refused: boolean; callerDeclarations?: Array<Record<string, unknown>> | null; toolChoiceWire?: Record<string, unknown> | null;
+  capturedRequestTools?: Array<Record<string, unknown>> | null; capturedDeferredDeclarations?: Array<Record<string, unknown>>; }
+const policyFixtures = ['anthropic-tool-policy-reference.json', 'anthropic-tool-schema-boundaries-reference.json'].map(name => {
+  const raw = readFileSync(new URL(`../../../../tests/fixtures/${name}`, import.meta.url));
+  return { bytes: raw, data: JSON.parse(raw.toString()) as { catalogueSha256: string; modelProjections: number; vectors: number;
+    requests: number; refusals: number; capturedDeferredDeclarations: number; rows: ToolPolicyVector[] } };
+});
+const policyVectors = policyFixtures.flatMap(fixture => fixture.data.rows);
 const profiles = Object.values(JSON.parse(bytes.toString())['anthropic-messages']) as Array<{
   id: string; name: string; contextWindow: number; maxTokens: number;
   cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -186,6 +195,21 @@ describe('owned Anthropic response authority', () => {
         name: tool.name, description: tool.description, input_schema: tool.parameters,
       })));
     }
+    // Scoped controls may not grant native strict/choice authority to legacy paths.
+    for (const [model, Provider, override] of [[profiles[0]!.id, Compatible, undefined], ['unknown-model', AnthropicProvider, undefined],
+      [profiles[0]!.id, AnthropicProvider, 'unknown-model']] as const) {
+      const legacy = fixture(model, 'legacy-response', Provider), vector = policyVectors.find(row => row.case === 'prefer')!;
+      for (const stream of [false, true]) {
+        await legacy.call(stream, 'none', { model: override, tools: vector.tools });
+        expect(JSON.parse(String(legacy.fetch.mock.calls.at(-1)?.[1]?.body)).tools).toEqual(vector.tools.map(tool => ({
+          name: tool.name, description: tool.description, input_schema: tool.parameters,
+        })));
+        const count = legacy.fetch.mock.calls.length, required = policyVectors.find(row => row.case === 'require')!;
+        await expect(legacy.call(stream, 'none', { model: override, tools: required.tools })).rejects.toThrow('Anthropic tool requires unsupported constrained sampling.');
+        await expect(legacy.call(stream, 'none', { model: override, tools: vector.tools, toolChoice: 'any' } as AnthropicChatOptions)).rejects.toThrow('Invalid Anthropic tool policy.');
+        expect(legacy.fetch).toHaveBeenCalledTimes(count);
+      }
+    }
     const f = fixture('unknown-model'), vector = toolFixture.rows.find(row => row.model === profiles[0]!.id && row.case === 'required-object')!;
     f.reply({ content: [{ type: 'text', text: 'reviewed' }], stop_reason: 'end_turn' }, responseEvents());
     for (const stream of [false, true]) {
@@ -193,7 +217,18 @@ describe('owned Anthropic response authority', () => {
       expect((await f.call(stream, 'none', options)).model).toBe(vector.model);
       expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).tools).toEqual(vector.callerDeclarations);
       expect(options).toEqual(before);
+      const strict = policyVectors.find(row => row.model === vector.model && row.case === 'require-named')!;
+      await f.call(stream, 'none', { model: strict.model, tools: strict.tools, toolChoice: strict.toolChoice } as AnthropicChatOptions);
+      const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+      expect(body.tools).toEqual(strict.callerDeclarations); expect(body.tool_choice ?? null).toEqual(strict.toolChoiceWire);
     }
+    // Core-only malformed scoped controls, not additional executed SDK vectors.
+    const native = fixture(profiles[0]!.id), tools = policyVectors[0]!.tools, invalidCount = native.fetch.mock.calls.length;
+    for (const options of [...[null, 'required', {}, { type: 'function', name: 'echo' }, { type: 'tool', name: '' }].map(toolChoice => ({ tools, toolChoice })),
+      ...[null, true, {}, { type: 'json_schema', strict: 'sometimes' }, { type: 'grammar', variants: {} }].map(constrainedSampling => ({ tools: [{ ...tools[0], constrainedSampling }] }))]) {
+      for (const stream of [false, true]) await expect(native.call(stream, 'none', options as AnthropicChatOptions)).rejects.toThrow('Invalid Anthropic tool policy.');
+    }
+    expect(native.fetch).toHaveBeenCalledTimes(invalidCount);
   });
 });
 
@@ -210,6 +245,20 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
     for (const vector of toolFixture.rows) expect(vector.capturedRequestTools ?? []).toEqual([
       ...(vector.callerDeclarations ?? []), ...vector.capturedDeferredDeclarations,
     ]); // Deferred SDK declarations stay visible but outside this bounded caller-declaration projection.
+    expect(policyFixtures.map(fixture => createHash('sha256').update(fixture.bytes).digest('hex'))).toEqual([
+      '905454a70d75291e56a6d4be82f0c7609085329085f4606c06569ce2b7075d86', 'a66743b54cfb3fad04463f11dc70943f5a5ee2f474415b1839cbbaa2dafba966',
+    ]);
+    expect(policyFixtures.map(fixture => [fixture.data.modelProjections, fixture.data.vectors, fixture.data.requests, fixture.data.refusals, fixture.data.capturedDeferredDeclarations]))
+      .toEqual([[17, 306, 272, 34, 105], [2, 272, 172, 100, 86]]);
+    expect(policyFixtures[0]!.data.rows.map(row => row.model)).toEqual(profiles.flatMap(profile => Array(18).fill(profile.id)));
+    expect(policyFixtures[1]!.data.rows.map(row => row.model)).toEqual(['claude-opus-5-5', 'claude-sonnet-4-6'].flatMap(model => Array(136).fill(model)));
+    for (const fixture of policyFixtures) {
+      expect(fixture.data.catalogueSha256).toBe(createHash('sha256').update(bytes).digest('hex'));
+      expect(fixture.data.rows.filter(row => row.refused)).toHaveLength(fixture.data.refusals);
+      for (const vector of fixture.data.rows.filter(row => !row.refused)) expect(vector.capturedRequestTools ?? []).toEqual([
+        ...(vector.callerDeclarations ?? []), ...vector.capturedDeferredDeclarations!,
+      ]); // Retain all191 SDK deferred placeholders; compare the whole Core array separately below.
+    }
   });
   for (const profile of profiles) it(profile.id, async () => {
     const f = fixture(profile.id);
@@ -237,6 +286,21 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       expect({ options, input }).toEqual(before);
     }
     expect(f.fetch).toHaveBeenCalledTimes(12);
+    for (const vector of policyVectors.filter(row => row.model === profile.id)) {
+      const options: AnthropicChatOptions = { tools: vector.tools, toolChoice: vector.toolChoice }, before = structuredClone({ options, input });
+      for (const stream of [false, true]) {
+        const count = f.fetch.mock.calls.length;
+        if (vector.refused) {
+          await expect(f.call(stream, 'none', options)).rejects.toThrow('Anthropic tool requires unsupported constrained sampling.');
+          expect(f.fetch).toHaveBeenCalledTimes(count);
+        } else {
+          const result = await f.call(stream, 'none', options), body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+          expect(body.tools ?? null, vector.case).toEqual(vector.callerDeclarations); expect(body.tool_choice ?? null, vector.case).toEqual(vector.toolChoiceWire);
+          expect(body.model).toBe(vector.model); expect(result).toMatchObject({ content: 'ok', model: profile.id, api: 'anthropic-messages' });
+        }
+      }
+      expect({ options, input }).toEqual(before);
+    }
   });
   for (const profile of profiles) it(`${profile.id}: enforces the owned output ceiling on SDK and preflight`, async () => {
     const f = fixture(profile.id), policy = captureNativeOutputBudget(f.provider)!;

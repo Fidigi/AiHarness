@@ -163,6 +163,7 @@ export type {
   StreamChunkCallback,
   ChatOptions,
   ResponsesChatOptions,
+  AnthropicChatOptions,
   GoogleChatOptions,
   ChatToolDefinition,
   ThinkingLevel,

@@ -1573,11 +1573,12 @@ it('hosts and withdraws owned MCP registrations through installed declarations a
 
 // Provider addition: original installed executable/declaration/PATH probes above
 // remain intact. This case consumes only freshly packed, actually installed Core.
-it('validates installed public provider discovery declarations and keyless based-path runtime with original Anthropic caller tools', async () => {
+it('validates installed public provider discovery declarations and keyless based-path runtime with original Anthropic caller tools and scoped strict policy', async () => {
   await writeFile(path.join(consumer, 'anthropic-tool-schema.json'), await readFile(path.join(checkout, 'tests/fixtures/anthropic-tool-schema-reference.json')));
+  for (const name of ['anthropic-tool-policy-reference.json', 'anthropic-tool-schema-boundaries-reference.json']) await writeFile(path.join(consumer, name), await readFile(path.join(checkout, 'tests/fixtures', name)));
   await writeFile(path.join(consumer, 'provider-public.ts'), `
     import { OpenAiProvider, AnthropicProvider, AiProvider, copyThinkingBudgets,
-      type ThinkingBudgets, type StartAgentRunRequest, type ScopedConfigurationValues, type ChatResponse, type ChatOptions, type ChatToolDefinition } from '@ai-harness/core';
+      type ThinkingBudgets, type StartAgentRunRequest, type ScopedConfigurationValues, type ChatResponse, type ChatOptions, type ChatToolDefinition, type AnthropicChatOptions } from '@ai-harness/core';
     const budgets: ThinkingBudgets = Object.freeze({ low: 2000 });
     const request: StartAgentRunRequest = { sessionId: 'declaration-only', provider: 'mock', cwd: '.', input: 'budget', thinkingBudgets: budgets };
     const scoped: ScopedConfigurationValues = { thinkingBudgets: copyThinkingBudgets(budgets) };
@@ -1602,6 +1603,19 @@ it('validates installed public provider discovery declarations and keyless based
       const result = await provider.chat([], options); await provider.streamChat([], () => {}, undefined, undefined, options); return result;
     }
     void callerTools;
+    const strictOptions: AnthropicChatOptions = { tools: [{ ...tools[0]!, constrainedSampling: { type: 'json_schema', strict: 'require' } }], toolChoice: { type: 'tool', name: 'echo' } };
+    async function strictTools(provider: AnthropicProvider): Promise<void> {
+      for (const toolChoice of ['auto', 'none', 'any', { type: 'tool', name: 'echo' }] as const) {
+        await provider.chat([], { ...strictOptions, toolChoice }); await provider.streamChat([], () => {}, undefined, undefined, { ...strictOptions, toolChoice });
+      }
+    }
+    // @ts-expect-error only prefer/require are supported strict policy values
+    const badSampling: AnthropicChatOptions = { tools: [{ ...tools[0]!, constrainedSampling: { type: 'json_schema', strict: 'sometimes' } }] };
+    // @ts-expect-error Anthropic named choices are not Responses function choices
+    const badChoice: AnthropicChatOptions = { toolChoice: { type: 'function', name: 'echo' } };
+    // @ts-expect-error scoped tool choice does not widen generic host contracts
+    const genericChoice: ChatOptions = { toolChoice: 'any' };
+    void strictTools; void badSampling; void badChoice; void genericChoice;
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'provider-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
@@ -1633,6 +1647,8 @@ it('validates installed public provider discovery declarations and keyless based
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
     const paths = [], bodies = [], toolBodies = [];
     const toolFixture = JSON.parse(await readFile('anthropic-tool-schema.json', 'utf8'));
+    const policyFixtures = await Promise.all(['anthropic-tool-policy-reference.json', 'anthropic-tool-schema-boundaries-reference.json'].map(async name => JSON.parse(await readFile(name, 'utf8'))));
+    assert.deepEqual(policyFixtures.map(fixture => [fixture.vectors, fixture.requests, fixture.refusals, fixture.capturedDeferredDeclarations]), [[306, 272, 34, 105], [272, 172, 100, 86]]);
     assert.equal(toolFixture.rows.length, 68); assert.equal(toolFixture.callerDeclarations, 51); assert.equal(toolFixture.capturedDeferredDeclarations, 21);
     const server = createServer(async (req, res) => {
       paths.push(req.url);
@@ -1701,11 +1717,34 @@ it('validates installed public provider discovery declarations and keyless based
       }
       assert.equal(toolBodies.length, 136); assert.equal(paths.length, 148);
       assert.deepEqual(paths.slice(12), Array(136).fill('/caller-tools/v1/messages'));
+      let refusals = 0;
+      for (const vector of policyFixtures.flatMap(fixture => fixture.rows)) {
+        const provider = new AnthropicProvider({ type: 'operator-caller-tools', apiKey: 'disposable-caller-tools', model: vector.model, baseUrl: base + '/caller-tools' });
+        const message = { ...input, content: 'probe' }, options = { maxTokens: 64, cacheRetention: 'none', tools: vector.tools, toolChoice: vector.toolChoice }, before = structuredClone({ message, options });
+        for (const stream of [false, true]) {
+          let result, failure; const count = paths.length;
+          try {
+            if (!stream) result = await provider.chat([message], options);
+            else await provider.streamChat([message], async () => { await Promise.resolve(); }, value => { result = value; }, error => { failure = error; }, options);
+          } catch (error) { failure = error; }
+          if (vector.refused) {
+            assert.equal(failure?.message, 'Anthropic tool requires unsupported constrained sampling.'); assert.equal(result, undefined); assert.equal(paths.length, count); refusals++;
+          } else {
+            if (failure) throw failure; const body = toolBodies.at(-1);
+            assert.deepEqual(body.tools ?? null, vector.callerDeclarations); assert.deepEqual(body.tool_choice ?? null, vector.toolChoiceWire);
+            assert.equal(body.model, vector.model); assert.equal(body.stream, stream);
+            assert.equal(result.content, 'ok'); assert.equal(result.api, 'anthropic-messages'); assert.equal(result.model, vector.model);
+          }
+        }
+        assert.deepEqual({ message, options }, before);
+      }
+      assert.equal(refusals, 268); assert.equal(toolBodies.length, 1024); assert.equal(paths.length, 1036);
+      assert.deepEqual(paths.slice(12), Array(1024).fill('/caller-tools/v1/messages'));
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
-    console.log('fresh installed provider declarations/runtime/Anthropic caller tools OK');
+    console.log('fresh installed provider declarations/runtime/Anthropic caller tools/scoped strict policy OK');
   `);
   const runtime = await run(process.execPath, ['provider-public.mjs'], consumer, environment);
-  expect(runtime).toEqual({ code: 0, stdout: 'fresh installed provider declarations/runtime/Anthropic caller tools OK\n', stderr: '' });
+  expect(runtime).toEqual({ code: 0, stdout: 'fresh installed provider declarations/runtime/Anthropic caller tools/scoped strict policy OK\n', stderr: '' });
   // Stronger separate declaration control; the original SDK probe remains intact.
   const sdkTypes = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'consumer.ts'], consumer, environment);
   expect(sdkTypes.stdout).toBe(''); expect(sdkTypes.stderr).toBe('');
@@ -1713,7 +1752,7 @@ it('validates installed public provider discovery declarations and keyless based
   if (evidence) {
     expect(outside(path.resolve(evidence), checkout)).toBe(true);
     for (const name of await readdir(artifactRoot)) if (name.endsWith('.tgz')) await cp(path.join(artifactRoot, name), path.join(evidence, name));
-    for (const name of ['provider-public.ts', 'provider-public.mjs', 'anthropic-tool-schema.json', 'consumer.ts', 'consumer.mjs', 'package.json', 'package-lock.json']) await cp(path.join(consumer, name), path.join(evidence, name));
+    for (const name of ['provider-public.ts', 'provider-public.mjs', 'anthropic-tool-schema.json', 'anthropic-tool-policy-reference.json', 'anthropic-tool-schema-boundaries-reference.json', 'consumer.ts', 'consumer.mjs', 'package.json', 'package-lock.json']) await cp(path.join(consumer, name), path.join(evidence, name));
     await cp(path.join(consumer, 'node_modules', '@ai-harness', 'core', 'dist'), path.join(evidence, 'installed-core-dist'), { recursive: true });
     await writeFile(path.join(evidence, 'provider-results.json'), JSON.stringify({ checkout, consumer, types, sdkTypes, runtime,
       strictTypeArguments: ['--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node'],

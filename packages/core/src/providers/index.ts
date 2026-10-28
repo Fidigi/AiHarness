@@ -533,6 +533,12 @@ export interface ResponsesChatOptions extends ChatOptions {
   toolChoice?: 'auto' | 'none' | 'required' | { type: 'function'; name: string };
 }
 
+/** Scoped JSON-schema/choice controls for original Anthropic profiles, not generic or automatic host tools. */
+export interface AnthropicChatOptions extends ChatOptions {
+  tools?: Array<ChatToolDefinition & { constrainedSampling?: false | { type: 'json_schema'; strict: 'prefer' | 'require' } }>;
+  toolChoice?: 'auto' | 'none' | 'any' | { type: 'tool'; name: string };
+}
+
 /** JSON-schema tool controls for the reviewed Google/Vertex adapters, not a cross-provider or host-tool promise. */
 export interface GoogleChatOptions extends ChatOptions {
   tools?: Array<ChatToolDefinition & { constrainedSampling?: false | { type: 'json_schema'; strict: 'prefer' | 'require' } }>;
@@ -4486,10 +4492,8 @@ export class AnthropicProvider extends AiProvider {
     return Object.fromEntries(merged.entries());
   }
   protected prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
-    if (this.ownsNativeProfiles) {
-      applyAnthropicProfileToolDeclarations(body);
-      applyAnthropicManagedHistory(body, options, toolImageMessages(messages).filter(message => message.role !== 'system'), this.config.type);
-    }
+    applyAnthropicProfileToolDeclarations(body, this.ownsNativeProfiles, options);
+    if (this.ownsNativeProfiles) applyAnthropicManagedHistory(body, options, toolImageMessages(messages).filter(message => message.role !== 'system'), this.config.type);
     return body;
   }
   protected applyMessageThinking(body: Record<string, unknown>, options?: ChatOptions): void {
@@ -4569,7 +4573,7 @@ export class AnthropicProvider extends AiProvider {
 
   async chat(
     messages: Message[],
-    options?: ChatOptions,
+    options?: AnthropicChatOptions,
   ): Promise<ChatResponse> {
     if (!this.validateConfig()) {
       throw new Error('Anthropic API key is required');
@@ -4654,7 +4658,7 @@ export class AnthropicProvider extends AiProvider {
     onChunk: StreamChunkCallback,
     onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void,
-    options?: ChatOptions,
+    options?: AnthropicChatOptions,
   ): Promise<void> {
     if (!this.validateConfig()) {
       throw new Error('Anthropic API key is required');

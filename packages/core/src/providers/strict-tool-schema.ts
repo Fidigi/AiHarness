@@ -8,12 +8,13 @@ function schemaAllowsNull(value: unknown): boolean {
     || (Array.isArray(value.anyOf) && value.anyOf.some(schemaAllowsNull)));
 }
 /** Pinned JSON-schema strict subset: close objects, require fields and make optional fields nullable without mutation. */
-export function makeStrictToolSchema(parameters: Record<string, unknown>): Record<string, unknown> {
+export function makeStrictToolSchema(parameters: Record<string, unknown>, isUnsupportedKeyword?: (key: string, value: unknown) => boolean): Record<string, unknown> {
   const schema: unknown = structuredClone(parameters);
   const unsupported = (): never => { throw new UnsupportedStrictToolSchema(); };
   const visit = (value: unknown): void => {
     if (!schemaRecord(value)) return unsupported();
     if (unsupportedStrictKeys.some(key => value[key] !== undefined)) unsupported();
+    if (isUnsupportedKeyword && Object.entries(value).some(([key, item]) => isUnsupportedKeyword(key, item))) unsupported();
     if (value.anyOf !== undefined) {
       if (!Array.isArray(value.anyOf) || value.anyOf.length === 0) return unsupported();
       for (const member of value.anyOf) {
