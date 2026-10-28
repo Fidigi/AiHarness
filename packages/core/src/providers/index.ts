@@ -3108,8 +3108,8 @@ export class OpenAiResponsesProvider extends AiProvider {
 
   protected responseUrl(): string { return `${this.baseUrl}/responses`; }
 
-  protected requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
-    messages = toolImageMessages(messages);
+  protected requestBody(messages: Message[], options?: ChatOptions, nativeToolImages = false): ResponsesRequest {
+    if (!nativeToolImages) messages = toolImageMessages(messages);
     const input: ResponsesInput = [];
     for (const message of messages) {
       if (message.role === 'tool') {
@@ -3469,8 +3469,10 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
   }
 
   protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
-    const body = super.requestBody(messages, options);
-    if (this.ownsNativeProfiles && azureProfileApi(body.model) === 'azure-openai-responses') {
+    const model = options?.model ?? this.getConfiguredModel() ?? 'gpt-4o';
+    const native = this.ownsNativeProfiles && azureProfileApi(model) === 'azure-openai-responses';
+    const body = super.requestBody(messages, options, native);
+    if (native) {
       prepareAzureResponses(body, options); this.requestedModels.set(body, body.model);
       applyNativeResponsesToolHistory(body, messages, 'azure', body.model, 'azure-openai-responses');
     }
@@ -3715,7 +3717,7 @@ class ReviewedOpenAiResponsesProvider extends OpenAiResponsesProvider {
       ...(profile.declaredInput.includes('image') ? { imageInput: true } : {}) }];
   }
   protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
-    const body = super.requestBody(messages, options); prepareOpenAiResponse(body, options);
+    const body = super.requestBody(messages, options, true); prepareOpenAiResponse(body, options);
     applyNativeResponsesToolHistory(body, messages, 'openai', body.model, 'openai-responses'); return body;
   }
   protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return nativeResponsesToolId(item) ?? super.responseToolId(item, body); }

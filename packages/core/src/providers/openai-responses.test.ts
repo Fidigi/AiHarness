@@ -25,6 +25,11 @@ const grammarReplay = JSON.parse(readFileSync(new URL('../../../../tests/fixture
   rows: Array<GrammarVector & { responseItems: Array<Record<string, unknown>>; calls: NonNullable<ChatResponse['toolCalls']>;
     messages: Array<Omit<Message, 'timestamp'>>; items: unknown[] }>;
 };
+const imageReference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/responses-tool-images-reference.json', import.meta.url), 'utf8')) as {
+  pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; grammarCapableProjections: number;
+  fallbackGrammarProjections: number; imageCapableProjections: number; textOnlyProjections: number; cases: number; requests: number;
+  rows: Array<(typeof grammarReplay.rows)[number] & { mode: 'function' | 'grammar'; supportsImages: boolean; usesGrammar: boolean }>;
+};
 const user: Message[] = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
 afterEach(() => vi.restoreAllMocks());
 function reply(items?: Array<Record<string, unknown>>) {
@@ -71,7 +76,7 @@ describe('original OpenAI/Azure Responses unsigned call/item IDs and paired tool
       expect(reference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
       expect(reference.captureSha256).toBe('bd2ecd7d1f31612c828ce3a486352f4e501fa46a42e52a24012ab4498412e4bd');
       expect(reference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
-      for (const fixture of [policy, boundaries, generation]) {
+      for (const fixture of [policy, boundaries, generation, imageReference]) {
         expect(fixture.pinnedCommit).toBe(reference.pinnedCommit); expect(fixture.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
       }
       expect(generation.captureSha256).toBe('637862c5e5ae2ae6c9729d4d8bdf7fc13130f15320fcaacaa680a8c93f782a8a');
@@ -87,14 +92,21 @@ describe('original OpenAI/Azure Responses unsigned call/item IDs and paired tool
       expect([...models].sort()).toEqual(identities.sort());
       expect(reference.modelProjections).toBe(88); expect(reference.cases).toBe(704); expect(reference.requests).toBe(1408); expect(reference.rows).toHaveLength(704);
       expect(models).toHaveLength(44); expect(vectors).toHaveLength(352);
+      expect(imageReference.captureSha256).toBe('ebd660cdf58457b4af0821b29701105e7a42623bbaabc82e3262aafd7d472ba0');
+      expect([imageReference.modelProjections, imageReference.grammarCapableProjections, imageReference.fallbackGrammarProjections,
+        imageReference.imageCapableProjections, imageReference.textOnlyProjections, imageReference.cases, imageReference.requests, imageReference.rows.length]).toEqual([88, 50, 38, 84, 4, 704, 1408, 704]);
+      expect([...new Set(imageReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(models);
+      expect([...new Set(imageReference.rows.filter(row => row.scope === scope && !row.supportsImages).map(row => row.model))]).toEqual(['gpt-4', 'o3-mini']);
       const f = fixture(scope, models[0]);
       const published = f.provider.getPublishedModels!()!.filter(row => row.api === (scope === 'openai' ? 'openai-responses' : 'azure-openai-responses'));
       expect(published.map(row => row.id).sort()).toEqual([...models].sort()); expect(f.fetch).not.toHaveBeenCalled();
     });
-    for (const model of models) it(`${scope}/${model}: binds provided response IDs and same/cross-identity replay tool items on both facades`, async () => {
+    for (const model of models) it(`${scope}/${model}: binds provided IDs, identity replay and one-image function outputs on both facades`, async () => {
       const rows = vectors.filter(row => row.model === model), f = fixture(scope, model);
+      const images = imageReference.rows.filter(row => row.scope === scope && row.model === model && row.mode === 'function').map(row => ({ ...row, tools: row.options.tools! }));
       expect(rows.map(row => row.case)).toEqual(['success', 'error', 'empty', 'adjacent-two-results', 'cross-provider', 'cross-api', 'cross-model', 'legacy-missing-identity']);
-      for (const vector of rows) for (const stream of [false, true]) {
+      expect(images.map(row => row.case)).toEqual(['image-success', 'image-error', 'image-only-success', 'image-only-error']);
+      for (const vector of [...rows, ...images]) for (const stream of [false, true]) {
         const options = { model, maxTokens: 64, systemPrompt: 'owned guard', tools: structuredClone(vector.tools) }, chunks = f.chunks.length;
         f.items(vector.responseItems);
         const first = await f.call(stream, user, options);
@@ -106,6 +118,8 @@ describe('original OpenAI/Azure Responses unsigned call/item IDs and paired tool
         expect(second).toMatchObject({ content: 'ok', model, api: vector.api });
         const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
         expect(toolItems(body)).toEqual(vector.items); expect(body.model).toBe(scope === 'azure' ? 'owned-deployment' : model);
+        if (vector.case.startsWith('image')) expect(body.input.slice(2)).toEqual(vector.items);
+        if ('fields' in vector) expect(toolFields(body)).toEqual(vector.fields);
         expect(messages).toEqual(before); expect(options.tools).toEqual(vector.tools);
       }
     });
@@ -125,10 +139,25 @@ describe('original OpenAI/Azure Responses unsigned call/item IDs and paired tool
             ...vector.calls.map(call => ({ type: 'function_call', call_id: call.id, name: call.name, arguments: JSON.stringify(call.input) })),
             ...messages.filter(message => message.role === 'tool').map(message => ({ type: 'function_call_output', call_id: message.toolCallId, output: message.content })),
           ]);
+          const image = imageReference.rows.find(row => row.scope === scope && row.model === 'gpt-5' && row.mode === 'function' && row.case === 'image-success')!;
+          const imageMessages: Message[] = structuredClone(image.messages).map(message => ({ ...message, timestamp: new Date(0) })), before = structuredClone(imageMessages);
+          await f.call(stream, imageMessages, { maxTokens: 64 });
+          const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
+          expect(body.input.at(-1)).toEqual({ role: 'user', content: [{ type: 'input_text', text: `Tool images for ${image.calls[0]!.id}` },
+            { type: 'input_image', image_url: imageMessages.at(-1)!.blocks!.find(block => block.type === 'image')!.url }] });
+          expect(toolItems(body).at(-1)).toEqual({ type: 'function_call_output', call_id: image.calls[0]!.id, output: 'first' }); expect(imageMessages).toEqual(before);
         }
       }
       const f = fixture(scope, scope === 'azure' ? 'gpt-5-unreviewed' : 'gpt-4o'); f.items(vector.responseItems);
-      for (const stream of [false, true]) expect((await f.call(stream, user, { model: 'gpt-5', maxTokens: 64 })).toolCalls).toEqual(vector.calls);
+      for (const stream of [false, true]) {
+        expect((await f.call(stream, user, { model: 'gpt-5', maxTokens: 64 })).toolCalls).toEqual(vector.calls);
+        const image = imageReference.rows.find(row => row.scope === scope && row.model === 'gpt-5' && row.mode === 'function' && row.case === 'image-success')!;
+        const options = { ...structuredClone(image.options), model: 'gpt-5' };
+        f.items(image.responseItems); expect((await f.call(stream, user, options)).toolCalls).toEqual(image.calls); f.items();
+        const messages: Message[] = structuredClone(image.messages).map(message => ({ ...message, timestamp: new Date(0) }));
+        await f.call(stream, messages, options); expect(JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string).input.slice(2)).toEqual(image.items);
+        f.items(vector.responseItems);
+      }
     });
   }
 });
@@ -233,13 +262,15 @@ describe('original Responses grammar declarations and supplied custom/function t
       const identities = pin.rows.filter((row: string[]) => row[0] === scope && row[3] === 'chat' && row[2] === (scope === 'openai' ? 'openai-responses' : 'azure-openai-responses')).map((row: string[]) => row[1]);
       expect([...models].sort()).toEqual(identities.sort()); expect(models).toHaveLength(44);
     });
-    for (const model of models) it(`${scope}/${model}: binds grammar/fallback construction, raw input and paired result replay on both facades`, async () => {
+    for (const model of models) it(`${scope}/${model}: binds grammar/fallback construction, raw input and text/image paired replay on both facades`, async () => {
       const f = fixture(scope, model), rows = grammar.rows.filter(row => row.scope === scope && row.model === model);
       expect(rows.map(row => row.case)).toEqual(['lark', 'regex', 'both', 'blank-lark-regex', 'blank-variants', 'no-required', 'two-required', 'wrong-type', 'optional-extra', 'renamed-property']);
       for (const vector of rows) for (const stream of [false, true]) await compare(f, vector, stream);
       const replays = grammarReplay.rows.filter(row => row.scope === scope && row.model === model);
       expect(replays.map(row => row.case)).toEqual(['success', 'error', 'empty', 'adjacent-two-results', 'cross-provider', 'cross-api', 'cross-model', 'legacy-missing-identity']);
-      for (const vector of replays) for (const stream of [false, true]) {
+      const images = imageReference.rows.filter(row => row.scope === scope && row.model === model && row.mode === 'grammar');
+      expect(images.map(row => row.case)).toEqual(['image-success', 'image-error', 'image-only-success', 'image-only-error']);
+      for (const vector of [...replays, ...images]) for (const stream of [false, true]) {
         const options = { ...structuredClone(vector.options), model }, originalOptions = structuredClone(options), count = f.fetch.mock.calls.length, chunks = f.chunks.length;
         f.items(vector.responseItems);
         const first = await f.call(stream, user, options);
@@ -254,6 +285,7 @@ describe('original Responses grammar declarations and supplied custom/function t
         const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
         expect(body.input.filter((item: Record<string, unknown>) => ['function_call', 'function_call_output', 'custom_tool_call', 'custom_tool_call_output'].includes(String(item.type)))).toEqual(vector.items);
         expect(toolFields(body)).toEqual(vector.fields); expect(body.model).toBe(scope === 'azure' ? 'owned-deployment' : model);
+        if (vector.case.startsWith('image')) expect(body.input.slice(2)).toEqual(vector.items);
         expect(messages).toEqual(before); expect(options).toEqual(originalOptions);
       }
     });

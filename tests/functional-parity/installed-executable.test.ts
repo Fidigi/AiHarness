@@ -1677,14 +1677,15 @@ it('validates installed public provider discovery declarations and keyless based
   }
 }, 60_000);
 
-it('binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choice, scalar generation and grammar through installed declarations and runtime', async () => {
+it('binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choice, scalar generation, grammar and tool images through installed declarations and runtime', async () => {
   await writeFile(path.join(consumer, 'responses-tools-public.ts'), `
     import { OpenAiMixedProvider, AzureProvider, AzureResponsesProvider, type AiProvider, type ChatOptions, type ChatToolDefinition, type ResponsesChatOptions, type Message, type ToolCall } from '@ai-harness/core';
     const providers: AiProvider[] = [new OpenAiMixedProvider({ type: 'openai', apiKey: 'sk-disposable', model: 'gpt-5', transport: 'sse' }),
       new AzureProvider({ type: 'azure', apiKey: 'sk-disposable', model: 'gpt-5', baseUrl: 'https://owned.example/openai/v1' })];
     const call: ToolCall = { id: 'provided-call|fc_owned', name: 'echo', input: { x: 'owned' } };
     const messages: Message[] = [{ id: 'a', role: 'assistant', content: '', timestamp: new Date(0), provider: 'openai', api: 'openai-responses', model: 'gpt-5', toolCalls: [call] },
-      { id: 't', role: 'tool', content: 'done', timestamp: new Date(0), toolCallId: call.id, name: 'echo', isError: false }];
+      { id: 't', role: 'tool', content: 'done', timestamp: new Date(0), toolCallId: call.id, name: 'echo', isError: false,
+        blocks: [{ type: 'text', text: 'done' }, { type: 'image', mediaType: 'image/png', url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==' }] }];
     const options: ChatOptions = { maxTokens: 64, tools: [{ name: 'echo', description: 'Echo', parameters: { type: 'object', properties: { x: { type: 'string' } } } }] };
     async function compile() {
       const scoped: ResponsesChatOptions = { toolChoice: { type: 'function', name: 'echo' }, tools: [{ name: 'echo', description: 'Echo',
@@ -1718,12 +1719,13 @@ it('binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choi
   const scalarVectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-scalar-generation-reference.json'), 'utf8')).rows;
   const grammarVectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-grammar-reference.json'), 'utf8')).rows;
   const grammarReplays = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-grammar-tool-results-reference.json'), 'utf8')).rows;
+  const imageVectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-tool-images-reference.json'), 'utf8')).rows;
   await writeFile(path.join(consumer, 'responses-tools-public.mjs'), `
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
     import { OpenAiMixedProvider, AzureProvider } from '@ai-harness/core';
     const vectors = ${JSON.stringify(vectors)}, policyVectors = ${JSON.stringify(policyVectors)}, scalarVectors = ${JSON.stringify(scalarVectors)},
-      grammarVectors = ${JSON.stringify(grammarVectors)}, grammarReplays = ${JSON.stringify(grammarReplays)}, calls = []; let replyItems;
+      grammarVectors = ${JSON.stringify(grammarVectors)}, grammarReplays = ${JSON.stringify(grammarReplays)}, imageVectors = ${JSON.stringify(imageVectors)}, calls = []; let replyItems;
     function events(items) {
       const output = items ?? [{ type: 'message', id: 'msg_owned', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'ok', annotations: [] }] }];
       const result = [{ type: 'response.created', response: { id: 'resp_owned', status: 'in_progress', output: [] } }];
@@ -1847,11 +1849,21 @@ it('binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choi
         assert.deepEqual(second.call.body.input.filter(item => ['function_call', 'function_call_output', 'custom_tool_call', 'custom_tool_call_output'].includes(item.type)), vector.items);
       }
       assert.equal(grammarReplays.length, 704); assert.equal(calls.length, 9784); assert.equal(refusals, 696);
-      console.log('installed original Responses unsigned/schema/scalar/grammar tools OK');
+      for (const vector of imageVectors) for (const stream of [false, true]) {
+        const options = { ...structuredClone(vector.options), model: vector.model };
+        replyItems = vector.responseItems;
+        const first = await performGrammar(vector, stream, [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }], options);
+        assert.equal(first.result.content, ''); assert.deepEqual(first.result.toolCalls, vector.calls); if (stream) assert.deepEqual(first.chunks, vector.calls);
+        replyItems = undefined;
+        const second = await performGrammar(vector, stream, structuredClone(vector.messages).map(message => ({ ...message, timestamp: new Date(0) })), options);
+        assert.equal(second.result.content, 'ok'); assert.deepEqual(second.call.body.input.slice(2), vector.items);
+      }
+      assert.equal(imageVectors.length, 704); assert.equal(calls.length, 12600); assert.equal(refusals, 696);
+      console.log('installed original Responses unsigned/schema/scalar/grammar/tool images OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);
   expect(await run(process.execPath, ['responses-tools-public.mjs'], consumer, environment))
-    .toEqual({ code: 0, stdout: 'installed original Responses unsigned/schema/scalar/grammar tools OK\n', stderr: '' });
+    .toEqual({ code: 0, stdout: 'installed original Responses unsigned/schema/scalar/grammar/tool images OK\n', stderr: '' });
 }, 60_000);
 
 it('dispatches original Google/Vertex schema/generation/choice/history/images and regional Bearer construction through installed declarations and runtime', async () => {

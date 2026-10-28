@@ -6,6 +6,7 @@ import type { Message } from '../types/index.js';
 
 const profiles = new Map(OPENAI_RESPONSE_MODELS.map(profile => [profile.id, profile]));
 const grammarProperties = new WeakMap<object, ReadonlyMap<string, string>>();
+const imageInputBodies = new WeakMap<object, boolean>();
 export function nativeResponsesGrammarProperty(body: object, name: string): string | undefined {
   return grammarProperties.get(body)?.get(name);
 }
@@ -51,6 +52,7 @@ export function applyNativeResponsesToolHistory(body: Record<string, unknown>, m
   provider: 'openai' | 'azure', model: string, api: string): void {
   if (!Array.isArray(body.input)) return;
   const ids = new Map<string, { callId: string; itemId?: string; customInput?: string }>();
+  const results = new Map(messages.filter(message => message.role === 'tool').map(message => [message.toolCallId ?? message.id, message]));
   const normalize = (id: string) => id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64).replace(/_+$/, '');
   for (const message of messages) if (message.role === 'assistant') for (const call of message.toolCalls ?? []) {
     const parts = call.id.split('|');
@@ -78,6 +80,10 @@ export function applyNativeResponsesToolHistory(body: Record<string, unknown>, m
       if (id.itemId !== undefined) item.id = id.itemId;
       if (id.customInput !== undefined) { item.type = 'custom_tool_call'; item.input = id.customInput; delete item.arguments; }
     } else if (item.type === 'function_call_output') {
+      const message = results.get(item.call_id), images = message?.blocks?.filter(block => block.type === 'image') ?? [];
+      if (images.length) item.output = imageInputBodies.get(body)
+        ? [...(message!.content ? [{ type: 'input_text', text: message!.content }] : []), ...images.map(image => ({ type: 'input_image', detail: 'auto', image_url: image.url }))]
+        : [message!.content, '(tool image omitted: model does not support images)'].filter(Boolean).join('\n');
       item.call_id = id.callId;
       if (id.customInput !== undefined) item.type = 'custom_tool_call_output';
       if (item.output === '') item.output = '(no tool output)';
@@ -130,6 +136,7 @@ function applyNativeResponsesToolPolicy(body: Record<string, unknown>, options: 
 /** Shared R protocol, with private profile authority supplied by the owning adapter. */
 export function prepareNativeResponses(body: Record<string, unknown>, options: ChatOptions | undefined,
   profile: NativeResponsesProfile, provider: 'OpenAI' | 'Azure', supportsGrammar = false): void {
+  imageInputBodies.set(body, profile.declaredInput.includes('image'));
   const requested = options?.thinking;
   if (requested !== undefined && !PUBLISHED_THINKING_LEVELS.includes(requested)) throw new Error(`Invalid ${provider} thinking level.`);
   const levels = PUBLISHED_THINKING_LEVELS.filter(level => !profile.reasoning ? level === 'off'
