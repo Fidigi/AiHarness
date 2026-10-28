@@ -18,7 +18,7 @@ import { OPENAI_DECISIONS_MODEL, decisionsBody, decisionsAnswers, type NativeWir
 export { OPENAI_DECISIONS_MODEL } from './openai-decisions.js';
 import { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
 export { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
-import { applyNativeResponsesToolHistory, nativeResponsesToolId, openAiMixedBase, openAiResponseProfile, prepareOpenAiResponse, openAiResponseUsage } from './openai-responses.js';
+import { applyNativeResponsesToolHistory, nativeResponsesToolId, nativeResponsesGrammarProperty, openAiMixedBase, openAiResponseProfile, prepareOpenAiResponse, openAiResponseUsage } from './openai-responses.js';
 import { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
 export { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
 import { cloudflareAiBase, cloudflareChatEndpoint, cloudflareChatProfile, cloudflareMixedBases, prepareCloudflareChat, cloudflareChatUsage, validateCloudflareChat } from './cloudflare-completions.js';
@@ -526,9 +526,10 @@ export interface ChatOptions {
   sessionId?: string;
 }
 
-/** JSON-schema/choice controls for reviewed original OpenAI/Azure R profiles, not generic or host tools. */
+/** Scoped tool controls for reviewed original OpenAI/Azure R profiles, not generic or host tools. */
 export interface ResponsesChatOptions extends ChatOptions {
-  tools?: Array<ChatToolDefinition & { constrainedSampling?: false | { type: 'json_schema'; strict: 'prefer' | 'require' } }>;
+  tools?: Array<ChatToolDefinition & { constrainedSampling?: false | { type: 'json_schema'; strict: 'prefer' | 'require' }
+    | { type: 'grammar'; variants: { openai_lark?: string; openai_regex?: string } } }>;
   toolChoice?: 'auto' | 'none' | 'required' | { type: 'function'; name: string };
 }
 
@@ -2542,7 +2543,7 @@ type ResponsesContinuation = {
   assistantInput: Record<string, unknown>;
 };
 
-type ResponsesToolFragment = { id: string; name: string; arguments: string };
+type ResponsesToolFragment = { id: string; name: string; arguments: string; grammarInputProperty?: string };
 type ProviderResponseRecord = Record<string, unknown>;
 
 function providerResponseRecord(value: unknown): ProviderResponseRecord | undefined {
@@ -2701,14 +2702,20 @@ function responsesUsage(value: unknown): ChatResponse['usage'] | undefined {
   };
 }
 
-function parseResponsesTool(item: unknown, toolId?: (item: ProviderResponseRecord) => string): ResponsesToolFragment | undefined {
+function parseResponsesTool(item: unknown, toolId?: (item: ProviderResponseRecord) => string,
+  grammarProperty?: (name: string) => string | undefined): ResponsesToolFragment | undefined {
   if (!item || typeof item !== 'object') return undefined;
   const record = item as Record<string, unknown>;
-  if (record.type !== 'function_call' || typeof record.name !== 'string') return undefined;
+  if (typeof record.name !== 'string') return undefined;
+  const property = record.type === 'custom_tool_call' ? grammarProperty?.(record.name) : undefined;
+  if (record.type !== 'function_call' && property === undefined) return undefined;
+  if (property !== undefined && record.input !== undefined && typeof record.input !== 'string') throw new ResponsesProtocolError('invalid_grammar_input');
+  const input = property === undefined ? record.arguments : record.input;
   return {
     id: toolId ? toolId(record) : String(record.call_id ?? record.id ?? randomUUID()),
     name: record.name,
-    arguments: typeof record.arguments === 'string' ? record.arguments : '',
+    arguments: typeof input === 'string' ? input : '',
+    ...(property === undefined ? {} : { grammarInputProperty: property }),
   };
 }
 
@@ -2730,6 +2737,7 @@ async function applyResponsesEvent(
   onChunk: StreamChunkCallback,
   usage: (value: unknown) => ChatResponse['usage'] = responsesUsage,
   toolId?: (item: ProviderResponseRecord) => string,
+  grammarProperty?: (name: string) => string | undefined,
 ): Promise<void> {
   if (++state.events > 1_024) throw new ResponsesProtocolError('too_many_events');
   const type = typeof event.type === 'string' ? event.type : '';
@@ -2755,8 +2763,17 @@ async function applyResponsesEvent(
     await onChunk('', { type: 'reasoning_delta', data: { content: event.delta } });
   }
   if (type === 'response.output_item.added' || type === 'response.output_item.done') {
-    const tool = parseResponsesTool(event.item, toolId);
+    const tool = parseResponsesTool(event.item, toolId, grammarProperty);
     if (tool) setResponsesTool(state, String(event.output_index ?? tool.id), tool);
+  }
+  if (type === 'response.custom_tool_call_input.delta' || type === 'response.custom_tool_call_input.done') {
+    const key = String(event.output_index ?? event.item_id ?? event.call_id ?? '0');
+    const current = state.tools.get(key);
+    if (current?.grammarInputProperty !== undefined) {
+      const input = type === 'response.custom_tool_call_input.delta' ? event.delta : event.input;
+      if (typeof input !== 'string') throw new ResponsesProtocolError('invalid_grammar_input');
+      setResponsesTool(state, key, { ...current, arguments: type === 'response.custom_tool_call_input.delta' ? current.arguments + input : input });
+    }
   }
   if (type === 'response.function_call_arguments.delta' && typeof event.delta === 'string') {
     const key = String(event.output_index ?? event.item_id ?? event.call_id ?? '0');
@@ -2788,7 +2805,7 @@ async function applyResponsesEvent(
     state.usage = usage(response.usage) ?? state.usage;
     state.stopReason = lengthStop(providerResponseRecord(response.incomplete_details)?.reason).stopReason;
     for (const [index, item] of (Array.isArray(response.output) ? response.output : []).entries()) {
-      const tool = parseResponsesTool(item, toolId);
+      const tool = parseResponsesTool(item, toolId, grammarProperty);
       if (tool) setResponsesTool(state, String(index), tool);
     }
     if (!state.content) {
@@ -2804,9 +2821,14 @@ async function applyResponsesEvent(
 }
 
 function finalizeResponses(state: ResponsesAccumulator): ChatResponse {
-  const toolCalls: ToolCall[] = [...state.tools.values()].map(tool => ({
-    id: tool.id, name: tool.name, input: parseProviderToolArguments(tool.arguments),
-  }));
+  const toolCalls: ToolCall[] = [...state.tools.values()].map(tool => {
+    const input = tool.grammarInputProperty === undefined ? parseProviderToolArguments(tool.arguments) : { [tool.grammarInputProperty]: tool.arguments };
+    if (tool.grammarInputProperty !== undefined) {
+      state.outputBytes += Buffer.byteLength(JSON.stringify(input)) - Buffer.byteLength(tool.arguments);
+      if (state.outputBytes > RESPONSES_MAX_OUTPUT_BYTES) throw new ResponsesProtocolError('grammar_input_too_large', 'The provider response exceeded the output limit.');
+    }
+    return { id: tool.id, name: tool.name, input };
+  });
   return {
     content: state.content,
     ...(state.stopReason ? { stopReason: state.stopReason } : {}),
@@ -3076,6 +3098,7 @@ export class OpenAiResponsesProvider extends AiProvider {
 
   protected responseUsage(value: unknown, _model: string, _body?: ResponsesRequest): ChatResponse['usage'] { return responsesUsage(value); }
   protected responseToolId(item: ProviderResponseRecord, _body: ResponsesRequest): string { return String(item.call_id ?? item.id ?? randomUUID()); }
+  protected responseGrammarProperty(_name: string, _body: ResponsesRequest): string | undefined { return undefined; }
 
   protected requiresCompleteSseResponse(): boolean { return this.config.type === 'azure'; }
 
@@ -3194,7 +3217,8 @@ export class OpenAiResponsesProvider extends AiProvider {
       try {
         lease.socket.send(serializeProviderBody({ type: 'response.create', ...body }));
         for await (const event of responsesWebSocketEvents(lease.socket, signal, network.httpIdleTimeoutMs)) {
-          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, fullBody.model, fullBody), item => this.responseToolId(item, fullBody));
+          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, fullBody.model, fullBody),
+            item => this.responseToolId(item, fullBody), name => this.responseGrammarProperty(name, fullBody));
         }
         if (!state.completed) throw new ResponsesProtocolError('incomplete_websocket_response');
         const response = finalizeResponses(state);
@@ -3253,7 +3277,7 @@ export class OpenAiResponsesProvider extends AiProvider {
         throw new ResponsesProtocolError('invalid_json_response');
       }
       await applyResponsesEvent({ type: value.status === 'completed' ? 'response.completed' : 'response.incomplete', response: value },
-        state, onChunk, usage => this.responseUsage(usage, body.model, body), item => this.responseToolId(item, body));
+        state, onChunk, usage => this.responseUsage(usage, body.model, body), item => this.responseToolId(item, body), name => this.responseGrammarProperty(name, body));
       return finalizeResponses(state);
     }
     const reader = response.body.getReader();
@@ -3281,7 +3305,8 @@ export class OpenAiResponsesProvider extends AiProvider {
           let event: ProviderResponseRecord;
           try { event = JSON.parse(payload) as ProviderResponseRecord; }
           catch { throw new ResponsesProtocolError('invalid_sse_json'); }
-          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model, body), item => this.responseToolId(item, body));
+          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model, body),
+            item => this.responseToolId(item, body), name => this.responseGrammarProperty(name, body));
         }
       }
       buffer += decoder.decode();
@@ -3291,7 +3316,8 @@ export class OpenAiResponsesProvider extends AiProvider {
           let event: ProviderResponseRecord;
           try { event = JSON.parse(payload) as ProviderResponseRecord; }
           catch { throw new ResponsesProtocolError('invalid_sse_json'); }
-          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model, body), item => this.responseToolId(item, body));
+          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model, body),
+            item => this.responseToolId(item, body), name => this.responseGrammarProperty(name, body));
         }
       }
     } finally {
@@ -3426,6 +3452,7 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
   protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string {
     return (this.requestedModels.has(body) ? nativeResponsesToolId(item) : undefined) ?? super.responseToolId(item, body);
   }
+  protected override responseGrammarProperty(name: string, body: ResponsesRequest): string | undefined { return nativeResponsesGrammarProperty(body, name); }
 
   protected override responseUrl(): string {
     const url = new URL(super.responseUrl());
@@ -3692,6 +3719,7 @@ class ReviewedOpenAiResponsesProvider extends OpenAiResponsesProvider {
     applyNativeResponsesToolHistory(body, messages, 'openai', body.model, 'openai-responses'); return body;
   }
   protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return nativeResponsesToolId(item) ?? super.responseToolId(item, body); }
+  protected override responseGrammarProperty(name: string, body: ResponsesRequest): string | undefined { return nativeResponsesGrammarProperty(body, name); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return openAiResponseUsage(value, model); }
   protected override requiresCompleteSseResponse(): boolean { return true; }
   protected override headers(websocket: boolean, sessionId?: string): Record<string, string> {
@@ -3706,10 +3734,12 @@ class ReviewedOpenAiResponsesProvider extends OpenAiResponsesProvider {
     const report = (error: Error) => {
       const fixed = ['OpenAI API key is required.', 'OpenAI response model is not supported.', 'Invalid OpenAI thinking level.',
         'OpenAI response model does not support images.', 'Invalid OpenAI output limit.',
-        'Invalid Responses tool policy.', 'Responses tool requires unsupported constrained sampling.'];
+        'Invalid Responses tool policy.', 'Responses tool requires unsupported constrained sampling.',
+        'Responses tool requires unsupported grammar sampling.', 'Invalid Responses grammar tool input.'];
+      const grammarProtocol = error instanceof ResponsesProtocolError && ['invalid_grammar_input', 'grammar_input_too_large'].includes(error.code);
       const safe = options?.signal?.aborted ? new Error('OpenAI request aborted.')
         : error instanceof ProviderContextOverflowError ? new ProviderContextOverflowError()
-          : new Error(fixed.includes(error.message) ? error.message : 'OpenAI response request failed.');
+          : new Error(fixed.includes(error.message) || grammarProtocol ? error.message : 'OpenAI response request failed.');
       if (onError) onError(safe); else throw safe;
     };
     if (!this.validateConfig()) { report(new Error('OpenAI API key is required.')); return; }

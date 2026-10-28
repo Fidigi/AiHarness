@@ -1677,7 +1677,7 @@ it('validates installed public provider discovery declarations and keyless based
   }
 }, 60_000);
 
-it('binds original OpenAI/Azure unsigned response IDs, paired tool items, scoped schema/choice and scalar generation through installed declarations and runtime', async () => {
+it('binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choice, scalar generation and grammar through installed declarations and runtime', async () => {
   await writeFile(path.join(consumer, 'responses-tools-public.ts'), `
     import { OpenAiMixedProvider, AzureProvider, AzureResponsesProvider, type AiProvider, type ChatOptions, type ChatToolDefinition, type ResponsesChatOptions, type Message, type ToolCall } from '@ai-harness/core';
     const providers: AiProvider[] = [new OpenAiMixedProvider({ type: 'openai', apiKey: 'sk-disposable', model: 'gpt-5', transport: 'sse' }),
@@ -1689,11 +1689,18 @@ it('binds original OpenAI/Azure unsigned response IDs, paired tool items, scoped
     async function compile() {
       const scoped: ResponsesChatOptions = { toolChoice: { type: 'function', name: 'echo' }, tools: [{ name: 'echo', description: 'Echo',
         parameters: { type: 'object', properties: { x: { type: 'string' } } }, constrainedSampling: { type: 'json_schema', strict: 'require' } }] };
+      const grammar: ResponsesChatOptions = { tools: [{ name: 'echo', description: 'Echo raw input', parameters: { type: 'object', properties: { source_code: { type: 'string' } }, required: ['source_code'] },
+        constrainedSampling: { type: 'grammar', variants: { openai_lark: 'start: /.+/s', openai_regex: '.+' } } }] };
       for (const provider of providers) { await provider.chat(messages, options); await provider.streamChat(messages, () => {}, undefined, undefined, options);
-        await provider.chat(messages, scoped); await provider.streamChat(messages, () => {}, undefined, undefined, scoped); }
+        await provider.chat(messages, scoped); await provider.streamChat(messages, () => {}, undefined, undefined, scoped);
+        await provider.chat(messages, grammar); await provider.streamChat(messages, () => {}, undefined, undefined, grammar); }
       const native = [new OpenAiMixedProvider({ type: 'openai', apiKey: 'sk-disposable', model: 'gpt-5', transport: 'sse' }),
         new AzureResponsesProvider({ type: 'azure', apiKey: 'sk-disposable', model: 'gpt-5', baseUrl: 'https://owned.example/openai/v1' })];
-      for (const provider of native) { await provider.chat(messages, { toolChoice: 'none' }); await provider.streamChat(messages, () => {}, undefined, undefined, { toolChoice: 'required' }); }
+      for (const provider of native) { await provider.chat(messages, { toolChoice: 'none' }); await provider.streamChat(messages, () => {}, undefined, undefined, { toolChoice: 'required' });
+        await provider.chat(messages, { tools: [{ name: 'echo', description: 'Echo', parameters: {}, constrainedSampling: { type: 'grammar', variants: { openai_regex: '.+' } } }] }); }
+      // @ts-expect-error Only the two pinned OpenAI grammar variant keys are scoped public controls.
+      const badGrammar: ResponsesChatOptions = { tools: [{ name: 'echo', description: 'Echo', parameters: {}, constrainedSampling: { type: 'grammar', variants: { other_regex: '.+' } } }] };
+      void badGrammar;
       // @ts-expect-error Responses choices are not generic host/provider controls.
       const genericChoice: ChatOptions = { toolChoice: 'required' };
       // @ts-expect-error Generic tool declarations do not gain constrained-sampling controls.
@@ -1709,17 +1716,23 @@ it('binds original OpenAI/Azure unsigned response IDs, paired tool items, scoped
   const policyVectors = (await Promise.all(['responses-tool-policy-reference.json', 'responses-tool-schema-boundaries-reference.json'].map(async file =>
     JSON.parse(await readFile(path.join(checkout, 'tests/fixtures', file), 'utf8')).rows))).flat();
   const scalarVectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-scalar-generation-reference.json'), 'utf8')).rows;
+  const grammarVectors = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-grammar-reference.json'), 'utf8')).rows;
+  const grammarReplays = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/responses-grammar-tool-results-reference.json'), 'utf8')).rows;
   await writeFile(path.join(consumer, 'responses-tools-public.mjs'), `
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
     import { OpenAiMixedProvider, AzureProvider } from '@ai-harness/core';
-    const vectors = ${JSON.stringify(vectors)}, policyVectors = ${JSON.stringify(policyVectors)}, scalarVectors = ${JSON.stringify(scalarVectors)}, calls = []; let replyItems;
+    const vectors = ${JSON.stringify(vectors)}, policyVectors = ${JSON.stringify(policyVectors)}, scalarVectors = ${JSON.stringify(scalarVectors)},
+      grammarVectors = ${JSON.stringify(grammarVectors)}, grammarReplays = ${JSON.stringify(grammarReplays)}, calls = []; let replyItems;
     function events(items) {
       const output = items ?? [{ type: 'message', id: 'msg_owned', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'ok', annotations: [] }] }];
       const result = [{ type: 'response.created', response: { id: 'resp_owned', status: 'in_progress', output: [] } }];
       for (const [index, item] of output.entries()) {
-        result.push({ type: 'response.output_item.added', output_index: index, item: { ...item, status: 'in_progress', ...(items ? { arguments: '' } : { content: [] }) } });
-        result.push(items ? { type: 'response.function_call_arguments.delta', output_index: index, delta: item.arguments }
+        result.push({ type: 'response.output_item.added', output_index: index, item: { ...item, status: 'in_progress', ...(items ? item.type === 'custom_tool_call' ? { input: '' } : { arguments: '' } : { content: [] }) } });
+        if (items && item.type === 'custom_tool_call') {
+          for (const delta of [item.input.slice(0, 3), item.input.slice(3)]) result.push({ type: 'response.custom_tool_call_input.delta', output_index: index, delta });
+          result.push({ type: 'response.custom_tool_call_input.done', output_index: index, input: item.input });
+        } else result.push(items ? { type: 'response.function_call_arguments.delta', output_index: index, delta: item.arguments }
           : { type: 'response.output_text.delta', output_index: index, content_index: 0, delta: 'ok' });
         result.push({ type: 'response.output_item.done', output_index: index, item });
       }
@@ -1798,11 +1811,47 @@ it('binds original OpenAI/Azure unsigned response IDs, paired tool items, scoped
         assert.equal(JSON.stringify({ messages, options }), before);
       }
       assert.equal(scalarVectors.length, 176); assert.equal(calls.length, 5608); assert.equal(refusals, 296);
-      console.log('installed original Responses unsigned tools, scoped schema/choice and scalar generation OK');
+      const performGrammar = async (vector, stream, messages, options) => {
+        const provider = providers[vector.scope], before = JSON.stringify({ messages, options }), count = calls.length, chunks = [];
+        let result, failure;
+        if (stream) await provider.streamChat(messages, (_text, event) => { if (event?.type === 'tool_call') chunks.push(event.data); }, value => { result = value; }, error => { failure = error; }, options);
+        else result = await provider.chat(messages, options);
+        if (failure) throw failure;
+        assert.equal(calls.length, count + 1); assert.equal(result.model, vector.model); assert.equal(result.api, vector.api);
+        const call = calls.at(-1); assert.equal(call.body.model, vector.scope === 'azure' ? 'owned-deployment' : vector.model);
+        assert.equal(call.headers[vector.scope === 'azure' ? 'api-key' : 'authorization'], vector.scope === 'azure' ? key : 'Bearer ' + key);
+        assert.equal(call.headers[vector.scope === 'azure' ? 'authorization' : 'api-key'], undefined);
+        assert.deepEqual(Object.fromEntries(['tools', 'tool_choice'].filter(key => call.body[key] !== undefined).map(key => [key, call.body[key]])), vector.fields);
+        assert.equal(JSON.stringify({ messages, options }), before); return { result, chunks, call };
+      };
+      for (const vector of grammarVectors) for (const stream of [false, true]) {
+        const provider = providers[vector.scope], options = { ...structuredClone(vector.options), model: vector.model }, messages = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
+        if (vector.refusal) {
+          const count = calls.length, before = JSON.stringify({ messages, options }), chunks = []; let failure, completions = 0;
+          if (stream) {
+            await provider.streamChat(messages, (text, event) => { chunks.push({ text, event }); }, () => { completions++; }, error => { failure = error; }, options);
+            assert.equal(failure?.message, 'Responses tool requires unsupported grammar sampling.'); assert.equal(completions, 0); assert.deepEqual(chunks, []);
+          } else await assert.rejects(() => provider.chat(messages, options), { message: 'Responses tool requires unsupported grammar sampling.' });
+          assert.equal(calls.length, count); assert.equal(JSON.stringify({ messages, options }), before); refusals++;
+        } else assert.equal((await performGrammar(vector, stream, messages, options)).result.content, 'ok');
+      }
+      assert.equal(grammarVectors.length, 880); assert.equal(calls.length, 6968); assert.equal(refusals, 696);
+      for (const vector of grammarReplays) for (const stream of [false, true]) {
+        const options = { ...structuredClone(vector.options), model: vector.model };
+        replyItems = vector.responseItems;
+        const first = await performGrammar(vector, stream, [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }], options);
+        assert.equal(first.result.content, ''); assert.deepEqual(first.result.toolCalls, vector.calls); if (stream) assert.deepEqual(first.chunks, vector.calls);
+        replyItems = undefined;
+        const second = await performGrammar(vector, stream, structuredClone(vector.messages).map(message => ({ ...message, timestamp: new Date(0) })), options);
+        assert.equal(second.result.content, 'ok');
+        assert.deepEqual(second.call.body.input.filter(item => ['function_call', 'function_call_output', 'custom_tool_call', 'custom_tool_call_output'].includes(item.type)), vector.items);
+      }
+      assert.equal(grammarReplays.length, 704); assert.equal(calls.length, 9784); assert.equal(refusals, 696);
+      console.log('installed original Responses unsigned/schema/scalar/grammar tools OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);
   expect(await run(process.execPath, ['responses-tools-public.mjs'], consumer, environment))
-    .toEqual({ code: 0, stdout: 'installed original Responses unsigned tools, scoped schema/choice and scalar generation OK\n', stderr: '' });
+    .toEqual({ code: 0, stdout: 'installed original Responses unsigned/schema/scalar/grammar tools OK\n', stderr: '' });
 }, 60_000);
 
 it('dispatches original Google/Vertex schema/generation/choice/history and regional Bearer construction through installed declarations and runtime', async () => {

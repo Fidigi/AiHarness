@@ -18,14 +18,25 @@ const generation = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/r
   pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; cases: number; reusedCaptureRequests: number;
   rows: Array<{ scope: Scope; model: string; api: string; sourceCase: string; options: ChatOptions; fields: Record<string, unknown> }>;
 };
+type GrammarVector = PolicyVector & { supportsGrammar: boolean };
+type GrammarReference = Omit<PolicyReference, 'rows'> & { grammarCapableProjections: number; fallbackProjections: number; rows: GrammarVector[] };
+const grammar = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/responses-grammar-reference.json', import.meta.url), 'utf8')) as GrammarReference;
+const grammarReplay = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/responses-grammar-tool-results-reference.json', import.meta.url), 'utf8')) as Omit<GrammarReference, 'rows'> & {
+  rows: Array<GrammarVector & { responseItems: Array<Record<string, unknown>>; calls: NonNullable<ChatResponse['toolCalls']>;
+    messages: Array<Omit<Message, 'timestamp'>>; items: unknown[] }>;
+};
 const user: Message[] = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
 afterEach(() => vi.restoreAllMocks());
 function reply(items?: Array<Record<string, unknown>>) {
   const output: Array<Record<string, unknown>> = items ?? [{ type: 'message', id: 'msg_owned', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'ok', annotations: [] }] }];
   const events: Array<Record<string, unknown>> = [{ type: 'response.created', response: { id: 'resp_owned', status: 'in_progress', output: [] } }];
   for (const [index, item] of output.entries()) {
-    events.push({ type: 'response.output_item.added', output_index: index, item: { ...item, status: 'in_progress', ...(items ? { arguments: '' } : { content: [] }) } });
-    events.push(items ? { type: 'response.function_call_arguments.delta', output_index: index, delta: item.arguments }
+    events.push({ type: 'response.output_item.added', output_index: index, item: { ...item, status: 'in_progress', ...(items ? item.type === 'custom_tool_call' ? { input: '' } : { arguments: '' } : { content: [] }) } });
+    if (items && item.type === 'custom_tool_call') {
+      const input = String(item.input);
+      for (const delta of [input.slice(0, 3), input.slice(3)]) events.push({ type: 'response.custom_tool_call_input.delta', output_index: index, delta });
+      events.push({ type: 'response.custom_tool_call_input.done', output_index: index, input });
+    } else events.push(items ? { type: 'response.function_call_arguments.delta', output_index: index, delta: item.arguments }
       : { type: 'response.output_text.delta', output_index: index, content_index: 0, delta: 'ok' });
     events.push({ type: 'response.output_item.done', output_index: index, item });
   }
@@ -175,6 +186,106 @@ describe('original Responses scoped JSON-schema and tool-choice construction', (
     });
     it(`${scope}: keeps legacy prefer schemas off-profile despite public API labels and admits reviewed per-call policy privately`, async () => {
       const vector = policy.rows.find(row => row.scope === scope && row.model === 'gpt-5' && row.case === 'strict-prefer')!;
+      const controls = scope === 'openai' ? [['gpt-5', 'generic'], ['gpt-5-unreviewed', 'generic']] as const
+        : [['gpt-5', 'derived-azure'], ['gpt-5-unreviewed', 'unknown-azure']] as const;
+      for (const [model, legacy] of controls) {
+        const f = fixture(scope, model, legacy); f.provider.getModelApi = () => vector.api;
+        for (const stream of [false, true]) {
+          await f.call(stream, user, structuredClone(vector.options));
+          expect(toolFields(JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string))).toEqual({
+            tools: vector.options.tools!.map(tool => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.parameters })), tool_choice: 'auto',
+          });
+        }
+      }
+      const f = fixture(scope, scope === 'azure' ? 'gpt-5-unreviewed' : 'gpt-4o');
+      for (const stream of [false, true]) await compare(f, vector, stream);
+    });
+  }
+});
+
+describe('original Responses grammar declarations and supplied custom/function tool replay', () => {
+  const compare = async (f: ReturnType<typeof fixture>, vector: GrammarVector, stream: boolean) => {
+    const options = { ...structuredClone(vector.options), model: vector.model }, before = structuredClone(options), count = f.fetch.mock.calls.length;
+    if (vector.refusal) {
+      await expect(f.call(stream, user, options)).rejects.toThrow('Responses tool requires unsupported grammar sampling.');
+      expect(f.fetch.mock.calls).toHaveLength(count);
+    } else {
+      expect(await f.call(stream, user, options)).toMatchObject({ content: 'ok', model: vector.model, api: vector.api });
+      expect(f.fetch.mock.calls).toHaveLength(count + 1);
+      const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
+      expect(toolFields(body)).toEqual(vector.fields); expect(body.model).toBe(vector.scope === 'azure' ? 'owned-deployment' : vector.model);
+    }
+    expect(options).toEqual(before);
+  };
+  for (const scope of ['openai', 'azure'] as const) {
+    const models = [...new Set(grammar.rows.filter(row => row.scope === scope).map(row => row.model))];
+    it(`${scope}: binds grammar capability and both executed SDK captures independently`, () => {
+      for (const fixture of [grammar, grammarReplay]) {
+        expect(fixture.pinnedCommit).toBe(reference.pinnedCommit); expect(fixture.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
+        expect([fixture.modelProjections, fixture.grammarCapableProjections, fixture.fallbackProjections]).toEqual([88, 50, 38]);
+        expect([...new Set(fixture.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(models);
+        expect(new Set(fixture.rows.filter(row => row.scope === scope && row.supportsGrammar).map(row => row.model)).size).toBe(25);
+      }
+      expect(grammar.captureSha256).toBe('2de313ea2f2cfffd8ce24b410ce092a10c1b4c03933e551744d01bb6edfa3e9d');
+      expect(grammarReplay.captureSha256).toBe('a0bf1db4a1a0bfe6983cc90178f5aec48377ab54e3fb7ea2e9f90528fb465f3d');
+      expect([grammar.cases, grammar.requests, grammar.refusals, grammar.rows.length]).toEqual([880, 680, 200, 880]);
+      expect([grammarReplay.cases, grammarReplay.requests, grammarReplay.refusals, grammarReplay.rows.length]).toEqual([704, 1408, 0, 704]);
+      const identities = pin.rows.filter((row: string[]) => row[0] === scope && row[3] === 'chat' && row[2] === (scope === 'openai' ? 'openai-responses' : 'azure-openai-responses')).map((row: string[]) => row[1]);
+      expect([...models].sort()).toEqual(identities.sort()); expect(models).toHaveLength(44);
+    });
+    for (const model of models) it(`${scope}/${model}: binds grammar/fallback construction, raw input and paired result replay on both facades`, async () => {
+      const f = fixture(scope, model), rows = grammar.rows.filter(row => row.scope === scope && row.model === model);
+      expect(rows.map(row => row.case)).toEqual(['lark', 'regex', 'both', 'blank-lark-regex', 'blank-variants', 'no-required', 'two-required', 'wrong-type', 'optional-extra', 'renamed-property']);
+      for (const vector of rows) for (const stream of [false, true]) await compare(f, vector, stream);
+      const replays = grammarReplay.rows.filter(row => row.scope === scope && row.model === model);
+      expect(replays.map(row => row.case)).toEqual(['success', 'error', 'empty', 'adjacent-two-results', 'cross-provider', 'cross-api', 'cross-model', 'legacy-missing-identity']);
+      for (const vector of replays) for (const stream of [false, true]) {
+        const options = { ...structuredClone(vector.options), model }, originalOptions = structuredClone(options), count = f.fetch.mock.calls.length, chunks = f.chunks.length;
+        f.items(vector.responseItems);
+        const first = await f.call(stream, user, options);
+        expect(first).toMatchObject({ content: '', model, api: vector.api }); expect(first.toolCalls).toEqual(vector.calls);
+        if (stream) expect(f.chunks.slice(chunks)).toEqual(vector.calls);
+        expect(f.fetch.mock.calls).toHaveLength(count + 1);
+        expect(toolFields(JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string))).toEqual(vector.fields);
+        f.items();
+        const messages: Message[] = structuredClone(vector.messages).map(message => ({ ...message, timestamp: new Date(0) })), before = structuredClone(messages);
+        expect(await f.call(stream, messages, options)).toMatchObject({ content: 'ok', model, api: vector.api });
+        expect(f.fetch.mock.calls).toHaveLength(count + 2);
+        const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
+        expect(body.input.filter((item: Record<string, unknown>) => ['function_call', 'function_call_output', 'custom_tool_call', 'custom_tool_call_output'].includes(String(item.type)))).toEqual(vector.items);
+        expect(toolFields(body)).toEqual(vector.fields); expect(body.model).toBe(scope === 'azure' ? 'owned-deployment' : model);
+        expect(messages).toEqual(before); expect(options).toEqual(originalOptions);
+      }
+    });
+    it(`${scope}: refuses malformed custom input and counts its mapped JSON against the existing output limit before publishing tools`, async () => {
+      const vector = grammarReplay.rows.find(row => row.scope === scope && row.model === 'gpt-5' && row.case === 'success')!;
+      const f = fixture(scope, 'gpt-5'), options = structuredClone(vector.options), originalOptions = structuredClone(options);
+      for (const input of [null, 1, {}]) for (const stream of [false, true]) {
+        f.items([{ ...structuredClone(vector.responseItems[0]!), input }]);
+        await expect(f.call(stream, user, options)).rejects.toThrow('The provider response was invalid.');
+        expect(f.chunks).toEqual([]);
+      }
+      const messages: Message[] = structuredClone(vector.messages).map(message => ({ ...message, timestamp: new Date(0) }));
+      messages.find(message => message.role === 'assistant')!.toolCalls![0]!.input = { source_code: 1 };
+      const before = structuredClone(messages), count = f.fetch.mock.calls.length;
+      for (const stream of [false, true]) await expect(f.call(stream, messages, options)).rejects.toThrow('Invalid Responses grammar tool input.');
+      expect(f.fetch.mock.calls).toHaveLength(count); expect(messages).toEqual(before);
+      f.fetch.mockImplementation(async () => {
+        const item = { ...vector.responseItems[0]!, input: '' }, encoder = new TextEncoder();
+        const events = [{ type: 'response.output_item.added', output_index: 0, item },
+          ...Array.from({ length: 30 }, () => ({ type: 'response.custom_tool_call_input.delta', output_index: 0, delta: '\u0000'.repeat(100_000) })),
+          { type: 'response.completed', response: { status: 'completed', output: [] } }];
+        let next = 0;
+        return new Response(new ReadableStream({ pull(controller) {
+          if (next === events.length) controller.close();
+          else controller.enqueue(encoder.encode(`data: ${JSON.stringify(events[next++])}\n\n`));
+        } }), { headers: { 'content-type': 'text/event-stream' } });
+      });
+      for (const stream of [false, true]) await expect(f.call(stream, user, options)).rejects.toThrow('The provider response exceeded the output limit.');
+      expect(f.fetch.mock.calls).toHaveLength(8); expect(f.chunks).toEqual([]); expect(options).toEqual(originalOptions);
+    });
+    it(`${scope}: keeps grammar off generic/derived/unknown profiles despite public API labels and admits reviewed per-call policy`, async () => {
+      const vector = grammar.rows.find(row => row.scope === scope && row.model === 'gpt-5' && row.case === 'lark')!;
       const controls = scope === 'openai' ? [['gpt-5', 'generic'], ['gpt-5-unreviewed', 'generic']] as const
         : [['gpt-5', 'derived-azure'], ['gpt-5-unreviewed', 'unknown-azure']] as const;
       for (const [model, legacy] of controls) {

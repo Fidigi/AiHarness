@@ -56,6 +56,12 @@ const rows: readonly Row[] = [
   ["o4-mini","o4-mini","azure-openai-responses",200000,100000,true,true,{"input":1.1,"output":4.4,"cacheRead":0.275,"cacheWrite":0},{}],
   ["deepseek-v4-pro","DeepSeek V4 Pro","openai-completions",1000000,384000,true,false,{"input":1.925,"output":3.828,"cacheRead":0.165,"cacheWrite":0},{"minimal":null,"low":"low","medium":"medium","high":"high","xhigh":null,"max":null}],
 ];
+// Independent pinned Azure grammar declarations; do not infer them from same-ID OpenAI policy.
+const grammarModels = new Set([
+  'gpt-5', 'gpt-5-chat-latest', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5-pro', 'gpt-5.1', 'gpt-5.2', 'gpt-5.2-chat-latest', 'gpt-5.2-pro',
+  'gpt-5.3-chat-latest', 'gpt-5.3-codex', 'gpt-5.3-codex-spark', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-5.4-pro', 'gpt-5.5',
+  'gpt-5.5-pro', 'gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-6-astra', 'gpt-6-luna', 'gpt-6-sol', 'gpt-6.1-sol',
+]);
 const pricing = (cost: Rates) => ({ inputPerMillion: cost.input, outputPerMillion: cost.output,
   cacheReadPerMillion: cost.cacheRead, cacheWritePerMillion: cost.cacheWrite });
 const profiles = new Map(rows.map(([id, name, api, contextWindow, maxOutputTokens, reasoning, image, cost, thinkingLevelMap]) => {
@@ -74,7 +80,7 @@ export function azurePublishedProfiles(api?: Api): PublishedModelMetadata[] {
 }
 export function prepareAzureResponses(body: Record<string, unknown>, options?: ChatOptions): void {
   const profile = profiles.get(String(body.model)); if (profile?.api !== 'azure-openai-responses') return;
-  prepareNativeResponses(body, options, profile, 'Azure');
+  prepareNativeResponses(body, options, profile, 'Azure', grammarModels.has(profile.id));
   // Azure's SDK uses affinity independently of retention. This does not observe a cache hit or make a warming request.
   if (options?.sessionId) body.prompt_cache_key = Array.from(options.sessionId).slice(0, 64).join('');
 }

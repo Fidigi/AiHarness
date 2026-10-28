@@ -5,6 +5,10 @@ import { PUBLISHED_THINKING_LEVELS, clampPublishedThinkingLevel } from './model-
 import type { Message } from '../types/index.js';
 
 const profiles = new Map(OPENAI_RESPONSE_MODELS.map(profile => [profile.id, profile]));
+const grammarProperties = new WeakMap<object, ReadonlyMap<string, string>>();
+export function nativeResponsesGrammarProperty(body: object, name: string): string | undefined {
+  return grammarProperties.get(body)?.get(name);
+}
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 export function openAiResponseProfile(model: string): OpenAiResponseProfile {
   const profile = profiles.get(model);
@@ -46,7 +50,7 @@ function responseItemHash(value: string): string {
 export function applyNativeResponsesToolHistory(body: Record<string, unknown>, messages: Message[],
   provider: 'openai' | 'azure', model: string, api: string): void {
   if (!Array.isArray(body.input)) return;
-  const ids = new Map<string, { callId: string; itemId?: string }>();
+  const ids = new Map<string, { callId: string; itemId?: string; customInput?: string }>();
   const normalize = (id: string) => id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64).replace(/_+$/, '');
   for (const message of messages) if (message.role === 'assistant') for (const call of message.toolCalls ?? []) {
     const parts = call.id.split('|');
@@ -59,8 +63,11 @@ export function applyNativeResponsesToolHistory(body: Record<string, unknown>, m
         if (!itemId.startsWith('fc_')) itemId = normalize(`fc_${itemId}`);
       }
     }
-    if ((sameProviderApi && message.model !== model) || !itemId?.startsWith('fc_')) itemId = undefined;
-    ids.set(call.id, { callId, itemId });
+    const property = nativeResponsesGrammarProperty(body, call.name);
+    if ((sameProviderApi && message.model !== model) || !itemId?.startsWith(property === undefined ? 'fc_' : 'ctc_')) itemId = undefined;
+    const customInput = property === undefined ? undefined : record(call.input) ? call.input[property] : undefined;
+    if (property !== undefined && typeof customInput !== 'string') throw new Error('Invalid Responses grammar tool input.');
+    ids.set(call.id, { callId, itemId, ...(typeof customInput === 'string' ? { customInput } : {}) });
   }
   for (const item of body.input) {
     if (!record(item) || typeof item.call_id !== 'string') continue;
@@ -69,25 +76,44 @@ export function applyNativeResponsesToolHistory(body: Record<string, unknown>, m
     if (item.type === 'function_call') {
       item.call_id = id.callId;
       if (id.itemId !== undefined) item.id = id.itemId;
+      if (id.customInput !== undefined) { item.type = 'custom_tool_call'; item.input = id.customInput; delete item.arguments; }
     } else if (item.type === 'function_call_output') {
       item.call_id = id.callId;
+      if (id.customInput !== undefined) item.type = 'custom_tool_call_output';
       if (item.output === '') item.output = '(no tool output)';
     }
   }
 }
 
 /** Called only after private native profile admission; generic/derived/unknown R policy stays legacy. */
-function applyNativeResponsesToolPolicy(body: Record<string, unknown>, options?: ResponsesChatOptions): void {
+function applyNativeResponsesToolPolicy(body: Record<string, unknown>, options: ResponsesChatOptions | undefined, supportsGrammar: boolean): void {
   const invalid = (): never => { throw new Error('Invalid Responses tool policy.'); };
   const choice: unknown = options?.toolChoice;
   if (choice !== undefined && !((typeof choice === 'string' && ['auto', 'none', 'required'].includes(choice))
     || (record(choice) && choice.type === 'function' && typeof choice.name === 'string'))) invalid();
+  const properties = new Map<string, string>();
   if (Array.isArray(body.tools)) body.tools = body.tools.map((tool, index) => {
     if (!record(tool)) return invalid();
     const sampling = options?.tools?.[index]?.constrainedSampling;
     let parameters = tool.parameters, strict = false;
     if (sampling !== undefined && sampling !== false) {
-      if (!record(sampling) || sampling.type !== 'json_schema' || !['prefer', 'require'].includes(sampling.strict)) return invalid();
+      if (!record(sampling)) return invalid();
+      if (sampling.type === 'grammar') {
+        if (!supportsGrammar) return { ...tool, parameters, strict };
+        if (!record(sampling.variants)) return invalid();
+        const lark = sampling.variants.openai_lark, regex = sampling.variants.openai_regex;
+        const syntax = typeof lark === 'string' && lark.trim() ? 'lark' : 'regex';
+        const definition = syntax === 'lark' ? lark : regex;
+        const schema = record(parameters) ? parameters : {};
+        const property = Array.isArray(schema.required) && schema.required.length === 1 ? schema.required[0] : undefined;
+        if (typeof definition !== 'string' || !definition.trim() || schema.type !== 'object' || typeof property !== 'string'
+          || !record(schema.properties) || !record(schema.properties[property]) || schema.properties[property].type !== 'string') {
+          throw new Error('Responses tool requires unsupported grammar sampling.');
+        }
+        properties.set(String(tool.name), property);
+        return { type: 'custom', name: tool.name, description: tool.description, format: { type: 'grammar', syntax, definition } };
+      }
+      if (sampling.type !== 'json_schema' || !['prefer', 'require'].includes(sampling.strict)) return invalid();
       try { parameters = makeStrictToolSchema(parameters as Record<string, unknown>); strict = true; }
       catch (error) {
         if (!(error instanceof UnsupportedStrictToolSchema)) return invalid();
@@ -96,13 +122,14 @@ function applyNativeResponsesToolPolicy(body: Record<string, unknown>, options?:
     }
     return { ...tool, parameters, strict };
   });
+  grammarProperties.set(body, properties);
   if (choice === undefined) delete body.tool_choice;
   else body.tool_choice = record(choice) ? { type: 'function', name: choice.name } : choice;
 }
 
 /** Shared R protocol, with private profile authority supplied by the owning adapter. */
 export function prepareNativeResponses(body: Record<string, unknown>, options: ChatOptions | undefined,
-  profile: NativeResponsesProfile, provider: 'OpenAI' | 'Azure'): void {
+  profile: NativeResponsesProfile, provider: 'OpenAI' | 'Azure', supportsGrammar = false): void {
   const requested = options?.thinking;
   if (requested !== undefined && !PUBLISHED_THINKING_LEVELS.includes(requested)) throw new Error(`Invalid ${provider} thinking level.`);
   const levels = PUBLISHED_THINKING_LEVELS.filter(level => !profile.reasoning ? level === 'off'
@@ -128,7 +155,7 @@ export function prepareNativeResponses(body: Record<string, unknown>, options: C
     }
     if (typeof body.instructions === 'string') { body.input.unshift({ role: systemRole, content: body.instructions }); delete body.instructions; }
   }
-  applyNativeResponsesToolPolicy(body, options);
+  applyNativeResponsesToolPolicy(body, options, supportsGrammar);
   if (options?.maxTokens !== undefined) {
     if (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 1 || options.maxTokens > profile.maxOutputTokens) throw new Error(`Invalid ${provider} output limit.`);
     body.max_output_tokens = Math.max(16, options.maxTokens);
@@ -137,7 +164,7 @@ export function prepareNativeResponses(body: Record<string, unknown>, options: C
 
 export function prepareOpenAiResponse(body: Record<string, unknown>, options?: ChatOptions): void {
   const profile = openAiResponseProfile(String(body.model));
-  prepareNativeResponses(body, options, profile, 'OpenAI');
+  prepareNativeResponses(body, options, profile, 'OpenAI', profile.compat.supportsOpenAIGrammarTools === true);
   if (options?.cacheRetention !== 'none' && options?.sessionId) body.prompt_cache_key = Array.from(options.sessionId).slice(0, 64).join('');
   if (profile.compat.supportsExplicitPromptCacheMode) {
     if (options?.cacheRetention === 'none') body.prompt_cache_options = { mode: 'explicit' };
