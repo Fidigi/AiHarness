@@ -46,11 +46,12 @@ async function cli(args, rpc = false) {
   child.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk; });
   if (rpc) child.stdin.write(JSON.stringify({ type: 'prompt', id: 'p', message: 'Read fixture' }) + '\n');
   else child.stdin.end();
-  const timer = setTimeout(() => child.kill('SIGKILL'), 6_000);
+  let watchdogFired = false;
+  const timer = setTimeout(() => { watchdogFired = true; child.kill('SIGKILL'); }, 6_000);
   const exit = await new Promise((resolve, reject) => {
     child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal }));
   }).finally(() => clearTimeout(timer));
-  assert.equal(protocolError, undefined); assert.deepEqual(exit, { code: 0, signal: null }, JSON.stringify({ exit, stdout, stderr }));
+  assert.equal(protocolError, undefined); assert.deepEqual(exit, { code: 0, signal: null }, JSON.stringify({ exit, stdout, stderr, watchdogFired }));
   assert.equal(stderr, ''); return stdout;
 }
 try {
