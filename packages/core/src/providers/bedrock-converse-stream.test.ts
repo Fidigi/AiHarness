@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { BedrockProvider, bedrockCredentialConfig, type ChatResponse } from './index.js';
+import { BedrockProvider, bedrockCredentialConfig, type ChatOptions, type ChatResponse } from './index.js';
 import { closeProviderNetworkDispatchers } from './provider-network.js';
 import { bedrockFrame as frame, bedrockText } from '../../../../tests/fixtures/bedrock-event-stream.js';
 import type { Message } from '../types/index.js';
@@ -235,6 +235,12 @@ const outputBoundaryReference = JSON.parse(outputBoundaryBytes.toString()) as {
   pinnedCommit: string; catalogueSha256: string; captureSha256: string; modelProjections: number; vectors: number; freshSdkRequests: number;
   rows: Array<{ model: string; api: string; case: string; options: { maxTokens?: number; temperature?: number }; expectedInferenceConfig: { maxTokens?: number; temperature?: number } }>;
 };
+const toolSchemaBytes = readFileSync(new URL('../../../../tests/fixtures/bedrock-tool-schema-reference.json', import.meta.url));
+const toolSchemaReference = JSON.parse(toolSchemaBytes.toString()) as {
+  pinnedCommit: string; catalogueSha256: string; captureSha256: string; reuseCaptureSha256: string;
+  modelProjections: number; vectors: number; freshSdkRequests: number; reusedSdkRequests: number;
+  rows: Array<{ model: string; api: string; case: string; options: ChatOptions; expectedToolConfig: Record<string, unknown> | null }>;
+};
 const known = reference.models[0];
 function observedResponse(value: unknown, binary: boolean): Response {
   return binary ? response(bedrockText('ok', 'end_turn', value)) : new Response(JSON.stringify({
@@ -253,6 +259,13 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
     expect(outputBoundaryReference.captureSha256).toBe('23e552940581dfd233e7c617f337481803f34f091a71a23dfd5ef79808dd4e2a');
     expect(outputBoundaryReference.modelProjections).toBe(193); expect(outputBoundaryReference.vectors).toBe(1351); expect(outputBoundaryReference.freshSdkRequests).toBe(1351);
     expect(outputBoundaryReference.rows).toHaveLength(1351); expect([...new Set(outputBoundaryReference.rows.map(row => row.model))]).toEqual(reference.models.map(model => model.id));
+    expect(createHash('sha256').update(toolSchemaBytes).digest('hex')).toBe('6d7f9341b36b41049e85a12a6a814c40952b6d2395a5fd79c8807cec43ac6ae1');
+    expect(toolSchemaReference.pinnedCommit).toBe(reference.pinnedCommit); expect(toolSchemaReference.catalogueSha256).toBe(reference.catalogueSha256);
+    expect(toolSchemaReference.captureSha256).toBe('f00528ffdfe80c91aeb74378d014c378b74293b4e17fc540d77f617bb9d73bc7');
+    expect(toolSchemaReference.reuseCaptureSha256).toBe(outputBoundaryReference.captureSha256);
+    expect(toolSchemaReference.modelProjections).toBe(193); expect(toolSchemaReference.vectors).toBe(579);
+    expect(toolSchemaReference.freshSdkRequests).toBe(386); expect(toolSchemaReference.reusedSdkRequests).toBe(193);
+    expect(toolSchemaReference.rows).toHaveLength(579); expect([...new Set(toolSchemaReference.rows.map(row => row.model))]).toEqual(reference.models.map(model => model.id));
     expect(rawOutputReference.pinnedCommit).toBe(reference.pinnedCommit);
     expect(rawOutputReference.constructionCaptureSha256).toBe('2d160e9fa168b2eb2165c84a75e65cc09f0dda89acae34198266d690142aaca5');
     expect(rawOutputReference.successfulUsageCaptureSha256).toBe(reference.captureSha256);
@@ -292,6 +305,8 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       expect(Object.hasOwn(config, 'maxTokens')).toBe(expected.maxTokens !== null);
       expect(config.maxTokens).toBe(expected.maxTokens ?? undefined);
     }
+    const toolVectors = toolSchemaReference.rows.filter(row => row.model === model.id);
+    expect(toolVectors.map(row => row.case)).toEqual(['raw-omitted', 'object', 'union-optional']);
     const vectors = outputBoundaryReference.rows.filter(row => row.model === model.id);
     expect(vectors.map(row => row.case)).toEqual(['raw-omitted', 'raw-one', 'raw-fifteen', 'raw-sixteen', 'raw-maximum', 'raw-temperature-zero', 'raw-temperature-one']);
     for (const vector of vectors) for (const binary of [false, true]) {
@@ -302,7 +317,23 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       if (binary) await provider.streamChat(input, () => {}, value => { result = value; }, undefined, options);
       else result = await provider.chat(input, options);
       expect(result).toMatchObject({ content: 'ok', model: model.id, api: vector.api }); expect(fetch).toHaveBeenCalledOnce();
-      expect(JSON.parse(fetch.mock.calls[0][1]!.body as string).inferenceConfig, vector.case).toEqual(vector.expectedInferenceConfig);
+      const body = JSON.parse(fetch.mock.calls[0][1]!.body as string);
+      expect(body.inferenceConfig, vector.case).toEqual(vector.expectedInferenceConfig);
+      if (vector.case === 'raw-omitted') {
+        expect(toolVectors[0].expectedToolConfig).toBeNull(); expect(Object.hasOwn(body, 'toolConfig')).toBe(false);
+      }
+      expect({ input, options }).toEqual(before);
+    }
+    for (const vector of toolVectors.slice(1)) for (const binary of [false, true]) {
+      const fetch = vi.fn(async (_url: string | URL, _init?: RequestInit) => observedResponse({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }, binary));
+      vi.stubGlobal('fetch', fetch);
+      const input = structuredClone(messages), options = { ...structuredClone(vector.options), model: model.id }, before = structuredClone({ input, options });
+      let result: ChatResponse | undefined;
+      if (binary) await provider.streamChat(input, () => {}, value => { result = value; }, undefined, options);
+      else result = await provider.chat(input, options);
+      expect(result).toMatchObject({ content: 'ok', model: model.id, api: vector.api }); expect(fetch).toHaveBeenCalledOnce();
+      const body = JSON.parse(fetch.mock.calls[0][1]!.body as string);
+      expect(Object.hasOwn(body, 'toolConfig')).toBe(true); expect(body.toolConfig, vector.case).toEqual(vector.expectedToolConfig);
       expect({ input, options }).toEqual(before);
     }
   });

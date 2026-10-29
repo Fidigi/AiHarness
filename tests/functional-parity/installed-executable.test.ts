@@ -2207,7 +2207,7 @@ it('dispatches original Google/Vertex schema/generation/choice/history/tool and 
 
 it('dispatches native Bedrock binary streams through installed public declarations and runtime', async () => {
   await writeFile(path.join(consumer, 'bedrock-public.ts'), `
-    import { BedrockProvider, ProviderFactory, bedrockCredentialConfig, type AiProvider, type ChatResponse, type ProviderConfig } from '@ai-harness/core';
+    import { BedrockProvider, ProviderFactory, bedrockCredentialConfig, type AiProvider, type ChatOptions, type ChatResponse, type ProviderConfig } from '@ai-harness/core';
     const config: ProviderConfig = { type: 'bedrock', accessKeyId: 'DISPOSABLE', secretAccessKey: 'disposable', baseUrl: 'https://proxy.example', model: 'fixture:0' };
     const native: AiProvider = new BedrockProvider(config);
     const factory: AiProvider = ProviderFactory.create(config);
@@ -2215,7 +2215,8 @@ it('dispatches native Bedrock binary streams through installed public declaratio
     void [native, factory, bearer];
     async function compile() {
       let complete: ChatResponse | undefined;
-      await native.streamChat([], async (text, event) => { void [text, event]; }, value => { complete = value; }, undefined, { model: 'override:1' });
+      const options: ChatOptions = { tools: [{ name: 'echo', description: 'Echo', parameters: { type: 'object', properties: { x: { type: 'string' } }, required: ['x'], additionalProperties: false } }] };
+      await native.streamChat([], async (text, event) => { void [text, event]; }, value => { complete = value; }, undefined, { ...options, model: 'override:1' });
       const api: string | undefined = complete?.api; void api;
     }
     void compile;
@@ -2226,6 +2227,7 @@ it('dispatches native Bedrock binary streams through installed public declaratio
   const originalReference = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-reference.json'), 'utf8'));
   const rawOutputReference = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-raw-output-reference.json'), 'utf8'));
   const outputBoundaries = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-output-boundaries-reference.json'), 'utf8')).rows;
+  const toolSchemas = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-tool-schema-reference.json'), 'utf8')).rows;
   const originals = originalReference.models.map((model: { id: string; maxTokens: number }) => ({ id: model.id, maximum: model.maxTokens,
     rawDefault: rawOutputReference.rows.find((row: { id: string }) => row.id === model.id).maxTokens,
     cost: originalReference.cases.find((row: { model: string; case: string }) => row.model === model.id && row.case === 'base-short').expected.costUsd }));
@@ -2237,7 +2239,7 @@ it('dispatches native Bedrock binary streams through installed public declaratio
     import { BedrockProvider, ProviderFactory, bedrockCredentialConfig, collectProviderModelCatalog, flattenModelCatalog } from '@ai-harness/core';
     import { fileURLToPath } from 'node:url';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
-    const originals = ${JSON.stringify(originals)}, nativeUsage = ${JSON.stringify(nativeUsage)}, outputBoundaries = ${JSON.stringify(outputBoundaries)};
+    const originals = ${JSON.stringify(originals)}, nativeUsage = ${JSON.stringify(nativeUsage)}, outputBoundaries = ${JSON.stringify(outputBoundaries)}, toolSchemas = ${JSON.stringify(toolSchemas)};
     const calls = [];
     const server = createServer(async (request, reply) => {
       let body = ''; for await (const chunk of request) body += chunk;
@@ -2316,10 +2318,26 @@ it('dispatches native Bedrock binary streams through installed public declaratio
         else result = await native.chat(input, options);
         assert.equal(result.content, binary ? 'installed-native-ok' : 'installed-bedrock-json-ok'); assert.equal(result.model, vector.model); assert.equal(result.api, vector.api);
         const call = calls.at(-1); assert.deepEqual(call.body.inferenceConfig, vector.expectedInferenceConfig);
+        if (vector.case === 'raw-omitted') {
+          const noTools = toolSchemas.find(row => row.model === vector.model && row.case === 'raw-omitted');
+          assert.equal(noTools.api, vector.api); assert.equal(noTools.expectedToolConfig, null); assert.equal(Object.hasOwn(call.body, 'toolConfig'), false);
+        }
         assert.equal(call.path, '/proxy/model/' + encodeURIComponent(vector.model) + '/converse' + (binary ? '-stream' : ''));
         assert.equal(call.headers.authorization, 'Bearer installed-native-bearer'); assert.equal(JSON.stringify({ input, options }), before);
       }
       assert.equal(outputBoundaries.length, 1351); assert.equal(calls.length, 3477);
+      for (const model of originals) assert.deepEqual(toolSchemas.filter(row => row.model === model.id).map(row => row.case), ['raw-omitted', 'object', 'union-optional']);
+      for (const vector of toolSchemas.filter(row => row.case !== 'raw-omitted')) for (const binary of [false, true]) {
+        const input = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }], options = { ...structuredClone(vector.options), model: vector.model };
+        const before = JSON.stringify({ input, options }); let result;
+        if (binary) await native.streamChat(input, () => {}, value => { result = value; }, undefined, options);
+        else result = await native.chat(input, options);
+        assert.equal(result.content, binary ? 'installed-native-ok' : 'installed-bedrock-json-ok'); assert.equal(result.model, vector.model); assert.equal(result.api, vector.api);
+        const call = calls.at(-1); assert.equal(Object.hasOwn(call.body, 'toolConfig'), true); assert.deepEqual(call.body.toolConfig, vector.expectedToolConfig);
+        assert.equal(call.path, '/proxy/model/' + encodeURIComponent(vector.model) + '/converse' + (binary ? '-stream' : ''));
+        assert.equal(call.headers.authorization, 'Bearer installed-native-bearer'); assert.equal(JSON.stringify({ input, options }), before);
+      }
+      assert.equal(toolSchemas.length, 579); assert.equal(calls.length, 4249);
       console.log('installed Bedrock ConverseStream OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);
