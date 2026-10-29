@@ -200,6 +200,37 @@ for (const duplicate of [false, true]) it(`uses parent order and the last append
   }
 });
 
+it.each(['entry', 'current', 'index', 'clone'] as const)('retains post-compaction messages across durable %s copies with regressing clocks', async kind => {
+  const f = await fixture('durable');
+  await f.manager.applyCompaction(f.session.id, 'New context boundary', f.target);
+  await f.manager.addMessage(f.session.id, { role: 'user', content: 'After compaction' });
+  const leaf = f.session.activeLeafId!, filePath = f.open().getSessionFilePath(f.session.id)!;
+  const entries = (await readFile(filePath, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as SessionEntry);
+  // Preserve append order and all parent links while making descendants older.
+  entries.forEach((entry, index) => { if (entry.type !== 'metadata') entry.timestamp = 10_000 - index; });
+  await writeFile(filePath, entries.map(entry => JSON.stringify(entry)).join('\n') + '\n');
+  const source = new SessionManager({ store: f.open() });
+  await source.loadFromStore(f.session.id);
+  const expected = ['Selected user', 'After compaction'];
+  const expectedContext = source.getEffectiveContext(f.session.id).map(entry => entry.type === 'message' ? entry.content : entry);
+  expect(source.get(f.session.id)!.messages.map(message => message.content)).toEqual(expected);
+  const copied = kind === 'entry' ? await source.forkSessionAtEntry(f.session.id, leaf)
+    : kind === 'clone' ? await source.cloneSession(f.session.id)
+      : await source.forkSession(f.session.id, kind === 'index' ? leaf : undefined);
+  expect(copied).not.toBeNull();
+  expect(copied!.messages.map(message => message.content)).toEqual(expected);
+  expect(revisions(await source.getActiveBranchEntries(copied!.id))).toEqual([1]);
+  const context = source.getEffectiveContext(copied!.id);
+  expect(context.map(entry => entry.type === 'message' ? entry.content : entry)).toEqual(expectedContext);
+  const reopened = new SessionManager({ store: f.open() });
+  await reopened.loadFromStore(copied!.id);
+  expect(reopened.get(copied!.id)!.messages.map(message => message.content)).toEqual(expected);
+  expect(reopened.getEffectiveContext(copied!.id)).toEqual(context);
+  expect(revisions(await reopened.getActiveBranchEntries(copied!.id))).toEqual([1]);
+  if (kind === 'clone') expect((await source.getActiveBranchEntries(copied!.id)).some(entry => entry.id === f.state.id)).toBe(false);
+  else expect((await source.getActiveBranchEntries(copied!.id)).some(entry => entry.id === f.state.id)).toBe(true);
+});
+
 it('returns empty for missing/invalid identities without coercing them', async () => {
   const manager = new SessionManager();
   let coercions = 0;

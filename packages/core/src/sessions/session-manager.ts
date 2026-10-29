@@ -967,7 +967,10 @@ export class JsonlSessionStore {
       commands = [];
       latestCompaction = undefined;
     } else if (hasUsableTree) {
-      messages = messages.filter(message => activePathIds.has(message.id));
+      // Durable copies may be timestamp-sorted; slice compaction boundaries in parent order.
+      const parentOrder = new Map([...activePathIds].reverse().map((id, index) => [id, index]));
+      messages = messages.filter(message => activePathIds.has(message.id))
+        .sort((left, right) => parentOrder.get(left.id)! - parentOrder.get(right.id)!);
       commands = commands.filter(command => activePathIds.has(command.id));
       latestCompaction = [...treeEntries].reverse().find(
         (entry): entry is CompactionEntry => entry.type === 'compaction' && activePathIds.has(entry.id),
