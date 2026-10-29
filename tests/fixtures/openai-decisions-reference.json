@@ -1,0 +1,3011 @@
+{
+  "referenceVersion": "1.2.0",
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "catalogueSha256": "f4c1ac9f8f84cb9f2a952b0ceec51c90a38b31b4cdf33200e018ece9d408e95f",
+  "sourceCaptureSha256": "84abbac9c2c8dc864f8953f976774be375181857cb3383841fd6c69b888d7d84",
+  "identity": {
+    "provider": "openai",
+    "model": "gpt-6-luna",
+    "api": "openai-decisions",
+    "type": "classifier"
+  },
+  "model": {
+    "type": "classifier",
+    "id": "gpt-6-luna",
+    "name": "GPT-6 Luna",
+    "api": "openai-decisions",
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "input": [
+      "text",
+      "image"
+    ],
+    "cost": {
+      "input": 0.1,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "tiers": [
+        {
+          "inputTokensAbove": 272000,
+          "input": 0.2,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        }
+      ]
+    },
+    "contextWindow": 922000
+  },
+  "logicalCases": 10,
+  "physicalFreshRequests": 11,
+  "reusedRequests": 0,
+  "sourceRows": [
+    {
+      "model": "gpt-6-luna",
+      "api": "openai-decisions",
+      "type": "classifier",
+      "entrypoint": "factory.classify",
+      "case": "named-text",
+      "context": {
+        "state": {
+          "approved": true
+        },
+        "questions": {
+          "approved": {
+            "type": "bool",
+            "instructions": "Approved?",
+            "criteria": {
+              "true": "Approved",
+              "false": "Review"
+            }
+          },
+          "severity": {
+            "type": "score",
+            "instructions": "Severity?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          },
+          "label": {
+            "type": "choice",
+            "instructions": "Label?",
+            "criteria": {
+              "safe": "Safe",
+              "review": ""
+            }
+          }
+        }
+      },
+      "options": {
+        "apiKey": "disposable-decisions-reference",
+        "maxRetries": 0
+      },
+      "signalDeadlineMs": 30000,
+      "requests": [
+        {
+          "ordinal": 0,
+          "case": "named-text",
+          "method": "POST",
+          "path": "/proxy%2Ftenant/v1/decisions",
+          "headers": {
+            "host": "127.0.0.1:35095",
+            "connection": "keep-alive",
+            "authorization": "Bearer disposable-decisions-reference",
+            "content-type": "application/json",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "content-length": "409"
+          },
+          "rawHeaders": [
+            "host",
+            "127.0.0.1:35095",
+            "connection",
+            "keep-alive",
+            "authorization",
+            "Bearer disposable-decisions-reference",
+            "content-type",
+            "application/json",
+            "accept",
+            "*/*",
+            "accept-language",
+            "*",
+            "sec-fetch-mode",
+            "cors",
+            "user-agent",
+            "node",
+            "accept-encoding",
+            "br, gzip, deflate",
+            "content-length",
+            "409"
+          ],
+          "rawBody": "{\"model\":\"gpt-6-luna\",\"input\":\"{\\\"approved\\\":true}\",\"questions\":[{\"type\":\"predicate\",\"name\":\"approved\",\"instructions\":\"Approved?\\n\\nTrue means: Approved\\nFalse means: Review\"},{\"type\":\"score\",\"name\":\"severity\",\"instructions\":\"Severity?\",\"levels\":[{\"label\":\"Low\"},{\"label\":\"High\"}]},{\"type\":\"choice\",\"name\":\"label\",\"instructions\":\"Label?\",\"choices\":[{\"value\":\"safe\",\"description\":\"Safe\"},{\"value\":\"review\"}]}]}",
+          "body": {
+            "model": "gpt-6-luna",
+            "input": "{\"approved\":true}",
+            "questions": [
+              {
+                "type": "predicate",
+                "name": "approved",
+                "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+              },
+              {
+                "type": "score",
+                "name": "severity",
+                "instructions": "Severity?",
+                "levels": [
+                  {
+                    "label": "Low"
+                  },
+                  {
+                    "label": "High"
+                  }
+                ]
+              },
+              {
+                "type": "choice",
+                "name": "label",
+                "instructions": "Label?",
+                "choices": [
+                  {
+                    "value": "safe",
+                    "description": "Safe"
+                  },
+                  {
+                    "value": "review"
+                  }
+                ]
+              }
+            ]
+          },
+          "tls": true,
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "x-owned-response": "named-text"
+            },
+            "rawBody": "{\"answers\":[{\"name\":\"severity\",\"type\":\"score\",\"score\":1.25,\"confidence\":0.9},{\"name\":\"label\",\"type\":\"choice\",\"choice\":\"safe\",\"confidence\":0.8,\"probabilities\":[{\"value\":\"safe\",\"probability\":0.75},{\"value\":\"review\",\"probability\":0.25}]},{\"name\":\"approved\",\"type\":\"predicate\",\"probability\":0.8}],\"usage\":{\"input_tokens\":10,\"output_tokens\":2}}",
+            "body": {
+              "answers": [
+                {
+                  "name": "severity",
+                  "type": "score",
+                  "score": 1.25,
+                  "confidence": 0.9
+                },
+                {
+                  "name": "label",
+                  "type": "choice",
+                  "choice": "safe",
+                  "confidence": 0.8,
+                  "probabilities": [
+                    {
+                      "value": "safe",
+                      "probability": 0.75
+                    },
+                    {
+                      "value": "review",
+                      "probability": 0.25
+                    }
+                  ]
+                },
+                {
+                  "name": "approved",
+                  "type": "predicate",
+                  "probability": 0.8
+                }
+              ],
+              "usage": {
+                "input_tokens": 10,
+                "output_tokens": 2
+              }
+            }
+          }
+        }
+      ],
+      "payloads": [
+        {
+          "model": "gpt-6-luna",
+          "input": "{\"approved\":true}",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "approved",
+              "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+            },
+            {
+              "type": "score",
+              "name": "severity",
+              "instructions": "Severity?",
+              "levels": [
+                {
+                  "label": "Low"
+                },
+                {
+                  "label": "High"
+                }
+              ]
+            },
+            {
+              "type": "choice",
+              "name": "label",
+              "instructions": "Label?",
+              "choices": [
+                {
+                  "value": "safe",
+                  "description": "Safe"
+                },
+                {
+                  "value": "review"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "responseHooks": [
+        {
+          "status": 200,
+          "headers": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "date": "Thu, 29 Oct 2026 11:58:33 GMT",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked",
+            "x-owned-response": "named-text"
+          }
+        }
+      ],
+      "result": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1793275113104,
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000010000000000000002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000010000000000000002
+          }
+        }
+      },
+      "normalizedResult": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 0,
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000010000000000000002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000010000000000000002
+          }
+        }
+      },
+      "callerInputsUnchanged": true
+    },
+    {
+      "model": "gpt-6-luna",
+      "api": "openai-decisions",
+      "type": "classifier",
+      "entrypoint": "factory.classify",
+      "case": "one-image",
+      "context": {
+        "state": {
+          "approved": true
+        },
+        "questions": {
+          "approved": {
+            "type": "bool",
+            "instructions": "Approved?",
+            "criteria": {
+              "true": "Approved",
+              "false": "Review"
+            }
+          },
+          "severity": {
+            "type": "score",
+            "instructions": "Severity?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          },
+          "label": {
+            "type": "choice",
+            "instructions": "Label?",
+            "criteria": {
+              "safe": "Safe",
+              "review": ""
+            }
+          }
+        },
+        "images": [
+          {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgo="
+          }
+        ]
+      },
+      "options": {
+        "apiKey": "disposable-decisions-reference",
+        "maxRetries": 0
+      },
+      "signalDeadlineMs": 30000,
+      "requests": [
+        {
+          "ordinal": 1,
+          "case": "one-image",
+          "method": "POST",
+          "path": "/proxy%2Ftenant/v1/decisions",
+          "headers": {
+            "host": "127.0.0.1:35095",
+            "connection": "keep-alive",
+            "authorization": "Bearer disposable-decisions-reference",
+            "content-type": "application/json",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "content-length": "540"
+          },
+          "rawHeaders": [
+            "host",
+            "127.0.0.1:35095",
+            "connection",
+            "keep-alive",
+            "authorization",
+            "Bearer disposable-decisions-reference",
+            "content-type",
+            "application/json",
+            "accept",
+            "*/*",
+            "accept-language",
+            "*",
+            "sec-fetch-mode",
+            "cors",
+            "user-agent",
+            "node",
+            "accept-encoding",
+            "br, gzip, deflate",
+            "content-length",
+            "540"
+          ],
+          "rawBody": "{\"model\":\"gpt-6-luna\",\"input\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"{\\\"approved\\\":true}\"},{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,iVBORw0KGgo=\"}]}],\"questions\":[{\"type\":\"predicate\",\"name\":\"approved\",\"instructions\":\"Approved?\\n\\nTrue means: Approved\\nFalse means: Review\"},{\"type\":\"score\",\"name\":\"severity\",\"instructions\":\"Severity?\",\"levels\":[{\"label\":\"Low\"},{\"label\":\"High\"}]},{\"type\":\"choice\",\"name\":\"label\",\"instructions\":\"Label?\",\"choices\":[{\"value\":\"safe\",\"description\":\"Safe\"},{\"value\":\"review\"}]}]}",
+          "body": {
+            "model": "gpt-6-luna",
+            "input": [
+              {
+                "role": "user",
+                "content": [
+                  {
+                    "type": "input_text",
+                    "text": "{\"approved\":true}"
+                  },
+                  {
+                    "type": "input_image",
+                    "image_url": "data:image/png;base64,iVBORw0KGgo="
+                  }
+                ]
+              }
+            ],
+            "questions": [
+              {
+                "type": "predicate",
+                "name": "approved",
+                "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+              },
+              {
+                "type": "score",
+                "name": "severity",
+                "instructions": "Severity?",
+                "levels": [
+                  {
+                    "label": "Low"
+                  },
+                  {
+                    "label": "High"
+                  }
+                ]
+              },
+              {
+                "type": "choice",
+                "name": "label",
+                "instructions": "Label?",
+                "choices": [
+                  {
+                    "value": "safe",
+                    "description": "Safe"
+                  },
+                  {
+                    "value": "review"
+                  }
+                ]
+              }
+            ]
+          },
+          "tls": true,
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "x-owned-response": "one-image"
+            },
+            "rawBody": "{\"answers\":[{\"name\":\"severity\",\"type\":\"score\",\"score\":1.25,\"confidence\":0.9},{\"name\":\"label\",\"type\":\"choice\",\"choice\":\"safe\",\"confidence\":0.8,\"probabilities\":[{\"value\":\"safe\",\"probability\":0.75},{\"value\":\"review\",\"probability\":0.25}]},{\"name\":\"approved\",\"type\":\"predicate\",\"probability\":0.8}],\"usage\":{\"input_tokens\":10,\"output_tokens\":2}}",
+            "body": {
+              "answers": [
+                {
+                  "name": "severity",
+                  "type": "score",
+                  "score": 1.25,
+                  "confidence": 0.9
+                },
+                {
+                  "name": "label",
+                  "type": "choice",
+                  "choice": "safe",
+                  "confidence": 0.8,
+                  "probabilities": [
+                    {
+                      "value": "safe",
+                      "probability": 0.75
+                    },
+                    {
+                      "value": "review",
+                      "probability": 0.25
+                    }
+                  ]
+                },
+                {
+                  "name": "approved",
+                  "type": "predicate",
+                  "probability": 0.8
+                }
+              ],
+              "usage": {
+                "input_tokens": 10,
+                "output_tokens": 2
+              }
+            }
+          }
+        }
+      ],
+      "payloads": [
+        {
+          "model": "gpt-6-luna",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "{\"approved\":true}"
+                },
+                {
+                  "type": "input_image",
+                  "image_url": "data:image/png;base64,iVBORw0KGgo="
+                }
+              ]
+            }
+          ],
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "approved",
+              "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+            },
+            {
+              "type": "score",
+              "name": "severity",
+              "instructions": "Severity?",
+              "levels": [
+                {
+                  "label": "Low"
+                },
+                {
+                  "label": "High"
+                }
+              ]
+            },
+            {
+              "type": "choice",
+              "name": "label",
+              "instructions": "Label?",
+              "choices": [
+                {
+                  "value": "safe",
+                  "description": "Safe"
+                },
+                {
+                  "value": "review"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "responseHooks": [
+        {
+          "status": 200,
+          "headers": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "date": "Thu, 29 Oct 2026 11:58:33 GMT",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked",
+            "x-owned-response": "one-image"
+          }
+        }
+      ],
+      "result": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1793275113131,
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000010000000000000002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000010000000000000002
+          }
+        }
+      },
+      "normalizedResult": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 0,
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000010000000000000002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000010000000000000002
+          }
+        }
+      },
+      "callerInputsUnchanged": true
+    },
+    {
+      "model": "gpt-6-luna",
+      "api": "openai-decisions",
+      "type": "classifier",
+      "entrypoint": "factory.classify",
+      "case": "temperature-ignored",
+      "context": {
+        "state": {
+          "approved": true
+        },
+        "questions": {
+          "approved": {
+            "type": "bool",
+            "instructions": "Approved?",
+            "criteria": {
+              "true": "Approved",
+              "false": "Review"
+            }
+          },
+          "severity": {
+            "type": "score",
+            "instructions": "Severity?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          },
+          "label": {
+            "type": "choice",
+            "instructions": "Label?",
+            "criteria": {
+              "safe": "Safe",
+              "review": ""
+            }
+          }
+        }
+      },
+      "options": {
+        "apiKey": "disposable-decisions-reference",
+        "maxRetries": 0,
+        "temperature": 0.2
+      },
+      "signalDeadlineMs": 30000,
+      "requests": [
+        {
+          "ordinal": 2,
+          "case": "temperature-ignored",
+          "method": "POST",
+          "path": "/proxy%2Ftenant/v1/decisions",
+          "headers": {
+            "host": "127.0.0.1:35095",
+            "connection": "keep-alive",
+            "authorization": "Bearer disposable-decisions-reference",
+            "content-type": "application/json",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "content-length": "409"
+          },
+          "rawHeaders": [
+            "host",
+            "127.0.0.1:35095",
+            "connection",
+            "keep-alive",
+            "authorization",
+            "Bearer disposable-decisions-reference",
+            "content-type",
+            "application/json",
+            "accept",
+            "*/*",
+            "accept-language",
+            "*",
+            "sec-fetch-mode",
+            "cors",
+            "user-agent",
+            "node",
+            "accept-encoding",
+            "br, gzip, deflate",
+            "content-length",
+            "409"
+          ],
+          "rawBody": "{\"model\":\"gpt-6-luna\",\"input\":\"{\\\"approved\\\":true}\",\"questions\":[{\"type\":\"predicate\",\"name\":\"approved\",\"instructions\":\"Approved?\\n\\nTrue means: Approved\\nFalse means: Review\"},{\"type\":\"score\",\"name\":\"severity\",\"instructions\":\"Severity?\",\"levels\":[{\"label\":\"Low\"},{\"label\":\"High\"}]},{\"type\":\"choice\",\"name\":\"label\",\"instructions\":\"Label?\",\"choices\":[{\"value\":\"safe\",\"description\":\"Safe\"},{\"value\":\"review\"}]}]}",
+          "body": {
+            "model": "gpt-6-luna",
+            "input": "{\"approved\":true}",
+            "questions": [
+              {
+                "type": "predicate",
+                "name": "approved",
+                "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+              },
+              {
+                "type": "score",
+                "name": "severity",
+                "instructions": "Severity?",
+                "levels": [
+                  {
+                    "label": "Low"
+                  },
+                  {
+                    "label": "High"
+                  }
+                ]
+              },
+              {
+                "type": "choice",
+                "name": "label",
+                "instructions": "Label?",
+                "choices": [
+                  {
+                    "value": "safe",
+                    "description": "Safe"
+                  },
+                  {
+                    "value": "review"
+                  }
+                ]
+              }
+            ]
+          },
+          "tls": true,
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "x-owned-response": "temperature-ignored"
+            },
+            "rawBody": "{\"answers\":[{\"name\":\"severity\",\"type\":\"score\",\"score\":1.25,\"confidence\":0.9},{\"name\":\"label\",\"type\":\"choice\",\"choice\":\"safe\",\"confidence\":0.8,\"probabilities\":[{\"value\":\"safe\",\"probability\":0.75},{\"value\":\"review\",\"probability\":0.25}]},{\"name\":\"approved\",\"type\":\"predicate\",\"probability\":0.8}],\"usage\":{\"input_tokens\":10,\"output_tokens\":2}}",
+            "body": {
+              "answers": [
+                {
+                  "name": "severity",
+                  "type": "score",
+                  "score": 1.25,
+                  "confidence": 0.9
+                },
+                {
+                  "name": "label",
+                  "type": "choice",
+                  "choice": "safe",
+                  "confidence": 0.8,
+                  "probabilities": [
+                    {
+                      "value": "safe",
+                      "probability": 0.75
+                    },
+                    {
+                      "value": "review",
+                      "probability": 0.25
+                    }
+                  ]
+                },
+                {
+                  "name": "approved",
+                  "type": "predicate",
+                  "probability": 0.8
+                }
+              ],
+              "usage": {
+                "input_tokens": 10,
+                "output_tokens": 2
+              }
+            }
+          }
+        }
+      ],
+      "payloads": [
+        {
+          "model": "gpt-6-luna",
+          "input": "{\"approved\":true}",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "approved",
+              "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+            },
+            {
+              "type": "score",
+              "name": "severity",
+              "instructions": "Severity?",
+              "levels": [
+                {
+                  "label": "Low"
+                },
+                {
+                  "label": "High"
+                }
+              ]
+            },
+            {
+              "type": "choice",
+              "name": "label",
+              "instructions": "Label?",
+              "choices": [
+                {
+                  "value": "safe",
+                  "description": "Safe"
+                },
+                {
+                  "value": "review"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "responseHooks": [
+        {
+          "status": 200,
+          "headers": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "date": "Thu, 29 Oct 2026 11:58:33 GMT",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked",
+            "x-owned-response": "temperature-ignored"
+          }
+        }
+      ],
+      "result": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1793275113134,
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000010000000000000002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000010000000000000002
+          }
+        }
+      },
+      "normalizedResult": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 0,
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000010000000000000002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000010000000000000002
+          }
+        }
+      },
+      "callerInputsUnchanged": true
+    },
+    {
+      "model": "gpt-6-luna",
+      "api": "openai-decisions",
+      "type": "classifier",
+      "entrypoint": "factory.classify",
+      "case": "tier-boundary",
+      "context": {
+        "state": {
+          "approved": true
+        },
+        "questions": {
+          "approved": {
+            "type": "bool",
+            "instructions": "Approved?",
+            "criteria": {
+              "true": "Approved",
+              "false": "Review"
+            }
+          },
+          "severity": {
+            "type": "score",
+            "instructions": "Severity?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          },
+          "label": {
+            "type": "choice",
+            "instructions": "Label?",
+            "criteria": {
+              "safe": "Safe",
+              "review": ""
+            }
+          }
+        }
+      },
+      "options": {
+        "apiKey": "disposable-decisions-reference",
+        "maxRetries": 0
+      },
+      "signalDeadlineMs": 30000,
+      "requests": [
+        {
+          "ordinal": 3,
+          "case": "tier-boundary",
+          "method": "POST",
+          "path": "/proxy%2Ftenant/v1/decisions",
+          "headers": {
+            "host": "127.0.0.1:35095",
+            "connection": "keep-alive",
+            "authorization": "Bearer disposable-decisions-reference",
+            "content-type": "application/json",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "content-length": "409"
+          },
+          "rawHeaders": [
+            "host",
+            "127.0.0.1:35095",
+            "connection",
+            "keep-alive",
+            "authorization",
+            "Bearer disposable-decisions-reference",
+            "content-type",
+            "application/json",
+            "accept",
+            "*/*",
+            "accept-language",
+            "*",
+            "sec-fetch-mode",
+            "cors",
+            "user-agent",
+            "node",
+            "accept-encoding",
+            "br, gzip, deflate",
+            "content-length",
+            "409"
+          ],
+          "rawBody": "{\"model\":\"gpt-6-luna\",\"input\":\"{\\\"approved\\\":true}\",\"questions\":[{\"type\":\"predicate\",\"name\":\"approved\",\"instructions\":\"Approved?\\n\\nTrue means: Approved\\nFalse means: Review\"},{\"type\":\"score\",\"name\":\"severity\",\"instructions\":\"Severity?\",\"levels\":[{\"label\":\"Low\"},{\"label\":\"High\"}]},{\"type\":\"choice\",\"name\":\"label\",\"instructions\":\"Label?\",\"choices\":[{\"value\":\"safe\",\"description\":\"Safe\"},{\"value\":\"review\"}]}]}",
+          "body": {
+            "model": "gpt-6-luna",
+            "input": "{\"approved\":true}",
+            "questions": [
+              {
+                "type": "predicate",
+                "name": "approved",
+                "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+              },
+              {
+                "type": "score",
+                "name": "severity",
+                "instructions": "Severity?",
+                "levels": [
+                  {
+                    "label": "Low"
+                  },
+                  {
+                    "label": "High"
+                  }
+                ]
+              },
+              {
+                "type": "choice",
+                "name": "label",
+                "instructions": "Label?",
+                "choices": [
+                  {
+                    "value": "safe",
+                    "description": "Safe"
+                  },
+                  {
+                    "value": "review"
+                  }
+                ]
+              }
+            ]
+          },
+          "tls": true,
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "x-owned-response": "tier-boundary"
+            },
+            "rawBody": "{\"answers\":[{\"name\":\"severity\",\"type\":\"score\",\"score\":1.25,\"confidence\":0.9},{\"name\":\"label\",\"type\":\"choice\",\"choice\":\"safe\",\"confidence\":0.8,\"probabilities\":[{\"value\":\"safe\",\"probability\":0.75},{\"value\":\"review\",\"probability\":0.25}]},{\"name\":\"approved\",\"type\":\"predicate\",\"probability\":0.8}],\"usage\":{\"input_tokens\":272000,\"output_tokens\":2}}",
+            "body": {
+              "answers": [
+                {
+                  "name": "severity",
+                  "type": "score",
+                  "score": 1.25,
+                  "confidence": 0.9
+                },
+                {
+                  "name": "label",
+                  "type": "choice",
+                  "choice": "safe",
+                  "confidence": 0.8,
+                  "probabilities": [
+                    {
+                      "value": "safe",
+                      "probability": 0.75
+                    },
+                    {
+                      "value": "review",
+                      "probability": 0.25
+                    }
+                  ]
+                },
+                {
+                  "name": "approved",
+                  "type": "predicate",
+                  "probability": 0.8
+                }
+              ],
+              "usage": {
+                "input_tokens": 272000,
+                "output_tokens": 2
+              }
+            }
+          }
+        }
+      ],
+      "payloads": [
+        {
+          "model": "gpt-6-luna",
+          "input": "{\"approved\":true}",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "approved",
+              "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+            },
+            {
+              "type": "score",
+              "name": "severity",
+              "instructions": "Severity?",
+              "levels": [
+                {
+                  "label": "Low"
+                },
+                {
+                  "label": "High"
+                }
+              ]
+            },
+            {
+              "type": "choice",
+              "name": "label",
+              "instructions": "Label?",
+              "choices": [
+                {
+                  "value": "safe",
+                  "description": "Safe"
+                },
+                {
+                  "value": "review"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "responseHooks": [
+        {
+          "status": 200,
+          "headers": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "date": "Thu, 29 Oct 2026 11:58:33 GMT",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked",
+            "x-owned-response": "tier-boundary"
+          }
+        }
+      ],
+      "result": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1793275113136,
+        "usage": {
+          "input": 272000,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 272002,
+          "cost": {
+            "input": 0.027200000000000002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.027200000000000002
+          }
+        }
+      },
+      "normalizedResult": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 0,
+        "usage": {
+          "input": 272000,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 272002,
+          "cost": {
+            "input": 0.027200000000000002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.027200000000000002
+          }
+        }
+      },
+      "callerInputsUnchanged": true
+    },
+    {
+      "model": "gpt-6-luna",
+      "api": "openai-decisions",
+      "type": "classifier",
+      "entrypoint": "factory.classify",
+      "case": "tier-above",
+      "context": {
+        "state": {
+          "approved": true
+        },
+        "questions": {
+          "approved": {
+            "type": "bool",
+            "instructions": "Approved?",
+            "criteria": {
+              "true": "Approved",
+              "false": "Review"
+            }
+          },
+          "severity": {
+            "type": "score",
+            "instructions": "Severity?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          },
+          "label": {
+            "type": "choice",
+            "instructions": "Label?",
+            "criteria": {
+              "safe": "Safe",
+              "review": ""
+            }
+          }
+        }
+      },
+      "options": {
+        "apiKey": "disposable-decisions-reference",
+        "maxRetries": 0
+      },
+      "signalDeadlineMs": 30000,
+      "requests": [
+        {
+          "ordinal": 4,
+          "case": "tier-above",
+          "method": "POST",
+          "path": "/proxy%2Ftenant/v1/decisions",
+          "headers": {
+            "host": "127.0.0.1:35095",
+            "connection": "keep-alive",
+            "authorization": "Bearer disposable-decisions-reference",
+            "content-type": "application/json",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "content-length": "409"
+          },
+          "rawHeaders": [
+            "host",
+            "127.0.0.1:35095",
+            "connection",
+            "keep-alive",
+            "authorization",
+            "Bearer disposable-decisions-reference",
+            "content-type",
+            "application/json",
+            "accept",
+            "*/*",
+            "accept-language",
+            "*",
+            "sec-fetch-mode",
+            "cors",
+            "user-agent",
+            "node",
+            "accept-encoding",
+            "br, gzip, deflate",
+            "content-length",
+            "409"
+          ],
+          "rawBody": "{\"model\":\"gpt-6-luna\",\"input\":\"{\\\"approved\\\":true}\",\"questions\":[{\"type\":\"predicate\",\"name\":\"approved\",\"instructions\":\"Approved?\\n\\nTrue means: Approved\\nFalse means: Review\"},{\"type\":\"score\",\"name\":\"severity\",\"instructions\":\"Severity?\",\"levels\":[{\"label\":\"Low\"},{\"label\":\"High\"}]},{\"type\":\"choice\",\"name\":\"label\",\"instructions\":\"Label?\",\"choices\":[{\"value\":\"safe\",\"description\":\"Safe\"},{\"value\":\"review\"}]}]}",
+          "body": {
+            "model": "gpt-6-luna",
+            "input": "{\"approved\":true}",
+            "questions": [
+              {
+                "type": "predicate",
+                "name": "approved",
+                "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+              },
+              {
+                "type": "score",
+                "name": "severity",
+                "instructions": "Severity?",
+                "levels": [
+                  {
+                    "label": "Low"
+                  },
+                  {
+                    "label": "High"
+                  }
+                ]
+              },
+              {
+                "type": "choice",
+                "name": "label",
+                "instructions": "Label?",
+                "choices": [
+                  {
+                    "value": "safe",
+                    "description": "Safe"
+                  },
+                  {
+                    "value": "review"
+                  }
+                ]
+              }
+            ]
+          },
+          "tls": true,
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "x-owned-response": "tier-above"
+            },
+            "rawBody": "{\"answers\":[{\"name\":\"severity\",\"type\":\"score\",\"score\":1.25,\"confidence\":0.9},{\"name\":\"label\",\"type\":\"choice\",\"choice\":\"safe\",\"confidence\":0.8,\"probabilities\":[{\"value\":\"safe\",\"probability\":0.75},{\"value\":\"review\",\"probability\":0.25}]},{\"name\":\"approved\",\"type\":\"predicate\",\"probability\":0.8}],\"usage\":{\"input_tokens\":272001,\"output_tokens\":2}}",
+            "body": {
+              "answers": [
+                {
+                  "name": "severity",
+                  "type": "score",
+                  "score": 1.25,
+                  "confidence": 0.9
+                },
+                {
+                  "name": "label",
+                  "type": "choice",
+                  "choice": "safe",
+                  "confidence": 0.8,
+                  "probabilities": [
+                    {
+                      "value": "safe",
+                      "probability": 0.75
+                    },
+                    {
+                      "value": "review",
+                      "probability": 0.25
+                    }
+                  ]
+                },
+                {
+                  "name": "approved",
+                  "type": "predicate",
+                  "probability": 0.8
+                }
+              ],
+              "usage": {
+                "input_tokens": 272001,
+                "output_tokens": 2
+              }
+            }
+          }
+        }
+      ],
+      "payloads": [
+        {
+          "model": "gpt-6-luna",
+          "input": "{\"approved\":true}",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "approved",
+              "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+            },
+            {
+              "type": "score",
+              "name": "severity",
+              "instructions": "Severity?",
+              "levels": [
+                {
+                  "label": "Low"
+                },
+                {
+                  "label": "High"
+                }
+              ]
+            },
+            {
+              "type": "choice",
+              "name": "label",
+              "instructions": "Label?",
+              "choices": [
+                {
+                  "value": "safe",
+                  "description": "Safe"
+                },
+                {
+                  "value": "review"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "responseHooks": [
+        {
+          "status": 200,
+          "headers": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "date": "Thu, 29 Oct 2026 11:58:33 GMT",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked",
+            "x-owned-response": "tier-above"
+          }
+        }
+      ],
+      "result": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1793275113137,
+        "usage": {
+          "input": 272001,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 272003,
+          "cost": {
+            "input": 0.0544002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0544002
+          }
+        }
+      },
+      "normalizedResult": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 0,
+        "usage": {
+          "input": 272001,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 272003,
+          "cost": {
+            "input": 0.0544002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0544002
+          }
+        }
+      },
+      "callerInputsUnchanged": true
+    },
+    {
+      "model": "gpt-6-luna",
+      "api": "openai-decisions",
+      "type": "classifier",
+      "entrypoint": "factory.classify",
+      "case": "refused-billed",
+      "context": {
+        "state": {
+          "approved": true
+        },
+        "questions": {
+          "approved": {
+            "type": "bool",
+            "instructions": "Approved?",
+            "criteria": {
+              "true": "Approved",
+              "false": "Review"
+            }
+          },
+          "severity": {
+            "type": "score",
+            "instructions": "Severity?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          },
+          "label": {
+            "type": "choice",
+            "instructions": "Label?",
+            "criteria": {
+              "safe": "Safe",
+              "review": ""
+            }
+          }
+        }
+      },
+      "options": {
+        "apiKey": "disposable-decisions-reference",
+        "maxRetries": 0
+      },
+      "signalDeadlineMs": 30000,
+      "requests": [
+        {
+          "ordinal": 5,
+          "case": "refused-billed",
+          "method": "POST",
+          "path": "/proxy%2Ftenant/v1/decisions",
+          "headers": {
+            "host": "127.0.0.1:35095",
+            "connection": "keep-alive",
+            "authorization": "Bearer disposable-decisions-reference",
+            "content-type": "application/json",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "content-length": "409"
+          },
+          "rawHeaders": [
+            "host",
+            "127.0.0.1:35095",
+            "connection",
+            "keep-alive",
+            "authorization",
+            "Bearer disposable-decisions-reference",
+            "content-type",
+            "application/json",
+            "accept",
+            "*/*",
+            "accept-language",
+            "*",
+            "sec-fetch-mode",
+            "cors",
+            "user-agent",
+            "node",
+            "accept-encoding",
+            "br, gzip, deflate",
+            "content-length",
+            "409"
+          ],
+          "rawBody": "{\"model\":\"gpt-6-luna\",\"input\":\"{\\\"approved\\\":true}\",\"questions\":[{\"type\":\"predicate\",\"name\":\"approved\",\"instructions\":\"Approved?\\n\\nTrue means: Approved\\nFalse means: Review\"},{\"type\":\"score\",\"name\":\"severity\",\"instructions\":\"Severity?\",\"levels\":[{\"label\":\"Low\"},{\"label\":\"High\"}]},{\"type\":\"choice\",\"name\":\"label\",\"instructions\":\"Label?\",\"choices\":[{\"value\":\"safe\",\"description\":\"Safe\"},{\"value\":\"review\"}]}]}",
+          "body": {
+            "model": "gpt-6-luna",
+            "input": "{\"approved\":true}",
+            "questions": [
+              {
+                "type": "predicate",
+                "name": "approved",
+                "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+              },
+              {
+                "type": "score",
+                "name": "severity",
+                "instructions": "Severity?",
+                "levels": [
+                  {
+                    "label": "Low"
+                  },
+                  {
+                    "label": "High"
+                  }
+                ]
+              },
+              {
+                "type": "choice",
+                "name": "label",
+                "instructions": "Label?",
+                "choices": [
+                  {
+                    "value": "safe",
+                    "description": "Safe"
+                  },
+                  {
+                    "value": "review"
+                  }
+                ]
+              }
+            ]
+          },
+          "tls": true,
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "x-owned-response": "refused-billed"
+            },
+            "rawBody": "{\"answers\":[{\"name\":\"severity\",\"type\":\"score\",\"score\":1.25,\"confidence\":0.9},{\"name\":\"label\",\"type\":\"choice\",\"choice\":\"safe\",\"confidence\":0.8,\"probabilities\":[{\"value\":\"safe\",\"probability\":0.75},{\"value\":\"review\",\"probability\":0.25}]},{\"name\":\"approved\",\"type\":\"refusal\"}],\"usage\":{\"input_tokens\":272001,\"output_tokens\":2}}",
+            "body": {
+              "answers": [
+                {
+                  "name": "severity",
+                  "type": "score",
+                  "score": 1.25,
+                  "confidence": 0.9
+                },
+                {
+                  "name": "label",
+                  "type": "choice",
+                  "choice": "safe",
+                  "confidence": 0.8,
+                  "probabilities": [
+                    {
+                      "value": "safe",
+                      "probability": 0.75
+                    },
+                    {
+                      "value": "review",
+                      "probability": 0.25
+                    }
+                  ]
+                },
+                {
+                  "name": "approved",
+                  "type": "refusal"
+                }
+              ],
+              "usage": {
+                "input_tokens": 272001,
+                "output_tokens": 2
+              }
+            }
+          }
+        }
+      ],
+      "payloads": [
+        {
+          "model": "gpt-6-luna",
+          "input": "{\"approved\":true}",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "approved",
+              "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+            },
+            {
+              "type": "score",
+              "name": "severity",
+              "instructions": "Severity?",
+              "levels": [
+                {
+                  "label": "Low"
+                },
+                {
+                  "label": "High"
+                }
+              ]
+            },
+            {
+              "type": "choice",
+              "name": "label",
+              "instructions": "Label?",
+              "choices": [
+                {
+                  "value": "safe",
+                  "description": "Safe"
+                },
+                {
+                  "value": "review"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "responseHooks": [
+        {
+          "status": 200,
+          "headers": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "date": "Thu, 29 Oct 2026 11:58:33 GMT",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked",
+            "x-owned-response": "refused-billed"
+          }
+        }
+      ],
+      "result": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {},
+        "stopReason": "error",
+        "timestamp": 1793275113140,
+        "usage": {
+          "input": 272001,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 272003,
+          "cost": {
+            "input": 0.0544002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0544002
+          }
+        },
+        "errorMessage": "OpenAI Decisions refused to answer approved"
+      },
+      "normalizedResult": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {},
+        "stopReason": "error",
+        "timestamp": 0,
+        "usage": {
+          "input": 272001,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 272003,
+          "cost": {
+            "input": 0.0544002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0544002
+          }
+        },
+        "errorMessage": "OpenAI Decisions refused to answer approved"
+      },
+      "callerInputsUnchanged": true
+    },
+    {
+      "model": "gpt-6-luna",
+      "api": "openai-decisions",
+      "type": "classifier",
+      "entrypoint": "factory.classify",
+      "case": "missing-answer-billed",
+      "context": {
+        "state": {
+          "approved": true
+        },
+        "questions": {
+          "approved": {
+            "type": "bool",
+            "instructions": "Approved?",
+            "criteria": {
+              "true": "Approved",
+              "false": "Review"
+            }
+          },
+          "severity": {
+            "type": "score",
+            "instructions": "Severity?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          },
+          "label": {
+            "type": "choice",
+            "instructions": "Label?",
+            "criteria": {
+              "safe": "Safe",
+              "review": ""
+            }
+          }
+        }
+      },
+      "options": {
+        "apiKey": "disposable-decisions-reference",
+        "maxRetries": 0
+      },
+      "signalDeadlineMs": 30000,
+      "requests": [
+        {
+          "ordinal": 6,
+          "case": "missing-answer-billed",
+          "method": "POST",
+          "path": "/proxy%2Ftenant/v1/decisions",
+          "headers": {
+            "host": "127.0.0.1:35095",
+            "connection": "keep-alive",
+            "authorization": "Bearer disposable-decisions-reference",
+            "content-type": "application/json",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "content-length": "409"
+          },
+          "rawHeaders": [
+            "host",
+            "127.0.0.1:35095",
+            "connection",
+            "keep-alive",
+            "authorization",
+            "Bearer disposable-decisions-reference",
+            "content-type",
+            "application/json",
+            "accept",
+            "*/*",
+            "accept-language",
+            "*",
+            "sec-fetch-mode",
+            "cors",
+            "user-agent",
+            "node",
+            "accept-encoding",
+            "br, gzip, deflate",
+            "content-length",
+            "409"
+          ],
+          "rawBody": "{\"model\":\"gpt-6-luna\",\"input\":\"{\\\"approved\\\":true}\",\"questions\":[{\"type\":\"predicate\",\"name\":\"approved\",\"instructions\":\"Approved?\\n\\nTrue means: Approved\\nFalse means: Review\"},{\"type\":\"score\",\"name\":\"severity\",\"instructions\":\"Severity?\",\"levels\":[{\"label\":\"Low\"},{\"label\":\"High\"}]},{\"type\":\"choice\",\"name\":\"label\",\"instructions\":\"Label?\",\"choices\":[{\"value\":\"safe\",\"description\":\"Safe\"},{\"value\":\"review\"}]}]}",
+          "body": {
+            "model": "gpt-6-luna",
+            "input": "{\"approved\":true}",
+            "questions": [
+              {
+                "type": "predicate",
+                "name": "approved",
+                "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+              },
+              {
+                "type": "score",
+                "name": "severity",
+                "instructions": "Severity?",
+                "levels": [
+                  {
+                    "label": "Low"
+                  },
+                  {
+                    "label": "High"
+                  }
+                ]
+              },
+              {
+                "type": "choice",
+                "name": "label",
+                "instructions": "Label?",
+                "choices": [
+                  {
+                    "value": "safe",
+                    "description": "Safe"
+                  },
+                  {
+                    "value": "review"
+                  }
+                ]
+              }
+            ]
+          },
+          "tls": true,
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "x-owned-response": "missing-answer-billed"
+            },
+            "rawBody": "{\"answers\":[{\"name\":\"severity\",\"type\":\"score\",\"score\":1.25,\"confidence\":0.9},{\"name\":\"label\",\"type\":\"choice\",\"choice\":\"safe\",\"confidence\":0.8,\"probabilities\":[{\"value\":\"safe\",\"probability\":0.75},{\"value\":\"review\",\"probability\":0.25}]}],\"usage\":{\"input_tokens\":272001,\"output_tokens\":2}}",
+            "body": {
+              "answers": [
+                {
+                  "name": "severity",
+                  "type": "score",
+                  "score": 1.25,
+                  "confidence": 0.9
+                },
+                {
+                  "name": "label",
+                  "type": "choice",
+                  "choice": "safe",
+                  "confidence": 0.8,
+                  "probabilities": [
+                    {
+                      "value": "safe",
+                      "probability": 0.75
+                    },
+                    {
+                      "value": "review",
+                      "probability": 0.25
+                    }
+                  ]
+                }
+              ],
+              "usage": {
+                "input_tokens": 272001,
+                "output_tokens": 2
+              }
+            }
+          }
+        }
+      ],
+      "payloads": [
+        {
+          "model": "gpt-6-luna",
+          "input": "{\"approved\":true}",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "approved",
+              "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+            },
+            {
+              "type": "score",
+              "name": "severity",
+              "instructions": "Severity?",
+              "levels": [
+                {
+                  "label": "Low"
+                },
+                {
+                  "label": "High"
+                }
+              ]
+            },
+            {
+              "type": "choice",
+              "name": "label",
+              "instructions": "Label?",
+              "choices": [
+                {
+                  "value": "safe",
+                  "description": "Safe"
+                },
+                {
+                  "value": "review"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "responseHooks": [
+        {
+          "status": 200,
+          "headers": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "date": "Thu, 29 Oct 2026 11:58:33 GMT",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked",
+            "x-owned-response": "missing-answer-billed"
+          }
+        }
+      ],
+      "result": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {},
+        "stopReason": "error",
+        "timestamp": 1793275113142,
+        "usage": {
+          "input": 272001,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 272003,
+          "cost": {
+            "input": 0.0544002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0544002
+          }
+        },
+        "errorMessage": "OpenAI Decisions did not return an answer for approved"
+      },
+      "normalizedResult": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {},
+        "stopReason": "error",
+        "timestamp": 0,
+        "usage": {
+          "input": 272001,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 272003,
+          "cost": {
+            "input": 0.0544002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0544002
+          }
+        },
+        "errorMessage": "OpenAI Decisions did not return an answer for approved"
+      },
+      "callerInputsUnchanged": true
+    },
+    {
+      "model": "gpt-6-luna",
+      "api": "openai-decisions",
+      "type": "classifier",
+      "entrypoint": "factory.classify",
+      "case": "usage-absent",
+      "context": {
+        "state": {
+          "approved": true
+        },
+        "questions": {
+          "approved": {
+            "type": "bool",
+            "instructions": "Approved?",
+            "criteria": {
+              "true": "Approved",
+              "false": "Review"
+            }
+          },
+          "severity": {
+            "type": "score",
+            "instructions": "Severity?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          },
+          "label": {
+            "type": "choice",
+            "instructions": "Label?",
+            "criteria": {
+              "safe": "Safe",
+              "review": ""
+            }
+          }
+        }
+      },
+      "options": {
+        "apiKey": "disposable-decisions-reference",
+        "maxRetries": 0
+      },
+      "signalDeadlineMs": 30000,
+      "requests": [
+        {
+          "ordinal": 7,
+          "case": "usage-absent",
+          "method": "POST",
+          "path": "/proxy%2Ftenant/v1/decisions",
+          "headers": {
+            "host": "127.0.0.1:35095",
+            "connection": "keep-alive",
+            "authorization": "Bearer disposable-decisions-reference",
+            "content-type": "application/json",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "content-length": "409"
+          },
+          "rawHeaders": [
+            "host",
+            "127.0.0.1:35095",
+            "connection",
+            "keep-alive",
+            "authorization",
+            "Bearer disposable-decisions-reference",
+            "content-type",
+            "application/json",
+            "accept",
+            "*/*",
+            "accept-language",
+            "*",
+            "sec-fetch-mode",
+            "cors",
+            "user-agent",
+            "node",
+            "accept-encoding",
+            "br, gzip, deflate",
+            "content-length",
+            "409"
+          ],
+          "rawBody": "{\"model\":\"gpt-6-luna\",\"input\":\"{\\\"approved\\\":true}\",\"questions\":[{\"type\":\"predicate\",\"name\":\"approved\",\"instructions\":\"Approved?\\n\\nTrue means: Approved\\nFalse means: Review\"},{\"type\":\"score\",\"name\":\"severity\",\"instructions\":\"Severity?\",\"levels\":[{\"label\":\"Low\"},{\"label\":\"High\"}]},{\"type\":\"choice\",\"name\":\"label\",\"instructions\":\"Label?\",\"choices\":[{\"value\":\"safe\",\"description\":\"Safe\"},{\"value\":\"review\"}]}]}",
+          "body": {
+            "model": "gpt-6-luna",
+            "input": "{\"approved\":true}",
+            "questions": [
+              {
+                "type": "predicate",
+                "name": "approved",
+                "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+              },
+              {
+                "type": "score",
+                "name": "severity",
+                "instructions": "Severity?",
+                "levels": [
+                  {
+                    "label": "Low"
+                  },
+                  {
+                    "label": "High"
+                  }
+                ]
+              },
+              {
+                "type": "choice",
+                "name": "label",
+                "instructions": "Label?",
+                "choices": [
+                  {
+                    "value": "safe",
+                    "description": "Safe"
+                  },
+                  {
+                    "value": "review"
+                  }
+                ]
+              }
+            ]
+          },
+          "tls": true,
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "x-owned-response": "usage-absent"
+            },
+            "rawBody": "{\"answers\":[{\"name\":\"severity\",\"type\":\"score\",\"score\":1.25,\"confidence\":0.9},{\"name\":\"label\",\"type\":\"choice\",\"choice\":\"safe\",\"confidence\":0.8,\"probabilities\":[{\"value\":\"safe\",\"probability\":0.75},{\"value\":\"review\",\"probability\":0.25}]},{\"name\":\"approved\",\"type\":\"predicate\",\"probability\":0.8}]}",
+            "body": {
+              "answers": [
+                {
+                  "name": "severity",
+                  "type": "score",
+                  "score": 1.25,
+                  "confidence": 0.9
+                },
+                {
+                  "name": "label",
+                  "type": "choice",
+                  "choice": "safe",
+                  "confidence": 0.8,
+                  "probabilities": [
+                    {
+                      "value": "safe",
+                      "probability": 0.75
+                    },
+                    {
+                      "value": "review",
+                      "probability": 0.25
+                    }
+                  ]
+                },
+                {
+                  "name": "approved",
+                  "type": "predicate",
+                  "probability": 0.8
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "payloads": [
+        {
+          "model": "gpt-6-luna",
+          "input": "{\"approved\":true}",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "approved",
+              "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+            },
+            {
+              "type": "score",
+              "name": "severity",
+              "instructions": "Severity?",
+              "levels": [
+                {
+                  "label": "Low"
+                },
+                {
+                  "label": "High"
+                }
+              ]
+            },
+            {
+              "type": "choice",
+              "name": "label",
+              "instructions": "Label?",
+              "choices": [
+                {
+                  "value": "safe",
+                  "description": "Safe"
+                },
+                {
+                  "value": "review"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "responseHooks": [
+        {
+          "status": 200,
+          "headers": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "date": "Thu, 29 Oct 2026 11:58:33 GMT",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked",
+            "x-owned-response": "usage-absent"
+          }
+        }
+      ],
+      "result": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1793275113143
+      },
+      "normalizedResult": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 0
+      },
+      "callerInputsUnchanged": true
+    },
+    {
+      "model": "gpt-6-luna",
+      "api": "openai-decisions",
+      "type": "classifier",
+      "entrypoint": "factory.classify",
+      "case": "gateway-504-no-retry",
+      "context": {
+        "state": {
+          "approved": true
+        },
+        "questions": {
+          "approved": {
+            "type": "bool",
+            "instructions": "Approved?",
+            "criteria": {
+              "true": "Approved",
+              "false": "Review"
+            }
+          },
+          "severity": {
+            "type": "score",
+            "instructions": "Severity?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          },
+          "label": {
+            "type": "choice",
+            "instructions": "Label?",
+            "criteria": {
+              "safe": "Safe",
+              "review": ""
+            }
+          }
+        }
+      },
+      "options": {
+        "apiKey": "disposable-decisions-reference",
+        "maxRetries": 2,
+        "maxRetryDelayMs": 0
+      },
+      "signalDeadlineMs": 30000,
+      "requests": [
+        {
+          "ordinal": 8,
+          "case": "gateway-504-no-retry",
+          "method": "POST",
+          "path": "/proxy%2Ftenant/v1/decisions",
+          "headers": {
+            "host": "127.0.0.1:35095",
+            "connection": "keep-alive",
+            "authorization": "Bearer disposable-decisions-reference",
+            "content-type": "application/json",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "content-length": "409"
+          },
+          "rawHeaders": [
+            "host",
+            "127.0.0.1:35095",
+            "connection",
+            "keep-alive",
+            "authorization",
+            "Bearer disposable-decisions-reference",
+            "content-type",
+            "application/json",
+            "accept",
+            "*/*",
+            "accept-language",
+            "*",
+            "sec-fetch-mode",
+            "cors",
+            "user-agent",
+            "node",
+            "accept-encoding",
+            "br, gzip, deflate",
+            "content-length",
+            "409"
+          ],
+          "rawBody": "{\"model\":\"gpt-6-luna\",\"input\":\"{\\\"approved\\\":true}\",\"questions\":[{\"type\":\"predicate\",\"name\":\"approved\",\"instructions\":\"Approved?\\n\\nTrue means: Approved\\nFalse means: Review\"},{\"type\":\"score\",\"name\":\"severity\",\"instructions\":\"Severity?\",\"levels\":[{\"label\":\"Low\"},{\"label\":\"High\"}]},{\"type\":\"choice\",\"name\":\"label\",\"instructions\":\"Label?\",\"choices\":[{\"value\":\"safe\",\"description\":\"Safe\"},{\"value\":\"review\"}]}]}",
+          "body": {
+            "model": "gpt-6-luna",
+            "input": "{\"approved\":true}",
+            "questions": [
+              {
+                "type": "predicate",
+                "name": "approved",
+                "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+              },
+              {
+                "type": "score",
+                "name": "severity",
+                "instructions": "Severity?",
+                "levels": [
+                  {
+                    "label": "Low"
+                  },
+                  {
+                    "label": "High"
+                  }
+                ]
+              },
+              {
+                "type": "choice",
+                "name": "label",
+                "instructions": "Label?",
+                "choices": [
+                  {
+                    "value": "safe",
+                    "description": "Safe"
+                  },
+                  {
+                    "value": "review"
+                  }
+                ]
+              }
+            ]
+          },
+          "tls": true,
+          "response": {
+            "status": 504,
+            "headers": {
+              "content-type": "application/json",
+              "x-owned-response": "gateway-504-no-retry"
+            },
+            "rawBody": "{\"error\":{\"message\":\"owned gateway timeout\"}}",
+            "body": {
+              "error": {
+                "message": "owned gateway timeout"
+              }
+            }
+          }
+        }
+      ],
+      "payloads": [
+        {
+          "model": "gpt-6-luna",
+          "input": "{\"approved\":true}",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "approved",
+              "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+            },
+            {
+              "type": "score",
+              "name": "severity",
+              "instructions": "Severity?",
+              "levels": [
+                {
+                  "label": "Low"
+                },
+                {
+                  "label": "High"
+                }
+              ]
+            },
+            {
+              "type": "choice",
+              "name": "label",
+              "instructions": "Label?",
+              "choices": [
+                {
+                  "value": "safe",
+                  "description": "Safe"
+                },
+                {
+                  "value": "review"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "responseHooks": [],
+      "result": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {},
+        "stopReason": "error",
+        "timestamp": 1793275113144,
+        "errorMessage": "OpenAI Decisions error (504): the request timed out at the gateway. Very large inputs (above roughly 600K tokens) currently exceed its time limit."
+      },
+      "normalizedResult": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {},
+        "stopReason": "error",
+        "timestamp": 0,
+        "errorMessage": "OpenAI Decisions error (504): the request timed out at the gateway. Very large inputs (above roughly 600K tokens) currently exceed its time limit."
+      },
+      "callerInputsUnchanged": true
+    },
+    {
+      "model": "gpt-6-luna",
+      "api": "openai-decisions",
+      "type": "classifier",
+      "entrypoint": "factory.classify",
+      "case": "retry-503-then-success",
+      "context": {
+        "state": {
+          "approved": true
+        },
+        "questions": {
+          "approved": {
+            "type": "bool",
+            "instructions": "Approved?",
+            "criteria": {
+              "true": "Approved",
+              "false": "Review"
+            }
+          },
+          "severity": {
+            "type": "score",
+            "instructions": "Severity?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          },
+          "label": {
+            "type": "choice",
+            "instructions": "Label?",
+            "criteria": {
+              "safe": "Safe",
+              "review": ""
+            }
+          }
+        }
+      },
+      "options": {
+        "apiKey": "disposable-decisions-reference",
+        "maxRetries": 1,
+        "maxRetryDelayMs": 0
+      },
+      "signalDeadlineMs": 30000,
+      "requests": [
+        {
+          "ordinal": 9,
+          "case": "retry-503-then-success",
+          "method": "POST",
+          "path": "/proxy%2Ftenant/v1/decisions",
+          "headers": {
+            "host": "127.0.0.1:35095",
+            "connection": "keep-alive",
+            "authorization": "Bearer disposable-decisions-reference",
+            "content-type": "application/json",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "content-length": "409"
+          },
+          "rawHeaders": [
+            "host",
+            "127.0.0.1:35095",
+            "connection",
+            "keep-alive",
+            "authorization",
+            "Bearer disposable-decisions-reference",
+            "content-type",
+            "application/json",
+            "accept",
+            "*/*",
+            "accept-language",
+            "*",
+            "sec-fetch-mode",
+            "cors",
+            "user-agent",
+            "node",
+            "accept-encoding",
+            "br, gzip, deflate",
+            "content-length",
+            "409"
+          ],
+          "rawBody": "{\"model\":\"gpt-6-luna\",\"input\":\"{\\\"approved\\\":true}\",\"questions\":[{\"type\":\"predicate\",\"name\":\"approved\",\"instructions\":\"Approved?\\n\\nTrue means: Approved\\nFalse means: Review\"},{\"type\":\"score\",\"name\":\"severity\",\"instructions\":\"Severity?\",\"levels\":[{\"label\":\"Low\"},{\"label\":\"High\"}]},{\"type\":\"choice\",\"name\":\"label\",\"instructions\":\"Label?\",\"choices\":[{\"value\":\"safe\",\"description\":\"Safe\"},{\"value\":\"review\"}]}]}",
+          "body": {
+            "model": "gpt-6-luna",
+            "input": "{\"approved\":true}",
+            "questions": [
+              {
+                "type": "predicate",
+                "name": "approved",
+                "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+              },
+              {
+                "type": "score",
+                "name": "severity",
+                "instructions": "Severity?",
+                "levels": [
+                  {
+                    "label": "Low"
+                  },
+                  {
+                    "label": "High"
+                  }
+                ]
+              },
+              {
+                "type": "choice",
+                "name": "label",
+                "instructions": "Label?",
+                "choices": [
+                  {
+                    "value": "safe",
+                    "description": "Safe"
+                  },
+                  {
+                    "value": "review"
+                  }
+                ]
+              }
+            ]
+          },
+          "tls": true,
+          "response": {
+            "status": 503,
+            "headers": {
+              "content-type": "application/json",
+              "x-owned-response": "retry-503-then-success"
+            },
+            "rawBody": "{\"error\":{\"message\":\"owned transient\"}}",
+            "body": {
+              "error": {
+                "message": "owned transient"
+              }
+            }
+          }
+        },
+        {
+          "ordinal": 10,
+          "case": "retry-503-then-success",
+          "method": "POST",
+          "path": "/proxy%2Ftenant/v1/decisions",
+          "headers": {
+            "host": "127.0.0.1:35095",
+            "connection": "keep-alive",
+            "authorization": "Bearer disposable-decisions-reference",
+            "content-type": "application/json",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "content-length": "409"
+          },
+          "rawHeaders": [
+            "host",
+            "127.0.0.1:35095",
+            "connection",
+            "keep-alive",
+            "authorization",
+            "Bearer disposable-decisions-reference",
+            "content-type",
+            "application/json",
+            "accept",
+            "*/*",
+            "accept-language",
+            "*",
+            "sec-fetch-mode",
+            "cors",
+            "user-agent",
+            "node",
+            "accept-encoding",
+            "br, gzip, deflate",
+            "content-length",
+            "409"
+          ],
+          "rawBody": "{\"model\":\"gpt-6-luna\",\"input\":\"{\\\"approved\\\":true}\",\"questions\":[{\"type\":\"predicate\",\"name\":\"approved\",\"instructions\":\"Approved?\\n\\nTrue means: Approved\\nFalse means: Review\"},{\"type\":\"score\",\"name\":\"severity\",\"instructions\":\"Severity?\",\"levels\":[{\"label\":\"Low\"},{\"label\":\"High\"}]},{\"type\":\"choice\",\"name\":\"label\",\"instructions\":\"Label?\",\"choices\":[{\"value\":\"safe\",\"description\":\"Safe\"},{\"value\":\"review\"}]}]}",
+          "body": {
+            "model": "gpt-6-luna",
+            "input": "{\"approved\":true}",
+            "questions": [
+              {
+                "type": "predicate",
+                "name": "approved",
+                "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+              },
+              {
+                "type": "score",
+                "name": "severity",
+                "instructions": "Severity?",
+                "levels": [
+                  {
+                    "label": "Low"
+                  },
+                  {
+                    "label": "High"
+                  }
+                ]
+              },
+              {
+                "type": "choice",
+                "name": "label",
+                "instructions": "Label?",
+                "choices": [
+                  {
+                    "value": "safe",
+                    "description": "Safe"
+                  },
+                  {
+                    "value": "review"
+                  }
+                ]
+              }
+            ]
+          },
+          "tls": true,
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "x-owned-response": "retry-503-then-success"
+            },
+            "rawBody": "{\"answers\":[{\"name\":\"severity\",\"type\":\"score\",\"score\":1.25,\"confidence\":0.9},{\"name\":\"label\",\"type\":\"choice\",\"choice\":\"safe\",\"confidence\":0.8,\"probabilities\":[{\"value\":\"safe\",\"probability\":0.75},{\"value\":\"review\",\"probability\":0.25}]},{\"name\":\"approved\",\"type\":\"predicate\",\"probability\":0.8}],\"usage\":{\"input_tokens\":10,\"output_tokens\":2}}",
+            "body": {
+              "answers": [
+                {
+                  "name": "severity",
+                  "type": "score",
+                  "score": 1.25,
+                  "confidence": 0.9
+                },
+                {
+                  "name": "label",
+                  "type": "choice",
+                  "choice": "safe",
+                  "confidence": 0.8,
+                  "probabilities": [
+                    {
+                      "value": "safe",
+                      "probability": 0.75
+                    },
+                    {
+                      "value": "review",
+                      "probability": 0.25
+                    }
+                  ]
+                },
+                {
+                  "name": "approved",
+                  "type": "predicate",
+                  "probability": 0.8
+                }
+              ],
+              "usage": {
+                "input_tokens": 10,
+                "output_tokens": 2
+              }
+            }
+          }
+        }
+      ],
+      "payloads": [
+        {
+          "model": "gpt-6-luna",
+          "input": "{\"approved\":true}",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "approved",
+              "instructions": "Approved?\n\nTrue means: Approved\nFalse means: Review"
+            },
+            {
+              "type": "score",
+              "name": "severity",
+              "instructions": "Severity?",
+              "levels": [
+                {
+                  "label": "Low"
+                },
+                {
+                  "label": "High"
+                }
+              ]
+            },
+            {
+              "type": "choice",
+              "name": "label",
+              "instructions": "Label?",
+              "choices": [
+                {
+                  "value": "safe",
+                  "description": "Safe"
+                },
+                {
+                  "value": "review"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "responseHooks": [
+        {
+          "status": 200,
+          "headers": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "date": "Thu, 29 Oct 2026 11:58:33 GMT",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked",
+            "x-owned-response": "retry-503-then-success"
+          }
+        }
+      ],
+      "result": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1793275113146,
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000010000000000000002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000010000000000000002
+          }
+        }
+      },
+      "normalizedResult": {
+        "api": "openai-decisions",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "answers": {
+          "approved": {
+            "type": "bool",
+            "probability": 0.8
+          },
+          "severity": {
+            "type": "score",
+            "score": 1.25,
+            "confidence": 0.9
+          },
+          "label": {
+            "type": "choice",
+            "choice": "safe",
+            "probabilities": {
+              "safe": 0.75,
+              "review": 0.25
+            },
+            "confidence": 0.8
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 0,
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000010000000000000002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000010000000000000002
+          }
+        }
+      },
+      "callerInputsUnchanged": true
+    }
+  ],
+  "projectionLimits": {
+    "entrypoint": "Pinned original openaiProvider().classify; not chat/stream/streamSimple or finite guest lowering.",
+    "timestamp": "Only normalizedResult.timestamp is set to zero; original result.timestamp is retained.",
+    "callerImmutability": "The capture assertions cover context, model and catalogue. Options immutability was not separately asserted; callerInputsUnchanged must not be read as that stronger claim.",
+    "missingUsage": "An omitted usage object remains absent, never converted to zero/free usage.",
+    "tariff": "Native known classifier tariff: input 0.1/million, strictly above 272000 input tokens all-input 0.2/million; output/cache zero tariffs do not imply cache support.",
+    "images": "One supplied PNG-header byte sequence is serialized, not decoded/resized or accepted by a service. Existing Core safety bounds are unchanged.",
+    "requestDefaults": "Complete native request objects retained; typed classifier temperature 0.2 is ignored by the captured SDK. No chat output/reasoning/tool contract is invented.",
+    "execution": "Runtime JS through original factory over owned verified HTTPS loopback with disposable credentials in Docker network none; not typed Pi, Core, installed consumer, platform, issuer/account or all-policy qualification.",
+    "review": "No complete prerequisite/manual-reading assurance, generated-fixture review exception or Bedrock numeric contract selection."
+  }
+}

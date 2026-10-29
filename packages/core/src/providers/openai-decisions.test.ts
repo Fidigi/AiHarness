@@ -1,10 +1,24 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OpenAiDecisionsProvider, OPENAI_DECISIONS_MODEL, TypesafeProvider } from './index.js';
 import { SpecializedModelError, SpecializedModels } from './specialized-models.js';
 import { runCodemode } from '../tools/codemode.js';
 import type { ExtensionRuntimeContext } from '../extensions/extension-registry.js';
+import type { NativeClassifierRequest, NativeClassifierResult } from './native-classification.js';
 
+type PinnedRow = {
+  case: string; model: string;
+  context: Omit<NativeClassifierRequest, 'model' | 'images'> & { images?: Array<{ mimeType: 'image/png'; data: string }> };
+  options: { apiKey: string; maxRetries: number; maxRetryDelayMs?: number };
+  requests: Array<{ method: string; path: string; headers: { authorization: string }; body: unknown; response: { status: number; rawBody: string } }>;
+  normalizedResult: Omit<NativeClassifierResult, 'usage'> & { usage?: { input: number; output: number; totalTokens: number; cost: { total: number } } };
+};
+const referenceBytes = readFileSync(new URL('../../../../tests/fixtures/openai-decisions-reference.json', import.meta.url));
+const reference = JSON.parse(referenceBytes.toString()) as {
+  pinnedCommit: string; sourceCaptureSha256: string; identity: { provider: string; model: string; api: string; type: string }; sourceRows: PinnedRow[];
+};
 const model = 'gpt-6-luna';
 const native = { model, state: { approved: true }, questions: {
   approved: { type: 'bool' as const, instructions: 'Approved?', criteria: { true: 'Approved', false: 'Review' } },
@@ -20,10 +34,10 @@ const png = { mediaType: 'image/png' as const, data: Buffer.from([137, 80, 78, 7
 const servers: Server[] = [];
 afterEach(async () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); for (const server of servers.splice(0)) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } });
 async function fixture(reply: (response: import('node:http').ServerResponse) => void = response => response.end(JSON.stringify({ answers: answers(), usage: { input_tokens: 10, output_tokens: 2 } }))) {
-  const calls: Array<{ url?: string; authorization?: string; body: unknown }> = [];
+  const calls: Array<{ method?: string; url?: string; authorization?: string; body: unknown }> = [];
   const server = createServer(async (request, response) => {
     let text = ''; for await (const chunk of request) text += chunk;
-    calls.push({ url: request.url, authorization: request.headers.authorization, body: JSON.parse(text) });
+    calls.push({ method: request.method, url: request.url, authorization: request.headers.authorization, body: JSON.parse(text) });
     response.setHeader('content-type', 'application/json'); reply(response);
   });
   servers.push(server); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -60,13 +74,50 @@ describe('native OpenAI Decisions', () => {
         answers: { approved: { type: 'bool', probability: 0.8 }, severity: { type: 'score', score: 1.25, confidence: 0.9 },
           label: { type: 'choice', choice: 'safe', confidence: 0.8, probabilities: { safe: 0.75, review: 0.25 } } }, usage: { totalTokens: 12, costUsd: 0.000001 } });
       expect(result.answers.severity).not.toHaveProperty('probabilities');
-      expect(calls.at(-1)).toEqual({ url: '/proxy%2Ftenant/v1/decisions', authorization: 'Bearer disposable-decisions', body: {
+      expect(calls.at(-1)).toEqual({ method: 'POST', url: '/proxy%2Ftenant/v1/decisions', authorization: 'Bearer disposable-decisions', body: {
         model, input: images ? [{ role: 'user', content: [{ type: 'input_text', text: JSON.stringify(native.state) }, { type: 'input_image', image_url: `data:image/png;base64,${png.data}` }] }] : JSON.stringify(native.state),
         questions: [{ name: 'approved', type: 'predicate', instructions: 'Approved?\n\nTrue means: Approved\nFalse means: Review' },
           { name: 'severity', type: 'score', instructions: 'Severity?', levels: [{ label: 'Low' }, { label: 'High' }] },
           { name: 'label', type: 'choice', instructions: 'Label?', choices: [{ value: 'safe', description: 'Safe' }, { value: 'review' }] }],
       } });
     }
+  });
+
+  it('binds complete native requests and observed results to the pinned original classifier capture', async () => {
+    expect(createHash('sha256').update(referenceBytes).digest('hex')).toBe('4817a0f3d739fbbac99c13c39e6a90c1b869cf1bea6f755406695a21cd4d8ec7');
+    expect(reference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
+    expect(reference.sourceCaptureSha256).toBe('84abbac9c2c8dc864f8953f976774be375181857cb3383841fd6c69b888d7d84');
+    expect(reference.identity).toEqual({ provider: 'openai', model, api: 'openai-decisions', type: 'classifier' });
+    expect(reference.sourceRows.map(row => row.case)).toEqual(['named-text', 'one-image', 'temperature-ignored', 'tier-boundary', 'tier-above',
+      'refused-billed', 'missing-answer-billed', 'usage-absent', 'gateway-504-no-retry', 'retry-503-then-success']);
+    let count = 0;
+    for (const row of reference.sourceRows) {
+      let attempt = 0;
+      const { calls, baseUrl } = await fixture(response => {
+        const observed = row.requests[Math.min(attempt++, row.requests.length - 1)].response;
+        response.statusCode = observed.status; response.end(observed.rawBody);
+      });
+      const provider = new OpenAiDecisionsProvider({ type: 'operator-decisions', apiKey: row.options.apiKey, baseUrl,
+        providerMaxRetries: row.options.maxRetries, providerMaxRetryDelayMs: row.options.maxRetryDelayMs });
+      // SDK temperature is ignored on this native API; Core has no native temperature option.
+      const request: NativeClassifierRequest = { model: row.model, state: row.context.state, questions: row.context.questions,
+        ...(row.context.images ? { images: row.context.images.map(image => ({ mediaType: image.mimeType, data: image.data })) } : {}) };
+      const before = structuredClone(request), result = await provider.classifyNativeQuestions(request);
+      expect(calls, row.case).toEqual(row.requests.map(observed => ({ method: observed.method, url: observed.path,
+        authorization: observed.headers.authorization, body: observed.body })));
+      const { usage, timestamp, errorMessage, ...actual } = result;
+      const { usage: sourceUsage, timestamp: _timestamp, errorMessage: _errorMessage, ...expected } = row.normalizedResult;
+      expect(actual, row.case).toEqual({ ...expected, provider: 'operator-decisions' });
+      expect(Number.isSafeInteger(timestamp)).toBe(true);
+      expect(errorMessage).toBe(result.stopReason === 'error' ? row.case === 'gateway-504-no-retry'
+        ? 'OpenAI Decisions classification failed.' : 'Invalid OpenAI Decisions response.' : undefined);
+      if (sourceUsage) {
+        expect(usage).toEqual({ inputTokens: sourceUsage.input, outputTokens: sourceUsage.output, totalTokens: sourceUsage.totalTokens, costUsd: expect.any(Number) });
+        expect(usage!.costUsd).toBeCloseTo(sourceUsage.cost.total, 12);
+      } else expect(result).not.toHaveProperty('usage');
+      expect(request).toEqual(before); count += calls.length;
+    }
+    expect(count).toBe(11);
   });
 
   it('retains billed malformed/refused-answer usage and tier thresholds without remote error prose', async () => {

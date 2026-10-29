@@ -2495,6 +2495,7 @@ it('dispatches native OpenRouter images through installed declarations, output b
 }, 60_000);
 
 it('dispatches native OpenAI Decisions through installed declarations, images and failed guest accounting', async () => {
+  await cp(path.join(checkout, 'tests/fixtures/openai-decisions-reference.json'), path.join(consumer, 'decisions-reference.json'));
   await writeFile(path.join(consumer, 'decisions-public.ts'), `
     import { OpenAiDecisionsProvider, OPENAI_DECISIONS_MODEL, SpecializedModels, type NativeClassifierResult } from '@ai-harness/core';
     const provider = new OpenAiDecisionsProvider({ type: 'operator-decisions', apiKey: 'disposable' });
@@ -2505,23 +2506,37 @@ it('dispatches native OpenAI Decisions through installed declarations, images an
     OPENAI_DECISIONS_MODEL.pricingTiers[0].inputTokensAbove = 1;
     // @ts-expect-error native scalar criteria are descriptive strings, not finite numeric values
     provider.classifyNativeQuestions({ model: 'gpt-6-luna', state: {}, questions: { q: { type: 'score', instructions: '?', criteria: [1, 2] } } });
-    void result; void bridge;
+    const accounting: Promise<Array<number | undefined>> = result.then(response => [response.usage?.totalTokens, response.usage?.costUsd]);
+    void result; void bridge; void accounting;
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'decisions-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
   await writeFile(path.join(consumer, 'decisions-public.mjs'), `
     import assert from 'node:assert/strict';
+    import { createHash } from 'node:crypto';
+    import { readFileSync } from 'node:fs';
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
     import { OpenAiDecisionsProvider, OPENAI_DECISIONS_MODEL, SpecializedModels, SpecializedModelError, runCodemode, closeProviderNetworkDispatchers } from '@ai-harness/core';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
-    const calls = []; let malformed = false;
+    const referenceBytes = readFileSync(new URL('./decisions-reference.json', import.meta.url));
+    assert.equal(createHash('sha256').update(referenceBytes).digest('hex'), '4817a0f3d739fbbac99c13c39e6a90c1b869cf1bea6f755406695a21cd4d8ec7');
+    const reference = JSON.parse(referenceBytes.toString());
+    assert.equal(reference.pinnedCommit, '06a466935536f8c9bcacb2d5efc0fc021be1bdff');
+    assert.equal(reference.sourceCaptureSha256, '84abbac9c2c8dc864f8953f976774be375181857cb3383841fd6c69b888d7d84');
+    assert.deepEqual(reference.identity, { provider: 'openai', model: 'gpt-6-luna', api: 'openai-decisions', type: 'classifier' });
+    const calls = []; let malformed = false, observedResponses, responseIndex = 0;
     const server = createServer(async (request, response) => {
       let text = ''; for await (const chunk of request) text += chunk;
-      const body = JSON.parse(text); calls.push({ url: request.url, authorization: request.headers.authorization, body });
+      const body = JSON.parse(text); calls.push({ method: request.method, url: request.url, authorization: request.headers.authorization, body });
+      response.setHeader('content-type', 'application/json');
+      if (observedResponses) {
+        const observed = observedResponses[Math.min(responseIndex++, observedResponses.length - 1)].response;
+        response.statusCode = observed.status; response.end(observed.rawBody); return;
+      }
       const answers = malformed ? [] : body.questions.map(question => question.type === 'predicate'
         ? { name: question.name, type: 'predicate', probability: 0.8 } : { name: question.name, type: 'score', score: 1.25, confidence: 0.75 });
-      response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ answers, usage: { input_tokens: 272001, output_tokens: 2 } }));
+      response.end(JSON.stringify({ answers, usage: { input_tokens: 272001, output_tokens: 2 } }));
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     try {
@@ -2549,6 +2564,33 @@ it('dispatches native OpenAI Decisions through installed declarations, images an
       assert.equal(failed.details.usage.costUsd, 272001 * 0.2 / 1e6); assert.equal(failed.details.costComplete, true);
       assert.equal(calls.length, 4);
       for (const call of calls) { assert.equal(call.url, '/proxy/v1/decisions'); assert.equal(call.authorization, 'Bearer disposable-installed-key'); }
+      assert.deepEqual(reference.sourceRows.map(row => row.case), ['named-text', 'one-image', 'temperature-ignored', 'tier-boundary', 'tier-above',
+        'refused-billed', 'missing-answer-billed', 'usage-absent', 'gateway-504-no-retry', 'retry-503-then-success']);
+      for (const row of reference.sourceRows) {
+        observedResponses = row.requests; responseIndex = 0;
+        const start = calls.length;
+        const native = new OpenAiDecisionsProvider({ type: 'operator-decisions', apiKey: row.options.apiKey,
+          baseUrl: 'http://127.0.0.1:' + server.address().port + '/proxy%2Ftenant/v1',
+          providerMaxRetries: row.options.maxRetries, providerMaxRetryDelayMs: row.options.maxRetryDelayMs });
+        // SDK temperature is omitted, not transferred as a nonexistent Core native option.
+        const request = { model: row.model, state: row.context.state, questions: row.context.questions,
+          ...(row.context.images ? { images: row.context.images.map(image => ({ mediaType: image.mimeType, data: image.data })) } : {}) };
+        const before = structuredClone(request), result = await native.classifyNativeQuestions(request);
+        assert.deepEqual(calls.slice(start), row.requests.map(observed => ({ method: observed.method, url: observed.path,
+          authorization: observed.headers.authorization, body: observed.body })), row.case);
+        const { usage, timestamp, errorMessage, ...actual } = result;
+        const { usage: sourceUsage, timestamp: sourceTimestamp, errorMessage: sourceError, ...expected } = row.normalizedResult;
+        assert.deepEqual(actual, { ...expected, provider: 'operator-decisions' }, row.case);
+        assert.ok(Number.isSafeInteger(timestamp));
+        assert.equal(errorMessage, result.stopReason === 'error' ? row.case === 'gateway-504-no-retry'
+          ? 'OpenAI Decisions classification failed.' : 'Invalid OpenAI Decisions response.' : undefined);
+        if (sourceUsage) {
+          assert.deepEqual(usage, { inputTokens: sourceUsage.input, outputTokens: sourceUsage.output, totalTokens: sourceUsage.totalTokens, costUsd: usage?.costUsd });
+          assert.ok(Number.isFinite(usage.costUsd) && Math.abs(usage.costUsd - sourceUsage.cost.total) <= 1e-12);
+        } else assert.equal(Object.hasOwn(result, 'usage'), false);
+        assert.deepEqual(request, before);
+      }
+      observedResponses = undefined; assert.equal(calls.length, 15);
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed OpenAI Decisions OK');
   `);
