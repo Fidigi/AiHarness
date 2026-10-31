@@ -1,0 +1,505 @@
+{
+  "schema": "mod-01-browser-network-context-checkpoint-v1",
+  "recordedAt": "2026-10-31T14:24:58.973Z",
+  "candidate": {
+    "head": "1109513ecef77915ae8805c74d3c64f6130d292b",
+    "tree": "449ef3f93a6ec9879d5945900a2d11e52360e099",
+    "sourceEntries": 1809
+  },
+  "scope": "Chromium loopback/network-state diagnostic and six retained provider/model lifecycle visual pairs; no application gate or provider semantic qualification.",
+  "priorDiagnostic": {
+    "localBase": "/tmp/aih-mod01-browser-network-context-r1",
+    "controllerCode": 20,
+    "makeCode": 2,
+    "containerId": null,
+    "networkId": null,
+    "browserLaunches": 0,
+    "successResultAbsent": true,
+    "failure": "SyntaxError: Expected ',' or '}' after property value in JSON at position 228 (line 2 column 1)\n    at JSON.parse (<anonymous>)\n    at file:///tmp/aih-mod01-browser-network-context-r1/inputs/run.mjs:6:213\n    at Array.map (<anonymous>)\n    at foreign (file:///tmp/aih-mod01-browser-network-context-r1/inputs/run.mjs:6:201)\n    at file:///tmp/aih-mod01-browser-network-context-r1/inputs/run.mjs:10:28\n    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)",
+    "observerCorrection": "Add missing final JSON object brace; verify the identity-only native format for both exact foreign identities before new admission."
+  },
+  "diagnostic": {
+    "recordedAt": "2026-10-31T14:13:46.216Z",
+    "diagnosticPassed": true,
+    "probe": {
+      "diagnosticPassed": true,
+      "states": [
+        true,
+        false,
+        true
+      ],
+      "events": [
+        "offline",
+        "online"
+      ],
+      "loopbackStatus": 200,
+      "chromium": "154.0.8037.92",
+      "node": "v24.15.0",
+      "nodeOptions": null,
+      "applicationTestsExecuted": 0,
+      "e2eAccepted": false
+    },
+    "containerId": "0a2bafe3b17f39a8d1c298675011f97d1621c8dcc1961577478542d271b12040",
+    "imageId": "sha256:e0d14245cf66ae903d5c782959d3b3c5f49100b09ffd29661c8724ca100850dc",
+    "networkId": "015049f06d3b67d6b32cb31499ab8743bdf706190b97ec237819d86b8757cb62",
+    "networkInternal": true,
+    "originalE2EStillFailed": true,
+    "e2eAccepted": false,
+    "providerCellsNewlyQualified": 0,
+    "applicationTestsExecuted": 0,
+    "sourceUnchanged": true,
+    "foreignEndpointsUnchanged": true,
+    "cleanupAuthorized": false,
+    "scope": "Owned Chromium loopback/network-state diagnostic only; no continuous isolation, external TLS/interoperability, product acceptance, resolution of all 137 failures or whole-goal closure.",
+    "controllerCode": 0,
+    "makeCode": 0,
+    "nativeAttachCode": 0,
+    "containerExitCode": 0,
+    "oneBrowserLaunch": true,
+    "maximumAttempts": 1,
+    "inputsSha256": "304bdfa7e48bd58ec7b487273ce1b7e2d23594b4d260c5350b63154835450758",
+    "localBase": "/tmp/aih-mod01-browser-network-context-r2"
+  },
+  "visualReview": {
+    "reviewedPairs": [
+      {
+        "testId": "8324bb52c49185e48ff4-789e1d50ed627a4df3f6",
+        "title": "desktop-dark garde statuts, secrets masqués et métadonnées lisibles",
+        "images": [
+          {
+            "name": "provider-model-lifecycle-desktop-dark-expected.png",
+            "source": "/app/playwright-report/standard/data/f64b1d515034e6596429914926b35e83e688c19c.png",
+            "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/01.png",
+            "bytes": 78663,
+            "mode": 384,
+            "sha256": "6ce540047164864f1a27e83b2dd2b92fe0249a065d4bf4a278b3f93ec6cbdff2"
+          },
+          {
+            "name": "provider-model-lifecycle-desktop-dark-actual.png",
+            "source": "/app/playwright-report/standard/data/ecca87130adbbb7deae5aac5b1218bc74ffb23db.png",
+            "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/02.png",
+            "bytes": 92466,
+            "mode": 384,
+            "sha256": "d3e5c9b279ef034bd49bd43b8bc7e108b107ac2af1f3f1d6e010fe9d0619e739"
+          }
+        ]
+      },
+      {
+        "testId": "8324bb52c49185e48ff4-50c57e98a58a7946aefc",
+        "title": "desktop-light garde statuts, secrets masqués et métadonnées lisibles",
+        "images": [
+          {
+            "name": "provider-model-lifecycle-desktop-light-expected.png",
+            "source": "/app/playwright-report/standard/data/4a052e70edaf92e2d20da09e908d564bf1ef1f7c.png",
+            "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-artifacts/03.png",
+            "bytes": 78919,
+            "mode": 384,
+            "sha256": "97d3d70ee98da78bb94255e49c088ce755dfac688512f65a050eea5843bbd69e"
+          },
+          {
+            "name": "provider-model-lifecycle-desktop-light-actual.png",
+            "source": "/app/playwright-report/standard/data/6b24cb6a4a9ccada21a5b4425034405eddbf5415.png",
+            "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-artifacts/04.png",
+            "bytes": 93111,
+            "mode": 384,
+            "sha256": "e9fdbfe134fc222417436bccf0f7311bffd701c964dfffeb6cf0e5d682a93946"
+          }
+        ]
+      },
+      {
+        "testId": "8324bb52c49185e48ff4-349a0c4af41ebecb0eac",
+        "title": "tablet-dark garde statuts, secrets masqués et métadonnées lisibles",
+        "images": [
+          {
+            "name": "provider-model-lifecycle-tablet-dark-expected.png",
+            "source": "/app/playwright-report/standard/data/c95116e54f271d4d76ad2d0385c84357ef7e2ddd.png",
+            "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/03.png",
+            "bytes": 80111,
+            "mode": 384,
+            "sha256": "02c69f17bb917d957f207e674e7f425e8b11696e9452f1fa1b5790b8dc7651e1"
+          },
+          {
+            "name": "provider-model-lifecycle-tablet-dark-actual.png",
+            "source": "/app/playwright-report/standard/data/a300668002b28904a7f83a93d8b9f285e8f8f571.png",
+            "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/04.png",
+            "bytes": 88627,
+            "mode": 384,
+            "sha256": "5d88c8d8dff1bfa41e1fc69d38fcd291f2cb8ba82c1ef1f0d09b40024774775c"
+          }
+        ]
+      },
+      {
+        "testId": "8324bb52c49185e48ff4-d02f599c557ea507fba3",
+        "title": "tablet-light garde statuts, secrets masqués et métadonnées lisibles",
+        "images": [
+          {
+            "name": "provider-model-lifecycle-tablet-light-expected.png",
+            "source": "/app/playwright-report/standard/data/52b29dc39e04a32b31758a2813a4ce0674c516e7.png",
+            "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/05.png",
+            "bytes": 80465,
+            "mode": 384,
+            "sha256": "ee26474b7f4f1ae8149e909b69ddf61730c615e5026f613dff123091a0fafe23"
+          },
+          {
+            "name": "provider-model-lifecycle-tablet-light-actual.png",
+            "source": "/app/playwright-report/standard/data/0c61965eebe619106a5d4c36d79ee63884660cb9.png",
+            "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/06.png",
+            "bytes": 89570,
+            "mode": 384,
+            "sha256": "b6f82a2e23ff05c9f4c325cbff0e122cceebd8bc7ba2a02728004677ee2de2e2"
+          }
+        ]
+      },
+      {
+        "testId": "8324bb52c49185e48ff4-93f03050ba779b1d96ea",
+        "title": "mobile-dark garde statuts, secrets masqués et métadonnées lisibles",
+        "images": [
+          {
+            "name": "provider-model-lifecycle-mobile-dark-expected.png",
+            "source": "/app/playwright-report/standard/data/a7c1cd3cdcd9c75e6a4c8327082396653553ea9a.png",
+            "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/07.png",
+            "bytes": 44324,
+            "mode": 384,
+            "sha256": "6d40c34971ff534169260dcb3ba442af68bf7fa9717ac08cfe0c4f9dacf7b457"
+          },
+          {
+            "name": "provider-model-lifecycle-mobile-dark-actual.png",
+            "source": "/app/playwright-report/standard/data/3afd08348987efde9c6daba4989066e57806fa7a.png",
+            "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/08.png",
+            "bytes": 49504,
+            "mode": 384,
+            "sha256": "e5793d35b66ecf0a4c48e936e051571cce451c110004afd7624312f14cdbee7b"
+          }
+        ]
+      },
+      {
+        "testId": "8324bb52c49185e48ff4-ac07783db110b21bf71f",
+        "title": "mobile-light garde statuts, secrets masqués et métadonnées lisibles",
+        "images": [
+          {
+            "name": "provider-model-lifecycle-mobile-light-expected.png",
+            "source": "/app/playwright-report/standard/data/c496e257617a75af3dd67c4aed117667fb074768.png",
+            "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-artifacts/06.png",
+            "bytes": 44896,
+            "mode": 384,
+            "sha256": "c7f8b84e9ef8ae0fd17d12568ecc9f08014be4ddc8f99189158e9b45863829b6"
+          },
+          {
+            "name": "provider-model-lifecycle-mobile-light-actual.png",
+            "source": "/app/playwright-report/standard/data/b6f05c4b0a850c5f9f89313e982aee4f3b911c8f.png",
+            "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-artifacts/07.png",
+            "bytes": 50750,
+            "mode": 384,
+            "sha256": "a070aeba8a833d1894d430045a1f8d65a0cff017a8a90d2b9c4fcf51fdca5e4e"
+          }
+        ]
+      }
+    ],
+    "totalVisualFailures": 38,
+    "remainingVisualFailuresNotReviewed": 32,
+    "observations": [
+      "Prompt cache disclosure row is visible in all six actual provider/model lifecycle images and absent from their baselines.",
+      "Desktop actual images also show linked-directory and organise-navigation controls absent from baselines.",
+      "The offline banner is present in actual images, absent from baselines; this does not explain all other visual differences."
+    ],
+    "originalFailureCheckpoint": "MOD-01.01b-1109513-e2e-failure.json",
+    "baselinesUpdated": false,
+    "freshApplicationScreenshotsCaptured": false,
+    "allPixelDifferencesAccepted": false,
+    "scope": "Content-level review of six expected/actual pairs, not a complete historical/product-contract or 38-case visual reconciliation.",
+    "collectorSetupFailure": "Initial auxiliary destination outside the sealed E2E collector root was rejected before Docker reads. Original rejection retained; unmodified collector then copied eight PNG files to an allowed new directory, hash-matched to the retained inventory."
+  },
+  "preservation": {
+    "preDocumentationUpdate": true,
+    "frozenFiles": 9,
+    "mainFilesVerified": 13,
+    "sourceEntriesVerified": 1809,
+    "candidateClean": true,
+    "indexEmpty": true,
+    "foreignEndpointsUnchanged": true,
+    "stoppedProbeRetained": true,
+    "networkRetained": true,
+    "originalE2EFailureRetained": true,
+    "fullRawCorpusVersioned": false
+  },
+  "acceptance": {
+    "newApplicationGatesAccepted": 0,
+    "e2eAccepted": false,
+    "providerCellsNewlyQualified": 0,
+    "runtimeIntegrated": false,
+    "goalComplete": false
+  },
+  "limitations": [
+    "The positive diagnostic establishes browser network-state behavior in this owned internal-only configuration, not that all 137 E2E failures are resolved.",
+    "No original suite, compiler, root, typecheck or parity replay occurred. The nine-suite result remains 599 passed / 137 failed.",
+    "Internal network configuration/endpoint observations are not continuous isolation, daemon settlement, complete dependency/emitted-byte identity or live service interoperability proof.",
+    "Baseline intent and any targeted fresh capture/update require review; do not hide UI, force clicks or accept the offline-banner captures as replacement baselines.",
+    "Local stopped resources and /tmp receipts remain local retention, not delivery of the full evidence corpus."
+  ],
+  "evidence": [
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/prepare.mjs",
+      "bytes": 3982,
+      "mode": 384,
+      "sha256": "52ab29430425b5446aef7c47a787bf45d821bf2b6da8180e856deee39ffbc87b"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/launch.mjs",
+      "bytes": 1434,
+      "mode": 384,
+      "sha256": "3fbe9711161a4d987a1b00419b2b3192daddf9009f100a03022fb9d881b4ba1a"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/inputs/Makefile",
+      "bytes": 84,
+      "mode": 384,
+      "sha256": "496962239070d903fa55d29733added2b07a40c3e12b7481ea543982d7db0a22"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/inputs/probe.mjs",
+      "bytes": 1970,
+      "mode": 384,
+      "sha256": "42c30a63bfeb69550f712162c1bdcfbdfd614b86eb341d39ff2a9707aa69c633"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/inputs/run.mjs",
+      "bytes": 6658,
+      "mode": 384,
+      "sha256": "3dea80582fb85845a2e4045045604f2ede652016dd13c779e193331b5bca27be"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/inputs/config.json",
+      "bytes": 4008,
+      "mode": 384,
+      "sha256": "3790f2c575c660283491f479405f11793579cf34a2ae9a6c242eec8fb63802e5"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/prospective-review.md",
+      "bytes": 3014,
+      "mode": 384,
+      "sha256": "d273131eaada417c20088e43769e15da9643ab640639ae7071a9bd6e7036ec96"
+    },
+    {
+      "path": "/app/projects/AiHarness/docs/audit/pi/MOD-01-tracking.md",
+      "bytes": 20521,
+      "mode": 420,
+      "sha256": "06fac593050c3de08a272ffc3d1660abd3756f39b04f565bf6c761dd45057465"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/source-freeze.json",
+      "bytes": 398004,
+      "mode": 384,
+      "sha256": "0c9ae81d6dc169cdc8bc0db56b5856f5e09abc4225065b3e82020bd370a63c13"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-artifacts/03.png",
+      "bytes": 78919,
+      "mode": 384,
+      "sha256": "97d3d70ee98da78bb94255e49c088ce755dfac688512f65a050eea5843bbd69e"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-artifacts/03.png.receipt.json",
+      "bytes": 771,
+      "mode": 384,
+      "sha256": "5fd8bd15c1ecbee0fde885645b1cf955054e21510638989d86b0807fc798c9ac"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-artifacts/04.png",
+      "bytes": 93111,
+      "mode": 384,
+      "sha256": "e9fdbfe134fc222417436bccf0f7311bffd701c964dfffeb6cf0e5d682a93946"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-artifacts/04.png.receipt.json",
+      "bytes": 771,
+      "mode": 384,
+      "sha256": "c6a55aca58bde282153e57283ad19599f3e5edef9d1ce9c859f83e1053d96965"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-artifacts/06.png",
+      "bytes": 44896,
+      "mode": 384,
+      "sha256": "c7f8b84e9ef8ae0fd17d12568ecc9f08014be4ddc8f99189158e9b45863829b6"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-artifacts/06.png.receipt.json",
+      "bytes": 771,
+      "mode": 384,
+      "sha256": "74fffb28dbdc5a9747078618d3941ca811593612ea4d1138f61155ff92a8c257"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-artifacts/07.png",
+      "bytes": 50750,
+      "mode": 384,
+      "sha256": "a070aeba8a833d1894d430045a1f8d65a0cff017a8a90d2b9c4fcf51fdca5e4e"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-artifacts/07.png.receipt.json",
+      "bytes": 771,
+      "mode": 384,
+      "sha256": "471ee4057665025298d0e1ad85b14e43a7210312d70dcc349c8c5608512c1067"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/01.png",
+      "bytes": 78663,
+      "mode": 384,
+      "sha256": "6ce540047164864f1a27e83b2dd2b92fe0249a065d4bf4a278b3f93ec6cbdff2"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/01.png.receipt.json",
+      "bytes": 775,
+      "mode": 384,
+      "sha256": "ef1c42f2a54f55b2ae5c3fe3a8323bfda6be32af338e44b23688a87999878883"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/02.png",
+      "bytes": 92466,
+      "mode": 384,
+      "sha256": "d3e5c9b279ef034bd49bd43b8bc7e108b107ac2af1f3f1d6e010fe9d0619e739"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/02.png.receipt.json",
+      "bytes": 775,
+      "mode": 384,
+      "sha256": "c615cba731034df3f3c11a1295b7c3942486134d0014be9e6852a437ced3a4d2"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/03.png",
+      "bytes": 80111,
+      "mode": 384,
+      "sha256": "02c69f17bb917d957f207e674e7f425e8b11696e9452f1fa1b5790b8dc7651e1"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/03.png.receipt.json",
+      "bytes": 775,
+      "mode": 384,
+      "sha256": "e1dacc7bfe34110d55947ebaf2d24dc977d864c5d0797ae323544691b93e44de"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/04.png",
+      "bytes": 88627,
+      "mode": 384,
+      "sha256": "5d88c8d8dff1bfa41e1fc69d38fcd291f2cb8ba82c1ef1f0d09b40024774775c"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/04.png.receipt.json",
+      "bytes": 775,
+      "mode": 384,
+      "sha256": "3c9db48ad7ae2c3ba1394c5ca249f0f63dc8c41d456988cc9cfa5f86c61c1638"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/05.png",
+      "bytes": 80465,
+      "mode": 384,
+      "sha256": "ee26474b7f4f1ae8149e909b69ddf61730c615e5026f613dff123091a0fafe23"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/05.png.receipt.json",
+      "bytes": 775,
+      "mode": 384,
+      "sha256": "a251cb67c40d140a6ec233a742a191bbeaf4941d8e659346654aac0a112cf35a"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/06.png",
+      "bytes": 89570,
+      "mode": 384,
+      "sha256": "b6f82a2e23ff05c9f4c325cbff0e122cceebd8bc7ba2a02728004677ee2de2e2"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/06.png.receipt.json",
+      "bytes": 775,
+      "mode": 384,
+      "sha256": "5d91c8d71cb8c57b0b611e7771f5f909e55c2692a902342d2520785eff2479a9"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/07.png",
+      "bytes": 44324,
+      "mode": 384,
+      "sha256": "6d40c34971ff534169260dcb3ba442af68bf7fa9717ac08cfe0c4f9dacf7b457"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/07.png.receipt.json",
+      "bytes": 775,
+      "mode": 384,
+      "sha256": "8b493e93ec716cae4def62ba9f834c0520fc162370ddcf1e12b2ab7ac30bfb2a"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/08.png",
+      "bytes": 49504,
+      "mode": 384,
+      "sha256": "e5793d35b66ecf0a4c48e936e051571cce451c110004afd7624312f14cdbee7b"
+    },
+    {
+      "path": "/tmp/aih-mod01-typescript-gc-mitigation-r1/e2e/collection/selected-provider-rest/08.png.receipt.json",
+      "bytes": 775,
+      "mode": 384,
+      "sha256": "48cee223d26cf34793d6c9ed75dac7da92717ca78cc608fa5ca948e735ca2c9b"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r1/manifest.json",
+      "bytes": 1927,
+      "mode": 384,
+      "sha256": "a19a0af11668b9fda5206b115c1cef17e1590d9a6547306ebe8b296ee7944b85"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r1/run/failure.json",
+      "bytes": 763,
+      "mode": 384,
+      "sha256": "3a972b57edb7887acd2e3fc21129522ec39d69128a515b48e63bd85add840462"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r1/run/completion.json",
+      "bytes": 183,
+      "mode": 384,
+      "sha256": "320ff5fca96f5ff24891410f2f1baf8658c499be60c4474cabf43fd4f3f8ee29"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r1/make-native.json",
+      "bytes": 51,
+      "mode": 384,
+      "sha256": "b39d6c6c186997fbda60fc41d8888589407628954c8aea8ff9731f889f25789a"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/manifest.json",
+      "bytes": 1927,
+      "mode": 384,
+      "sha256": "304bdfa7e48bd58ec7b487273ce1b7e2d23594b4d260c5350b63154835450758"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/decision.json",
+      "bytes": 439,
+      "mode": 384,
+      "sha256": "73e5ccb0c255be8d1544ce2a89c918ccf1fdfa05c2c47c0134738e4cba25f4b7"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/run/result.json",
+      "bytes": 1109,
+      "mode": 384,
+      "sha256": "020b65c1cd51a334cde516366c5d95634ef0c6eb26f9b4551f85fd29de63e0cb"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/run/completion.json",
+      "bytes": 306,
+      "mode": 384,
+      "sha256": "1331104f260af0c8cff0e057b9c80406a71dcc567eadbee59f9cf19c84ff4db0"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/make-native.json",
+      "bytes": 51,
+      "mode": 384,
+      "sha256": "8bd97e66044ff54d0678cb6e8d3ab6618555a16ad9310e5f7490e76e35caeda4"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/visual-review/01.stderr",
+      "bytes": 663,
+      "mode": 384,
+      "sha256": "eded447377f8849f7b26ba39a88d823b6e3fcdd361f4077beb82d0b7d50bc212"
+    },
+    {
+      "path": "/tmp/aih-mod01-browser-network-context-r2/visual-review/destination-correction.json",
+      "bytes": 322,
+      "mode": 384,
+      "sha256": "0223731db488fcb2b0a9892a78b27681cb4d43d3727212d827d9d5211ed7e444"
+    }
+  ]
+}
