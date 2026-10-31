@@ -10,9 +10,10 @@ import { createAgentSession, ExtensionRegistry, JsonlSessionStore, SessionManage
 
 const [mode, scenario, steeringMode = 'one-at-a-time', followUpMode = 'one-at-a-time'] = process.argv.slice(2);
 assert.ok(['print', 'json', 'rpc', 'sdk', 'regular', 'fullscreen'].includes(mode));
-assert.ok(['tools', 'overflow', 'length', 'queues'].includes(scenario));
+assert.ok(['tools', 'overflow', 'length', 'length-tools', 'queues'].includes(scenario));
 const root = await mkdtemp(path.join(os.tmpdir(), 'aih-run-contract-'));
 const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
+const executionFile = path.join(cwd, 'executions.txt');
 const secret = 'disposable-run-credential-71fca9';
 const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aT6sAAAAASUVORK5CYII=';
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
@@ -57,6 +58,30 @@ const server = createServer(async (request, response) => {
         assert.ok(body.messages.some(message => Array.isArray(message.content) && message.content.some(block => block.type === 'image_url' && block.image_url.url === pixel)));
         assert.ok(results[2].content.includes('nested complete'));
       }
+    } else if (scenario === 'length-tools') {
+      if (attempts === 1) {
+        delta = { content: 'partial tool answer', reasoning_content: 'partial tool thought', tool_calls: [
+          { index: 0, id: 'cut-complete', type: 'function', function: { name: 'recover', arguments: '{"value":"unsafe"}' } },
+          { index: 1, id: 'cut-partial', type: 'function', function: { name: 'recover', arguments: '{}' } },
+        ] };
+        finish_reason = 'length';
+      } else if (attempts === 2) {
+        await assert.rejects(readFile(executionFile), { code: 'ENOENT' });
+        const results = body.messages.filter(message => message.role === 'tool');
+        assert.deepEqual(results.map(message => message.tool_call_id), ['cut-complete', 'cut-partial']);
+        for (const result of results) {
+          assert.ok(result.content.includes('output token limit'));
+          assert.ok(result.content.includes('Re-issue the tool call with complete arguments'));
+        }
+        assert.ok(body.messages.some(message => message.role === 'assistant' && message.content === 'partial tool answer'));
+        delta = { tool_calls: [{ index: 0, id: 'safe-retry', type: 'function', function: { name: 'recover', arguments: '{"value":"safe"}' } }] };
+        finish_reason = 'tool_calls';
+      } else {
+        assert.equal(attempts, 3); assert.equal(await readFile(executionFile, 'utf8'), 'safe\n');
+        const results = body.messages.filter(message => message.role === 'tool');
+        assert.deepEqual(results.map(message => message.tool_call_id), ['cut-complete', 'cut-partial', 'safe-retry']);
+        assert.equal(results[2].content, 'safe retry executed');
+      }
     } else if (scenario === 'queues') {
       assert.deepEqual(inputs.at(-1), expected[attempts - 1]);
       if (attempts === 1) { delta = { tool_calls: [{ index: 0, id: 'read', type: 'function', function: { name: 'read', arguments: '{"path":"input.txt"}' } }] }; finish_reason = 'tool_calls'; }
@@ -98,6 +123,11 @@ export default api => {
  } });
  api.registerTool({ name: 'mutate', description: 'Serial mutation', execute: () => { assert.equal(active, 0); assert.equal(done, 2); mutated = true; return { content: 'M' }; } });
 };`);
+  if (scenario === 'length-tools') await writeFile(extension, `import { appendFile } from 'node:fs/promises';
+export default api => api.registerTool({ name: 'recover', description: 'Record actual execution', execute: async input => {
+ await appendFile(${JSON.stringify(executionFile)}, String(input.value) + '\\n');
+ return { content: 'safe retry executed' };
+} });`);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); const endpoint = `http://127.0.0.1:${server.address().port}/v1`;
   const waitUntil = async check => {
     const until = Date.now() + 8_000;
@@ -109,7 +139,7 @@ export default api => {
   };
   if (mode === 'sdk') {
     registry = new ExtensionRegistry();
-    if (scenario === 'tools') await registry.load('probe', (await import(pathToFileURL(extension).href)).default);
+    if (['tools', 'length-tools'].includes(scenario)) await registry.load('probe', (await import(pathToFileURL(extension).href)).default);
     else if (scenario === 'queues') { const workspace = new WorkspaceManager({ defaultCwd: cwd, allowedRoots: [cwd] }); await workspace.initialize(); await registerWorkspaceTools(registry, workspace); }
     sdk = await createAgentSession({ cwd, allowedRoots: [cwd], store, session: { kind: 'resume', id: session.id }, extensionRegistry: registry,
       isProjectTrusted: () => true, auth: { secrets: [secret] }, runDefaults: { maxRetries: 0, steeringMode, followUpMode },
@@ -124,8 +154,8 @@ export default api => {
     const args = [...(command ? [] : [fileURLToPath(new URL('../../../dist/index.js', import.meta.url))]),
       ...(mode === 'print' ? ['--print'] : ['regular', 'fullscreen'].includes(mode) ? ['--tui-mode', mode, '--verbose', '--theme', 'dark'] : ['--mode', mode]),
       '--offline', '--approve', '--no-mcp', '--no-extensions', '--no-context-files', '--session-dir', sessions, '--session-id', session.id,
-      ...(scenario === 'tools' ? ['--tools', 'a,b,parent,child,mutate'] : scenario === 'queues' ? ['--tools', 'read'] : ['--no-tools']),
-      ...(scenario === 'tools' ? ['-e', extension] : []), '--model', 'local/fixture-model', ...(['rpc', 'regular', 'fullscreen'].includes(mode) ? [] : ['initial'])];
+      ...(scenario === 'tools' ? ['--tools', 'a,b,parent,child,mutate'] : scenario === 'length-tools' ? ['--tools', 'recover'] : scenario === 'queues' ? ['--tools', 'read'] : ['--no-tools']),
+      ...(['tools', 'length-tools'].includes(scenario) ? ['-e', extension] : []), '--model', 'local/fixture-model', ...(['rpc', 'regular', 'fullscreen'].includes(mode) ? [] : ['initial'])];
     const env = { PATH: process.env.PATH, HOME: path.join(root, 'home'), AI_HARNESS_AGENT_DIR: agent, LOCAL_BASE_URL: endpoint, LOCAL_MODEL: 'fixture-model', LOCAL_API_KEY: secret, TERM: 'xterm-256color', NO_COLOR: '1' };
     if (['regular', 'fullscreen'].includes(mode)) {
       const { spawn } = await import(process.env.AIH_TEST_MODULES_ROOT
@@ -171,6 +201,11 @@ export default api => {
   if (mode === 'json' || mode === 'rpc') {
     const wire = mode === 'json' ? stdout.trim().split('\n').map(line => JSON.parse(line)) : records;
     assert.equal(wire.filter(record => record.type === 'agent_settled').length, 1);
+    if (scenario === 'length-tools') {
+      const ends = wire.filter(record => record.type === 'tool_execution_end');
+      assert.deepEqual(ends.map(record => record.toolCallId), ['cut-complete', 'cut-partial', 'safe-retry']);
+      assert.deepEqual(ends.map(record => record.isError), [true, true, false]);
+    }
     if (scenario === 'tools') {
       const end = wire.find(record => record.type === 'tool_execution_end' && record.toolCallId === 'call-a');
       assert.deepEqual(end.result.details.structuredContent, { value: '[REDACTED]' });
@@ -185,6 +220,18 @@ export default api => {
     assert.ok(tools[0].blocks.find(block => block.type === 'tool_result').fullContent.includes('FULL_END'));
     assert.equal(tools[2].metadata.nestedTools[0].name, 'child'); assert.equal(tools[2].metadata.nestedTools[0].isError, false);
     assert.equal(getSessionAccounting(raw, reloaded.get(session.id).activeLeafId).active.usage.totalTokens, 10);
+  } else if (scenario === 'length-tools') {
+    assert.equal(attempts, 3); assert.equal(summaries, 0); assert.equal(await readFile(executionFile, 'utf8'), 'safe\n');
+    const messages = raw.filter(entry => entry.type === 'message');
+    assert.deepEqual(messages.map(entry => entry.role), ['user', 'assistant', 'tool', 'tool', 'assistant', 'tool', 'assistant']);
+    assert.equal(messages[1].content, 'partial tool answer'); assert.equal(messages[1].metadata.stopReason, 'length');
+    assert.ok(messages[1].blocks.some(block => block.type === 'reasoning' && block.text === 'partial tool thought'));
+    assert.deepEqual(messages[1].toolCalls.map(call => call.id), ['cut-complete', 'cut-partial']);
+    const tools = messages.filter(entry => entry.role === 'tool');
+    assert.deepEqual(tools.map(entry => entry.toolCallId), ['cut-complete', 'cut-partial', 'safe-retry']);
+    assert.deepEqual(tools.map(entry => entry.isError), [true, true, false]);
+    assert.equal(getSessionAccounting(raw, reloaded.get(session.id).activeLeafId).active.usage.totalTokens, 15);
+    assert.ok(!raw.some(entry => entry.type === 'compaction' || entry.type === 'context_edit'));
   } else if (scenario === 'queues') { assert.deepEqual(inputs, expected); assert.deepEqual(raw.filter(entry => entry.type === 'message' && entry.role === 'user').map(entry => entry.content), expected.at(-1)); }
   else {
     assert.equal(attempts, 2); assert.equal(summaries, 1); assert.ok(raw.some(entry => entry.type === 'custom' && entry.customType === 'run.context_recovery'));

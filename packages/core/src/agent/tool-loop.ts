@@ -292,7 +292,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         ...(response.selection ? { selection: response.selection, thinkingLevel: response.thinkingLevel } : {}),
       } } : {}),
       durationMs,
-    }, { signal: options.signal });
+    }, { signal: options.signal, ...(response.stopReason === 'length' ? { skipAutoCompaction: true } : {}) });
 
     const toolResults: ToolExecutionResult[] = [];
     const execute = (name: string, input: unknown, context: ExtensionRuntimeContext) => Promise.resolve(options.executeTool
@@ -429,6 +429,15 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         .some(tool => tool.name.toLowerCase() === call.name.toLowerCase() && tool.readOnly === true)));
     for (let index = 0; index < toolCalls.length;) {
       throwIfAborted();
+      if (response.stopReason === 'length') {
+        // Even valid-looking arguments may have been salvaged from cut-off output.
+        // Publish correlated failures without entering any executor or tool hook.
+        const call = toolCalls[index++];
+        await options.onToolCall?.(call);
+        await save({ call, isError: true, durationMs: 0, truncated: false,
+          content: 'Tool call was not executed: the response hit the output token limit, so its arguments may be truncated. Re-issue the tool call with complete arguments.' });
+        continue;
+      }
       const batch = [toolCalls[index++]];
       if (readOnly(batch[0])) while (index < toolCalls.length && batch.length < 4 && readOnly(toolCalls[index])) batch.push(toolCalls[index++]);
       // Join every admitted invocation before saving in declared order, even on stop/failure.

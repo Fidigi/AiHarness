@@ -20,6 +20,68 @@ async function fixture(tools: ExtensionTool[], calls = tools.map(tool => tool.na
 }
 
 describe('native tool result and nested execution contract', () => {
+  it.each(['registry', 'composite'])('rejects every length-truncated call before %s dispatch and lets the model re-issue it', async executor => {
+    const execute = vi.fn((_input: unknown, ..._rest: unknown[]) => ({ content: 'executed safe retry' }));
+    const f = await fixture(['probe', 'mutate', 'tool_search'].map(name => ({ name, description: '', readOnly: true, execute })));
+    const calls = [
+      { id: 'complete', name: 'probe', input: { value: 'apparently complete' } },
+      { id: 'partial', name: 'mutate', input: {} },
+      { id: 'discovery', name: 'tool_search', input: { query: 'tools' } },
+    ];
+    const retry = { id: 'retry', name: 'mutate', input: { value: 'safe retry' } };
+    const beforeTool = vi.fn();
+    await f.registry.load('hooks', api => api.before('before:tool', data => { beforeTool(data.tool); return data; }));
+    const classify = vi.fn(() => true), activate = vi.fn(), metadata = vi.fn();
+    const onToolCall = vi.fn(), onToolResult = vi.fn(), onTurnEnd = vi.fn();
+    const compaction = vi.spyOn(f.manager, 'checkAndTriggerCompaction').mockImplementation(async () => {
+      const messages = f.manager.get(f.session.id)!.messages;
+      if (messages.some(message => message.metadata?.stopReason === 'length')) {
+        expect(messages.filter(message => message.role === 'tool').slice(0, 3).map(message => message.toolCallId))
+          .toEqual(calls.map(call => call.id));
+      }
+      return false;
+    });
+    f.turn.mockReset().mockResolvedValueOnce({ content: 'partial answer', reasoning: 'partial thought', toolCalls: calls,
+      stopReason: 'length', provider: 'physical', model: 'physical-model', api: 'openai-completions',
+      usage: { promptTokens: 2, completionTokens: 5, totalTokens: 7, costUsd: 0.01 } })
+      .mockImplementationOnce(async messages => {
+        expect(execute).not.toHaveBeenCalled(); expect(beforeTool).not.toHaveBeenCalled();
+        expect(classify).not.toHaveBeenCalled(); expect(activate).not.toHaveBeenCalled(); expect(metadata).not.toHaveBeenCalled();
+        expect(messages.map(message => message.role)).toEqual(['user', 'assistant', 'tool', 'tool', 'tool']);
+        expect(messages[1]).toMatchObject({ content: 'partial answer', toolCalls: calls,
+          blocks: [{ type: 'reasoning', text: 'partial thought' }, { type: 'text', text: 'partial answer' },
+            ...calls.map(call => ({ type: 'tool_call', ...call }))],
+          metadata: { stopReason: 'length' }, provider: 'physical', model: 'physical-model', api: 'openai-completions',
+          usage: { inputTokens: 2, outputTokens: 5, totalTokens: 7, costUsd: 0.01 } });
+        expect(messages.slice(2)).toEqual(calls.map(call => expect.objectContaining({ role: 'tool', toolCallId: call.id,
+          name: call.name, isError: true, content: expect.stringContaining('output token limit') })));
+        return { content: '', toolCalls: [retry] };
+      }).mockResolvedValueOnce({ content: 'recovered', usage: { totalTokens: 4 } });
+    expect(await f.run({ ...(executor === 'composite' ? { executeTool: execute } : {}), canExecuteInParallel: classify,
+      getActivatedTools: activate, getToolResultMetadata: metadata, onToolCall, onToolResult, onTurnEnd })).toBe('recovered');
+    expect(execute).toHaveBeenCalledOnce(); expect(execute.mock.calls[0][executor === 'composite' ? 1 : 0]).toEqual(retry.input);
+    expect(f.turn).toHaveBeenCalledTimes(3); expect(compaction).toHaveBeenCalled();
+    expect(onToolCall.mock.calls.map(([call]) => call.id)).toEqual([...calls, retry].map(call => call.id));
+    expect(onToolResult.mock.calls.slice(0, 3).map(([result]) => result)).toEqual(calls.map(call => expect.objectContaining({
+      call, isError: true, durationMs: 0, truncated: false, content: expect.stringContaining('Re-issue the tool call with complete arguments'),
+    })));
+    expect(onTurnEnd.mock.calls[0][1]).toHaveLength(3);
+    expect(f.results().map(message => message.isError)).toEqual([true, true, true, false]);
+    const raw = await f.manager.getRawEntries(f.session.id);
+    expect(getSessionAccounting(raw, f.manager.get(f.session.id)!.activeLeafId).active)
+      .toMatchObject({ usage: { totalTokens: 11 }, knownCostUsd: 0.01 });
+  });
+
+  it('bounds repeated length-truncated tool calls by the existing round limit without execution', async () => {
+    const execute = vi.fn(() => ({ content: 'unsafe' }));
+    const f = await fixture([{ name: 'probe', description: '', execute }]);
+    f.turn.mockReset().mockResolvedValue({ content: '', stopReason: 'length', toolCalls: [{ id: 'cut', name: 'probe', input: {} }] });
+    await expect(f.run({ maxToolRounds: 2 })).rejects.toThrow("Limite de 2 tours d'outils atteinte.");
+    expect(execute).not.toHaveBeenCalled(); expect(f.turn).toHaveBeenCalledTimes(2);
+    expect(f.results()).toHaveLength(2);
+    expect(f.results().every(message => message.isError && message.toolCallId === 'cut')).toBe(true);
+  });
+
   it('vetoes public results without granting codemode store authority or losing completed usage', async () => {
     const f = await fixture([{ name: 'probe', description: '', execute: () => ({ content: 'original' }) }]);
     await f.registry.load('veto', api => { api.before('before:tool:result', () => false); });

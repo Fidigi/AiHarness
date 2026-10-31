@@ -11,7 +11,7 @@ const check = async (args: string[]) => {
   });
   expect(stderr).toBe(''); expect(stdout.trim()).toBe('RUN_CONTRACT_OK');
 };
-for (const mode of ['print', 'json', 'rpc', 'sdk']) for (const scenario of ['tools', 'overflow', 'length']) {
+for (const mode of ['print', 'json', 'rpc', 'sdk']) for (const scenario of ['tools', 'overflow', 'length', 'length-tools']) {
   it(`${mode} executes the real ${scenario} contract with durable readback`, () => check([mode, scenario]), 28_000);
 }
 for (const mode of ['rpc', 'sdk', 'regular', 'fullscreen']) for (const steering of ['all', 'one-at-a-time']) for (const followUp of ['all', 'one-at-a-time']) {

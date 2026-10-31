@@ -292,7 +292,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
   }, 25_000);
 
   it.each([
-    ...['print', 'json', 'rpc', 'sdk'].flatMap(mode => ['tools', 'overflow', 'length'].map(scenario => `${mode}/${scenario}`)),
+    ...['print', 'json', 'rpc', 'sdk'].flatMap(mode => ['tools', 'overflow', 'length', 'length-tools'].map(scenario => `${mode}/${scenario}`)),
     ...['rpc', 'sdk', 'regular', 'fullscreen'].map(mode => `${mode}/queues`),
   ])('owns native run delivery/recovery/results outside the checkout (%s)', async entry => {
     const [mode, scenario] = entry.split('/'); const probe = `run-contract-${mode}-${scenario}.mjs`;

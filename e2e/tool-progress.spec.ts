@@ -22,6 +22,10 @@ export default function(api) {
       const report = update => context.toolCallId === undefined ? Promise.resolve() : context.onProgress(update);
       const wait = async name => { while (!signal?.aborted) { try { await access(file(name)); return; } catch {} await new Promise(r => setTimeout(r, 25)); } };
       if (input.mode === 'legacy') return { content: 'Legacy custom result without progress' };
+      if (input.mode === 'truncation') {
+        await writeFile(file('executed'), String(input.value));
+        return { content: 'Safe retry executed' };
+      }
       if (input.mode.startsWith('dialogs')) {
         const first = context.requestInteraction({ kind: 'input', title: 'Live first approval', signal });
         const second = context.requestInteraction({ kind: 'custom', title: 'Live custom approval', signal,
@@ -113,6 +117,27 @@ test.beforeAll(async ({ request }) => {
     }
     const prompt = body.messages.flatMap(message => message.role === 'user' && typeof message.content === 'string' ? [message.content] : []).at(-1) ?? '';
     const [mode, token] = prompt.split(':');
+    if (mode === 'truncated-tools') {
+      const attempt = modelRequests.filter(request => request.messages.some(message => message.content === prompt)).length;
+      let delta: unknown, finish: string;
+      if (attempt === 1) {
+        delta = { content: 'Partial truncated tool answer.', reasoning_content: 'Partial truncated thought.', tool_calls:
+          ['complete', 'partial'].map((part, index) => ({ index, id: `cut-${part}`, type: 'function', function: { name: 'arbitrary_custom',
+            arguments: JSON.stringify({ token, mode: 'truncation', ...(part === 'complete' ? { value: 'unsafe' } : {}) }) } })) };
+        finish = 'length';
+      } else if (attempt === 2) {
+        while (!res.destroyed) {
+          try { await readFile(path.join(root, `${token}-reissue`)); break; } catch { /* Browser verifies nonexecution before allowing retry. */ }
+          await new Promise(resolve => setTimeout(resolve, 25));
+        }
+        if (res.destroyed) return;
+        delta = { tool_calls: [{ index: 0, id: 'safe-retry', type: 'function', function: { name: 'arbitrary_custom',
+          arguments: JSON.stringify({ token, mode: 'truncation', value: 'safe' }) } }] };
+        finish = 'tool_calls';
+      } else { delta = { content: 'HTTP_TRUNCATED_TOOLS_OK' }; finish = 'stop'; }
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`data: ${JSON.stringify({ choices: [{ delta, finish_reason: finish }], usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 } })}\n\ndata: [DONE]\n\n`); return;
+    }
     if (mode.startsWith('recover-')) {
       const first = modelRequests.filter(request => request.messages.some(message => message.content === prompt)).length === 1;
       if (first && mode === 'recover-overflow') {
@@ -921,6 +946,35 @@ test('real background failure marks attention without stealing another session d
     await page.locator('.sidebar-nav a.session-main').filter({ hasText: 'BACKGROUND_DRAFT_CONTROL' }).click();
     await expect(composer).toHaveValue('background draft must survive');
   } finally { await page.request.post(`/api/agent/runs/${probe.runId}/stop`); }
+});
+
+test('actual HTTP length-truncated tool calls have no effects and recover through durable browser reload', async ({ page }) => {
+  const probe = await begin(page, 'truncated-tools');
+  try {
+    await expect.poll(async () => (await state(page.request, probe.sessionId)).session.messages.filter(message => message.role === 'tool').length).toBe(2);
+    await expect(page.getByRole('log')).toContainText('Partial truncated tool answer.');
+    expect(await readFile(path.join(root, `${probe.token}-executed`), 'utf8').catch(error => error.code)).toBe('ENOENT');
+    const partial = (await state(page.request, probe.sessionId)).session.messages;
+    expect(partial[1]).toMatchObject({ content: 'Partial truncated tool answer.', metadata: { stopReason: 'length' },
+      blocks: expect.arrayContaining([{ type: 'reasoning', text: 'Partial truncated thought.' }]), usage: { totalTokens: 5 } });
+    expect(partial.filter(message => message.role === 'tool')).toEqual(['cut-complete', 'cut-partial'].map(toolCallId =>
+      expect.objectContaining({ toolCallId, isError: true, content: expect.stringContaining('output token limit') })));
+    await probe.gate('reissue');
+    await expect.poll(async () => (await state(page.request, probe.sessionId)).run.phase).toBe('completed');
+    await expect(page.getByRole('log')).toContainText('HTTP_TRUNCATED_TOOLS_OK');
+    expect(await readFile(path.join(root, `${probe.token}-executed`), 'utf8')).toBe('safe');
+    const calls = modelRequests.filter(request => request.messages.some(message => message.content === `truncated-tools:${probe.token}`));
+    expect(calls).toHaveLength(3);
+    expect(calls[1].messages.filter(message => message.role === 'tool')).toEqual(['cut-complete', 'cut-partial'].map(tool_call_id =>
+      expect.objectContaining({ tool_call_id, content: expect.stringContaining('Re-issue the tool call with complete arguments') })));
+    await page.reload(); await expect(page.getByRole('log')).toContainText('HTTP_TRUNCATED_TOOLS_OK');
+    const snapshot = await new JsonlSessionStore(path.join(process.env.AI_HARNESS_E2E_PROGRESS_DATA_DIR!, 'sessions')).getSessionSnapshot(probe.sessionId);
+    const raw = snapshot!.entries!;
+    expect(raw.filter(entry => entry.type === 'message' && entry.role === 'tool').map(entry => [entry.toolCallId, entry.isError]))
+      .toEqual([['cut-complete', true], ['cut-partial', true], ['safe-retry', false]]);
+    expect(raw.some(entry => entry.type === 'compaction' || entry.type === 'context_edit')).toBe(false);
+    expect(getSessionAccounting(raw, raw.at(-1)!.id).active.usage.totalTokens).toBe(15);
+  } finally { await probe.gate('reissue'); await page.request.post(`/api/agent/runs/${probe.runId}/stop`); }
 });
 
 for (const reason of ['overflow', 'length']) test(`actual HTTP ${reason} recovers once with smaller input, immutable raw history and authentic usage`, async ({ page }) => {
