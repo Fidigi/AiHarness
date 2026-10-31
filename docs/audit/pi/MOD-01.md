@@ -1,8 +1,16 @@
 # MOD-01 — Delivery Tasks and Local Acceptance
 
-> **Status: IN PROGRESS** (2026-10-30)
+> **Status: IN PROGRESS** (2026-10-31)
 
 > **Authority:** [AUDIT-5](./AUDIT-5.md), MOD-01; [pinned provider/API/auth inventory](../../ai/topics/provider-matrix.md). Target Pi 1.2.0 commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, not the installed agent's moving release.
+
+## Latest local validation checkpoint — 2026-10-31
+
+This bounded update does not reconcile the entire historical journal or close MOD-01.01b. The [execution board](./MOD-01-tracking.md) indexes the retained evidence. Unchanged isolated `1109513ecef77915ae8805c74d3c64f6130d292b` has accepted selected/root/typecheck/parity receipts; its complete nine-suite E2E attempt **failed**. No runtime integration or new provider-cell qualification is credited.
+
+| Date | ID(s) | Old → New | Evidence | Validation | Notes/decision |
+|---|---|---|---|---|---|
+| 2026-10-31 | MOD-01.01b; MOD-01.06b | Remain IN PROGRESS | [Current-candidate gate checkpoint](./evidence/MOD-01.01b-1109513-validation.json); [nine-suite E2E failure checkpoint](./evidence/MOD-01.01b-1109513-e2e-failure.json) | Selected 7 / 2 files, root 9,623 / 525 files, standalone typecheck and parity 364 / 4 files accepted on this candidate. One Docker/Make browser attempt: build 0, 599 passed / 137 failed, no skips/flaky outcomes; process/container 1, controller 20, Make 2. Documentation: `make lint-docs` and `git diff --check` 0 | All nine suites executed; stopped non-OOM container and three artifact roots retained. Review the network-none offline-browser context and separate visual drift before changed-input execution. No unchanged retry, baseline replacement, accepted gap or whole-parent closure. Full raw evidence remains local; checkpoint hashes are not a complete durable archive. |
 
 ## Scope and acceptance
 
