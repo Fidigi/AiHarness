@@ -1,0 +1,1684 @@
+{
+  "schema": "mod-01-bedrock-opus46-complete-rebuild-root-v1",
+  "time": "2026-10-31T16:02:08.577Z",
+  "source": {
+    "path": "/tmp/aih-mod01-bedrock-opus46-adaptive-r1/candidate",
+    "head": "1af372a79e695988d57649a5ea9c0fcf5fdcfc09",
+    "tree": "bb3f373f6e55a149eea8c2e0b4c13fc74a48d1ee",
+    "entries": 1811,
+    "files": 1684,
+    "directories": 127,
+    "declaredImageFiles": 1500,
+    "applicability": {
+      "all1682FoundationFileHashesMatchForkBaseline": true,
+      "all1684E10GreenFileHashesMatchCurrentSource": true,
+      "foundationEntryCount1809Equals1682FilesPlus127Directories": true,
+      "focused368AndSeparateTypecheckReusedWithoutReplay": true
+    },
+    "limits": "Declared filtered source-file identity, not dependency/emitted-byte or arbitrary outer-image certification."
+  },
+  "construction": {
+    "baseImage": "sha256:e0d14245cf66ae903d5c782959d3b3c5f49100b09ffd29661c8724ca100850dc",
+    "baseTag": "ai-harness:mod01-typescript-gc-e2e-r1",
+    "dockerfile": "FROM ai-harness:mod01-typescript-gc-e2e-r1 AS test-runner\nWORKDIR /app\n# Clear inherited generated outputs/cache only in this new build, not any retained resource.\nRUN node --input-type=module -e \"import fs from 'node:fs';import {createHash} from 'node:crypto';const cache='/app/packages/core/tsconfig.tsbuildinfo';if(!fs.statSync(cache).isFile())throw new Error('Expected inherited Core incremental file');console.log('INVALIDATE_INHERITED_CORE_CACHE '+createHash('sha256').update(fs.readFileSync(cache)).digest('hex'));fs.rmSync(cache);for(const p of ['core','cli','server','web'])fs.rmSync('/app/packages/'+p+'/dist',{recursive:true,force:true});\"\nCOPY . .\n\n# Process tests consume emitted Core/CLI/Server and the real Web bundle.\n# Build dependencies first; never rely on a local dist surviving COPY.\nRUN npm run build --workspace @ai-harness/core \\\n    && npm run build --workspace @ai-harness/cli \\\n    && npm run build --workspace @ai-harness/server \\\n    && npm run build --workspace @ai-harness/web\nRUN node --test .docker/test-build.test.mjs\n\n# Run against COPY's filtered context, not a later source overlay. Fail the image\n# build if the E2E entry point, declarations or owning configurations are missing.\nRUN node --test .docker/e2e-suites.test.mjs\n\n\nENV PLAYWRIGHT_BROWSERS_PATH=/usr\nENV PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true\nENV CI=true\n\nCMD [\"npm\", \"test\"]\n",
+    "wholeFilteredCandidateCopied": true,
+    "inheritedGeneratedPathsReset": [
+      "packages/core/dist",
+      "packages/cli/dist",
+      "packages/server/dist",
+      "packages/web/dist"
+    ],
+    "exactInheritedCacheInvalidated": "packages/core/tsconfig.tsbuildinfo",
+    "inheritedCacheSha256": "0d2e519e5e4b5962dc20f69314df4d508ca88eae68dae7860cb7534c470bd1b6",
+    "canonicalWorkspaceCommandsUnchanged": true,
+    "buildControls": {
+      "testBuild": 8,
+      "e2eSuiteControls": 19,
+      "failed": 0,
+      "skipped": 0
+    },
+    "canonicalDependencyInstallationAccepted": false,
+    "limit": "Complete workspace rebuild using the exact retained dependency/base image; not a successful fresh execution of the canonical npm-install/npm-ci layers. Earlier EAI_AGAIN failure remains unchanged."
+  },
+  "failedR1": {
+    "seal": "bd4d3c1d0d7e0d51e62fdcbd69db3f39658d658bc878011050a013327e118c93",
+    "message": "Full workspace rebuild failed; root blocked\n\n2 !== 0\n",
+    "buildNative": {
+      "cmd": "make",
+      "args": [
+        "-j1",
+        "-f",
+        "/tmp/aih-mod01-bedrock-opus46-full-root-r1/Makefile",
+        "image"
+      ],
+      "code": 2,
+      "signal": null,
+      "error": null,
+      "captureError": null,
+      "deadline": false,
+      "owner": {
+        "pid": 122049,
+        "pgid": 122049,
+        "session": 122049,
+        "startTicks": "54105895"
+      },
+      "stdoutBytes": 382,
+      "stderrBytes": 41369,
+      "interrupted": null
+    },
+    "completion": {
+      "controllerCode": 20,
+      "buildCode": 2,
+      "rootAttachCode": null,
+      "imageId": null,
+      "containerId": null,
+      "interrupted": null,
+      "cleanupAuthorized": false,
+      "daemonSettlementCertified": false,
+      "rootReplayed": false,
+      "laterGatesAdmitted": false
+    },
+    "outerMake": {
+      "code": 2,
+      "signal": null,
+      "error": null
+    },
+    "diagnostic": "Core composite build returned0 after inherited dist removal; CLI reported TS2307: Cannot find module '@ai-harness/core' or its corresponding type declarations, followed by downstream diagnostics. Docker build1 / inner Make2. No root/image/container accepted.",
+    "rootSuccessFileAbsent": true,
+    "historyRewritten": false,
+    "revisedAdmission": "Fresh R2 invalidates the exact observed inherited Core incremental file as well as the four dist paths, before the unchanged full workspace build commands. No product/compiler flags, versions, dependencies, assertions, budgets or source bytes changed; no unchanged-input retry. This does not establish an exclusive shared cause for historical failures."
+  },
+  "root": {
+    "seal": "3822381bb34797f19dc345e4049231871fc01d096d7d3e65d20d198acb49f566",
+    "result": {
+      "head": "1af372a79e695988d57649a5ea9c0fcf5fdcfc09",
+      "tree": "bb3f373f6e55a149eea8c2e0b4c13fc74a48d1ee",
+      "imageId": "sha256:5ed10c34ee9029f7abc0cc3359229035c68d3dda2ed06b312fa424e81e35cf54",
+      "containerId": "08df0f12e03e21b3fab15e1768ec7a9adca6ccb7c2bd4d672a7802b8dcccad75",
+      "buildCode": 0,
+      "applicationCode": 0,
+      "containerCode": 0,
+      "files": 526,
+      "passed": 9633,
+      "failed": 0,
+      "skipped": 0,
+      "command": "npm test",
+      "sourceProof": {
+        "head": "1af372a79e695988d57649a5ea9c0fcf5fdcfc09",
+        "tree": "bb3f373f6e55a149eea8c2e0b4c13fc74a48d1ee",
+        "declaredFiles": 1500,
+        "node": "v24.15.0",
+        "npm": "12.1.0",
+        "v8": "13.6.233.17-node.48",
+        "nodeOptions": null,
+        "scope": "All previously declared filtered image paths plus the two new files; not dependencies/emitted-byte or arbitrary outer-image certification."
+      },
+      "sourceAndMainProtectionsUnchanged": true,
+      "context": "Retained dependency/base image; verified/hash-recorded Core incremental cache invalidation, four inherited dist resets, whole filtered COPY, four clean workspace builds and both existing build controls. Not a new canonical dependency installation or full dependency-byte certificate.",
+      "newQualifiedProviderCells": 0,
+      "runtimeIntegrated": false,
+      "goalComplete": false
+    },
+    "completion": {
+      "controllerCode": 0,
+      "buildCode": 0,
+      "rootAttachCode": 0,
+      "imageId": "sha256:5ed10c34ee9029f7abc0cc3359229035c68d3dda2ed06b312fa424e81e35cf54",
+      "containerId": "08df0f12e03e21b3fab15e1768ec7a9adca6ccb7c2bd4d672a7802b8dcccad75",
+      "interrupted": null,
+      "cleanupAuthorized": false,
+      "daemonSettlementCertified": false,
+      "rootReplayed": false,
+      "laterGatesAdmitted": false
+    },
+    "outerMake": {
+      "code": 0,
+      "signal": null,
+      "error": null
+    },
+    "native": {
+      "cmd": "docker",
+      "args": [
+        "start",
+        "--attach",
+        "08df0f12e03e21b3fab15e1768ec7a9adca6ccb7c2bd4d672a7802b8dcccad75"
+      ],
+      "code": 0,
+      "signal": null,
+      "error": null,
+      "captureError": null,
+      "deadline": false,
+      "owner": {
+        "pid": 122439,
+        "pgid": 122439,
+        "session": 122439,
+        "startTicks": "54149920"
+      },
+      "stdoutBytes": 363792,
+      "stderrBytes": 16287,
+      "interrupted": null
+    },
+    "durationSeconds": 1817.88,
+    "summaryLines": [
+      " Test Files  526 passed (526)",
+      "      Tests  9633 passed (9633)",
+      "   Duration  1817.88s (tests 96%, import 3%)"
+    ]
+  },
+  "resource": {
+    "id": "08df0f12e03e21b3fab15e1768ec7a9adca6ccb7c2bd4d672a7802b8dcccad75",
+    "name": "/aih-mod01-bedrock-opus46-full-root-r2",
+    "image": "sha256:5ed10c34ee9029f7abc0cc3359229035c68d3dda2ed06b312fa424e81e35cf54",
+    "label": "e41bc3fe-4d49-45ad-9d1c-00d2d4a04348",
+    "state": {
+      "Status": "exited",
+      "Running": false,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 0,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-10-31T15:28:36.576879975Z",
+      "FinishedAt": "2026-10-31T15:58:55.058042546Z"
+    },
+    "networkMode": "none",
+    "shmSize": 1073741824,
+    "mounts": [],
+    "privileged": false,
+    "capAdd": null,
+    "retained": true,
+    "cleanupAuthorized": false
+  },
+  "preservation": {
+    "mainHead": "7f1efc06cbde2d8baddd8463d5b1378bff787e4e",
+    "indexEmptyBeforeDocumentation": true,
+    "protectedMainFiles": 13,
+    "originalDirtyFilesPreserved": true,
+    "foundationClean": true,
+    "candidateClean": true,
+    "foreignIdentities": "Only exact /pi and /qwen-moe ID/image/StartedAt/running snapshots before/after/final, not continuous isolation or daemon-settlement certification."
+  },
+  "progress": {
+    "newGate": "Exact changed-source root, accepted locally on the complete retained-base workspace rebuild.",
+    "newSemanticallyQualifiedCells": 0,
+    "newParentClosures": 0,
+    "runtimeIntegrated": false,
+    "goalComplete": false,
+    "e2eFailuresStillOpen": 137,
+    "visualFailuresNewlyAccepted": 0
+  },
+  "remaining": [
+    "Fresh canonical dependency/image construction acceptance or separately approved equivalent; preserve the original offline installation failure.",
+    "Exact Opus 4.6 installed/public-host applicability and authentic physical signed-response semantics remain unqualified; do not infer cell closure from root.",
+    "No fresh standalone parity/E2E run admitted; prior foundation results remain source-local.",
+    "Independent user baseline-content/capture/update decisions; all 137 original E2E failures remain unwaived.",
+    "Other 91 additional-level Bedrock owners, other providers, historical journal gaps, durable evidence delivery and authorized selective runtime integration remain open."
+  ],
+  "rawEvidenceRetention": {
+    "scope": "Local retained files with sizes/SHA256, not durable raw archive delivery.",
+    "files": [
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/Dockerfile",
+        "bytes": 1061,
+        "sha256": "209324d30ca1dcaa816f8bd1cfe7934b3ea578ebfb744f22a7d625fad47362cf"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/Makefile",
+        "bytes": 556,
+        "sha256": "ed2f89791bf5b0eaee7e9cbf10e205d1dcaa5eca98ffadc6388733357e433230"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/board-at-admission.md",
+        "bytes": 33696,
+        "sha256": "c5142c8f6e193907244ec46aa92f32517acd01f01537c49c9e1a6ed6983a0ab0"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/config.json",
+        "bytes": 1904,
+        "sha256": "40fedfdf684d8a35926b0c2e9449f5a201bea0865dc02e80c63a19f9f4be9185"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/decision.json",
+        "bytes": 297,
+        "sha256": "f58f99e299356505d71e58a74e8392d3160434fb8e40d77b9ebc3a83ec1a0d6f"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/entry.sh",
+        "bytes": 117,
+        "sha256": "01c93e522eafc79dc3c903141de2f89097a7ce856df559199df018b8acaec166"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/execution-inputs.json",
+        "bytes": 1955,
+        "sha256": "bd4d3c1d0d7e0d51e62fdcbd69db3f39658d658bc878011050a013327e118c93"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/finalize.mjs",
+        "bytes": 3547,
+        "sha256": "d62da2eec86f133f2b8cf128c45e97220095246b41ee6dbf307270bf1673ae60"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/image-source-manifest.json",
+        "bytes": 310534,
+        "sha256": "35380892cd5a32c69c91cd202837e7f8cbd98272ce67270f8ad6a661ffa6e31e"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/launch.mjs",
+        "bytes": 1036,
+        "sha256": "c65370021d03a0ed9d062d78b8778de129a2c3eb8bc57589d11832397d5984a1"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/make.native.json",
+        "bytes": 51,
+        "sha256": "b39d6c6c186997fbda60fc41d8888589407628954c8aea8ff9731f889f25789a"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/make.pending.json",
+        "bytes": 289,
+        "sha256": "f07d0fd66f92e95baa47b3f231d37498164293a24460ae03ebe50711c8e64615"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/make.stderr",
+        "bytes": 80,
+        "sha256": "c99313c5b4152378d94b8442aeb06fc80c4b591ec2dcca3ba6c0bbfeb8c19e61"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/make.stdout",
+        "bytes": 304,
+        "sha256": "4e179dbeb8aa49f5cfdd8db7c15a47cc40ad5128fd64216474d9479bdb023e38"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/prepare.mjs",
+        "bytes": 4652,
+        "sha256": "787cf65edd2ef25249faddc80865decbb704dc164b9b890850219a6db0d32c53"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/proof.mjs",
+        "bytes": 1261,
+        "sha256": "8c3f24cb4fbfb63d9bb9287d98091fbdef029783079ffebfd3d51947c1d0beee"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/001-main-head-before.native.json",
+        "bytes": 279,
+        "sha256": "ad01338b4f6e142777f89c0db73ef8dd376f448fd750dc8f5fcf569d19b12079"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/001-main-head-before.pending.json",
+        "bytes": 163,
+        "sha256": "3210eccfce6f1f5d824cd73e6793c79068b8fd1ec632548fb64160de7e31426b"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/001-main-head-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/001-main-head-before.stdout",
+        "bytes": 41,
+        "sha256": "5d9aa46ad6726760dd4cba0e400607d06d81ed8f17719c7638cc565991befb83"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/002-main-branch-before.native.json",
+        "bytes": 286,
+        "sha256": "23978e451ad892086be901791968a01a108481dd136b5683a649be99e1e05129"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/002-main-branch-before.pending.json",
+        "bytes": 170,
+        "sha256": "fe048fe97682466c1422e8b222c3a9710cd1c6e9f28a0f22c3a8a3a1252211ba"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/002-main-branch-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/002-main-branch-before.stdout",
+        "bytes": 15,
+        "sha256": "a13b7942a7e5915eb507d72569d6070cbc0576e54f1774fc17e4f442e3191f3f"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/003-main-index-before.native.json",
+        "bytes": 277,
+        "sha256": "cf644b99239f188efca2f698c3eac59fbde8213ea938e987ec3d89cc78d1eefa"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/003-main-index-before.pending.json",
+        "bytes": 162,
+        "sha256": "3ce3bde70beca423ff06ecfd73e46cb0fbb7b8450c4f5821aabe5da9918fc12c"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/003-main-index-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/003-main-index-before.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/004-main-status-before.native.json",
+        "bytes": 284,
+        "sha256": "bae7100372d42d4cea35d6700f4ecb9a5c8361ebc52ad4155c63f0aefe3ecad0"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/004-main-status-before.pending.json",
+        "bytes": 167,
+        "sha256": "ec50dc6ea6cef30945d758ec5e1536bad2fe63f39650dcab12a535ca4f2f4754"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/004-main-status-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/004-main-status-before.stdout",
+        "bytes": 601,
+        "sha256": "10f7fab7acd4d4df76ab9983d75324e3b672043c93d30b41ddab9fa5c25762d4"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/005-candidate-head-before.native.json",
+        "bytes": 238,
+        "sha256": "8ca792e4d0aeb6cc37c2be1b51f785dd64e83354b89f9a413ad70e00939f41df"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/005-candidate-head-before.pending.json",
+        "bytes": 122,
+        "sha256": "fee5ee137e5fc1bf05dc5b3f0428f7321bef54b77e5e28ce8d4d5db0c3c977d2"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/005-candidate-head-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/005-candidate-head-before.stdout",
+        "bytes": 41,
+        "sha256": "6910e25796018aa32c8cf02bd865ef73850165a73bfe6a2c3d8d1ae4a2d5c3e6"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/006-candidate-status-before.native.json",
+        "bytes": 241,
+        "sha256": "65bdc7dc2f82c8d80e0ceac6277bd270db167e3c7e36a0e0af6c6453bf96b6b5"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/006-candidate-status-before.pending.json",
+        "bytes": 126,
+        "sha256": "48b10a43de48ab4bfebf2d26e275e6b4c552b22ab5e23bc217c6d32791d7f0b3"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/006-candidate-status-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/006-candidate-status-before.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/007-foundation-status-before.native.json",
+        "bytes": 311,
+        "sha256": "a4ad161c7ca997c11f57fa96c22b955d5c0ca9bbe5b8d8172f3e201b23992c28"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/007-foundation-status-before.pending.json",
+        "bytes": 196,
+        "sha256": "39b775d37774400d85d48d34e788b09323f01e7cc15af7d7943f02616d57f296"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/007-foundation-status-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/007-foundation-status-before.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/008-foreign-identity-before.native.json",
+        "bytes": 389,
+        "sha256": "773680d84dd46f3d60c8c5e89ed96584bde856b59e8196f956c41074e578b893"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/008-foreign-identity-before.pending.json",
+        "bytes": 272,
+        "sha256": "e5a8236b8338bb6b7ae719737cdf16479463b486eb78f59e653cb12f0d2ab4f6"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/008-foreign-identity-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/008-foreign-identity-before.stdout",
+        "bytes": 112,
+        "sha256": "7f036f911c630ab0f1fc8734517c3c6c483c1b58c235d2165194c98a63f0d6aa"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/009-foreign-identity-before.native.json",
+        "bytes": 389,
+        "sha256": "c1ce5008d89e2f66bd37e718fe97c282858494f5729d4654e1bd53a71a3b13c7"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/009-foreign-identity-before.pending.json",
+        "bytes": 272,
+        "sha256": "7249b0cd6a8b9c6f5b01a7656addf3ceaa3801ec5476e387e0847dd4bfa6711a"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/009-foreign-identity-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/009-foreign-identity-before.stdout",
+        "bytes": 112,
+        "sha256": "1860c4097e21cee00cf9ff83449c65cd445d6300f2daee2ee994df2c6c6c53eb"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/010-base-image.native.json",
+        "bytes": 316,
+        "sha256": "5c158d3b70072b0254d859cc6bf0cffa639dc4413fe52c98796b161e3f082070"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/010-base-image.pending.json",
+        "bytes": 200,
+        "sha256": "2c3f808e3482e31deafc84530ae19169226332eba9fd54d93b43c26785d29f70"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/010-base-image.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/010-base-image.stdout",
+        "bytes": 72,
+        "sha256": "af11290e8c96f5a14652000ef6dee9cb5197eb69876d1fe9aab27782aab0a9fa"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/011-name-absent.native.json",
+        "bytes": 272,
+        "sha256": "abfee072679ba2dd15fac013df36e1ac06b6c0154d2e80510db54cbfb1eb737f"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/011-name-absent.pending.json",
+        "bytes": 156,
+        "sha256": "cd86086c1aedd666a305081ba9aeeb5a006456f2510524b1272248ce7004b289"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/011-name-absent.stderr",
+        "bytes": 61,
+        "sha256": "c45a0c364bf1012513872456c6e303e6ebbaaa96ee3cc2179f69228d38ef78b5"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/011-name-absent.stdout",
+        "bytes": 3,
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/012-tag-absent.native.json",
+        "bytes": 292,
+        "sha256": "bc162af55102307d5170e3998e455f9c2fd04c96f20e0cfb86cc6839142f8317"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/012-tag-absent.pending.json",
+        "bytes": 176,
+        "sha256": "fd6cffbe099726776cd6321121733267a76c89ae1439394daf7dd654af93e82f"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/012-tag-absent.stderr",
+        "bytes": 67,
+        "sha256": "6288cf9ebbbb0026150607b6a15bbe47b7140e64e6654498084c2265d9d24750"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/012-tag-absent.stdout",
+        "bytes": 3,
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/013-full-workspace-build.native.json",
+        "bytes": 400,
+        "sha256": "638dcb3a7e6bab267e387f36ba375b69ac8ff6a1250ee2d8b24dd631211d9e45"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/013-full-workspace-build.pending.json",
+        "bytes": 188,
+        "sha256": "693dcf4a0a2753274d65b18b4c71ad3114a8e104d1b7525b69c13c374f7541b9"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/013-full-workspace-build.stderr",
+        "bytes": 41369,
+        "sha256": "3130837f2ea091c1349516c4bf523089cbb77dd8f2cf62de35d55e7343c4ac4f"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/013-full-workspace-build.stdout",
+        "bytes": 382,
+        "sha256": "77b3a5c71b38ddf13c0cf78cdb834bbcfd3095faada7b943e201b03370f3648a"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/014-main-head-final.native.json",
+        "bytes": 279,
+        "sha256": "ad01338b4f6e142777f89c0db73ef8dd376f448fd750dc8f5fcf569d19b12079"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/014-main-head-final.pending.json",
+        "bytes": 163,
+        "sha256": "3210eccfce6f1f5d824cd73e6793c79068b8fd1ec632548fb64160de7e31426b"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/014-main-head-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/014-main-head-final.stdout",
+        "bytes": 41,
+        "sha256": "5d9aa46ad6726760dd4cba0e400607d06d81ed8f17719c7638cc565991befb83"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/015-main-branch-final.native.json",
+        "bytes": 286,
+        "sha256": "23978e451ad892086be901791968a01a108481dd136b5683a649be99e1e05129"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/015-main-branch-final.pending.json",
+        "bytes": 170,
+        "sha256": "fe048fe97682466c1422e8b222c3a9710cd1c6e9f28a0f22c3a8a3a1252211ba"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/015-main-branch-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/015-main-branch-final.stdout",
+        "bytes": 15,
+        "sha256": "a13b7942a7e5915eb507d72569d6070cbc0576e54f1774fc17e4f442e3191f3f"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/016-main-index-final.native.json",
+        "bytes": 277,
+        "sha256": "cf644b99239f188efca2f698c3eac59fbde8213ea938e987ec3d89cc78d1eefa"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/016-main-index-final.pending.json",
+        "bytes": 162,
+        "sha256": "3ce3bde70beca423ff06ecfd73e46cb0fbb7b8450c4f5821aabe5da9918fc12c"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/016-main-index-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/016-main-index-final.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/017-main-status-final.native.json",
+        "bytes": 284,
+        "sha256": "bae7100372d42d4cea35d6700f4ecb9a5c8361ebc52ad4155c63f0aefe3ecad0"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/017-main-status-final.pending.json",
+        "bytes": 167,
+        "sha256": "ec50dc6ea6cef30945d758ec5e1536bad2fe63f39650dcab12a535ca4f2f4754"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/017-main-status-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/017-main-status-final.stdout",
+        "bytes": 601,
+        "sha256": "10f7fab7acd4d4df76ab9983d75324e3b672043c93d30b41ddab9fa5c25762d4"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/018-candidate-head-final.native.json",
+        "bytes": 238,
+        "sha256": "8ca792e4d0aeb6cc37c2be1b51f785dd64e83354b89f9a413ad70e00939f41df"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/018-candidate-head-final.pending.json",
+        "bytes": 122,
+        "sha256": "fee5ee137e5fc1bf05dc5b3f0428f7321bef54b77e5e28ce8d4d5db0c3c977d2"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/018-candidate-head-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/018-candidate-head-final.stdout",
+        "bytes": 41,
+        "sha256": "6910e25796018aa32c8cf02bd865ef73850165a73bfe6a2c3d8d1ae4a2d5c3e6"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/019-candidate-status-final.native.json",
+        "bytes": 241,
+        "sha256": "65bdc7dc2f82c8d80e0ceac6277bd270db167e3c7e36a0e0af6c6453bf96b6b5"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/019-candidate-status-final.pending.json",
+        "bytes": 126,
+        "sha256": "48b10a43de48ab4bfebf2d26e275e6b4c552b22ab5e23bc217c6d32791d7f0b3"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/019-candidate-status-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/019-candidate-status-final.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/020-foundation-status-final.native.json",
+        "bytes": 311,
+        "sha256": "a4ad161c7ca997c11f57fa96c22b955d5c0ca9bbe5b8d8172f3e201b23992c28"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/020-foundation-status-final.pending.json",
+        "bytes": 196,
+        "sha256": "39b775d37774400d85d48d34e788b09323f01e7cc15af7d7943f02616d57f296"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/020-foundation-status-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/020-foundation-status-final.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/021-foreign-identity-final.native.json",
+        "bytes": 389,
+        "sha256": "773680d84dd46f3d60c8c5e89ed96584bde856b59e8196f956c41074e578b893"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/021-foreign-identity-final.pending.json",
+        "bytes": 272,
+        "sha256": "e5a8236b8338bb6b7ae719737cdf16479463b486eb78f59e653cb12f0d2ab4f6"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/021-foreign-identity-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/021-foreign-identity-final.stdout",
+        "bytes": 112,
+        "sha256": "7f036f911c630ab0f1fc8734517c3c6c483c1b58c235d2165194c98a63f0d6aa"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/022-foreign-identity-final.native.json",
+        "bytes": 389,
+        "sha256": "c1ce5008d89e2f66bd37e718fe97c282858494f5729d4654e1bd53a71a3b13c7"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/022-foreign-identity-final.pending.json",
+        "bytes": 272,
+        "sha256": "7249b0cd6a8b9c6f5b01a7656addf3ceaa3801ec5476e387e0847dd4bfa6711a"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/022-foreign-identity-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/022-foreign-identity-final.stdout",
+        "bytes": 112,
+        "sha256": "1860c4097e21cee00cf9ff83449c65cd445d6300f2daee2ee994df2c6c6c53eb"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/completion.json",
+        "bytes": 260,
+        "sha256": "eeb5d05edb80be60cbf28426ec008424fc27367c05d1ccb77a93407c9f8d66fe"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run/failure.json",
+        "bytes": 304,
+        "sha256": "a64756c68fa4d51fd121a3f9d9c91ea37cdf6546272b438d68887da6f3ee8508"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/run.mjs",
+        "bytes": 10628,
+        "sha256": "cb271bc6d31ba314c2b3654a200c941aa16e03c15f1913e0dc463fec9f1595b0"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r1/source-freeze.json",
+        "bytes": 398121,
+        "sha256": "3e90fb7f25523b46f05a0e20dafb0a4df238565fc77a25698c06cd1578a3e075"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/Dockerfile",
+        "bytes": 1383,
+        "sha256": "362a056c4f2ca7979bd95673cd168787290e8adc74eb5ac1cb9fabd8f68c48c0"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/Makefile",
+        "bytes": 556,
+        "sha256": "d9edfb282f7e7289aa9a2aa0d07b2ff6706d4cd0c1acb8d9498061a9c941e942"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/board-at-admission.md",
+        "bytes": 34699,
+        "sha256": "db80dfde7d6b102e5eb370fe2d9bea56436823c830f1f0163d072ce867405116"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/config.json",
+        "bytes": 1904,
+        "sha256": "2b1fc8bcb6f3e0524d1f6a65c7906101d7691ba30472eb71edc5ee3ad28b8870"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/decision.json",
+        "bytes": 297,
+        "sha256": "389fd6da724ab8fabc933fe36f41f37f5597515e68663af66597ba33a0de736c"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/entry.sh",
+        "bytes": 117,
+        "sha256": "01c93e522eafc79dc3c903141de2f89097a7ce856df559199df018b8acaec166"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/execution-inputs.json",
+        "bytes": 1955,
+        "sha256": "3822381bb34797f19dc345e4049231871fc01d096d7d3e65d20d198acb49f566"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/finalize.mjs",
+        "bytes": 3881,
+        "sha256": "a6ad4d073ab17f6558906a942931180fabef3c8c5eac5083415c238b76a14ae8"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/image-source-manifest.json",
+        "bytes": 310534,
+        "sha256": "35380892cd5a32c69c91cd202837e7f8cbd98272ce67270f8ad6a661ffa6e31e"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/launch.mjs",
+        "bytes": 1036,
+        "sha256": "726fcc4f376b1df0002227ef3a5d1d218dc07efd2552c3c70efa2ccc512b85af"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/make.native.json",
+        "bytes": 51,
+        "sha256": "8bd97e66044ff54d0678cb6e8d3ab6618555a16ad9310e5f7490e76e35caeda4"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/make.pending.json",
+        "bytes": 289,
+        "sha256": "3055b5ee2a26bbad1d859d0403fb760524936542e1c63eee2d792d545bff68b0"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/make.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/make.stdout",
+        "bytes": 304,
+        "sha256": "a1ab84911b921c6079fca3b7eef3abc0e3f464bc4671aa717e73021ee3eca734"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/prepare.mjs",
+        "bytes": 4652,
+        "sha256": "8266ec803d2dfeacfc4f6dabca003b80c5dc11814dd603d427c10be8dbd44380"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/proof.mjs",
+        "bytes": 1261,
+        "sha256": "8c3f24cb4fbfb63d9bb9287d98091fbdef029783079ffebfd3d51947c1d0beee"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/001-main-head-before.native.json",
+        "bytes": 279,
+        "sha256": "ad01338b4f6e142777f89c0db73ef8dd376f448fd750dc8f5fcf569d19b12079"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/001-main-head-before.pending.json",
+        "bytes": 163,
+        "sha256": "3210eccfce6f1f5d824cd73e6793c79068b8fd1ec632548fb64160de7e31426b"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/001-main-head-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/001-main-head-before.stdout",
+        "bytes": 41,
+        "sha256": "5d9aa46ad6726760dd4cba0e400607d06d81ed8f17719c7638cc565991befb83"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/002-main-branch-before.native.json",
+        "bytes": 286,
+        "sha256": "23978e451ad892086be901791968a01a108481dd136b5683a649be99e1e05129"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/002-main-branch-before.pending.json",
+        "bytes": 170,
+        "sha256": "fe048fe97682466c1422e8b222c3a9710cd1c6e9f28a0f22c3a8a3a1252211ba"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/002-main-branch-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/002-main-branch-before.stdout",
+        "bytes": 15,
+        "sha256": "a13b7942a7e5915eb507d72569d6070cbc0576e54f1774fc17e4f442e3191f3f"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/003-main-index-before.native.json",
+        "bytes": 277,
+        "sha256": "cf644b99239f188efca2f698c3eac59fbde8213ea938e987ec3d89cc78d1eefa"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/003-main-index-before.pending.json",
+        "bytes": 162,
+        "sha256": "3ce3bde70beca423ff06ecfd73e46cb0fbb7b8450c4f5821aabe5da9918fc12c"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/003-main-index-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/003-main-index-before.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/004-main-status-before.native.json",
+        "bytes": 284,
+        "sha256": "bae7100372d42d4cea35d6700f4ecb9a5c8361ebc52ad4155c63f0aefe3ecad0"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/004-main-status-before.pending.json",
+        "bytes": 167,
+        "sha256": "ec50dc6ea6cef30945d758ec5e1536bad2fe63f39650dcab12a535ca4f2f4754"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/004-main-status-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/004-main-status-before.stdout",
+        "bytes": 601,
+        "sha256": "10f7fab7acd4d4df76ab9983d75324e3b672043c93d30b41ddab9fa5c25762d4"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/005-candidate-head-before.native.json",
+        "bytes": 238,
+        "sha256": "8ca792e4d0aeb6cc37c2be1b51f785dd64e83354b89f9a413ad70e00939f41df"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/005-candidate-head-before.pending.json",
+        "bytes": 122,
+        "sha256": "fee5ee137e5fc1bf05dc5b3f0428f7321bef54b77e5e28ce8d4d5db0c3c977d2"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/005-candidate-head-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/005-candidate-head-before.stdout",
+        "bytes": 41,
+        "sha256": "6910e25796018aa32c8cf02bd865ef73850165a73bfe6a2c3d8d1ae4a2d5c3e6"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/006-candidate-status-before.native.json",
+        "bytes": 241,
+        "sha256": "65bdc7dc2f82c8d80e0ceac6277bd270db167e3c7e36a0e0af6c6453bf96b6b5"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/006-candidate-status-before.pending.json",
+        "bytes": 126,
+        "sha256": "48b10a43de48ab4bfebf2d26e275e6b4c552b22ab5e23bc217c6d32791d7f0b3"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/006-candidate-status-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/006-candidate-status-before.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/007-foundation-status-before.native.json",
+        "bytes": 311,
+        "sha256": "a4ad161c7ca997c11f57fa96c22b955d5c0ca9bbe5b8d8172f3e201b23992c28"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/007-foundation-status-before.pending.json",
+        "bytes": 196,
+        "sha256": "39b775d37774400d85d48d34e788b09323f01e7cc15af7d7943f02616d57f296"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/007-foundation-status-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/007-foundation-status-before.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/008-foreign-identity-before.native.json",
+        "bytes": 389,
+        "sha256": "773680d84dd46f3d60c8c5e89ed96584bde856b59e8196f956c41074e578b893"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/008-foreign-identity-before.pending.json",
+        "bytes": 272,
+        "sha256": "e5a8236b8338bb6b7ae719737cdf16479463b486eb78f59e653cb12f0d2ab4f6"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/008-foreign-identity-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/008-foreign-identity-before.stdout",
+        "bytes": 112,
+        "sha256": "7f036f911c630ab0f1fc8734517c3c6c483c1b58c235d2165194c98a63f0d6aa"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/009-foreign-identity-before.native.json",
+        "bytes": 389,
+        "sha256": "c1ce5008d89e2f66bd37e718fe97c282858494f5729d4654e1bd53a71a3b13c7"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/009-foreign-identity-before.pending.json",
+        "bytes": 272,
+        "sha256": "7249b0cd6a8b9c6f5b01a7656addf3ceaa3801ec5476e387e0847dd4bfa6711a"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/009-foreign-identity-before.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/009-foreign-identity-before.stdout",
+        "bytes": 112,
+        "sha256": "1860c4097e21cee00cf9ff83449c65cd445d6300f2daee2ee994df2c6c6c53eb"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/010-base-image.native.json",
+        "bytes": 316,
+        "sha256": "5c158d3b70072b0254d859cc6bf0cffa639dc4413fe52c98796b161e3f082070"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/010-base-image.pending.json",
+        "bytes": 200,
+        "sha256": "2c3f808e3482e31deafc84530ae19169226332eba9fd54d93b43c26785d29f70"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/010-base-image.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/010-base-image.stdout",
+        "bytes": 72,
+        "sha256": "af11290e8c96f5a14652000ef6dee9cb5197eb69876d1fe9aab27782aab0a9fa"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/011-name-absent.native.json",
+        "bytes": 272,
+        "sha256": "8c71a15f0367a85d65af30348b3c4fb890f7d8c1134fe9a32c42c4802c8317aa"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/011-name-absent.pending.json",
+        "bytes": 156,
+        "sha256": "6f7777238ba125485761d526be5a62155fce8d5a99b78b1475e0696ce77ed80b"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/011-name-absent.stderr",
+        "bytes": 61,
+        "sha256": "a1f0e89c578be7ebf402ec4957508f14197edca5a83cd4454b466e339e5af5a5"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/011-name-absent.stdout",
+        "bytes": 3,
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/012-tag-absent.native.json",
+        "bytes": 292,
+        "sha256": "c822c25782d085390b90054f551b0064ae548fcd5c84f03968d3f1ea82e2c9ae"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/012-tag-absent.pending.json",
+        "bytes": 176,
+        "sha256": "197cacc4e92a15b02589c392e1acf2bd87d00a0f37612556856c0feadf05b5d5"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/012-tag-absent.stderr",
+        "bytes": 67,
+        "sha256": "0071db2be9119af2cc80e66274e0535afa712555971c84587fa55d47829cf5a4"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/012-tag-absent.stdout",
+        "bytes": 3,
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/013-full-workspace-build.native.json",
+        "bytes": 400,
+        "sha256": "d8b04f715d1398f5f2345fa97bbc8200e26c6fae4f145ad2fd9923ec3b370017"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/013-full-workspace-build.pending.json",
+        "bytes": 188,
+        "sha256": "ef5c59aaf68eed51821f346e77701d53b56a7aa2884a723b7a79c47e7a59bb46"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/013-full-workspace-build.stderr",
+        "bytes": 17637,
+        "sha256": "bb0b35b00189b0284469e50f3787580e7179da04b7fb64aa36f904ee896d7f4f"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/013-full-workspace-build.stdout",
+        "bytes": 382,
+        "sha256": "49bf478e87e0798a60763cbadc1768e7b231ed7735b075af96c62ecc46dc7a11"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/014-image-built.native.json",
+        "bytes": 323,
+        "sha256": "b9a0222692acc6af327fe66f4f24d3dce5a49dbff904b72a2f75d078548104e0"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/014-image-built.pending.json",
+        "bytes": 207,
+        "sha256": "2fa0255ecf43f70fdfc57659480b173ce854a711ef7810a537d55eeb5be4dcce"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/014-image-built.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/014-image-built.stdout",
+        "bytes": 72,
+        "sha256": "e2319c64a500e51284cf9c81ec0d7730d4e3f5eabf18008df8eb425e4d0fe25e"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/015-create.native.json",
+        "bytes": 569,
+        "sha256": "1c46153b37ff0e138cfc5369c1f65d66261dcd22799004af91e68982ee5560b2"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/015-create.pending.json",
+        "bytes": 453,
+        "sha256": "9a82b7d77c0f58f46544c0e78ef40524b3d9e0c3747c8ac25aaadc20ff527008"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/015-create.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/015-create.stdout",
+        "bytes": 65,
+        "sha256": "40682ad40c3e9ec0f3e50d7230a2489e057661f494ca8caac087c4ed8d6f9459"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/016-owned-created.native.json",
+        "bytes": 335,
+        "sha256": "f8a4033c7a8e8116333a28a649488aa37d12449e5a288e1e680543126eeb2134"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/016-owned-created.pending.json",
+        "bytes": 217,
+        "sha256": "fe291d71e337264d945be279a2b6276bed80548fe27d9328de53ac409704ed87"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/016-owned-created.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/016-owned-created.stdout",
+        "bytes": 3524,
+        "sha256": "aead4da9dcaaf732b1cf3ff5293eadc000f64b7e59575f0acb7470c532d90f58"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/017-copy-entry.sh.native.json",
+        "bytes": 366,
+        "sha256": "6ad4d130d4d085f443cc4d475a58f5cd4ea90d423b529f0ed02edf3e84b1d435"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/017-copy-entry.sh.pending.json",
+        "bytes": 251,
+        "sha256": "45998ad053b1ca326eca1fe6e40932f37dd414fde5866e9ac349bf7643d06c75"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/017-copy-entry.sh.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/017-copy-entry.sh.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/018-copy-proof.mjs.native.json",
+        "bytes": 368,
+        "sha256": "713ee8179b1384dc858468b42a48ac4c87701b5717ed2fbc7cedd22465bca4f5"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/018-copy-proof.mjs.pending.json",
+        "bytes": 253,
+        "sha256": "8d75edd394528ca7722ea885901be45523a40e6b4a7f7372825001f47fd2361a"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/018-copy-proof.mjs.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/018-copy-proof.mjs.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/019-copy-image-source-manifest.json.native.json",
+        "bytes": 402,
+        "sha256": "732900dddf32424b0930488f6892edbaf22e5bc33ae439604ffea55bed268bb6"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/019-copy-image-source-manifest.json.pending.json",
+        "bytes": 287,
+        "sha256": "f5316d89c6a96205d3af46b0d85eb3d2107767528218f01375bb1e512e37fbc5"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/019-copy-image-source-manifest.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/019-copy-image-source-manifest.json.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/020-owned-before-root.native.json",
+        "bytes": 335,
+        "sha256": "f8a4033c7a8e8116333a28a649488aa37d12449e5a288e1e680543126eeb2134"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/020-owned-before-root.pending.json",
+        "bytes": 217,
+        "sha256": "fe291d71e337264d945be279a2b6276bed80548fe27d9328de53ac409704ed87"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/020-owned-before-root.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/020-owned-before-root.stdout",
+        "bytes": 3524,
+        "sha256": "aead4da9dcaaf732b1cf3ff5293eadc000f64b7e59575f0acb7470c532d90f58"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/021-root.native.json",
+        "bytes": 413,
+        "sha256": "f93c23b773f0755b4f58f41051c94f58ee55dd49c13adc02f38b56c0b0a5a220"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/021-root.pending.json",
+        "bytes": 199,
+        "sha256": "4551a6701574e3401252c80811e46546aa5de272b1e38f7c7fc28df272185d08"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/021-root.stderr",
+        "bytes": 16287,
+        "sha256": "636958d917f914809527f4c9fb381212e78db53d19e3ad12742eb6581b38c45a"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/021-root.stdout",
+        "bytes": 363792,
+        "sha256": "ab105ba5f79bfe7e90a9e0c773f9ec4db4adf8bd8820ca3aff0e0a4637ef00a7"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/022-owned-terminal.native.json",
+        "bytes": 335,
+        "sha256": "0efb93bf05fb4d8ad342422345b068cc72962c850522d535d13293b8daf64ec5"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/022-owned-terminal.pending.json",
+        "bytes": 217,
+        "sha256": "fe291d71e337264d945be279a2b6276bed80548fe27d9328de53ac409704ed87"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/022-owned-terminal.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/022-owned-terminal.stdout",
+        "bytes": 4071,
+        "sha256": "80ecb39fef93113bfb4e0ac936a7593b57be7f14f8f0ec331d631015294ef3f8"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/023-main-head-after.native.json",
+        "bytes": 279,
+        "sha256": "ad01338b4f6e142777f89c0db73ef8dd376f448fd750dc8f5fcf569d19b12079"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/023-main-head-after.pending.json",
+        "bytes": 163,
+        "sha256": "3210eccfce6f1f5d824cd73e6793c79068b8fd1ec632548fb64160de7e31426b"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/023-main-head-after.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/023-main-head-after.stdout",
+        "bytes": 41,
+        "sha256": "5d9aa46ad6726760dd4cba0e400607d06d81ed8f17719c7638cc565991befb83"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/024-main-branch-after.native.json",
+        "bytes": 286,
+        "sha256": "23978e451ad892086be901791968a01a108481dd136b5683a649be99e1e05129"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/024-main-branch-after.pending.json",
+        "bytes": 170,
+        "sha256": "fe048fe97682466c1422e8b222c3a9710cd1c6e9f28a0f22c3a8a3a1252211ba"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/024-main-branch-after.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/024-main-branch-after.stdout",
+        "bytes": 15,
+        "sha256": "a13b7942a7e5915eb507d72569d6070cbc0576e54f1774fc17e4f442e3191f3f"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/025-main-index-after.native.json",
+        "bytes": 277,
+        "sha256": "cf644b99239f188efca2f698c3eac59fbde8213ea938e987ec3d89cc78d1eefa"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/025-main-index-after.pending.json",
+        "bytes": 162,
+        "sha256": "3ce3bde70beca423ff06ecfd73e46cb0fbb7b8450c4f5821aabe5da9918fc12c"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/025-main-index-after.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/025-main-index-after.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/026-main-status-after.native.json",
+        "bytes": 284,
+        "sha256": "bae7100372d42d4cea35d6700f4ecb9a5c8361ebc52ad4155c63f0aefe3ecad0"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/026-main-status-after.pending.json",
+        "bytes": 167,
+        "sha256": "ec50dc6ea6cef30945d758ec5e1536bad2fe63f39650dcab12a535ca4f2f4754"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/026-main-status-after.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/026-main-status-after.stdout",
+        "bytes": 601,
+        "sha256": "10f7fab7acd4d4df76ab9983d75324e3b672043c93d30b41ddab9fa5c25762d4"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/027-candidate-head-after.native.json",
+        "bytes": 238,
+        "sha256": "8ca792e4d0aeb6cc37c2be1b51f785dd64e83354b89f9a413ad70e00939f41df"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/027-candidate-head-after.pending.json",
+        "bytes": 122,
+        "sha256": "fee5ee137e5fc1bf05dc5b3f0428f7321bef54b77e5e28ce8d4d5db0c3c977d2"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/027-candidate-head-after.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/027-candidate-head-after.stdout",
+        "bytes": 41,
+        "sha256": "6910e25796018aa32c8cf02bd865ef73850165a73bfe6a2c3d8d1ae4a2d5c3e6"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/028-candidate-status-after.native.json",
+        "bytes": 241,
+        "sha256": "65bdc7dc2f82c8d80e0ceac6277bd270db167e3c7e36a0e0af6c6453bf96b6b5"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/028-candidate-status-after.pending.json",
+        "bytes": 126,
+        "sha256": "48b10a43de48ab4bfebf2d26e275e6b4c552b22ab5e23bc217c6d32791d7f0b3"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/028-candidate-status-after.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/028-candidate-status-after.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/029-foundation-status-after.native.json",
+        "bytes": 311,
+        "sha256": "a4ad161c7ca997c11f57fa96c22b955d5c0ca9bbe5b8d8172f3e201b23992c28"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/029-foundation-status-after.pending.json",
+        "bytes": 196,
+        "sha256": "39b775d37774400d85d48d34e788b09323f01e7cc15af7d7943f02616d57f296"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/029-foundation-status-after.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/029-foundation-status-after.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/030-foreign-identity-after.native.json",
+        "bytes": 389,
+        "sha256": "773680d84dd46f3d60c8c5e89ed96584bde856b59e8196f956c41074e578b893"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/030-foreign-identity-after.pending.json",
+        "bytes": 272,
+        "sha256": "e5a8236b8338bb6b7ae719737cdf16479463b486eb78f59e653cb12f0d2ab4f6"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/030-foreign-identity-after.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/030-foreign-identity-after.stdout",
+        "bytes": 112,
+        "sha256": "7f036f911c630ab0f1fc8734517c3c6c483c1b58c235d2165194c98a63f0d6aa"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/031-foreign-identity-after.native.json",
+        "bytes": 389,
+        "sha256": "c1ce5008d89e2f66bd37e718fe97c282858494f5729d4654e1bd53a71a3b13c7"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/031-foreign-identity-after.pending.json",
+        "bytes": 272,
+        "sha256": "7249b0cd6a8b9c6f5b01a7656addf3ceaa3801ec5476e387e0847dd4bfa6711a"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/031-foreign-identity-after.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/031-foreign-identity-after.stdout",
+        "bytes": 112,
+        "sha256": "1860c4097e21cee00cf9ff83449c65cd445d6300f2daee2ee994df2c6c6c53eb"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/032-owned-final-retained.native.json",
+        "bytes": 335,
+        "sha256": "0efb93bf05fb4d8ad342422345b068cc72962c850522d535d13293b8daf64ec5"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/032-owned-final-retained.pending.json",
+        "bytes": 217,
+        "sha256": "fe291d71e337264d945be279a2b6276bed80548fe27d9328de53ac409704ed87"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/032-owned-final-retained.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/032-owned-final-retained.stdout",
+        "bytes": 4071,
+        "sha256": "80ecb39fef93113bfb4e0ac936a7593b57be7f14f8f0ec331d631015294ef3f8"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/033-main-head-final.native.json",
+        "bytes": 279,
+        "sha256": "ad01338b4f6e142777f89c0db73ef8dd376f448fd750dc8f5fcf569d19b12079"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/033-main-head-final.pending.json",
+        "bytes": 163,
+        "sha256": "3210eccfce6f1f5d824cd73e6793c79068b8fd1ec632548fb64160de7e31426b"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/033-main-head-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/033-main-head-final.stdout",
+        "bytes": 41,
+        "sha256": "5d9aa46ad6726760dd4cba0e400607d06d81ed8f17719c7638cc565991befb83"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/034-main-branch-final.native.json",
+        "bytes": 286,
+        "sha256": "23978e451ad892086be901791968a01a108481dd136b5683a649be99e1e05129"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/034-main-branch-final.pending.json",
+        "bytes": 170,
+        "sha256": "fe048fe97682466c1422e8b222c3a9710cd1c6e9f28a0f22c3a8a3a1252211ba"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/034-main-branch-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/034-main-branch-final.stdout",
+        "bytes": 15,
+        "sha256": "a13b7942a7e5915eb507d72569d6070cbc0576e54f1774fc17e4f442e3191f3f"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/035-main-index-final.native.json",
+        "bytes": 277,
+        "sha256": "cf644b99239f188efca2f698c3eac59fbde8213ea938e987ec3d89cc78d1eefa"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/035-main-index-final.pending.json",
+        "bytes": 162,
+        "sha256": "3ce3bde70beca423ff06ecfd73e46cb0fbb7b8450c4f5821aabe5da9918fc12c"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/035-main-index-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/035-main-index-final.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/036-main-status-final.native.json",
+        "bytes": 284,
+        "sha256": "bae7100372d42d4cea35d6700f4ecb9a5c8361ebc52ad4155c63f0aefe3ecad0"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/036-main-status-final.pending.json",
+        "bytes": 167,
+        "sha256": "ec50dc6ea6cef30945d758ec5e1536bad2fe63f39650dcab12a535ca4f2f4754"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/036-main-status-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/036-main-status-final.stdout",
+        "bytes": 601,
+        "sha256": "10f7fab7acd4d4df76ab9983d75324e3b672043c93d30b41ddab9fa5c25762d4"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/037-candidate-head-final.native.json",
+        "bytes": 238,
+        "sha256": "8ca792e4d0aeb6cc37c2be1b51f785dd64e83354b89f9a413ad70e00939f41df"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/037-candidate-head-final.pending.json",
+        "bytes": 122,
+        "sha256": "fee5ee137e5fc1bf05dc5b3f0428f7321bef54b77e5e28ce8d4d5db0c3c977d2"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/037-candidate-head-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/037-candidate-head-final.stdout",
+        "bytes": 41,
+        "sha256": "6910e25796018aa32c8cf02bd865ef73850165a73bfe6a2c3d8d1ae4a2d5c3e6"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/038-candidate-status-final.native.json",
+        "bytes": 241,
+        "sha256": "65bdc7dc2f82c8d80e0ceac6277bd270db167e3c7e36a0e0af6c6453bf96b6b5"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/038-candidate-status-final.pending.json",
+        "bytes": 126,
+        "sha256": "48b10a43de48ab4bfebf2d26e275e6b4c552b22ab5e23bc217c6d32791d7f0b3"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/038-candidate-status-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/038-candidate-status-final.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/039-foundation-status-final.native.json",
+        "bytes": 311,
+        "sha256": "a4ad161c7ca997c11f57fa96c22b955d5c0ca9bbe5b8d8172f3e201b23992c28"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/039-foundation-status-final.pending.json",
+        "bytes": 196,
+        "sha256": "39b775d37774400d85d48d34e788b09323f01e7cc15af7d7943f02616d57f296"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/039-foundation-status-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/039-foundation-status-final.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/040-foreign-identity-final.native.json",
+        "bytes": 389,
+        "sha256": "773680d84dd46f3d60c8c5e89ed96584bde856b59e8196f956c41074e578b893"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/040-foreign-identity-final.pending.json",
+        "bytes": 272,
+        "sha256": "e5a8236b8338bb6b7ae719737cdf16479463b486eb78f59e653cb12f0d2ab4f6"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/040-foreign-identity-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/040-foreign-identity-final.stdout",
+        "bytes": 112,
+        "sha256": "7f036f911c630ab0f1fc8734517c3c6c483c1b58c235d2165194c98a63f0d6aa"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/041-foreign-identity-final.native.json",
+        "bytes": 389,
+        "sha256": "c1ce5008d89e2f66bd37e718fe97c282858494f5729d4654e1bd53a71a3b13c7"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/041-foreign-identity-final.pending.json",
+        "bytes": 272,
+        "sha256": "7249b0cd6a8b9c6f5b01a7656addf3ceaa3801ec5476e387e0847dd4bfa6711a"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/041-foreign-identity-final.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/041-foreign-identity-final.stdout",
+        "bytes": 112,
+        "sha256": "1860c4097e21cee00cf9ff83449c65cd445d6300f2daee2ee994df2c6c6c53eb"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/completion.json",
+        "bytes": 387,
+        "sha256": "88befaaa8ebbbc5737773c27ff0c21470b174df1fd7fb12567861494d96c27ec"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run/root-result.json",
+        "bytes": 1292,
+        "sha256": "245561bf1477732fded3b3e7d7a2afbe204be9f489ec1e86d8e99465f9060ccc"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/run.mjs",
+        "bytes": 10790,
+        "sha256": "26404326ebd0e9941803f7c36b5bd1d663bde1d24a97fb3208992d7b36e82c6f"
+      },
+      {
+        "path": "/tmp/aih-mod01-bedrock-opus46-full-root-r2/source-freeze.json",
+        "bytes": 398121,
+        "sha256": "de08f5c12d98f0081519ec15ed6b1499bb87d8895168edbd5e2777d0d9b55f15"
+      }
+    ]
+  }
+}
