@@ -56,6 +56,10 @@ Closure is `(DONE + GAP ACCEPTED) / total`; `PARTIAL` is not closed.
 
 Paths are plain code text and intentionally omit `.md`, matching navigation conventions.
 
+## Execution Boards
+
+[MOD-01 execution board](./pi/MOD-01-tracking.md) is the short resumption index for the existing [MOD-01 delivery register](./pi/MOD-01.md): work packages, exact-candidate evidence, blockers, exit criteria and the next bounded action. Update it after each batch; do not treat technical gate success as whole-criterion closure. It supplements, rather than replaces, AUDIT-5's sole active parity status.
+
 ## Common Prefixes
 
 | Prefix | Surface |
