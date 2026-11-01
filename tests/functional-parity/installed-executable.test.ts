@@ -2208,7 +2208,9 @@ it('dispatches native Bedrock binary streams through installed public declaratio
     const native: AiProvider = new BedrockProvider(config);
     const factory: AiProvider = ProviderFactory.create(config);
     const bearer: AiProvider = ProviderFactory.create({ type: 'bedrock', ...bedrockCredentialConfig('opaque-token') });
-    void [native, factory, bearer];
+    const levels: NonNullable<ChatOptions['thinking']>[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+    const adaptive: ChatOptions[] = levels.map(thinking => ({ model: 'anthropic.claude-opus-4-6-v1', thinking, maxTokens: 64 }));
+    void [native, factory, bearer, adaptive];
     async function compile() {
       let complete: ChatResponse | undefined;
       const options: ChatOptions = { tools: [{ name: 'echo', description: 'Echo', parameters: { type: 'object', properties: { x: { type: 'string' } }, required: ['x'], additionalProperties: false } }] };
@@ -2221,12 +2223,14 @@ it('dispatches native Bedrock binary streams through installed public declaratio
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
   const bytes = bedrockText('installed-bedrock-ok', 'end_turn', { inputTokens: 7, outputTokens: 2, cacheReadInputTokens: 3, totalTokens: 12 });
   const originalReference = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-reference.json'), 'utf8'));
-  const rawOutputReference = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-raw-output-reference.json'), 'utf8'));
   const outputBoundaries = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-output-boundaries-reference.json'), 'utf8')).rows;
   const toolSchemas = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-tool-schema-reference.json'), 'utf8')).rows;
-  const originals = originalReference.models.map((model: { id: string; maxTokens: number }) => ({ id: model.id, maximum: model.maxTokens,
-    rawDefault: rawOutputReference.rows.find((row: { id: string }) => row.id === model.id).maxTokens,
+  const simpleDefaults = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-simple-defaults-reference.json'), 'utf8')).rows;
+  const simpleNumeric = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-simple-numeric-reference.json'), 'utf8')).rows;
+  const simpleContext = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-simple-context-reference.json'), 'utf8'));
+  const originals = originalReference.models.map((model: { id: string; maxTokens: number; contextWindow: number }) => ({ id: model.id, maximum: model.maxTokens, contextWindow: model.contextWindow,
     cost: originalReference.cases.find((row: { model: string; case: string }) => row.model === model.id && row.case === 'base-short').expected.costUsd }));
+  const adaptive = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-opus46-adaptive-reference.json'), 'utf8'));
   const nativeUsage = { inputTokens: 7, outputTokens: 2, cacheReadInputTokens: 3, cacheWriteInputTokens: 1, totalTokens: 13 };
   const nativeBytes = bedrockText('installed-native-ok', 'end_turn', nativeUsage);
   await writeFile(path.join(consumer, 'bedrock-public.mjs'), `
@@ -2236,17 +2240,19 @@ it('dispatches native Bedrock binary streams through installed public declaratio
     import { fileURLToPath } from 'node:url';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
     const originals = ${JSON.stringify(originals)}, nativeUsage = ${JSON.stringify(nativeUsage)}, outputBoundaries = ${JSON.stringify(outputBoundaries)}, toolSchemas = ${JSON.stringify(toolSchemas)};
-    const calls = [];
+    const simpleDefaults = ${JSON.stringify(simpleDefaults)}, simpleNumeric = ${JSON.stringify(simpleNumeric)}, simpleContext = ${JSON.stringify(simpleContext)}, adaptive = ${JSON.stringify(adaptive)};
+    const calls = []; let selectedSimple = false;
     const server = createServer(async (request, reply) => {
       let body = ''; for await (const chunk of request) body += chunk;
       calls.push({ path: request.url, headers: request.headers, body: JSON.parse(body) });
       const native = originals.some(model => request.url.startsWith('/proxy/model/' + encodeURIComponent(model.id) + '/'));
       if (request.url.endsWith('/converse')) {
         reply.writeHead(200, { 'content-type': 'application/json' });
-        reply.end(JSON.stringify({ output: { message: { content: [{ text: 'installed-bedrock-json-ok' }] } }, ...(native ? { usage: nativeUsage } : {}) }));
+        reply.end(JSON.stringify({ output: { message: { content: [{ text: selectedSimple ? 'ok' : 'installed-bedrock-json-ok' }] } },
+          ...(native ? { usage: selectedSimple ? { inputTokens: 1, outputTokens: 1, totalTokens: 2 } : nativeUsage } : {}) }));
       } else {
         reply.writeHead(200, { 'content-type': 'application/vnd.amazon.eventstream' });
-        reply.end(Buffer.from(native ? ${JSON.stringify(nativeBytes.toString('base64'))} : ${JSON.stringify(bytes.toString('base64'))}, 'base64'));
+        reply.end(Buffer.from(selectedSimple ? simpleContext.replyFramesBase64 : native ? ${JSON.stringify(nativeBytes.toString('base64'))} : ${JSON.stringify(bytes.toString('base64'))}, 'base64'));
       }
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -2294,26 +2300,52 @@ it('dispatches native Bedrock binary streams through installed public declaratio
         }
       }
       assert.equal(calls.length, 3 + 193 * 2);
-      for (const model of originals) {
-        const json = await native.chat([], { model: model.id });
-        assert.equal(json.model, model.id); assert.equal(json.api, 'bedrock-converse-stream');
-        await native.streamChat([], () => {}, value => { complete = value; }, undefined, { model: model.id });
-        assert.equal(complete.model, model.id); assert.equal(complete.api, 'bedrock-converse-stream');
-        for (const call of calls.slice(-2)) {
-          assert.equal(call.headers.authorization, 'Bearer installed-native-bearer');
-          assert.ok(call.path.startsWith('/proxy/model/' + encodeURIComponent(model.id) + '/'));
-          assert.equal(Object.hasOwn(call.body.inferenceConfig, 'maxTokens'), model.rawDefault !== null);
-          assert.equal(call.body.inferenceConfig.maxTokens, model.rawDefault ?? undefined);
+      function optionsFor(model, caller) {
+        const { reasoning, ...options } = structuredClone(caller);
+        return { ...options, model, thinking: reasoning, temperature: 0.7, systemPrompt: 'owned tool system', cacheRetention: 'none' };
+      }
+      async function bindSimple(input, options, expectedBody, sdk, refused) {
+        for (const binary of [false, true]) {
+          const before = structuredClone({ input, options }), count = calls.length;
+          let result, completed = false, chunks = 0, failure;
+          if (refused) {
+            if (binary) await native.streamChat(input, () => { chunks++; }, () => { completed = true; }, error => { failure = error; }, options);
+            else await assert.rejects(native.chat(input, options), { message: 'Invalid Bedrock thinking allocation.' });
+            if (binary) assert.equal(failure?.message, 'Invalid Bedrock thinking allocation.');
+            assert.equal(calls.length, count); assert.equal(completed, false); assert.equal(chunks, 0);
+          } else {
+            if (binary) await native.streamChat(input, () => {}, value => { result = value; }, error => { throw error; }, options);
+            else result = await native.chat(input, options);
+            assert.equal(calls.length, count + 1); const call = calls.at(-1);
+            assert.deepEqual(call.body, expectedBody);
+            assert.equal(call.path, '/proxy/model/' + encodeURIComponent(options.model) + '/converse' + (binary ? '-stream' : ''));
+            assert.equal(call.headers.authorization, 'Bearer installed-native-bearer');
+            assert.equal(result.content, 'ok'); assert.equal(result.model, options.model); assert.equal(result.api, 'bedrock-converse-stream');
+            assert.deepEqual({ ...result.usage, costUsd: undefined }, { promptTokens: sdk.usage.input, completionTokens: sdk.usage.output,
+              cacheReadTokens: sdk.usage.cacheRead, cacheWriteTokens: sdk.usage.cacheWrite, totalTokens: sdk.usage.totalTokens, costUsd: undefined });
+            assert.ok(Math.abs(result.usage.costUsd - sdk.usage.cost.total) < 1e-12);
+          }
+          assert.deepEqual({ input, options }, before);
         }
       }
-      assert.equal(calls.length, 3 + 193 * 4);
+      selectedSimple = true;
+      for (const row of simpleDefaults) {
+        const captured = row.observed;
+        await bindSimple([{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }], optionsFor(captured.model, captured.callerOptions),
+          captured.requests[0].body, captured.result, false);
+      }
+      selectedSimple = false;
+      assert.equal(simpleDefaults.length, 193); assert.equal(calls.length, 3 + 193 * 4);
       for (const vector of outputBoundaries) for (const binary of [false, true]) {
         const input = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }], options = { ...vector.options, model: vector.model };
         const before = JSON.stringify({ input, options }); let result;
         if (binary) await native.streamChat(input, () => {}, value => { result = value; }, undefined, options);
         else result = await native.chat(input, options);
         assert.equal(result.content, binary ? 'installed-native-ok' : 'installed-bedrock-json-ok'); assert.equal(result.model, vector.model); assert.equal(result.api, vector.api);
-        const call = calls.at(-1); assert.deepEqual(call.body.inferenceConfig, vector.expectedInferenceConfig);
+        const call = calls.at(-1), model = originals.find(model => model.id === vector.model);
+        // Rule projection for this short no-system facade input; raw module controls remain in the owning test.
+        assert.deepEqual(call.body.inferenceConfig, { ...vector.expectedInferenceConfig,
+          maxTokens: Math.min(vector.options.maxTokens ?? model.maximum, model.contextWindow - 4098) });
         if (vector.case === 'raw-omitted') {
           const noTools = toolSchemas.find(row => row.model === vector.model && row.case === 'raw-omitted');
           assert.equal(noTools.api, vector.api); assert.equal(noTools.expectedToolConfig, null); assert.equal(Object.hasOwn(call.body, 'toolConfig'), false);
@@ -2334,6 +2366,38 @@ it('dispatches native Bedrock binary streams through installed public declaratio
         assert.equal(call.headers.authorization, 'Bearer installed-native-bearer'); assert.equal(JSON.stringify({ input, options }), before);
       }
       assert.equal(toolSchemas.length, 579); assert.equal(calls.length, 4249);
+      selectedSimple = true;
+      const numericRows = simpleNumeric.filter(row => row.observed.entrypoint === 'streamSimple' && row.observed.case !== 'simple-omitted');
+      assert.equal(numericRows.length, 322);
+      for (const row of numericRows) await bindSimple([{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }],
+        optionsFor(row.observed.model, row.observed.callerOptions), row.observed.requests[0].body, row.observed.result, row.expectedCoreRefusal);
+      for (const row of simpleContext.rows) {
+        assert.deepEqual(row.context.messages[0], { role: 'system', content: 'owned tool system', timestamp: 0 });
+        // Explicit fixture projection only: no automatic-host provenance is inferred.
+        const input = row.context.messages.slice(1).map((message, index) => ({ id: String(index), role: message.role,
+          content: typeof message.content === 'string' ? message.content : message.content.map(block => block.type === 'text' ? block.text : '').join(''),
+          ...(Array.isArray(message.content) ? { blocks: message.content.flatMap(block => block.type === 'image'
+            ? [{ type: 'image', mediaType: block.mimeType, url: 'data:' + block.mimeType + ';base64,' + block.data }] : []) } : {}),
+          timestamp: new Date(message.timestamp), provider: message.provider === 'amazon-bedrock' ? 'bedrock' : message.provider,
+          model: message.model, api: message.api, metadata: { stopReason: message.stopReason },
+          ...(message.usage ? { usage: { inputTokens: message.usage.input, outputTokens: message.usage.output,
+            cacheReadTokens: message.usage.cacheRead, cacheWriteTokens: message.usage.cacheWrite, totalTokens: message.usage.totalTokens } } : {}) }));
+        await bindSimple(input, optionsFor(row.model, row.callerOptions), row.request.body, row.sdkResult, row.expectedCoreRefusal);
+      }
+      assert.equal(simpleContext.rows.length, 211);
+      assert.equal(numericRows.filter(row => row.expectedCoreRefusal).length, 46);
+      assert.equal(simpleContext.rows.filter(row => row.expectedCoreRefusal).length, 47);
+      assert.equal(calls.length, 5129);
+      assert.equal(adaptive.model.id, 'anthropic.claude-opus-4-6-v1');
+      assert.deepEqual(adaptive.rows.map(row => row.thinking), ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
+      // Same text-only reply as the existing exact-model default; no signed-response claim.
+      const sdk = simpleDefaults.find(row => row.observed.model === adaptive.model.id).observed.result;
+      for (const row of adaptive.rows) {
+        assert.equal(row.model, adaptive.model.id);
+        await bindSimple([{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }],
+          { ...row.options, model: row.model }, row.expectedBody, sdk, false);
+      }
+      assert.equal(calls.length, 5143);
       console.log('installed Bedrock ConverseStream OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);

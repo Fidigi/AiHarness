@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { BedrockProvider, bedrockCredentialConfig, type ChatOptions, type ChatResponse } from './index.js';
+import { BedrockProvider, bedrockCredentialConfig, type ChatOptions, type ChatResponse, type ThinkingLevel } from './index.js';
+import { applyBedrockProfileOutputPolicy } from './bedrock-profiles.js';
 import { closeProviderNetworkDispatchers } from './provider-network.js';
 import { bedrockFrame as frame, bedrockText } from '../../../../tests/fixtures/bedrock-event-stream.js';
 import type { Message } from '../types/index.js';
@@ -241,11 +242,74 @@ const toolSchemaReference = JSON.parse(toolSchemaBytes.toString()) as {
   modelProjections: number; vectors: number; freshSdkRequests: number; reusedSdkRequests: number;
   rows: Array<{ model: string; api: string; case: string; options: ChatOptions; expectedToolConfig: Record<string, unknown> | null }>;
 };
+type SimpleCaller = { reasoning?: ThinkingLevel; maxTokens?: number; thinkingBudgets?: ChatOptions['thinkingBudgets'] };
+type SimpleResult = { stopReason: string; usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; cost: { total: number } } };
+type SimpleBody = Record<string, unknown> & { inferenceConfig: { maxTokens: number; temperature?: number } };
+type SimpleStoredRow = { model: string; case: string; entrypoint: string; callerOptions: SimpleCaller; requests: Array<{ body: SimpleBody }>; result: SimpleResult };
+type CapturedMessage = { role: 'system' | 'user' | 'assistant'; content: string | Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>;
+  timestamp: number; provider?: string; model?: string; api?: string; usage?: SimpleResult['usage']; stopReason?: string };
+const simpleDefaultBytes = readFileSync(new URL('../../../../tests/fixtures/bedrock-simple-defaults-reference.json', import.meta.url));
+const simpleDefaults = JSON.parse(simpleDefaultBytes.toString()) as { rows: Array<{ sourceIndex: number; observed: SimpleStoredRow }> };
+const simpleNumericBytes = readFileSync(new URL('../../../../tests/fixtures/bedrock-simple-numeric-reference.json', import.meta.url));
+const simpleNumeric = JSON.parse(simpleNumericBytes.toString()) as { models: Array<{ id: string }>; rows: Array<{ expectedCoreRefusal: boolean; observed: SimpleStoredRow }> };
+const simpleContextBytes = readFileSync(new URL('../../../../tests/fixtures/bedrock-simple-context-reference.json', import.meta.url));
+const simpleContext = JSON.parse(simpleContextBytes.toString()) as { replyFramesBase64: string; rows: Array<{ model: string; case: string; callerOptions: SimpleCaller;
+  context: { messages: CapturedMessage[] }; request: { body: SimpleBody }; sdkResult: SimpleResult; expectedCoreRefusal: boolean }> };
+const numericIds = new Set(simpleNumeric.models.map(model => model.id));
+const numericLevels = { off: 'off', minimal: 'minimal', low: 'low', medium: 'medium', high: 'high', xhigh: 'high', max: 'high' };
 const known = reference.models[0];
 function observedResponse(value: unknown, binary: boolean): Response {
   return binary ? response(bedrockText('ok', 'end_turn', value)) : new Response(JSON.stringify({
     model: 'untrusted-response-alias', output: { message: { role: 'assistant', content: [{ text: 'ok' }] } }, stopReason: 'end_turn', usage: value,
   }), { headers: { 'content-type': 'application/json' } });
+}
+
+function selectedSimpleOptions(model: string, caller: SimpleCaller): ChatOptions {
+  const { reasoning, ...options } = structuredClone(caller);
+  return { ...options, model, thinking: reasoning, temperature: 0.7, systemPrompt: 'owned tool system', cacheRetention: 'none' };
+}
+function capturedMessages(source: CapturedMessage[]): Message[] {
+  expect(source[0]).toEqual({ role: 'system', content: 'owned tool system', timestamp: 0 });
+  // Explicit SDK-to-Core fixture projection, not automatic host provenance.
+  return source.slice(1).map((message, index) => ({ id: String(index), role: message.role,
+    content: typeof message.content === 'string' ? message.content : message.content.map(block => block.type === 'text' ? block.text : '').join(''),
+    ...(Array.isArray(message.content) ? { blocks: message.content.flatMap(block => block.type === 'image'
+      ? [{ type: 'image' as const, mediaType: block.mimeType, url: `data:${block.mimeType};base64,${block.data}` }] : []) } : {}),
+    timestamp: new Date(message.timestamp), provider: message.provider === 'amazon-bedrock' ? 'bedrock' : message.provider,
+    model: message.model, api: message.api, metadata: { stopReason: message.stopReason },
+    ...(message.usage ? { usage: { inputTokens: message.usage.input, outputTokens: message.usage.output,
+      cacheReadTokens: message.usage.cacheRead, cacheWriteTokens: message.usage.cacheWrite, totalTokens: message.usage.totalTokens } } : {}),
+  }));
+}
+async function bindSelectedSimple(input: Message[], options: ChatOptions, body: SimpleBody, sdk: SimpleResult, refused = false): Promise<void> {
+  const provider = create({ apiKey: 'disposable-selected-simple', model: options.model });
+  for (const binary of [false, true]) {
+    const fetch = vi.fn(async (_url: string | URL, _init?: RequestInit) => binary
+      ? response(Buffer.from(simpleContext.replyFramesBase64, 'base64'))
+      : observedResponse({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }, false));
+    vi.stubGlobal('fetch', fetch);
+    const before = structuredClone({ input, options }), failed = vi.fn(), complete = vi.fn(), chunk = vi.fn();
+    let result: ChatResponse | undefined;
+    if (refused) {
+      if (binary) await provider.streamChat(input, chunk, complete, failed, options);
+      else await expect(provider.chat(input, options)).rejects.toMatchObject({ message: 'Invalid Bedrock thinking allocation.' });
+      if (binary) expect(failed.mock.calls[0]?.[0].message).toBe('Invalid Bedrock thinking allocation.');
+      expect(fetch).not.toHaveBeenCalled(); expect(chunk).not.toHaveBeenCalled(); expect(complete).not.toHaveBeenCalled();
+    } else {
+      if (binary) { await provider.streamChat(input, chunk, complete, failed, options); result = complete.mock.calls[0]?.[0]; }
+      else result = await provider.chat(input, options);
+      expect(failed).not.toHaveBeenCalled(); expect(fetch).toHaveBeenCalledOnce();
+      expect(String(fetch.mock.calls[0][0])).toBe(`https://bedrock-runtime.us-east-1.amazonaws.com/model/${encodeURIComponent(options.model!)}/converse${binary ? '-stream' : ''}`);
+      expect(JSON.parse(fetch.mock.calls[0][1]!.body as string)).toEqual(body);
+      expect(result).toMatchObject({ content: 'ok', model: options.model, api: 'bedrock-converse-stream' });
+      // Both existing Core facades omit ordinary stop labels; retain the SDK/Core divergence explicitly.
+      expect(sdk.stopReason).toBe('stop'); expect(result?.stopReason).toBeUndefined();
+      expect(result?.usage).toMatchObject({ promptTokens: sdk.usage.input, completionTokens: sdk.usage.output,
+        cacheReadTokens: sdk.usage.cacheRead, cacheWriteTokens: sdk.usage.cacheWrite, totalTokens: sdk.usage.totalTokens });
+      expect(result?.usage?.costUsd).toBeCloseTo(sdk.usage.cost.total, 12);
+    }
+    expect({ input, options }).toEqual(before);
+  }
 }
 
 describe('owned original Bedrock declarations, observed accounting and explicit ceilings', () => {
@@ -254,6 +318,12 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
     expect(reference.catalogueSha256).toBe('df227d426b678e44cd82deae1cf433855d6b27f36fedcff3ef4fb812fe882868');
     expect(reference.captureSha256).toBe('6b27c0226ae372bde56def095c5ee06873385ff3ab52909add2f3db3f026b2bd');
     expect(reference.models).toHaveLength(193); expect(reference.cases).toHaveLength(666);
+    expect(createHash('sha256').update(simpleDefaultBytes).digest('hex')).toBe('296d476e8a249cc4763935b1380e7b330ba04550b456883167c5db9a106717a2');
+    expect(createHash('sha256').update(simpleNumericBytes).digest('hex')).toBe('1c13c5dafcd2364c7fdde4ba54f42c34bb5b08c9612c5da36bcbdafc233c682a');
+    expect(createHash('sha256').update(simpleContextBytes).digest('hex')).toBe('c000978f0aab15c2b9e85655f6360818b9b529cf67c454f84332e7bf1806cb9b');
+    expect(simpleDefaults.rows.map(row => row.observed.model)).toEqual(reference.models.map(model => model.id));
+    expect(simpleNumeric.rows).toHaveLength(690); expect(simpleNumeric.rows.filter(row => row.expectedCoreRefusal)).toHaveLength(46);
+    expect(simpleContext.rows).toHaveLength(211); expect(simpleContext.rows.filter(row => row.expectedCoreRefusal)).toHaveLength(47);
     expect(createHash('sha256').update(outputBoundaryBytes).digest('hex')).toBe('716ec438933f21d1579054d122f95c089985553fbb17c02dcc9adabff6c8327c');
     expect(outputBoundaryReference.pinnedCommit).toBe(reference.pinnedCommit); expect(outputBoundaryReference.catalogueSha256).toBe(reference.catalogueSha256);
     expect(outputBoundaryReference.captureSha256).toBe('23e552940581dfd233e7c617f337481803f34f091a71a23dfd5ef79808dd4e2a');
@@ -279,13 +349,13 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       id: model.id, name: model.name, api: model.api, contextWindow: model.contextWindow, maxOutputTokens: model.maxTokens,
       capabilities: { reasoning: model.reasoning, imageInput: model.input.includes('image'), toolCalls: true },
       pricing: { inputPerMillion: model.cost.input, outputPerMillion: model.cost.output, cacheReadPerMillion: model.cost.cacheRead, cacheWritePerMillion: model.cost.cacheWrite },
-      thinkingLevelMap: null,
+      thinkingLevelMap: numericIds.has(model.id) ? numericLevels : null,
     })));
     expect(published.find(row => row.id === 'anthropic.claude-3-haiku-20240307-v1:0')).toMatchObject({ name: 'Claude 3 Haiku (Bedrock)' });
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  for (const model of reference.models) it(`${model.id}: owns JSON/binary identity, pinned accounting and raw output/scalar boundaries`, async () => {
+  for (const model of reference.models) it(`${model.id}: owns JSON/binary identity, pinned accounting and raw-module/simple-facade boundaries`, async () => {
     const provider = create({ apiKey: 'disposable-bedrock-reference', model: model.id });
     for (const vector of reference.cases.filter(row => row.model === model.id)) for (const binary of [false, true]) {
       const fetch = vi.fn(async (url: string | URL, _init?: RequestInit) => {
@@ -300,11 +370,13 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       expect.soft(result?.usage).toMatchObject(counts);
       expect.soft(result?.usage?.costUsd).toBeCloseTo(costUsd!, 12);
       expect(fetch).toHaveBeenCalledOnce();
-      const expected = rawOutputReference.rows.find(row => row.id === model.id)!;
       const config = JSON.parse(fetch.mock.calls[0][1]!.body as string).inferenceConfig;
-      expect(Object.hasOwn(config, 'maxTokens')).toBe(expected.maxTokens !== null);
-      expect(config.maxTokens).toBe(expected.maxTokens ?? undefined);
+      // Rule projection for this legacy test input: one five-character user message, no system/tools.
+      expect(config).toEqual({ maxTokens: Math.min(model.maxTokens, model.contextWindow - 4098) });
     }
+    const defaults = simpleDefaults.rows.find(row => row.observed.model === model.id)!.observed;
+    await bindSelectedSimple([{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }],
+      selectedSimpleOptions(model.id, defaults.callerOptions), defaults.requests[0].body, defaults.result);
     const toolVectors = toolSchemaReference.rows.filter(row => row.model === model.id);
     expect(toolVectors.map(row => row.case)).toEqual(['raw-omitted', 'object', 'union-optional']);
     const vectors = outputBoundaryReference.rows.filter(row => row.model === model.id);
@@ -318,7 +390,13 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       else result = await provider.chat(input, options);
       expect(result).toMatchObject({ content: 'ok', model: model.id, api: vector.api }); expect(fetch).toHaveBeenCalledOnce();
       const body = JSON.parse(fetch.mock.calls[0][1]!.body as string);
-      expect(body.inferenceConfig, vector.case).toEqual(vector.expectedInferenceConfig);
+      // Keep the captured raw module facet separate from the selected simple facade allocation.
+      const rawBody = { inferenceConfig: { ...(vector.options.maxTokens !== undefined ? { maxTokens: vector.options.maxTokens } : {}),
+        ...(vector.options.temperature !== undefined ? { temperature: vector.options.temperature } : {}) } };
+      applyBedrockProfileOutputPolicy(model.id, rawBody, vector.options.maxTokens);
+      expect(rawBody.inferenceConfig, vector.case).toEqual(vector.expectedInferenceConfig);
+      expect(body.inferenceConfig, vector.case).toEqual({ ...vector.expectedInferenceConfig,
+        maxTokens: Math.min(vector.options.maxTokens ?? model.maxTokens, model.contextWindow - 4098) });
       if (vector.case === 'raw-omitted') {
         expect(toolVectors[0].expectedToolConfig).toBeNull(); expect(Object.hasOwn(body, 'toolConfig')).toBe(false);
       }
@@ -338,7 +416,21 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
     }
   });
 
-  it('keeps raw defaults private and per-turn without changing explicit caps, derived/unknown transports or the legacy default', async () => {
+  for (const model of simpleNumeric.models) {
+    it(`${model.id}: binds selected simple numeric allocations and pretransport safety refusals`, async () => {
+      // The193-model default loop already binds the23 overlapping simple-omitted source rows.
+      const rows = simpleNumeric.rows.filter(row => row.observed.model === model.id && row.observed.entrypoint === 'streamSimple' && row.observed.case !== 'simple-omitted');
+      expect(rows).toHaveLength(14);
+      for (const row of rows) await bindSelectedSimple([{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }],
+        selectedSimpleOptions(model.id, row.observed.callerOptions), row.observed.requests[0].body, row.observed.result, row.expectedCoreRefusal);
+    });
+    it(`${model.id}: binds selected simple context chronology, image and custom boundaries`, async () => {
+      for (const row of simpleContext.rows.filter(row => row.model === model.id)) await bindSelectedSimple(capturedMessages(row.context.messages),
+        selectedSimpleOptions(model.id, row.callerOptions), row.request.body, row.sdkResult, row.expectedCoreRefusal);
+    });
+  }
+
+  it('keeps native defaults private and per-turn without changing explicit caps, derived/unknown transports or the legacy default', async () => {
     const target = rawOutputReference.rows.find(row => row.maxTokens !== null)!;
     const native = create({ model: known.id });
     const published = native.getPublishedModels()?.find(row => row.id === target.id)!;
@@ -361,6 +453,54 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       const config = JSON.parse(fetch.mock.calls[0][1]!.body as string).inferenceConfig;
       expect(Object.hasOwn(config, 'maxTokens')).toBe(maximum !== undefined);
       expect(config.maxTokens).toBe(maximum);
+    }
+  });
+
+  it('refuses malformed numeric levels/maps unread while leaving off, unknown and derived maps opaque', async () => {
+    const model = simpleNumeric.models[0].id, provider = create({ apiKey: 'disposable', model });
+    const get = vi.fn(() => 16384), map = Object.defineProperty({}, 'high', { enumerable: true, get });
+    const invalid: Array<[ChatOptions, string]> = [
+      ...['private-level', '__proto__', null, 1].map(thinking => [{ thinking: thinking as ThinkingLevel }, 'Invalid Bedrock reasoning level.'] as [ChatOptions, string]),
+      ...[-1, 1.5, Infinity, NaN].map(high => [{ thinking: 'high', thinkingBudgets: { high } },
+        'Thinking budgets must contain only safe nonnegative integer minimal/low/medium/high values.'] as [ChatOptions, string]),
+      [{ thinking: 'high', thinkingBudgets: map }, 'Thinking budgets must contain only safe nonnegative integer minimal/low/medium/high values.'],
+    ];
+    const fetch = vi.fn(async () => observedResponse({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }, false)); vi.stubGlobal('fetch', fetch);
+    for (const [options, diagnostic] of invalid) {
+      const error = vi.fn(), complete = vi.fn(), chunk = vi.fn();
+      await expect(provider.chat(messages, options)).rejects.toMatchObject({ message: diagnostic });
+      await provider.streamChat(messages, chunk, complete, error, options);
+      expect(error.mock.calls[0]?.[0].message).toBe(diagnostic); expect(complete).not.toHaveBeenCalled(); expect(chunk).not.toHaveBeenCalled();
+    }
+    expect(fetch).not.toHaveBeenCalled(); expect(get).not.toHaveBeenCalled();
+    class Compatible extends BedrockProvider {}
+    for (const [owner, thinking] of [[provider, 'off'], [create({ model: 'unknown' }), 'high'],
+      [new Compatible({ type: 'bedrock', apiKey: 'disposable', model }), 'high']] as const) {
+      for (const binary of [false, true]) {
+        const fetch = vi.fn(async (_url: string | URL, _init?: RequestInit) => observedResponse({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }, binary)); vi.stubGlobal('fetch', fetch);
+        const options = { thinking, thinkingBudgets: map, maxTokens: 64 };
+        if (binary) await owner.streamChat(messages, () => {}, undefined, undefined, options); else await owner.chat(messages, options);
+        expect(fetch).toHaveBeenCalledOnce(); expect(get).not.toHaveBeenCalled();
+        expect(Object.hasOwn(JSON.parse(fetch.mock.calls[0][1]!.body as string), 'additionalModelRequestFields')).toBe(false);
+      }
+    }
+  });
+
+  it('refuses callable context carriers before JSON/binary dispatch without executing accessors', async () => {
+    const provider = create({ apiKey: 'disposable', model: 'anthropic.claude-haiku-4-5-20251001-v1:0' });
+    const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+    for (const field of ['usage', 'metadata'] as const) {
+      const get = vi.fn(() => { throw new Error('PRIVATE_CONTEXT_ACCESSOR'); });
+      const carrier = Object.defineProperty(() => {}, field === 'usage' ? 'totalTokens' : 'stopReason', { get });
+      const input: Message = { ...messages[0], role: 'assistant', usage: { totalTokens: 1 } };
+      Object.defineProperty(input, field, { value: carrier, enumerable: true });
+      const options: ChatOptions = { maxTokens: 64, thinking: 'off' }, before = Object.getOwnPropertyDescriptors(input);
+      await expect(provider.chat([input], options)).rejects.toThrow('Provider native output policy is invalid.');
+      const chunk = vi.fn(), complete = vi.fn(), error = vi.fn();
+      await provider.streamChat([input], chunk, complete, error, options);
+      expect(error).toHaveBeenCalledTimes(1); expect(error.mock.calls[0][0].message).toBe('Provider native output policy is invalid.');
+      expect(chunk).not.toHaveBeenCalled(); expect(complete).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled(); expect(get).not.toHaveBeenCalled();
+      expect(Object.getOwnPropertyDescriptors(input)).toEqual(before); expect(options).toEqual({ maxTokens: 64, thinking: 'off' });
     }
   });
 

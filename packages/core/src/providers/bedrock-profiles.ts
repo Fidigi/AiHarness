@@ -1,5 +1,9 @@
-import type { ChatResponse } from './index.js';
+import { isProxy } from 'node:util/types';
+import type { ChatOptions, ChatResponse } from './index.js';
+import type { Message } from '../types/index.js';
 import type { PublishedModelMetadata } from './model-metadata.js';
+import { copyThinkingBudgets } from './thinking-budgets.js';
+import { ProviderOutputBudgetError, type PreparedNativeOutputBudget } from './provider-output-budget.js';
 
 // Pi 1.2.0 / 06a4669, approved amazon-bedrock.json; the independent fixture binds
 // its digest and executed AWS SDK observations. Declarations are not availability.
@@ -201,16 +205,44 @@ const rows: readonly Row[] = [
   ["zai.glm-4.7-flash","GLM-4.7-Flash",202752,131072,true,false,{"input":0.07,"output":0.4,"cacheRead":0,"cacheWrite":0}],
   ["zai.glm-5","GLM-5",202752,131072,true,false,{"input":1,"output":3.2,"cacheRead":0,"cacheWrite":0}],
 ];
+const numericModels = new Set([
+  'anthropic.claude-haiku-4-5-20251001-v1:0',
+  'anthropic.claude-opus-4-1-20250805-v1:0',
+  'anthropic.claude-opus-4-5-20251101-v1:0',
+  'anthropic.claude-sonnet-4-5-20250929-v1:0',
+  'apac.anthropic.claude-sonnet-4-20250514-v1:0',
+  'au.anthropic.claude-haiku-4-5-20251001-v1:0',
+  'au.anthropic.claude-sonnet-4-5-20250929-v1:0',
+  'eu.anthropic.claude-haiku-4-5-20251001-v1:0',
+  'eu.anthropic.claude-opus-4-5-20251101-v1:0',
+  'eu.anthropic.claude-sonnet-4-20250514-v1:0',
+  'eu.anthropic.claude-sonnet-4-5-20250929-v1:0',
+  'global.anthropic.claude-haiku-4-5-20251001-v1:0',
+  'global.anthropic.claude-opus-4-5-20251101-v1:0',
+  'global.anthropic.claude-sonnet-4-20250514-v1:0',
+  'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+  'in.anthropic.claude-haiku-4-5-20251001-v1:0',
+  'jp.anthropic.claude-haiku-4-5-20251001-v1:0',
+  'jp.anthropic.claude-sonnet-4-5-20250929-v1:0',
+  'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+  'us.anthropic.claude-opus-4-1-20250805-v1:0',
+  'us.anthropic.claude-opus-4-5-20251101-v1:0',
+  'us.anthropic.claude-sonnet-4-20250514-v1:0',
+  'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+]);
+const numericLevels = { off: 'off', minimal: 'minimal', low: 'low', medium: 'medium', high: 'high', xhigh: 'high', max: 'high' };
+const numericBudgets = { minimal: 1024, low: 2048, medium: 8192, high: 16384 };
 const profiles = new Map(rows.map(([id, name, contextWindow, maxOutputTokens, reasoning, imageInput, cost]) => {
   const pricing = { inputPerMillion: cost.input, outputPerMillion: cost.output, cacheReadPerMillion: cost.cacheRead, cacheWritePerMillion: cost.cacheWrite };
   const metadata: PublishedModelMetadata = { id, name, api: 'bedrock-converse-stream', contextWindow, maxOutputTokens,
-    capabilities: { reasoning, imageInput, toolCalls: true }, thinkingLevelMap: null,
+    capabilities: { reasoning, imageInput, toolCalls: true }, thinkingLevelMap: numericModels.has(id) ? numericLevels : null,
     ...(Object.values(pricing).some(rate => rate > 0) ? { pricing } : {}) };
-  return [id, { metadata, cost, maxOutputTokens, rawDefaultMaxTokens: id.includes('anthropic.claude') ? maxOutputTokens : undefined }] as const;
+  return [id, { metadata, cost, contextWindow, maxOutputTokens, rawDefaultMaxTokens: id.includes('anthropic.claude') ? maxOutputTokens : undefined }] as const;
 }));
 export function hasBedrockProfile(model: string): boolean { return profiles.has(model); }
 export function bedrockPublishedProfiles(): PublishedModelMetadata[] {
   return [...profiles.values()].map(({ metadata }) => ({ ...metadata, capabilities: { ...metadata.capabilities },
+    ...(metadata.thinkingLevelMap ? { thinkingLevelMap: { ...metadata.thinkingLevelMap } } : {}),
     ...(metadata.pricing ? { pricing: { ...metadata.pricing } } : {}) }));
 }
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -225,6 +257,123 @@ export function applyBedrockProfileOutputPolicy(model: string, body: Record<stri
     || (body.inferenceConfig.maxTokens !== undefined && !valid(body.inferenceConfig.maxTokens))) throw new Error('Invalid Bedrock output limit.');
   if (requested === undefined && body.inferenceConfig.maxTokens === undefined && profile.rawDefaultMaxTokens !== undefined) {
     body.inferenceConfig.maxTokens = profile.rawDefaultMaxTokens;
+  }
+}
+
+function contextJson(value: unknown): string {
+  try { return JSON.stringify(value) ?? 'undefined'; } catch { return '[unserializable]'; }
+}
+
+/** Consume only inert own data; unrelated usage/metadata fields stay opaque. */
+function contextSlot(value: object, key: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  if (!descriptor) {
+    if (key in value) throw new ProviderOutputBudgetError();
+    return undefined;
+  }
+  if (!('value' in descriptor)) throw new ProviderOutputBudgetError();
+  return descriptor.value;
+}
+function contextCarrier(value: unknown): object | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'object' || isProxy(value) || Array.isArray(value)) throw new ProviderOutputBudgetError();
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) throw new ProviderOutputBudgetError();
+  return value;
+}
+function contextScalar(value: object, key: string): unknown {
+  const field = contextSlot(value, key);
+  if ((typeof field === 'object' && field !== null) || typeof field === 'function') throw new ProviderOutputBudgetError();
+  return field;
+}
+
+/** Pi's approximate transcript estimate, not vendor tokenization or observed billing. */
+function simpleContextTokens(messages: readonly Message[], options: ChatOptions | undefined): number {
+  const initialSystem = Boolean(options?.systemPrompt || options?.tools?.length);
+  let tokens = initialSystem ? Math.ceil((options?.systemPrompt?.length ?? 0) / 3.5)
+    + (options?.tools?.length ? Math.ceil(contextJson(options.tools).length / 3.5) : 0) : 0;
+  let latestPrefix = initialSystem ? 0 : Number.NEGATIVE_INFINITY;
+  for (const message of messages) {
+    const time = message.timestamp.getTime();
+    let used: unknown = 0, stopped = false;
+    if (message.role === 'assistant' && time >= latestPrefix) {
+      const usage = contextCarrier(contextSlot(message, 'usage'));
+      if (usage) {
+        used = contextScalar(usage, 'totalTokens');
+        if (!used) {
+          const fields = ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens'].map(key => contextScalar(usage, key));
+          // Missing counters remain unknown; only a complete sum can replace an absent/zero total.
+          used = fields.every(counter) ? fields.reduce<number>((sum, value) => sum + Number(value), 0) : 0;
+        }
+        if (counter(used) && used > 0) {
+          const metadata = contextCarrier(contextSlot(message, 'metadata'));
+          const stop = metadata ? contextScalar(metadata, 'stopReason') : undefined;
+          stopped = stop === 'error' || stop === 'aborted';
+        }
+      }
+    }
+    if (counter(used) && used > 0 && !stopped) tokens = used;
+    else {
+      let chars = message.content.length;
+      for (const block of message.blocks ?? []) {
+        if (block.type === 'image' && message.role !== 'assistant') chars += 4800;
+        if (block.type === 'reasoning' && message.role === 'assistant') chars += block.text.length;
+      }
+      if (message.role === 'assistant') for (const call of message.toolCalls ?? []) chars += call.name.length + contextJson(call.input).length;
+      tokens += Math.ceil(chars / 3.5);
+    }
+    latestPrefix = Math.max(latestPrefix, time);
+  }
+  return tokens;
+}
+
+/** Selected full-simple allocation; the raw output module above remains separate. */
+export function applyBedrockProfileSimplePolicy(model: string, body: Record<string, unknown>, options: ChatOptions | undefined,
+  messages: readonly Message[] = [], region = 'us-east-1'): { maxTokens: number; thinkingBudget?: number; thinkingBudgets?: ChatOptions['thinkingBudgets'] } | undefined {
+  const profile = profiles.get(model);
+  if (!profile) return undefined;
+  applyBedrockProfileOutputPolicy(model, body, options?.maxTokens);
+  const available = Math.max(1, profile.contextWindow - simpleContextTokens(messages, options) - 4096);
+  let maxTokens = Math.min(options?.maxTokens ?? profile.maxOutputTokens, available);
+  let thinkingBudget: number | undefined, thinkingBudgets: ChatOptions['thinkingBudgets'];
+  const level = options?.thinking;
+  if (model === 'anthropic.claude-opus-4-6-v1' && level !== undefined && level !== 'off') {
+    const efforts = { minimal: 'low', low: 'low', medium: 'medium', high: 'high', xhigh: 'high', max: 'max' } as const;
+    if (typeof level !== 'string' || !Object.hasOwn(efforts, level)) throw new Error('Invalid Bedrock reasoning level.');
+    body.additionalModelRequestFields = { thinking: { type: 'adaptive',
+      ...(region.toLowerCase().startsWith('us-gov-') ? {} : { display: 'summarized' }) }, output_config: { effort: efforts[level] } };
+  }
+  if (numericModels.has(model) && level !== undefined && level !== 'off') {
+    if (typeof level !== 'string' || !Object.hasOwn(numericLevels, level)) throw new Error('Invalid Bedrock reasoning level.');
+    const selected = level === 'xhigh' || level === 'max' ? 'high' : level;
+    try {
+      const descriptor = Object.getOwnPropertyDescriptor(options, 'thinkingBudgets');
+      if (descriptor && !('value' in descriptor)) throw new Error();
+      thinkingBudgets = copyThinkingBudgets(descriptor?.value);
+    } catch { throw new ProviderOutputBudgetError('thinking'); }
+    thinkingBudget = thinkingBudgets?.[selected] ?? numericBudgets[selected];
+    // Saturating addition preserves a valid MAX_SAFE_INTEGER custom budget without unsafe intermediate arithmetic.
+    maxTokens = thinkingBudget >= profile.maxOutputTokens - maxTokens ? profile.maxOutputTokens : maxTokens + thinkingBudget;
+    if (maxTokens <= thinkingBudget) thinkingBudget = Math.min(thinkingBudget, Math.max(0, maxTokens - 1024));
+    maxTokens = Math.min(maxTokens, available);
+    thinkingBudget = Math.min(thinkingBudget, Math.max(0, maxTokens - 1024));
+    if (thinkingBudget < 1024 || maxTokens - thinkingBudget < 1024) throw new Error('Invalid Bedrock thinking allocation.');
+    body.additionalModelRequestFields = { thinking: { type: 'enabled', budget_tokens: thinkingBudget,
+      ...(region.toLowerCase().startsWith('us-gov-') ? {} : { display: 'summarized' }) }, anthropic_beta: ['interleaved-thinking-2025-05-14'] };
+  }
+  (body.inferenceConfig as Record<string, unknown>).maxTokens = maxTokens;
+  return { maxTokens, thinkingBudget, thinkingBudgets };
+}
+
+export function prepareBedrockOutputBudget(options: ChatOptions, configuredModel: string, messages: readonly Message[] = [], region = 'us-east-1'): Readonly<PreparedNativeOutputBudget> {
+  try {
+    const model = options.model || configuredModel;
+    const allocation = applyBedrockProfileSimplePolicy(model, { inferenceConfig: {} }, options, messages, region);
+    const owned = { ...options, model, ...(allocation?.thinkingBudget !== undefined ? { thinkingBudgets: allocation.thinkingBudgets } : {}) };
+    return Object.freeze({ options: owned, maxTokens: allocation?.maxTokens ?? options.maxTokens ?? 0 });
+  } catch (error) {
+    if (error instanceof ProviderOutputBudgetError) throw error;
+    throw new ProviderOutputBudgetError();
   }
 }
 

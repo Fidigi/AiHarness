@@ -13,7 +13,7 @@ import { azureDeployments, normalizeAzureResponsesBaseUrl, usesAzureResponses } 
 import { azureProfileApi, azureProfileUsage, azurePublishedProfiles, prepareAzureCompletion, prepareAzureResponses } from './azure-profiles.js';
 import { parseProviderToolArguments } from './tool-arguments.js';
 import { consumeBedrockStream } from './bedrock-converse-stream.js';
-import { applyBedrockProfileOutputPolicy, bedrockProfileUsage, bedrockPublishedProfiles, hasBedrockProfile } from './bedrock-profiles.js';
+import { applyBedrockProfileSimplePolicy, prepareBedrockOutputBudget, bedrockProfileUsage, bedrockPublishedProfiles, hasBedrockProfile } from './bedrock-profiles.js';
 import { OPENAI_DECISIONS_MODEL, decisionsBody, decisionsAnswers, type NativeWireQuestion } from './openai-decisions.js';
 export { OPENAI_DECISIONS_MODEL } from './openai-decisions.js';
 import { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
@@ -4232,6 +4232,10 @@ export class BedrockProvider extends AiProvider {
     });
     this.region = String(config.region || process.env.AWS_REGION || 'us-east-1');
     this.ownsNativeProfiles = new.target === BedrockProvider;
+    if (this.ownsNativeProfiles) registerNativeOutputBudget(this, () => {
+      const model = captureNativeConfiguredModel(this.config, 'anthropic.claude-3-haiku-20240307-v1:0'), region = this.region;
+      return (options, messages) => prepareBedrockOutputBudget(options, model, messages, region);
+    });
   }
 
   validateConfig(): boolean {
@@ -4345,7 +4349,7 @@ export class BedrockProvider extends AiProvider {
       throw new Error('Invalid Bedrock endpoint.');
     }
     const prepared = this.requestBody(messages, options);
-    if (native) applyBedrockProfileOutputPolicy(requestedModel, prepared, options?.maxTokens);
+    if (native) applyBedrockProfileSimplePolicy(requestedModel, prepared, options, messages, this.region);
     const body = serializeProviderBody(prepared);
     const response = await this.request(url, {
       method: 'POST', headers: await this.requestHeaders(url, body), body, signal: options?.signal,
@@ -4400,7 +4404,7 @@ export class BedrockProvider extends AiProvider {
       const native = this.ownsNativeProfiles && hasBedrockProfile(model);
       const url = this.streamEndpoint(model);
       const prepared = this.requestBody(messages, options);
-      if (native) applyBedrockProfileOutputPolicy(model, prepared, options?.maxTokens);
+      if (native) applyBedrockProfileSimplePolicy(model, prepared, options, messages, this.region);
       const body = serializeProviderBody(prepared);
       const response = await this.request(url, {
         method: 'POST', headers: { ...await this.requestHeaders(url, body), Accept: 'application/vnd.amazon.eventstream' },

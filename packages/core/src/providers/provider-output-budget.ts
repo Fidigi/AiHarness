@@ -1,11 +1,12 @@
 import type { ChatOptions } from './index.js';
+import type { Message } from '../types/index.js';
 
 /** Internal preparation only. No new required provider/store method or public DTO field. */
 export interface PreparedNativeOutputBudget {
   readonly options: ChatOptions;
   readonly maxTokens: number;
 }
-export type NativeOutputBudgetPolicy = (ownedOptions: ChatOptions) => Readonly<PreparedNativeOutputBudget>;
+export type NativeOutputBudgetPolicy = (ownedOptions: ChatOptions, messages?: readonly Message[]) => Readonly<PreparedNativeOutputBudget>;
 const policies = new WeakMap<object, () => NativeOutputBudgetPolicy>();
 
 export class ProviderOutputBudgetError extends Error {

@@ -403,7 +403,7 @@ async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
         const prepared = prepare(safeJson);
         const projected = options.prepareDispatch?.(prepared.data.messages, prepared.data.options)
           ?? { messages: prepared.data.messages, options: prepared.data.options };
-        const nativeOutput = nativeOutputPolicy?.(projected.options);
+        const nativeOutput = nativeOutputPolicy?.(projected.options, projected.messages);
         const requestMessages = projected.messages, requestOptions = nativeOutput?.options ?? projected.options;
         if (contextBudget) assertProviderRequestBudget(requestMessages, requestOptions, contextBudget,
           Math.max(prepared.requestedMaxTokens ?? 0, nativeOutput?.maxTokens ?? 0));
