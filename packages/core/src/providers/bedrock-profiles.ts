@@ -235,7 +235,7 @@ const numericBudgets = { minimal: 1024, low: 2048, medium: 8192, high: 16384 };
 const profiles = new Map(rows.map(([id, name, contextWindow, maxOutputTokens, reasoning, imageInput, cost]) => {
   const pricing = { inputPerMillion: cost.input, outputPerMillion: cost.output, cacheReadPerMillion: cost.cacheRead, cacheWritePerMillion: cost.cacheWrite };
   const metadata: PublishedModelMetadata = { id, name, api: 'bedrock-converse-stream', contextWindow, maxOutputTokens,
-    capabilities: { reasoning, imageInput, toolCalls: true }, thinkingLevelMap: numericModels.has(id) ? numericLevels : null,
+    capabilities: { reasoning, imageInput, toolCalls: true }, thinkingLevelMap: numericModels.has(id) ? {} : null,
     ...(Object.values(pricing).some(rate => rate > 0) ? { pricing } : {}) };
   return [id, { metadata, cost, contextWindow, maxOutputTokens, rawDefaultMaxTokens: id.includes('anthropic.claude') ? maxOutputTokens : undefined }] as const;
 }));

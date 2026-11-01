@@ -2323,7 +2323,24 @@ it('dispatches native Bedrock binary streams through installed public declaratio
         assert.deepEqual(native.getPublishedModels().find(row => row.id === model.id).thinkingLevelMap, {});
         assert.deepEqual(getSupportedThinkingLevels('operator-bedrock', model.id, undefined, native), baselineHost.standardLevels);
       }
-      assert.equal(baselineClamps, 72); assert.equal(calls.length, 3);
+      assert.equal(baselineClamps, 72);
+      const numericHostModels = [...new Set(simpleNumeric.map(row => row.observed.model))]; assert.equal(numericHostModels.length, 23);
+      let numericClamps = 0;
+      for (const model of numericHostModels) {
+        const row = native.getPublishedModels().find(row => row.id === model);
+        assert.deepEqual(row.thinkingLevelMap, {});
+        const available = getSupportedThinkingLevels('operator-bedrock', model, undefined, native);
+        assert.deepEqual(available, baselineHost.standardLevels);
+        for (const level of levels) {
+          const selected = baselineHost.standardLevels.includes(level) ? level : 'high';
+          assert.equal(clampPublishedThinkingLevel(level, available), selected);
+          if (selected !== level) numericClamps++;
+        }
+        row.thinkingLevelMap.high = 'foreign';
+        assert.deepEqual(native.getPublishedModels().find(row => row.id === model).thinkingLevelMap, {});
+        assert.deepEqual(getSupportedThinkingLevels('operator-bedrock', model, undefined, native), baselineHost.standardLevels);
+      }
+      assert.equal(numericClamps, 46); assert.equal(calls.length, 3);
       assert.deepEqual(getSupportedThinkingLevels('operator-bedrock', 'unreviewed', undefined, native), ['off']);
       for (const model of originals) {
         const json = await native.chat([], { model: model.id, maxTokens: 16 });
@@ -2489,6 +2506,15 @@ it('dispatches native Bedrock binary streams through installed public declaratio
           { ...row.options, model: row.model, thinking }, row.expectedBody, sdk, false);
       }
       assert.equal(baselineSelections, 72); assert.equal(calls.length, 6683);
+      let numericSelections = 0;
+      for (const model of numericHostModels) for (const requested of ['xhigh', 'max']) {
+        const row = simpleNumeric.find(row => row.observed.model === model && row.observed.case === 'simple-high-output64');
+        const thinking = clampPublishedThinkingLevel(requested, getSupportedThinkingLevels('operator-bedrock', model, undefined, native));
+        assert.equal(thinking, 'high'); numericSelections++;
+        await bindSimple([{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }],
+          optionsFor(model, { ...row.observed.callerOptions, reasoning: thinking }), row.observed.requests[0].body, row.observed.result, row.expectedCoreRefusal);
+      }
+      assert.equal(numericSelections, 46); assert.equal(calls.length, 6775);
       console.log('installed Bedrock ConverseStream OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);

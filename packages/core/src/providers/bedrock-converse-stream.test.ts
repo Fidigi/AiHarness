@@ -272,7 +272,7 @@ const simpleContextBytes = readFileSync(new URL('../../../../tests/fixtures/bedr
 const simpleContext = JSON.parse(simpleContextBytes.toString()) as { replyFramesBase64: string; rows: Array<{ model: string; case: string; callerOptions: SimpleCaller;
   context: { messages: CapturedMessage[] }; request: { body: SimpleBody }; sdkResult: SimpleResult; expectedCoreRefusal: boolean }> };
 const numericIds = new Set(simpleNumeric.models.map(model => model.id));
-const numericLevels = { off: 'off', minimal: 'minimal', low: 'low', medium: 'medium', high: 'high', xhigh: 'high', max: 'high' };
+const numericLevels = {};
 const known = reference.models[0];
 function observedResponse(value: unknown, binary: boolean): Response {
   return binary ? response(bedrockText('ok', 'end_turn', value)) : new Response(JSON.stringify({
@@ -426,6 +426,20 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       expect(getSupportedThinkingLevels('operator-bedrock', model.id, undefined, provider)).toEqual(baselineHostReference.standardLevels);
     }
     expect(baselineClamps).toBe(72);
+    let numericClamps = 0;
+    for (const model of simpleNumeric.models) {
+      const available = getSupportedThinkingLevels('operator-bedrock', model.id, undefined, provider);
+      expect(available, model.id).toEqual(baselineHostReference.standardLevels);
+      for (const level of levels) {
+        const selected = baselineHostReference.standardLevels.includes(level) ? level : 'high';
+        expect(clampPublishedThinkingLevel(level, available), model.id + ':' + level).toBe(selected);
+        if (selected !== level) numericClamps++;
+      }
+      published.find(row => row.id === model.id)!.thinkingLevelMap!.high = 'foreign';
+      expect(provider.getPublishedModels?.().find(row => row.id === model.id)?.thinkingLevelMap).toEqual({});
+      expect(getSupportedThinkingLevels('operator-bedrock', model.id, undefined, provider)).toEqual(baselineHostReference.standardLevels);
+    }
+    expect(numericClamps).toBe(46);
     expect(getSupportedThinkingLevels('operator-bedrock', 'unreviewed', undefined, provider)).toEqual(['off']);
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -531,6 +545,13 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       const thinking = clampPublishedThinkingLevel(clamp.requested, available); expect(thinking).toBe(clamp.selected);
       await bindSelectedSimple([{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }],
         { ...structuredClone(baseline.options), model: model.id, thinking }, baseline.expectedBody, defaults.result);
+    }
+    const numericHigh = simpleNumeric.rows.find(row => row.observed.model === model.id && row.observed.case === 'simple-high-output64');
+    if (numericHigh) for (const requested of ['xhigh', 'max'] as const) {
+      const thinking = clampPublishedThinkingLevel(requested, available); expect(thinking).toBe('high');
+      await bindSelectedSimple([{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }],
+        selectedSimpleOptions(model.id, { ...numericHigh.observed.callerOptions, reasoning: thinking }),
+        numericHigh.observed.requests[0].body, numericHigh.observed.result, numericHigh.expectedCoreRefusal);
     }
   });
 
