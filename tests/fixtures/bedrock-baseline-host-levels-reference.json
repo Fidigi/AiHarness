@@ -1,0 +1,3888 @@
+{
+  "schema": "bedrock-baseline-host-levels-reference-v1",
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "catalogueSha256": "df227d426b678e44cd82deae1cf433855d6b27f36fedcff3ef4fb812fe882868",
+  "captureSha256": "e35627194953d0d793c6a4fc53ffed34b0a91e120c62f40141803f9203763256",
+  "models": [
+    {
+      "id": "amazon.nova-2-lite-v1:0",
+      "name": "Nova 2 Lite",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.33,
+        "output": 2.75,
+        "cacheRead": 0.0825,
+        "cacheWrite": 0.33
+      },
+      "contextWindow": 1000000,
+      "maxTokens": 65535,
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "deepseek.v3-v1:0",
+      "name": "DeepSeek-V3.1",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 0.58,
+        "output": 1.68,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 163840,
+      "maxTokens": 81920,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "deepseek.v3.2",
+      "name": "DeepSeek V3.2",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 0.62,
+        "output": 1.85,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 163840,
+      "maxTokens": 81920,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "eu.amazon.nova-2-lite-v1:0",
+      "name": "Nova 2 Lite (EU)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.eu-central-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.374,
+        "output": 3.157,
+        "cacheRead": 0.0935,
+        "cacheWrite": 0.374
+      },
+      "contextWindow": 1000000,
+      "maxTokens": 65535,
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "global.amazon.nova-2-lite-v1:0",
+      "name": "Nova 2 Lite (Global)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.3,
+        "output": 2.5,
+        "cacheRead": 0.075,
+        "cacheWrite": 0.3
+      },
+      "contextWindow": 1000000,
+      "maxTokens": 65535,
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "global.moonshotai.kimi-k3",
+      "name": "Kimi K3 (Global)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 3,
+        "output": 15,
+        "cacheRead": 0.3,
+        "cacheWrite": 3.75
+      },
+      "contextWindow": 1048576,
+      "maxTokens": 128000,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "global.xai.grok-4.6",
+      "name": "Grok 4.6 (Global)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 2,
+        "output": 6,
+        "cacheRead": 0.5,
+        "cacheWrite": 0
+      },
+      "contextWindow": 500000,
+      "maxTokens": 500000,
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "global.xai.grok-4.7",
+      "name": "Grok 4.7 (Global)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 2,
+        "output": 6,
+        "cacheRead": 0.5,
+        "cacheWrite": 0
+      },
+      "contextWindow": 500000,
+      "maxTokens": 500000,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "global.zai.glm-5.3",
+      "name": "GLM-5.3 (Global)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 1.68,
+        "output": 5.28,
+        "cacheRead": 0.312,
+        "cacheWrite": 2.1
+      },
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "google.gemma-4-26b-a4b",
+      "name": "Gemma 4 26B A4B IT",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.13,
+        "output": 0.4,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 262144,
+      "maxTokens": 32768,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "google.gemma-4-31b",
+      "name": "Gemma 4 31B IT",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.14,
+        "output": 0.4,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 262144,
+      "maxTokens": 32768,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "google.gemma-4-e2b",
+      "name": "Gemma 4 E2B IT",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.04,
+        "output": 0.08,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 131072,
+      "maxTokens": 8192,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "jp.amazon.nova-2-lite-v1:0",
+      "name": "Nova 2 Lite (JP)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.396,
+        "output": 3.311,
+        "cacheRead": 0.099,
+        "cacheWrite": 0.396
+      },
+      "contextWindow": 1000000,
+      "maxTokens": 65535,
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "minimax.minimax-m2",
+      "name": "MiniMax-M2",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 0.3,
+        "output": 1.2,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 204608,
+      "maxTokens": 128000,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "minimax.minimax-m2.1",
+      "name": "MiniMax-M2.1",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 0.3,
+        "output": 1.2,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 196608,
+      "maxTokens": 131072,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "minimax.minimax-m2.5",
+      "name": "MiniMax-M2.5",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 0.3,
+        "output": 1.2,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 196608,
+      "maxTokens": 98304,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "mistral.magistral-small-2509",
+      "name": "Magistral Small 1.2",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.5,
+        "output": 1.5,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 128000,
+      "maxTokens": 40000,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "moonshot.kimi-k2-thinking",
+      "name": "Kimi K2 Thinking",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 0.6,
+        "output": 2.5,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 262144,
+      "maxTokens": 16000,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "moonshotai.kimi-k2.5",
+      "name": "Kimi K2.5",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.6,
+        "output": 3,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 262144,
+      "maxTokens": 16384,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "nvidia.nemotron-nano-3-30b",
+      "name": "NVIDIA Nemotron Nano 3 30B",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 0.06,
+        "output": 0.24,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 262144,
+      "maxTokens": 8192,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "nvidia.nemotron-super-3-120b",
+      "name": "NVIDIA Nemotron 3 Super 120B A12B",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 0.15,
+        "output": 0.65,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 262144,
+      "maxTokens": 131072,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "qwen.qwen3-32b-v1:0",
+      "name": "Qwen3 32B",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 0.15,
+        "output": 0.6,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 32768,
+      "maxTokens": 16384,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "us.amazon.nova-2-lite-v1:0",
+      "name": "Nova 2 Lite (US)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.33,
+        "output": 2.75,
+        "cacheRead": 0.0825,
+        "cacheWrite": 0.33
+      },
+      "contextWindow": 1000000,
+      "maxTokens": 65535,
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "us.moonshotai.kimi-k3",
+      "name": "Kimi K3 (US)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 3.3,
+        "output": 16.5,
+        "cacheRead": 0.33,
+        "cacheWrite": 4.125
+      },
+      "contextWindow": 1048576,
+      "maxTokens": 128000,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "us.writer.palmyra-x4-v1:0",
+      "name": "Palmyra X4 (US)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 2.5,
+        "output": 10,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 122880,
+      "maxTokens": 8192,
+      "type": "chat"
+    },
+    {
+      "id": "us.writer.palmyra-x5-v1:0",
+      "name": "Palmyra X5 (US)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 0.6,
+        "output": 6,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 1040000,
+      "maxTokens": 8192,
+      "type": "chat"
+    },
+    {
+      "id": "us.xai.grok-4.6",
+      "name": "Grok 4.6 (US)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 2.2,
+        "output": 6.6,
+        "cacheRead": 0.55,
+        "cacheWrite": 0
+      },
+      "contextWindow": 500000,
+      "maxTokens": 500000,
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "us.xai.grok-4.7",
+      "name": "Grok 4.7 (US)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 2.2,
+        "output": 6.6,
+        "cacheRead": 0.55,
+        "cacheWrite": 0
+      },
+      "contextWindow": 500000,
+      "maxTokens": 500000,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "us.zai.glm-5.3",
+      "name": "GLM-5.3 (US)",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 1.848,
+        "output": 5.808,
+        "cacheRead": 0.3432,
+        "cacheWrite": 2.31
+      },
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "writer.palmyra-x4-v1:0",
+      "name": "Palmyra X4",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 2.5,
+        "output": 10,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 122880,
+      "maxTokens": 8192,
+      "type": "chat"
+    },
+    {
+      "id": "writer.palmyra-x5-v1:0",
+      "name": "Palmyra X5",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 0.6,
+        "output": 6,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 1040000,
+      "maxTokens": 8192,
+      "type": "chat"
+    },
+    {
+      "id": "xai.grok-4.3",
+      "name": "Grok 4.3",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 1.25,
+        "output": 2.5,
+        "cacheRead": 0.2,
+        "cacheWrite": 0
+      },
+      "contextWindow": 1000000,
+      "maxTokens": 131072,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "xai.grok-4.6",
+      "name": "Grok 4.6",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 2.2,
+        "output": 6.6,
+        "cacheRead": 0.55,
+        "cacheWrite": 0
+      },
+      "contextWindow": 500000,
+      "maxTokens": 500000,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "inputLimits": {
+        "images": {
+          "maxPerMessage": 20,
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "zai.glm-4.7",
+      "name": "GLM-4.7",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 0.6,
+        "output": 2.2,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 202752,
+      "maxTokens": 131072,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "zai.glm-4.7-flash",
+      "name": "GLM-4.7-Flash",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 0.07,
+        "output": 0.4,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 202752,
+      "maxTokens": 131072,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "zai.glm-5",
+      "name": "GLM-5",
+      "api": "bedrock-converse-stream",
+      "provider": "amazon-bedrock",
+      "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 1,
+        "output": 3.2,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "contextWindow": 202752,
+      "maxTokens": 131072,
+      "compat": {
+        "supportsStrictMode": true
+      },
+      "type": "chat"
+    }
+  ],
+  "standardLevels": [
+    "off",
+    "minimal",
+    "low",
+    "medium",
+    "high"
+  ],
+  "hostClamps": [
+    {
+      "requested": "xhigh",
+      "selected": "high"
+    },
+    {
+      "requested": "max",
+      "selected": "high"
+    }
+  ],
+  "modelProjections": 36,
+  "logicalLevelSelections": 252,
+  "clampedSelections": 72,
+  "sdkBodyObservations": 216,
+  "freshSdkRequests": 0,
+  "scope": "Source-reviewed logical levels only. Retained omitted/high/budget1 bodies are identical and contain no additional reasoning field;this is not a promise of adjustable physical effort or off disabling intrinsic reasoning.",
+  "rows": [
+    {
+      "model": "amazon.nova-2-lite-v1:0",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 2,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 3,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 4,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 5,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 6,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 7,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "deepseek.v3-v1:0",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 266,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 267,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 268,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 269,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 270,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 271,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "deepseek.v3.2",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 274,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 275,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 276,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 277,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 278,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 279,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "eu.amazon.nova-2-lite-v1:0",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 282,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 283,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 284,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 285,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 286,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 287,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "global.amazon.nova-2-lite-v1:0",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 434,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 435,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 436,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 437,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 438,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 439,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "global.moonshotai.kimi-k3",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 562,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 563,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 564,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 565,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 566,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 567,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "global.xai.grok-4.6",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 626,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 627,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 628,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 629,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 630,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 631,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "global.xai.grok-4.7",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 634,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 635,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 636,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 637,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 638,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 639,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "global.zai.glm-5.3",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 642,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 643,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 644,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 645,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 646,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 647,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "google.gemma-4-26b-a4b",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 650,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 651,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 652,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 653,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 654,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 655,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "google.gemma-4-31b",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 658,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 659,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 660,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 661,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 662,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 663,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "google.gemma-4-e2b",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 666,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 667,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 668,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 669,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 670,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 671,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "jp.amazon.nova-2-lite-v1:0",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 714,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 715,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 716,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 717,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 718,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 719,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "minimax.minimax-m2",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 834,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 835,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 836,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 837,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 838,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 839,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "minimax.minimax-m2.1",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 842,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 843,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 844,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 845,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 846,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 847,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "minimax.minimax-m2.5",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 850,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 851,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 852,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 853,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 854,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 855,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "mistral.magistral-small-2509",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 866,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 867,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 868,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 869,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 870,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 871,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "moonshot.kimi-k2-thinking",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 930,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 931,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 932,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 933,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 934,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 935,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "moonshotai.kimi-k2.5",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 938,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 939,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 940,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 941,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 942,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 943,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "nvidia.nemotron-nano-3-30b",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 954,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 955,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 956,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 957,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 958,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 959,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "nvidia.nemotron-super-3-120b",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 970,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 971,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 972,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 973,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 974,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 975,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "qwen.qwen3-32b-v1:0",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1106,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1107,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1108,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1109,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1110,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1111,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "us.amazon.nova-2-lite-v1:0",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1170,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1171,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1172,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1173,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1174,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1175,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "us.moonshotai.kimi-k3",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1386,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1387,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1388,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1389,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1390,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1391,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "us.writer.palmyra-x4-v1:0",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1450,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1451,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1452,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1453,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1454,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1455,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "us.writer.palmyra-x5-v1:0",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1458,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1459,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1460,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1461,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1462,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1463,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "us.xai.grok-4.6",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1466,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1467,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1468,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1469,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1470,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1471,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "us.xai.grok-4.7",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1474,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1475,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1476,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1477,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1478,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1479,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "us.zai.glm-5.3",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1482,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1483,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1484,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1485,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1486,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1487,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "writer.palmyra-x4-v1:0",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1490,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1491,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1492,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1493,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1494,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1495,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "writer.palmyra-x5-v1:0",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1498,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1499,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1500,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1501,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1502,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1503,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "xai.grok-4.3",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1506,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1507,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1508,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1509,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1510,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1511,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "xai.grok-4.6",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1514,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1515,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1516,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1517,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1518,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1519,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "zai.glm-4.7",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1522,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1523,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1524,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1525,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1526,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1527,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "zai.glm-4.7-flash",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1530,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1531,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1532,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1533,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1534,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1535,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    },
+    {
+      "model": "zai.glm-5",
+      "api": "bedrock-converse-stream",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "sources": [
+        {
+          "rowIndex": 1538,
+          "case": "raw-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1539,
+          "case": "simple-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": null,
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1540,
+          "case": "raw-high-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1541,
+          "case": "simple-high-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": null
+        },
+        {
+          "rowIndex": 1542,
+          "case": "raw-high-budget1-output64",
+          "entrypoint": "stream",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        },
+        {
+          "rowIndex": 1543,
+          "case": "simple-high-budget1-output64",
+          "entrypoint": "streamSimple",
+          "sdkReasoning": "high",
+          "thinkingBudgets": {
+            "high": 1
+          }
+        }
+      ]
+    }
+  ]
+}

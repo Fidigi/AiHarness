@@ -249,6 +249,13 @@ const reasoningReference = JSON.parse(reasoningBytes.toString()) as {
   models: Array<{ id: string; thinkingLevelMap?: Partial<Record<ThinkingLevel, string | null>> }>; modelProjections: number; vectors: number; sdkBodyObservations: number; freshSdkRequests: number; reusedSdkRequests: number;
   rows: Array<{ model: string; api: string; thinking: NonNullable<ChatOptions['thinking']>; options: ChatOptions; expectedBody: Record<string, unknown> }>;
 };
+const baselineHostBytes = readFileSync(new URL('../../../../tests/fixtures/bedrock-baseline-host-levels-reference.json', import.meta.url));
+const baselineHostReference = JSON.parse(baselineHostBytes.toString()) as {
+  pinnedCommit: string; catalogueSha256: string; captureSha256: string; modelProjections: number; logicalLevelSelections: number;
+  clampedSelections: number; sdkBodyObservations: number; freshSdkRequests: number; models: Array<{ id: string }>;
+  standardLevels: ThinkingLevel[]; hostClamps: Array<{ requested: ThinkingLevel; selected: ThinkingLevel }>;
+  rows: Array<{ model: string; api: string; options: ChatOptions; expectedBody: SimpleBody; sources: Array<{ rowIndex: number }> }>;
+};
 // The exact Opus model already has its independent seven-level owning/installed controls.
 const remainingReasoning = reasoningReference.rows.filter(row => row.model !== 'anthropic.claude-opus-4-6-v1');
 type SimpleCaller = { reasoning?: ThinkingLevel; maxTokens?: number; thinkingBudgets?: ChatOptions['thinkingBudgets'] };
@@ -355,6 +362,17 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
     expect(remainingReasoning).toHaveLength(637); expect(new Set(remainingReasoning.map(row => row.model)).size).toBe(91);
     expect([...new Set(reasoningReference.rows.map(row => row.model))]).toEqual(reasoningReference.models.map(model => model.id));
     expect(reference.models.filter(model => reasoningReference.models.some(row => row.id === model.id)).map(model => model.id)).toEqual(reasoningReference.models.map(model => model.id));
+    expect(createHash('sha256').update(baselineHostBytes).digest('hex')).toBe('3799b8da66487f4ec1aef8fa726c970ef03a2095ec9898f46255219a22676810');
+    expect(baselineHostReference.pinnedCommit).toBe(reference.pinnedCommit); expect(baselineHostReference.catalogueSha256).toBe(reference.catalogueSha256);
+    expect(baselineHostReference.captureSha256).toBe(reasoningReference.priorCaptureSha256);
+    expect(baselineHostReference.models.map(model => model.id)).toEqual(reference.models.filter(model => model.reasoning && !numericIds.has(model.id)
+      && !reasoningReference.models.some(row => row.id === model.id)).map(model => model.id));
+    expect(baselineHostReference.modelProjections).toBe(36); expect(baselineHostReference.models).toHaveLength(36); expect(baselineHostReference.rows).toHaveLength(36);
+    expect(baselineHostReference.logicalLevelSelections).toBe(252); expect(baselineHostReference.clampedSelections).toBe(72);
+    expect(baselineHostReference.sdkBodyObservations).toBe(216); expect(baselineHostReference.freshSdkRequests).toBe(0);
+    expect(new Set(baselineHostReference.rows.flatMap(row => row.sources.map(source => source.rowIndex))).size).toBe(216);
+    expect(baselineHostReference.standardLevels).toEqual(['off', 'minimal', 'low', 'medium', 'high']);
+    expect(baselineHostReference.hostClamps).toEqual([{ requested: 'xhigh', selected: 'high' }, { requested: 'max', selected: 'high' }]);
     expect(rawOutputReference.pinnedCommit).toBe(reference.pinnedCommit);
     expect(rawOutputReference.constructionCaptureSha256).toBe('2d160e9fa168b2eb2165c84a75e65cc09f0dda89acae34198266d690142aaca5');
     expect(rawOutputReference.successfulUsageCaptureSha256).toBe(reference.captureSha256);
@@ -364,7 +382,10 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
     const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
     const provider = create({ model: known.id });
     const published = provider.getPublishedModels?.() ?? [];
-    const nonnumericMaps = new Map(reasoningReference.models.map(model => [model.id, model.thinkingLevelMap ?? {}]));
+    const nonnumericMaps = new Map([
+      ...reasoningReference.models.map(model => [model.id, model.thinkingLevelMap ?? {}] as const),
+      ...baselineHostReference.models.map(model => [model.id, {}] as const),
+    ]);
     expect(published.filter(row => reference.models.some(model => model.id === row.id))).toEqual(reference.models.map(model => ({
       id: model.id, name: model.name, api: model.api, contextWindow: model.contextWindow, maxOutputTokens: model.maxTokens,
       capabilities: { reasoning: model.reasoning, imageInput: model.input.includes('image'), toolCalls: true },
@@ -391,6 +412,20 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       expect(getSupportedThinkingLevels('operator-bedrock', model.id, undefined, provider)).toEqual(expected);
     }
     expect(clampedCases).toBe(59);
+    let baselineClamps = 0;
+    for (const model of baselineHostReference.models) {
+      const available = getSupportedThinkingLevels('operator-bedrock', model.id, undefined, provider);
+      expect(available, model.id).toEqual(baselineHostReference.standardLevels);
+      for (const level of levels) {
+        const selected = baselineHostReference.standardLevels.includes(level) ? level : 'high';
+        expect(clampPublishedThinkingLevel(level, available), model.id + ':' + level).toBe(selected);
+        if (selected !== level) baselineClamps++;
+      }
+      published.find(row => row.id === model.id)!.thinkingLevelMap!.high = 'foreign';
+      expect(provider.getPublishedModels?.().find(row => row.id === model.id)?.thinkingLevelMap).toEqual({});
+      expect(getSupportedThinkingLevels('operator-bedrock', model.id, undefined, provider)).toEqual(baselineHostReference.standardLevels);
+    }
+    expect(baselineClamps).toBe(72);
     expect(getSupportedThinkingLevels('operator-bedrock', 'unreviewed', undefined, provider)).toEqual(['off']);
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -490,6 +525,12 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       expect(result).toMatchObject({ content: 'ok', model: model.id, api: vector.api }); expect(fetch).toHaveBeenCalledOnce();
       expect(JSON.parse(fetch.mock.calls[0][1]!.body as string), vector.thinking + '→' + thinking).toEqual(expected.expectedBody);
       expect({ input, options }).toEqual(before);
+    }
+    const baseline = baselineHostReference.rows.find(row => row.model === model.id);
+    if (baseline) for (const clamp of baselineHostReference.hostClamps) {
+      const thinking = clampPublishedThinkingLevel(clamp.requested, available); expect(thinking).toBe(clamp.selected);
+      await bindSelectedSimple([{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }],
+        { ...structuredClone(baseline.options), model: model.id, thinking }, baseline.expectedBody, defaults.result);
     }
   });
 

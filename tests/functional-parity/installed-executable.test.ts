@@ -2243,6 +2243,7 @@ it('dispatches native Bedrock binary streams through installed public declaratio
     const originals = ${JSON.stringify(originals)}, nativeUsage = ${JSON.stringify(nativeUsage)}, outputBoundaries = ${JSON.stringify(outputBoundaries)}, toolSchemas = ${JSON.stringify(toolSchemas)};
     const simpleDefaults = ${JSON.stringify(simpleDefaults)}, simpleNumeric = ${JSON.stringify(simpleNumeric)}, simpleContext = ${JSON.stringify(simpleContext)}, adaptive = ${JSON.stringify(adaptive)};
     const reasoning = ${JSON.stringify(JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-reasoning-reference.json'), 'utf8')))};
+    const baselineHost = ${JSON.stringify(JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-baseline-host-levels-reference.json'), 'utf8')))};
     const calls = []; let selectedSimple = false;
     const server = createServer(async (request, reply) => {
       let body = ''; for await (const chunk of request) body += chunk;
@@ -2304,7 +2305,25 @@ it('dispatches native Bedrock binary streams through installed public declaratio
         assert.deepEqual(native.getPublishedModels().find(row => row.id === model.id).thinkingLevelMap, map);
         assert.deepEqual(getSupportedThinkingLevels('operator-bedrock', model.id, undefined, native), expected);
       }
-      assert.equal(clampedCases, 59); assert.equal(calls.length, 3);
+      assert.equal(clampedCases, 59);
+      assert.equal(baselineHost.models.length, 36); assert.equal(baselineHost.rows.length, 36); assert.equal(baselineHost.freshSdkRequests, 0);
+      assert.equal(baselineHost.sdkBodyObservations, 216); assert.deepEqual(baselineHost.standardLevels, ['off', 'minimal', 'low', 'medium', 'high']);
+      let baselineClamps = 0;
+      for (const model of baselineHost.models) {
+        const row = native.getPublishedModels().find(row => row.id === model.id);
+        assert.deepEqual(row.thinkingLevelMap, {});
+        const available = getSupportedThinkingLevels('operator-bedrock', model.id, undefined, native);
+        assert.deepEqual(available, baselineHost.standardLevels);
+        for (const level of levels) {
+          const selected = baselineHost.standardLevels.includes(level) ? level : 'high';
+          assert.equal(clampPublishedThinkingLevel(level, available), selected);
+          if (selected !== level) baselineClamps++;
+        }
+        row.thinkingLevelMap.high = 'foreign';
+        assert.deepEqual(native.getPublishedModels().find(row => row.id === model.id).thinkingLevelMap, {});
+        assert.deepEqual(getSupportedThinkingLevels('operator-bedrock', model.id, undefined, native), baselineHost.standardLevels);
+      }
+      assert.equal(baselineClamps, 72); assert.equal(calls.length, 3);
       assert.deepEqual(getSupportedThinkingLevels('operator-bedrock', 'unreviewed', undefined, native), ['off']);
       for (const model of originals) {
         const json = await native.chat([], { model: model.id, maxTokens: 16 });
@@ -2461,6 +2480,15 @@ it('dispatches native Bedrock binary streams through installed public declaratio
           { ...row.options, model: row.model, thinking }, expected.expectedBody, sdk, false);
       }
       assert.equal(calls.length, 6539);
+      let baselineSelections = 0;
+      for (const row of baselineHost.rows) for (const clamp of baselineHost.hostClamps) {
+        const thinking = clampPublishedThinkingLevel(clamp.requested, getSupportedThinkingLevels('operator-bedrock', row.model, undefined, native));
+        assert.equal(thinking, clamp.selected); baselineSelections++;
+        const sdk = simpleDefaults.find(vector => vector.observed.model === row.model).observed.result;
+        await bindSimple([{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }],
+          { ...row.options, model: row.model, thinking }, row.expectedBody, sdk, false);
+      }
+      assert.equal(baselineSelections, 72); assert.equal(calls.length, 6683);
       console.log('installed Bedrock ConverseStream OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);
