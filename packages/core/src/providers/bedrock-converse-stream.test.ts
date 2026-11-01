@@ -242,6 +242,14 @@ const toolSchemaReference = JSON.parse(toolSchemaBytes.toString()) as {
   modelProjections: number; vectors: number; freshSdkRequests: number; reusedSdkRequests: number;
   rows: Array<{ model: string; api: string; case: string; options: ChatOptions; expectedToolConfig: Record<string, unknown> | null }>;
 };
+const reasoningBytes = readFileSync(new URL('../../../../tests/fixtures/bedrock-reasoning-reference.json', import.meta.url));
+const reasoningReference = JSON.parse(reasoningBytes.toString()) as {
+  pinnedCommit: string; catalogueSha256: string; priorCaptureSha256: string; captureSha256: string;
+  models: Array<{ id: string }>; modelProjections: number; vectors: number; sdkBodyObservations: number; freshSdkRequests: number; reusedSdkRequests: number;
+  rows: Array<{ model: string; api: string; thinking: NonNullable<ChatOptions['thinking']>; options: ChatOptions; expectedBody: Record<string, unknown> }>;
+};
+// The exact Opus model already has its independent seven-level owning/installed controls.
+const remainingReasoning = reasoningReference.rows.filter(row => row.model !== 'anthropic.claude-opus-4-6-v1');
 type SimpleCaller = { reasoning?: ThinkingLevel; maxTokens?: number; thinkingBudgets?: ChatOptions['thinkingBudgets'] };
 type SimpleResult = { stopReason: string; usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; cost: { total: number } } };
 type SimpleBody = Record<string, unknown> & { inferenceConfig: { maxTokens: number; temperature?: number } };
@@ -336,6 +344,16 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
     expect(toolSchemaReference.modelProjections).toBe(193); expect(toolSchemaReference.vectors).toBe(579);
     expect(toolSchemaReference.freshSdkRequests).toBe(386); expect(toolSchemaReference.reusedSdkRequests).toBe(193);
     expect(toolSchemaReference.rows).toHaveLength(579); expect([...new Set(toolSchemaReference.rows.map(row => row.model))]).toEqual(reference.models.map(model => model.id));
+    expect(createHash('sha256').update(reasoningBytes).digest('hex')).toBe('ed379ba9463355e2f6d1eb1814185d33b3c08b6253499402391632673e3b63aa');
+    expect(reasoningReference.pinnedCommit).toBe(reference.pinnedCommit); expect(reasoningReference.catalogueSha256).toBe(reference.catalogueSha256);
+    expect(reasoningReference.priorCaptureSha256).toBe('e35627194953d0d793c6a4fc53ffed34b0a91e120c62f40141803f9203763256');
+    expect(reasoningReference.captureSha256).toBe('9011dc64aee4c190e78aff09f50521669f3aaaf3b769a1d2731dc6b742dfebeb');
+    expect(reasoningReference.modelProjections).toBe(92); expect(reasoningReference.vectors).toBe(644); expect(reasoningReference.sdkBodyObservations).toBe(1288);
+    expect(reasoningReference.freshSdkRequests).toBe(920); expect(reasoningReference.reusedSdkRequests).toBe(368);
+    expect(reasoningReference.rows).toHaveLength(644); expect(reasoningReference.models).toHaveLength(92);
+    expect(remainingReasoning).toHaveLength(637); expect(new Set(remainingReasoning.map(row => row.model)).size).toBe(91);
+    expect([...new Set(reasoningReference.rows.map(row => row.model))]).toEqual(reasoningReference.models.map(model => model.id));
+    expect(reference.models.filter(model => reasoningReference.models.some(row => row.id === model.id)).map(model => model.id)).toEqual(reasoningReference.models.map(model => model.id));
     expect(rawOutputReference.pinnedCommit).toBe(reference.pinnedCommit);
     expect(rawOutputReference.constructionCaptureSha256).toBe('2d160e9fa168b2eb2165c84a75e65cc09f0dda89acae34198266d690142aaca5');
     expect(rawOutputReference.successfulUsageCaptureSha256).toBe(reference.captureSha256);
@@ -414,6 +432,24 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       expect(Object.hasOwn(body, 'toolConfig')).toBe(true); expect(body.toolConfig, vector.case).toEqual(vector.expectedToolConfig);
       expect({ input, options }).toEqual(before);
     }
+    const reasoningVectors = remainingReasoning.filter(row => row.model === model.id);
+    expect(reasoningVectors.map(row => row.thinking)).toEqual(remainingReasoning.some(row => row.model === model.id)
+      ? ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] : []);
+    for (const vector of reasoningVectors) for (const binary of [false, true]) {
+      const fetch = vi.fn(async (url: string | URL, init?: RequestInit) => {
+        expect(String(url)).toBe(`https://bedrock-runtime.us-east-1.amazonaws.com/model/${encodeURIComponent(model.id)}/converse${binary ? '-stream' : ''}`);
+        expect(new Headers(init?.headers).get('authorization')).toBe('Bearer disposable-bedrock-reference');
+        return observedResponse({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }, binary);
+      }); vi.stubGlobal('fetch', fetch);
+      const input: Message[] = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
+      const options = { ...structuredClone(vector.options), model: model.id }, before = structuredClone({ input, options });
+      let result: ChatResponse | undefined;
+      if (binary) await provider.streamChat(input, () => {}, value => { result = value; }, undefined, options);
+      else result = await provider.chat(input, options);
+      expect(result).toMatchObject({ content: 'ok', model: model.id, api: vector.api }); expect(fetch).toHaveBeenCalledOnce();
+      expect({ input, options }).toEqual(before);
+      expect(JSON.parse(fetch.mock.calls[0][1]!.body as string), vector.thinking).toEqual(vector.expectedBody);
+    }
   });
 
   for (const model of simpleNumeric.models) {
@@ -453,6 +489,44 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       const config = JSON.parse(fetch.mock.calls[0][1]!.body as string).inferenceConfig;
       expect(Object.hasOwn(config, 'maxTokens')).toBe(maximum !== undefined);
       expect(config.maxTokens).toBe(maximum);
+    }
+    const high = remainingReasoning.find(row => row.model === target.id && row.thinking === 'high')!;
+    const off = remainingReasoning.find(row => row.model === target.id && row.thinking === 'off')!;
+    for (const binary of [false, true]) for (const [provider, selected, thinking, expected] of [
+      [native, target.id, 'high', high.expectedBody],
+      [native, target.id, 'off', off.expectedBody],
+      [native, target.id, undefined, off.expectedBody],
+      [native, known.id, 'high', off.expectedBody],
+      [new Compatible({ type: 'bedrock', apiKey: 'disposable-bedrock-reference', model: target.id }), target.id, 'high', off.expectedBody],
+      [create({ model: 'anthropic.claude-unreviewed' }), 'anthropic.claude-unreviewed', 'high', off.expectedBody],
+      [create({ model: undefined }), 'anthropic.claude-3-haiku-20240307-v1:0', 'high', off.expectedBody],
+    ] as const) {
+      const fetch = vi.fn(async (_url: string | URL, _init?: RequestInit) => observedResponse({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }, binary));
+      vi.stubGlobal('fetch', fetch);
+      const input: Message[] = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
+      const unused = vi.fn(() => { throw new Error('Unused numeric budget map was read.'); });
+      const selectedBase: ChatOptions = { ...high.options, model: selected };
+      if (thinking === undefined) delete selectedBase.thinking; else selectedBase.thinking = thinking;
+      const selectedOptions = Object.defineProperty(selectedBase, 'thinkingBudgets', { get: unused });
+      if (binary) await provider.streamChat(input, () => {}, undefined, undefined, selectedOptions);
+      else await provider.chat(input, selectedOptions);
+      expect(fetch).toHaveBeenCalledOnce(); expect(unused).not.toHaveBeenCalled();
+      expect(JSON.parse(fetch.mock.calls[0][1]!.body as string)).toEqual(expected);
+      expect(Object.getOwnPropertyDescriptor(selectedOptions, 'thinkingBudgets')?.get).toBe(unused);
+    }
+    // Source-reviewed Pi GovCloud branch, not additional SDK wire observations.
+    for (const model of [target.id, 'anthropic.claude-sonnet-4-6']) for (const binary of [false, true]) {
+      const vector = remainingReasoning.find(row => row.model === model && row.thinking === 'high')!;
+      const expected = structuredClone(vector.expectedBody) as { additionalModelRequestFields: { thinking: Record<string, unknown>; anthropic_beta?: unknown } };
+      delete expected.additionalModelRequestFields.thinking.display; delete expected.additionalModelRequestFields.thinking.block_binding;
+      delete expected.additionalModelRequestFields.anthropic_beta;
+      const provider = create({ model, region: 'us-gov-west-1' });
+      const fetch = vi.fn(async (_url: string | URL, _init?: RequestInit) => observedResponse({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }, binary)); vi.stubGlobal('fetch', fetch);
+      const input: Message[] = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
+      if (binary) await provider.streamChat(input, () => {}, undefined, undefined, vector.options);
+      else await provider.chat(input, vector.options);
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(JSON.parse(fetch.mock.calls[0][1]!.body as string)).toEqual(expected);
     }
   });
 
@@ -516,6 +590,15 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
         await provider.streamChat(messages, () => {}, complete, error, { maxTokens });
         expect(error.mock.calls[0]?.[0].message).toBe('Invalid Bedrock output limit.'); expect(complete).not.toHaveBeenCalled();
       }
+    }
+    const native = create({ apiKey: 'disposable-bedrock-reference', model: remainingReasoning[0].model });
+    for (const thinking of ['private-level', '__proto__', null, 1]) {
+      const options = { thinking, maxTokens: 64 } as unknown as ChatOptions;
+      await expect(native.chat(messages, options)).rejects.toThrow('Invalid Bedrock reasoning level.');
+      const failed = vi.fn(), complete = vi.fn(), chunk = vi.fn();
+      await native.streamChat(messages, chunk, complete, failed, options);
+      expect(failed.mock.calls[0]?.[0].message).toBe('Invalid Bedrock reasoning level.');
+      expect(complete).not.toHaveBeenCalled(); expect(chunk).not.toHaveBeenCalled();
     }
     expect(fetch).not.toHaveBeenCalled();
   });

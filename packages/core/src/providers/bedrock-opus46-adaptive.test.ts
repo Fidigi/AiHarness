@@ -68,7 +68,7 @@ describe('selected Bedrock Opus 4.6 adaptive request composition', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('keeps numeric maps opaque for adaptive levels and confines selection to the direct owner and exact requested model', async () => {
+  it('keeps numeric maps opaque for adaptive levels and confines selection to privately admitted direct-owner models', async () => {
     const get = vi.fn(() => { throw new Error('PRIVATE_UNUSED_BUDGET'); });
     const thinkingBudgets = Object.defineProperty({}, 'high', { enumerable: true, get });
     class Compatible extends BedrockProvider {}
@@ -76,7 +76,7 @@ describe('selected Bedrock Opus 4.6 adaptive request composition', () => {
       [create(), { thinking: 'high', thinkingBudgets, maxTokens: 64 }, 'high'],
       [create(), { thinking: 'off', thinkingBudgets, maxTokens: 64 }, undefined],
       [create(), { thinkingBudgets, maxTokens: 64 }, undefined],
-      [create(), { model: 'anthropic.claude-sonnet-4-6', thinking: 'high', thinkingBudgets, maxTokens: 64 }, undefined],
+      [create(), { model: 'anthropic.claude-sonnet-4-6', thinking: 'high', thinkingBudgets, maxTokens: 64 }, 'high'],
       [create({ model: 'unknown' }), { model, thinking: 'max', thinkingBudgets, maxTokens: 64 }, 'max'],
       [create({ model: model + '-unreviewed' }), { thinking: 'high', thinkingBudgets, maxTokens: 64 }, undefined],
       [new Compatible({ type: 'bedrock', apiKey: 'disposable', model }), { thinking: 'high', thinkingBudgets, maxTokens: 64 }, undefined],

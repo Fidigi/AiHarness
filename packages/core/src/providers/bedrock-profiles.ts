@@ -343,6 +343,7 @@ export function applyBedrockProfileSimplePolicy(model: string, body: Record<stri
     body.additionalModelRequestFields = { thinking: { type: 'adaptive',
       ...(region.toLowerCase().startsWith('us-gov-') ? {} : { display: 'summarized' }) }, output_config: { effort: efforts[level] } };
   }
+  applyBedrockProfileReasoningPolicy(model, body, options, region);
   if (numericModels.has(model) && level !== undefined && level !== 'off') {
     if (typeof level !== 'string' || !Object.hasOwn(numericLevels, level)) throw new Error('Invalid Bedrock reasoning level.');
     const selected = level === 'xhigh' || level === 'max' ? 'high' : level;
@@ -406,4 +407,40 @@ export function bedrockProfileUsage(value: unknown, model: string): ChatResponse
   const costUsd = rates.input / 1_000_000 * value.inputTokens + rates.output / 1_000_000 * value.outputTokens
     + rates.cacheRead / 1_000_000 * read + (rates.cacheWrite * (write - longWrite) + rates.input * 2 * longWrite) / 1_000_000;
   return { ...usage, costUsd };
+}
+
+// Explicit caller thinking: retained raw/simple whole bodies agree at output64 on these91 IDs.
+// The exact Opus4.6 model above and selectable host metadata remain separate.
+const reasoningGroups: readonly { models: readonly string[]; fields: Record<string, unknown>; efforts: Readonly<Record<string, string>> }[] = [
+  { models: ["anthropic.claude-fable-5","anthropic.claude-fable-5-1","anthropic.claude-haiku-5-5","anthropic.claude-opus-4-7","anthropic.claude-opus-4-8","anthropic.claude-opus-5-5","anthropic.claude-sonnet-5","anthropic.claude-sonnet-5-5","au.anthropic.claude-haiku-5-5","au.anthropic.claude-opus-4-7","au.anthropic.claude-opus-4-8","au.anthropic.claude-opus-5","au.anthropic.claude-opus-5-5","au.anthropic.claude-sonnet-5","eu.anthropic.claude-fable-5","eu.anthropic.claude-haiku-5-5","eu.anthropic.claude-opus-4-7","eu.anthropic.claude-opus-4-8","eu.anthropic.claude-opus-5","eu.anthropic.claude-opus-5-5","eu.anthropic.claude-sonnet-5","eu.anthropic.claude-sonnet-5-5","global.anthropic.claude-fable-5","global.anthropic.claude-fable-5-1","global.anthropic.claude-haiku-5-5","global.anthropic.claude-opus-4-7","global.anthropic.claude-opus-4-8","global.anthropic.claude-opus-5","global.anthropic.claude-opus-5-5","global.anthropic.claude-sonnet-5","global.anthropic.claude-sonnet-5-5","in.anthropic.claude-opus-5","in.anthropic.claude-sonnet-5","jp.anthropic.claude-haiku-5-5","jp.anthropic.claude-opus-4-7","jp.anthropic.claude-opus-4-8","jp.anthropic.claude-opus-5","jp.anthropic.claude-opus-5-5","jp.anthropic.claude-sonnet-5","us.anthropic.claude-fable-5","us.anthropic.claude-fable-5-1","us.anthropic.claude-haiku-5-5","us.anthropic.claude-opus-4-7","us.anthropic.claude-opus-4-8","us.anthropic.claude-opus-5","us.anthropic.claude-opus-5-5","us.anthropic.claude-sonnet-5","us.anthropic.claude-sonnet-5-5"],
+    fields: {"thinking":{"type":"adaptive","display":"summarized","block_binding":{"prefix_mismatch_behavior":"drop_block"}},"output_config":{},"anthropic_beta":["thinking-binding-controls-2026-08-01"]},
+    efforts: {"minimal":"low","low":"low","medium":"medium","high":"high","xhigh":"xhigh","max":"max"} },
+  { models: ["anthropic.claude-sonnet-4-6","au.anthropic.claude-opus-4-6-v1","au.anthropic.claude-sonnet-4-6","eu.anthropic.claude-opus-4-6-v1","eu.anthropic.claude-sonnet-4-6","global.anthropic.claude-opus-4-6-v1","global.anthropic.claude-sonnet-4-6","jp.anthropic.claude-sonnet-4-6","us.anthropic.claude-opus-4-6-v1","us.anthropic.claude-sonnet-4-6"],
+    fields: {"thinking":{"type":"adaptive","display":"summarized"},"output_config":{}},
+    efforts: {"minimal":"low","low":"low","medium":"medium","high":"high","xhigh":"high","max":"max"} },
+  { models: ["global.openai.gpt-5.6-luna","global.openai.gpt-5.6-sol","global.openai.gpt-5.6-terra","global.openai.gpt-6-astra","global.openai.gpt-6-luna","global.openai.gpt-6-sol","global.openai.gpt-6.1-sol","in.openai.gpt-5.6-luna","in.openai.gpt-5.6-terra","openai.gpt-5.4","openai.gpt-5.5","openai.gpt-5.6-luna","openai.gpt-5.6-sol","openai.gpt-5.6-terra","openai.gpt-6-astra","openai.gpt-6-luna","openai.gpt-6-sol","openai.gpt-6.1-sol","us.openai.gpt-5.6-luna","us.openai.gpt-5.6-sol","us.openai.gpt-5.6-terra","us.openai.gpt-6-astra","us.openai.gpt-6-luna","us.openai.gpt-6-sol","us.openai.gpt-6.1-sol"],
+    fields: {"reasoning":{}},
+    efforts: {"minimal":"low","low":"low","medium":"medium","high":"high","xhigh":"xhigh","max":"max"} },
+  { models: ["openai.gpt-oss-120b","openai.gpt-oss-120b-1:0","openai.gpt-oss-20b","openai.gpt-oss-20b-1:0","openai.gpt-oss-safeguard-120b","openai.gpt-oss-safeguard-20b","us-gov.openai.gpt-oss-120b-1:0","us-gov.openai.gpt-oss-20b-1:0"],
+    fields: {},
+    efforts: {"minimal":"low","low":"low","medium":"medium","high":"high","xhigh":"high","max":"high"} },
+];
+const reasoningProfiles = new Map(reasoningGroups.flatMap(profile => profile.models.map(model => [model, profile] as const)));
+
+/** Private exact-ID caller policy; unused numeric budgets and public metadata stay opaque. */
+function applyBedrockProfileReasoningPolicy(model: string, body: Record<string, unknown>, options: ChatOptions | undefined, region: string): void {
+  const profile = reasoningProfiles.get(model);
+  if (!profile) return;
+  const level = options?.thinking;
+  if (level === undefined || level === 'off') return;
+  if (typeof level !== 'string' || !Object.hasOwn(profile.efforts, level)) throw new Error('Invalid Bedrock reasoning level.');
+  const fields = structuredClone(profile.fields), effort = profile.efforts[level];
+  if (record(fields.output_config)) fields.output_config.effort = effort;
+  else if (record(fields.reasoning)) fields.reasoning.effort = effort;
+  else fields.reasoning_effort = effort;
+  // Pinned GovCloud policy omits both display and managed binding controls/beta.
+  if (region.toLowerCase().startsWith('us-gov-') && record(fields.thinking)) {
+    delete fields.thinking.display; delete fields.thinking.block_binding; delete fields.anthropic_beta;
+  }
+  body.additionalModelRequestFields = fields;
 }
