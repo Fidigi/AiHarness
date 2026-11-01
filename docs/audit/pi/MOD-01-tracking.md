@@ -6,6 +6,8 @@
 
 ## Current delivery — 2026-11-01
 
+**Held,not delivered:** native DeepSeek CLI `4b27685` (MOD-01.03a) and Bedrock strict-tool/choice `fa24f8c` (MOD-01.01b) remain isolated and unqualified:pre-action prerequisite authorization is not established,and both canonical parity/root commands failed. [Source-local observations and durable archive](./MOD-01.md#mod-0103a--mod-0101b--held-candidate-observations-2026-11-01-documentary-retention-only) retain236 original artifacts plus both reading errata. This is documentary retention only,no runtime integration,criterion promotion,retry or authorization for a separate PTY investigation.
+
 This dated checkpoint supersedes older next-action wording below; it does not reopen or reconcile the historical audit. **Integrated:** native Mistral CLI `bd05889`, [scoped receipt](./MOD-01.md#mod-0103a--native-mistral-cli-composition-2026-11-01). Typecheck, 40 focused controls and the installed Mistral consumer pass. Required parity **366/2** and root **8,539/1** remain failed in three TypeScript compiler children; no application regression is demonstrated solely by those exits, and no gate is waived.
 
 **Earlier functional integration:** Google/Vertex override `4777c4c`, [source-bound receipt](./MOD-01.md#mod-0101b--googlevertex-valid-budget-delivery-2026-11-01). Clean `64f96be` passes typecheck, 282 focused cases and installed Google/Vertex. Required parity fails at compiler setup (35 pass / 333 unexecuted); root fails (8,535 pass / five fail), including two unexplained application SIGSEGVs plus three compiler terminations. They are not treated as benign or repaired by the earlier Mistral source.
