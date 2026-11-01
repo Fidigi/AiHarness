@@ -4,6 +4,27 @@
 
 > **Authority:** [AUDIT-5](./AUDIT-5.md), MOD-01; [pinned provider/API/auth inventory](../../ai/topics/provider-matrix.md). Target Pi 1.2.0 commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, not the installed agent's moving release.
 
+## MOD-01.01b — Bedrock simple allocation delivery (2026-11-01)
+
+**Implemented, bounded verification obtained and selectively integrated as `17a21f1`; required root qualification remains failed.** [Durable receipt](./evidence/MOD-01.01b-bedrock-simple-delivery.json). This dated delivery supersedes older isolated/next-action labels for this slice, not their historical failures. Clean frozen `b129967` on integrated `c354322` composes retained `189d9be` allocation, existing corrected scenarios, `7d60baa` inert context reader, exact Opus request `1af372a` and installed regression `ac6b6fa`. Concurrent Anthropic policies and documentary cleanup are excluded; the identical private transcript callback primitive is independently required by Bedrock.
+
+The selected native facades apply private 193-model output/context defaults, 23 numeric Claude maps, the 4,096-token context reserve and final 1,024-token answer reserve. Numeric cap expansion/context clipping retain pretransport subminimum/whole-output refusals. Consumed usage/stop metadata is inert own data; unused fields remain opaque. Shared output preparation receives the post-observer projected transcript without double allocation. Exact Opus4.6 adaptive requests preserve off/omitted/explicit distinctions and unused numeric-map opacity. Raw-helper, derived/unknown and legacy contracts remain separate. No signed/opaque carrier, public DTO/schema, dependency, engine/collector or baseline policy changes.
+
+Existing owning and installed scenarios reuse the missing behaviors rather than adding a test framework. File-only provenance checks cover all 193 default, 690 numeric/raw and 211 context rows, rejecting 7/8/11 mutations respectively; 14 Opus raw/simple whole-body bindings are verified. Only applicable simple rows receive facade credit. Generator/projector and meaningful-variant review is separate from automated every-row checks; no every-row manual reading or reinstatement of withdrawn historical assurances is claimed. **Zero fresh SDK reference executions.** Historical allocation RED/gate failures and the inert-reader typecheck controller20/native0 HOLD remain preserved, not retrospectively passed.
+
+| Gate on this one frozen source | Actual result |
+|---|---|
+| `make typecheck` | PASS |
+| Four focused files | 370 PASS; two existing Server HTTP cases are compatibility controls on an unknown fixture model, not native-allocation HTTP qualification |
+| Existing genuine installed Bedrock consumer | One PASS / 332 unselected; scenario asserts 5,143 requests and 186 allocation refusals, including 14 adaptive requests, not separately printed transport counters |
+| `make test-parity` | 368/368 PASS / four files |
+| `make test` | **FAIL: 8,658 pass / one fail / 8,659 / 526 files** |
+| Focused `make test-e2e E2E_ARGS='e2e/bedrock-converse-stream-live.spec.ts --retries=0'` | Two PASS: actual authenticated emitted-Web → owned HTTPS binary SigV4/Bearer and transcript reload; unknown fixture model, not native-allocation or full-E2E qualification |
+
+**One bounded failure assessment:** the root's `cerebras-public.ts` TypeScript compiler receives `SIGSEGV` at the existing success helper115/caller4211, before its runtime probe. Cause is unknown; compiler termination alone establishes no application regression. The required root remains failed. No unchanged retry, debugger/compiler/runtime/collector project or waived gate follows. Earlier Google-source application crashes remain unexplained independently of this compiler-only failure.
+
+The four canonical build logs bind image `sha256:a582e9567f604844c830584b966b9c69ab968844a85d38d55fc4e44b25f62ea1`; typecheck/parity/root tags independently resolve to that identity. All 1,697 tracked frozen inputs are indexed: 1,549 included byte/mode matches, 148 excluded absences, zero mismatches. Before integration every included staged blob/mode matches the tested candidate. Nine concurrent source/fixture paths are hash/mode-preserved after reversing only selected hunks in temporary copies. Canonical cached npm dependencies and seeded offline archive consumers are **not a clean fresh installation**. The receipt retains 57 compressed hash-bound artifacts, including native failed output and the focused browser report. Final same-selection full gates, production/install/platform qualification and user continuation/distribution/visual decisions remain open; all seven criteria and the goal remain open.
+
 ## MOD-01.03a — Native Mistral CLI composition (2026-11-01)
 
 **Implemented and selectively integrated as `bd05889`; required parity/root qualification remains failed.** [Durable source-bound receipt](./evidence/MOD-01.03a-native-mistral-cli.json). Candidate `bb844a05770e1c3d9c4609645a3b5f77c559b17d`, tree selected from clean `470bfbf`, excludes concurrent Anthropic and documentary changes. No GDB/collector work is resumed. This delivers one existing 03a host-composition requirement, not Mistral OAuth, Server/Web builtin admission, complete effective profiles or the other SDK-only adapters.

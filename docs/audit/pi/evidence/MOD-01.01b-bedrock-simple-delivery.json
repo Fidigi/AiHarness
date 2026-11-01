@@ -109,7 +109,8 @@
     }
   },
   "delivery": {
-    "integration": "Pending reviewed selective commit; staged included blobs/modes match the tested candidate.",
+    "integration": "Selectively integrated as 17a21f1; all 1549 included staged blobs/modes matched the tested candidate. Concurrent Anthropic and documentary cleanup excluded. Required root remains failed.",
+    "integrationCommit": "17a21f1",
     "wholeCriterionClosed": false,
     "wholeAuditClosed": false,
     "finalIntegratedQualification": false,

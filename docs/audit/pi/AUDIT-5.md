@@ -8,6 +8,8 @@
 
 **Latest bounded MOD-01 checkpoint — 2026-10-31:** unchanged isolated `1109513ecef77915ae8805c74d3c64f6130d292b` has accepted selected/root/typecheck/parity receipts, but its complete nine-suite browser attempt failed: **599 passed / 137 failed**, zero skipped or flaky outcomes. The [execution board](./MOD-01-tracking.md) and [failure checkpoint](./evidence/MOD-01.01b-1109513-e2e-failure.json) bind this later evidence; they do not supersede the historical audited instance below or reconcile the full journal. MOD-01 remains `IN PROGRESS`, QUA-01 `PARTIAL`; no criterion, provider cell, runtime delivery or accepted gap is newly credited.
 
+**Bounded Bedrock integration — 2026-11-01:** selected simple defaults/context/numeric allocation, inert context reading and exact Opus adaptive requests are integrated as `17a21f1`; [delivery and durable evidence](./MOD-01.md#mod-0101b--bedrock-simple-allocation-delivery-2026-11-01). One frozen clean `b129967` passes typecheck, 370 focused cases, the genuine installed Bedrock consumer, parity368 and two existing actual HTTPS/browser compatibility cases. Required root **fails: 8,658 pass / one Cerebras public TypeScript compiler SIGSEGV / 8,659 tests / 526 files**, before that consumer's runtime probe. Cause unknown; no unchanged retry or compiler/debugger/collector work. These local results neither repair earlier application crashes nor qualify full E2E, production, fresh installation, platforms/distribution or opaque continuation. Concurrent Anthropic/docs remain excluded; **36/43 closed and seven criteria open**, unchanged. The delivery board owns the next bounded selection; older isolated/next-action wording remains historical.
+
 ## 1. Audit Reference
 
 | Element | Value |
