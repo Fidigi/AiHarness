@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { BedrockProvider, bedrockCredentialConfig, type ChatOptions, type ChatResponse, type ThinkingLevel } from './index.js';
 import { applyBedrockProfileOutputPolicy } from './bedrock-profiles.js';
+import { getSupportedThinkingLevels, clampPublishedThinkingLevel } from './model-metadata.js';
 import { closeProviderNetworkDispatchers } from './provider-network.js';
 import { bedrockFrame as frame, bedrockText } from '../../../../tests/fixtures/bedrock-event-stream.js';
 import type { Message } from '../types/index.js';
@@ -245,7 +246,7 @@ const toolSchemaReference = JSON.parse(toolSchemaBytes.toString()) as {
 const reasoningBytes = readFileSync(new URL('../../../../tests/fixtures/bedrock-reasoning-reference.json', import.meta.url));
 const reasoningReference = JSON.parse(reasoningBytes.toString()) as {
   pinnedCommit: string; catalogueSha256: string; priorCaptureSha256: string; captureSha256: string;
-  models: Array<{ id: string }>; modelProjections: number; vectors: number; sdkBodyObservations: number; freshSdkRequests: number; reusedSdkRequests: number;
+  models: Array<{ id: string; thinkingLevelMap?: Partial<Record<ThinkingLevel, string | null>> }>; modelProjections: number; vectors: number; sdkBodyObservations: number; freshSdkRequests: number; reusedSdkRequests: number;
   rows: Array<{ model: string; api: string; thinking: NonNullable<ChatOptions['thinking']>; options: ChatOptions; expectedBody: Record<string, unknown> }>;
 };
 // The exact Opus model already has its independent seven-level owning/installed controls.
@@ -363,13 +364,34 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
     const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
     const provider = create({ model: known.id });
     const published = provider.getPublishedModels?.() ?? [];
+    const nonnumericMaps = new Map(reasoningReference.models.map(model => [model.id, model.thinkingLevelMap ?? {}]));
     expect(published.filter(row => reference.models.some(model => model.id === row.id))).toEqual(reference.models.map(model => ({
       id: model.id, name: model.name, api: model.api, contextWindow: model.contextWindow, maxOutputTokens: model.maxTokens,
       capabilities: { reasoning: model.reasoning, imageInput: model.input.includes('image'), toolCalls: true },
       pricing: { inputPerMillion: model.cost.input, outputPerMillion: model.cost.output, cacheReadPerMillion: model.cost.cacheRead, cacheWritePerMillion: model.cost.cacheWrite },
-      thinkingLevelMap: numericIds.has(model.id) ? numericLevels : null,
+      thinkingLevelMap: numericIds.has(model.id) ? numericLevels : nonnumericMaps.get(model.id) ?? null,
     })));
     expect(published.find(row => row.id === 'anthropic.claude-3-haiku-20240307-v1:0')).toMatchObject({ name: 'Claude 3 Haiku (Bedrock)' });
+    const levels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+    let clampedCases = 0;
+    for (const model of reasoningReference.models) {
+      const map = model.thinkingLevelMap ?? {};
+      const expected = levels.filter(level => map[level] !== null && (!['xhigh', 'max'].includes(level) || map[level] !== undefined));
+      const available = getSupportedThinkingLevels('operator-bedrock', model.id, undefined, provider);
+      expect(available, model.id).toEqual(expected);
+      for (const level of levels) {
+        const index = levels.indexOf(level);
+        const selected = expected.includes(level) ? level : levels.slice(index).find(candidate => expected.includes(candidate))
+          ?? levels.slice(0, index).reverse().find(candidate => expected.includes(candidate)) ?? 'off';
+        expect(clampPublishedThinkingLevel(level, available), model.id + ':' + level).toBe(selected);
+        if (selected !== level) clampedCases++;
+      }
+      published.find(row => row.id === model.id)!.thinkingLevelMap!.high = 'foreign';
+      expect(provider.getPublishedModels?.().find(row => row.id === model.id)?.thinkingLevelMap).toEqual(map);
+      expect(getSupportedThinkingLevels('operator-bedrock', model.id, undefined, provider)).toEqual(expected);
+    }
+    expect(clampedCases).toBe(59);
+    expect(getSupportedThinkingLevels('operator-bedrock', 'unreviewed', undefined, provider)).toEqual(['off']);
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -449,6 +471,25 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       expect(result).toMatchObject({ content: 'ok', model: model.id, api: vector.api }); expect(fetch).toHaveBeenCalledOnce();
       expect({ input, options }).toEqual(before);
       expect(JSON.parse(fetch.mock.calls[0][1]!.body as string), vector.thinking).toEqual(vector.expectedBody);
+    }
+    const available = getSupportedThinkingLevels('operator-bedrock', model.id, undefined, provider);
+    const hostVectors = reasoningReference.rows.filter(row => row.model === model.id && clampPublishedThinkingLevel(row.thinking, available) !== row.thinking);
+    for (const vector of hostVectors) for (const binary of [false, true]) {
+      const thinking = clampPublishedThinkingLevel(vector.thinking, available);
+      const expected = reasoningReference.rows.find(row => row.model === model.id && row.thinking === thinking)!;
+      const fetch = vi.fn(async (url: string | URL, init?: RequestInit) => {
+        expect(String(url)).toBe(`https://bedrock-runtime.us-east-1.amazonaws.com/model/${encodeURIComponent(model.id)}/converse${binary ? '-stream' : ''}`);
+        expect(new Headers(init?.headers).get('authorization')).toBe('Bearer disposable-bedrock-reference');
+        return observedResponse({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }, binary);
+      }); vi.stubGlobal('fetch', fetch);
+      const input: Message[] = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
+      const options = { ...structuredClone(vector.options), model: model.id, thinking }, before = structuredClone({ input, options });
+      let result: ChatResponse | undefined;
+      if (binary) await provider.streamChat(input, () => {}, value => { result = value; }, undefined, options);
+      else result = await provider.chat(input, options);
+      expect(result).toMatchObject({ content: 'ok', model: model.id, api: vector.api }); expect(fetch).toHaveBeenCalledOnce();
+      expect(JSON.parse(fetch.mock.calls[0][1]!.body as string), vector.thinking + '→' + thinking).toEqual(expected.expectedBody);
+      expect({ input, options }).toEqual(before);
     }
   });
 

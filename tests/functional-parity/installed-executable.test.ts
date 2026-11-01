@@ -2203,14 +2203,15 @@ it('dispatches original Google/Vertex schema/generation/choice/history/tool and 
 
 it('dispatches native Bedrock binary streams through installed public declarations and runtime', async () => {
   await writeFile(path.join(consumer, 'bedrock-public.ts'), `
-    import { BedrockProvider, ProviderFactory, bedrockCredentialConfig, type AiProvider, type ChatOptions, type ChatResponse, type ProviderConfig } from '@ai-harness/core';
+    import { BedrockProvider, ProviderFactory, bedrockCredentialConfig, getSupportedThinkingLevels, clampPublishedThinkingLevel, type AiProvider, type ChatOptions, type ChatResponse, type ProviderConfig } from '@ai-harness/core';
     const config: ProviderConfig = { type: 'bedrock', accessKeyId: 'DISPOSABLE', secretAccessKey: 'disposable', baseUrl: 'https://proxy.example', model: 'fixture:0' };
     const native: AiProvider = new BedrockProvider(config);
     const factory: AiProvider = ProviderFactory.create(config);
     const bearer: AiProvider = ProviderFactory.create({ type: 'bedrock', ...bedrockCredentialConfig('opaque-token') });
     const levels: NonNullable<ChatOptions['thinking']>[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
     const adaptive: ChatOptions[] = levels.map(thinking => ({ model: 'anthropic.claude-opus-4-6-v1', thinking, maxTokens: 64 }));
-    void [native, factory, bearer, adaptive];
+    const clamped: NonNullable<ChatOptions['thinking']> = clampPublishedThinkingLevel('xhigh', getSupportedThinkingLevels('operator-bedrock', 'anthropic.claude-opus-4-6-v1', undefined, native));
+    void [native, factory, bearer, adaptive, clamped];
     async function compile() {
       let complete: ChatResponse | undefined;
       const options: ChatOptions = { thinking: 'high', maxTokens: 64, tools: [{ name: 'echo', description: 'Echo', parameters: { type: 'object', properties: { x: { type: 'string' } }, required: ['x'], additionalProperties: false } }] };
@@ -2236,7 +2237,7 @@ it('dispatches native Bedrock binary streams through installed public declaratio
   await writeFile(path.join(consumer, 'bedrock-public.mjs'), `
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
-    import { BedrockProvider, ProviderFactory, bedrockCredentialConfig, collectProviderModelCatalog, flattenModelCatalog } from '@ai-harness/core';
+    import { BedrockProvider, ProviderFactory, bedrockCredentialConfig, collectProviderModelCatalog, flattenModelCatalog, getSupportedThinkingLevels, clampPublishedThinkingLevel } from '@ai-harness/core';
     import { fileURLToPath } from 'node:url';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
     const originals = ${JSON.stringify(originals)}, nativeUsage = ${JSON.stringify(nativeUsage)}, outputBoundaries = ${JSON.stringify(outputBoundaries)}, toolSchemas = ${JSON.stringify(toolSchemas)};
@@ -2285,6 +2286,26 @@ it('dispatches native Bedrock binary streams through installed public declaratio
         baseUrl: 'http://127.0.0.1:' + server.address().port + '/proxy' });
       assert.equal(originals.length, 193);
       assert.equal(native.getPublishedModels().filter(row => originals.some(model => model.id === row.id)).length, 193);
+      const levels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']; let clampedCases = 0;
+      for (const model of reasoning.models) {
+        const map = model.thinkingLevelMap ?? {}, row = native.getPublishedModels().find(row => row.id === model.id);
+        assert.deepEqual(row.thinkingLevelMap, map);
+        const expected = levels.filter(level => map[level] !== null && (!['xhigh', 'max'].includes(level) || map[level] !== undefined));
+        const available = getSupportedThinkingLevels('operator-bedrock', model.id, undefined, native);
+        assert.deepEqual(available, expected);
+        for (const level of levels) {
+          const index = levels.indexOf(level);
+          const selected = expected.includes(level) ? level : levels.slice(index).find(candidate => expected.includes(candidate))
+            ?? levels.slice(0, index).reverse().find(candidate => expected.includes(candidate)) ?? 'off';
+          assert.equal(clampPublishedThinkingLevel(level, available), selected);
+          if (selected !== level) clampedCases++;
+        }
+        row.thinkingLevelMap.high = 'foreign';
+        assert.deepEqual(native.getPublishedModels().find(row => row.id === model.id).thinkingLevelMap, map);
+        assert.deepEqual(getSupportedThinkingLevels('operator-bedrock', model.id, undefined, native), expected);
+      }
+      assert.equal(clampedCases, 59); assert.equal(calls.length, 3);
+      assert.deepEqual(getSupportedThinkingLevels('operator-bedrock', 'unreviewed', undefined, native), ['off']);
       for (const model of originals) {
         const json = await native.chat([], { model: model.id, maxTokens: 16 });
         assert.equal(json.model, model.id); assert.equal(json.api, 'bedrock-converse-stream');
@@ -2429,6 +2450,17 @@ it('dispatches native Bedrock binary streams through installed public declaratio
         assert.equal(call.path, '/proxy/model/' + encodeURIComponent(model) + '/converse' + (binary ? '-stream' : ''));
       }
       assert.equal(calls.length, 6421);
+      const hostRows = reasoning.rows.filter(row => clampPublishedThinkingLevel(row.thinking,
+        getSupportedThinkingLevels('operator-bedrock', row.model, undefined, native)) !== row.thinking);
+      assert.equal(hostRows.length, 59);
+      for (const row of hostRows) {
+        const thinking = clampPublishedThinkingLevel(row.thinking, getSupportedThinkingLevels('operator-bedrock', row.model, undefined, native));
+        const expected = reasoning.rows.find(vector => vector.model === row.model && vector.thinking === thinking);
+        const sdk = simpleDefaults.find(vector => vector.observed.model === row.model).observed.result;
+        await bindSimple([{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }],
+          { ...row.options, model: row.model, thinking }, expected.expectedBody, sdk, false);
+      }
+      assert.equal(calls.length, 6539);
       console.log('installed Bedrock ConverseStream OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);
