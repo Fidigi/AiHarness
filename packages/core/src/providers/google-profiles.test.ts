@@ -192,12 +192,7 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
           maxTokens: vector.options.maxTokens, thinkingBudgets: vector.options.thinkingBudgets }, [{ ...input[0], content }]);
         expect(result).toMatchObject({ content: 'ok', model: profile.id, api: vector.api });
         const actual = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string).generationConfig;
-        if (profile.id === 'gemini-2.5-pro' && vector.case === 'simple-high-budget1-answer64') {
-          // Counter-evidence, not full-chain equivalence: keep the existing Core minimum safe guard.
-          expect(vector.generationConfig.thinkingConfig?.thinkingBudget).toBe(1);
-          expect(actual).not.toEqual(vector.generationConfig);
-          expect(actual).toEqual({ ...vector.generationConfig, thinkingConfig: { ...vector.generationConfig.thinkingConfig, thinkingBudget: 128 } });
-        } else expect(actual).toEqual(vector.generationConfig);
+        expect(actual).toEqual(vector.generationConfig);
       }
       if (scope === 'google-vertex') {
         const physical = bearerReference.rows.find(row => row.model === profile.id)!;
@@ -477,6 +472,15 @@ describe('pinned original Google/Vertex native thinking and output policy', () =
         await f.call(stream, { thinking: 'max', thinkingBudgets: budgets });
         expect(JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body)).generationConfig.thinkingConfig)
           .toEqual({ thinkingBudget: maximum, includeThoughts: true });
+      }
+      for (const high of [0, 1, 127]) {
+        const thinkingBudgets = Object.freeze({ high });
+        for (const stream of [false, true]) {
+          await f.call(stream, { thinking: 'high', maxTokens: 64, thinkingBudgets });
+          expect(JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body)).generationConfig)
+            .toEqual({ maxOutputTokens: 64, thinkingConfig: { thinkingBudget: high, includeThoughts: true } });
+        }
+        expect(thinkingBudgets).toEqual({ high });
       }
       const getter = vi.fn(() => 1000), invalid = Object.defineProperty({}, 'high', { get: getter });
       const before = f.fetch.mock.calls.length;

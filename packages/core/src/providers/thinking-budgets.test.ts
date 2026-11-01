@@ -50,7 +50,7 @@ describe('numeric thinking budgets on real HTTP payloads', () => {
           : { [level === 'xhigh' || level === 'max' || level === 'off' ? 'high' : level]: configured };
         const expected = level === 'off' ? (kind === 'anthropic' ? undefined : 0)
           : level === 'minimal' ? (kind === 'anthropic' ? 1024 : 128)
-            : level === 'low' ? 3333 : level === 'medium' ? (kind === 'anthropic' ? 1024 : 128)
+            : level === 'low' ? 3333 : level === 'medium' ? (kind === 'anthropic' ? 1024 : 0)
               : level === 'xhigh' && kind === 'anthropic' ? 16384
                 : (level === 'xhigh' || level === 'max') && kind !== 'anthropic' ? 2222 : 32768;
         for (const stream of [false, true]) await test.call(stream, { thinking: level, thinkingBudgets: budgets, maxTokens: kind === 'anthropic' ? 64 : 65536, temperature: 0.3 });

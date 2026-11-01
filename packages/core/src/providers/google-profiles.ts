@@ -97,7 +97,7 @@ export function applyGoogleNativeGenerationConfig(scope: GoogleNativeScope, mode
         : { minimal: -1, low: -1, medium: -1, high: -1 };
   const overrides = copyThinkingBudgets(options?.thinkingBudgets), fallback = defaults[numericLevel];
   const budget = overrides?.[numericLevel] === undefined && fallback === -1 ? -1 : resolveThinkingBudget(numericLevel, overrides, fallback,
-    model.includes('2.5-pro') ? 128 : 0, model.includes('2.5-pro') ? 32768 : model.includes('2.5-flash') ? 24576 : 8192);
+    0, model.includes('2.5-pro') ? 32768 : model.includes('2.5-flash') ? 24576 : 8192);
   config.thinkingConfig = { thinkingBudget: budget, includeThoughts: true };
 }
 

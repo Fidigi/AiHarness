@@ -91,7 +91,14 @@
     }
   },
   "delivery": {
-    "integration": "Selectively integrate only the source-local verified native Mistral composition, tests and owning clean documentation. Required root/parity gates remain failed; integration is not full qualification or parent closure.",
+    "integration": "Native Mistral composition, tests and owning clean documentation selectively integrated as bd05889. Required root/parity gates remain failed; integration is not full qualification or parent closure.",
+    "integratedCommit": "bd05889",
+    "stagedSourceProof": {
+      "checkedIncludedBlobsAndModes": 1544,
+      "mismatched": [],
+      "onlyNewStagedPath": "docs/audit/pi/evidence/MOD-01.03a-native-mistral-cli.json",
+      "excludedConcurrentWork": "Anthropic implementation, fixture, installed-test hunks and documentary cleanup remained unstaged."
+    },
     "wholeCriterionClosed": false,
     "wholeAuditClosed": false,
     "finalIntegratedQualification": false,

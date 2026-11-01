@@ -2117,11 +2117,7 @@ it('dispatches original Google/Vertex schema/generation/choice/history/tool and 
         else result = await provider.chat(messages, options);
         assert.equal(result.content, 'ok'); assert.equal(result.model, vector.model); assert.equal(result.api, vector.api);
         const actual = calls.at(-1).body.generationConfig;
-        if (vector.model === 'gemini-2.5-pro' && vector.case === 'simple-high-budget1-answer64') {
-          // Explicit counter-evidence: preserve Core's existing minimum; do not alter the SDK oracle.
-          assert.equal(vector.generationConfig.thinkingConfig.thinkingBudget, 1); assert.notDeepEqual(actual, vector.generationConfig);
-          assert.deepEqual(actual, { ...vector.generationConfig, thinkingConfig: { ...vector.generationConfig.thinkingConfig, thinkingBudget: 128 } });
-        } else assert.deepEqual(actual, vector.generationConfig);
+        assert.deepEqual(actual, vector.generationConfig);
       }
       assert.equal(generation.length, 210); assert.equal(calls.length, 630);
       let refused = 0;
