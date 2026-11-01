@@ -73,10 +73,13 @@ Les variables doivent être définies **avant** de démarrer le CLI ou le serveu
 | OpenAI | `OPENAI_API_KEY` | `OPENAI_MODEL` en mode RPC |
 | Anthropic | `ANTHROPIC_API_KEY` | `ANTHROPIC_MODEL` en mode RPC |
 | Google Gemini | `GEMINI_API_KEY` ou `GOOGLE_API_KEY` | `GEMINI_MODEL` |
+| Mistral (CLI, `mistral-conversations`) | `MISTRAL_API_KEY` | `MISTRAL_MODEL`, `MISTRAL_BASE_URL` |
 | Azure OpenAI | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT` | `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` |
 | Google Vertex AI | `GOOGLE_VERTEX_ACCESS_TOKEN`, `GOOGLE_CLOUD_PROJECT` | `GOOGLE_CLOUD_LOCATION`, `VERTEX_MODEL` |
 | AWS Bedrock | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `AWS_SESSION_TOKEN`, `AWS_REGION`, `BEDROCK_MODEL` |
 | Local / Ollama / llama.cpp / AirNES | `LOCAL_BASE_URL` ou `LLAMA_BASE_URL` | `LOCAL_API_KEY`/`LLAMA_API_KEY`, `LOCAL_MODEL`/`LLAMA_MODEL` |
+
+Mistral CLI ne nécessite aucune extension : `ai-harness --offline --model mistral-conversations/magistral-medium-latest:high --print "Relis ce patch"`. Son modèle par défaut est `mistral-small-latest`. `AI_HARNESS_MISTRAL_CONVERSATIONS_API_KEY` puis `MISTRAL_CONVERSATIONS_API_KEY` priment sur `MISTRAL_API_KEY`. Utilisez `mistral-conversations` pour `defaultProvider`, les commandes de confiance `providerApiKeyCommands` et le stockage chiffré ; les credentials existants sous `mistral` ne sont pas migrés. Le nom nu `mistral` reste disponible aux extensions. Cela n’active ni provider Web intégré ni connexion par abonnement.
 
 Exemple OpenAI :
 

@@ -4223,6 +4223,7 @@ it('dispatches native Mistral through installed public declarations and runtime'
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
   await writeFile(path.join(consumer, 'mistral-public.mjs'), `
     import assert from 'node:assert/strict';
+    import { spawn } from 'node:child_process';
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
     import { MistralProvider, ProviderFactory, ProviderType, getProviderPublishedModels, getProviderPublishedModel, getSupportedThinkingLevels,
@@ -4267,6 +4268,34 @@ it('dispatches native Mistral through installed public declarations and runtime'
       assert.equal(calls[1].authorization, 'Bearer disposable-native-key');
       assert.equal(calls[1].body.model, 'mistral-small-latest'); assert.equal(calls[1].body.reasoning_effort, 'none');
       assert.equal(calls[1].body.max_tokens, 64); assert.equal('max_completion_tokens' in calls[1].body, false);
+      for (const mode of ['print', 'json', 'rpc']) {
+        const result = await new Promise((resolve, reject) => {
+          const child = spawn('ai-harness', ['--approve', '--offline', '--no-extensions', '--no-session',
+            '--model', 'mistral-conversations/magistral-medium-latest', '--thinking', 'high',
+            ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
+            cwd: ${JSON.stringify(workspace)}, env: { ...${JSON.stringify(environment)}, MISTRAL_API_KEY: 'disposable-native-cli-key',
+              MISTRAL_BASE_URL: 'http://127.0.0.1:' + server.address().port }, stdio: ['pipe', 'pipe', 'pipe'],
+          });
+          let stdout = '', stderr = '';
+          const timer = setTimeout(() => child.kill('SIGKILL'), 20000);
+          child.stdout.setEncoding('utf8').on('data', text => { stdout += text; });
+          child.stderr.setEncoding('utf8').on('data', text => { stderr += text; });
+          child.once('error', error => { clearTimeout(timer); reject(error); });
+          child.once('close', (code, signal) => { clearTimeout(timer); resolve({ code, signal, stdout, stderr }); });
+          child.stdin.end(mode === 'rpc' ? JSON.stringify({ type: 'prompt', id: 'native-mistral', message: 'hello' }) + '\\n' : '');
+        });
+        assert.equal(result.code, 0, JSON.stringify(result)); assert.equal(result.signal, null);
+        assert.ok(result.stdout.includes('installed Mistral')); assert.ok(!(result.stdout + result.stderr).includes('disposable-native-cli-key'));
+        if (mode !== 'print') {
+          const records = result.stdout.trim().split('\\n').map(line => JSON.parse(line));
+          const message = records.find(record => record.type === 'message_end' && record.message?.role === 'assistant')?.message;
+          assert.equal(message.provider, 'mistral-conversations'); assert.equal(message.api, 'mistral-conversations');
+          assert.equal(message.model, 'magistral-medium-latest');
+        }
+        const call = calls.at(-1); assert.equal(call.url, '/v1/chat/completions');
+        assert.equal(call.authorization, 'Bearer disposable-native-cli-key'); assert.equal(call.body.reasoning_effort, 'high');
+      }
+      assert.equal(calls.length, 5);
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed Mistral OK');
   `);

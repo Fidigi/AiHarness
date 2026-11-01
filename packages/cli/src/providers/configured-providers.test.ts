@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BedrockProvider, CerebrasProvider, MockProvider } from '@ai-harness/core';
+import { BedrockProvider, CerebrasProvider, MistralProvider, MockProvider, ProviderFactory } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -28,6 +28,28 @@ describe('configured CLI providers', () => {
     await expect(resolveStartupProvider(providers, { models: ['cerebras/*:high'], preferredProvider: 'cerebras', preferredModel: 'qwen-3.8-27b' }, {}))
       .resolves.toMatchObject({ providerName: 'cerebras', model: 'qwen-3.8-27b', thinkingLevel: 'high' });
     expect(createConfiguredProviders({ CEREBRAS_API_KEY: 'synthetic', CEREBRAS_MODEL: 'unknown' }).has('cerebras')).toBe(false);
+  });
+
+  it('composes native Mistral without reserving the bare extension name', async () => {
+    expect(createConfiguredProviders({}).has('mistral-conversations')).toBe(false);
+    expect(ProviderFactory.has('mistral')).toBe(false);
+    const providers = createConfiguredProviders({ MISTRAL_API_KEY: 'environment',
+      AI_HARNESS_MISTRAL_CONVERSATIONS_API_KEY: 'first', MISTRAL_MODEL: 'magistral-medium-latest',
+      MISTRAL_BASE_URL: 'http://127.0.0.1/owned/v1',
+    }, { credentials: { 'mistral-conversations': 'stored' } });
+    const provider = providers.get('mistral-conversations');
+    expect(provider).toBeInstanceOf(MistralProvider);
+    expect((provider as unknown as { config: Record<string, unknown> }).config).toMatchObject({
+      apiKey: 'first', model: 'magistral-medium-latest', baseUrl: 'http://127.0.0.1/owned/v1',
+    });
+    const stored = createConfiguredProviders({}, { credentials: new Map([['mistral-conversations', 'stored']]) });
+    expect(stored.get('mistral-conversations')?.getConfiguredModel()).toBe('mistral-small-latest');
+    expect(stored.get('mistral-conversations')?.validateConfig()).toBe(true);
+    const { selection } = applyAgentModelSettings({}, { defaultProvider: 'mistral-conversations', defaultModel: 'magistral-medium-latest' });
+    await expect(resolveStartupProvider(stored, selection, {})).resolves.toMatchObject({ providerName: 'mistral-conversations', model: 'magistral-medium-latest' });
+    await expect(resolveStartupProvider(providers, { models: ['mistral-conversations/*:high'],
+      preferredProvider: 'mistral-conversations', preferredModel: 'magistral-medium-latest', offline: true }, {}))
+      .resolves.toMatchObject({ providerName: 'mistral-conversations', model: 'magistral-medium-latest', thinkingLevel: 'high' });
   });
 
   it('shares one bounded environment resolver across CLI modes', () => {

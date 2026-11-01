@@ -129,6 +129,7 @@ export function createConfiguredProviders(
   const anthropicKey = configuredCredential('anthropic', env.ANTHROPIC_API_KEY, options.credentials);
   const googleKey = configuredCredential('google', env.GEMINI_API_KEY || env.GOOGLE_API_KEY, options.credentials);
   const cerebrasKey = configuredCredential('cerebras', providerCredentialEnvironmentKeys('cerebras').map(name => env[name]).find(Boolean), options.credentials);
+  const mistralKey = configuredCredential('mistral-conversations', providerCredentialEnvironmentKeys('mistral-conversations').map(name => env[name]).find(Boolean), options.credentials);
   const azureKey = configuredCredential('azure', env.AZURE_OPENAI_API_KEY, options.credentials);
   const vertexKey = configuredCredential('vertex', env.GOOGLE_VERTEX_ACCESS_TOKEN, options.credentials);
   const localKey = configuredCredential('local', env.LOCAL_API_KEY || env.LLAMA_API_KEY, options.credentials);
@@ -151,6 +152,9 @@ export function createConfiguredProviders(
     : undefined);
   attempt(providers, 'cerebras', cerebrasKey
     ? { ...network, type: 'cerebras', apiKey: cerebrasKey, model: env.CEREBRAS_MODEL, baseUrl: env.CEREBRAS_BASE_URL }
+    : undefined);
+  attempt(providers, 'mistral-conversations', mistralKey
+    ? { ...network, type: 'mistral-conversations', apiKey: mistralKey, model: env.MISTRAL_MODEL, baseUrl: env.MISTRAL_BASE_URL }
     : undefined);
   const azure = azureEnvironmentConfig(env, azureKey);
   attempt(providers, 'azure', azure ? { ...network, ...azure } : undefined);

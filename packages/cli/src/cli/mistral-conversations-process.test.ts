@@ -9,8 +9,10 @@ import { describe, expect, it } from 'vitest';
 const cli = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 const core = fileURLToPath(new URL('../../../core/dist/index.js', import.meta.url));
 
-describe('emitted CLI custom Mistral dialect', () => {
-  it.each([['print', 'mistral'], ['json', 'mistral'], ['rpc', 'mistral'], ['rpc', 'operator-mistral']] as const)('%s uses explicit %s registration, environment credential resolution and durable accounting', async (mode, alias) => {
+describe('emitted CLI Mistral composition', () => {
+  it.each([['print', 'mistral'], ['json', 'mistral'], ['rpc', 'mistral'], ['rpc', 'operator-mistral'],
+    ['print', 'mistral-conversations'], ['json', 'mistral-conversations'], ['rpc', 'mistral-conversations']] as const)('%s uses %s composition, environment credential resolution and durable accounting', async (mode, alias) => {
+    const builtin = alias === 'mistral-conversations';
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-mistral-cli-'));
     const cwd = path.join(root, 'project'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
     const calls: Array<{ url?: string; authorization?: string; body: Record<string, unknown> }> = [];
@@ -29,15 +31,22 @@ describe('emitted CLI custom Mistral dialect', () => {
     await new Promise<void>(resolve => upstream.listen(0, '127.0.0.1', resolve));
     try {
       await mkdir(cwd); await mkdir(path.join(agent, 'extensions'), { recursive: true });
-      await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ cacheWarming: 'off' }));
-      await writeFile(path.join(agent, 'extensions/mistral.mjs'), `import { MistralProvider } from ${JSON.stringify(core)};
+      await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ cacheWarming: 'off',
+        ...(builtin ? { defaultProvider: alias, defaultModel: 'magistral-medium-latest', enabledModels: [`${alias}/*:high`] } : {}),
+      }));
+      if (!builtin) await writeFile(path.join(agent, 'extensions/mistral.mjs'), `import { MistralProvider } from ${JSON.stringify(core)};
         export default api => api.registerProvider('${alias}', { defaultConfig: { model: 'magistral-medium-latest' },
           create(config) { return new MistralProvider({ ...config, baseUrl: 'http://127.0.0.1:${(upstream.address() as { port: number }).port}' }); } });`);
+      if (builtin) expect(await readdir(path.join(agent, 'extensions'))).toEqual([]);
       const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {
         const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions,
-          '--model', `${alias}/magistral-medium-latest`, '--thinking', 'high', ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
+          ...(builtin ? [] : ['--model', `${alias}/magistral-medium-latest`, '--thinking', 'high']),
+          ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
           cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent,
-            [`${alias.toUpperCase().replaceAll('-', '_')}_API_KEY`]: 'disposable-cli-mistral-key' }, stdio: ['pipe', 'pipe', 'pipe'],
+            ...(builtin ? { MISTRAL_API_KEY: 'disposable-cli-mistral-key', MISTRAL_MODEL: 'mistral-small-latest',
+              MISTRAL_BASE_URL: `http://127.0.0.1:${(upstream.address() as { port: number }).port}` }
+              : { [`${alias.toUpperCase().replaceAll('-', '_')}_API_KEY`]: 'disposable-cli-mistral-key' }),
+          }, stdio: ['pipe', 'pipe', 'pipe'],
         });
         let stdout = '', stderr = '';
         const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);

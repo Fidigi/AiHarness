@@ -10,23 +10,27 @@ afterEach(async () => {
 });
 
 describe('CLI provider runtime', () => {
-  it('resolves native Cerebras environment, command and encrypted credentials without registration', async () => {
+  it.each([['cerebras', 'CEREBRAS_API_KEY', 'AI_HARNESS_CEREBRAS_API_KEY'],
+    ['mistral-conversations', 'MISTRAL_API_KEY', 'AI_HARNESS_MISTRAL_CONVERSATIONS_API_KEY']] as const)(
+    'resolves native %s environment, command and encrypted credentials without registration', async (provider, variable, firstVariable) => {
     const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-cerebras-credentials-'));
     roots.push(agentDir);
     const key = 'synthetic-cerebras-env';
-    const environment = await createCliProviderRuntime(agentDir, {}, { CEREBRAS_API_KEY: key });
-    expect(environment.values.get('cerebras')).toBe(key);
+    const environment = await createCliProviderRuntime(agentDir, {}, { [variable]: key });
+    expect(environment.values.get(provider)).toBe(key);
     expect(environment.redactor.redact(key)).toBe('[REDACTED]');
     const env = { AI_HARNESS_MASTER_KEY: 'sufficiently long synthetic Cerebras master key' };
     const first = await createCliProviderRuntime(agentDir, {}, env);
-    await first.credentials.setApiKey('cerebras', 'synthetic-cerebras-stored');
-    const settings = { providerApiKeyCommands: { cerebras: `${JSON.stringify(process.execPath)} -e "process.stdout.write('synthetic-cerebras-command')"` } };
+    await first.credentials.setApiKey(provider, 'synthetic-cerebras-stored');
+    const settings = { providerApiKeyCommands: { [provider]: `${JSON.stringify(process.execPath)} -e "process.stdout.write('synthetic-cerebras-command')"` } };
     const command = await createCliProviderRuntime(agentDir, settings, env);
-    expect(command.values.get('cerebras')).toBe('synthetic-cerebras-command');
-    const override = await createCliProviderRuntime(agentDir, settings, { ...env, CEREBRAS_API_KEY: key, AI_HARNESS_CEREBRAS_API_KEY: 'synthetic-cerebras-first' });
-    expect(override.values.get('cerebras')).toBe('synthetic-cerebras-first');
+    expect(command.values.get(provider)).toBe('synthetic-cerebras-command');
+    const override = await createCliProviderRuntime(agentDir, settings, { ...env, [variable]: key, [firstVariable]: 'synthetic-cerebras-first' });
+    expect(override.values.get(provider)).toBe('synthetic-cerebras-first');
+    const offline = await createCliProviderRuntime(agentDir, settings, env, undefined, true, [], undefined, true);
+    expect(offline.values.has(provider)).toBe(false);
     const restored = await createCliProviderRuntime(agentDir, {}, env);
-    expect(restored.values.get('cerebras')).toBe('synthetic-cerebras-stored');
+    expect(restored.values.get(provider)).toBe('synthetic-cerebras-stored');
     expect(restored.redactor.redact('synthetic-cerebras-stored')).toBe('[REDACTED]');
     const bytes = await readFile(path.join(agentDir, 'credentials.enc'), 'utf8');
     for (const secret of [key, 'synthetic-cerebras-stored', 'synthetic-cerebras-command', 'synthetic-cerebras-first']) expect(bytes).not.toContain(secret);
