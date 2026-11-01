@@ -106,7 +106,14 @@
     }
   },
   "delivery": {
-    "integration": "Pending reviewed selective integration of bounded verified functional contract; failed required gates must remain failed.",
+    "integration": "Bounded verified Google/Vertex numeric-override contract selectively integrated as 4777c4c; required parity/root gates remain failed.",
+    "integratedCommit": "4777c4c",
+    "stagedSourceProof": {
+      "checkedIncludedBlobsAndModes": 1544,
+      "mismatched": [],
+      "onlyNewStagedPath": "docs/audit/pi/evidence/MOD-01.01b-google-budget-delivery.json",
+      "excludedConcurrentWork": "Anthropic implementation, fixture, installed-test hunks and documentary cleanup remained unstaged."
+    },
     "wholeCriterionClosed": false,
     "wholeAuditClosed": false,
     "finalIntegratedQualification": false,

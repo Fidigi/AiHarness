@@ -1,6 +1,6 @@
 # MOD-01 — Execution Board
 
-> **Status: IN PROGRESS** (2026-10-31)
+> **Status: IN PROGRESS** (2026-11-01)
 >
 > MOD-01 and MOD-01.01b remain open. Foundation `1109513` retains its accepted gates and failed E2E (599 passed, 137 failed). New isolated Bedrock Opus 4.6 fork `1af372a` passes 368 focused tests, exact typecheck and a changed-source root (9,633 / 526 files) after a complete retained-base workspace rebuild. Subsequent tests-only fork `ac6b6fa` passes the installed Core scenario with 14 new adaptive requests (1 passed / 328 unselected). E13 adds two declared synthetic pinned-SDK response/continuation bindings, not Core signed-replay acceptance. Fresh canonical dependency-build and provider-cell acceptance remain open. All 38 visual failures remain unaccepted; fresh targeted captures/baseline changes still need the user's decision.
 
@@ -8,7 +8,9 @@
 
 This dated checkpoint supersedes older next-action wording below; it does not reopen or reconcile the historical audit. **Integrated:** native Mistral CLI `bd05889`, [scoped receipt](./MOD-01.md#mod-0103a--native-mistral-cli-composition-2026-11-01). Typecheck, 40 focused controls and the installed Mistral consumer pass. Required parity **366/2** and root **8,539/1** remain failed in three TypeScript compiler children; no application regression is demonstrated solely by those exits, and no gate is waived.
 
-**Next functional batch:** integrate E15's already approved Google/Vertex valid numeric override using its four retained code/test paths and existing scenarios. No policy/fixture reinvestigation or GDB/collector repair. All seven audit criteria remain open; continuation export/redaction, distribution/platform support and intentional visual acceptance still require the user's explicit decisions. Preserve concurrent Anthropic and documentary work.
+**Latest functional integration:** Google/Vertex override `4777c4c`, [source-bound receipt](./MOD-01.md#mod-0101b--googlevertex-valid-budget-delivery-2026-11-01). Clean `64f96be` passes typecheck, 282 focused cases and installed Google/Vertex. Required parity fails at compiler setup (35 pass / 333 unexecuted); root fails (8,535 pass / five fail), including two unexplained application SIGSEGVs plus three compiler terminations. They are not treated as benign or repaired by the earlier Mistral source.
+
+**Next functional batch:** select the approved Bedrock `streamSimple` defaults/context/numeric-allocation candidate `189d9be`, coordinating the separately verified Opus adaptive request and installed scenarios before one coherent qualification. Preserve safety refusals and raw/simple separation; no new policy or opaque-carrier decision is needed for this allocation slice. Do not resume GDB/collector work. All seven criteria remain open; continuation export/redaction, distribution/platform support and intentional visual acceptance require explicit user decisions. Concurrent Anthropic and documentary work stays preserved.
 
 ## 1. Authority and operating rule
 
