@@ -74,15 +74,24 @@ for (const scene of [
         await page.evaluate(() => document.fonts.ready);
         expect((await new AxeBuilder({ page }).include('.subagent-panel').analyze()).violations).toEqual([]);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        if (scene.width === 1280) {
+          // Rounded corners expose the transcript: reproduce its recorded reference position.
+          const history = page.locator('.messages-container');
+          const top = scene.locale === 'en' ? 25 : 97;
+          // The exposed gutter sends the wheel to history rather than the overlaid panel.
+          await history.hover({ position: { x: 2, y: 2 } });
+          await page.mouse.wheel(0, -(await history.evaluate(element => element.scrollHeight)));
+          await expect.poll(() => history.evaluate(element => element.scrollTop)).toBe(0);
+          await page.mouse.wheel(0, top);
+          await expect.poll(() => history.evaluate(element => element.scrollTop)).toBe(top);
+        }
         // Keep transient hover paint and fractional outside pixels out of the panel capture.
         await page.mouse.move(0, 0);
         await panel.evaluate(element => {
           const rect = element.getBoundingClientRect();
           element.style.translate = `${Math.ceil(rect.x) - rect.x}px ${Math.ceil(rect.y) - rect.y}px`;
         });
-        await expect(panel).toHaveScreenshot(`children-${scene.locale}-${scene.theme}-${scene.width}.png`, {
-          style: 'body * { visibility: hidden !important; } .subagent-panel, .subagent-panel * { visibility: visible !important; }',
-        });
+        await expect(panel).toHaveScreenshot(`children-${scene.locale}-${scene.theme}-${scene.width}.png`);
         if (scene.locale === 'en' && scene.width === 1280) {
           await page.goto(`${f.base()}/settings?cwd=${encodeURIComponent(f.cwd)}#subagents`);
           const settings = page.locator('#subagents');

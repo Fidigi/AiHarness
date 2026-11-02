@@ -1,0 +1,876 @@
+{
+  "schemaVersion": 1,
+  "criterion": "QUA-01",
+  "date": "2026-11-02",
+  "criterionStatus": "PARTIAL",
+  "status": "CAPTURE_REFERENCE_STATE_FIXED_QUALIFICATION_FAILED",
+  "scope": "Native-only capture-fixture repair and complete source-bound local Docker campaign; simulated upstreams with genuine HTTP/process/browser boundaries. No new product/visual acceptance.",
+  "source": {
+    "head": "3c645e98d44c8988d7d8a26e35ae0aa36355db40",
+    "selection": "Observed dirty inputs including preserved concurrent provider/audit work and one owned E2E fixture change. Exact hashes/modes govern identity, not a later documentary checkout or clean/dirty delivery commit.",
+    "files": 1720,
+    "manifest": {
+      "file": "sources.json",
+      "sha256": "3178166d3299741b4644207ab4a559ecf9b69e798e2b5382a29331bea64d211e"
+    },
+    "archive": {
+      "file": "frozen-sources.tar.gz",
+      "sha256": "8c27dff147e87789c673996daa392e208ca68242d697c7f8471e2aadf676315b",
+      "verification": {
+        "verified": 1720,
+        "checks": [
+          "path list",
+          "regular-file type",
+          "bytes",
+          "mode",
+          "sha256"
+        ],
+        "extraction": "/tmp/aih-qua01-capture-reference-tar-verify-20261102",
+        "tarSha256": "8c27dff147e87789c673996daa392e208ca68242d697c7f8471e2aadf676315b"
+      }
+    },
+    "image": "sha256:c4634d271dae811519be4765a18e911623375547a807cf8f9a6829117e02b71f",
+    "verification": {
+      "frozenSourceChecks": 1720,
+      "drift": [],
+      "unexpected": [],
+      "baselineChanges": [],
+      "image": {
+        "id": "sha256:c4634d271dae811519be4765a18e911623375547a807cf8f9a6829117e02b71f",
+        "matched": 1552,
+        "reviewedExclusions": 168,
+        "mismatches": []
+      }
+    },
+    "runtime": {
+      "node": "24.15.0",
+      "v8": "13.6.233.17-node.48",
+      "platform": "linux",
+      "arch": "x64",
+      "nodeOptions": null
+    },
+    "checkoutBeforeDocumentaryDelivery": {
+      "checked": 1720,
+      "differences": [],
+      "observedAt": "2026-11-02T14:32:43.704Z",
+      "checkoutRoot": "/app/projects/AiHarness"
+    },
+    "productionImage": "sha256:c9247234a28cc5948ba3e6c03d39f7ac2048bd12005f7370aabbdef5f0cbe346",
+    "postGateVerification": {
+      "observedAt": "2026-11-02T14:38:33.863Z",
+      "frozenSourceChecks": 1720,
+      "drift": [],
+      "checkoutDifferences": [
+        "docs/audit/pi/AUDIT-5.md"
+      ],
+      "expectedNewReceipt": [
+        "docs/audit/pi/evidence/QUA-01.capture-reference-20261102.json"
+      ],
+      "ownedSourceMatchesFrozen": true
+    }
+  },
+  "change": {
+    "files": [
+      {
+        "path": "e2e/subagent-lifecycle-live.spec.ts",
+        "sha256": "07aa73af6d4077129c958659d14c9d2997871f7d82f5f81bb866f4de25e9990d",
+        "mode": 420,
+        "bytes": 11959
+      }
+    ],
+    "productChanges": 0,
+    "addedScenarios": 0,
+    "existingLifecycleScenes": 4,
+    "existingRefusedAssetCase": 1,
+    "baselineUpdates": 0,
+    "coverageGap": "Existing lifecycle cases compared a rounded panel over an unspecified transcript scroll state. Cropped outside-corner pixels could therefore include different underlying text/tool surfaces even when panel rectangles were stable.",
+    "protocolFinding": "Installed Playwright 1.63.0 toHaveScreenshot reads stylePath, not the unsupported inline style property. The original assertion did not isolate the background. Remove that inert option; do not enable hiding via stylePath or other CSS.",
+    "repair": "Use real wheel input in the exposed transcript gutter to reach zero, then the genuine recorded desktop reference position (EN 25 / FR 97), asserting both scroll positions. Retain the existing mouse-away/integer panel alignment and strict screenshot assertion. Mobile preparation is unchanged.",
+    "referenceEvidence": {
+      "historicalIndexSha256": "99350afe32d7d5081b7c8cbc7793569075c8e439dc7fe4034f1dedc3740a95c6",
+      "generationExit": {
+        "path": "visual-generation.exit",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+        "bytes": 2
+      },
+      "scenes": [
+        {
+          "locale": "en",
+          "trace": {
+            "path": "visual-generation-artifacts/subagent-lifecycle-live-na-c2622-pens-durable-linked-history-chromium/trace.zip",
+            "sha256": "ae3047f4102a3746140392a3c5eb651a5fd49cdb3f59b8d87ad0bdd32c9ba556",
+            "bytes": 3222197
+          },
+          "candidate": {
+            "path": "accepted-image-review/07-candidate.png",
+            "sha256": "a86f9b74683c6c3d20bce07f698fc360f79695c44a548c59437839925b742e46",
+            "bytes": 29588
+          },
+          "baselinePath": "e2e/subagent-lifecycle-live.spec.ts-snapshots/children-en-light-1280-chromium-linux.png",
+          "baselineSha256": "a86f9b74683c6c3d20bce07f698fc360f79695c44a548c59437839925b742e46",
+          "capturedScrollTop": 25,
+          "captureCallId": "call@1809",
+          "phases": [
+            "before",
+            "after"
+          ]
+        },
+        {
+          "locale": "fr",
+          "trace": {
+            "path": "visual-generation-artifacts/subagent-lifecycle-live-na-4da8c-pens-durable-linked-history-chromium/trace.zip",
+            "sha256": "f2c24998037c3abe2ecb83b7a1d3902b6b0d22ca98dbb9c302a93a2c465b4a29",
+            "bytes": 2476898
+          },
+          "candidate": {
+            "path": "accepted-image-review/06-candidate.png",
+            "sha256": "74eb3b3d2164d3e70a27a4114fd469a1d6214c55f10b3ff1d4777416efc199cb",
+            "bytes": 29697
+          },
+          "baselinePath": "e2e/subagent-lifecycle-live.spec.ts-snapshots/children-fr-dark-1280-chromium-linux.png",
+          "baselineSha256": "74eb3b3d2164d3e70a27a4114fd469a1d6214c55f10b3ff1d4777416efc199cb",
+          "capturedScrollTop": 97,
+          "captureCallId": "call@1989",
+          "phases": [
+            "before",
+            "after"
+          ]
+        }
+      ],
+      "limitation": "Trace DOM before/after the genuine original screenshot call establishes the captured transcript view, not original failure chronology or a new runtime/raster cause. English reference was retained; French reference is the already-approved update. No new baseline generation."
+    },
+    "unchanged": [
+      "all four baseline hashes",
+      "screenshot comparator/tolerances/options in effect",
+      "panel DOM/CSS/geometry",
+      "runtime/toolchain/dependencies/flags",
+      "whole-case 60s and capture 5s deadlines",
+      "retries",
+      "read/auth quotas and privacy boundaries",
+      "all functional/a11y/cold-restart assertions"
+    ],
+    "laterAssertions": "The successful existing four lifecycle cases credit their post-capture settings/cold-restart assertions. No such credit is transferred to earlier failed executions."
+  },
+  "diagnosticExecutions": {
+    "image": "sha256:5c6e1fdc77588bd147193f728ddcaff285177207c1921cb12bde89bd9e953697",
+    "authority": "Previous immutable launch-context image plus bounded test overlays; distinct from the rebuilt frozen qualification image.",
+    "attempts": {
+      "probe": {
+        "exit": 1,
+        "stats": {
+          "startTime": "2026-11-02T12:21:54.493Z",
+          "duration": 50030.294,
+          "expected": 2,
+          "skipped": 0,
+          "unexpected": 2,
+          "flaky": 0
+        },
+        "report": "protocol/probe-artifacts/probe.json"
+      },
+      "comparator": {
+        "exit": 1,
+        "stats": {
+          "startTime": "2026-11-02T12:22:45.056Z",
+          "duration": 5180.226,
+          "expected": 3,
+          "skipped": 0,
+          "unexpected": 9,
+          "flaky": 0
+        },
+        "report": "protocol/comparator-artifacts/comparator.json"
+      },
+      "effective": {
+        "exit": 1,
+        "stats": {
+          "startTime": "2026-11-02T12:27:51.395Z",
+          "duration": 50984.689000000006,
+          "expected": 2,
+          "skipped": 0,
+          "unexpected": 2,
+          "flaky": 0
+        },
+        "report": "protocol/effective-artifacts/effective.json"
+      },
+      "top": {
+        "exit": 1,
+        "stats": {
+          "startTime": "2026-11-02T12:31:10.745Z",
+          "duration": 50531.727999999996,
+          "expected": 3,
+          "skipped": 0,
+          "unexpected": 1,
+          "flaky": 0
+        },
+        "report": "protocol/top-artifacts/top.json"
+      },
+      "reference": {
+        "exit": 0,
+        "stats": {
+          "startTime": "2026-11-02T12:43:40.893Z",
+          "duration": 45720.381,
+          "expected": 4,
+          "skipped": 0,
+          "unexpected": 0,
+          "flaky": 0
+        },
+        "report": "protocol/reference-artifacts/reference.json"
+      }
+    },
+    "interpretation": {
+      "firstProtocolProbe": "Direct screenshot APIs applied inline style while the original assertion ignored it. Its 12 retained comparisons are not a like-for-like protocol test or acceptance. The probe-source.json no-DOM/style-mutation wording was overbroad: direct capture temporarily applies its screenshot CSS.",
+      "effectiveProtocolProbe": "Without inline CSS, locator capture, page clip and whole-viewport crop have identical raw pixels in all four scenes. Existing strict desktop failures remain five EN / one FR pixels. No capture-protocol repair is inferred.",
+      "topCandidate": "Rejected: scrolling both desktop transcripts to zero fixes EN but FR still differs at (0,518), expected RGBA174,174,176,255 versus actual20,20,35,255. No top-zero change integrated.",
+      "referenceCandidate": "The two authentic sealed generation traces establish EN25 / FR97 before and after capture. Native wheel input reproduces those views; all four unchanged strict captures and later case assertions pass. No additional baseline update or hiding is used.",
+      "readbackFailure": "Initial compressed-DOM reader exited1 on a void element without an attribute slot (IndexError). Rejected source/stderr are retained. Corrected read-only parser follows the installed renderer literal-node/reference format; not an application failure or gate retry."
+    },
+    "protocolComparison": "protocol/analysis.json: all three effective-option capture modes have zero raw pixel differences in all four scenes; no API-switch repair is inferred.",
+    "referenceRecovery": "protocol/resolved-scroll-v2.jsonl and reference-trace-binding.json: actual original capture call IDs, before/after transcript offsets, sealed trace hashes and unchanged accepted image hashes."
+  },
+  "validation": {
+    "gates": {
+      "build": {
+        "executed": true,
+        "command": "make build-test IMAGE_TEST=aih-qua01:capture-reference-20261102",
+        "exit": 0,
+        "started": "2026-11-02T12:47:46Z",
+        "finished": "2026-11-02T12:48:02Z",
+        "monotonicSeconds": 18.479999999981374,
+        "log": "build.log"
+      },
+      "typecheck": {
+        "executed": true,
+        "command": "make typecheck IMAGE_TYPECHECK=aih-qua01:capture-reference-20261102",
+        "exit": 0,
+        "started": "2026-11-02T12:48:03Z",
+        "finished": "2026-11-02T12:48:14Z",
+        "monotonicSeconds": 11.729999999981374,
+        "log": "typecheck.log"
+      },
+      "owning": {
+        "executed": true,
+        "command": "make test-e2e IMAGE_TEST=aih-qua01:capture-reference-20261102 E2E_ARGS=e2e/conversation-live.spec.ts\\ e2e/sessions.spec.ts\\ e2e/subagent-lifecycle-live.spec.ts\\ --trace=on\\ --reporter=line\\,json",
+        "exit": 0,
+        "started": "2026-11-02T12:48:14Z",
+        "finished": "2026-11-02T12:52:57Z",
+        "monotonicSeconds": 298.5800000000745,
+        "log": "owning.log"
+      },
+      "parity": {
+        "executed": true,
+        "command": "make test-parity IMAGE_TEST_RUN=aih-qua01:capture-reference-20261102",
+        "exit": 2,
+        "started": "2026-11-02T12:52:57Z",
+        "finished": "2026-11-02T13:01:37Z",
+        "monotonicSeconds": 550.3099999999395,
+        "log": "parity.log",
+        "summaryAvailable": true,
+        "passed": 366,
+        "failed": 2,
+        "skipped": 0,
+        "todo": 0,
+        "passedFiles": 3,
+        "failedFiles": 1,
+        "vitestSeconds": 548.63
+      },
+      "root": {
+        "executed": true,
+        "command": "make test IMAGE_TEST_RUN=aih-qua01:capture-reference-20261102",
+        "exit": 2,
+        "started": "2026-11-02T13:01:37Z",
+        "finished": "2026-11-02T13:30:20Z",
+        "monotonicSeconds": 1825.280000000028,
+        "log": "root.log",
+        "summaryAvailable": true,
+        "passed": 8663,
+        "failed": 4,
+        "skipped": 0,
+        "todo": 0,
+        "passedFiles": 524,
+        "failedFiles": 2,
+        "vitestSeconds": 1823.53
+      },
+      "browser": {
+        "executed": true,
+        "command": "make test-e2e IMAGE_TEST=aih-qua01:capture-reference-20261102 E2E_ARGS=--all-suites\\ --reporter=line\\,json\\ --trace=on",
+        "exit": 0,
+        "started": "2026-11-02T13:30:20Z",
+        "finished": "2026-11-02T14:32:02Z",
+        "monotonicSeconds": 3920.480000000098,
+        "log": "browser.log"
+      },
+      "controls": {
+        "executed": true,
+        "command": "docker run --rm --network none aih-qua01:capture-reference-20261102 node --test .docker/baseline-artifacts.test.mjs .docker/test-fonts.test.mjs",
+        "exit": 0,
+        "started": "2026-11-02T14:32:02Z",
+        "finished": "2026-11-02T14:32:03Z",
+        "monotonicSeconds": 0.6799999999348074,
+        "log": "controls.log"
+      },
+      "production": {
+        "executed": true,
+        "command": "make build-prod IMAGE_PROD=aih-qua01:capture-reference-prod-20261102",
+        "exit": 0,
+        "started": "2026-11-02T14:32:03Z",
+        "finished": "2026-11-02T14:32:39Z",
+        "monotonicSeconds": 37.9900000001071,
+        "log": "production.log"
+      },
+      "smoke": {
+        "executed": true,
+        "command": "docker start --attach qua01-capture-reference-production-smoke-20261102",
+        "exit": 0,
+        "started": "2026-11-02T14:32:40Z",
+        "finished": "2026-11-02T14:32:41Z",
+        "monotonicSeconds": 1.7299999999813735,
+        "log": "smoke.log"
+      },
+      "source-verification": {
+        "executed": true,
+        "command": "node /tmp/aih-qua01-capture-reference-20261102/verify-sources.mjs",
+        "exit": 0,
+        "started": "2026-11-02T14:32:42Z",
+        "finished": "2026-11-02T14:32:44Z",
+        "monotonicSeconds": 2.040000000037253,
+        "log": "source-verification.log"
+      }
+    },
+    "owningBrowser": {
+      "available": true,
+      "file": "owning-browser-artifacts/focused/report.json",
+      "stats": {
+        "startTime": "2026-11-02T12:48:28.694Z",
+        "duration": 284073.76700000005,
+        "expected": 38,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "cases": 38,
+      "attempted": 38,
+      "attempts": 38,
+      "nonzeroRetries": [],
+      "failures": []
+    },
+    "completeBrowserMatrix": {
+      "aggregate": {
+        "reports": 9,
+        "expected": 743,
+        "unexpected": 0,
+        "skipped": 0,
+        "flaky": 0
+      },
+      "suites": [
+        {
+          "name": "standard",
+          "available": true,
+          "report": "browser-artifacts/standard/report.json",
+          "stats": {
+            "startTime": "2026-11-02T13:30:35.123Z",
+            "duration": 2872459.432,
+            "expected": 544,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "cases": 544,
+          "attempts": 544,
+          "nonzeroRetries": [],
+          "failures": []
+        },
+        {
+          "name": "interactions",
+          "available": true,
+          "report": "browser-artifacts/interactions/report.json",
+          "stats": {
+            "startTime": "2026-11-02T14:15:47.252Z",
+            "duration": 71830.5,
+            "expected": 69,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "cases": 69,
+          "attempts": 69,
+          "nonzeroRetries": [],
+          "failures": []
+        },
+        {
+          "name": "locale",
+          "available": true,
+          "report": "browser-artifacts/locale/report.json",
+          "stats": {
+            "startTime": "2026-11-02T14:16:55.846Z",
+            "duration": 12229.036,
+            "expected": 8,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "cases": 8,
+          "attempts": 8,
+          "nonzeroRetries": [],
+          "failures": []
+        },
+        {
+          "name": "workspace",
+          "available": true,
+          "report": "browser-artifacts/workspace/report.json",
+          "stats": {
+            "startTime": "2026-11-02T14:17:06.638Z",
+            "duration": 15492.784,
+            "expected": 17,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "cases": 17,
+          "attempts": 17,
+          "nonzeroRetries": [],
+          "failures": []
+        },
+        {
+          "name": "pane",
+          "available": true,
+          "report": "browser-artifacts/pane/report.json",
+          "stats": {
+            "startTime": "2026-11-02T14:17:22.506Z",
+            "duration": 21720.686999999998,
+            "expected": 18,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "cases": 18,
+          "attempts": 18,
+          "nonzeroRetries": [],
+          "failures": []
+        },
+        {
+          "name": "linked",
+          "available": true,
+          "report": "browser-artifacts/linked/report.json",
+          "stats": {
+            "startTime": "2026-11-02T14:17:42.796Z",
+            "duration": 155434.969,
+            "expected": 43,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "cases": 43,
+          "attempts": 43,
+          "nonzeroRetries": [],
+          "failures": []
+        },
+        {
+          "name": "title",
+          "available": true,
+          "report": "browser-artifacts/title/report.json",
+          "stats": {
+            "startTime": "2026-11-02T14:20:09.561Z",
+            "duration": 1802.851,
+            "expected": 2,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "cases": 2,
+          "attempts": 2,
+          "nonzeroRetries": [],
+          "failures": []
+        },
+        {
+          "name": "progress",
+          "available": true,
+          "report": "browser-artifacts/progress/report.json",
+          "stats": {
+            "startTime": "2026-11-02T14:20:11.735Z",
+            "duration": 714440.0549999999,
+            "expected": 34,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "cases": 34,
+          "attempts": 34,
+          "nonzeroRetries": [],
+          "failures": []
+        },
+        {
+          "name": "demo",
+          "available": true,
+          "report": "browser-artifacts/demo/report.json",
+          "stats": {
+            "startTime": "2026-11-02T14:31:32.452Z",
+            "duration": 28932.821,
+            "expected": 8,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "cases": 8,
+          "attempts": 8,
+          "nonzeroRetries": [],
+          "failures": []
+        }
+      ]
+    },
+    "strictCaptureCases": {
+      "owning": {
+        "available": true,
+        "cases": [
+          {
+            "scene": "native child lifecycle en/light/1280",
+            "status": "expected",
+            "attempts": [
+              {
+                "status": "passed",
+                "retry": 0
+              }
+            ]
+          },
+          {
+            "scene": "native child lifecycle fr/dark/1280",
+            "status": "expected",
+            "attempts": [
+              {
+                "status": "passed",
+                "retry": 0
+              }
+            ]
+          },
+          {
+            "scene": "native child lifecycle en/dark/390",
+            "status": "expected",
+            "attempts": [
+              {
+                "status": "passed",
+                "retry": 0
+              }
+            ]
+          },
+          {
+            "scene": "native child lifecycle fr/light/390",
+            "status": "expected",
+            "attempts": [
+              {
+                "status": "passed",
+                "retry": 0
+              }
+            ]
+          }
+        ]
+      },
+      "integrated": {
+        "available": true,
+        "cases": [
+          {
+            "scene": "native child lifecycle en/light/1280",
+            "status": "expected",
+            "attempts": [
+              {
+                "status": "passed",
+                "retry": 0
+              }
+            ]
+          },
+          {
+            "scene": "native child lifecycle fr/dark/1280",
+            "status": "expected",
+            "attempts": [
+              {
+                "status": "passed",
+                "retry": 0
+              }
+            ]
+          },
+          {
+            "scene": "native child lifecycle en/dark/390",
+            "status": "expected",
+            "attempts": [
+              {
+                "status": "passed",
+                "retry": 0
+              }
+            ]
+          },
+          {
+            "scene": "native child lifecycle fr/light/390",
+            "status": "expected",
+            "attempts": [
+              {
+                "status": "passed",
+                "retry": 0
+              }
+            ]
+          }
+        ]
+      },
+      "passedOnBoth": true
+    },
+    "captureTraceReadback": {
+      "passed": true,
+      "image": "sha256:c4634d271dae811519be4765a18e911623375547a807cf8f9a6829117e02b71f",
+      "checked": [
+        {
+          "file": "integrated-en.zip",
+          "sha256": "186d9a31f5950d2749c1eca1bdc243dcde6e7975c2cfeb93947cc1fede507852",
+          "capturedScrollTop": 25,
+          "phases": [
+            "before",
+            "after"
+          ],
+          "nativeWheelDeltas": [
+            -1360,
+            25
+          ]
+        },
+        {
+          "file": "integrated-fr.zip",
+          "sha256": "2ff12c7df6d2da2ab8efa4abb3768c16fbe8e76b778b9591e9b75c1c5186b799",
+          "capturedScrollTop": 97,
+          "phases": [
+            "before",
+            "after"
+          ],
+          "nativeWheelDeltas": [
+            -1360,
+            97
+          ]
+        },
+        {
+          "file": "owning-en.zip",
+          "sha256": "bd85732443db381764d874f411b648da92c84fc3fffb57e5abdc4b010acc2c81",
+          "capturedScrollTop": 25,
+          "phases": [
+            "before",
+            "after"
+          ],
+          "nativeWheelDeltas": [
+            -1360,
+            25
+          ]
+        },
+        {
+          "file": "owning-fr.zip",
+          "sha256": "88722d8e15d195558dbe126c875c6e2b4e7a1af2b72899e5220043f2ac79a2a6",
+          "capturedScrollTop": 97,
+          "phases": [
+            "before",
+            "after"
+          ],
+          "nativeWheelDeltas": [
+            -1360,
+            97
+          ]
+        }
+      ],
+      "libraries": [
+        {
+          "package": "playwright",
+          "version": "1.63.0",
+          "path": "/app/node_modules/playwright/lib/matchers/expect.js",
+          "bytes": 546839,
+          "sha256": "5ef2a695e787386367f4b1e03c79b05100b5526121462b24d7730a731689d941"
+        },
+        {
+          "package": "playwright-core",
+          "version": "1.63.0",
+          "path": "/app/node_modules/playwright-core/lib/coreBundle.js",
+          "bytes": 3477183,
+          "sha256": "549070af3acabb3efcc4f55bfe6210f9f7c2fcf633cf7eaa59bfe60719969171"
+        }
+      ],
+      "libraryReadbackMatchesPreviousImage": true,
+      "limitation": "Actual trace before/after capture states and native wheel calls; not a new screenshot run, baseline generation, rasterization proof or original failure chronology."
+    },
+    "chronology": "Keep original wall stamps, raw monotonic observations and reported runner durations separately. No clock-origin, timeout or native-cause attribution is made.",
+    "matchingSourceRemoteCi": "OUTSTANDING",
+    "fullNativeQualificationPassed": false
+  },
+  "failedExecutions": {
+    "parity": {
+      "gate": "canonical make test-parity",
+      "exit": 2,
+      "passed": 366,
+      "failed": 2,
+      "total": 368,
+      "passedFiles": 3,
+      "failedFiles": 1,
+      "totalFiles": 4,
+      "vitestSeconds": 548.63,
+      "nativeReceiptCount": 2,
+      "cases": [
+        {
+          "test": "dispatches native Together through installed public declarations and physical C policies",
+          "source": "tests/functional-parity/installed-executable.test.ts:3875",
+          "stage": "together-public.ts strict NodeNext declaration compiler",
+          "code": null,
+          "signal": "SIGSEGV",
+          "runtimeProbeReached": false,
+          "cause": "UNDETERMINED",
+          "evidence": "parity.log actual failed compiler command/assertion plus the matching launch-context signal receipt; frozen source places together-public.mjs creation/execution after the failed await"
+        },
+        {
+          "test": "dispatches native xAI through installed public declarations and captured R policies",
+          "source": "tests/functional-parity/installed-executable.test.ts:4023",
+          "stage": "xai-public.ts strict NodeNext declaration compiler",
+          "code": null,
+          "signal": "SIGSEGV",
+          "runtimeProbeReached": false,
+          "cause": "UNDETERMINED",
+          "evidence": "parity.log actual failed compiler command/assertion plus the matching launch-context signal receipt; frozen source places xai-public.mjs creation/execution after the failed await"
+        }
+      ],
+      "decision": "Both executions remain failed without retry, exclusion, runtime/dependency/clock investigation, provider-defect attribution or asserted common cause. Launch context alone would not establish stage or original async ownership; the independent assertion/source boundaries establish the compiler stages here."
+    },
+    "root": {
+      "gate": "canonical make test",
+      "exit": 2,
+      "passed": 8663,
+      "failed": 4,
+      "total": 8667,
+      "passedFiles": 524,
+      "failedFiles": 2,
+      "totalFiles": 526,
+      "vitestSeconds": 1823.53,
+      "nativeReceiptCount": 3,
+      "cases": [
+        {
+          "test": "validates installed public provider discovery declarations and keyless based-path runtime with original Anthropic caller tools, scoped strict policy, unsigned results and user images",
+          "source": "tests/functional-parity/installed-executable.test.ts:1620",
+          "stage": "provider-public.ts strict NodeNext declaration compiler",
+          "code": null,
+          "signal": "SIGSEGV",
+          "followingRuntimeProbeReached": false,
+          "cause": "UNDETERMINED"
+        },
+        {
+          "test": "binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choice, scalar generation, grammar, tool images and output boundaries through installed declarations and runtime",
+          "source": "tests/functional-parity/installed-executable.test.ts:1895",
+          "stage": "responses-tools-public.ts strict NodeNext declaration compiler",
+          "code": null,
+          "signal": "SIGSEGV",
+          "followingRuntimeProbeReached": false,
+          "cause": "UNDETERMINED"
+        },
+        {
+          "test": "dispatches native Cloudflare C through installed public declarations, reasoning and virtual classification",
+          "source": "tests/functional-parity/installed-executable.test.ts:3240",
+          "stage": "cloudflare-chat-public.ts strict NodeNext declaration compiler",
+          "code": null,
+          "signal": "SIGTRAP",
+          "followingRuntimeProbeReached": false,
+          "stderr": "Fatal error in line 0: unreachable code; native stack preserved in root.log",
+          "cause": "UNDETERMINED"
+        },
+        {
+          "test": "actual top-level provider auth CLI / cancels the real device-stall transport/poll and exits with no token publication",
+          "source": "packages/cli/src/cli/provider-auth-command.test.ts:250",
+          "failure": "Test timed out in 5000ms.",
+          "reportedCaseMilliseconds": 5092,
+          "stage": "UNDETERMINED",
+          "childCodeEstablished": false,
+          "childSignalEstablished": false,
+          "cause": "UNDETERMINED",
+          "limitation": "The whole-case deadline does not establish whether startup, request observation, SIGINT completion or later checks were pending. The intended cancellation/no-publication assertions are not credited after the failed execution. No native, clock or common-cause attribution."
+        }
+      ],
+      "evidence": "root.log actual failed commands/assertions plus exactly three launch-context signal receipts; frozen source places each corresponding runtime consumer after its failed compiler await",
+      "decision": "All four failures are retained. No retry, exclusion, deadline change, runtime/dependency/clock investigation, provider-defect attribution or asserted common cause. Passing previous focused/root executions do not diagnose or waive these failures."
+    },
+    "nativeReceipts": {
+      "receipts": [
+        {
+          "gate": "parity",
+          "line": 105,
+          "raw": "[installed-process] Native child termination. {\n  code: null,\n  signal: 'SIGSEGV',\n  testName: 'dispatches native Together through installed public declarations and physical C policies'\n}"
+        },
+        {
+          "gate": "parity",
+          "line": 112,
+          "raw": "[installed-process] Native child termination. {\n  code: null,\n  signal: 'SIGSEGV',\n  testName: 'dispatches native xAI through installed public declarations and captured R policies'\n}"
+        },
+        {
+          "gate": "root",
+          "line": 105,
+          "raw": "[installed-process] Native child termination. {\n  code: null,\n  signal: 'SIGSEGV',\n  testName: 'validates installed public provider discovery declarations and keyless based-path runtime with original Anthropic caller tools, scoped strict policy, unsigned results and user images'\n}"
+        },
+        {
+          "gate": "root",
+          "line": 112,
+          "raw": "[installed-process] Native child termination. {\n  code: null,\n  signal: 'SIGSEGV',\n  testName: 'binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choice, scalar generation, grammar, tool images and output boundaries through installed declarations and runtime'\n}"
+        },
+        {
+          "gate": "root",
+          "line": 119,
+          "raw": "[installed-process] Native child termination. {\n  code: null,\n  signal: 'SIGTRAP',\n  testName: 'dispatches native Cloudflare C through installed public declarations, reasoning and virtual classification'\n}"
+        }
+      ],
+      "limitation": "Launch-time runner testName is diagnostic context, not fault causality, a child-stage witness or proof of original async ownership after a prior whole-test timeout. Stage requires separate assertion/source evidence."
+    },
+    "decision": "Every required gate was attempted once and retained independently. The two parity/compiler failures, three root/compiler failures and root whole-case deadline are not waived by scoped/browser/typecheck/build/smoke passes. No retry, exclusion or asserted common cause."
+  },
+  "limitations": [
+    "This repairs a demonstrated capture-fixture state boundary, not a product rendering/geometry defect or every historical capture chronology.",
+    "The first direct-capture CSS diagnostic was not equivalent to the original assertion; its failed comparisons and overbroad scope wording are retained and corrected explicitly, not used as qualification.",
+    "Native compiler/application crashes remain failed executions of undetermined cause. Launch-time runner names alone do not prove stage, fault causality or original async ownership after another test timed out.",
+    "The OAuth device-stall whole-case deadline establishes neither the pending step nor child exit/signal; no post-failure cancellation/privacy assertion is credited.",
+    "No runtime/Node/V8/GC/JIT/dependency/clock/hardware investigation or mitigation, baseline regeneration/mask/tolerance/deadline/retry change, paid account, physical-platform, installation/update or release expansion.",
+    "All earlier source-specific failures and receipts remain historical evidence; later passes do not diagnose or erase them.",
+    "Frozen hashes/modes include Docker-included nested documentation. Qualification does not transfer to later documentary edits or a clean/dirty delivery commit.",
+    "Local Docker is not matching-source remote CI. QUA-01 remains PARTIAL; complete closure is not claimed."
+  ],
+  "priorReceipts": [
+    "QUA-01.visual-acceptance-20261101.json",
+    "QUA-01.launch-context-20261102.json",
+    "QUA-01.journal-20261102.json",
+    "QUA-01.browser-anchors-20261102.json"
+  ],
+  "auditCounts": {
+    "DONE": 36,
+    "PARTIAL": 6,
+    "IN_PROGRESS": 1,
+    "total": 43
+  },
+  "evidence": {
+    "archive": "test-results/qua01-capture-reference-20261102",
+    "sealed": true,
+    "indefiniteAvailabilityGuaranteed": false,
+    "files": 1173,
+    "index": "artifact-index.json",
+    "indexSha256": "58a5ab8dd932c5c6eef4eeaea0793088c4525256da2cc1846e02ce8e85a0ca6a",
+    "verification": "Every copied artifact hash/byte count/mode verified against the original. The index excludes itself and this outside versioned receipt.",
+    "preflight": "seal-preflight.json"
+  },
+  "documentation": {
+    "status": "PASSED",
+    "markdownFiles": 117,
+    "localLinks": 1435,
+    "logs": [
+      "lint-docs.log",
+      "diff-check.log"
+    ],
+    "audit": {
+      "worktree": {
+        "counts": {
+          "DONE": 36,
+          "PARTIAL": 6,
+          "IN PROGRESS": 1
+        },
+        "total": 43
+      },
+      "selected": {
+        "counts": {
+          "DONE": 36,
+          "PARTIAL": 6,
+          "IN PROGRESS": 1
+        },
+        "total": 43
+      },
+      "independentWorkPreserved": true,
+      "reconstructedInitialSha256": "4b625af116891a38081393d8240171b2937143c9c6cfa3a041e0242a3f7077d1"
+    }
+  }
+}
