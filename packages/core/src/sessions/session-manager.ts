@@ -524,9 +524,13 @@ export class JsonlSessionStore {
     const lines = content.split('\n');
     if (trailingNewline) lines.pop();
     const safe = lines.map(line => {
-      if (!line.trim()) return '';
-      try { return JSON.stringify(this.redactJson(JSON.parse(line))); }
-      catch { return this.redactText(line); }
+      if (!line.trim()) return line;
+      try {
+        const entry = JSON.parse(line);
+        const before = JSON.stringify(entry);
+        const after = JSON.stringify(this.redactJson(entry));
+        return before === after ? line : after;
+      } catch { return this.redactText(line); }
     }).join('\n');
     return trailingNewline ? `${safe}\n` : safe;
   }
@@ -639,7 +643,7 @@ export class JsonlSessionStore {
     }
   }
 
-  private async readSessionFile(filePath: string): Promise<string> {
+  private async readSessionFile(filePath: string, scrub = true): Promise<string> {
     await this.verifySessionPath(filePath, false);
     const before = await fs.lstat(filePath);
     if (before.size > MAX_SESSION_FILE_BYTES) throw new Error('Session file exceeds its size limit.');
@@ -678,7 +682,7 @@ export class JsonlSessionStore {
         throw new Error('Session file changed while it was read.');
       }
       const content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-      return this.redactJsonLines(content);
+      return scrub ? this.redactJsonLines(content) : content;
     } finally {
       await handle.close();
     }
@@ -731,13 +735,14 @@ export class JsonlSessionStore {
     filePath: string,
     content: string,
     directoryHandle?: Awaited<ReturnType<typeof fs.open>>,
+    contentIsRedacted = false,
   ): Promise<SessionEntry[]> {
     await this.verifySessionPath(filePath, true);
     const expected = await fs.lstat(filePath).catch(error => {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
       throw error;
     });
-    const safeContent = this.redactJsonLines(content);
+    const safeContent = contentIsRedacted ? content : this.redactJsonLines(content);
     if (Buffer.byteLength(safeContent) > MAX_SESSION_FILE_BYTES) {
       throw new Error('Session file exceeds its size limit.');
     }
@@ -824,9 +829,35 @@ export class JsonlSessionStore {
     }
   }
 
-  /** Load a session from JSONL file. */
+  /** Load native bytes, scrubbing credentials without saving an inferred active projection. */
   async loadSession(sessionId: string): Promise<Session | null> {
-    return (await this.getSessionSnapshot(sessionId))?.session ?? null;
+    const initial = await this.getSessionSnapshot(sessionId);
+    if (!initial || sessionStoreKinds.get(this) !== 'native') return initial?.session ?? null;
+    return this.withStableSessionDirectory(async (directoryPath, directoryHandle) => {
+      const filePath = this.anchoredFilePath(directoryPath, this.getFilePath(sessionId));
+      const release = await acquireSessionLock(filePath);
+      try {
+        // Reread under the writer lock; never scrub an earlier snapshot over a later append.
+        const original = await this.readSessionFile(filePath, false);
+        const content = this.redactJsonLines(original).split('\n').map(line => {
+          let entry;
+          try { entry = JSON.parse(line); } catch { return line; }
+          if (entry?.type !== 'metadata' || entry.providerConfig === undefined) return line;
+          const providerConfig = sanitizeProviderConfig(entry.providerConfig);
+          if (isDeepStrictEqual(providerConfig, entry.providerConfig)) return line;
+          entry.providerConfig = providerConfig;
+          // Do not fall back to unfiltered bytes if credential-key scrubbing cannot serialize.
+          return JSON.stringify(entry);
+        }).join('\n');
+        // Commit exactly the scrubbed bytes used below, without applying a caller redactor twice.
+        if (content !== original) await this.rewriteSessionFile(filePath, content, directoryHandle, true);
+        const snapshot = this.parseSessionSnapshot(sessionId, content);
+        committedSessionEntries.set(snapshot.session, structuredClone(snapshot.entries));
+        return snapshot.session;
+      } finally {
+        await release();
+      }
+    });
   }
 
   /** Read one bounded stable file into an owned session and journal, without writing it. */
@@ -842,6 +873,10 @@ export class JsonlSessionStore {
     } catch {
       return null;
     }
+    return this.parseSessionSnapshot(sessionId, content);
+  }
+
+  private parseSessionSnapshot(sessionId: string, content: string): SessionStoreSnapshot {
     if (!content.trim()) {
       return { session: {
         id: sessionId,
@@ -2280,6 +2315,17 @@ export class SessionManager {
     }
   }
 
+  private async adoptLoadedSession(session: Session, store: JsonlSessionStore): Promise<void> {
+    const entries = sessionStoreKinds.get(store) === 'native' ? committedSessionEntries.get(session) : undefined;
+    if (entries?.some(entry => entry.type === 'metadata' && entry.schemaVersion === SESSION_SCHEMA_VERSION)) {
+      this.committedEntries.set(session.id, entries);
+    } else {
+      // Keep legacy migration and borrowed structural-store persistence semantics.
+      await this.persistSession(session);
+    }
+    this.sessions.set(session.id, session);
+  }
+
   /** Load a session from the JSONL store into memory */
   async loadFromStore(sessionId: string): Promise<Session | null> {
     const store = this.store;
@@ -2289,8 +2335,7 @@ export class SessionManager {
     return this.withSessionMutation(sessionId, async () => {
       const session = await store.loadSession(sessionId);
       if (!session) return null;
-      await this.persistSession(session);
-      this.sessions.set(session.id, session);
+      await this.adoptLoadedSession(session, store);
       return session;
     });
   }
@@ -2598,8 +2643,7 @@ export class SessionManager {
       await this.withSessionMutation(id, async () => {
         const session = await store.loadSession(id);
         if (!session) return;
-        await this.persistSession(session);
-        this.sessions.set(session.id, session);
+        await this.adoptLoadedSession(session, store);
       });
     }
   }

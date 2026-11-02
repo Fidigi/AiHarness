@@ -179,6 +179,10 @@ describe('JsonlSessionStore', () => {
         redactJson: value => redactor.redactJson(value),
       });
       const loaded = await manager.loadFromStore('legacy-secret-session');
+      const afterLoad = await fs.readFile(path.join(tempDir, 'legacy-secret-session.jsonl'), 'utf8');
+      expect(afterLoad).not.toContain(secret);
+      expect(afterLoad).not.toContain(Buffer.from(secret).toString('base64'));
+      expect(afterLoad).toContain('[REDACTED]');
       await manager.addMessage('legacy-secret-session', {
         role: 'tool',
         content: `tool ${encodeURIComponent(secret)}`,
@@ -1109,6 +1113,63 @@ describe('SessionManager with JSONL Persistence', () => {
   });
 
   describe('loadFromStore()', async () => {
+    it.each(['loadFromStore', 'loadAllSessions'] as const)('%s preserves native journal bytes instead of saving inferred dates', async method => {
+      const id = 'unchanged-native';
+      await store.saveSession({
+        id, title: 'Explicit metadata', createdAt: new Date('2026-01-02'), updatedAt: new Date('2026-01-04'),
+        activeLeafId: 'last', metadata: { hasBranchedHistory: true }, messages: [
+          { id: 'first', role: 'user', content: 'Earlier imported message', timestamp: new Date('2026-01-01'), blocks: [{ type: 'text', text: 'Original block' }] },
+          { id: 'last', parentMessageId: 'first', role: 'assistant', content: 'Later message', timestamp: new Date('2026-01-05') },
+        ],
+      });
+      const file = path.join(tempDir, id + '.jsonl');
+      const original = (await fs.readFile(file, 'utf8')).trim().split('\n').map(line => `  ${line} `).join('\n \t\n') + '\n \t\n';
+      await fs.writeFile(file, original);
+
+      if (method === 'loadFromStore') await manager.loadFromStore(id);
+      else await manager.loadAllSessions();
+
+      expect(await fs.readFile(file, 'utf8')).toBe(original);
+      // Preserve the existing active projection and appended-entry date inference.
+      expect(manager.get(id)).toMatchObject({ createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-05') });
+      expect((await manager.getActiveBranchEntries(id)).map(entry => entry.id)).toEqual(['first', 'last']);
+      const block = manager.get(id)!.messages[0].blocks![0];
+      if (block.type !== 'text') throw new Error('Expected the imported text block.');
+      block.text = 'Changed projection';
+      expect(manager.getEffectiveContext(id).find(entry => entry.id === 'first'))
+        .toMatchObject({ blocks: [{ type: 'text', text: 'Original block' }] });
+      block.text = 'Original block';
+      await manager.addMessage(id, { role: 'user', content: 'Actual mutation' }, { skipAutoCompaction: true });
+      expect((await store.getRawEntries(id)).filter(entry => entry.type === 'message').map(entry => entry.id))
+        .toEqual(['first', 'last', manager.get(id)!.messages.at(-1)!.id]);
+    });
+
+    it('loads the exact native projection admitted by a non-idempotent redactor', async () => {
+      await store.saveSession({
+        id: 'redacted-native', createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-01'),
+        messages: [{ id: 'm', role: 'user', content: 'original body', timestamp: new Date('2026-01-01') }],
+      });
+      store.setRedaction(text => text, value => JSON.parse(JSON.stringify(value).replaceAll('original body', 'original body [scrubbed]')));
+      const loaded = await manager.loadFromStore('redacted-native');
+      const persisted = (await fs.readFile(path.join(tempDir, 'redacted-native.jsonl'), 'utf8'))
+        .trim().split('\n').map(line => JSON.parse(line));
+      expect(loaded?.messages[0]?.content).toBe('original body [scrubbed]');
+      expect(loaded?.messages[0]?.content).toBe(persisted.find(entry => entry.type === 'message').content);
+    });
+
+    it('scrubs provider credential fields on native load without knowing their values', async () => {
+      const file = path.join(tempDir, 'unsafe-provider.jsonl');
+      await fs.writeFile(file, JSON.stringify({ id: 'session-metadata', type: 'metadata', version: 2, schemaVersion: 2,
+        timestamp: 1_700_000_000_000, createdAt: 1_700_000_000_000, updatedAt: 1_700_000_000_000,
+        providerConfig: { type: 'openai', apiKey: 'unknown-secret', headers: { Authorization: 'Bearer unknown-header', 'X-Region': 'eu' } },
+      }) + '\n');
+      await manager.loadFromStore('unsafe-provider');
+      const serialized = await fs.readFile(file, 'utf8');
+      expect(serialized).not.toContain('unknown-secret');
+      expect(serialized).not.toContain('unknown-header');
+      expect(manager.get('unsafe-provider')?.providerConfig).toEqual({ type: 'openai', headers: { 'X-Region': 'eu' } });
+    });
+
     it('should load a session from the JSONL store into memory', async () => {
       // Create and save via store directly (bypassing manager)
       await store.saveSession({
