@@ -4,6 +4,20 @@
 
 > **Authority:** [AUDIT-5](./AUDIT-5.md), MOD-01; [pinned provider/API/auth inventory](../../ai/topics/provider-matrix.md). Target Pi 1.2.0 commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, not the installed agent's moving release.
 
+## Opaque continuation retention and edit policy
+
+**User decision, 2026-11-02 — MOD-01.01b / MOD-01.04b:** `fais comme pi` selects the remaining retention/edit behavior from Pi 1.2.0, commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`. The earlier explicit [JSON-export choice](#opaque-continuation-json-export-policy) remains unchanged: expurgated by default, warning, complete option only on explicit request, and API keys excluded in both modes. This is a selected reference contract, not an implemented or runtime-verified carrier.
+
+| Boundary | Pinned behavior to follow |
+|---|---|
+| Stored content | Pi's [content types](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/ai/src/types.ts#L413-L444) attach opaque `textSignature`, `thinkingSignature`/`redacted`, and `thoughtSignature` to their respective blocks. [Session persistence](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/coding-agent/src/core/session-manager.ts#L1172-L1215) serializes message entries without stripping those fields; no-session remains memory-only. Follow normal journal/branch lifecycle, not an invented signature TTL or a ban on user-requested fork copies. |
+| Editing and context | [Context projection](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/coding-agent/src/core/session-manager.ts#L508-L588) applies branch-local omission/content replacement without rewriting the raw target or globally invalidating later signatures. [Re-editing a user message](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/coding-agent/src/core/agent-session.ts#L4114-L4162) branches from its parent; abandoned entries remain history. Context omission is not secure erasure. |
+| Request replay | The [SDK transformer](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/ai/src/api/transform-messages.ts#L95-L149) distinguishes exact provider/API/model identity: same-identity signed blocks survive; cross-identity encrypted/redacted thinking is omitted, visible thinking becomes text, and tool thought signatures are removed. Native owner rules still apply: [Bedrock Claude missing-signature reasoning falls back to text](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/ai/src/api/bedrock-converse-stream.ts#L1036-L1077); malformed encrypted payloads are omitted by its decoder, not a blanket whole-request refusal. |
+
+The assistant's earlier suggested blanket suffix invalidation and mandatory refusal are **not** the selected Pi policy. Provider-redacted encrypted thinking is replay data, not permission to disable AiHarness credential redaction. Existing secret protection stays mandatory; its carrier interaction still needs implementation and focused verification. Do not copy Pi's session-v3 format into AiHarness v2 or infer cryptographic/service authenticity from opaque strings.
+
+This bounded static review uses a clean pinned checkout and the named owning functions; it is not a fresh SDK capture, execution of upstream tests or review of the full historical corpus. The concrete Core carrier/export implementation remains outstanding, with SDK + agent + persistence scope retained. No runtime integration, criterion closure, accepted gap, diagnostic expansion or QUA-01 restart follows. See the [delivery board](./MOD-01-tracking.md).
+
 ## Opaque continuation JSON export policy
 
 **User decision, 2026-11-02 — MOD-01.01b / MOD-01.04b; selected, not implemented or runtime-verified.** In this conversation, the user explicitly selected: “l’export expurgé par défaut, avec avertissement et option complète explicite.”
