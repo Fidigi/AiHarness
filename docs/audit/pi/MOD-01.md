@@ -1,8 +1,18 @@
 # MOD-01 — Delivery Tasks and Local Acceptance
 
-> **Status: IN PROGRESS** (2026-11-01)
+> **Status: IN PROGRESS** (2026-11-02)
 
 > **Authority:** [AUDIT-5](./AUDIT-5.md), MOD-01; [pinned provider/API/auth inventory](../../ai/topics/provider-matrix.md). Target Pi 1.2.0 commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, not the installed agent's moving release.
+
+## Opaque continuation JSON export policy
+
+**User decision, 2026-11-02 — MOD-01.01b / MOD-01.04b; selected, not implemented or runtime-verified.** In this conversation, the user explicitly selected: “l’export expurgé par défaut, avec avertissement et option complète explicite.”
+
+- **Default JSON session export:** omit opaque continuation payloads, retain the visible conversation, and clearly warn that native continuation may no longer be possible after import.
+- **Explicit complete option:** include the opaque continuation data only when the user explicitly requests the complete export. This preserves available continuation data, not a guarantee of provider/account compatibility or successful replay.
+- **Both modes:** exclude API keys. A complete export is not a credential dump and must not bypass credential protection.
+
+This resolves the JSON-export policy choice only. SDK + agent + persistence remains the selected scope. Internal retention/deletion rules, the concrete carrier/public surface, and redaction/edit/compaction invalidation policy are not selected by this reply. Earlier export-policy-pending wording is historical; the older carrier proposal is still not an approved mechanism. No CLI flag, SDK/API option or export implementation is delivered by this documentary record. The QUA-01 stop, preserved failures, open criteria and all other pending user decisions remain unchanged; no diagnostic or qualification campaign is restarted. See the [delivery board](./MOD-01-tracking.md).
 
 ## MOD-01.03a — NVIDIA native CLI build failure (2026-11-01; HOLD)
 
