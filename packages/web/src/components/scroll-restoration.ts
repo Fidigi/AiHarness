@@ -25,7 +25,13 @@ export function restoreWhileOwned(
   const apply = (): void => {
     if (!live) return;
     const layoutChanged = container.scrollHeight !== height || container.clientHeight !== viewport;
-    if (!container.isConnected || container.scrollTop !== top && !layoutChanged) { dispose(); return; }
+    const viewportShift = viewport - container.clientHeight;
+    const scrollShift = container.scrollTop - top;
+    // A viewport-only resize may shift/clamp the offset by its height delta,
+    // not by an unrelated scroll. Allow one CSS pixel for rounded dimensions.
+    const unrelatedResizeScroll = container.scrollHeight === height && viewportShift !== 0
+      && (scrollShift < Math.min(0, viewportShift) - 1 || scrollShift > Math.max(0, viewportShift) + 1);
+    if (!container.isConnected || container.scrollTop !== top && (!layoutChanged || unrelatedResizeScroll)) { dispose(); return; }
     restore();
     top = container.scrollTop;
     height = container.scrollHeight;

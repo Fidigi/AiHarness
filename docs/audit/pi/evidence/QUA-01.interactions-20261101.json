@@ -1,0 +1,125 @@
+{
+  "criterion": "QUA-01",
+  "date": "2026-11-01",
+  "status": "PARTIAL",
+  "scope": "Repair the two interaction-dialog failures from QUA-01.native-20261101.json; not a complete integrated qualification.",
+  "allRequiredGatesPassed": false,
+  "functionalRepairVerified": true,
+  "source": {
+    "base": "77db5125fcf32546bb6526db47fca72da52ad33b",
+    "description": "Isolated git-archive inputs from the explicit committed base; the corrected input adds only the interaction fixture patch. Independent dirty Anthropic/provider/installed-consumer and documentary work is excluded and preserved in the main checkout. These checks do not qualify that dirty checkout.",
+    "baselineWebAndE2eDiffFromOriginalReceiptBase": "Empty git diff for packages/web and e2e between bd058890b62dbaaac1ee8ba9ef3df0bd6021b6c0 and this base.",
+    "filesPerInput": 1700,
+    "baselineManifestSha256": "dcd124f37def0fc8bd562804be719fd87856d38797fee84c03e60f3cfd678338",
+    "diagnosticManifestSha256": "d89ffef9c889342d625477402f39466607e50cf13fc8b6c8dc7d9818fa57bb02",
+    "correctedManifestSha256": "47ec335522fcb2e16ea5d07ab91148c00a7ac62f95df835861e66ac216fc182d",
+    "baseArchiveSha256": "0b6a2f903fcd5f4bc0332de3e4098f4b8030c003df311a027c781d7549fc5c7c",
+    "patchSha256": "1dd4d3c60f4b3f22d43f80da2562e530837077c6549707a5a887183575d5c941",
+    "correctedFile": "e2e/interaction-single-asset-load.spec.ts",
+    "correctedFileSha256": "0296aea041ce1a7d798fca44765725554996c75295721c3067352a9bb8b25109",
+    "imageSourceMatches": 1550,
+    "imageSourceMismatches": 0,
+    "expectedExcludedFiles": 150,
+    "exclusionReview": "All missing paths match .dockerignore exclusions: docs, root Markdown/license/Makefile, two excluded Dockerfiles and two internal scripts. Included nested documentation is hashed normally.",
+    "postRunSourceChecks": 5100,
+    "postRunSourceDrift": 0
+  },
+  "diagnosis": {
+    "existingCoverage": "The existing 69-case production-asset/queue/admission matrix already asserts reload recovery, same-ID composing draft/focus, Enter suppression until compositionend, stale callback refusal and four visual comparisons. No new test cases or assertion relaxations were needed.",
+    "baseline": "Both original failures reproduce in the complete owning matrix: 67 pass / 2 fail. Raw network traces are retained.",
+    "instrumentation": "Separate diagnostic input adds only console observations in ChatView.acceptInteractionSnapshot and their test console forwarding; no guard or assertion changes. Both selected scenarios still fail.",
+    "observedGuard": "The initial canonical read and held readiness stream capture activeSessionId:null; bootstrap later selects interaction-assets. The existing setRun guard then correctly refuses the old capture. The reload case stalls with events?after=0 held and discovery returning an empty list. The same-ID case rejects the captured readiness frame then performs a fresh canonical read, but the ad-hoc SSE override never updated that fixture's canonical run, which still returns Request a at sequence 1.",
+    "fixtureCorrection": [
+      "Intercept the actual GET /api/agent/running endpoint instead of the unused /api/agent/runs list path; terminal runs remain absent from discovery.",
+      "Let the existing fixture update accept a complete interaction snapshot, updating its canonical run and pending IDs before publishing the readiness frame.",
+      "Use that existing update path for the renamed same-ID request instead of a separate contradictory SSE-only override."
+    ],
+    "productChanges": false,
+    "productGuardsChanged": false,
+    "assertionTimeoutsBudgetsOrRuntimeControlsChanged": false,
+    "visualBaselinesChanged": false
+  },
+  "environment": {
+    "node": "24.15.0",
+    "npm": "12.1.0",
+    "correctedImage": "sha256:4478ac7f8cde3aa167b994a5b97b9f1eb44a20e73d8b0cff7c89b0c8ee03d7aa",
+    "imageSourceInspectionTag": "aih-qua01:interactions-fix-typecheck",
+    "execution": "All browser and type checks use Docker through Make, in isolated input directories; main-checkout test-results are not cleaned.",
+    "browserWorkers": 1,
+    "playwrightRetries": 0,
+    "trace": "on",
+    "snapshotUpdates": false
+  },
+  "attempts": [
+    {
+      "name": "baseline reproduction",
+      "command": "make test-e2e IMAGE_TEST=aih-qua01:interactions-red E2E_ARGS='--config=e2e/interaction-queue.config.ts --trace=on'",
+      "input": "input-base",
+      "makeExit": 2,
+      "passed": 67,
+      "failed": 2,
+      "log": "red.log",
+      "logSha256": "33bb233d6c63f73f6d054885d0395d3729bf96a7f7e4ab3462d698a9c1c69ab2"
+    },
+    {
+      "name": "instrumented diagnosis",
+      "command": "make test-e2e IMAGE_TEST=aih-qua01:interactions-diagnostic E2E_ARGS='--config=e2e/interaction-queue.config.ts --trace=on --grep=\"explicit reload|owning same-ID schema refresh\"'",
+      "input": "input-diagnostic",
+      "makeExit": 2,
+      "passed": 0,
+      "failed": 2,
+      "log": "diagnostic.log",
+      "logSha256": "ece563f3a985b3c9d8a9b3ded1648cda9f114d70d898e4916fafa9e4a3f693e8"
+    },
+    {
+      "name": "first corrected browser preparation",
+      "command": "make test-e2e IMAGE_TEST=aih-qua01:interactions-fix E2E_ARGS='--config=e2e/interaction-queue.config.ts --trace=on'",
+      "input": "input-fix",
+      "makeExit": 2,
+      "testsStarted": false,
+      "failure": "Docker build stops at the Web TypeScript compiler: code=null, signal=SIGSEGV, spawnFailed=false.",
+      "log": "fix.log",
+      "logSha256": "0a29f1c4741e0ac29bf0150f4d86db745b513d438afac821458837877207a8c0"
+    },
+    {
+      "name": "corrected typecheck",
+      "command": "make typecheck IMAGE_TYPECHECK=aih-qua01:interactions-fix-typecheck",
+      "input": "input-fix",
+      "makeExit": 2,
+      "failure": "The Docker image builds, but workspace Web typecheck terminates code=null, signal=SIGSEGV, spawnFailed=false. This is not a passing typecheck; subsequent parity typechecking is not reached.",
+      "log": "typecheck.log",
+      "logSha256": "bfadc87ea9b30f9dde6f58ccbf30ae16efb0fdde5d6fb303a1e756b7b52b98f6"
+    },
+    {
+      "name": "subsequent functional verification, not native-failure waiver",
+      "command": "make test-e2e IMAGE_TEST=aih-qua01:interactions-functional E2E_ARGS='--config=e2e/interaction-queue.config.ts --trace=on'",
+      "input": "input-fix",
+      "makeExit": 0,
+      "passed": 69,
+      "failed": 0,
+      "skipped": 0,
+      "flaky": 0,
+      "owningFiles": 4,
+      "duration": "1.1m",
+      "log": "functional.log",
+      "logSha256": "bfdf22389b0086572bf6079d894e218f0063364472f56b8715dd4f74a88e13ea",
+      "limitation": "Same unchanged corrected input and controls, after the separately retained preparation and typecheck failures. This verifies the fixture repair only; it is neither a clean first attempt nor a repaired native compiler gate."
+    }
+  ],
+  "remainingQualification": [
+    "Native compiler/runner terminations, including both newly retained corrected-input SIGSEGVs, remain unresolved and unwaived.",
+    "The installed accounting deadline, original cache-notice viewport failure, locale runner termination and 18 original visual mismatches were not repaired by this increment.",
+    "Freeze the actual final delivery after concurrent work and rerun the complete required matrix coherently; this owning browser result does not replace it.",
+    "No matching-source remote CI, vendor-account, physical-platform or release qualification is claimed."
+  ],
+  "evidenceAvailability": {
+    "primary": "/tmp/aih-qua01-interactions-20261101/",
+    "archive": "test-results/qua01-interactions-20261101/",
+    "artifactIndex": "artifact-index.json",
+    "indexedRawFiles": 386,
+    "artifactIndexSha256": "3293501c10c7cf93bd1037ca9e516c8c665ed212249f4bbc813accda5b5320ad",
+    "warning": "Raw evidence is local and nonversioned. The versioned receipt binds hashes and outcomes, not permanent archive availability. Its later receipt.json copy is outside the raw-file index. Original QUA-01.native-20261101.json and its archive remain unchanged."
+  },
+  "historicalFailuresWaived": false,
+  "publicationOrRealAccountUse": false
+}

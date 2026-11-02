@@ -1,0 +1,168 @@
+{
+  "criterion": "QUA-01",
+  "date": "2026-11-01",
+  "status": "PARTIAL",
+  "scope": "Diagnose cache-notice viewport ownership; repair a demonstrated scroll-restoration defect without changing browser assertions, visual baselines or restoration deadlines.",
+  "allRequiredGatesPassed": false,
+  "demonstratedDefectFixed": true,
+  "originalFullSuiteFailureCausallyProven": false,
+  "source": {
+    "base": "9dbcad4cf11636e3aad5bb18b3f01fad4d2a5116",
+    "description": "Explicit committed-base git archives with named overlays. Independent dirty Anthropic/provider/installed-consumer/documentary work is excluded and preserved. The prior interaction fixture correction is carried unchanged. The diagnostic browser probe is archived locally, not added to the application checkout.",
+    "webAndE2eDiffFromOriginalReceiptBase": "No committed packages/web or e2e differences from bd058890b62dbaaac1ee8ba9ef3df0bd6021b6c0 before this increment.",
+    "committedBaseFiles": 1701,
+    "fixedCandidateFiles": 1702,
+    "fixedManifestSha256": "74ed73e49e04aa4012086ba50c6a19bc618fe22ed2e5f4fff2ec2af556ded2fe",
+    "cleanPhysicalRedManifestSha256": "de024beffafae94adbd90f8cf3649ff288408889f9546a5a083b1b482bfa3eda",
+    "cleanPhysicalFixedManifestSha256": "e7a4fc290e8ac11a061b94aebae59d1abdb0b17019e3e44ab7b85995fb406558",
+    "baseArchiveSha256": "9f5764794d4d383607f4719fd340ebfb2797dcef23e6f52555c014f638471847",
+    "patchSha256": "3dcc178f13a790d9727d23eb95b2a96c2e3b79833ee0f2c3e72cf13e5b073241",
+    "changedCheckoutFiles": [
+      { "path": "packages/web/src/components/scroll-restoration.ts", "sha256": "a899740037a276774d99f32c72ba0a085378505dd5e5e87de0b8be88e4c0013d" },
+      { "path": "packages/web/src/components/scroll-restoration.test.ts", "sha256": "d20cdb39d1c93dcdb99443465ce93d4d289720956ff62e6df49cddac43f9dbb1" }
+    ],
+    "diagnosticProbeSha256": "91f8f59ca7d2f0fb772287cfacfb440a2fe289dc7f24a9a7eaeba582e83ced0a",
+    "includedImagePathsMatched": 1551,
+    "imageSourceMismatches": 0,
+    "expectedExcludedFiles": 151,
+    "exclusionReview": "All missing paths match .dockerignore: docs, root Markdown/license/Makefile, two excluded Dockerfiles and two internal scripts. Included nested documentation is hashed normally.",
+    "postRunSourceChecks": 11911,
+    "postRunSourceDrift": 0
+  },
+  "diagnosis": {
+    "existingCoverage": "Nine existing helper cases cover bounded settling, virtual measurement and viewport adjustments, input retirement, unrelated offsets, detachment and disposal. They do not combine a new scroll with a simultaneous viewport-only resize. Existing cache and session browser journeys remain unchanged in the corrected candidate.",
+    "observation": "A separate diagnostic copy attaches ResizeObserver/mutation/scroll geometry around the unchanged final cache viewport assertion. Both original cache journeys pass again. EN timeline shows scrollHeight 2259, initial scrollTop 0/clientHeight 634, then bottom scrollTop 1625, followed by clientHeight 683 and clamped scrollTop 1576. The jump-to-latest control disappearing changes the viewport by 49 CSS pixels.",
+    "defect": "restoreWhileOwned previously treated every simultaneous viewport change as permission to reclaim an unrelated offset. A deterministic unit using the observed geometry makes the old helper restore scrollTop 0 thirteen times instead of retiring. A separate real Chromium root, importing the actual helper from the owning Vite host, reproduces viewport ratio 0 with the old helper and passes with the corrected helper.",
+    "correction": "For viewport-only resizing, permit only offset shifts/clamping consistent with the viewport height delta, with one CSS pixel for rounded dimensions. Retire larger/opposite-direction scroll changes. Existing virtual measurement behavior when scrollHeight changes is retained.",
+    "newRegressionCases": [
+      "A later bottom scroll survives simultaneous viewport growth.",
+      "An upward scroll during viewport shrink retires ownership.",
+      "Legitimate viewport clamping retains ownership and restores the captured position when the scroll range grows again."
+    ],
+    "unchangedControls": "Ten settling frames, 120/300/600ms delays, input/identity disposal, assertion deadlines, retries, bundle budgets and all visual baselines are unchanged.",
+    "historicalLimit": "The original complete-suite cache failure has no retained geometry proving this exact ordering. The full-context replay stops in mandatory CLI compilation before tests. The demonstrated helper defect is repaired; this is not proof that every cause of the original failure is eliminated."
+  },
+  "environment": {
+    "node": "24.15.0",
+    "npm": "12.1.0",
+    "fixedImage": "sha256:d2a725acb7c6987d2415532c1704acc9961023e1851caeb9e07242776ebeb55e",
+    "sourceInspectionTag": "aih-qua01:cache-fix",
+    "browserWorkers": 1,
+    "playwrightRetries": 0,
+    "runtimeOverridesAdded": false,
+    "snapshotUpdates": false,
+    "execution": "Tests/types run only in Docker through Make-built images and Make E2E targets, in isolated inputs. Existing main-checkout test-results are never cleaned."
+  },
+  "attempts": [
+    {
+      "name": "instrumented original cache journeys",
+      "command": "make test-e2e IMAGE_TEST=aih-qua01:cache-observe E2E_ARGS='e2e/model-cache-live.spec.ts --trace=on'",
+      "input": "input-observe",
+      "exit": 0,
+      "passed": 2,
+      "log": "observe.log",
+      "logSha256": "4f4aaaba9022d48b925bca0cdf4c13f82641eec673732793b464f6c826baf051"
+    },
+    {
+      "name": "full standard context attempt",
+      "command": "make test-e2e IMAGE_TEST=aih-qua01:cache-context E2E_ARGS='--config=playwright.config.ts --trace=retain-on-failure'",
+      "input": "input-context",
+      "exit": 2,
+      "testsStarted": false,
+      "failure": "Docker image construction passes; mandatory in-container npm build fails at the CLI TypeScript child: code=null, signal=SIGSEGV, spawnFailed=false. No browser cases are credited or invented as reported skips.",
+      "log": "context.log",
+      "logSha256": "46a353748a0d5221350d85c236e83d294fc140c015df552edd982463dc63e69d"
+    },
+    {
+      "name": "deterministic unit red",
+      "command": "make build-test IMAGE_TEST=aih-qua01:cache-unit-red; docker run --rm --network none -e CI=true aih-qua01:cache-unit-red npm test -- packages/web/src/components/scroll-restoration.test.ts",
+      "input": "input-unit-red",
+      "buildExit": 0,
+      "exit": 1,
+      "passed": 9,
+      "failed": 1,
+      "log": "unit-red.log",
+      "logSha256": "447a1d6f5c7e989b1d1f532d1fef3986c7307c449735390fb417e1b63e6a42a0"
+    },
+    {
+      "name": "initial physical probe, harness limitation retained",
+      "command": "make test-e2e IMAGE_TEST=aih-qua01:cache-physical-red E2E_ARGS='e2e/qua-cache-viewport-probe.spec.ts --trace=on'",
+      "input": "input-physical-red",
+      "exit": 2,
+      "failed": 1,
+      "limitation": "Eight observations show viewport ratio 0, but /offline.html schedules a connection-check navigation after 2000ms, so the final assertion also loses its element. This is not the clean 5000ms physical negative. The initial harness and trace are preserved.",
+      "log": "physical-red.log",
+      "logSha256": "dc71914d7f85b0ed69921f2185918227886499998d09f676e1cdd6173a25c8f2"
+    },
+    {
+      "name": "corrected typecheck",
+      "command": "make typecheck IMAGE_TYPECHECK=aih-qua01:cache-fix",
+      "input": "input-fix",
+      "exit": 0,
+      "log": "typecheck.log",
+      "logSha256": "f39e217e7b91604ba407056686ddf4d2ad3d5468e0dbc25bbc05ddfd0881d77c"
+    },
+    {
+      "name": "corrected helper and reading units",
+      "command": "docker run --rm --network none -e CI=true aih-qua01:cache-fix npm test -- packages/web/src/components/scroll-restoration.test.ts packages/web/src/components/history-reading.test.ts",
+      "input": "input-fix",
+      "exit": 0,
+      "passed": 17,
+      "files": 2,
+      "log": "unit-fix.log",
+      "logSha256": "ce18cc3454af566cb7bdaadfc4d82201fd282f79c2ec18c7a8693c7891ca2a96"
+    },
+    {
+      "name": "corrected original cache/session journeys and initial probe",
+      "command": "make test-e2e IMAGE_TEST=aih-qua01:cache-fix-browser E2E_ARGS='e2e/qua-cache-viewport-probe.spec.ts e2e/model-cache-live.spec.ts e2e/sessions.spec.ts --trace=on'",
+      "input": "input-fix",
+      "exit": 0,
+      "passed": 21,
+      "existingApplicationCases": 20,
+      "diagnosticProbeCases": 1,
+      "failed": 0,
+      "skipped": 0,
+      "flaky": 0,
+      "limitation": "The 20 unchanged application cases pass, including both real cache journeys and virtual reading restoration. The initial probe succeeds before its offline-page timer; separate corrected-harness controls below supply the clean native negative/positive.",
+      "log": "browser-fix.log",
+      "logSha256": "9e754382894d09d7242161b0a8e088b2457d90054ac232eae47a3b7d4257cf93"
+    },
+    {
+      "name": "clean native negative",
+      "command": "make test-e2e IMAGE_TEST=aih-qua01:cache-physical-red-clean E2E_ARGS='e2e/qua-cache-viewport-probe.spec.ts --trace=on'",
+      "input": "input-physical-red-clean",
+      "exit": 2,
+      "failed": 1,
+      "harnessCorrection": "Only replace the initial offline-page navigation with an inert same-origin HTML route. Actual source-module import, geometry, default helper lease, two real animation frames and 5000ms viewport assertion are unchanged.",
+      "evidence": "Fourteen observations retain the actual notice with viewport ratio 0 throughout the unchanged deadline; no element-loss error.",
+      "log": "physical-red-clean.log",
+      "logSha256": "c9dff93e0565c57ad2bc96fb604b2804937d61957d2981aefa8613867b4fa70e"
+    },
+    {
+      "name": "clean native positive",
+      "command": "make test-e2e IMAGE_TEST=aih-qua01:cache-physical-fix-clean E2E_ARGS='e2e/qua-cache-viewport-probe.spec.ts --trace=on'",
+      "input": "input-physical-fix-clean",
+      "exit": 0,
+      "passed": 1,
+      "harness": "Byte-identical to the clean native negative; corrected product helper with the three permanent regression tests.",
+      "log": "physical-fix-clean.log",
+      "logSha256": "8bfce9e2ebb25ecd1eb5214922597af11c464e4e56a18f03b7e088b2470fc104"
+    }
+  ],
+  "remainingQualification": [
+    "Retain the full-context CLI compiler SIGSEGV and all earlier native terminations as unresolved required-gate failures.",
+    "Replay the original complete browser matrix on the final frozen delivery. Selected passes and a deterministic reconstructed race do not transfer or repair its historical gate.",
+    "Installed accounting deadline, locale runner termination, 18 historical visual mismatches, concurrent integration and final coherent matrix remain outstanding.",
+    "Remote CI, real accounts, physical platforms and distribution are neither performed nor credited."
+  ],
+  "evidenceAvailability": {
+    "primary": "/tmp/aih-qua01-cache-20261101/",
+    "archive": "test-results/qua01-cache-scroll-20261101/",
+    "artifactIndex": "artifact-index.json",
+    "indexedRawFiles": 227,
+    "artifactIndexSha256": "4fed9a9be210fe78d33877b429347fab710e201ec807f2014df83fbf5fd93006",
+    "warning": "Raw archives are local and nonversioned; this receipt binds hashes/outcomes, not permanent availability. Its later receipt.json copy is outside the raw-file index. Earlier QUA-01 receipts and archives are not rewritten."
+  },
+  "historicalFailuresWaived": false,
+  "publicationOrRealAccountUse": false
+}

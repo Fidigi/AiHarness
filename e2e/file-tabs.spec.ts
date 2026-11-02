@@ -42,6 +42,67 @@ test('file tabs are bounded, keyboard navigable and distinguish identical basena
   await expect(panel.getByRole('tab', { name: 'right/same.csv', exact: true })).toBeVisible();
 });
 
+for (const scene of [
+  { name: 'desktop', width: 1280, height: 900 },
+  { name: 'mobile', width: 390, height: 844 },
+  { name: 'short-mobile', width: 390, height: 480 },
+]) for (const theme of ['light', 'dark']) test(`maximized file viewer restores reading space ${scene.name}-${theme}`, async ({ page }) => {
+  await page.setViewportSize({ width: scene.width, height: scene.height });
+  await page.addInitScript(theme => localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({
+    version: 4, theme, filesOpen: true,
+  })), theme);
+  const api = await installMockApi(page, { sessions: [mockSession('file-reading', 'File reading')], workspaceFiles: [
+    { path: 'first.md', content: '# First\n\nRead without the explorer taking up the screen.' },
+    { path: 'second.md', content: '# Second\n\nKeep file tabs available while reading.' },
+  ] });
+  await page.goto('/chat/file-reading');
+  const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
+  await composer.fill('Keep my draft');
+  const panel = page.getByRole('complementary', { name: 'Workspace explorer' });
+  if (!await panel.isVisible()) await page.keyboard.press('Control+Shift+F');
+  for (const file of ['second.md', 'first.md']) {
+    await panel.locator('.file-name').filter({ hasText: file }).click();
+    await expect(panel.locator('.file-viewer > header')).toContainText(file);
+  }
+  const tree = panel.locator('.file-tree');
+  await expect(tree).toBeVisible();
+  const normalHeight = await panel.locator('.viewer-content').evaluate(element => element.clientHeight);
+  const reads = api.requests.filter(request => request.path === '/api/files/content').length;
+  await panel.getByRole('button', { name: 'Maximize file viewer', exact: true }).click();
+  await expect(tree).toBeHidden();
+  await expect(panel.locator('.panel-linked-directories')).toBeHidden();
+  await expect(panel.locator('.file-toolbar')).toBeHidden();
+  await expect(panel.getByRole('tab')).toHaveCount(2);
+  await expect(panel.getByRole('link', { name: 'Download', exact: true })).toBeVisible();
+  const readingHeight = await panel.locator('.viewer-content').evaluate(element => element.clientHeight);
+  expect(readingHeight).toBeGreaterThan(normalHeight + 100);
+  expect(readingHeight).toBeGreaterThan(scene.height / 2);
+  expect(api.requests.filter(request => request.path === '/api/files/content')).toHaveLength(reads);
+  for (const file of ['second.md', 'first.md']) {
+    await panel.getByRole('tab', { name: file, exact: true }).click();
+    await expect(panel.locator('.file-viewer > header')).toContainText(file);
+  }
+  await test.info().attach('maximized-file-viewer', { body: await page.screenshot({ caret: 'hide' }), contentType: 'image/png' });
+  await panel.getByRole('tab', { name: 'first.md', exact: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(panel.getByRole('tab', { name: 'second.md', exact: true })).toBeFocused();
+  await expect(panel.locator('.file-viewer > header')).toContainText('second.md');
+  await panel.getByRole('button', { name: 'Restore file viewer', exact: true }).click();
+  await expect(tree).toBeVisible();
+  await expect(panel.locator('.file-toolbar')).toBeVisible();
+  await expect(panel.locator('.panel-linked-directories')).toBeVisible();
+  expect(await panel.locator('.viewer-content').evaluate(element => element.clientHeight)).toBe(normalHeight);
+  await expect(composer).toHaveValue('Keep my draft');
+  await panel.getByRole('button', { name: 'Maximize file viewer', exact: true }).click();
+  for (const file of ['second.md', 'first.md']) {
+    await expect(panel.locator('.file-viewer > header')).toContainText(file);
+    await panel.locator('.file-viewer > header').getByRole('button', { name: 'Close', exact: true }).click();
+  }
+  await expect(panel.getByRole('tab')).toHaveCount(0);
+  await expect(tree).toBeVisible();
+  await expect(panel.locator('.file-toolbar')).toBeVisible();
+});
+
 for (const kind of ['content', 'preview'] as const) test(`retired ${kind} read cannot recreate tabs or replace a newer file`, async ({ page }) => {
   await installMockApi(page, { sessions: [mockSession('file-tabs', 'File tabs')], workspaceFiles: [
     { path: kind === 'content' ? 'held.csv' : 'held.docx', content: 'metadata', binary: kind === 'preview' },

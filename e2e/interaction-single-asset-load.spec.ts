@@ -28,14 +28,16 @@ async function product(page: Page, heads: string[] = []) {
     } else if (path === '/api/agent/runs/asset-run/stop') {
       run = { ...run, lastSequence: run.lastSequence + 1, phase: 'stopped', extensionRequest: undefined };
       await json(route, run);
-    } else if (path === '/api/agent/runs') await json(route, [run]);
+    } else if (path === '/api/agent/running') await json(route, ['completed', 'failed', 'stopped'].includes(run.phase) ? [] : [run]);
     else if (path === '/api/agent/runs/asset-run') await json(route, run);
     else await route.fallback();
   });
-  return { replies, async update(heads: string[], phase: AgentRunSnapshot['phase'] = 'tool') {
+  return { replies, async update(heads: Array<string | ExtensionInteractionSnapshot>, phase: AgentRunSnapshot['phase'] = 'tool') {
     await expect.poll(() => Boolean(stream)).toBe(true);
-    pendingHeads = [...heads];
-    run = { ...run, phase, lastSequence: run.lastSequence + 1, extensionRequest: heads[0] ? request(heads[0]) : undefined };
+    const requests = heads.map(head => typeof head === 'string' ? request(head) : head);
+    pendingHeads = requests.map(head => head.id);
+    // Canonical reads and running-list polls must agree with the readiness frame.
+    run = { ...run, phase, lastSequence: run.lastSequence + 1, extensionRequest: requests[0] };
     const route = stream!; stream = undefined;
     await route.fulfill({ contentType: 'text/event-stream', body: `event: connection.ready\ndata: ${JSON.stringify({
       snapshot: { sessionId, lastSequence: run.lastSequence, run }, reset: true,
@@ -436,8 +438,6 @@ test('owning composition lifetime keeps Enter from acknowledging the ready form 
 
 test('owning same-ID schema refresh preserves the composing draft until its real compositionend', async ({ page }) => {
   const api = await product(page, ['a']);
-  let stream: Route | undefined;
-  await page.route('**/api/agent/sessions/interaction-assets/events*', route => { stream = route; });
   await page.goto(url);
   const dialog = page.getByRole('dialog', { name: 'Request a' });
   await expect(dialog).toBeVisible();
@@ -445,12 +445,7 @@ test('owning same-ID schema refresh preserves the composing draft until its real
   await input.fill('編集途中の承認');
   await input.focus();
   await input.evaluate(element => element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })));
-  await expect.poll(() => Boolean(stream)).toBe(true);
-  const run: AgentRunSnapshot = { id: 'asset-run', sessionId, cwd: '/workspace', phase: 'tool', provider: 'mock',
-    lastSequence: 2, steerQueue: [], followUpQueue: [], extensionRequest: { ...request('a'), title: 'Renamed same-ID approval' } };
-  await stream!.fulfill({ contentType: 'text/event-stream', body: `event: connection.ready\ndata: ${JSON.stringify({
-    snapshot: { sessionId, lastSequence: run.lastSequence, run }, reset: true,
-  })}\n\n` });
+  await api.update([{ ...request('a'), title: 'Renamed same-ID approval' }]);
   await expect(page.getByRole('dialog', { name: 'Renamed same-ID approval' })).toBeVisible();
   await expect(input).toHaveValue('編集途中の承認');
   await expect(input).toBeFocused();

@@ -68,6 +68,50 @@ describe('layout restoration ownership', () => {
     vi.runAllTimers();
     expect(restore).toHaveBeenCalledTimes(2);
   });
+  it('does not reclaim a later bottom scroll when the viewport grows at the same time', () => {
+    const root = new ScrollRoot();
+    root.scrollTop = 0;
+    root.scrollHeight = 2_259;
+    root.clientHeight = 634;
+    const restore = vi.fn(() => { root.scrollTop = 0; });
+    restoreWhileOwned(root, restore);
+    // Reaching the bottom hides the jump-to-latest control and grows the viewport.
+    root.scrollTop = root.scrollHeight - root.clientHeight;
+    root.clientHeight += 49;
+    root.scrollTop = root.scrollHeight - root.clientHeight;
+    vi.runAllTimers();
+    expect(restore).not.toHaveBeenCalled();
+    expect(root.scrollTop).toBe(1_576);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it('retires an upward scroll during a viewport shrink', () => {
+    const root = new ScrollRoot();
+    const restore = vi.fn();
+    restoreWhileOwned(root, restore);
+    root.clientHeight -= 100;
+    root.scrollTop = 0;
+    vi.runAllTimers();
+    expect(restore).not.toHaveBeenCalled();
+    expect(root.scrollTop).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it('keeps ownership through viewport clamping and subsequent growth of the scroll range', () => {
+    const root = new ScrollRoot();
+    root.scrollTop = 800;
+    root.clientHeight = 100;
+    const restore = vi.fn(() => { root.scrollTop = Math.min(800, root.scrollHeight - root.clientHeight); });
+    restoreWhileOwned(root, restore);
+    root.clientHeight = 400;
+    root.scrollTop = 600;
+    vi.advanceTimersByTime(16);
+    expect(restore).toHaveBeenCalledTimes(1);
+    expect(root.scrollTop).toBe(600);
+    root.clientHeight = 100;
+    vi.runAllTimers();
+    expect(restore).toHaveBeenCalledTimes(13);
+    expect(root.scrollTop).toBe(800);
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it('retires detached history roots permanently', () => {
     const root = new ScrollRoot();
     const restore = vi.fn();
