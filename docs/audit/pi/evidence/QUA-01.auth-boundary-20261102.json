@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "criterion": "QUA-01",
+  "date": "2026-11-02",
+  "status": "SCOPED_AUTH_FIXTURE_CHILD_EXIT_FIXED_NOT_FULL_QUALIFICATION",
+  "criterionStatus": "PARTIAL",
+  "scope": "Private auth test-fixture child completion observation only; no product or compiler mitigation.",
+  "source": {
+    "headAtStart": "eb755662e72ad1d5df07fe8707a13f40bc4e490e",
+    "changedPath": "packages/cli/src/cli/provider-auth-command.test.ts",
+    "originalSha256": "f7ad37269b7c8dedc43da0b21e8c64bf91290d23da38cf7455b34e9348d76ade",
+    "correctedSha256": "524c824eeb1096e9a93763c9da68d23472611f978edb37f034f82de85aae84ed",
+    "image": "sha256:c4634d271dae811519be4765a18e911623375547a807cf8f9a6829117e02b71f",
+    "binding": "unchanged-input-binding.json",
+    "unchangedNonDocumentaryFiles": 1560,
+    "authority": "Previously Make-built immutable capture-state image with an explicit owning-test source overlay. Current documentation differs; not a rebuilt-image or full delivered-source qualification. All stage source readbacks match their saved overlays."
+  },
+  "existingCoverage": "19 actual CLI scenarios and eight OAuth client cases; request waiting ignored a child that had already closed.",
+  "addedCoverage": "Two real process negative controls, ordinary usage exit 2 and deliberate SIGTERM before issuer observation. No mocked transport or invented native compiler failure.",
+  "change": "Only the private fixture request waiter races observation against actual child completion. Two real process negative controls distinguish exit code 2 from deliberate SIGTERM. No product/runtime/compiler/assertion/budget/deadline change.",
+  "validation": {
+    "diagnostic": {
+      "cases": 19,
+      "observations": [
+        {
+          "selected": "device-stall",
+          "operation": 26,
+          "cancellationToCloseMs": 9.187267999999676,
+          "code": 130,
+          "signal": null,
+          "existingAssertionsCompleted": true
+        },
+        {
+          "selected": "token-stall",
+          "operation": 27,
+          "cancellationToCloseMs": 8.31738100000075,
+          "code": 130,
+          "signal": null,
+          "existingAssertionsCompleted": true
+        },
+        {
+          "selected": "pending",
+          "operation": 28,
+          "cancellationToCloseMs": 5.2973929999989195,
+          "code": 130,
+          "signal": null,
+          "existingAssertionsCompleted": true
+        }
+      ],
+      "caveat": "A diagnostic-only current execution, not a reconstruction or repair of the historical whole-case timeout."
+    },
+    "red": {
+      "failed": 2,
+      "filtered": 19,
+      "behaviorOnly": true,
+      "result": "Both early-exit controls exhaust the unchanged 5000ms whole-case limit with the old waiter."
+    },
+    "green": {
+      "passed": 29,
+      "cli": 21,
+      "oauthClient": 8,
+      "files": 2,
+      "retries": 0
+    },
+    "typecheck": "PASS on the same previously Make-built immutable image with the owning test source overlay",
+    "stages": {
+      "observe": {
+        "image": "sha256:c4634d271dae811519be4765a18e911623375547a807cf8f9a6829117e02b71f",
+        "container": "qua01-auth-boundary-observe-20261102",
+        "command": [
+          "./node_modules/.bin/vitest",
+          "run",
+          "packages/cli/src/cli/provider-auth-command.test.ts",
+          "--reporter=verbose"
+        ],
+        "network": "none",
+        "exitCode": 0,
+        "started": "2026-11-02T16:04:20Z",
+        "finished": "2026-11-02T16:04:36Z"
+      },
+      "red": {
+        "image": "sha256:c4634d271dae811519be4765a18e911623375547a807cf8f9a6829117e02b71f",
+        "container": "qua01-auth-boundary-red-20261102",
+        "command": [
+          "./node_modules/.bin/vitest",
+          "run",
+          "packages/cli/src/cli/provider-auth-command.test.ts",
+          "-t",
+          "reports early auth child",
+          "--reporter=verbose"
+        ],
+        "network": "none",
+        "exitCode": 1,
+        "started": "2026-11-02T16:09:48Z",
+        "finished": "2026-11-02T16:10:00Z"
+      },
+      "green": {
+        "image": "sha256:c4634d271dae811519be4765a18e911623375547a807cf8f9a6829117e02b71f",
+        "container": "qua01-auth-boundary-green-20261102",
+        "command": [
+          "./node_modules/.bin/vitest",
+          "run",
+          "packages/cli/src/cli/provider-auth-command.test.ts",
+          "packages/cli/src/security/oauth-device.test.ts",
+          "--reporter=verbose"
+        ],
+        "network": "none",
+        "exitCode": 0,
+        "started": "2026-11-02T16:11:36Z",
+        "finished": "2026-11-02T16:11:53Z"
+      },
+      "typecheck": {
+        "image": "sha256:c4634d271dae811519be4765a18e911623375547a807cf8f9a6829117e02b71f",
+        "container": "qua01-auth-boundary-typecheck-20261102",
+        "command": [
+          "npm",
+          "run",
+          "typecheck"
+        ],
+        "network": "none",
+        "exitCode": 0,
+        "started": "2026-11-02T16:17:58Z",
+        "finished": "2026-11-02T16:18:07Z"
+      }
+    }
+  },
+  "historicalFailures": "Five compiler terminations and the earlier OAuth whole-case deadline remain failed, with undetermined causes. No compiler experiment or complete gate campaign rerun in this follow-up.",
+  "ci": {
+    "evidence": "https://github.com/Fidigi/AiHarness/actions/runs/38288563030",
+    "sha": "5adb32f02e27b41c026fbf0bc5b2ffc514f89e31",
+    "conclusion": "success",
+    "matchingSource": false,
+    "observation": "One older CI success; the separate Static demo Pages success is not native qualification. No new remote execution or authenticated write path established."
+  },
+  "qualification": "No new full parity/root/nine-suite/production/smoke campaign. Previous frozen capture-state evidence remains the integrated authority, not the current checkout.",
+  "currentIntegratedAuthority": "docs/audit/pi/evidence/QUA-01.capture-reference-20261102.json",
+  "nextEvidenceBoundary": "Authorized independent Docker execution of the retained genuine compiler workload, not another same-daemon container or unchanged rejected runtime candidate. No such execution occurred here.",
+  "artifactArchive": {
+    "path": "test-results/qua01-auth-boundary-20261102",
+    "files": 54,
+    "indexSha256": "48969c17d9111d42d5f0c8dff3807da666f1066a4b04e42a14c7f995fde72d4b",
+    "availability": "Local, nonversioned, no indefinite availability guarantee; never overwrite sealed output.",
+    "excluded": "Index itself, versioned receipt and later delivery/commit verification outputs."
+  },
+  "preservation": {
+    "auditStatusCounts": {
+      "DONE": 36,
+      "PARTIAL": 6,
+      "IN_PROGRESS": 1,
+      "total": 43
+    },
+    "independentAuditBytesPreserved": true,
+    "independentTrackedDiffPreserved": true,
+    "untrackedProviderFixtureMatchesFrozenBinding": true,
+    "noRuntimeFlagsOrDeadlineChanges": true,
+    "noNewCompleteCampaign": true,
+    "historicalFailuresUnwaived": true,
+    "noPushOrRemoteExecution": true
+  }
+}

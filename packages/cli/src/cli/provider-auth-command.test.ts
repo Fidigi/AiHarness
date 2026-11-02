@@ -45,9 +45,17 @@ function launch(args: string[], env: NodeJS.ProcessEnv = {}) {
   return { child, done };
 }
 async function invoke(args: string[], env?: NodeJS.ProcessEnv) { return launch(args, env).done; }
-async function waitForRequest(route: string) {
+async function waitForRequest(route: string, childDone: ReturnType<typeof launch>['done']) {
   const deadline = Date.now() + 5000;
-  while (!requests.includes(route) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+  while (!requests.includes(route) && Date.now() < deadline) {
+    const closed = await Promise.race([
+      childDone.then(({ code, signal }) => ({ code, signal })),
+      new Promise<undefined>(resolve => setTimeout(resolve, 10)),
+    ]);
+    if (closed && !requests.includes(route)) {
+      throw new Error(`Auth child exited before issuer request was observed (code=${closed.code}, signal=${closed.signal}).`);
+    }
+  }
   expect(requests).toContain(route);
 }
 
@@ -247,10 +255,19 @@ process.stdout.write('Kimi issuer SDK fixture passed.\\n');`;
     expect(transportErrors).toEqual([]);
   }, 30_000);
 
+  it.each(['exit', 'signal'] as const)('reports early auth child %s before an issuer request', async outcome => {
+    const run = launch(['auth', 'login', 'openai', '--unknown-option']);
+    if (outcome === 'signal') run.child.kill('SIGTERM');
+    await expect(waitForRequest('/device', run.done)).rejects.toThrow(outcome === 'signal'
+      ? 'Auth child exited before issuer request was observed (code=null, signal=SIGTERM).'
+      : 'Auth child exited before issuer request was observed (code=2, signal=null).');
+    expect(requests).toEqual([]);
+  });
+
   it.each(['device-stall', 'token-stall', 'pending'] as const)('cancels the real %s transport/poll and exits with no token publication', async selected => {
     mode = selected;
     const run = launch(['auth', 'login', 'openai']);
-    await waitForRequest(selected === 'device-stall' ? '/device' : '/token');
+    await waitForRequest(selected === 'device-stall' ? '/device' : '/token', run.done);
     const start = Date.now(); run.child.kill('SIGINT');
     expect(await run.done).toMatchObject({ code: 130, signal: null, stdout: '' });
     expect(Date.now() - start).toBeLessThan(3000);
