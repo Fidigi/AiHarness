@@ -1,0 +1,281 @@
+{
+  "schema": 1,
+  "criterion": "MOD-02",
+  "date": "2026-11-02",
+  "status": "PARTIAL",
+  "allRequiredGatesPassed": false,
+  "criterionComplete": false,
+  "documentationChecks": {
+    "lintExit": 0,
+    "markdownFiles": 118,
+    "localLinks": 1467,
+    "diffCheckExit": 0,
+    "verifiedArchives": 16,
+    "verifiedImageSourceFiles": 4,
+    "uniqueCriteria": 43,
+    "unchangedStatusTotals": { "DONE": 36, "PARTIAL": 6, "IN PROGRESS": 1 }
+  },
+  "initialHead": "e46c146",
+  "deliveryCommits": [
+    "8612538",
+    "59936bf"
+  ],
+  "deliveryHead": "59936bf906f4400c2d748527a2ae3688dd492bef",
+  "source": {
+    "image": "sha256:6e3741e0adba19b850b6bbead56170d6e85955ebb7067eca6ad20594bbb4948b",
+    "frozenTrackedFiles": 1727,
+    "drift": [],
+    "selected": [
+      {
+        "path": "packages/cli/src/rpc/rpc-controller.ts",
+        "sha256": "b0bd938fec1131bbfd348e195968802d9c57840a7be164a920bacdf34d2e762e",
+        "mode": "644",
+        "imageSha256": "b0bd938fec1131bbfd348e195968802d9c57840a7be164a920bacdf34d2e762e",
+        "imageMode": "644"
+      },
+      {
+        "path": "packages/cli/src/rpc/rpc-controller.test.ts",
+        "sha256": "5dcbf0600059a48be14504ab899aab77cb611f76db972144e76ce22637021034",
+        "mode": "644",
+        "imageSha256": "5dcbf0600059a48be14504ab899aab77cb611f76db972144e76ce22637021034",
+        "imageMode": "644"
+      },
+      {
+        "path": "packages/server/src/runtime/model-catalog.test.ts",
+        "sha256": "2562371a5c919ab6f68b31d85e701374ac2992c6f80bac134d9d5bbacf47723e",
+        "mode": "644",
+        "imageSha256": "2562371a5c919ab6f68b31d85e701374ac2992c6f80bac134d9d5bbacf47723e",
+        "imageMode": "644"
+      },
+      {
+        "path": "packages/cli/src/cli/offline-mode-process.test.ts",
+        "sha256": "01c0ddff8b8271b63b1d90bf9a028b8b890ab123cab164215f9d5b19ce8874ad",
+        "mode": "644",
+        "imageSha256": "01c0ddff8b8271b63b1d90bf9a028b8b890ab123cab164215f9d5b19ce8874ad",
+        "imageMode": "644"
+      }
+    ]
+  },
+  "scope": "RPC discovery eligibility, bounded Server cache acceptance, actual CLI discovery-failure fallback and response-correlated scoped cycling. No provider/auth/budget/transport/ABI/persistence changes.",
+  "commands": {
+    "reproduction": "make build-test IMAGE_TEST=ai-harness:mod02-red; docker run --rm -e CI=true ai-harness:mod02-red npx vitest run packages/server/src/runtime/model-catalog.test.ts packages/cli/src/rpc/rpc-controller.test.ts",
+    "typecheck": "make typecheck IMAGE_TYPECHECK=ai-harness:mod02-final",
+    "parity": "make test-parity IMAGE_TEST_RUN=ai-harness:mod02-final",
+    "root": "make test IMAGE_TEST_RUN=ai-harness:mod02-final",
+    "unreachedTypecheckPhase": "docker run --rm -e CI=true ai-harness:mod02-final npm run typecheck",
+    "unreachedParityTypecheckPhase": "docker run --rm -e CI=true ai-harness:mod02-final npm run typecheck:parity",
+    "focused": "docker run --rm -e CI=true ai-harness:mod02-final npx vitest run packages/cli/src/rpc/rpc-controller.test.ts packages/server/src/runtime/model-catalog.test.ts packages/core/src/providers/model-catalog.test.ts packages/core/src/providers/model-resolution-ambiguity.test.ts packages/core/src/providers/provider-endpoints.test.ts packages/core/src/providers/provider-network.test.ts packages/core/src/providers/provider-websocket.integration.test.ts packages/core/src/providers/offline-policy.test.ts packages/cli/src/cli/offline-mode-process.test.ts packages/cli/src/cli/model-resolution-process.test.ts packages/cli/src/providers/startup-model-resolution.test.ts"
+  },
+  "results": {
+    "reproduction": {
+      "pass": 40,
+      "fail": 2
+    },
+    "intermediate1": {
+      "typecheckExit": 0,
+      "focusedPass": 178,
+      "focusedFail": 4
+    },
+    "intermediate2": {
+      "typecheckExit": 0,
+      "focusedPass": 185,
+      "focusedFail": 4
+    },
+    "correctedFixtureOverlay": {
+      "pass": 29,
+      "fail": 0
+    },
+    "finalCanonicalTypecheck": {
+      "makeExit": 2,
+      "stage": "Core build compiler SIGSEGV; typecheck phase unreached"
+    },
+    "initialFinalFocused": {
+      "exit": 125,
+      "testsRun": 0,
+      "reason": "Final image absent after failed build"
+    },
+    "parity": {
+      "makeExit": 2,
+      "pass": 365,
+      "fail": 3,
+      "total": 368,
+      "installedAmbiguityScopesPass": 30,
+      "failures": [
+        {
+          "case": "installed passive provider policies",
+          "stage": "offline-public.ts TypeScript compiler",
+          "signal": "SIGSEGV"
+        },
+        {
+          "case": "installed Groq",
+          "stage": "groq-public.ts TypeScript compiler",
+          "signal": "SIGSEGV"
+        },
+        {
+          "case": "installed Moonshot CN",
+          "stage": "moonshot-cn-public.ts TypeScript compiler",
+          "signal": "SIGTRAP"
+        }
+      ]
+    },
+    "root": {
+      "makeExit": 2,
+      "pass": 8676,
+      "fail": 1,
+      "total": 8678,
+      "files": 526,
+      "unaccountedTests": 1,
+      "unhandledErrors": 1,
+      "failures": [
+        {
+          "case": "installed CODE declarations/runtime",
+          "boundary": "5000ms whole-case limit; reported 5010ms"
+        },
+        {
+          "file": "packages/server/src/api/zai-http.test.ts",
+          "boundary": "Vitest worker SIGSEGV in started state; internal stage/cause unknown"
+        }
+      ]
+    },
+    "typecheckPhase": {
+      "exit": 1,
+      "completed": [
+        "Core build",
+        "CLI typecheck",
+        "Core typecheck",
+        "Server typecheck"
+      ],
+      "failure": "Web TypeScript compiler SIGSEGV; trailing parity declarations unreached"
+    },
+    "parityTypecheckPhase": {
+      "exit": 0
+    },
+    "focused": {
+      "exit": 0,
+      "pass": 189,
+      "fail": 0,
+      "files": 11
+    }
+  },
+  "limitations": [
+    "Final required validation remains failed; no criterion promotion or accepted gap.",
+    "The next scheduled Make target rebuilt identical code successfully; that does not repair the earlier build failure.",
+    "Previously unreached typecheck phases and final focused execution are independent results, not retries of failed test cases.",
+    "No compiler/runtime investigation, flag/deadline/assertion changes or E2E/production/remote/live-account/distribution qualification.",
+    "Snapshot integrity and selected four-file image equality do not imply full build-context byte-by-byte verification."
+  ],
+  "artifacts": [
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/build-red.log.gz",
+      "sha256": "d3a5020a80b7b29b801c8c0a11c63847486c2c50eaf3068a0b6cefbf93bcd73f",
+      "bytes": 6029,
+      "rawSha256": "e661d63586c81662bedb45b540e08fde4ddc316d71ea3eed7e5c738fa5b45e83",
+      "rawBytes": 19046
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/red.log.gz",
+      "sha256": "bb568555a9aff783a1fb8b12f99671155904a6772366596445857568852e32a2",
+      "bytes": 2087,
+      "rawSha256": "2e3d61c2dae161eb68ecec6943ba1bb3eb0422fbddc4268da86b6b2367606cb0",
+      "rawBytes": 6413
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/typecheck-1.log.gz",
+      "sha256": "5f383fa74a0a2c0005d8ae50047b6d486b554cfaaebefeafb13cfbf48b5c42c1",
+      "bytes": 6205,
+      "rawSha256": "00c8d352342fa920009b0c17ee2b1a31335979e05b1021f5ecaab286463d6803",
+      "rawBytes": 19879
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/focused-1.log.gz",
+      "sha256": "9cf5dba72d867a511a94c709cd105c6c89b239733390ca5d6d91d6929eb4793b",
+      "bytes": 2098,
+      "rawSha256": "3fb3fc4ea579cae99b80dfe7cc06408762523b3a69e32ae555c0b0cda84bc383",
+      "rawBytes": 10610
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/typecheck-2.log.gz",
+      "sha256": "4bab71327e928af68535e04aadb2c41527f8db9731e4dd306a8714feba522ebb",
+      "bytes": 6238,
+      "rawSha256": "9de282c71bf39cb5e62edb897cb8a432ebb0b874a65cbf83f8081e1e5eb47540",
+      "rawBytes": 19860
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/focused-2.log.gz",
+      "sha256": "8e497207051ef9c97ac50e9102375afb75fc7dd1c6d28f1acf839a6d405c0629",
+      "bytes": 2098,
+      "rawSha256": "01964ebe03fbac8d21edebaec41433ede750e363ede800ae801ff1811126719d",
+      "rawBytes": 11012
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/fixture-3.log.gz",
+      "sha256": "63930cdeca623b84369cb5248b5725efa21456265904d8fb7d2155bf04532699",
+      "bytes": 696,
+      "rawSha256": "7870e552c62635c9f982461950a857bd74b2a0b01c7b7f8c7971955d875c24df",
+      "rawBytes": 3044
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/typecheck-final.log.gz",
+      "sha256": "9d9791e10fa1211bf198b48cdb6acffead0079ca45cd456365685afdb558d8bf",
+      "bytes": 2123,
+      "rawSha256": "832b1f1c104bc082c48d94ca895cde534e998e052ac0ebbd37b88a8a80fb910a",
+      "rawBytes": 5262
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/focused-final.log.gz",
+      "sha256": "d84b2d3db6054220ac97be7cd2110771fb2af9e0d3dafce0fb72bdb7ee692453",
+      "bytes": 167,
+      "rawSha256": "09f21bdf33e1d6508519f77347e01038033919639095c04c5f3f81c9138376ad",
+      "rawBytes": 207
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/parity.log.gz",
+      "sha256": "c6cdfcc2b62483aa68ad3ab5d507cdbf6af51d4672e2579b56e8e640788bfdd1",
+      "bytes": 13510,
+      "rawSha256": "4db6aa8c0c9c592cd1e0a2110d7a6d62dad2f2f4fdaee3784cf3dd2f45a11657",
+      "rawBytes": 75869
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/unit.log.gz",
+      "sha256": "9ba6b72d07ad1a8a42c8e63b83d5b9ed624e92f0d8919b03d9a6b00e67c9112f",
+      "bytes": 46862,
+      "rawSha256": "df7aec8f8c2eb4cd970010484546301b14dfafddc1f597d211b6ebf74d481c1c",
+      "rawBytes": 387566
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/typecheck-phase.log.gz",
+      "sha256": "372effafd2f4a7cff8ffc9be24e8d619bc5afa06a05396c0edb569a7b65e5d1d",
+      "bytes": 328,
+      "rawSha256": "29027205af2e80c71da3f86b64d8679074183e9a28c08d1673ba627c54705d65",
+      "rawBytes": 886
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/typecheck-parity-phase.log.gz",
+      "sha256": "a15ea5ac9c247200b7f43ee1d8955944ce469e4324c14bfb55fb96d9cd39ea48",
+      "bytes": 128,
+      "rawSha256": "24898d8498443740b4fe06639cf300587ee1e04d0a24825898a8f26799fdf05f",
+      "rawBytes": 146
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/focused-image.log.gz",
+      "sha256": "1d6f8a1ab1aac343a761a6e0154433e0c08cb563c801cda1454b2c5aef597f34",
+      "bytes": 1178,
+      "rawSha256": "4871119b3ddeb254c9a60c62b7122018d8137e6baf0f80800e5344024c62709e",
+      "rawBytes": 5590
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/source-3.json.gz",
+      "sha256": "1044b60f1d70078ea8fcee19ec493e38e49c0595f73a765954ec9b1980d949e4",
+      "bytes": 79263,
+      "rawSha256": "dce62031f5ad238593e1f95f86aef593694870b4f8c9302bf8753c79ed2a00a5",
+      "rawBytes": 321719
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02/source-proof.json.gz",
+      "sha256": "64bc975dbb80431b2be085cb9d1e846c97d7d5f5edce7033181a8aca5518a0e3",
+      "bytes": 456,
+      "rawSha256": "c4d1db44e8baeccec4c324e986e3eccdef0db5ef230e165000932b961272ef02",
+      "rawBytes": 1333
+    }
+  ]
+}
