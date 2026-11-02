@@ -257,6 +257,25 @@ describe('shared ordinary native-output admission', () => {
       expect(onStart).toHaveBeenCalledTimes(1); expect(onError).toHaveBeenCalledTimes(1); expect(dispatch).not.toHaveBeenCalled(); expect(onRetryStart).not.toHaveBeenCalled();
     } finally { await registry.shutdown(); }
   });
+  it('uses the final post-hook transcript in native numeric preflight without double allocation', async () => {
+    const owner = provider('claude-haiku-4-5'), registry = new ExtensionRegistry();
+    const original = captureNativeOutputBudget(owner)!, policy = vi.fn(original);
+    registerNativeOutputBudget(owner, () => policy);
+    await registry.load('numeric-context', api => api.before('before:provider', data => {
+      data.messages = [{ ...message(), role: 'assistant', timestamp: new Date(1), usage: { totalTokens: 185904 } }];
+      data.options.thinking = 'high';
+    }));
+    const dispatch = vi.spyOn(owner, 'streamChat').mockImplementation(async (messages, _chunk, complete, _error, options) => {
+      expect(original(options!, messages).maxTokens).toBe(10000);
+      complete?.({ content: 'ok' });
+    });
+    try {
+      await streamProviderTurn({ provider: owner, providerName: 'anthropic', messages: [message()], tools: [], extensionRegistry: registry,
+        contextBudget: { contextWindow: 20000, reserveTokens: 0 } });
+      expect(policy).toHaveBeenCalledTimes(1); expect(policy.mock.results[0]!.value.maxTokens).toBe(10000);
+      expect(policy.mock.calls[0]![1]![0]!.usage?.totalTokens).toBe(185904); expect(dispatch).toHaveBeenCalledTimes(1);
+    } finally { await registry.shutdown(); }
+  });
   it('pairs late used-map refusal with start/error,not retries or getter execution', async () => {
     const registry = new ExtensionRegistry(), owner = provider(), dispatch = vi.spyOn(owner, 'streamChat'), get = vi.fn(), onError = vi.fn(), onRetryStart = vi.fn(); let raw: BeforeProviderData | undefined;
     await registry.load('late-native-budget', api => api.before('before:provider', data => { raw = data; data.options.thinking = 'low'; }));

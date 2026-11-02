@@ -69,6 +69,25 @@ const profiles = Object.values(JSON.parse(bytes.toString())['anthropic-messages'
 const adaptiveProfiles = profiles.filter(profile => profile.compat?.forceAdaptiveThinking && !profile.compat.supportsMidConvoEffort);
 const managedProfiles = profiles.filter(profile => profile.compat?.supportsMidConvoEffort);
 const numericProfiles = profiles.filter(profile => !profile.compat?.forceAdaptiveThinking && !profile.compat?.supportsMidConvoEffort);
+const allocationBytes = readFileSync(new URL('../../../../tests/fixtures/anthropic-simple-allocation-reference.json', import.meta.url));
+const allocationFixture = JSON.parse(allocationBytes.toString()) as { pinnedCommit: string; requests: number; rows: Array<{
+  model: string; case: string; options: ChatOptions; maxTokens: number; thinkingBudget?: number; refusedByCore: boolean;
+  context: { usage?: number; input?: number; output?: number; cacheRead?: number; cacheWrite?: number;
+    stale?: boolean; failed?: boolean; trailing?: string; textChars?: number; system?: string; tools?: ChatOptions['tools']; images?: number };
+}> };
+function allocationMessages(spec: typeof allocationFixture.rows[number]['context']): Message[] {
+  const messages: Message[] = [];
+  if (spec.usage !== undefined) {
+    messages.push({ id: 'prior', role: 'user', content: 'prior', timestamp: new Date(spec.stale ? 2 : 0) },
+      { id: 'answer', role: 'assistant', content: 'ok', timestamp: new Date(1), metadata: { outputError: spec.failed },
+        usage: { totalTokens: spec.usage, inputTokens: spec.input ?? 0, outputTokens: spec.output ?? 0,
+          cacheReadTokens: spec.cacheRead ?? 0, cacheWriteTokens: spec.cacheWrite ?? 0 } });
+  }
+  if (spec.usage === undefined || spec.trailing) messages.push({ id: 'user', role: 'user', timestamp: new Date(3),
+    content: spec.trailing ?? 'x'.repeat(spec.textChars ?? 5),
+    ...(spec.images ? { blocks: [{ type: 'image' as const, mediaType: 'image/png', url: 'data:image/png;base64,opaque' }] } : {}) });
+  return messages;
+}
 const supported = (profile: typeof profiles[number]) => PUBLISHED_THINKING_LEVELS.filter(level =>
   profile.thinkingLevelMap?.[level] !== null && (!['xhigh', 'max'].includes(level) || profile.thinkingLevelMap?.[level] !== undefined));
 // Independent expected native efforts, in published level order; sparse xhigh clamps upward.
@@ -508,28 +527,41 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       expect(options).toEqual({ thinking, maxTokens: undefined, temperature: 0.25 });
     });
   }
-  for (const profile of numericProfiles) it(`${profile.id}: accepts minimal thinking with a small valid explicit answer allocation`, async () => {
+  for (const profile of numericProfiles) it(`${profile.id}: follows pinned full streamSimple allocation with safe pretransport refusals`, async () => {
     const f = fixture(profile.id), prepare = captureNativeOutputBudget(f.provider)!;
-    // The pinned helper reserves 1024 only when reasoning reaches the total ceiling.
-    for (const maxTokens of [1, 64]) {
-      const options: ChatOptions = { maxTokens, thinking: 'minimal' }, prepared = prepare(options);
-      expect(prepared.maxTokens).toBe(maxTokens + 1024);
-      expect(prepare(prepared.options).maxTokens).toBe(maxTokens + 1024);
-      for (const stream of [false, true]) {
-        await f.call(stream, 'none', prepared.options);
-        const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
-        expect(body.max_tokens).toBe(maxTokens + 1024);
-        expect(body.thinking).toMatchObject({ budget_tokens: 1024 });
+    expect(createHash('sha256').update(allocationBytes).digest('hex')).toBe('c2f4a2ac6e29109cf368bfda5872b07b7a0d09a8dcb046874001e29976f3c313');
+    expect(allocationFixture.pinnedCommit).toBe(pin.sourceCommit);
+    expect(allocationFixture.rows).toHaveLength(168); expect(allocationFixture.requests).toBe(168);
+    for (const vector of allocationFixture.rows.filter(row => row.model === profile.id)) {
+      const messages = allocationMessages(vector.context), options: ChatOptions = { ...vector.options, maxTokens: vector.options.maxTokens,
+        systemPrompt: vector.context.system, tools: vector.context.tools }, before = structuredClone({ messages, options });
+      const count = f.fetch.mock.calls.length;
+      if (vector.refusedByCore) {
+        expect(() => prepare(options, messages), vector.case).toThrow(ProviderOutputBudgetError);
+        for (const stream of [false, true]) await expect(f.call(stream, 'none', options, messages), vector.case).rejects.toThrow('Invalid Anthropic thinking allocation.');
+        expect(f.fetch).toHaveBeenCalledTimes(count);
+      } else {
+        const prepared = prepare(options, messages);
+        expect(prepared.maxTokens, vector.case).toBe(vector.maxTokens);
+        expect(prepare(prepared.options, messages).maxTokens).toBe(vector.maxTokens);
+        for (const stream of [false, true]) {
+          const response = await f.call(stream, 'none', prepared.options, messages);
+          const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+          expect(body.model).toBe(profile.id); expect(response.model).toBe(profile.id); expect(response.api).toBe('anthropic-messages');
+          expect(body.max_tokens, vector.case).toBe(vector.maxTokens);
+          expect(body.thinking).toEqual(vector.thinkingBudget === undefined ? options.thinking === 'off' ? { type: 'disabled' } : undefined
+            : { type: 'enabled', budget_tokens: vector.thinkingBudget, display: 'summarized' });
+        }
       }
-      expect(options.maxTokens).toBe(maxTokens);
+      expect({ messages, options }).toEqual(before);
     }
   });
   for (const profile of numericProfiles) it(`${profile.id}: fits numeric answer room without double allocation or borrowing mutable metadata`, async () => {
     const f = fixture(profile.id), prepare = captureNativeOutputBudget(f.provider)!;
     const published = f.provider.getPublishedModels().find(row => row.id === profile.id)!;
     published.thinkingLevelMap!.high = 'off'; published.maxOutputTokens = Number.MAX_SAFE_INTEGER;
-    for (const [maxTokens, high, maximum, budget] of [[64, undefined, 16448, 16384], [1, undefined, 16385, 16384],
-      [64000, undefined, 64000, 16384], [64, 32000, 32064, 32000], [64, Number.MAX_SAFE_INTEGER, 64000, 62976], [64000, 0, 64000, 1024]] as const) {
+    for (const [maxTokens, high, maximum, budget] of [[64, undefined, 16448, 15424], [1, undefined, 16385, 15361],
+      [64000, undefined, 64000, 16384], [64, 32000, 32064, 31040], [64, Number.MAX_SAFE_INTEGER, 64000, 62976], [64000, 0, 64000, 1024]] as const) {
       const options: ChatOptions = { maxTokens, thinking: 'high', ...(high === undefined ? {} : { thinkingBudgets: { high } }) };
       const prepared = prepare(options), again = prepare(prepared.options);
       expect(prepared.maxTokens).toBe(maximum); expect(again.maxTokens).toBe(maximum);
@@ -668,7 +700,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       await f.call(stream, 'short', policy({ thinking: 'xhigh', maxTokens: 64 }).options);
       expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).output_config).toEqual({ effort: 'xhigh' });
       await f.call(stream, 'short', policy({ model: 'claude-haiku-4-5', thinking: 'high', maxTokens: 64 }).options);
-      expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).thinking).toEqual({ type: 'enabled', budget_tokens: 16384, display: 'summarized' });
+      expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).thinking).toEqual({ type: 'enabled', budget_tokens: 15424, display: 'summarized' });
     }
     class Compatible extends AnthropicProvider {}
     for (const model of ['claude-opus-4-7', 'claude-opus-4-7-unverified']) {

@@ -57,7 +57,7 @@ const adaptivePolicies = new Map<string, AdaptivePolicy>(([
 export function anthropicAdaptivePolicy(model: string): AdaptivePolicy | undefined { return adaptivePolicies.get(model); }
 const numericIds = new Set(['claude-haiku-4-5', 'claude-haiku-4-5-20251001', 'claude-opus-4-5',
   'claude-opus-4-5-20251101', 'claude-sonnet-4-5', 'claude-sonnet-4-5-20250929']);
-const numericPolicy = Object.freeze({ maxTokens: 64000, thinkingLevelMap: Object.freeze({
+const numericPolicy = Object.freeze({ maxTokens: 64000, contextWindow: 200000, thinkingLevelMap: Object.freeze({
   off: 'off', minimal: 'minimal', low: 'low', medium: 'medium', high: 'high', xhigh: null, max: null,
 }) });
 export function anthropicNumericPolicy(model: string): typeof numericPolicy | undefined { return numericIds.has(model) ? numericPolicy : undefined; }

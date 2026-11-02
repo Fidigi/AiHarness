@@ -4464,7 +4464,7 @@ export class AnthropicProvider extends AiProvider {
     this.baseUrl = config.baseUrl || AnthropicProvider.DEFAULT_BASE_URL;
     if (this.ownsNativeProfiles) registerNativeOutputBudget(this, () => {
       const model = captureNativeConfiguredModel(this.config, ANTHROPIC_DEFAULT_MODEL);
-      return options => prepareAnthropicOutputBudget(options, model);
+      return (options, messages) => prepareAnthropicOutputBudget(options, model, messages);
     });
   }
 
@@ -4505,8 +4505,8 @@ export class AnthropicProvider extends AiProvider {
     }));
     return body;
   }
-  protected applyMessageThinking(body: Record<string, unknown>, options?: ChatOptions): void {
-    if (this.ownsNativeProfiles) applyNativeAnthropicOutputPolicy(body, options);
+  protected applyMessageThinking(body: Record<string, unknown>, options?: ChatOptions, messages?: readonly Message[]): void {
+    if (this.ownsNativeProfiles) applyNativeAnthropicOutputPolicy(body, options, messages);
     else applyAnthropicThinking(body, options);
   }
   protected validateMessageResponse(_value: unknown): void {}
@@ -4610,7 +4610,7 @@ export class AnthropicProvider extends AiProvider {
 
     if (systemPrompt) body.system = systemPrompt;
     if (options?.temperature !== undefined && (!options.thinking || options.thinking === 'off')) body.temperature = options.temperature;
-    this.applyMessageThinking(body, options);
+    this.applyMessageThinking(body, options, messages);
     if (options?.tools?.length) {
       body.tools = options.tools.map(tool => ({
         name: tool.name,
@@ -4695,7 +4695,7 @@ export class AnthropicProvider extends AiProvider {
 
     if (systemPrompt) body.system = systemPrompt;
     if (options?.temperature !== undefined && (!options.thinking || options.thinking === 'off')) body.temperature = options.temperature;
-    this.applyMessageThinking(body, options);
+    this.applyMessageThinking(body, options, messages);
     if (options?.tools?.length) {
       body.tools = options.tools.map(tool => ({
         name: tool.name,

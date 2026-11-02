@@ -19,14 +19,14 @@ const NUMERIC_BUDGETS = { minimal: 1024, low: 1024, medium: 4096, high: 8192, xh
  * copied only when the selected native dialect consumes them; off/effort-only
  * modes keep unused maps opaque. Caller-owned maps/arrays are never frozen.
  */
-export function prepareAnthropicOutputBudget(ownedOptions: ChatOptions, configuredModel: string): Readonly<PreparedNativeOutputBudget> {
+export function prepareAnthropicOutputBudget(ownedOptions: ChatOptions, configuredModel: string, messages: readonly Message[] = []): Readonly<PreparedNativeOutputBudget> {
   const options: ChatOptions = { ...ownedOptions, model: ownedOptions.model || configuredModel };
   if (options.thinking && options.thinking !== 'off' && !anthropicAdaptivePolicy(options.model!)) {
     try { options.thinkingBudgets = copyThinkingBudgets(options.thinkingBudgets); }
     catch { throw new ProviderOutputBudgetError('thinking'); }
   }
   const body: Record<string, unknown> = { model: options.model, max_tokens: options.maxTokens ?? ANTHROPIC_DEFAULT_MAX_TOKENS };
-  try { applyNativeAnthropicOutputPolicy(body, options); }
+  try { applyNativeAnthropicOutputPolicy(body, options, messages); }
   catch { throw new ProviderOutputBudgetError(); }
   const maxTokens = body.max_tokens;
   if (typeof maxTokens !== 'number' || !Number.isSafeInteger(maxTokens) || maxTokens < 1) throw new ProviderOutputBudgetError();
@@ -34,10 +34,10 @@ export function prepareAnthropicOutputBudget(ownedOptions: ChatOptions, configur
 }
 
 /** Constrain direct-owner requests before and after their profile-owned thinking allocation. */
-export function applyNativeAnthropicOutputPolicy(body: Record<string, unknown>, options?: ChatOptions): void {
+export function applyNativeAnthropicOutputPolicy(body: Record<string, unknown>, options?: ChatOptions, messages: readonly Message[] = []): void {
   validateAnthropicProfileOutput(body, options?.maxTokens);
   const model = typeof body.model === 'string' ? body.model : '', policy = anthropicAdaptivePolicy(model);
-  if (anthropicNumericPolicy(model)) applyNumericAnthropicThinking(body, options, model);
+  if (anthropicNumericPolicy(model)) applyNumericAnthropicThinking(body, options, model, messages);
   else if (!policy) applyAnthropicThinking(body, options);
   else {
     body.max_tokens = options?.maxTokens ?? policy.maxTokens;
@@ -65,10 +65,37 @@ export function applyNativeAnthropicOutputPolicy(body: Record<string, unknown>, 
 }
 
 const NATIVE_NUMERIC_BUDGETS = { minimal: 1024, low: 2048, medium: 8192, high: 16384 } as const;
-/** Pi simple-options adds reasoning to the answer cap; reserve 1024 only when reasoning reaches the total ceiling. */
-function applyNumericAnthropicThinking(body: Record<string, unknown>, options: ChatOptions | undefined, model: string): void {
+/** Pinned Pi estimate on Core's text/image/tool transcript; not a vendor tokenizer. */
+function numericContextTokens(messages: readonly Message[], options?: ChatOptions): number {
+  const tokens = (chars: number) => Math.ceil(chars / 3.5);
+  let total = tokens(options?.systemPrompt?.length ?? 0)
+    + (options?.tools?.length ? tokens(JSON.stringify(options.tools).length) : 0);
+  let latestTimestamp = options?.systemPrompt || options?.tools?.length ? 0 : Number.NEGATIVE_INFINITY;
+  for (const message of messages) {
+    const timestamp = new Date(message.timestamp).getTime(), usage = message.usage;
+    const used = usage?.totalTokens || ((usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0)
+      + (usage?.cacheReadTokens ?? 0) + (usage?.cacheWriteTokens ?? 0));
+    if (message.role === 'assistant' && timestamp >= latestTimestamp && !message.isError
+      && !message.metadata?.outputError && Number.isSafeInteger(used) && used > 0) total = used;
+    else {
+      let chars = message.content.length;
+      if (message.role === 'assistant') {
+        for (const block of message.blocks ?? []) if (block.type === 'reasoning') chars += block.text.length;
+        for (const call of message.toolCalls ?? []) chars += call.name.length + (JSON.stringify(call.input) ?? 'undefined').length;
+      } else if (message.role !== 'system') {
+        chars += (message.blocks?.filter(block => block.type === 'image').length ?? 0) * 4800;
+      }
+      total += tokens(chars);
+    }
+    latestTimestamp = Math.max(latestTimestamp, timestamp);
+  }
+  return total;
+}
+/** Full Pi streamSimple allocation: base context clamp, thinking expansion, final context/answer clamp. */
+function applyNumericAnthropicThinking(body: Record<string, unknown>, options: ChatOptions | undefined, model: string, messages: readonly Message[]): void {
   const policy = anthropicNumericPolicy(model)!;
-  body.max_tokens = options?.maxTokens ?? policy.maxTokens;
+  const available = Math.max(1, policy.contextWindow - numericContextTokens(messages, options) - 4096);
+  body.max_tokens = Math.min(options?.maxTokens ?? policy.maxTokens, available);
   const level = options?.thinking;
   if (level === undefined) return;
   if (!PUBLISHED_THINKING_LEVELS.includes(level)) throw new Error('Invalid Anthropic thinking level.');
@@ -76,9 +103,9 @@ function applyNumericAnthropicThinking(body: Record<string, unknown>, options: C
   const selected = level === 'xhigh' || level === 'max' ? 'high' : level;
   const requested = copyThinkingBudgets(options?.thinkingBudgets)?.[selected] ?? NATIVE_NUMERIC_BUDGETS[selected];
   const base = Number(body.max_tokens);
-  const maximum = options?.maxTokens === undefined ? policy.maxTokens
-    : requested >= policy.maxTokens - base ? policy.maxTokens : base + requested;
-  const budget = (maximum <= requested ? Math.min(requested, Math.max(0, maximum - 1024)) : requested) || 1024;
+  const maximum = Math.min(requested >= policy.maxTokens - base ? policy.maxTokens : base + requested, available);
+  // The raw builder falls back to 1024 for a zero budget; preserve that only when it fits.
+  const budget = Math.min(requested, Math.max(0, maximum - 1024)) || 1024;
   // Do not reproduce invalid sub-1024 thinking blocks or consume the whole output ceiling.
   if (budget < 1024 || budget >= maximum) throw new Error('Invalid Anthropic thinking allocation.');
   body.max_tokens = maximum;
