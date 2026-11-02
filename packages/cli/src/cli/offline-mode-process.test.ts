@@ -15,12 +15,13 @@ async function fixture(credentials = true, mutateEnvironment?: '0' | '1', extens
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-offline-process-')), cwd = path.join(root, 'work'), agent = path.join(root, 'agent');
   await mkdir(cwd); await mkdir(agent);
   const requests: Array<{ method: string; url: string; body: Record<string, unknown> }> = [];
+  const discovery = { status: 200 };
   const server = createServer(async (request, response) => {
     let text = ''; for await (const chunk of request) text += chunk;
     const body = text && request.url !== '/oauth/token' ? JSON.parse(text) : {};
     requests.push({ method: request.method ?? '', url: request.url ?? '', body });
     if (request.url === '/oauth/token') { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ access_token: 'fresh-offline-fixture', expires_in: 3600 })); }
-    else if (request.url?.endsWith('/models')) { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ data: [{ id: request.url === '/openai/models' ? 'gpt-fixture' : 'local-model' }, { id: 'live-only' }] })); }
+    else if (request.url?.endsWith('/models')) { response.statusCode = discovery.status; response.setHeader('Content-Type', 'application/json'); response.end(discovery.status === 200 ? JSON.stringify({ data: [{ id: request.url === '/openai/models' ? 'gpt-fixture' : 'local-model' }, { id: 'live-only' }] }) : 'disposable-private-discovery-error'); }
     else if (request.url === '/v1/chat/completions') { response.setHeader('Content-Type', 'text/event-stream'); response.end(`data: ${JSON.stringify({ id: 'fixture', choices: [{ delta: { role: 'assistant', content: 'LOCAL EXPLICIT RESPONSE' }, finish_reason: null }] })}\n\ndata: ${JSON.stringify({ id: 'fixture', choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`); }
     else { response.end('explicit extension network allowed'); }
   });
@@ -45,15 +46,29 @@ async function fixture(credentials = true, mutateEnvironment?: '0' | '1', extens
   const args = ['--import', preload, cli, '--no-approve', '--no-extensions', '--no-session', ...((mutateEnvironment || extensionNetwork) ? ['-e', extension] : [])];
   const close = async () => { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true }); };
   const passive = async () => { expect(requests).toEqual([]); await expect(readFile(fetchMarker)).rejects.toMatchObject({ code: 'ENOENT' }); await expect(readFile(commandMarker)).rejects.toMatchObject({ code: 'ENOENT' }); if (before) expect(await readFile(path.join(agent, 'credentials.enc'))).toEqual(before); };
-  return { root, cwd, agent, env, args, requests, commandMarker, extensionMarker, before, passive, close };
+  return { root, cwd, agent, env, args, requests, discovery, commandMarker, extensionMarker, before, passive, close };
 }
-async function run(test: Awaited<ReturnType<typeof fixture>>, mode: Mode, flags: string[], model = 'mock', tail?: string[]) {
+async function run(test: Awaited<ReturnType<typeof fixture>>, mode: Mode, flags: string[], model = 'mock', tail?: string[], rpcCommands?: Record<string, unknown>[]) {
   return new Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(process.execPath, [...test.args, ...flags, ...(model === 'local' ? ['--model', 'local/local-model'] : []), ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(tail ?? (mode === 'rpc' ? [] : ['Hello.']))], { cwd: test.cwd, env: test.env, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '', stderr = ''; const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
-    child.stdout.on('data', chunk => { stdout += chunk; }); child.stderr.on('data', chunk => { stderr += chunk; }); child.once('error', error => { clearTimeout(timer); reject(error); });
+    let rpcBuffer = '', rpcIndex = 0;
+    const sendNext = () => {
+      child.stdin.write(JSON.stringify(rpcCommands![rpcIndex++]) + '\n');
+      if (rpcIndex === rpcCommands!.length) child.stdin.end();
+    };
+    child.stdout.on('data', chunk => {
+      stdout += chunk;
+      if (!rpcCommands) return;
+      rpcBuffer += chunk;
+      while (rpcBuffer.includes('\n')) {
+        const end = rpcBuffer.indexOf('\n'), record = JSON.parse(rpcBuffer.slice(0, end)); rpcBuffer = rpcBuffer.slice(end + 1);
+        if (record.type === 'response' && record.id === rpcCommands[rpcIndex - 1]?.id && rpcIndex < rpcCommands.length) sendNext();
+      }
+    }); child.stderr.on('data', chunk => { stderr += chunk; }); child.once('error', error => { clearTimeout(timer); reject(error); });
     child.once('close', (code, signal) => { clearTimeout(timer); resolve({ code, signal, stdout, stderr }); });
-    child.stdin.end(mode === 'rpc' ? [JSON.stringify({ type: 'get_available_models', id: 'models' }), JSON.stringify({ type: 'prompt', id: 'turn', message: 'Hello.' })].join('\n') + '\n' : '');
+    if (rpcCommands) sendNext();
+    else child.stdin.end(mode === 'rpc' ? [JSON.stringify({ type: 'get_available_models', id: 'models' }), JSON.stringify({ type: 'prompt', id: 'turn', message: 'Hello.' })].join('\n') + '\n' : '');
   });
 }
 function success(result: Awaited<ReturnType<typeof run>>, mode: Mode, text = '[Mock AI Response]') {
@@ -87,6 +102,33 @@ describe('actual offline startup and conserved explicit operations', () => {
       } finally { await test.close(); }
     }, 30_000);
   }
+  for (const mode of ['print', 'json', 'rpc'] as const) {
+    it(`${mode}: failed live discovery retains configured startup selection without leaking the remote body`, async () => {
+      const test = await fixture(false); test.discovery.status = 401;
+      try {
+        const result = await run(test, mode, ['--models', 'local/local-model']);
+        success(result, mode, 'LOCAL EXPLICIT RESPONSE');
+        expect(result.stdout + result.stderr).not.toContain('disposable-private-discovery-error');
+        expect(test.requests.filter(request => request.url === '/v1/models')).toHaveLength(mode === 'rpc' ? 2 : 1);
+        expect(test.requests.filter(request => request.url === '/v1/chat/completions').map(request => request.body.model)).toEqual(['local-model']);
+      } finally { await test.close(); }
+    }, 30_000);
+  }
+  it('RPC cycles the actual discovered scope and sends the selected physical model', async () => {
+    const test = await fixture(false);
+    try {
+      const result = await run(test, 'rpc', ['--models', 'local/local-model,local/live-only'], 'mock', undefined, [
+        { type: 'get_available_models', id: 'models' }, { type: 'cycle_model', id: 'cycle' },
+        { type: 'get_state', id: 'state' }, { type: 'prompt', id: 'turn', message: 'Hello.' },
+      ]);
+      success(result, 'rpc', 'LOCAL EXPLICIT RESPONSE');
+      const records = result.stdout.trim().split('\n').map(line => JSON.parse(line));
+      expect(records).toContainEqual(expect.objectContaining({ type: 'response', id: 'cycle', success: true,
+        data: expect.objectContaining({ model: expect.objectContaining({ provider: 'local', id: 'live-only' }), isScoped: true }) }));
+      expect(test.requests.filter(request => request.url === '/v1/models')).toHaveLength(2);
+      expect(test.requests.filter(request => request.url === '/v1/chat/completions').map(request => request.body.model)).toEqual(['live-only']);
+    } finally { await test.close(); }
+  }, 30_000);
   for (const mode of ['print', 'json'] as const) {
     it(`${mode}: authoritative contributed-option arity never promotes a prompt --offline token`, async () => {
       const test = await fixture(true, '1');
