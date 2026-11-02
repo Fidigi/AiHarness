@@ -799,6 +799,21 @@ describe('RPC command controller', () => {
     expect(discover).toHaveBeenCalledTimes(1);
   });
 
+  it.each([false, true])('respects discovery capability independently of availability (configured=%s)', async configured => {
+    const { controller, context } = createController();
+    vi.spyOn(context.provider, 'validateConfig').mockReturnValue(configured);
+    const capability = vi.spyOn(context.provider, 'canDiscoverModels').mockReturnValue(!configured);
+    const discovery = vi.spyOn(context.provider, 'getAvailableModels').mockResolvedValue(['live-only']);
+    await controller.initialize();
+    const result = await controller.handle({ type: 'get_available_models' });
+    expect(capability).toHaveBeenCalledTimes(1);
+    expect(discovery).toHaveBeenCalledTimes(configured ? 0 : 1);
+    const models = (result?.data as { models: Array<{ id: string }> }).models;
+    expect(models.some(model => model.id === 'live-only')).toBe(!configured);
+    expect(models.some(model => model.id === 'mock-model')).toBe(true);
+    await controller.close();
+  });
+
   it('lists, switches, and cycles configured provider models', async () => {
     const { controller, context } = createController();
     const second = new MockProvider({ type: 'mock' as any, model: 'second-model' });

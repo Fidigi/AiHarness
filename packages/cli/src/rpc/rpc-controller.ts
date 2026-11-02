@@ -1915,10 +1915,10 @@ export class RpcController {
       let configured = false;
       try { configured = provider.validateConfig(); } catch { /* Invalid providers remain listed but unavailable. */ }
       let discoveredModels: string[] = [];
-      if (configured && !this.context.offline) {
+      if (!this.context.offline && provider.canDiscoverModels()) {
         try {
           discoveredModels = await discoverProviderModelIds(provider, { retries: 0 });
-        } catch { /* A configured provider remains selectable when live discovery is unavailable. */ }
+        } catch { /* Published/configured metadata remains usable when live discovery is unavailable. */ }
       }
       return {
         provider: providerName,

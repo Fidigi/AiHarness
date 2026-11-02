@@ -38,6 +38,63 @@ describe('ModelCatalogService', () => {
       .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'qwen-tool', source: 'discovered' })]));
   });
 
+  it('joins refreshes, expires the memory cache and preserves only the same source on failure', async () => {
+    const proxy = new AiProxyServer();
+    const provider = new OpenAiProvider({ type: 'cache-test', apiKey: 'disposable', model: 'configured' });
+    let release!: (models: string[]) => void;
+    const discover = vi.spyOn(provider, 'getAvailableModels').mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    proxy.setCustomProvider('cache-test', provider);
+    const catalog = new ModelCatalogService(proxy, () => [], 300_000);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    const first = catalog.getCatalog(), joined = catalog.getCatalog(true);
+    expect(discover).toHaveBeenCalledTimes(1);
+    release(['live']);
+    expect(await first).toEqual(await joined);
+    const cached = await catalog.getCatalog();
+    expect(discover).toHaveBeenCalledTimes(1);
+    cached.find(row => row.provider === 'cache-test')!.models[0]!.name = 'mutated';
+    expect((await catalog.getCatalog()).find(row => row.provider === 'cache-test')!.models[0]!.name).not.toBe('mutated');
+    discover.mockRejectedValue(new Error('disposable remote failure'));
+    now.mockReturnValue(301_000);
+    expect((await catalog.getCatalog()).find(row => row.provider === 'cache-test')?.models)
+      .toContainEqual(expect.objectContaining({ id: 'live', source: 'discovered' }));
+    expect(discover).toHaveBeenCalledTimes(4); // One successful attempt, three bounded failures.
+    await catalog.getCatalog();
+    expect(discover).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not republish a pending discovery after explicit invalidation of the same adapter', async () => {
+    const proxy = new AiProxyServer();
+    const provider = new OpenAiProvider({ type: 'cache-test', apiKey: 'disposable', model: 'configured' });
+    let release!: (models: string[]) => void;
+    const discover = vi.spyOn(provider, 'getAvailableModels').mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    proxy.setCustomProvider('cache-test', provider);
+    const catalog = new ModelCatalogService(proxy);
+    const pending = catalog.getCatalog();
+    catalog.invalidateProvider('cache-test');
+    release(['retired-live']);
+    expect((await pending).find(row => row.provider === 'cache-test')?.models.map(model => model.id)).not.toContain('retired-live');
+    discover.mockResolvedValue(['current-live']);
+    expect((await catalog.getCatalog()).find(row => row.provider === 'cache-test')?.models.map(model => model.id)).toContain('current-live');
+    expect(discover).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops old discovery on replacement even when the replacement is unreachable', async () => {
+    const proxy = new AiProxyServer();
+    const old = new OpenAiProvider({ type: 'cache-test', apiKey: 'old-disposable', model: 'old-configured' });
+    vi.spyOn(old, 'getAvailableModels').mockResolvedValue(['old-live']);
+    proxy.setCustomProvider('cache-test', old);
+    const catalog = new ModelCatalogService(proxy);
+    await catalog.getCatalog();
+    const replacement = new OpenAiProvider({ type: 'cache-test', apiKey: 'new-disposable', model: 'new-configured' });
+    vi.spyOn(replacement, 'getAvailableModels').mockRejectedValue(new Error('unreachable'));
+    proxy.setCustomProvider('cache-test', replacement);
+    const ids = (await catalog.getCatalog()).find(row => row.provider === 'cache-test')!.models.map(model => model.id);
+    expect(ids).toContain('new-configured');
+    expect(ids).not.toContain('old-live');
+    expect(ids).not.toContain('old-configured');
+  });
+
   it('uses current adapter-owned R metadata for catalogue and runtime lookups while preserving custom overrides', async () => {
     const fetch = vi.fn().mockRejectedValue(new Error('Unexpected network request')); vi.stubGlobal('fetch', fetch);
     const proxy = new AiProxyServer();
