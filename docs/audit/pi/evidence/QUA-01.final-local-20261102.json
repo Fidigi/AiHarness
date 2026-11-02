@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "criterion": "QUA-01",
+  "date": "2026-11-02",
+  "status": "FINAL_LOCAL_CANDIDATE_REJECTED_INTERVENTION_CLOSED_UNSUCCESSFULLY",
+  "criterionStatus": "PARTIAL",
+  "interventionStatus": "CLOSED_UNSUCCESSFULLY",
+  "headAtStart": "2ed4785bf0751b99c5bacb11c29c1d6542bee00f",
+  "source": {
+    "baseImage": "sha256:c4634d271dae811519be4765a18e911623375547a807cf8f9a6829117e02b71f",
+    "node": "24.15.0",
+    "originalHelperSha256": "164b9284012c686ce83ed85be60b8727a68ffc024fb71ac4809151cdc8231897",
+    "candidateHelperSha256": "84e69ec4ad622fc0871b06c51641c14a1242dda222fb797ec1814e413db8d983",
+    "fixtureSha256": "b0a8275a191b193db30aed86e7cadbe269ea1c0f50e143d542f452cce2a3e1b0",
+    "flags": [
+      "--no-maglev",
+      "--no-turbofan",
+      "--always-sparkplug"
+    ],
+    "scope": "One last disposable compiler-only candidate, no application argv/environment changes. Unlike the historical Node24.22.2/no-concurrent-marking/no-turbofan candidate, this keeps original Node24.15.0 and default GC and adds eager baseline compilation. Unlike JITless, baseline native code remains enabled. No retry or deadline/assertion/channel/budget change. The first existing 5000ms declaration case decides whether to proceed.",
+    "selection": "publishes native bounded recovery, nested/rich results and parallel snapshot declarations",
+    "stopOnFailure": true
+  },
+  "preflight": {
+    "exit": 0,
+    "stderr": "",
+    "versions": {
+      "node": "v24.15.0",
+      "v8": "13.6.233.17-node.48"
+    }
+  },
+  "owning": {
+    "command": [
+      "./node_modules/.bin/vitest",
+      "run",
+      "tests/functional-parity/installed-executable.test.ts",
+      "-t",
+      "publishes native bounded recovery, nested/rich results and parallel snapshot declarations",
+      "--reporter=verbose"
+    ],
+    "container": "qua01-final-local-owning-20261102",
+    "image": "sha256:c4634d271dae811519be4765a18e911623375547a807cf8f9a6829117e02b71f",
+    "network": "none",
+    "passed": 0,
+    "failed": 1,
+    "filtered": 332,
+    "total": 333,
+    "wholeCaseDeadlineMs": 5000,
+    "reportedCaseMs": 5012,
+    "vitestDurationSeconds": 30.03,
+    "exitCode": 1,
+    "nativeTerminationReceiptObserved": false,
+    "childExitCode": "UNKNOWN",
+    "childSignal": "UNKNOWN",
+    "pendingStepAtDeadline": "UNKNOWN",
+    "assertionCredit": "No assertions after the failed whole-case deadline are credited. Missing child result is not proof of normal exit or no signal."
+  },
+  "workload": "Original genuine pack/install and declaration case, saved cleanup-only diagnostic fixture and compiler-only helper overlay. Source readbacks match. No fresh installed-package inventory or consumer export was requested; no agent/home/environment data exported.",
+  "qualification": "No source/runtime mitigation integrated. No subsequent compiler probe or full typecheck/parity/root/nine-suite/production/smoke campaign after this rejection. Prior integrated failures remain failed, causes undetermined.",
+  "disposition": "User mandated a last local attempt and termination of this intervention regardless of outcome. The intervention stops unsuccessfully. Required native qualification is not established; no false verified-DONE claim or automatic resumption.",
+  "localDocker": "Available and used. An independent runner was never a prerequisite for the approved native qualification; lack of remote CI access is not the cause of this failed required case.",
+  "currentIntegratedAuthority": "docs/audit/pi/evidence/QUA-01.capture-reference-20261102.json",
+  "unresolved": "The five proved compiler-stage terminations and separate historical OAuth whole-case deadline remain failed and of undetermined cause. The final candidate is rejected by its required whole-case deadline, not proved to have reproduced a native crash. No complete green qualification is credited.",
+  "preservation": {
+    "repositoryImplementationUnchanged": true,
+    "indexEmptyBeforeDocumentation": true,
+    "independentTrackedDiffIdentical": true,
+    "independentUntrackedFixtureSha256": "c2f4a2ac6e29109cf368bfda5872b07b7a0d09a8dcb046874001e29976f3c313",
+    "readbackHashesMatch": true
+  },
+  "auditCounts": {
+    "DONE": 36,
+    "PARTIAL": 6,
+    "IN_PROGRESS": 1,
+    "total": 43
+  },
+  "artifactArchive": {
+    "path": "test-results/qua01-final-local-20261102",
+    "files": 32,
+    "indexSha256": "83150c7388fea214c4f1abf1c60d95230a264b2bb2a519fe1badc9f1dd7ba281",
+    "availability": "Local/nonversioned, without indefinite availability guarantee. Never overwrite sealed outputs.",
+    "exclusions": "Index itself, versioned receipt, subsequent delivery/lint/commit verification outputs."
+  }
+}
