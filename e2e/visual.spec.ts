@@ -533,14 +533,16 @@ test.describe('Régression visuelle des historiques paginés', () => {
       await page.goto('/chat/visual-history');
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; scroll-behavior: auto !important; }' });
       const loadEarlier = page.getByRole('button', { name: 'Load earlier messages' });
-      // Reveal once, then use a real pointer click. Locator.click() performs a
-      // second native reveal which can move this scroller by its 16px padding
-      // before pointerdown; that is not a pagination-restoration displacement.
-      await loadEarlier.scrollIntoViewIfNeeded();
-      const button = await loadEarlier.boundingBox();
-      expect(button).not.toBeNull();
-      const priorAnchor = await page.locator('#visual-history-message-101').evaluate(element => element.getBoundingClientRect().top);
-      await page.mouse.click(button!.x + button!.width / 2, button!.y + button!.height / 2);
+      // Measure at the actual pagination click, after native reveal and any
+      // in-flight initial scrolling, but before React admits the older page.
+      const [priorAnchor] = await Promise.all([
+        loadEarlier.evaluate(element => new Promise<number>(resolve => {
+          element.addEventListener('click', () => resolve(
+            document.getElementById('visual-history-message-101')!.getBoundingClientRect().top,
+          ), { capture: true, once: true });
+        })),
+        loadEarlier.click(),
+      ]);
       await expect(page.locator('.messages-container[data-virtualized="true"]')).toBeVisible();
       expect(await page.locator('.message').count()).toBeLessThan(45);
       const actions = scenario.width <= 959
