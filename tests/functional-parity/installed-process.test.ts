@@ -27,12 +27,19 @@ describe('installed child native termination evidence', () => {
 
   it.each(['SIGTERM', 'SIGINT'] as const)('retains real %s without command/input/environment/output data in its receipt', async signal => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const state = expect.getState();
+    const owner = state.currentTestName;
+    const getState = vi.spyOn(expect, 'getState').mockReturnValue(state);
     try {
-      const result = await run(process.execPath, ['-e', script(`process.kill(process.pid, ${JSON.stringify(signal)});`), 'synthetic-private-argv'], os.tmpdir(), {
+      const pending = run(process.execPath, ['-e', script(`process.kill(process.pid, ${JSON.stringify(signal)});`), 'synthetic-private-argv'], os.tmpdir(), {
         ...process.env, AIH_SYNTHETIC_PRIVATE_VALUE: 'synthetic-private-environment',
       }, 'synthetic-private-stdin');
+      // A late close must retain its launch owner, not the next displayed test.
+      getState.mockReturnValue({ ...state, currentTestName: 'unrelated later test' });
+      const result = await pending;
+      getState.mockRestore();
       expect(result).toEqual({ code: null, stdout: output, stderr: diagnostic });
-      expect(error).toHaveBeenCalledExactlyOnceWith('[installed-process] Native child termination.', { code: null, signal });
-    } finally { error.mockRestore(); }
+      expect(error).toHaveBeenCalledExactlyOnceWith('[installed-process] Native child termination.', { code: null, signal, testName: owner });
+    } finally { getState.mockRestore(); error.mockRestore(); }
   });
 });

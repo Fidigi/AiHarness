@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { expect } from 'vitest';
 
 // Private harness utility: captured child channels and legacy result shape stay exact.
 const byteLimit = 1024 * 1024;
@@ -11,6 +12,7 @@ export function compilerNodeArgs(command: string, args: readonly string[], compi
 
 export function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, input = '', timeoutMs = 20_000): Promise<Result> {
   return new Promise((resolve, reject) => {
+    const testName = expect.getState().currentTestName;
     const child = spawn(command, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
@@ -29,7 +31,7 @@ export function run(command: string, args: string[], cwd: string, env: NodeJS.Pr
     child.once('error', fail);
     child.once('close', (code, signal) => {
       clearTimeout(timer);
-      if (signal !== null) console.error('[installed-process] Native child termination.', { code, signal });
+      if (signal !== null) console.error('[installed-process] Native child termination.', { code, signal, testName });
       resolve({ code, stdout, stderr });
     });
     child.stdin.end(input);
