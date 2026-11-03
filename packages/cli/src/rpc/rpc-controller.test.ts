@@ -799,6 +799,62 @@ describe('RPC command controller', () => {
     expect(discover).toHaveBeenCalledTimes(1);
   });
 
+  it('withdraws cached discovery and configured IDs when an adapter is replaced or removed', async () => {
+    const { controller, context } = createController();
+    const original = context.provider;
+    const oldDiscovery = vi.spyOn(original, 'getAvailableModels').mockResolvedValue(['old-live', 'old-configured']);
+    context.providers = new Map([['mock', original]]);
+    await controller.initialize();
+    const ids = async () => ((await controller.handle({ type: 'get_available_models' }))?.data as { models: Array<{ id: string }> }).models.map(model => model.id);
+    expect(await ids()).toContain('old-live');
+    await expect(controller.handle({ type: 'set_model', provider: 'mock', modelId: 'old-configured' })).resolves.toMatchObject({ success: true });
+    const replacement = new MockProvider({ type: 'mock', model: 'new-configured' });
+    const newDiscovery = vi.spyOn(replacement, 'getAvailableModels').mockResolvedValue(['new-live']);
+    context.providers.set('mock', replacement);
+    const current = await ids();
+    expect(current).toContain('new-live');
+    expect(current).toContain('new-configured');
+    expect(current).not.toContain('old-live');
+    expect(current).not.toContain('old-configured');
+    await expect(controller.handle({ type: 'set_model', provider: 'mock', modelId: 'old-live' })).resolves.toMatchObject({ success: false });
+    expect(replacement.getConfiguredModel()).toBe('new-configured');
+    context.providers.delete('mock');
+    expect(await ids()).toEqual([]);
+    expect(oldDiscovery).toHaveBeenCalledTimes(1);
+    expect(newDiscovery).toHaveBeenCalledTimes(1);
+    await controller.close();
+  });
+
+  it('refuses retired in-flight discovery without clearing a replacement adapter cache', async () => {
+    const { controller, context } = createController();
+    let release!: (models: string[]) => void;
+    vi.spyOn(context.provider, 'getAvailableModels').mockImplementation(() => new Promise(resolve => { release = resolve; }));
+    context.providers = new Map([['mock', context.provider]]);
+    await controller.initialize();
+    const retired = controller.handle({ type: 'set_model', provider: 'mock', modelId: 'private-retired-live' });
+    const joinedRetired = controller.handle({ type: 'get_available_models' });
+    const replacement = new MockProvider({ type: 'mock', model: 'new-configured' });
+    let releaseCurrent!: (models: string[]) => void;
+    const discovery = vi.spyOn(replacement, 'getAvailableModels').mockImplementation(() => new Promise(resolve => { releaseCurrent = resolve; }));
+    context.providers.set('mock', replacement);
+    const current = controller.handle({ type: 'get_available_models' });
+    release(['private-retired-live']);
+    for (const request of [retired, joinedRetired]) {
+      await expect(request).resolves.toMatchObject({ success: false, error: 'Model catalogue changed during discovery.' });
+    }
+    expect(context.provider.getConfiguredModel()).toBe('mock-model');
+    const joinedCurrent = controller.handle({ type: 'get_available_models' });
+    expect(discovery).toHaveBeenCalledTimes(1);
+    releaseCurrent(['new-live']);
+    for (const request of [current, joinedCurrent]) {
+      await expect(request).resolves.toMatchObject({ success: true, data: { models: expect.arrayContaining([expect.objectContaining({ id: 'new-live' })]) } });
+    }
+    const cached = await controller.handle({ type: 'get_available_models' });
+    expect(JSON.stringify(cached)).not.toContain('private-retired-live');
+    expect(discovery).toHaveBeenCalledTimes(1);
+    await controller.close();
+  });
+
   it.each([false, true])('respects discovery capability independently of availability (configured=%s)', async configured => {
     const { controller, context } = createController();
     vi.spyOn(context.provider, 'validateConfig').mockReturnValue(configured);

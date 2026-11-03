@@ -390,6 +390,7 @@ export class RpcController {
   private runFailure?: unknown;
   private runAccepting = false;
   private activeBash?: ActiveBash;
+  private modelSources?: ReadonlyMap<string, AiProvider>;
   private modelCache?: {
     expiresAt: number;
     models: Array<Record<string, unknown> & { provider: string; id: string }>;
@@ -1882,24 +1883,40 @@ export class RpcController {
     return name === this.context.providerName ? this.context.provider : undefined;
   }
 
+  private hasModelSources(sources: ReadonlyMap<string, AiProvider>): boolean {
+    const providers = this.context.providers ?? new Map([[this.context.providerName, this.context.provider]]);
+    return providers.size === sources.size && [...sources].every(([name, provider]) => providers.get(name) === provider);
+  }
+
   private async availableModels(): Promise<Array<Record<string, unknown> & { provider: string; id: string }>> {
     const cacheMs = this.context.modelDiscoveryCacheMs ?? 30_000;
     if (!Number.isSafeInteger(cacheMs) || cacheMs < 0) {
       throw new Error('modelDiscoveryCacheMs must be a non-negative safe integer.');
     }
+    if (!this.modelSources || !this.hasModelSources(this.modelSources)) {
+      this.modelSources = new Map(this.context.providers ?? [[this.context.providerName, this.context.provider]]);
+      this.modelCache = undefined;
+      this.modelDiscovery = undefined;
+    }
+    const sources = this.modelSources;
     if (cacheMs > 0 && this.modelCache && this.modelCache.expiresAt >= Date.now()) return this.modelCache.models;
     if (this.modelDiscovery) return this.modelDiscovery;
-    this.modelDiscovery = this.discoverAvailableModels();
-    try {
-      const models = await this.modelDiscovery;
+    const discovery = this.discoverAvailableModels(sources).then(models => {
+      if (this.modelSources !== sources || !this.hasModelSources(sources)) {
+        throw new Error('Model catalogue changed during discovery.');
+      }
       this.modelCache = { expiresAt: Date.now() + cacheMs, models };
       return models;
+    });
+    this.modelDiscovery = discovery;
+    try {
+      return await discovery;
     } finally {
-      this.modelDiscovery = undefined;
+      if (this.modelDiscovery === discovery) this.modelDiscovery = undefined;
     }
   }
 
-  private async discoverAvailableModels(): Promise<Array<Record<string, unknown> & { provider: string; id: string }>> {
+  private async discoverAvailableModels(providers: ReadonlyMap<string, AiProvider>): Promise<Array<Record<string, unknown> & { provider: string; id: string }>> {
     if (!this.context.offline && this.context.providerModels) {
       const supplied = await this.context.providerModels();
       return supplied.filter((value): value is Record<string, unknown> & { provider: string; id: string } => (
@@ -1910,7 +1927,6 @@ export class RpcController {
       ));
     }
 
-    const providers = this.context.providers ?? new Map([[this.context.providerName, this.context.provider]]);
     const states = await Promise.all([...providers].map(async ([providerName, provider]) => {
       let configured = false;
       try { configured = provider.validateConfig(); } catch { /* Invalid providers remain listed but unavailable. */ }
@@ -1923,7 +1939,7 @@ export class RpcController {
       return {
         provider: providerName,
         configured,
-        configuredModel: providerName === this.context.providerName && this.model
+        configuredModel: provider === this.context.provider && providerName === this.context.providerName && this.model
           ? this.model
           : provider.getConfiguredModel(),
         discoveredModels,
