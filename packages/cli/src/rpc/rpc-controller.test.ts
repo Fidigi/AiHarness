@@ -810,7 +810,13 @@ describe('RPC command controller', () => {
     await expect(controller.handle({ type: 'set_model', provider: 'mock', modelId: 'old-configured' })).resolves.toMatchObject({ success: true });
     const replacement = new MockProvider({ type: 'mock', model: 'new-configured' });
     const newDiscovery = vi.spyOn(replacement, 'getAvailableModels').mockResolvedValue(['new-live']);
+    const retiredSelection = controller.handle({ type: 'set_model', provider: 'mock', modelId: 'old-live' });
+    const retiredCycle = controller.handle({ type: 'cycle_model' });
     context.providers.set('mock', replacement);
+    for (const request of [retiredSelection, retiredCycle]) {
+      await expect(request).resolves.toMatchObject({ success: false, error: 'Model catalogue changed during selection.' });
+    }
+    expect(original.getConfiguredModel()).toBe('old-configured');
     const current = await ids();
     expect(current).toContain('new-live');
     expect(current).toContain('new-configured');

@@ -733,7 +733,9 @@ export class RpcController {
           const provider = requiredString(request.provider, 'provider');
           const modelId = requiredString(request.modelId, 'modelId');
           const selected = this.configuredProvider(provider);
+          const sources = new Map(this.context.providers ?? [[this.context.providerName, this.context.provider]]);
           const available = await this.availableModels();
+          if (!this.hasModelSources(sources)) return failure(id, command, 'Model catalogue changed during selection.');
           if (!selected || !available.some(model => model.provider === provider && model.id === modelId)) {
             return failure(id, command, `Model not found: ${provider}/${modelId}`);
           }
@@ -741,7 +743,9 @@ export class RpcController {
           return success(id, command, createProtocolModelDescriptor(provider, modelId, selected.getModelApi?.(modelId), getProviderPublishedModels(selected)));
         }
         case 'cycle_model': {
+          const sources = new Map(this.context.providers ?? [[this.context.providerName, this.context.provider]]);
           const available = await this.availableModels();
+          if (!this.hasModelSources(sources)) return failure(id, command, 'Model catalogue changed during selection.');
           const explicitScope = this.context.scopedModels ?? [];
           const scoped = explicitScope.length > 0
             ? explicitScope.flatMap(candidate => {
