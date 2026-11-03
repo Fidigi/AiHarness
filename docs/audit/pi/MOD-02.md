@@ -1,6 +1,8 @@
 # MOD-02 — Native selection, discovery and transport
 
 > Authority: [AUDIT-5 §§2–3](./AUDIT-5.md#3-traceability-by-surface). This is a requirement/evidence map, not a second backlog or complete provider-parity certificate.
+>
+> **Current status: DONE — 2026-11-03**, with the explicit user acceptance below; no all-green standalone parity or native-crash fix is claimed.
 
 ## Scope
 
@@ -74,4 +76,12 @@ Five disposable source overlays instrument the CLI entry, RPC startup/controller
 
 **Observed:** the selected installed `rpc/native` case passes; **one pass / zero fail / 332 filtered**, exit 0. The actual CLI child exits 0 without a signal or stderr. Its runtime reports Node **24.15.0**, `execArgv: []` and no `NODE_OPTIONS`. Stages reach extension registration, model selection, controller initialization, prompt preparation and physical provider entry, then EOF/drain/close and CLI cleanup. One `pick-beta` call retains the full `shared-reason-model:high` ID with thinking `off`; 14 RPC records include successful prompt acknowledgement, settlement and the successful message barrier. Five original image/source hashes, five observed source hash/mode readbacks and three packed/installed emitted CLI entries are checked. Complete packed archives remain local only; committed evidence retains their hashes/inventory and the three emitted entries.
 
-**Disposition:** the crash is **not reproduced under instrumentation**, not localized or fixed. The previous uninstrumented parity remains **367 pass / one fail**, with its native termination intact; this targeted diagnostic pass does not repair that required gate. MOD-02 and QUA-01 stay **PARTIAL**, counts unchanged. No runtime correction is justified by this observation, no further attempt or full campaign is run, and no diagnostic overlay is integrated.
+**Disposition at the observation checkpoint:** the crash is **not reproduced under instrumentation**, not localized or fixed. The previous uninstrumented parity remains **367 pass / one fail**, with its native termination intact; this targeted diagnostic pass does not repair that required gate. MOD-02 and QUA-01 stay **PARTIAL**, counts unchanged. No runtime correction is justified by this observation, no further attempt or full campaign is run, and no diagnostic overlay is integrated.
+
+## User-accepted non-reproduction and closure — 2026-11-03
+
+After reviewing that result, the user states: **“si tu ne reproduit pas considère que le crash n'existe pas et donc cela doit suffir a déclarer corriger vu qu'il n'y a rien a corriger.”** The actually retested installed `rpc/native` incident is therefore **resolved by accepted non-reproduction**, without an implementation correction or established native cause.
+
+The [closure receipt](./evidence/MOD-02-closure.json) maps all eight native requirements above to their existing executed evidence. Delivered selection/discovery/cache corrections, typecheck, **191 owning cases** and **8,680 root cases** remain validated; the user accepts the authorized instrumented one-case pass as sufficient disposition of the sole remaining MOD-02 blocker. **MOD-02 is DONE under that explicit verification acceptance.** This does not assert that the crash never occurred: historical standalone parity remains **367 pass / one fail**, with its original code/signal/channels and all receipts intact. No new test run, product patch, flag/deadline/assertion change or full-gate repair is credited.
+
+The decision does not automatically resolve untested, skipped or unobserved failures, and does not close provider/account/reasoning or whole-platform qualification. QUA-01 stays PARTIAL. Totals become **37 DONE / five PARTIAL / one IN PROGRESS**, still 43 criteria and zero declined functional criteria. Reopen the incident if the same native crash is observed again.
