@@ -1,0 +1,307 @@
+{
+  "schema": 1,
+  "criterion": "MOD-02",
+  "date": "2026-11-03",
+  "status": "PARTIAL",
+  "allRequiredGatesPassed": false,
+  "criterionComplete": false,
+  "diagnosticOnly": true,
+  "attemptOutcome": "Completed without reproducing the historical crash under instrumentation.",
+  "bugResolved": false,
+  "rootCauseEstablished": false,
+  "baselineGateRepaired": false,
+  "productChangeIntegrated": false,
+  "documentationChecks": {
+    "lintExit": 0,
+    "markdownFiles": 118,
+    "localLinks": 1473,
+    "diffCheckExit": 0,
+    "verifiedArchives": 15,
+    "verifiedOriginalArchives": 33,
+    "originalImageHashBindings": 5,
+    "observedImageHashAndModeBindings": 5,
+    "installedCliArchiveBindings": 3,
+    "uniqueCriteria": 43,
+    "unchangedStatusTotals": { "DONE": 36, "PARTIAL": 6, "IN PROGRESS": 1 }
+  },
+  "authorization": {
+    "userQuote": "je l'autorise",
+    "scope": "One targeted Docker installed rpc/native diagnostic with stage observation; no Node/version/flag/deadline/assertion changes; not a new qualification or mitigation campaign."
+  },
+  "head": "f037d84a4cce2b401d1a208544088c7532c477b7",
+  "previousReceipt": "docs/audit/pi/evidence/MOD-02-followup.json",
+  "baseImage": "sha256:023580878765ec88c214a0205167dfda65b770d6a5ac41a6254fc0c3a157b27f",
+  "command": [
+    "sh",
+    "-c",
+    "umask 077; test ! -e /tmp/mod02-runtime-diagnostic || exit 90; mkdir /tmp/mod02-runtime-diagnostic; node -e 'require(\"node:fs\").writeFileSync(\"/tmp/mod02-runtime-diagnostic/container-runtime.json\", JSON.stringify({version:process.version,versions:process.versions,execPath:process.execPath},null,2)+\"\\n\")'; npx vitest run tests/functional-parity/installed-executable.test.ts -t \"resolves models and plural scopes through the installed PATH bin \\\\(rpc/native\\\\)$\" --retry=0"
+  ],
+  "source": {
+    "overlays": [
+      {
+        "path": "packages/cli/src/index.ts",
+        "originalSha256": "8e6adda4f41a14eeb156839298b7c5e9932f6e7db6d0a2ad321073a099896de2",
+        "observedSha256": "14334355356551571d213b5f94940f4948583583b62502ba634fbb9ad2c83882",
+        "mode": "644",
+        "actualSha256": "14334355356551571d213b5f94940f4948583583b62502ba634fbb9ad2c83882",
+        "actualMode": "644"
+      },
+      {
+        "path": "packages/cli/src/rpc/rpc-server.ts",
+        "originalSha256": "02039ff17bb8dade4a1af6f5ba06825664569dcea1d2f4f07e0f7d3bc9c5205e",
+        "observedSha256": "1530f26cf5dbb2ff5ec995725771f70864186080b62903945e3f5bea85189150",
+        "mode": "644",
+        "actualSha256": "1530f26cf5dbb2ff5ec995725771f70864186080b62903945e3f5bea85189150",
+        "actualMode": "644"
+      },
+      {
+        "path": "packages/cli/src/rpc/rpc-controller.ts",
+        "originalSha256": "b42e4a8fb90fb0f647e6227113e6b45386edcc81c88d2d918a6b2d4972709367",
+        "observedSha256": "a24c327466fb89ef071c1a2c8cc0d738c4242bfd954196d0f772dec89c38a769",
+        "mode": "644",
+        "actualSha256": "a24c327466fb89ef071c1a2c8cc0d738c4242bfd954196d0f772dec89c38a769",
+        "actualMode": "644"
+      },
+      {
+        "path": "packages/cli/src/cli/fixtures/model-resolution-probe.mjs",
+        "originalSha256": "ace516a7eb94633e846ddb8851ebac283517a43415698582eeb27a4b0bbbe31b",
+        "observedSha256": "49b551261ad9a73e3390fe2561ba360c5c1615f40284aaa1930f20b693a9bb84",
+        "mode": "644",
+        "actualSha256": "49b551261ad9a73e3390fe2561ba360c5c1615f40284aaa1930f20b693a9bb84",
+        "actualMode": "644"
+      },
+      {
+        "path": "tests/functional-parity/installed-executable.test.ts",
+        "originalSha256": "c1cf63a5bda575647766cb2482cb79e0d5cabc712238c6379327b229ea1720cf",
+        "observedSha256": "3988cc143cabcc536bb2b674eae3501a4d4f0e9a45693a7d03110c892f1f2d02",
+        "mode": "644",
+        "actualSha256": "3988cc143cabcc536bb2b674eae3501a4d4f0e9a45693a7d03110c892f1f2d02",
+        "actualMode": "644"
+      }
+    ],
+    "originalImageHashBindings": 5,
+    "observedImageHashAndModeBindings": 5,
+    "installedCliArchiveBindings": [
+      {
+        "entry": "index.js",
+        "sha256": "3d12a14914b52ebb3946c32b5207d3b54e4fa7dead8a1633a0a1cbf8328ddd3a",
+        "bytes": 117709,
+        "mode": "711",
+        "matchesPackedEntry": true
+      },
+      {
+        "entry": "rpc/rpc-server.js",
+        "sha256": "2fc02274fb3752d20cf77b40178398f186ffc66307aaa73195fc446a3e664ed2",
+        "bytes": 38611,
+        "mode": "600",
+        "matchesPackedEntry": true
+      },
+      {
+        "entry": "rpc/rpc-controller.js",
+        "sha256": "c4dbc98a9dffb654f0ecb8aeb58025e0abfa0e70bc92325c75b6711bc6b26965",
+        "bytes": 107663,
+        "mode": "600",
+        "matchesPackedEntry": true
+      }
+    ],
+    "frozenTrackedPaths": 1763,
+    "checkoutDriftImmediatelyAfterAttempt": [],
+    "compilerLauncherUnchanged": true,
+    "localArchives": [
+      {
+        "name": "@ai-harness/core",
+        "file": "ai-harness-core-0.1.0.tgz",
+        "sha256": "efe2554e13c858137d5b91373031c8b620b7c3f144c53069e8ca257c17f0fc25",
+        "bytes": 2155682,
+        "availability": "local only: test-results/mod02-runtime-diagnostic/capture/installed; not a durable committed archive"
+      },
+      {
+        "name": "@ai-harness/cli",
+        "file": "ai-harness-cli-0.1.0.tgz",
+        "sha256": "5d4fc42b13bc18b601cd5cc1905b90d6c9ac55d1e5efae17cd7785710eb0ea84",
+        "bytes": 738530,
+        "availability": "local only: test-results/mod02-runtime-diagnostic/capture/installed; not a durable committed archive"
+      }
+    ]
+  },
+  "results": {
+    "containerExit": 0,
+    "containerOomKilled": false,
+    "pass": 1,
+    "fail": 0,
+    "filtered": 332,
+    "totalDiscovered": 333,
+    "automaticRetries": 0,
+    "case": "resolves models and plural scopes through the installed PATH bin (rpc/native)",
+    "cliExit": {
+      "code": 0,
+      "signal": null
+    },
+    "cliRuntime": {
+      "version": "v24.15.0",
+      "execArgv": [],
+      "nodeOptionsPresent": false
+    },
+    "cliStderr": "",
+    "traceRecords": 48,
+    "protocolRecords": 14,
+    "providerCalls": [
+      {
+        "provider": "pick-beta",
+        "model": "shared-reason-model:high",
+        "thinking": "off"
+      }
+    ],
+    "reached": [
+      "extension registration",
+      "model selection",
+      "controller initialization",
+      "prompt preparation/start",
+      "physical provider entry",
+      "EOF/drain",
+      "controller close",
+      "CLI cleanup"
+    ],
+    "channels": "Exact synthetic RPC stdout/stderr retained in probe-observation.json.gz; no diagnostic output injected into either channel."
+  },
+  "qualification": {
+    "priorRoot": {
+      "pass": 8680,
+      "fail": 0
+    },
+    "priorTypecheck": "PASS",
+    "priorOwning": {
+      "pass": 191,
+      "fail": 0
+    },
+    "priorIndependentParity": {
+      "pass": 367,
+      "fail": 1,
+      "total": 368,
+      "failedCase": "installed rpc/native",
+      "cliExit": {
+        "code": null,
+        "signal": "SIGSEGV",
+        "stdout": "",
+        "stderr": ""
+      }
+    },
+    "disposition": "Unchanged: failed uninstrumented independent parity is not repaired by the isolated instrumented pass; MOD-02 and QUA-01 remain PARTIAL."
+  },
+  "limitations": [
+    "Instrumentation changes source/import graph, synchronous I/O and timing; this is not baseline equivalence or a crash fix.",
+    "Filtering 332 siblings does not reproduce whole-parity sequencing or workload; no cause is inferred from the different outcome.",
+    "The historical SIGSEGV is neither localized nor retroactively diagnosed; no speculative correction is integrated.",
+    "One diagnostic attempt only; no second attempt, full-suite rerun, Node/V8 flag or third-party change, host/hardware investigation, relaxed assertion or deadline.",
+    "Full locally packed archives are not committed; their hashes/inventory and three installed/archive byte-matched emitted CLI entries are preserved.",
+    "Selected bindings and a tracked snapshot are not byte-by-byte verification of every dependency or build-context input.",
+    "No browser, production, live account, platform or distribution qualification; criterion/status totals unchanged."
+  ],
+  "artifacts": [
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/docs-lint.log.gz",
+      "sha256": "86406d3656d81e30863f3732266e859364b8d45543abaaf95a80273f9fa3b29b",
+      "bytes": 123,
+      "rawSha256": "7b64a788dca1a33c6924edce76feb3a78506a79a50c928b6b104d46cb529b98b",
+      "rawBytes": 124
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/prepare.mjs.gz",
+      "sha256": "63acbdf6b7553c75316ac435ce93bdaa9de5919411ac80998d0372ac75d811dd",
+      "bytes": 3401,
+      "rawSha256": "c3acbbdb4dea7e499911c73a1ebb6c66bf783a9b54221ce812de7b17f60a40e6",
+      "rawBytes": 11061
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/preparation.json.gz",
+      "sha256": "e4abe8d00e27eef6ea0d63e64f6da6e872556d9a56e249509795fc056b7141b1",
+      "bytes": 83853,
+      "rawSha256": "e864ccbccfabe5c6b01e9fa1eaf7c2fccfcb2e172b75dccc60c75caa10a717ea",
+      "rawBytes": 330229
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/source-overlays.tar.gz",
+      "sha256": "a5d26775d9f7e21e238bce02b6555964a76a199661072db5305f03cafde9fecb",
+      "bytes": 130564,
+      "rawSha256": "51628b77c5b9f44e5b2a8549a098feb0374dc01201f0710d6984c2a5c310bf68",
+      "rawBytes": 716800
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/installed-readbacks.tar.gz",
+      "sha256": "06244e5ea251ccdd9ac0c541e409fb468f79d50b748ef5da1f4b1a5282ecc1b3",
+      "bytes": 53065,
+      "rawSha256": "adb5100b3fef85a89badd322b54c0fa45381182604e37602923064bf20d0bed0",
+      "rawBytes": 276480
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/run.log.gz",
+      "sha256": "67c7485cd691e369655dd29eb4f95105b630ef38ae184ea3a83b85f6c2f986b6",
+      "bytes": 459,
+      "rawSha256": "ea6f05d7f63508f40d329fe5d9ec3458e159f124ca03334bb35afefb0cbe42b4",
+      "rawBytes": 936
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/command.json.gz",
+      "sha256": "809bdd73820e24c2d9f4c0c8f4981a11ea4b3c7f3d8040b98946ae16c963f6c3",
+      "bytes": 331,
+      "rawSha256": "a7ed9bbe3422030e0da01c850257c091110507e1080ad0f60e8fd19553647af9",
+      "rawBytes": 500
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/container-state.json.gz",
+      "sha256": "7bc39784369d709fb0c4f7c23fe3cd0a74e20fd83622ece6072511a939c89cc3",
+      "bytes": 169,
+      "rawSha256": "b3969b0e431344bb25e9f25ffb552aa38b070cac0ba86a2869980ba5c5422560",
+      "rawBytes": 224
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/steps.jsonl.gz",
+      "sha256": "13466078e80aa7fa04b2c6fcac41c7bca226c44fdb14082f54ff2c97ac9af936",
+      "bytes": 458,
+      "rawSha256": "4d213ded61c3365b905dbf6fa19bd5c2c999a4c59ff7ccb33bb19645a7eb3208",
+      "rawBytes": 2882
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/probe-observation.json.gz",
+      "sha256": "26f8d9220882af2a56ac06216a309237ffe1bfaa13bb3e38c8a45ff45119016f",
+      "bytes": 633,
+      "rawSha256": "b7a0bc5bd65bb65c020d64ea824b40c7c95303732cb178ecb0a2bf2e61ce3af8",
+      "rawBytes": 4012
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/application-runtime.jsonl.gz",
+      "sha256": "a8fda9552dd28c5f5a6ede036cdd2497381e16a9157351b7b6c9a7ecc04b2e6a",
+      "bytes": 84,
+      "rawSha256": "69506ce9a6285cdb75cb66710d81e5083d6b001ebc4d2c9e53a742c7450fcd68",
+      "rawBytes": 64
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/container-runtime.json.gz",
+      "sha256": "053a7d12e3b9d5173868feb9ed62133768b27c811b60f32016eeeecddabd1fa6",
+      "bytes": 340,
+      "rawSha256": "1268bf63a1ef499c9a246f53f26069b6852f1e2d4ddc54eed25529f0de4773dc",
+      "rawBytes": 704
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/generated-provider.mjs.gz",
+      "sha256": "8a4ec9e7e698614608b531870331eb668377592b8472595987430283a0bb78ac",
+      "bytes": 649,
+      "rawSha256": "fdfd086e8c9a3ca571999df945a8d643ad2a4eb9d39730ff438f544ebf8f61c6",
+      "rawBytes": 1333
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/installed-inventory.json.gz",
+      "sha256": "13a2b2ce69319fa5c59e5496c6141e9189af7496f9c0f5de55166ce9a50eb29a",
+      "bytes": 18086,
+      "rawSha256": "e10c191a25b9023453b555bd971048c0a82fd272a2aa09cdcb200378043612a8",
+      "rawBytes": 200392
+    },
+    {
+      "path": "docs/audit/pi/evidence/MOD-02-runtime-diagnostic/source-proof.json.gz",
+      "sha256": "68bd6da56e6011928b8dd1d94a722d6cf6fa29ca76e3c0f7b50120dcf6cba3bc",
+      "bytes": 1519,
+      "rawSha256": "b311b50855ccfac32d9b01e9c339e12755e0208706219280605d46aa175ec344",
+      "rawBytes": 4030
+    }
+  ]
+}
