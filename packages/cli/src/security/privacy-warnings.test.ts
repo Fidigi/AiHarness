@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { JsonlSessionStore, SessionManager } from '@ai-harness/core';
+import { JsonlSessionStore, SessionManager, SESSION_EXPORT_CONTINUATION_WARNING } from '@ai-harness/core';
 import { CommandHandler } from '../commands/handler.js';
 import type { TerminalUI } from '../tui/terminal-ui.js';
 import { DIAGNOSTIC_PRIVACY_WARNING, EXPORT_PRIVACY_WARNING, SHARE_PRIVACY_WARNING } from './privacy-warnings.js';
@@ -71,6 +71,51 @@ describe('value-free privacy warning policy', () => {
     expect(await readFile(destination, 'utf8')).toContain(unknown);
     expect((await stat(destination)).mode & 0o777).toBe(0o600);
     expect(output.join('')).toContain('Exported session');
+  });
+
+  it('warns before expurgated JSON/JSONL publication and includes opaque data only in explicitly complete JSON', async () => {
+    const session = manager.list()[0]!;
+    await manager.addMessage(session.id, { role: 'assistant', content: 'Visible answer',
+      blocks: [{ type: 'reasoning', text: 'Visible summary', thinkingSignature: 'opaque-reasoning' },
+        { type: 'text', text: 'Visible answer', textSignature: 'opaque-text' }],
+      toolCalls: [{ id: 'tool-1', name: 'read', input: { signature: 'ordinary-data' }, thoughtSignature: 'opaque-tool' }],
+      metadata: { signature: 'ordinary-metadata' } });
+    const before = JSON.stringify(manager.get(session.id));
+    for (const [format, complete] of [['json', false], ['json', true], ['jsonl', false]] as const) {
+      warnings.length = 0;
+      const destination = path.join(root, `${format}-${complete}.${format}`);
+      await handler(warning => { expect(existsSync(destination)).toBe(false); warnings.push(warning); })
+        .execute(`/export ${format} ${complete ? '--include-opaque-continuations ' : ''}${JSON.stringify(destination)}`);
+      expect(errors).toEqual([]);
+      expect(warnings).toEqual(complete ? [EXPORT_PRIVACY_WARNING] : [EXPORT_PRIVACY_WARNING, SESSION_EXPORT_CONTINUATION_WARNING]);
+      const bytes = await readFile(destination, 'utf8');
+      expect(bytes.includes('opaque-tool')).toBe(complete);
+      expect(bytes).toContain('ordinary-data'); expect(bytes).toContain('Visible answer');
+      if (format === 'json') {
+        expect(bytes.includes('opaque-reasoning')).toBe(complete);
+        expect(bytes.includes('opaque-text')).toBe(complete);
+        expect(bytes).toContain('ordinary-metadata');
+        expect(JSON.parse(bytes).exportWarning).toBe(complete ? undefined : SESSION_EXPORT_CONTINUATION_WARNING);
+      }
+      expect(JSON.stringify(manager.get(session.id))).toBe(before);
+      expect(warnings.join('')).not.toContain('opaque-'); expect(warnings.join('')).not.toContain(unknown);
+    }
+  });
+
+  it.each(['json --include-opaque-continuations=false', 'json --include-opaque-continuations --include-opaque-continuations',
+    'markdown --include-opaque-continuations', 'jsonl --include-opaque-continuations', 'json result.json --include-opaque-continuations'])
+  ('refuses malformed or non-JSON complete options without warning or publication: %s', async command => {
+    await handler().execute('/export '+command);
+    expect(output.join('')).toContain('Usage: /export'); expect(warnings).toEqual([]);
+    expect(existsSync(path.join(root, 'result.json'))).toBe(false);
+  });
+
+  it('does not publish when the continuation warning sink fails', async () => {
+    await manager.addMessage(manager.list()[0]!.id, { role: 'assistant', content: 'Visible answer',
+      blocks: [{ type: 'reasoning', text: '', thinkingSignature: 'opaque-reasoning', redacted: true }] });
+    await handler(warning => { if (warning === SESSION_EXPORT_CONTINUATION_WARNING) throw new Error('disposable warning failure'); })
+      .execute('/export json result.json');
+    expect(existsSync(path.join(root, 'result.json'))).toBe(false); expect(errors).toEqual(['Command failed.']);
   });
 
   it('does not emit a publication notice for an unsupported export format', async () => {

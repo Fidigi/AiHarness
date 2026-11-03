@@ -23,6 +23,7 @@ import {
   McpOAuthFlowService,
   ProviderCredentialService,
   serializeSession,
+  serializeSessionForExport,
   SessionBranchCancelledError,
 } from '@ai-harness/core';
 import type { AgentSettings, Session, SessionManager } from '@ai-harness/core';
@@ -989,14 +990,25 @@ export function createApp(config?: ServerConfig): express.Application {
       return;
     }
     const format = req.query.format === 'markdown' ? 'markdown' : 'json';
+    if (req.query.includeOpaqueContinuations !== undefined
+      && (format !== 'json' || typeof req.query.includeOpaqueContinuations !== 'string'
+        || !['true', 'false'].includes(req.query.includeOpaqueContinuations))) {
+      res.status(400).json({ error: 'Invalid complete-export option.' });
+      return;
+    }
     const maximumBytes = 64 * 1024 * 1024;
     let payload: string;
+    let continuationWarning: string | undefined;
     try {
       if (format === 'json') {
-        const serialized = serializeSession(session);
-        const { messages, commands, ...metadata } = serialized;
+        const exported = serializeSessionForExport(session, {
+          includeOpaqueContinuations: req.query.includeOpaqueContinuations === 'true',
+        });
+        continuationWarning = exported.warning;
+        const { messages, commands, ...metadata } = exported.session;
         payload = JSON.stringify({
           ...redactor.redactJson(metadata),
+          ...(continuationWarning ? { exportWarning: continuationWarning } : {}),
           messages: messages.map(message => redactor.redactJson(message)),
           ...(commands ? { commands: commands.map(command => redactor.redactJson(command)) } : {}),
         }, null, 2);
@@ -1024,6 +1036,7 @@ export function createApp(config?: ServerConfig): express.Application {
     }
     const safeName = redactor.redact(session.title || session.id).replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 80)
       || 'session';
+    if (continuationWarning) res.setHeader('X-AiHarness-Export-Warning', continuationWarning);
     res.setHeader('Content-Disposition', `attachment; filename="${safeName}.${format === 'json' ? 'json' : 'md'}"`);
     res.type(format === 'json' ? 'application/json' : 'text/markdown').send(payload);
   });

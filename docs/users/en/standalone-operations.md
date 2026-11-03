@@ -35,6 +35,8 @@ Output must be explicitly named inside the current workspace and have the matchi
 
 Exports reuse the existing slash-command exporter and Core stable writer. HTML is standalone and escaped; JSON/Markdown retain their existing projection semantics. JSONL is one message per line, not a complete v2 session journal or backup of abandoned branches. JSON provides the richer active-session projection. Shared serialization removes provider-config secret fields; the shared redactor copies/scrubs known environment and encrypted provider credentials. This is not automatic detection of every arbitrary secret in conversation text.
 
+JSON omits typed opaque continuation data by default and warns when native continuation may be lost. To retain it explicitly, use `--format json --include-opaque-continuations` (or `/export json --include-opaque-continuations [path]`). This option is JSON-only; JSONL remains expurgated. Registered credentials remain excluded in both modes, and complete JSON does not guarantee compatible provider/account/model replay after import.
+
 A fixed [privacy warning](./cli-security.md) is emitted on stderr before the slash export's destination/publication step. It contains no transcript, path or credential values and does not claim arbitrary-secret removal. Only a fixed publication acknowledgement reaches stdout, never the transcript/title/path. Failures return 1 without success confirmation; publication failure does not imply unchanged disk. Check the selected output if publication fails. Help/success returns 0; malformed/unknown/conflicting arguments return 2 before startup.
 
 This contract does not provide browser/PKCE provider login, broader provider interoperability, complete journal backups or cross-platform distribution guarantees.

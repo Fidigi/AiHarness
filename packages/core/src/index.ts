@@ -295,6 +295,8 @@ export { getSessionAccounting } from './sessions/session-accounting.js';
 export type { SessionAccounting, SessionUsageAccounting } from './sessions/session-accounting.js';
 export {
   serializeSession,
+  serializeSessionForExport,
+  SESSION_EXPORT_CONTINUATION_WARNING,
   deserializeSession,
   redactProviderConfig,
 } from './sessions/serialization.js';

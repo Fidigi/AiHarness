@@ -13,6 +13,8 @@ export interface ToolCall {
   id: string;
   name: string;
   input: unknown;
+  /** Sensitive opaque native continuation data, not a fabricated or portable signature. */
+  thoughtSignature?: string;
 }
 
 /** Normalized token and cost accounting. All counters are optional when unavailable. */
@@ -27,8 +29,8 @@ export interface TokenUsage {
 
 /** Rich message blocks. `Message.content` remains the plain-text compatibility view. */
 export type MessageContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'reasoning'; text: string; durationMs?: number }
+  | { type: 'text'; text: string; textSignature?: string }
+  | { type: 'reasoning'; text: string; durationMs?: number; thinkingSignature?: string; redacted?: boolean }
   | {
       type: 'image';
       mediaType: string;
@@ -39,7 +41,7 @@ export type MessageContentBlock =
       width?: number;
       height?: number;
     }
-  | { type: 'tool_call'; id: string; name: string; input: unknown }
+  | { type: 'tool_call'; id: string; name: string; input: unknown; thoughtSignature?: string }
   | {
       type: 'tool_result';
       toolCallId: string;

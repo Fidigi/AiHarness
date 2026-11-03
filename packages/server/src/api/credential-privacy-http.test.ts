@@ -3,7 +3,8 @@ import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { expect, it, vi } from 'vitest';
-import { start, stop } from '../index.js';
+import { SESSION_EXPORT_CONTINUATION_WARNING, type Session } from '@ai-harness/core';
+import { getSessionManager, start, stop } from '../index.js';
 
 it('scrubs a genuinely configured provider credential through streaming, children, journals, shares and exports', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-privacy-http-'));
@@ -34,6 +35,45 @@ it('scrubs a genuinely configured provider credential through streaming, childre
     expect((await post('/api/config', { type: 'local', apiKey: secret, model: 'privacy-model',
       baseUrl: `http://127.0.0.1:${(provider.address() as { port: number }).port}/v1` })).status).toBe(200);
     expect(await readFile(path.join(dataDir, 'credentials.enc'), 'utf8')).not.toContain(secret);
+    // Use the active runtime lifecycle; credential-safe journal bytes are the export source.
+    const external: Session = { id: 'opaque-export', cwd, title: 'Opaque export',
+      createdAt: new Date(), updatedAt: new Date(),
+      providerConfig: { type: 'local', apiKey: secret }, metadata: { signature: 'ordinary-metadata', secretCopy: secret },
+      messages: [{ id: 'opaque-message', role: 'assistant', content: `Visible answer ${secret}`, timestamp: new Date(),
+        blocks: [{ type: 'text', text: 'Visible answer', textSignature: 'opaque-text' },
+          { type: 'reasoning', text: 'Visible summary', thinkingSignature: `opaque-${secret}` },
+          { type: 'reasoning', text: '', redacted: true, thinkingSignature: 'b3BhcXVlLWVuY3J5cHRlZA==' },
+          { type: 'tool_call', id: 'call-1', name: 'read', input: { signature: 'argument-data' }, thoughtSignature: 'opaque-tool' }],
+        toolCalls: [{ id: 'call-1', name: 'read', input: { signature: 'argument-data' }, thoughtSignature: 'opaque-call' }] }],
+    };
+    const manager = await getSessionManager();
+    await manager.create(external);
+    const externalFile = path.join(dataDir, 'sessions', 'opaque-export.jsonl'), before = await readFile(externalFile);
+    expect(before.toString()).not.toContain(secret);
+    expect(before.toString()).toContain('"thinkingSignature"');
+    expect(manager.get(external.id)?.messages[0]?.blocks?.[0]).toEqual({
+      type: 'text', text: 'Visible answer', textSignature: 'opaque-text',
+    });
+    for (const option of ['', '&includeOpaqueContinuations=false', '&includeOpaqueContinuations=true']) {
+      const complete = option.endsWith('=true');
+      const exported = await fetch(`${base}/api/sessions/opaque-export/export?format=json${option}`);
+      expect(exported.status).toBe(200); expect(exported.headers.get('cache-control')).toBe('no-store');
+      expect(exported.headers.get('content-disposition')).toContain('attachment');
+      expect(exported.headers.get('x-aiharness-export-warning')).toBe(complete ? null : SESSION_EXPORT_CONTINUATION_WARNING);
+      const bytes = await exported.text(); expect(bytes).not.toContain(secret); expect(bytes).toContain('[REDACTED]');
+      for (const opaque of ['opaque-text', 'opaque-tool', 'opaque-call', 'b3BhcXVlLWVuY3J5cHRlZA==']) expect(bytes.includes(opaque)).toBe(complete);
+      if (complete) expect(bytes).toContain('opaque-[REDACTED]');
+      for (const visible of ['Visible answer', 'Visible summary', 'ordinary-metadata', 'argument-data']) expect(bytes).toContain(visible);
+      expect(JSON.parse(bytes).providerConfig).not.toHaveProperty('apiKey');
+      expect(JSON.parse(bytes).exportWarning).toBe(complete ? undefined : SESSION_EXPORT_CONTINUATION_WARNING);
+      expect(await readFile(externalFile)).toEqual(before);
+    }
+    for (const query of ['format=json&includeOpaqueContinuations=1', 'format=json&includeOpaqueContinuations=',
+      'format=json&includeOpaqueContinuations=true&includeOpaqueContinuations=false', 'format=markdown&includeOpaqueContinuations=true']) {
+      const rejected = await fetch(`${base}/api/sessions/opaque-export/export?${query}`);
+      expect(rejected.status).toBe(400); expect(await rejected.json()).toEqual({ error: 'Invalid complete-export option.' });
+    }
+    expect(await readFile(externalFile)).toEqual(before);
     const response = await post('/api/agent/runs', { cwd, provider: 'local', input: 'Public parent request' });
     expect(response.status).toBe(202);
     const { run } = await response.json() as { run: { id: string; sessionId: string } };

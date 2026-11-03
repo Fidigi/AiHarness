@@ -12,6 +12,7 @@ import { loadTopLevelCredentialService } from './provider-auth-command.js';
 import { EXPORT_PRIVACY_WARNING } from '../security/privacy-warnings.js';
 
 export const EXPORT_HELP = `Usage: ai-harness export --session <path|id-prefix> --format <html|jsonl|json|markdown> --output <path> [options]
+  --include-opaque-continuations    Explicit complete JSON export (credentials remain excluded)
   --session-dir <dir>                Select the existing session storage root
   --approve | --no-approve           Process-only workspace trust decision (conflicting flags refused)
   -h, --help                        Show help without startup
@@ -19,13 +20,15 @@ Selection is mandatory and never creates a session. ID prefixes must be unambigu
 Paths must be ordinary files in the selected store or current workspace, with no links.
 Output must be an explicit trusted current-workspace file, ending in .html/.jsonl/.json/.md.
 Existing ordinary output files are atomically replaced, mode 0600; source files cannot be replaced.
-JSONL is the existing message projection, not the v2 session journal. No transcript is printed.
+JSON omits opaque continuation data by default and warns when native continuation may be lost.
+Complete JSON does not guarantee provider/account/model compatibility or successful replay.
+JSONL is the existing expurgated message projection, not the v2 session journal. No transcript is printed.
 ${EXPORT_PRIVACY_WARNING}
 Exits: 0 success/help, 2 usage, 1 selection/trust/publication failure.
 `;
 
 class ExportUsageError extends Error {}
-function parse(args: readonly string[]): { session?: string; format?: string; output?: string; sessionDir?: string; trust?: boolean; help: boolean } {
+function parse(args: readonly string[]): { session?: string; format?: string; output?: string; sessionDir?: string; trust?: boolean; includeOpaqueContinuations?: boolean; help: boolean } {
   if (args.length > 24 || args.some(arg => Buffer.byteLength(arg) > 4096 || /[\x00-\x1f\x7f-\x9f]/u.test(arg))) throw new ExportUsageError();
   const result: ReturnTypeShape = { help: args.length === 0 };
   const seen = new Set<string>();
@@ -36,11 +39,13 @@ function parse(args: readonly string[]): { session?: string; format?: string; ou
     const key = equal < 0 ? raw : raw.slice(0, equal);
     if (seen.has(key)) throw new ExportUsageError();
     seen.add(key);
-    if (['--help', '-h', '--approve', '--no-approve'].includes(key)) {
+    if (['--help', '-h', '--approve', '--no-approve', '--include-opaque-continuations'].includes(key)) {
       if (equal >= 0) throw new ExportUsageError();
       if (key === '--help' || key === '-h') {
         if (result.help) throw new ExportUsageError();
         result.help = true;
+      } else if (key === '--include-opaque-continuations') {
+        result.includeOpaqueContinuations = true;
       } else {
         if (result.trust !== undefined) throw new ExportUsageError();
         result.trust = key === '--approve';
@@ -55,6 +60,7 @@ function parse(args: readonly string[]): { session?: string; format?: string; ou
     } else throw new ExportUsageError();
   }
   if (result.format && !['html', 'jsonl', 'json', 'markdown'].includes(result.format)) throw new ExportUsageError();
+  if (result.includeOpaqueContinuations && result.format !== 'json') throw new ExportUsageError();
   if (!result.help) {
     if (!result.session || !result.format || !result.output) throw new ExportUsageError();
     const ext = result.format === 'markdown' ? 'md' : result.format;
@@ -62,7 +68,7 @@ function parse(args: readonly string[]): { session?: string; format?: string; ou
   }
   return result;
 }
-type ReturnTypeShape = { session?: string; format?: string; output?: string; sessionDir?: string; trust?: boolean; help: boolean };
+type ReturnTypeShape = { session?: string; format?: string; output?: string; sessionDir?: string; trust?: boolean; includeOpaqueContinuations?: boolean; help: boolean };
 
 /** A single copied projection. Manager normalization is memory-only, never a source rewrite. */
 class ExportProjectionStore extends JsonlSessionStore {
@@ -145,7 +151,7 @@ export async function runExportCommand(args: readonly string[]): Promise<number>
     });
     handler.getContext().currentSessionId = projection.id;
     if (!await trusted()) throw new Error();
-    await handler.execute(`/export ${parsed.format} ${JSON.stringify(destination)}`);
+    await handler.execute(`/export ${parsed.format} ${parsed.includeOpaqueContinuations ? '--include-opaque-continuations ' : ''}${JSON.stringify(destination)}`);
     if (failed || !published) throw new Error();
     process.stdout.write('Session export published.\n');
     return 0;

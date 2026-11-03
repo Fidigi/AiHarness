@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { EncryptedCredentialStore, JsonlSessionStore, ProviderCredentialService, type Session } from '@ai-harness/core';
+import { EncryptedCredentialStore, JsonlSessionStore, ProviderCredentialService, type Session, SESSION_EXPORT_CONTINUATION_WARNING } from '@ai-harness/core';
 import { EXPORT_PRIVACY_WARNING } from '../security/privacy-warnings.js';
 
 const entry = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
@@ -54,7 +54,10 @@ describe('actual top-level export CLI', () => {
     expect((await invoke(['--help'])).stdout).toContain('export --help');
     for (const invalid of [['--help=false'], ['--session', 'selected-session'], ['--format=xml', '--help'],
       ['--approve', '--no-approve'], ['--output=a.json', '--output=b.json'], ['--unknown', '--help'],
-      ['--approve=false'], ['--extension', 'evil.mjs'], ['--help', '-h'], ['--session=']]) {
+      ['--approve=false'], ['--extension', 'evil.mjs'], ['--help', '-h'], ['--session='],
+      ['--format=json', '--include-opaque-continuations=false', '--help'],
+      ['--format=jsonl', '--include-opaque-continuations', '--help'],
+      ['--format=json', '--include-opaque-continuations', '--include-opaque-continuations', '--help']]) {
       expect(await invoke(['export', ...invalid])).toMatchObject({ code: 2, signal: null, stdout: '', stderr: 'Export usage error. Run "ai-harness export --help".\n' });
     }
     await expect(readFile(path.join(cwd, 'extension-ran'))).rejects.toMatchObject({ code: 'ENOENT' });
@@ -84,6 +87,38 @@ describe('actual top-level export CLI', () => {
     } else expect(bytes).toContain('**You**');
     expect(await readFile(source)).toEqual(before);
     expect((await readdir(cwd)).filter(name => /staging|command-ran|extension-ran/.test(name))).toEqual([]);
+  });
+
+  it('exports typed opaque data only with an explicit complete JSON flag, retaining credential redaction and source bytes', async () => {
+    const store = new JsonlSessionStore(sessions);
+    const session = (await store.loadSession('selected-session'))!;
+    session.messages.push({ id: 'm3', role: 'assistant', content: `Visible answer ${secret}`, timestamp: new Date(),
+      blocks: [{ type: 'text', text: 'Visible answer', textSignature: 'opaque-text' },
+        { type: 'reasoning', text: 'Visible summary', thinkingSignature: `opaque-${secret}` },
+        { type: 'reasoning', text: '', redacted: true, thinkingSignature: 'b3BhcXVlLWVuY3J5cHRlZA==' }],
+      toolCalls: [{ id: 'call-1', name: 'read', input: { signature: 'argument-data' }, thoughtSignature: 'opaque-tool' }],
+      metadata: { signature: 'ordinary-metadata' } });
+    session.activeLeafId = 'm3';
+    await store.saveSession(session);
+    const before = await readFile(source);
+    for (const complete of [false, true]) {
+      const command = args('json'); if (complete) command.push('--include-opaque-continuations');
+      expect(await invoke(command)).toEqual({ code: 0, signal: null, stdout: 'Session export published.\n',
+        stderr: EXPORT_PRIVACY_WARNING+'\n'+(complete ? '' : SESSION_EXPORT_CONTINUATION_WARNING+'\n') });
+      const bytes = await readFile(path.join(cwd, 'out.json'), 'utf8');
+      expect(bytes).not.toContain(secret); expect(bytes).toContain('[REDACTED]');
+      expect(bytes.includes('opaque-text')).toBe(complete); expect(bytes.includes('opaque-tool')).toBe(complete);
+      expect(bytes.includes('b3BhcXVlLWVuY3J5cHRlZA==')).toBe(complete);
+      if (complete) expect(bytes).toContain('opaque-[REDACTED]');
+      expect(bytes).toContain('Visible answer'); expect(bytes).toContain('Visible summary');
+      expect(bytes).toContain('argument-data'); expect(bytes).toContain('ordinary-metadata');
+      expect(JSON.parse(bytes).exportWarning).toBe(complete ? undefined : SESSION_EXPORT_CONTINUATION_WARNING);
+      expect(JSON.parse(bytes).providerConfig).not.toHaveProperty('apiKey');
+      expect((await stat(path.join(cwd, 'out.json'))).mode & 0o777).toBe(0o600);
+      expect(await readFile(source)).toEqual(before);
+    }
+    await expect(readFile(path.join(cwd, 'command-ran'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(path.join(cwd, 'extension-ran'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('redacts stored-only credentials using genuine encrypted Core state without refresh or commands', async () => {

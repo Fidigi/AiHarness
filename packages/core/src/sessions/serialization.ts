@@ -86,6 +86,37 @@ export function serializeSession(session: Session): SerializedSession {
   };
 }
 
+export const SESSION_EXPORT_CONTINUATION_WARNING = 'Continuation warning: opaque continuation data was omitted. Native continuation may no longer be possible after import.';
+
+/** JSON export only; callers still redact registered credential values in both modes. */
+export function serializeSessionForExport(
+  session: Session,
+  options: { includeOpaqueContinuations?: boolean } = {},
+): { session: SerializedSession; warning?: string } {
+  const serialized = serializeSession(session);
+  if (options.includeOpaqueContinuations === true) return { session: serialized };
+  let omitted = false;
+  const strip = <T extends object>(value: T, key: string): T => {
+    if (!value || typeof value !== 'object' || !Object.hasOwn(value, key)) return value;
+    omitted = true;
+    const copy = { ...value };
+    delete (copy as Record<string, unknown>)[key];
+    return copy;
+  };
+  serialized.messages = serialized.messages.map(message => ({
+    ...message,
+    ...(Array.isArray(message.blocks) ? { blocks: message.blocks.map(block => {
+      if (!block || typeof block !== 'object') return block;
+      if (block.type === 'text') return strip(block, 'textSignature');
+      if (block.type === 'reasoning') return strip(block, 'thinkingSignature');
+      if (block.type === 'tool_call') return strip(block, 'thoughtSignature');
+      return block;
+    }) } : {}),
+    ...(Array.isArray(message.toolCalls) ? { toolCalls: message.toolCalls.map(call => strip(call, 'thoughtSignature')) } : {}),
+  }));
+  return { session: serialized, ...(omitted ? { warning: SESSION_EXPORT_CONTINUATION_WARNING } : {}) };
+}
+
 /** Hydrate a JSON session while retaining unknown additive fields. */
 export function deserializeSession(session: SerializedSession): Session {
   const { messages, commands, createdAt, updatedAt, providerConfig, ...rest } = session;

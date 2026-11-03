@@ -532,12 +532,25 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     const directory = await mkdtemp(path.join(consumer, 'installed-export-privacy-'));
     const cwd = path.join(directory, 'workspace'), sessions = path.join(directory, 'sessions');
     const unknown = 'disposable-installed-private-export-text', secret = 'disposable-installed-export-credential';
+    const continuationWarning = 'Continuation warning: opaque continuation data was omitted. Native continuation may no longer be possible after import.';
     await mkdir(cwd); await mkdir(sessions);
     const script = path.join(consumer, 'installed-export-privacy.mjs');
-    await writeFile(script, `import { JsonlSessionStore } from '@ai-harness/core';
+    await writeFile(script, `import assert from 'node:assert/strict';
+      import { JsonlSessionStore, serializeSessionForExport, SESSION_EXPORT_CONTINUATION_WARNING } from '@ai-harness/core';
       const date = new Date('2025-01-01T00:00:00Z');
-      await new JsonlSessionStore(${JSON.stringify(sessions)}).saveSession({id:'privacy-installed',title:'private fixture',cwd:${JSON.stringify(cwd)},createdAt:date,updatedAt:date,
-        messages:[{id:'m1',role:'user',content:${JSON.stringify(unknown+' '+secret)},timestamp:date}],activeLeafId:'m1'});`);
+      const session = {id:'privacy-installed',title:'private fixture',cwd:${JSON.stringify(cwd)},createdAt:date,updatedAt:date,
+        messages:[{id:'m1',role:'user',content:${JSON.stringify(unknown+' '+secret)},timestamp:date},
+          {id:'m2',role:'assistant',content:'Visible answer',timestamp:date,
+            blocks:[{type:'text',text:'Visible answer',textSignature:'opaque-text'},
+              {type:'reasoning',text:'Visible summary',thinkingSignature:'opaque-thinking'}],
+            toolCalls:[{id:'call-1',name:'read',input:{signature:'ordinary-data'},thoughtSignature:'opaque-tool'}]}],activeLeafId:'m2'};
+      assert.equal(SESSION_EXPORT_CONTINUATION_WARNING, ${JSON.stringify(continuationWarning)});
+      const projected = serializeSessionForExport(session);
+      assert.equal(projected.warning, SESSION_EXPORT_CONTINUATION_WARNING);
+      assert(!JSON.stringify(projected.session).includes('opaque-'));
+      assert.equal(serializeSessionForExport(session,{includeOpaqueContinuations:true}).session.messages[1].blocks[0].textSignature,'opaque-text');
+      assert.equal(session.messages[1].blocks[0].textSignature,'opaque-text');
+      await new JsonlSessionStore(${JSON.stringify(sessions)}).saveSession(session);`);
     try {
       expect(await run(process.execPath, [script], consumer, environment)).toEqual({ code: 0, stdout: '', stderr: '' });
       const source = path.join(sessions, 'privacy-installed.jsonl'), before = await readFile(source);
@@ -546,10 +559,21 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
         const result = await run('ai-harness', ['export','--session','privacy-installed','--session-dir',sessions,'--format',format,'--output',name,'--approve'], cwd,
           { ...environment, AI_HARNESS_AGENT_DIR: path.join(directory,'agent'), OPENAI_API_KEY: secret });
         expect(result.code, result.stderr).toBe(0); expect(result.stdout).toBe('Session export published.\n');
-        expect(result.stderr).toMatch(/^Privacy warning:.*unrecognized secrets.*\n$/u);
+        expect(result.stderr).toMatch(/^Privacy warning:.*unrecognized secrets.*\n/u);
+        expect(result.stderr.split('\n').slice(1).join('\n')).toBe(['json','jsonl'].includes(format) ? continuationWarning+'\n' : '');
         for (const value of [secret, unknown, cwd, sessions]) expect(result.stderr).not.toContain(value);
         const body = await readFile(path.join(cwd,name),'utf8'); expect(body).toContain(unknown); expect(body).not.toContain(secret);
+        expect(body).not.toContain('opaque-');
       }
+      const complete = await run('ai-harness', ['export','--session','privacy-installed','--session-dir',sessions,
+        '--format','json','--output','complete.json','--approve','--include-opaque-continuations'], cwd,
+        { ...environment, AI_HARNESS_AGENT_DIR: path.join(directory,'agent'), OPENAI_API_KEY: secret });
+      expect(complete.code, complete.stderr).toBe(0);
+      expect(complete.stdout).toBe('Session export published.\n');
+      expect(complete.stderr).toMatch(/^Privacy warning:.*unrecognized secrets.*\n$/u);
+      const body = await readFile(path.join(cwd,'complete.json'),'utf8');
+      for (const value of ['opaque-text','opaque-thinking','opaque-tool','ordinary-data',unknown]) expect(body).toContain(value);
+      expect(body).not.toContain(secret);
       expect(await readFile(source)).toEqual(before);
     } finally { await rm(directory,{recursive:true,force:true}); await rm(script,{force:true}); }
   });

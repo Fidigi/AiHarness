@@ -1,8 +1,14 @@
 # MOD-01 — Delivery Board
 
-> **Status: IN PROGRESS** (2026-11-02)
+> **Status: IN PROGRESS** (2026-11-03)
 >
 > Two bounded deliveries integrated on 2026-11-01: native Mistral CLI (`bd05889`) and Google/Vertex numeric override (`4777c4c`). Required parity/root gates remain failed, including two unexplained application SIGSEGVs on the later source. No collector repair or whole-provider acceptance.
+
+## MOD-03 shared export guard — 2026-11-03
+
+**Bounded functional delivery, no parent closure:** MOD-03 selects the ten byte-identical archived export product/test paths over `8f2462b`, plus two existing public-contract scenario extensions. See the [new source-bound receipt](./evidence/MOD-03-opaque-export.json) and [current register](./AUDIT-5.md#mod-03--guarded-opaque-continuation-exports). Fresh final-source typecheck, 141 focused cases, installed public export/types and four browser controls pass. Required parity remains failed (367 pass/one readonly-summary compiler SIGSEGV), as does root (8,689 pass/one Markdown-selector compiler SIGSEGV); no retry, mitigation, diagnosis or waiver. Operator EN/FR guides now describe the explicit complete JSON option.
+
+Only this later typed storage/export boundary supersedes the old unintegrated-export status. The dated checkpoints below retain their original sources/results and are not current-main interface descriptions. Native producer → SDK/agent → durable history → native replay and pinned retention/edit/context qualification remain missing; neither MOD-01 nor MOD-03 is closed. Do not turn the observed compiler exits into another diagnostic batch or substitute the export fixtures for native replay.
 
 ## User decision — non-reproduced bugs, 2026-11-02
 

@@ -29,6 +29,7 @@ import {
   resolveModelScope,
   ProviderFactory,
   SessionBranchCancelledError,
+  serializeSessionForExport,
   readBoundedResourceText,
   WorkspaceManager
 } from '@ai-harness/core';
@@ -1093,10 +1094,17 @@ const commands: CommandEntry[] = [
   {
     name: 'export',
     description: 'Export conversation to file',
-    usage: '/export <format> [path]',
+    usage: '/export <format> [--include-opaque-continuations] [path]',
     handler: async (args, ctx) => {
       const format = (args[0] || 'json').toLowerCase();
-      let outputPath = args.slice(1).join(' ') || undefined; // Optional explicit path
+      const completeFlag = '--include-opaque-continuations';
+      const flags = args.slice(1).filter(arg => arg.startsWith(completeFlag));
+      const includeOpaqueContinuations = args[1] === completeFlag;
+      if (flags.length > 1 || flags.some(flag => flag !== completeFlag)
+        || (flags.length > 0 && (!includeOpaqueContinuations || format !== 'json'))) {
+        return chalk.red('Usage: /export <format> [--include-opaque-continuations (JSON only)] [path]');
+      }
+      let outputPath = args.slice(includeOpaqueContinuations ? 2 : 1).join(' ') || undefined;
       
       const sessions = ctx.sessionManager.list();
       if (!sessions.length) return chalk.yellow('No conversations to export.');
@@ -1117,11 +1125,16 @@ const commands: CommandEntry[] = [
         ...(rawCommands ? { commands: rawCommands.map(command => safeJson(ctx, command)) } : {}),
       } as Session;
       let content: string;
+      let continuationWarning: string | undefined;
 
       switch (format) {
-        case 'json':
-          content = JSON.stringify(session, null, 2);
+        case 'json': {
+          const exported = serializeSessionForExport(session, { includeOpaqueContinuations });
+          continuationWarning = exported.warning;
+          content = JSON.stringify({ ...exported.session,
+            ...(exported.warning ? { exportWarning: exported.warning } : {}) }, null, 2);
           break;
+        }
         case 'markdown':
           content = `# ${session.title || 'Conversation'}\n\n`;
           for (const msg of session.messages) {
@@ -1137,11 +1150,13 @@ const commands: CommandEntry[] = [
           break;
         case 'jsonl': {
           // Export as JSONL format (one message per line)
-          const lines = session.messages.map(m => JSON.stringify({
+          const exported = serializeSessionForExport(session);
+          continuationWarning = exported.warning;
+          const lines = exported.session.messages.map(m => JSON.stringify({
             id: m.id,
             role: m.role,
             content: m.content,
-            timestamp: m.timestamp.toISOString(),
+            timestamp: m.timestamp,
             ...(m.toolCalls ? { toolCalls: m.toolCalls } : {}),
             ...(m.toolCallId ? { toolCallId: m.toolCallId } : {}),
             ...(m.name ? { name: m.name } : {}),
@@ -1177,6 +1192,7 @@ const commands: CommandEntry[] = [
       }
 
       privacyWarning(ctx, EXPORT_PRIVACY_WARNING);
+      if (continuationWarning) privacyWarning(ctx, continuationWarning);
       const destination = await resolveCommandPath(ctx, filename, { mustExist: false });
       await atomicWriteStableFile(destination, content, { overwrite: true, maxBytes: 64 * 1024 * 1024 });
       filename = destination;

@@ -1,8 +1,14 @@
 # MOD-01 — Delivery Tasks and Local Acceptance
 
-> **Status: IN PROGRESS** (2026-11-02)
+> **Status: IN PROGRESS** (2026-11-03)
 
 > **Authority:** [AUDIT-5](./AUDIT-5.md), MOD-01; [pinned provider/API/auth inventory](../../ai/topics/provider-matrix.md). Target Pi 1.2.0 commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, not the installed agent's moving release.
+
+## MOD-03 shared typed storage/export delivery
+
+**2026-11-03 — later bounded selection:** the [delivery board](./MOD-01-tracking.md#mod-03-shared-export-guard--2026-11-03) and [new receipt](./evidence/MOD-03-opaque-export.json) record reuse of the ten archived export paths over `8f2462b`, with two existing public-contract scenario extensions. Default expurgation/notice and explicit complete JSON now have current Core/CLI/HTTP implementation and EN/FR operator documentation. Final-source typecheck, 141 focused cases, installed export/types and four browser controls pass; parity/root retain separate declaration-compiler SIGSEGV failures. No old qualification transfers, failed gate is waived or parent criterion is promoted. Native producer/agent/persistence/replay and complete pinned-Pi lifecycle qualification remain outstanding.
+
+The following HOLD checkpoint describes its original isolated source, not the later selected interfaces. Its failed attempts, immutable receipt and incident disposition remain unchanged.
 
 ## JSON session export candidate (HOLD)
 

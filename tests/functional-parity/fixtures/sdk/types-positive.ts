@@ -5,6 +5,8 @@ import {
   SessionManager,
   SpecializedModels,
   MockProvider,
+  serializeSessionForExport,
+  type MessageContentBlock,
   type ClassificationRequest,
   type ClassificationResult,
   type ImageGenerationResult,
@@ -40,6 +42,17 @@ const session: Session = {
   createdAt: new Date(0),
   updatedAt: new Date(0),
 };
+
+const signed: MessageContentBlock = { type: 'reasoning', text: '', thinkingSignature: 'opaque', redacted: true };
+session.messages.push({ id: 'typed-reply', role: 'assistant', content: 'reply', timestamp: new Date(0),
+  blocks: [signed, { type: 'text', text: 'reply', textSignature: 'opaque' },
+    { type: 'tool_call', id: 'call-1', name: 'read', input: {}, thoughtSignature: 'opaque' }],
+  toolCalls: [{ id: 'call-1', name: 'read', input: {}, thoughtSignature: 'opaque' }] });
+const exported = serializeSessionForExport(session, { includeOpaqueContinuations: true });
+const warning: string | undefined = exported.warning;
+// @ts-expect-error A string cannot opt into a complete export.
+serializeSessionForExport(session, { includeOpaqueContinuations: 'true' });
+void warning;
 
 const models = new SpecializedModels(new MockProvider({ type: 'mock', model: 'typed-model' }));
 const classification: ClassificationRequest = { model: 'typed-model:classifier', input: 'probe', labels: ['safe'] };
