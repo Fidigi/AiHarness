@@ -130,30 +130,38 @@ describe('SubagentRuntime', () => {
     await runtime.shutdown();
   });
 
-  it('intersects inherited tools, empty denials, skills, extensions and code-mode budgets', async () => {
+  it('intersects inherited tools, empty denials, skills, extensions and owned reasoning/code-mode budgets', async () => {
     const f = await fixture(new HoldingProvider({ type: ProviderType.MOCK }));
+    const thinkingBudgets = { low: 2000, high: 4000 };
     const root = await f.agents.start({ sessionId: f.parent.id, cwd: f.project, provider: 'mock', input: 'parent',
-      model: 'owned-model', thinking: 'low', persistSettings: false,
+      model: 'owned-model', thinking: 'low', thinkingBudgets, persistSettings: false,
       allowedTools: ['read', 'spawn_subagent'], excludedTools: ['read'], allowedSkills: ['parent-skill'],
       allowedExtensions: ['parent-extension'], codemode: { enabled: false, limits: { timeoutMs: 100 } } });
     const captured = f.agents.getSessionDelegationPolicy(f.parent.id)!;
     captured.allowedTools!.push('write');
+    captured.thinkingBudgets!.low = 9999;
+    thinkingBudgets.low = 8888;
     expect(f.agents.getSessionDelegationPolicy(f.parent.id)?.allowedTools).not.toContain('write');
+    expect(f.agents.getSessionDelegationPolicy(f.parent.id)?.thinkingBudgets).toEqual({ low: 2000, high: 4000 });
     expect(f.parent.model).toBe('mock-model');
     const start = vi.spyOn(f.agents, 'start');
     try {
       await f.profiles.updateProfile({ cwd: f.project }, 'general', {
-        tools: ['read', 'write'], skills: ['other-skill'], extensions: ['other-extension'],
+        tools: ['read', 'write'], skills: ['other-skill'], extensions: ['other-extension'], thinking: 'high',
       });
       const child = await f.runtime.start({ parentSessionId: f.parent.id, profileId: 'general', task: 'child', provider: 'mock' });
       expect(start.mock.calls[0]?.[0]).toMatchObject({ allowedTools: ['read'], excludedTools: ['read'],
-        allowedSkills: [], allowedExtensions: [], toolPreset: 'read-only', model: 'owned-model', thinking: 'low',
+        allowedSkills: [], allowedExtensions: [], toolPreset: 'read-only', model: 'owned-model', thinking: 'high',
+        thinkingBudgets: { low: 2000, high: 4000 },
         codemode: { enabled: false, limits: { timeoutMs: 100 } } });
+      start.mock.calls[0]![0].thinkingBudgets!.high = 7777;
+      expect(f.agents.getSessionDelegationPolicy(child.childSessionId)?.thinkingBudgets).toEqual({ low: 2000, high: 4000 });
       f.runtime.stop(child.id); await f.runtime.wait(child.id);
-      await f.profiles.updateProfile({ cwd: f.project }, 'general', { tools: [], skills: [], extensions: [] });
+      await f.profiles.updateProfile({ cwd: f.project }, 'general', { tools: [], skills: [], extensions: [], thinking: 'off' });
       const inherited = await f.runtime.start({ parentSessionId: f.parent.id, profileId: 'general', task: 'inherit', provider: 'mock' });
       expect(start.mock.calls[1]?.[0]).toMatchObject({ allowedTools: ['read', 'spawn_subagent'],
-        excludedTools: ['read'], allowedSkills: ['parent-skill'], allowedExtensions: ['parent-extension'] });
+        excludedTools: ['read'], allowedSkills: ['parent-skill'], allowedExtensions: ['parent-extension'],
+        thinking: 'off', thinkingBudgets: { low: 2000, high: 4000 } });
       f.runtime.stop(inherited.id); await f.runtime.wait(inherited.id);
     } finally { f.agents.stop(root.id); await f.agents.wait(root.id); await f.runtime.shutdown(); }
   });

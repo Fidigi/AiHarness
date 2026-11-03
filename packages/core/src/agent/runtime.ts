@@ -95,7 +95,7 @@ export interface AgentRuntimeOptions {
 }
 
 type AgentDelegationPolicy = Pick<StartAgentRunRequest,
-  'model' | 'thinking' | 'toolPreset' | 'allowedTools' | 'excludedTools' | 'allowedSkills' | 'allowedExtensions' | 'codemode'>;
+  'model' | 'thinking' | 'thinkingBudgets' | 'toolPreset' | 'allowedTools' | 'excludedTools' | 'allowedSkills' | 'allowedExtensions' | 'codemode'>;
 
 interface ActiveRun {
   snapshot: AgentRunSnapshot;
@@ -355,7 +355,7 @@ export class AgentRuntime {
       const active: ActiveRun = {
         snapshot, controller, completion, resolveCompletion, settled: false,
         delegationPolicy: structuredClone({
-          model: snapshot.model, thinking: effectiveRequest.thinking,
+          model: snapshot.model, thinking: effectiveRequest.thinking, thinkingBudgets: effectiveRequest.thinkingBudgets,
           toolPreset: effectiveRequest.toolPreset, allowedTools: effectiveRequest.allowedTools,
           excludedTools: effectiveRequest.excludedTools, allowedSkills: effectiveRequest.allowedSkills,
           allowedExtensions: effectiveRequest.allowedExtensions, codemode: effectiveRequest.codemode,

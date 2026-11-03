@@ -61,6 +61,13 @@ describe('independent new-session defaults', () => {
       sessionId = body.session.id;
       expect((await services.agentRuntime.wait(body.run.id))?.phase).toBe('completed');
       expect(stream.mock.calls.at(-1)?.[4]?.thinkingBudgets).toEqual(expected);
+      const delegated = await request('/api/subagents/runs', 'POST', { parentSessionId: sessionId,
+        profileId: 'general', provider: 'mock', task: 'Inherit reasoning',
+        thinkingBudgets: { high: 999999 }, parentPolicy: { thinkingBudgets: { high: 999999 } } });
+      expect(delegated.status).toBe(202);
+      const child = await delegated.json() as { id: string };
+      expect((await services.subagentRuntime.wait(child.id))?.status).toBe('completed');
+      expect(stream.mock.calls.at(-1)?.[4]?.thinkingBudgets).toEqual(expected);
     };
     try {
       await patch('global', { thinkingBudgets: { low: 1000, high: 8000 } });
@@ -85,13 +92,47 @@ describe('independent new-session defaults', () => {
       await run({});
       await patch('global', { thinkingBudgets: null });
       await run({ low: 3000 });
-      expect(stream).toHaveBeenCalledTimes(7);
+      expect(stream).toHaveBeenCalledTimes(14);
     } finally {
       stream.mockRestore();
       await rm(path.join(root, '.ai-harness', 'settings.json'), { force: true });
       await patch('global', { thinkingBudgets: null });
       await patch('project', { thinkingBudgets: null }, projectId);
       if (sessionId) await patch('session', { thinkingBudgets: null }, sessionId);
+    }
+  });
+
+  it('resolves scoped budgets and trusted-file fallback for delegation without a prior parent run', async () => {
+    const parent = await services.sessionManager.create({ cwd: root, workspaceId: projectId });
+    const stream = vi.spyOn(MockProvider.prototype, 'streamChat').mockImplementation(async (_messages, _chunk, complete) => complete?.({ content: 'Child budget' }));
+    const file = path.join(root, '.ai-harness', 'settings.json');
+    const delegate = async (expected: unknown) => {
+      const response = await request('/api/subagents/runs', 'POST', { parentSessionId: parent.id,
+        profileId: 'general', provider: 'mock', task: 'Scoped child', thinkingBudgets: { high: 999999 } });
+      expect(response.status).toBe(202);
+      const child = await response.json() as { id: string };
+      expect((await services.subagentRuntime.wait(child.id))?.status).toBe('completed');
+      expect(stream.mock.calls.at(-1)?.[4]?.thinkingBudgets).toEqual(expected);
+    };
+    try {
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, JSON.stringify({ thinkingBudgets: { high: 3000 } }));
+      await delegate({ high: 3000 });
+      await services.configurationStore.patch('global', { thinkingBudgets: { low: 1500 } });
+      await delegate({ low: 1500 });
+      await services.configurationStore.patch('session', { thinkingBudgets: {} }, parent.id);
+      await delegate({});
+      await services.configurationStore.patch('session', { thinkingBudgets: null }, parent.id);
+      await services.configurationStore.patch('global', { thinkingBudgets: null });
+      await writeFile(file, JSON.stringify({ thinkingBudgets: { high: 4000 } }));
+      await delegate({ high: 4000 });
+      expect(services.agentRuntime.getSessionRun(parent.id)).toBeUndefined();
+      expect(stream).toHaveBeenCalledTimes(4);
+    } finally {
+      stream.mockRestore();
+      await rm(file, { force: true });
+      await services.configurationStore.patch('global', { thinkingBudgets: null });
+      await services.configurationStore.patch('session', { thinkingBudgets: null }, parent.id);
     }
   });
 

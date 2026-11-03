@@ -266,7 +266,7 @@ export class SubagentRuntime {
         workspaceId: parent.workspaceId,
         provider: request.provider,
         input: request.task.trim(),
-        model, thinking, toolPreset,
+        model, thinking, thinkingBudgets: inherited?.thinkingBudgets, toolPreset,
         signal: controller.signal,
         persistSettings: false,
         systemPrompt,

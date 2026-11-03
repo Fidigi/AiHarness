@@ -9,7 +9,7 @@ import { expect, test } from './fixtures/test-budget';
 
 // Real emitted static Web -> authenticated API -> Core -> native Anthropic HTTP
 // adapter; only the external service is a disposable loopback wire fixture.
-for (const [locale, theme] of [['en', 'light'], ['fr', 'dark']] as const) test(`${locale}/${theme}: scoped reasoning budgets survive Settings reload and reach the native numeric wire`, async ({ page }) => {
+for (const [locale, theme] of [['en', 'light'], ['fr', 'dark']] as const) test(`${locale}/${theme}: scoped reasoning budgets survive Settings reload and reach parent/child native numeric requests`, async ({ page }) => {
   const labels = locale === 'fr' ? { scope: 'Portée', budgets: 'Budgets de réflexion (JSON)', save: 'Enregistrer',
     invalid: 'doivent être un JSON valide', newChat: 'Nouvelle conversation', composer: 'Zone de rédaction', send: 'Envoyer' }
     : { scope: 'Scope', budgets: 'Reasoning budgets (JSON)', save: 'Save', invalid: 'must be valid JSON',
@@ -72,13 +72,24 @@ for (const [locale, theme] of [['en', 'light'], ['fr', 'dark']] as const) test(`
     expect(bodies).toEqual([]);
     await page.getByRole('button', { name: labels.newChat, exact: true }).click();
     await page.getByRole('textbox', { name: labels.composer }).fill('Exercise the numeric budget');
+    const accepted = page.waitForResponse(response => response.url().endsWith('/api/agent/runs') && response.request().method() === 'POST');
     await page.getByRole('button', { name: labels.send, exact: true }).click();
+    const parent = await (await accepted).json();
     await expect(page.locator('.message.assistant')).toContainText('Native reasoning wire received.');
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toMatchObject({ thinking: { type: 'enabled', budget_tokens: 2000 }, max_tokens: 3024, stream: true });
+    const delegated = await page.request.post(`${base}/api/subagents/runs`, { data: {
+      parentSessionId: parent.session.id, profileId: 'general', provider: 'reasoning-proof',
+      task: 'Inherit the numeric budget', thinkingBudgets: { low: 999999 },
+    } });
+    expect(delegated.status()).toBe(202);
+    const child = await delegated.json();
+    await expect.poll(async () => (await page.request.get(`${base}/api/subagents/runs/${child.id}`).then(response => response.json())).status).toBe('completed');
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toMatchObject({ thinking: { type: 'enabled', budget_tokens: 2000 }, max_tokens: 3024, stream: true });
     await page.reload(); await expect(page.locator('.message.assistant')).toHaveCount(1);
     await expect(page.locator('.message.assistant')).toContainText('Native reasoning wire received.');
-    expect(bodies).toHaveLength(1);
+    expect(bodies).toHaveLength(2);
   } finally {
     await page.goto('about:blank').catch(() => undefined); await stop();
     wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve()));

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import type { SubagentProfile } from '@ai-harness/core';
+import { loadAgentSettings, type SubagentProfile } from '@ai-harness/core';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { requireCapability } from '../security/request-security.js';
 import type { RuntimeServices } from '../runtime/services.js';
@@ -131,14 +131,18 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
       const parentSessionId = requiredString(request.body?.parentSessionId, 'parentSessionId', 200);
       const parent = services.sessionManager.get(parentSessionId)
         ?? await services.sessionManager.loadFromStore(parentSessionId);
-      if (!parent) {
-        response.status(404).json({ error: 'Parent session not found' });
+      if (!parent?.cwd) {
+        response.status(404).json({ error: 'Parent session not found or without workspace' });
         return;
       }
       const effective = resolveEffectiveConfiguration(services, {
         projectId: parent.workspaceId,
         sessionId: parent.id,
         session: parent,
+      });
+      const agentSettings = await loadAgentSettings({
+        cwd: parent.cwd,
+        projectTrusted: await services.trustManager.isTrusted(parent.cwd),
       });
       const run = await services.subagentRuntime.start({
         parentSessionId,
@@ -147,6 +151,7 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
         provider: requiredString(request.body?.provider, 'provider', 100),
         parentToolPreset: effective.values.toolPreset,
         parentPolicy: {
+          thinkingBudgets: effective.values.thinkingBudgets ?? agentSettings.settings.thinkingBudgets,
           allowedTools: effective.values.enabledTools,
           excludedTools: effective.values.powershellEnabled === true ? [] : ['powershell'],
           codemode: {

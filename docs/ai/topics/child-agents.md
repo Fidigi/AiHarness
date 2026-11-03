@@ -54,7 +54,7 @@ spawn_subagent(profile, task, background?)
   -> map child journal phases/turns to parent subagent.* events
 ```
 
-The child inherits cwd/workspace/Git branch and owned parent model/thinking selections unless the profile overrides them; the preset can only become more restrictive. Auto-compaction is disabled for the child. Nonempty inherited messages receive new linked `inherited:*` IDs and `metadata.inheritedFromSession`. An explicit inherited leaf keeps the new task last despite coarse/future timestamps; the copied text is context, not a parent task to execute again.
+The child inherits cwd/workspace/Git branch and owned parent model/thinking selections unless the profile overrides them; the preset can only become more restrictive. Numeric `thinkingBudgets` follow the owned parent delegation policy, independently of a profile's model/thinking override. Each child and policy readback gets a copy; provider clamps/off/output reserves remain unchanged. For HTTP delegation without a retained parent run policy, resolve administrator-scoped whole maps (including `{}`) before fresh trusted-file fallback; request bodies and profiles cannot supply budget authority. Auto-compaction is disabled for the child. Nonempty inherited messages receive new linked `inherited:*` IDs and `metadata.inheritedFromSession`. An explicit inherited leaf keeps the new task last despite coarse/future timestamps; the copied text is context, not a parent task to execute again.
 
 For synchronous execution, the tool waits under the parent AbortSignal and returns the bounded last non-inherited assistant result. For background execution, it returns run and child-session IDs immediately; admitted background execution survives parent completion and view changes. Stop reports `phase: stopping` and retains concurrency until Core physically settles owned execution. Cancellation does not roll back admitted writes/history.
 
@@ -89,13 +89,15 @@ Profile/settings mutations require `configuration`; the router itself is behind 
 ## Associated Tests
 
 - `packages/server/src/runtime/subagent-service.test.ts` — defaults, scopes, persistence and validation
-- `packages/server/src/runtime/subagent-runtime.test.ts` — inheritance, lineage, events, depth, concurrency and stop
+- `packages/server/src/runtime/subagent-runtime.test.ts` — inheritance, copied reasoning/code-mode budgets, profile thinking switches, lineage, events, depth, concurrency and stop
+- `packages/server/src/api/configuration-defaults.test.ts` — actual HTTP scoped/empty/inherited reasoning maps, trusted-file reload and refused prompt-body authority for parent/child runs
 - `packages/server/src/api/subagent-lifecycle-http.test.ts` — emitted Server auth/role/Origin/trust, real MCP restrictions, sync/background Stop and cold journal readback
 - `packages/server/src/web-server.test.ts` — HTTP capabilities, profiles and real child execution
 - `packages/web/src/services/api.test.ts` — browser route contracts
 - `e2e/settings.spec.ts` — profile/settings administration
 - `e2e/chat.spec.ts` and `e2e/visual.spec.ts` — child monitoring and responsive surfaces
 - `e2e/subagent-lifecycle-live.spec.ts` — actual static-Web delegation, notifications/ack, scoped profile edits, linked history, reload/restart and optional asset refusal
+- `e2e/reasoning-budgets-live.spec.ts` — EN/FR Settings save/reload, parent and child native numeric requests and no request replay on reload
 - `e2e/subagent-lifetime.spec.ts` — retired poll/Stop, older-poll acknowledgment and late-Stop terminal-resurrection regressions
 
 ## Common Changes
