@@ -1,8 +1,12 @@
 # MOD-01 — Delivery Tasks and Local Acceptance
 
-> **Status: IN PROGRESS** (2026-11-03)
+> **Status: IN PROGRESS** (2026-11-04)
 
 > **Authority:** [AUDIT-5](./AUDIT-5.md), MOD-01; [pinned provider/API/auth inventory](../../ai/topics/provider-matrix.md). Target Pi 1.2.0 commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, not the installed agent's moving release.
+
+## MOD-03 original Anthropic continuation subset
+
+**2026-11-04 — later bounded delivery:** the [board](./MOD-01-tracking.md#mod-03-original-anthropic-continuation--2026-11-04) and [source-bound receipt](./evidence/MOD-03-anthropic-replay.json) extend the selected storage/export policy with ordered native JSON/SSE text/thinking/redacted/tool capture on seventeen owned original Anthropic profiles, shared agent publication/v2 reload and exact physical provider/API/model request projection. Foreign visible thinking becomes text, foreign redacted data is omitted, failed publication does not replay, and target-only context edits do not globally invalidate later signatures or raw clone ancestry. Credential redaction remains authoritative. Existing owning/installed and actual browser restart/export/replay controls are distinct; browser replay explicitly reselects the physical provider. Earlier failed gates/browser preconditions and missing other-provider/full-lifecycle work remain preserved. No fresh pinned-SDK replay oracle, cryptographic/vendor/account/full-profile or whole-parent acceptance is claimed.
 
 ## MOD-03 shared typed storage/export delivery
 

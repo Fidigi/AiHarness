@@ -7,6 +7,7 @@ import {
   MockProvider,
   serializeSessionForExport,
   type MessageContentBlock,
+  type ChatResponse,
   type ClassificationRequest,
   type ClassificationResult,
   type ImageGenerationResult,
@@ -48,6 +49,9 @@ session.messages.push({ id: 'typed-reply', role: 'assistant', content: 'reply', 
   blocks: [signed, { type: 'text', text: 'reply', textSignature: 'opaque' },
     { type: 'tool_call', id: 'call-1', name: 'read', input: {}, thoughtSignature: 'opaque' }],
   toolCalls: [{ id: 'call-1', name: 'read', input: {}, thoughtSignature: 'opaque' }] });
+const response: ChatResponse = { content: 'reply', blocks: session.messages[0].blocks };
+const nativeBlocks: MessageContentBlock[] | undefined = response.blocks;
+void nativeBlocks;
 const exported = serializeSessionForExport(session, { includeOpaqueContinuations: true });
 const warning: string | undefined = exported.warning;
 // @ts-expect-error A string cannot opt into a complete export.

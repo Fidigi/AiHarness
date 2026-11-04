@@ -4,7 +4,7 @@
 // token usage tracking, model registry
 // ============================================================
 
-import type { Message, ProviderConfig, ToolCall, TokenUsage } from '../types/index.js';
+import type { Message, MessageContentBlock, ProviderConfig, ToolCall, TokenUsage } from '../types/index.js';
 import { ProviderType } from '../types/index.js';
 import { calculateModelCost, calculatePublishedModelCost, clampPublishedThinkingLevel, getPublishedModelMetadata, getPublishedModels, getSupportedThinkingLevels, type PublishedModelMetadata } from './model-metadata.js';
 import { getProviderPublishedModel } from './provider-model-metadata.js';
@@ -74,7 +74,8 @@ import { ProviderContextOverflowError, rejectProviderHttpResponse } from './cont
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget, anthropicManagedEffort, anthropicThinkingBetas, applyAnthropicManagedHistory } from './anthropic-thinking.js';
 import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage, applyAnthropicProfileToolDeclarations, applyAnthropicToolHistory } from './anthropic-profiles.js';
-import { validateAnthropicResponse, anthropicResponseStreamValidator, anthropicResponseToolInput, assertAnthropicResponseActive } from './anthropic-response.js';
+import { validateAnthropicResponse, anthropicResponseStreamValidator, assertAnthropicResponseActive } from './anthropic-response.js';
+import { projectAssistantReplay } from './message-replay.js';
 import { applyGoogleNativeGenerationConfig, applyGoogleToolPolicy, applyGoogleToolHistory, googlePublishedProfiles, hasGoogleProfile, googleProfileUsage, type GoogleNativeScope } from './google-profiles.js';
 import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
 export type { ThinkingBudgets } from './thinking-budgets.js';
@@ -292,6 +293,8 @@ export interface ChatResponse {
   stopReason?: 'length';
   /** Provider-supplied visible reasoning summary/process text, when available. */
   reasoning?: string;
+  /** Ordered completed native content, including sensitive opaque continuation fields. */
+  blocks?: MessageContentBlock[];
   model?: string;
   usage?: {
     promptTokens: number;
@@ -4436,8 +4439,10 @@ function applyAnthropicPromptCache(body: Record<string, unknown>, retention: Cha
   if (!last) return;
   if (typeof last.content === 'string' && last.content) last.content = [{ type: 'text', text: last.content, cache_control: control }];
   else if (Array.isArray(last.content) && last.content.length) {
+    let breakpoint = last.content.length - 1;
+    while (breakpoint >= 0 && ['thinking', 'redacted_thinking'].includes(String(last.content[breakpoint].type))) breakpoint--;
     last.content = last.content.map((block: Record<string, unknown>, index: number) =>
-      index === (last.content as unknown[]).length - 1 ? { ...block, cache_control: control } : block);
+      index === breakpoint ? { ...block, cache_control: control } : block);
   }
 }
 
@@ -4541,8 +4546,19 @@ export class AnthropicProvider extends AiProvider {
       ...(costUsd !== undefined ? { costUsd } : {}) };
   }
 
-  protected buildAnthropicMessages(messages: Message[], nativeImages = false): Array<{ role: 'user' | 'assistant'; content: unknown }> {
-    messages = nativeImages ? messages : toolImageMessages(messages);
+  private nativeMessageHistory(messages: Message[], model: string): Message[] {
+    return messages.filter(message => {
+      if (message.role !== 'assistant') return true;
+      if (message.metadata?.outputError) return false;
+      const projected = projectAssistantReplay(message, this.config.type, model, 'anthropic-messages');
+      return !!(projected.content.trim() || projected.toolCalls?.length || projected.blocks?.some(block =>
+        block.type === 'image' || block.type === 'tool_call' || block.type === 'text' && block.text.trim()
+        || block.type === 'reasoning' && (block.redacted ? block.thinkingSignature : block.text.trim() || block.thinkingSignature?.trim())));
+    });
+  }
+
+  protected buildAnthropicMessages(messages: Message[], native = false, model?: string): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    messages = native ? messages : toolImageMessages(messages);
     return messages.filter(message => message.role !== 'system').map(message => {
       if (message.role === 'tool') {
         return {
@@ -4554,6 +4570,24 @@ export class AnthropicProvider extends AiProvider {
             ...(message.isError ? { is_error: true } : {}),
           }],
         };
+      }
+      if (native && model && message.role === 'assistant' && !message.blocks?.some(block => block.type === 'image') && message.blocks?.some(block =>
+        block.type === 'text' || block.type === 'reasoning' || block.type === 'tool_call')) {
+        const projected = projectAssistantReplay(message, this.config.type, model, 'anthropic-messages');
+        const content = projected.blocks!.flatMap((block): Array<Record<string, unknown>> => {
+          if (block.type === 'text') return block.text.trim() ? [{ type: 'text', text: block.text }] : [];
+          if (block.type === 'tool_call') return [{ type: 'tool_use', id: block.id, name: block.name, input: block.input }];
+          if (block.type !== 'reasoning') return [];
+          if (block.redacted) return block.thinkingSignature ? [{ type: 'redacted_thinking', data: block.thinkingSignature }] : [];
+          if (block.thinkingSignature?.trim()) return [{ type: 'thinking', thinking: block.text, signature: block.thinkingSignature }];
+          return block.text.trim() ? [{ type: 'text', text: block.text }] : [];
+        });
+        if (!projected.blocks!.some(block => block.type === 'text') && message.content) content.push({ type: 'text', text: message.content });
+        const calls = new Set(projected.blocks!.flatMap(block => block.type === 'tool_call' ? [block.id] : []));
+        content.push(...(projected.toolCalls ?? []).filter(call => !calls.has(call.id)).map(call => ({
+          type: 'tool_use', id: call.id, name: call.name, input: call.input,
+        })));
+        return { role: 'assistant', content };
       }
       if (message.role === 'assistant' && message.toolCalls?.length) {
         return {
@@ -4573,7 +4607,7 @@ export class AnthropicProvider extends AiProvider {
       return {
         role: message.role === 'assistant' ? 'assistant' : 'user',
         content: images.length ? [
-          ...(message.content && (!nativeImages || message.role !== 'user' || message.content.trim()) ? [{ type: 'text', text: message.content }] : []),
+          ...(message.content && (!native || message.role !== 'user' || message.content.trim()) ? [{ type: 'text', text: message.content }] : []),
           ...images,
         ] : message.content,
       };
@@ -4589,10 +4623,11 @@ export class AnthropicProvider extends AiProvider {
     }
 
     const model = options?.model || (this.config.model as string) || ANTHROPIC_DEFAULT_MODEL;
-    const native = this.ownsNativeProfiles && hasAnthropicProfile(model);
+    const native = this.ownsNativeProfiles && hasAnthropicProfile(model), owner = this.config.type;
+    const history = native ? this.nativeMessageHistory(messages, model) : messages;
 
     const systemPrompt = options?.systemPrompt || '';
-    const anthropicMessages = this.buildAnthropicMessages(messages, native);
+    const anthropicMessages = this.buildAnthropicMessages(history, native, model);
 
     // Handle the case where first user message should be preceded by system prompt in messages
     const bodyMessages: Array<{ role: 'user' | 'assistant'; content: unknown }> = [...anthropicMessages];
@@ -4610,7 +4645,7 @@ export class AnthropicProvider extends AiProvider {
 
     if (systemPrompt) body.system = systemPrompt;
     if (options?.temperature !== undefined && (!options.thinking || options.thinking === 'off')) body.temperature = options.temperature;
-    this.applyMessageThinking(body, options, messages);
+    this.applyMessageThinking(body, options, history);
     if (options?.tools?.length) {
       body.tools = options.tools.map(tool => ({
         name: tool.name,
@@ -4624,7 +4659,7 @@ export class AnthropicProvider extends AiProvider {
     const response = await this.request(this.getMessagesUrl(), {
       method: 'POST',
       headers: this.messageHeaders(options, model),
-      body: serializeProviderBody(this.prepareMessageBody(body, options, messages)),
+      body: serializeProviderBody(this.prepareMessageBody(body, options, history)),
       signal: options?.signal,
     });
 
@@ -4635,8 +4670,9 @@ export class AnthropicProvider extends AiProvider {
     if (responseContent && ((!native && !Array.isArray(responseContent)) || responseContent.length > MAX_PROVIDER_STREAM_TOOL_CALLS)) {
       throw new Error('The provider response exceeded the content-block limit.');
     }
-    if (native) { assertAnthropicResponseActive(options?.signal); validateAnthropicResponse(data); }
-    else this.validateMessageResponse(data);
+    if (native) assertAnthropicResponseActive(options?.signal);
+    const blocks = native ? validateAnthropicResponse(data) : undefined;
+    if (!native) this.validateMessageResponse(data);
     const contentBlock = data.content?.find(c => c.type === 'text') as AnthropicTextContent | undefined;
     const reasoning = data.content
       ?.filter((block): block is AnthropicThinkingContent => block.type === 'thinking')
@@ -4652,7 +4688,7 @@ export class AnthropicProvider extends AiProvider {
     return {
       content: native ? data.content?.filter(block => block.type === 'text').map(block => (block as AnthropicTextContent).text ?? '').join('') ?? ''
         : this.messageText(data.content),
-      ...(this.ownsNativeProfiles && hasAnthropicProfile(model) ? { api: 'anthropic-messages' } : {}),
+      ...(native ? { api: 'anthropic-messages', provider: owner, blocks } : {}),
       ...lengthStop(data.stop_reason),
       ...(reasoning ? { reasoning } : {}),
       model: this.ownsNativeProfiles && hasAnthropicProfile(model) ? model : data.model,
@@ -4674,12 +4710,13 @@ export class AnthropicProvider extends AiProvider {
     }
 
     const model = options?.model || (this.config.model as string) || ANTHROPIC_DEFAULT_MODEL;
-    const native = this.ownsNativeProfiles && hasAnthropicProfile(model);
+    const native = this.ownsNativeProfiles && hasAnthropicProfile(model), owner = this.config.type;
     const checkCancellation = () => { if (native) assertAnthropicResponseActive(options?.signal); };
     const url = this.getMessagesUrl();
+    const history = native ? this.nativeMessageHistory(messages, model) : messages;
 
     const systemPrompt = options?.systemPrompt || '';
-    const anthropicMessages = this.buildAnthropicMessages(messages, native);
+    const anthropicMessages = this.buildAnthropicMessages(history, native, model);
 
     let bodyMessages: Array<{ role: 'user' | 'assistant'; content: unknown }> = [...anthropicMessages];
     if (bodyMessages.length === 0) {
@@ -4695,7 +4732,7 @@ export class AnthropicProvider extends AiProvider {
 
     if (systemPrompt) body.system = systemPrompt;
     if (options?.temperature !== undefined && (!options.thinking || options.thinking === 'off')) body.temperature = options.temperature;
-    this.applyMessageThinking(body, options, messages);
+    this.applyMessageThinking(body, options, history);
     if (options?.tools?.length) {
       body.tools = options.tools.map(tool => ({
         name: tool.name,
@@ -4710,7 +4747,7 @@ export class AnthropicProvider extends AiProvider {
       const response = await this.request(url, {
         method: 'POST',
         headers: this.messageHeaders(options, model),
-        body: serializeProviderBody(this.prepareMessageBody(body, options, messages)),
+        body: serializeProviderBody(this.prepareMessageBody(body, options, history)),
         signal: options?.signal,
       });
 
@@ -4723,10 +4760,11 @@ export class AnthropicProvider extends AiProvider {
       let outputBytes = 0;
       let transportBytes = 0;
       let streamEvents = 0;
-      const toolCallFragments = new Map<number, { id: string; name: string; json: string; input?: unknown }>();
+      const toolCallFragments = new Map<number, { id: string; name: string; json: string }>();
 
       if (!response.body) throw new Error('Anthropic streaming response has no body');
-      const validateStream = native ? anthropicResponseStreamValidator() : this.createMessageStreamValidator();
+      const nativeStream = native ? anthropicResponseStreamValidator() : undefined;
+      const validateStream = nativeStream?.validate ?? this.createMessageStreamValidator();
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8', { fatal: true });
       let buffer = '';
@@ -4780,7 +4818,7 @@ export class AnthropicProvider extends AiProvider {
                 fullReasoning += block.thinking;
                 await onChunk('', { type: 'reasoning_delta', data: { content: block.thinking } });
               }
-              if (eventData.content_block?.type === 'tool_use') {
+              if (!native && eventData.content_block?.type === 'tool_use') {
                 if (!Number.isSafeInteger(eventData.index) || eventData.index < 0
                   || eventData.index >= MAX_PROVIDER_STREAM_TOOL_CALLS
                   || typeof eventData.content_block.id !== 'string'
@@ -4795,7 +4833,6 @@ export class AnthropicProvider extends AiProvider {
                   id: eventData.content_block.id,
                   name: eventData.content_block.name,
                   json: '',
-                  ...(native ? { input: eventData.content_block.input } : {}),
                 });
               }
               break;
@@ -4836,11 +4873,12 @@ export class AnthropicProvider extends AiProvider {
       if (buffer.trim()) throw new Error('The provider streaming response was invalid.');
 
       checkCancellation();
-      validateStream();
-      const toolCalls = [...toolCallFragments.values()].map(fragment => {
-        const input = native && !fragment.json ? fragment.input ?? {} : parseProviderToolArguments(fragment.json);
-        return { id: fragment.id, name: fragment.name, input: native ? anthropicResponseToolInput(input) : input };
-      });
+      const blocks = nativeStream?.finish();
+      if (!native) validateStream();
+      const toolCalls = blocks ? blocks.flatMap(block => block.type === 'tool_call'
+        ? [{ id: block.id, name: block.name, input: block.input }] : [])
+        : [...toolCallFragments.values()].map(fragment => ({ id: fragment.id, name: fragment.name,
+          input: parseProviderToolArguments(fragment.json) }));
       for (const call of toolCalls) {
         checkCancellation();
         await onChunk('', { type: 'tool_call', data: call });
@@ -4848,7 +4886,7 @@ export class AnthropicProvider extends AiProvider {
       checkCancellation();
       const result: ChatResponse = {
         content: fullContent,
-        ...(this.ownsNativeProfiles && hasAnthropicProfile(model) ? { api: 'anthropic-messages' } : {}),
+        ...(native ? { api: 'anthropic-messages', provider: owner, blocks } : {}),
         ...(providerThinkingLevel !== undefined ? { providerThinkingLevel } : {}),
         ...(fullReasoning ? { reasoning: fullReasoning } : {}),
         model,

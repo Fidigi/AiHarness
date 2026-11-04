@@ -1597,7 +1597,7 @@ it('hosts and withdraws owned MCP registrations through installed declarations a
 
 // Provider addition: original installed executable/declaration/PATH probes above
 // remain intact. This case consumes only freshly packed, actually installed Core.
-it('validates installed public provider discovery declarations and keyless based-path runtime with original Anthropic caller tools, scoped strict policy, unsigned results and user images', async () => {
+it('validates installed public provider discovery declarations and keyless based-path runtime with original Anthropic caller tools, scoped strict policy, unsigned results, user images and signed continuation', async () => {
   await writeFile(path.join(consumer, 'anthropic-tool-schema.json'), await readFile(path.join(checkout, 'tests/fixtures/anthropic-tool-schema-reference.json')));
   for (const name of ['anthropic-tool-policy-reference.json', 'anthropic-tool-schema-boundaries-reference.json', 'anthropic-tool-results-reference.json', 'anthropic-user-images-reference.json', 'anthropic-simple-allocation-reference.json']) await writeFile(path.join(consumer, name), await readFile(path.join(checkout, 'tests/fixtures', name)));
   await writeFile(path.join(consumer, 'provider-public.ts'), `
@@ -1615,6 +1615,10 @@ it('validates installed public provider discovery declarations and keyless based
     void eligible; void anthropic;
     const legacyReply: ChatResponse = { content: 'legacy' };
     const managedReply: ChatResponse = { content: 'managed', providerThinkingLevel: 'low' };
+    const orderedReply: ChatResponse = { content: 'answer', blocks: [
+      { type: 'reasoning', text: 'visible', thinkingSignature: 'opaque' },
+      { type: 'reasoning', text: '', redacted: true, thinkingSignature: 'opaque-redacted' }, { type: 'text', text: 'answer' }] };
+    void orderedReply;
     const effort: ChatResponse['providerThinkingLevel'] = managedReply.providerThinkingLevel;
     // @ts-expect-error logical minimal is not a physical managed effort
     const logicalReply: ChatResponse = { content: 'logical', providerThinkingLevel: 'minimal' };
@@ -1669,7 +1673,9 @@ it('validates installed public provider discovery declarations and keyless based
     assert.equal((await runtime.wait(run.id)).phase, 'completed'); assert.equal(calls, 1);
     assert.ok(!JSON.stringify(session.messages).includes('thinkingBudgets'));
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
-    const paths = [], bodies = [], toolBodies = []; let provided;
+    const paths = [], bodies = [], toolBodies = [], signedBodies = []; let provided;
+    const signed = [{ type: 'thinking', thinking: 'visible', signature: 'opaque-signature' },
+      { type: 'redacted_thinking', data: 'opaque-redacted' }, { type: 'text', text: 'signed answer' }];
     const imageFixture = JSON.parse(await readFile('anthropic-user-images-reference.json', 'utf8'));
     assert.deepEqual([imageFixture.modelProjections, imageFixture.vectors, imageFixture.freshSdkRequests], [17, 68, 68]);
     const resultFixture = JSON.parse(await readFile('anthropic-tool-results-reference.json', 'utf8'));
@@ -1680,6 +1686,20 @@ it('validates installed public provider discovery declarations and keyless based
     assert.equal(toolFixture.rows.length, 68); assert.equal(toolFixture.callerDeclarations, 51); assert.equal(toolFixture.capturedDeferredDeclarations, 21);
     const server = createServer(async (req, res) => {
       paths.push(req.url);
+      if (req.url === '/signed/v1/messages') {
+        assert.equal(req.headers['x-api-key'], 'disposable-signed');
+        const chunks = []; for await (const chunk of req) chunks.push(chunk);
+        const body = JSON.parse(Buffer.concat(chunks).toString()); signedBodies.push(body);
+        if (!body.stream) { res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify({ model: 'untrusted-alias', content: signed, stop_reason: 'end_turn' })); }
+        else {
+          const events = [{ type: 'message_start', message: {} }, ...signed.flatMap((block, index) => [
+            { type: 'content_block_start', index, content_block: block }, { type: 'content_block_stop', index },
+          ]), { type: 'message_delta', delta: { stop_reason: 'end_turn' } }, { type: 'message_stop' }];
+          res.setHeader('content-type', 'text/event-stream'); res.end(events.map(event => 'data: ' + JSON.stringify(event) + '\\n\\n').join(''));
+        }
+        return;
+      }
       if (req.url === '/caller-tools/v1/messages') {
         assert.equal(req.method, 'POST'); assert.equal(req.headers['x-api-key'], 'disposable-caller-tools');
         assert.equal(req.headers.authorization, undefined); assert.equal(req.headers['anthropic-version'], '2023-06-01');
@@ -1860,6 +1880,28 @@ it('validates installed public provider discovery declarations and keyless based
       }
       assert.equal(toolBodies.length, 2216); assert.equal(paths.length, 2228); assert.equal(refusals, 364);
       assert.deepEqual(paths.slice(12), Array(2216).fill('/caller-tools/v1/messages'));
+      const native = new AnthropicProvider({ type: 'owned-signed', model: 'claude-sonnet-4-6', apiKey: 'disposable-signed', baseUrl: base + '/signed' });
+      for (const stream of [false, true]) {
+        const call = async messages => {
+          const options = { maxTokens: 64, cacheRetention: 'none' };
+          if (!stream) return native.chat(messages, options);
+          let result; await native.streamChat(messages, () => {}, value => { result = value; }, error => { throw error; }, options);
+          assert.ok(result); return result;
+        };
+        const reply = await call([input]);
+        assert.equal(reply.provider, 'owned-signed'); assert.equal(reply.api, 'anthropic-messages'); assert.equal(reply.model, 'claude-sonnet-4-6');
+        assert.deepEqual(reply.blocks, [{ type: 'reasoning', text: 'visible', thinkingSignature: 'opaque-signature' },
+          { type: 'reasoning', text: '[Reasoning redacted]', redacted: true, thinkingSignature: 'opaque-redacted' }, { type: 'text', text: 'signed answer' }]);
+        for (const foreign of [false, true]) {
+          const history = [input, { id: 'reply', role: 'assistant', content: reply.content, timestamp: new Date(1),
+            provider: reply.provider, api: foreign ? 'other-api' : reply.api, model: reply.model, blocks: reply.blocks }, { ...input, id: 'next' }];
+          const before = structuredClone(history); await call(history);
+          assert.deepEqual(signedBodies.at(-1).messages.filter(message => message.role === 'assistant'), [{ role: 'assistant',
+            content: foreign ? [{ type: 'text', text: 'visible' }, { type: 'text', text: 'signed answer' }] : signed }]);
+          assert.deepEqual(history, before);
+        }
+      }
+      assert.equal(signedBodies.length, 6); assert.equal(paths.length, 2234);
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('fresh installed provider declarations/runtime/Anthropic caller tools/scoped strict policy/unsigned results/user images OK');
   `);

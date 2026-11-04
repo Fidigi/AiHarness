@@ -95,6 +95,7 @@ describe('native tool result and nested execution contract', () => {
     const execute = vi.fn(() => ({ content: 'unreachable' }));
     const f = await fixture([{ name: 'probe', description: '', execute }]);
     f.turn.mockReset().mockResolvedValue({ content: 'billed', toolCalls: [{ id: 'pending', name: 'probe', input: {} }],
+      blocks: [{ type: 'reasoning', text: 'visible', thinkingSignature: 'opaque-not-published' }],
       usage: { promptTokens: 2, completionTokens: 1, totalTokens: 3 } });
     await f.registry.load('veto', api => { api.before('before:message', () => false); });
     await expect(f.run()).rejects.toThrow('Extension message cancelled.');
@@ -103,6 +104,38 @@ describe('native tool result and nested execution contract', () => {
     expect(f.manager.get(f.session.id)?.messages.at(-1)).toMatchObject({ role: 'assistant', content: 'billed',
       metadata: { outputError: 'Extension message publication refused.' } });
     expect(f.manager.get(f.session.id)?.messages.at(-1)?.toolCalls).toBeUndefined();
+    expect(f.manager.get(f.session.id)?.messages.at(-1)?.blocks).toBeUndefined();
+  });
+
+  it.each([false, true])('keeps native private order while replacing only final text (tools=%s)', async tools => {
+    const f = await fixture([{ name: 'probe', description: '', execute: () => ({ content: 'ok' }) }]);
+    const calls = tools ? [{ id: 'call', name: 'probe', input: {} }] : [];
+    const response = { content: 'answer', blocks: [
+      { type: 'reasoning' as const, text: 'visible', thinkingSignature: 'opaque-thinking' },
+      { type: 'text' as const, text: 'answer', textSignature: 'opaque-original-text' },
+      { type: 'reasoning' as const, text: '', redacted: true, thinkingSignature: 'opaque-redacted' },
+      ...calls.map(call => ({ type: 'tool_call' as const, ...call })),
+    ], toolCalls: calls };
+    const before = structuredClone(response);
+    f.turn.mockReset().mockResolvedValueOnce(response).mockResolvedValue({ content: 'done' });
+    await f.registry.load('replace', api => api.before('before:message', () => ({ content: 'edited answer' })));
+    expect(await f.run()).toBe('edited answer');
+    const assistant = f.session.messages.find(message => message.role === 'assistant')!;
+    expect(assistant.blocks).toEqual([before.blocks[0], { type: 'text', text: 'edited answer' }, before.blocks[2],
+      ...calls.map(call => ({ type: 'tool_call', ...call }))]);
+    expect(response).toEqual(before);
+    expect(f.results()).toHaveLength(tools ? 1 : 0);
+  });
+
+  it('persists opaque-only completed native content without fabricating visible text', async () => {
+    const f = await fixture([]);
+    f.turn.mockReset().mockResolvedValue({ content: '', blocks: [
+      { type: 'reasoning', text: '', redacted: true, thinkingSignature: 'opaque-redacted' },
+    ] });
+    expect(await f.run()).toBe('');
+    expect(f.session.messages.at(-1)).toMatchObject({ role: 'assistant', content: '', blocks: [
+      { type: 'reasoning', text: '', redacted: true, thinkingSignature: 'opaque-redacted' },
+    ] });
   });
 
   it('joins readonly batches in declared order before starting a mutator', async () => {

@@ -1,9 +1,14 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnthropicProvider, type AnthropicChatOptions, type ChatOptions, type ChatResponse } from './index.js';
 import type { Message } from '../types/index.js';
-import { SessionManager } from '../sessions/session-manager.js';
+import { JsonlSessionStore, SessionManager } from '../sessions/session-manager.js';
+import { deserializeSession, serializeSession, serializeSessionForExport } from '../sessions/serialization.js';
+import { CredentialRedactor } from './credentials.js';
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
 import { runToolLoop } from '../agent/tool-loop.js';
 import { streamProviderTurn } from '../agent/provider-turn.js';
@@ -153,6 +158,17 @@ function responseEvents(stop_reason = 'end_turn'): Array<Record<string, unknown>
   ];
 }
 
+const signedContent: Array<Record<string, unknown>> = [
+  { type: 'text', text: 'left!' }, { type: 'thinking', thinking: 'firstsecond', signature: 'opaque-signature' },
+  { type: 'redacted_thinking', data: 'opaque-redacted' }, { type: 'text', text: 'right?' },
+  { type: 'tool_use', id: 'call', name: 'echo', input: { x: 1 } },
+];
+function signedEvents(content: Array<Record<string, unknown>>, finish = 'end_turn'): Array<Record<string, unknown>> {
+  return [{ type: 'message_start', message: { usage: observed } }, ...content.flatMap((block, index) => [
+    { type: 'content_block_start', index, content_block: block }, { type: 'content_block_stop', index },
+  ]), { type: 'message_delta', delta: { stop_reason: finish }, usage: observed }, { type: 'message_stop' }];
+}
+
 describe('owned Anthropic response authority', () => {
   for (const profile of profiles) it(`${profile.id}: normalizes all text/thinking and accepts only successful terminal reasons`, async () => {
     const f = fixture(profile.id);
@@ -167,7 +183,14 @@ describe('owned Anthropic response authority', () => {
         expect(result).toMatchObject({ model: profile.id, api: 'anthropic-messages', content: 'left!right?',
           reasoning: 'firstsecond', toolCalls: [{ id: 'call', name: 'echo', input: { x: 1 } }] });
         expect(result.stopReason).toBe(finish === 'max_tokens' ? 'length' : undefined);
-        expect(JSON.stringify(result)).not.toContain('opaque-');
+        expect(result.provider).toBe('operator-alias');
+        expect(result.blocks).toEqual([
+          { type: 'text', text: 'left!' }, { type: 'reasoning', text: 'firstsecond',
+            thinkingSignature: stream ? 'opaque-signatureopaque-signature' : 'opaque-signature' },
+          ...(!stream ? [{ type: 'reasoning', text: '[Reasoning redacted]', redacted: true, thinkingSignature: 'opaque-redacted' }] : []),
+          { type: 'text', text: 'right?' }, { type: 'tool_call', id: 'call', name: 'echo', input: { x: 1 } },
+        ]);
+        expect(JSON.stringify({ content: result.content, reasoning: result.reasoning, toolCalls: result.toolCalls })).not.toContain('opaque-');
       }
     }
     for (const content of [[], [{ type: 'thinking', thinking: 'only-reasoning', signature: 'opaque' }]]) {
@@ -209,6 +232,54 @@ describe('owned Anthropic response authority', () => {
     }
     expect(f.fetch.mock.calls.length - imageStart).toBe(8);
   });
+  for (const profile of profiles) it(`${profile.id}: replays ordered opaque blocks only for the exact provider/API/model`, async () => {
+    const f = fixture(profile.id);
+    for (const stream of [false, true]) {
+      f.reply({ content: signedContent, stop_reason: 'tool_use', usage: observed }, signedEvents(signedContent, 'tool_use'));
+      const received = await f.call(stream, 'none');
+      expect(received.blocks).toHaveLength(5);
+      f.reply({ content: [{ type: 'text', text: 'next' }], stop_reason: 'end_turn' }, signedEvents([{ type: 'text', text: 'next' }]));
+      for (const change of ['same', 'provider', 'model', 'api', 'legacy', 'expurgated', 'failed'] as const) {
+        const source: Message = { id: 'signed', role: 'assistant', content: received.content, timestamp: new Date(0),
+          provider: received.provider, api: received.api, model: received.model,
+          blocks: structuredClone(received.blocks), toolCalls: received.toolCalls,
+          metadata: { providerThinkingLevel: received.providerThinkingLevel } };
+        if (change === 'provider') source.provider = 'other';
+        if (change === 'model') source.model = 'other-model';
+        if (change === 'api') source.api = 'other-api';
+        if (change === 'legacy') delete source.api;
+        if (change === 'failed') source.metadata!.outputError = 'failed publication';
+        if (change === 'expurgated') source.blocks = source.blocks!.map(block => {
+          if (block.type !== 'reasoning') return block;
+          const { thinkingSignature: _signature, ...visible } = block; return visible;
+        });
+        const history: Message[] = [...input, source,
+          ...(change === 'failed' ? [] : [{ id: 'tool', role: 'tool' as const, content: 'result', timestamp: new Date(0), toolCallId: 'call' }]),
+          { id: 'continue', role: 'user', content: 'continue', timestamp: new Date(1) }];
+        const before = structuredClone(history);
+        await f.call(stream, 'none', undefined, history);
+        const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+        const assistant = body.messages.filter((message: { role: string }) => message.role === 'assistant');
+        const unsigned = [{ type: 'text', text: 'left!' }, { type: 'text', text: 'firstsecond' },
+          { type: 'text', text: 'right?' }, { type: 'tool_use', id: 'call', name: 'echo', input: { x: 1 } }];
+        expect(assistant, `${stream}/${change}`).toEqual(change === 'failed' ? [] : [{ role: 'assistant',
+          content: change === 'same' ? signedContent : unsigned }]);
+        expect(history).toEqual(before);
+        if (change !== 'same') expect(JSON.stringify(body)).not.toContain('opaque-');
+      }
+      const images: Message[] = [...input, { id: 'assistant-image', role: 'assistant', content: 'caption', timestamp: new Date(0),
+        provider: received.provider, model: received.model, api: received.api,
+        blocks: [{ type: 'text', text: 'caption' }, { type: 'image', mediaType: 'image/png', url: 'data:image/png;base64,AA==' }] },
+        { ...input[0], id: 'next' }];
+      const before = structuredClone(images);
+      await f.call(stream, 'none', undefined, images);
+      const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+      expect(body.messages.filter((message: { role: string }) => message.role === 'assistant')).toEqual([{ role: 'assistant', content: [
+        { type: 'text', text: 'caption' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AA==' } },
+      ] }]);
+      expect(images).toEqual(before);
+    }
+  });
   for (const profile of profiles) it(`${profile.id}: rejects malformed/error/incomplete native responses before tools or completion`, async () => {
     const f = fixture(profile.id), content = [{ type: 'text', text: 'untrusted' }];
     for (const json of [null, [], { content }, { content, stop_reason: null },
@@ -234,6 +305,12 @@ describe('owned Anthropic response authority', () => {
       ...['refusal', 'sensitive', 'unknown'].map(finish => responseEvents(finish)),
       [start, { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 1 } }],
       [start, { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: '', name: 'echo' } }],
+      [start, { type: 'content_block_start', index: 1024, content_block: { type: 'text', text: '' } }],
+      [start, { type: 'content_block_stop', index: 0 }],
+      [start, events[1], events[1]],
+      [start, events[1], { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'SECRET' } }],
+      events.filter(event => event.type !== 'content_block_stop'),
+      [...events.slice(0, 4), events[2], ...events.slice(4)],
       [start, { type: 'error', error: { message: 'SECRET' } }],
     ];
     for (const records of malformed) {
@@ -662,34 +739,79 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       expect(body.output_config).toBeUndefined(); expect(new Headers(init?.headers).get('anthropic-beta')).toBeNull();
     }
   });
-  it('persists physical managed effort on both tool and final responses for the next native turn', async () => {
-    const f = fixture('claude-haiku-5-5'), manager = new SessionManager(), session = await manager.create({ title: 'Managed effort' });
+  it.each([false, true])('persists ordered native blocks/managed effort through both append paths and reload (stream=%s)', async stream => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-anthropic-replay-'));
+    const redactor = new CredentialRedactor(['disposable-profile-key']);
+    const redactText = (value: string) => redactor.redact(value), redactJson = <T>(value: T): T => redactor.redactJson(value);
+    const f = fixture('claude-haiku-5-5'), manager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson });
+    const session = await manager.create({ title: 'Managed effort' });
     const registry = new ExtensionRegistry(), tools = [{ name: 'echo', description: 'Echo', parameters: { type: 'object' } }];
-    await manager.addMessage(session.id, input[0]);
+    await manager.addMessage(session.id, { role: 'user', content: input[0].content });
     await registry.load('echo', api => api.registerTool({ name: 'echo', description: 'Echo', execute: async () => ({ content: 'result' }) }));
+    const native = signedContent.map(block => block.type === 'thinking' ? { ...block, signature: 'opaque-disposable-profile-key' } : block);
     let turn = 0;
     try {
       await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry, provider: 'operator-alias', tools,
-        toolContext: { sessionManager: manager, notify: () => {} }, streamTurn: async messages => {
-          f.tool(turn === 0);
-          return f.call(true, 'none', { thinking: turn++ === 0 ? 'max' : 'low', tools }, messages);
+        redactText, toolContext: { sessionManager: manager, notify: () => {} }, streamTurn: async messages => {
+          const first = turn++ === 0, thinking = first ? 'max' : 'low';
+          const content = first ? native : native.filter(block => block.type !== 'tool_use');
+          f.reply({ content, stop_reason: first ? 'tool_use' : 'end_turn', usage: observed }, signedEvents(content, first ? 'tool_use' : 'end_turn'));
+          return stream ? streamProviderTurn({ provider: f.provider, providerName: 'operator-alias', model: 'claude-haiku-5-5',
+            messages, tools, thinking, maxTokens: 64, cacheRetention: 'none', cacheWarming: 'off', maxRetries: 0,
+            extensionRegistry: registry, sessionManager: manager, sessionId: session.id,
+            redactText, redactJson, createTextRedactor: () => redactor.createStream() })
+            : f.call(false, 'none', { thinking, tools }, messages);
         } });
       const history = session.messages.filter(message => message.role === 'assistant');
       expect(history.map(message => message.metadata?.providerThinkingLevel)).toEqual(['max', 'low']);
       expect(history.map(message => message.metadata?.thinkingLevel)).toEqual([undefined, undefined]);
       expect(history.map(message => message.api)).toEqual(['anthropic-messages', 'anthropic-messages']);
       expect(history[0].toolCalls).toHaveLength(1); expect(history[1].toolCalls).toBeUndefined();
+      const expected = [{ type: 'text', text: 'left!' }, { type: 'reasoning', text: 'firstsecond', thinkingSignature: 'opaque-[REDACTED]' },
+        { type: 'reasoning', text: '[Reasoning redacted]', redacted: true, thinkingSignature: 'opaque-redacted' },
+        { type: 'text', text: 'right?' }, { type: 'tool_call', id: 'call', name: 'echo', input: { x: 1 } }];
+      expect(history[0].blocks).toEqual(expected); expect(history[1].blocks).toEqual(expected.slice(0, -1));
       const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
       expect(body.messages.filter((message: { role: string }) => message.role === 'system')).toEqual([
         { role: 'system', content: [], output_config: { effort: 'max' } }, { role: 'system', content: [], output_config: { effort: 'low' } },
       ]);
+      const file = path.join(root, session.id + '.jsonl'), bytes = await readFile(file, 'utf8');
+      expect(bytes).not.toContain('disposable-profile-key'); expect(bytes).toContain('opaque-[REDACTED]');
+      const restarted = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson });
+      const loaded = (await restarted.loadFromStore(session.id))!;
+      const imported = deserializeSession(JSON.parse(JSON.stringify(serializeSession(loaded))));
+      expect(imported.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual(history.map(message => message.blocks));
+      const expurgated = serializeSessionForExport(loaded);
+      expect(expurgated.warning).toContain('Native continuation'); expect(JSON.stringify(expurgated.session)).not.toContain('opaque-');
+      imported.messages.push({ id: 'next', role: 'user', content: 'continue', timestamp: new Date() });
+      await f.call(stream, 'none', { thinking: 'low' }, imported.messages);
+      const replay = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+      expect(replay.messages.filter((message: { role: string }) => message.role === 'assistant').map((message: { content: unknown }) => message.content))
+        .toEqual([native.map(block => block.type === 'thinking' ? { ...block, signature: 'opaque-[REDACTED]' } : block),
+          native.filter(block => block.type !== 'tool_use').map(block => block.type === 'thinking' ? { ...block, signature: 'opaque-[REDACTED]' } : block)]);
+      expect(await readFile(file, 'utf8')).toBe(bytes);
+      await restarted.appendContextEdit(session.id, { targetEntryId: history[0].id, replacement: 'edited answer' });
+      const clone = await restarted.cloneSession(session.id);
+      const context = restarted.getEffectiveContext(clone.id).flatMap((entry): Message[] => entry.type === 'message'
+        ? [{ ...entry, timestamp: new Date(entry.timestamp) }] : []);
+      context.push({ id: 'next', role: 'user', content: 'continue', timestamp: new Date() });
+      await f.call(stream, 'none', { thinking: 'low' }, context);
+      const edited = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).messages.filter((message: { role: string }) => message.role === 'assistant');
+      expect(JSON.stringify(edited[0])).not.toContain('opaque-'); expect(JSON.stringify(edited[1])).toContain('opaque-redacted');
+      expect((await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message' && entry.role === 'assistant').map(entry => entry.blocks))
+        .toEqual(history.map(message => message.blocks));
+      expect(clone.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual(history.map(message => message.blocks));
       registry.virtualModels.register({ provider: 'router', id: 'auto', maxOutputTokens: 64,
         route: () => ({ provider: 'operator-alias', id: 'claude-fable-5-1', thinkingLevel: 'minimal' }) });
       const routed = await streamProviderTurn({ provider: registry.getVirtualProvider('router')!, providerName: 'router', model: 'auto',
-        messages: input, tools: [], extensionRegistry: registry, resolveProvider: name => name === 'operator-alias' ? f.provider : undefined, maxRetries: 0 });
+        messages: loaded.messages, tools: [], extensionRegistry: registry, resolveProvider: name => name === 'operator-alias' ? f.provider : undefined, maxRetries: 0 });
       expect(routed.providerThinkingLevel).toBe('low'); expect(routed.thinkingLevel).toBe('minimal');
       expect(routed.selection).toMatchObject({ provider: 'router', id: 'auto' });
-    } finally { await registry.shutdown(); }
+      const switched = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+      expect(JSON.stringify(switched.messages)).not.toContain('opaque-');
+      expect(JSON.stringify(switched.messages)).toContain('firstsecond');
+      expect(native[1].signature).toBe('opaque-disposable-profile-key');
+    } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
   });
   it('captures the adaptive dialect independently of public metadata, later model changes and derived transports', async () => {
     const f = fixture('claude-opus-4-7'), policy = captureNativeOutputBudget(f.provider)!;

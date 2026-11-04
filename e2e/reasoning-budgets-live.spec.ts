@@ -1,11 +1,101 @@
 import { createServer } from 'node:http';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { AnthropicProvider } from '../packages/core/dist/index.js';
+import { AnthropicProvider, SESSION_EXPORT_CONTINUATION_WARNING } from '../packages/core/dist/index.js';
 import { start, stop } from '../packages/server/dist/index.js';
 import { createRuntimeServices } from '../packages/server/dist/runtime/services.js';
 import { expect, test } from './fixtures/test-budget';
+
+test('native signed Anthropic blocks survive server restart, replay and guarded export', async ({ page }) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'aih-signed-web-'));
+  const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data'), model = 'claude-sonnet-4-6';
+  const names = ['AI_HARNESS_AUTH_TOKEN', 'AI_HARNESS_ADMIN_TOKEN', 'AI_HARNESS_AGENT_DIR'] as const;
+  const previous = names.map(name => process.env[name]);
+  process.env.AI_HARNESS_AUTH_TOKEN = 'mod-user'; process.env.AI_HARNESS_ADMIN_TOKEN = 'mod-admin';
+  process.env.AI_HARNESS_AGENT_DIR = path.join(root, 'agent');
+  const bodies: Array<{ messages: Array<{ role: string; content: unknown }> }> = [];
+  const wire = createServer(async (request, response) => {
+    if (request.method === 'GET') { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ data: [{ id: model }] })); return; }
+    const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
+    bodies.push(JSON.parse(Buffer.concat(chunks).toString()));
+    const answer = bodies.length === 1 ? 'First native answer.' : 'Continued native answer.';
+    response.setHeader('Content-Type', 'text/event-stream');
+    response.end([
+      { type: 'message_start', message: { model: 'untrusted-alias', usage: { input_tokens: 5, output_tokens: 0 } } },
+      { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: 'Visible native reasoning', signature: 'opaque-start-' } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'tail' } },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'content_block_start', index: 1, content_block: { type: 'redacted_thinking', data: 'opaque-redacted' } },
+      { type: 'content_block_stop', index: 1 },
+      { type: 'content_block_start', index: 2, content_block: { type: 'text', text: answer } },
+      { type: 'content_block_stop', index: 2 },
+      { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 2 } }, { type: 'message_stop' },
+    ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
+  });
+  await mkdir(cwd); await new Promise<void>(resolve => wire.listen(0, '127.0.0.1', resolve));
+  try {
+    const upstream = `http://127.0.0.1:${(wire.address() as { port: number }).port}`;
+    const options: NonNullable<Parameters<typeof start>[0]> = { port: 0, host: '127.0.0.1', dataDir, defaultCwd: cwd,
+      allowedRoots: [cwd], webRoot: path.resolve('packages/web/dist'), enableMockProvider: true,
+      runtimeServicesFactory: async (proxy, settings) => {
+        const services = await createRuntimeServices(proxy, settings);
+        proxy.setCustomProvider('native-signed', new AnthropicProvider({ type: 'native-signed', apiKey: 'disposable-private-wire', baseUrl: upstream, model }));
+        return services;
+      } };
+    const server = await start(options), base = `http://127.0.0.1:${server.port}`;
+    const login = async () => expect((await page.request.post(`${base}/api/auth/login`, { data: { token: 'mod-admin' } })).status()).toBe(200);
+    await login();
+    expect((await page.request.post(`${base}/api/workspaces/trust`, { data: { cwd, confirm: true } })).status()).toBe(200);
+    expect((await page.request.patch(`${base}/api/configuration/scope`, { data: { scope: 'global',
+      values: { provider: 'native-signed', model, thinking: 'low', toolPreset: 'chat-only' } } })).status()).toBe(200);
+    await page.addInitScript(() => localStorage.setItem('ai-harness-locale', 'en'));
+    const settingsUrl = `${base}/settings?cwd=${encodeURIComponent(cwd)}`;
+    await page.goto(settingsUrl);
+    await page.getByRole('combobox', { name: 'Select the AI Provider', exact: true }).selectOption('native-signed');
+    await page.getByRole('button', { name: 'New chat', exact: true }).click();
+    const send = async (text: string) => {
+      await page.getByRole('textbox', { name: 'Message composer' }).fill(text);
+      const accepted = page.waitForResponse(response => response.url().endsWith('/api/agent/runs') && response.request().method() === 'POST');
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      const result = await (await accepted).json();
+      await expect.poll(async () => (await page.request.get(`${base}/api/agent/runs/${result.run.id}`).then(response => response.json())).phase).toBe('completed');
+      return result;
+    };
+    const first = await send('Start native reasoning');
+    await expect(page.locator('.message.assistant')).toContainText('First native answer.');
+    const file = path.join(dataDir, 'sessions', first.session.id + '.jsonl'), before = await readFile(file, 'utf8');
+    expect(before).toContain('opaque-start-tail'); expect(before).toContain('opaque-redacted'); expect(before).not.toContain('disposable-private-wire');
+    const exported = await page.request.get(`${base}/api/sessions/${first.session.id}/export?format=json`);
+    expect(exported.status()).toBe(200); expect(exported.headers()['x-aiharness-export-warning']).toBe(SESSION_EXPORT_CONTINUATION_WARNING);
+    const expurgated = await exported.text(); expect(expurgated).not.toContain('opaque-'); expect(expurgated).toContain('First native answer.');
+    const complete = await page.request.get(`${base}/api/sessions/${first.session.id}/export?format=json&includeOpaqueContinuations=true`);
+    expect(complete.status()).toBe(200); expect(await complete.text()).toContain('opaque-start-tail');
+    expect(await readFile(file, 'utf8')).toBe(before);
+    const url = page.url(); await page.goto('about:blank'); await stop();
+    await start({ ...options, port: server.port }); await login(); await page.goto(url);
+    await expect(page.locator('.message.assistant')).toHaveCount(1); expect(bodies).toHaveLength(1);
+    // Scoped defaults initialize new drafts, not the active provider for a saved chat.
+    // Explicitly select the same physical provider before asking for native replay.
+    await page.goto(settingsUrl);
+    await page.getByRole('combobox', { name: 'Select the AI Provider', exact: true }).selectOption('native-signed');
+    await page.locator(`a.session-main[href*="${first.session.id}"]`).click();
+    const second = await send('Continue from the saved native response');
+    expect(second.session.id).toBe(first.session.id);
+    await expect(page.locator('.message.assistant').last()).toContainText('Continued native answer.');
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1].messages.filter(message => message.role === 'assistant')).toEqual([{ role: 'assistant', content: [
+      { type: 'thinking', thinking: 'Visible native reasoning', signature: 'opaque-start-tail' },
+      { type: 'redacted_thinking', data: 'opaque-redacted' }, { type: 'text', text: 'First native answer.' },
+    ] }]);
+    await expect(page.locator('body')).not.toContainText('opaque-');
+  } finally {
+    await page.goto('about:blank').catch(() => undefined); await stop();
+    wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve()));
+    names.forEach((name, index) => { if (previous[index] === undefined) delete process.env[name]; else process.env[name] = previous[index]; });
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 // Real emitted static Web -> authenticated API -> Core -> native Anthropic HTTP
 // adapter; only the external service is a disposable loopback wire fixture.

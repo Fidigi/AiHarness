@@ -74,6 +74,32 @@ describe('virtual physical admission and missing-router resume', () => {
     expect(f.sent[0].options.maxTokens).toBeUndefined();
   });
 
+  it.each(['same', 'api', 'provider', 'model', 'failed'] as const)('projects native signed history at the physical %s boundary without editing raw messages', async change => {
+    const f = await fixture(); f.register();
+    f.physical.getModelApi = () => change === 'api' ? 'openai-completions' : 'anthropic-messages';
+    await f.manager.addMessage(f.session.id, { role: 'assistant', content: 'public', provider: change === 'provider' ? 'other' : 'physical',
+      model: change === 'model' ? 'other' : 'native', api: 'anthropic-messages',
+      blocks: [{ type: 'reasoning', text: 'visible thought', thinkingSignature: 'opaque-thinking' },
+        { type: 'reasoning', text: '', redacted: true, thinkingSignature: 'opaque-redacted' },
+        { type: 'text', text: 'public', textSignature: 'opaque-text' },
+        { type: 'tool_call', id: 'call', name: 'read', input: {}, thoughtSignature: 'opaque-tool' }],
+      toolCalls: [{ id: 'call', name: 'read', input: {}, thoughtSignature: 'opaque-tool' }],
+      ...(change === 'failed' ? { metadata: { outputError: 'failed' } } : {}) });
+    const before = structuredClone(f.session.messages);
+    await f.dispatch();
+    const sent = f.sent[0].messages;
+    if (change === 'same') expect(sent[1].blocks).toEqual(before[1].blocks);
+    else {
+      expect(JSON.stringify(sent)).not.toContain('opaque-');
+      if (change === 'failed') expect(sent).toHaveLength(1);
+      else expect(sent[1]).toMatchObject({ content: 'visible thoughtpublic',
+        blocks: [{ type: 'text', text: 'visible thought' }, { type: 'text', text: 'public' },
+          { type: 'tool_call', id: 'call', name: 'read', input: {} }],
+        toolCalls: [{ id: 'call', name: 'read', input: {} }] });
+    }
+    expect(f.session.messages).toEqual(before);
+  });
+
   it.each(['empty', 'invalid'])('does not borrow a known provider alias when its declaration is %s', async kind => {
     const f = await fixture();
     f.physical.getPublishedModels = () => kind === 'empty' ? [] : [{ id: 'o3-mini', name: '',

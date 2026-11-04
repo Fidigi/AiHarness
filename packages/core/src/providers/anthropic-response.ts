@@ -1,3 +1,6 @@
+import type { MessageContentBlock } from '../types/index.js';
+import { parseProviderToolArguments } from './tool-arguments.js';
+
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const validFinish = (value: unknown): boolean => typeof value === 'string'
   && ['end_turn', 'stop_sequence', 'tool_use', 'max_tokens', 'pause_turn'].includes(value);
@@ -25,45 +28,77 @@ function validateBlock(value: unknown, complete: boolean): void {
     if (complete || value.input !== undefined) anthropicResponseToolInput(value.input);
   } else invalid();
 }
-export function validateAnthropicResponse(value: unknown): void {
+function contentBlock(value: unknown): MessageContentBlock {
+  validateBlock(value, true);
+  const block = value as Record<string, unknown>;
+  if (block.type === 'text') return { type: 'text', text: block.text as string };
+  if (block.type === 'thinking') return { type: 'reasoning', text: block.thinking as string,
+    ...(typeof block.signature === 'string' ? { thinkingSignature: block.signature } : {}) };
+  if (block.type === 'redacted_thinking') return { type: 'reasoning', text: '[Reasoning redacted]',
+    redacted: true, thinkingSignature: block.data as string };
+  return { type: 'tool_call', id: block.id as string, name: block.name as string, input: block.input };
+}
+export function validateAnthropicResponse(value: unknown): MessageContentBlock[] {
   if (!record(value)) invalid();
   validateEnvelope(value);
-  if (!Array.isArray(value.content) || !validFinish(value.stop_reason)) invalid();
-  for (const block of value.content) validateBlock(block, true);
+  if (!Array.isArray(value.content) || value.content.length > 1024 || !validFinish(value.stop_reason)) invalid();
+  return value.content.map(contentBlock);
 }
 
-/** Native terminal authority only; complete block lifecycle/replay qualification is separate. */
-export function anthropicResponseStreamValidator(): (value?: unknown) => void {
+/** Ordered native content is released only after complete blocks and terminal authority. */
+export function anthropicResponseStreamValidator(): { validate(value: unknown): void; finish(): MessageContentBlock[] } {
   let started = false, finished = false, stopped = false;
-  return value => {
-    if (value === undefined) { if (!started || !finished || !stopped) invalid(); return; }
-    if (!record(value) || typeof value.type !== 'string') invalid();
-    if (value.type === 'ping') return;
-    if (stopped) invalid();
-    if (value.type === 'message_start') {
-      if (started || !record(value.message)) invalid();
-      validateEnvelope(value.message);
-      started = true;
-    } else if (value.type === 'message_delta') {
-      if (!started || !record(value.delta)) invalid();
-      if (value.delta.stop_reason !== undefined && value.delta.stop_reason !== null) {
-        if (finished || !validFinish(value.delta.stop_reason)) invalid();
-        finished = true;
-      }
-    } else if (value.type === 'message_stop') {
-      if (!started || !finished) invalid();
-      stopped = true;
-    } else if (['content_block_start', 'content_block_delta', 'content_block_stop'].includes(value.type)) {
-      if (!started || finished || !Number.isSafeInteger(value.index) || (value.index as number) < 0) invalid();
-      if (value.type === 'content_block_start') validateBlock(value.content_block, false);
-      else if (value.type === 'content_block_delta') {
-        const delta = value.delta;
-        if (!record(delta)) invalid();
-        const key = delta.type === 'text_delta' ? 'text' : delta.type === 'thinking_delta' ? 'thinking'
-          : delta.type === 'input_json_delta' ? 'partial_json' : delta.type === 'signature_delta' ? 'signature' : undefined;
-        if (!key || typeof delta[key] !== 'string') invalid();
-      }
-    } else invalid();
+  const blocks: Array<Record<string, unknown>> = [], open = new Set<number>(), argumentsJson = new Map<number, string>();
+  return {
+    validate(value) {
+      if (!record(value) || typeof value.type !== 'string') invalid();
+      if (value.type === 'ping') return;
+      if (stopped) invalid();
+      if (value.type === 'message_start') {
+        if (started || !record(value.message)) invalid();
+        validateEnvelope(value.message);
+        started = true;
+      } else if (value.type === 'message_delta') {
+        if (!started || !record(value.delta)) invalid();
+        if (value.delta.stop_reason !== undefined && value.delta.stop_reason !== null) {
+          if (finished || open.size || !validFinish(value.delta.stop_reason)) invalid();
+          finished = true;
+        }
+      } else if (value.type === 'message_stop') {
+        if (!started || !finished) invalid();
+        stopped = true;
+      } else if (['content_block_start', 'content_block_delta', 'content_block_stop'].includes(value.type)) {
+        const index = value.index as number;
+        if (!started || finished || !Number.isSafeInteger(index) || index < 0 || index >= 1024) invalid();
+        if (value.type === 'content_block_start') {
+          if (index !== blocks.length) invalid();
+          validateBlock(value.content_block, false);
+          const block = { ...value.content_block as Record<string, unknown> };
+          if (block.type === 'text') block.text ??= '';
+          if (block.type === 'thinking') block.thinking ??= '';
+          blocks.push(block); open.add(index);
+        } else {
+          if (!open.has(index)) invalid();
+          if (value.type === 'content_block_stop') { open.delete(index); return; }
+          const delta = value.delta, block = blocks[index]!;
+          if (!record(delta)) invalid();
+          const key = delta.type === 'text_delta' && block.type === 'text' ? 'text'
+            : delta.type === 'thinking_delta' && block.type === 'thinking' ? 'thinking'
+              : delta.type === 'signature_delta' && block.type === 'thinking' ? 'signature' : undefined;
+          if (key) {
+            if (typeof delta[key] !== 'string') invalid();
+            block[key] = String(block[key] ?? '') + delta[key];
+          } else if (delta.type === 'input_json_delta' && block.type === 'tool_use' && typeof delta.partial_json === 'string') {
+            argumentsJson.set(index, (argumentsJson.get(index) ?? '') + delta.partial_json);
+          } else invalid();
+        }
+      } else invalid();
+    },
+    finish() {
+      if (!started || !finished || !stopped || open.size) invalid();
+      return blocks.map((block, index) => contentBlock(block.type === 'tool_use'
+        ? { ...block, input: argumentsJson.get(index) ? parseProviderToolArguments(argumentsJson.get(index)!) : block.input ?? {} } : block));
+    },
   };
 }
 export function assertAnthropicResponseActive(signal?: AbortSignal): void {

@@ -99,7 +99,7 @@ export function applyAnthropicProfileToolDeclarations(body: Record<string, unkno
       input_schema: { ...(strict ? parameters : {}), type: 'object', properties: parameters.properties ?? {}, required: parameters.required ?? [] } };
   });
 }
-/** Supplied unsigned calls and paired results only; no generated/orphan/signature lifecycle. */
+/** Correlate paired tool results without changing surrounding native content order. */
 export function applyAnthropicToolHistory(body: Record<string, unknown>, messages: readonly Message[], owner: string,
   toolImageParts: (message: Message) => Array<Record<string, unknown>>): void {
   if (typeof body.model !== 'string' || !profiles.has(body.model) || !Array.isArray(body.messages)) return;
@@ -110,7 +110,7 @@ export function applyAnthropicToolHistory(body: Record<string, unknown>, message
     // Managed effort controls have already been inserted; they consume no source turn.
     if (message.role === 'system') { result.push(message); previousTool = false; continue; }
     const source = original[index++];
-    if (source?.role === 'assistant' && source.toolCalls?.length && Array.isArray(message.content)) {
+    if (source?.role === 'assistant' && Array.isArray(message.content)) {
       const same = source.provider === owner && source.model === body.model && source.api === 'anthropic-messages';
       message.content = message.content.map(block => {
         if (block.type !== 'tool_use') return block;

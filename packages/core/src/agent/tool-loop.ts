@@ -87,6 +87,27 @@ function normalizeUsage(usage: ChatResponse['usage']): TokenUsage | undefined {
   };
 }
 
+/** Keep native order; a final-text hook replaces text, not unrelated private reasoning. */
+function assistantBlocks(response: ChatResponse): MessageContentBlock[] {
+  let blocks: MessageContentBlock[] = response.blocks ? [...response.blocks] : [
+    ...(response.reasoning ? [{ type: 'reasoning' as const, text: response.reasoning }] : []),
+    ...(response.content ? [{ type: 'text' as const, text: response.content }] : []),
+  ];
+  if (response.blocks && blocks.filter(block => block.type === 'text').map(block => block.text).join('') !== response.content) {
+    let replaced = false;
+    blocks = blocks.flatMap((block): MessageContentBlock[] => {
+      if (block.type !== 'text') return [block];
+      if (replaced) return [];
+      replaced = true;
+      return response.content ? [{ type: 'text', text: response.content }] : [];
+    });
+    if (!replaced && response.content) blocks.push({ type: 'text', text: response.content });
+  }
+  const calls = new Set(blocks.flatMap(block => block.type === 'tool_call' ? [block.id] : []));
+  blocks.push(...(response.toolCalls ?? []).filter(call => !calls.has(call.id)).map(call => ({ type: 'tool_call' as const, ...call })));
+  return blocks;
+}
+
 /** Stable error used by the CLI and detached Web runtime. */
 export class AgentAbortError extends Error {
   constructor() {
@@ -230,14 +251,11 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
     const toolCalls = response.toolCalls ?? [];
 
     if (toolCalls.length === 0) {
-      if (response.content || originalContent || response.reasoning || response.stopReason === 'length') {
+      if (response.content || originalContent || response.reasoning || response.blocks?.length || response.stopReason === 'length') {
         await options.sessionManager.addMessage(options.sessionId, {
           role: 'assistant',
           content: response.content,
-          blocks: [
-            ...(response.reasoning ? [{ type: 'reasoning' as const, text: response.reasoning }] : []),
-            ...(response.content ? [{ type: 'text' as const, text: response.content }] : []),
-          ],
+          blocks: assistantBlocks(response),
           provider: response.provider ?? options.provider,
           model: response.model,
           ...(response.api ? { api: response.api } : {}),
@@ -276,11 +294,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
     await options.sessionManager.addMessage(options.sessionId, {
       role: 'assistant',
       content: response.content,
-      blocks: [
-        ...(response.reasoning ? [{ type: 'reasoning' as const, text: response.reasoning }] : []),
-        ...(response.content ? [{ type: 'text' as const, text: response.content }] : []),
-        ...toolCalls.map(call => ({ type: 'tool_call' as const, ...call })),
-      ],
+      blocks: assistantBlocks(response),
       toolCalls,
       provider: response.provider ?? options.provider,
       model: response.model,

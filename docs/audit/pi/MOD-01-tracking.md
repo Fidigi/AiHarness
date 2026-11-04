@@ -1,8 +1,14 @@
 # MOD-01 — Delivery Board
 
-> **Status: IN PROGRESS** (2026-11-03)
+> **Status: IN PROGRESS** (2026-11-04)
 >
 > Two bounded deliveries integrated on 2026-11-01: native Mistral CLI (`bd05889`) and Google/Vertex numeric override (`4777c4c`). Required parity/root gates remain failed, including two unexplained application SIGSEGVs on the later source. No collector repair or whole-provider acceptance.
+
+## MOD-03 original Anthropic continuation — 2026-11-04
+
+**Later bounded delivery, no parent closure:** the [source-bound receipt](./evidence/MOD-03-anthropic-replay.json) and [current register](./AUDIT-5.md#mod-03--native-anthropic-ordered-continuation) record ordered JSON/SSE response blocks, both shared agent append paths, v2 reload and exact provider/API/model replay on the seventeen privately owned original Anthropic profiles. Existing scenarios add foreign/failed/expurgated projection, credential protection, target-only context replacement and raw clone retention; installed declarations/runtime and an actual Server/static-Web restart/export/replay journey remain distinct controls. Browser replay explicitly selects the same physical provider through Settings/sidebar navigation, not automatic provider restoration.
+
+This supersedes the earlier missing-producer statement only for that bounded original-Anthropic path. Synthetic local wire data is not a fresh pinned-SDK replay oracle, cryptographic/account acceptance, other-provider/media/compaction/fork qualification or complete MOD-01/MOD-03 delivery. Required canonical failures and both earlier browser selection failures remain retained in the receipt, without retries, compiler/runtime intervention, weakened assertions/deadlines or gate waivers.
 
 ## MOD-03 shared export guard — 2026-11-03
 

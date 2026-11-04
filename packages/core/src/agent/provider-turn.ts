@@ -9,7 +9,7 @@ import {
   type ThinkingBudgets,
 } from '../providers/index.js';
 import type { ExtensionRegistry } from '../extensions/extension-registry.js';
-import type { Message, TokenUsage } from '../types/index.js';
+import type { Message, MessageContentBlock, TokenUsage } from '../types/index.js';
 import { calculatePublishedModelCost } from '../providers/model-metadata.js';
 import type { CredentialRedactionStream } from '../providers/credentials.js';
 import { copyThinkingBudgets } from '../providers/thinking-budgets.js';
@@ -26,6 +26,7 @@ import { resolveVirtualModelFallback, VirtualModelRoutingError, type VirtualMode
 import { getProviderPublishedModel } from '../providers/provider-model-metadata.js';
 import { clampPublishedThinkingLevel, getSupportedThinkingLevels } from '../providers/model-metadata.js';
 import { getSessionCacheWarmer, type CacheWarmingMode } from '../providers/cache-warmer.js';
+import { projectAssistantReplay } from '../providers/message-replay.js';
 
 export interface StreamProviderTurnOptions {
   provider: AiProvider;
@@ -139,13 +140,23 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
     });
     const { provider, selection } = resolved;
     const metadata = getProviderPublishedModel(selection.provider, selection.id, provider);
-    const project = (input: Message[]): Message[] => input.map(message => {
+    const api = provider.getModelApi?.(selection.id);
+    const project = (input: Message[]): Message[] => input.flatMap(message => {
+      if (message.role === 'assistant' && message.api === 'anthropic-messages' && message.metadata?.outputError) return [];
       let projected = message;
       // Private replay belongs to the exact physical source, not the virtual alias.
-      if (message.role === 'assistant' && (message.provider !== selection.provider || message.model !== selection.id)) {
-        projected = { id: message.id, timestamp: message.timestamp, role: message.role, content: message.content,
-          ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
-          ...(message.blocks ? { blocks: message.blocks.filter(block => block.type !== 'reasoning') } : {}) };
+      if (message.role === 'assistant' && (message.provider !== selection.provider || message.model !== selection.id
+        || message.api !== undefined && message.api !== api)) {
+        const source = message.api === 'anthropic-messages'
+          ? projectAssistantReplay(message, selection.provider, selection.id, api) : message;
+        projected = { id: source.id, timestamp: source.timestamp, role: source.role, content: source.content,
+          ...(source.toolCalls ? { toolCalls: source.toolCalls.map(({ thoughtSignature: _signature, ...call }) => call) } : {}),
+          ...(source.blocks ? { blocks: source.blocks.flatMap((block): MessageContentBlock[] => {
+            if (block.type === 'reasoning') return [];
+            if (block.type === 'text') return [{ type: 'text' as const, text: block.text }];
+            if (block.type === 'tool_call') { const { thoughtSignature: _signature, ...call } = block; return [call]; }
+            return [block];
+          }) } : {}) };
       }
       if (metadata?.capabilities.imageInput === false && projected.blocks?.some(block => block.type === 'image')) {
         projected = { ...projected, content: `${projected.content}\n[Image omitted: physical model does not support images.]`,
