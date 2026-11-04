@@ -339,6 +339,14 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       .toEqual({ code: 0, stdout: 'session context state OK\n', stderr: '' });
   }, 20_000);
 
+  it.each(['native-r', 'azure'].flatMap(provider => ['print', 'json', 'rpc'].map(mode => ({ provider, mode }))))(
+    'retains original Responses encrypted continuation through the installed PATH-bin ($provider/$mode)', async ({ provider, mode }) => {
+      const probe = `responses-continuation-${provider}-${mode}.mjs`;
+      await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/responses-continuation-probe.mjs'), path.join(consumer, probe));
+      expect(await run(process.execPath, [probe, provider, mode], consumer, environment, '', 20_000))
+        .toEqual({ code: 0, stdout: 'INSTALLED_RESPONSES_CONTINUATION_OK\n', stderr: '' });
+    }, 25_000);
+
   it('publishes owned native context-state and output-only compaction declarations', async () => {
     await writeFile(path.join(consumer, 'context-state-public.ts'), `
       import { SessionManager, type SessionLoadout, type SessionContextEdit, type ContextEditEntry, type LoadoutEntry,
