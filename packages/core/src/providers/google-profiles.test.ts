@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GeminiProvider, VertexGeminiProvider, MockProvider, type ChatOptions, type ChatResponse, type ThinkingLevel, type ThinkingBudgets } from './index.js';
 import { getSupportedThinkingLevels, PUBLISHED_THINKING_LEVELS } from './model-metadata.js';
@@ -7,6 +10,10 @@ import { getProviderPublishedModel, getProviderPublishedModels } from './provide
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
 import type { Message } from '../types/index.js';
 import { streamProviderTurn } from '../agent/provider-turn.js';
+import { runToolLoop } from '../agent/tool-loop.js';
+import { JsonlSessionStore, SessionManager } from '../sessions/session-manager.js';
+import { serializeSessionForExport } from '../sessions/serialization.js';
+import { CredentialRedactor } from './credentials.js';
 
 const pin = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/provider-reference.json', import.meta.url), 'utf8'));
 type Scope = 'google' | 'google-vertex';
@@ -63,11 +70,23 @@ const userImageReference = JSON.parse(userImageBytes.toString()) as {
 const input = [{ id: 'user', role: 'user' as const, content: 'probe', timestamp: new Date(0) }];
 const observed = { promptTokenCount: 12, candidatesTokenCount: 2, thoughtsTokenCount: 3, cachedContentTokenCount: 4, totalTokenCount: 17 };
 const known = (price: Price) => price.input > 0 || price.output > 0 || price.cacheRead > 0 || price.cacheWrite > 0;
+const signedParts = [
+  { text: 'left', thoughtSignature: 'bGVmdA==' }, { text: 'visible', thought: true, thoughtSignature: 'dGhvdWdodA==' },
+  { functionCall: { id: 'native-call', name: 'echo', args: { x: 1 } }, thoughtSignature: 'dG9vbA==' },
+  { text: '', thoughtSignature: 'ZW1wdHk=' }, { text: '', thought: true, thoughtSignature: 'aGlkZGVu' },
+  { text: 'right', thoughtSignature: 'cmlnaHQ=' },
+];
+const signedBlocks = [
+  { type: 'text', text: 'left', textSignature: 'bGVmdA==' }, { type: 'reasoning', text: 'visible', thinkingSignature: 'dGhvdWdodA==' },
+  { type: 'tool_call', id: 'native-call', name: 'echo', input: { x: 1 }, thoughtSignature: 'dG9vbA==' },
+  { type: 'text', text: '', textSignature: 'ZW1wdHk=' }, { type: 'reasoning', text: '', thinkingSignature: 'aGlkZGVu' },
+  { type: 'text', text: 'right', textSignature: 'cmlnaHQ=' },
+];
 afterEach(() => vi.restoreAllMocks());
-function fixture(scope: Scope, model: string, compatible = false) {
+function fixture(scope: Scope, model: string, compatible = false, apiKey = 'disposable-google-key') {
   const Native = scope === 'google' ? GeminiProvider : VertexGeminiProvider;
   class Compatible extends Native {}
-  const provider = new (compatible ? Compatible : Native)({ type: 'operator-alias', model, apiKey: 'disposable-google-key',
+  const provider = new (compatible ? Compatible : Native)({ type: 'operator-alias', model, apiKey,
     baseUrl: 'http://127.0.0.1:1/owned/v1', project: 'disposable-project' });
   let usage: unknown = structuredClone(observed), beforeReply = () => {};
   let parts: Array<Record<string, unknown>> = [{ text: 'ok' }];
@@ -518,6 +537,50 @@ describe('native original Google/Vertex response authority', () => {
           stopReason: 'length', model: profile.id, api: profile.api });
       }
       expect(f.chunks).toEqual([['', 'reasoning_delta', { content: 'first' }], ['A', 'text_delta', 'A'], ['', 'reasoning_delta', { content: 'second' }], ['B', 'text_delta', 'B']]);
+      f.parts(signedParts);
+      const requiresIds = Number(/^gemini(?:-live)?-(\d+)/i.exec(profile.id)?.[1] ?? 0) >= 3;
+      for (const stream of [false, true]) {
+        const response = await f.call(stream, { maxTokens: 64 });
+        expect(response).toMatchObject({ provider: scope === 'google' ? 'google' : 'vertex', api: profile.api, model: profile.id,
+          content: 'leftright', reasoning: 'visible', blocks: signedBlocks,
+          toolCalls: [{ id: 'native-call', name: 'echo', input: { x: 1 }, thoughtSignature: 'dG9vbA==' }] });
+        const source: Message = { id: 'signed', role: 'assistant', content: response.content, blocks: response.blocks,
+          toolCalls: response.toolCalls, provider: response.provider, api: response.api, model: response.model, timestamp: new Date(0) };
+        const before = structuredClone(source);
+        for (const change of ['same', 'provider', 'model', 'api', 'missing-api', 'expurgated', 'failed'] as const) {
+          const message = structuredClone(source);
+          if (change === 'provider') message.provider = 'foreign-provider';
+          if (change === 'model') message.model = 'foreign-model';
+          if (change === 'api') message.api = 'foreign-api';
+          if (change === 'missing-api') delete message.api;
+          if (change === 'failed') message.metadata = { outputError: 'failed publication' };
+          if (change === 'expurgated') {
+            message.blocks = message.blocks!.map(block => {
+              const copy = { ...block };
+              if (copy.type === 'text') delete copy.textSignature;
+              if (copy.type === 'reasoning') delete copy.thinkingSignature;
+              if (copy.type === 'tool_call') delete copy.thoughtSignature;
+              return copy;
+            });
+            message.toolCalls = message.toolCalls!.map(({ thoughtSignature: _signature, ...call }) => call);
+          }
+          const owned = structuredClone(message);
+          await f.call(stream, { maxTokens: 64 }, [message]);
+          const body = JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body));
+          const tool = { functionCall: { name: 'echo', args: { x: 1 }, ...(requiresIds ? { id: 'native-call' } : {}) } };
+          const same = signedParts.map(part => part.functionCall ? { ...part, ...tool } : part);
+          const unsigned = [{ text: 'left' }, { text: 'visible', ...(change === 'expurgated' ? { thought: true } : {}) }, tool, { text: 'right' }];
+          expect(body.contents).toEqual(change === 'failed' ? [] : [{ role: 'model', parts: change === 'same' ? same : unsigned }]);
+          expect(message).toEqual(owned);
+        }
+        expect(source).toEqual(before);
+        const image: Message = { ...source, content: 'image answer', blocks: [{ type: 'text', text: 'image answer' },
+          { type: 'image', url: 'data:image/png;base64,AA==' }], toolCalls: undefined };
+        await f.call(stream, { maxTokens: 64 }, [image]);
+        expect(JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body)).contents).toEqual([{ role: 'model', parts: [
+          { text: 'image answer' }, { inlineData: { mimeType: 'image/png', data: 'AA==' } },
+        ] }]);
+      }
     });
     it(`${scope}: refuses invalid responses or missing finishes without completing or publishing pending tools`, async () => {
       const f = fixture(scope, 'gemini-3.8-flash'), call = { functionCall: { name: 'read', args: {} } };
@@ -526,7 +589,8 @@ describe('native original Google/Vertex response authority', () => {
         candidate('OTHER'), candidate('MALFORMED_FUNCTION_CALL'), { candidates: [{ finishReason: 'STOP' }, { finishReason: 'STOP' }] },
         { candidates: {} }, { candidates: [{ finishReason: 'STOP', content: [] }] },
         candidate('STOP', null), candidate('STOP', {}), candidate('STOP', [{ text: 23 }]),
-        candidate('STOP', [{ text: 'PRIVATE', thought: 'true' }]), candidate('STOP', [call, { functionCall: { name: 'read', args: 'PRIVATE-arguments' } }])]) {
+        candidate('STOP', [{ text: 'PRIVATE', thought: 'true' }]), candidate('STOP', [{ text: '', thoughtSignature: 23 }]),
+        candidate('STOP', [call, { functionCall: { name: 'read', args: 'PRIVATE-arguments' } }])]) {
         for (const stream of [false, true]) {
           const count = f.completed.length; f.chunks.length = 0;
           f.fetch.mockImplementationOnce(async () => reply(data, stream));
@@ -543,6 +607,45 @@ describe('native original Google/Vertex response authority', () => {
       await expect(f.call(true)).rejects.toThrow('Invalid Google response.');
       expect(f.completed).toHaveLength(count); expect(f.chunks.some(([, type]) => type === 'tool_call')).toBe(false);
     });
+    it(`${scope}: retains signatures across streamed fragments and bounds completed rich history`, async () => {
+      const f = fixture(scope, 'gemini-3.8-flash');
+      const frames = [
+        { candidates: [{ content: { parts: [{ text: 'left', thoughtSignature: 'bGVmdA==' }, { text: 'visible', thought: true, thoughtSignature: 'Zmlyc3Q=' }] } }] },
+        { candidates: [{ content: { parts: [{ text: ' thought', thought: true }, { text: '', thought: true, thoughtSignature: 'bGFzdA==' }] } }] },
+        { candidates: [{ content: { parts: [{ functionCall: { id: 'native-call', name: 'echo', args: {} }, thoughtSignature: 'dG9vbA==' },
+          { text: '', thoughtSignature: 'ZW1wdHk=' }] } }] },
+        { candidates: [{ finishReason: 'STOP' }] },
+      ];
+      f.fetch.mockImplementationOnce(async () => new Response(frames.map(data => `data: ${JSON.stringify(data)}\n\n`).join('')));
+      const response = await f.call(true);
+      expect(response).toMatchObject({ content: 'left', reasoning: 'visible thought', blocks: [
+        { type: 'text', text: 'left', textSignature: 'bGVmdA==' }, { type: 'reasoning', text: 'visible thought', thinkingSignature: 'bGFzdA==' },
+        { type: 'tool_call', id: 'native-call', name: 'echo', input: {}, thoughtSignature: 'dG9vbA==' },
+        { type: 'text', text: '', textSignature: 'ZW1wdHk=' },
+      ] });
+      for (const opaque of ['bad', 'AAAA====', '=AA=']) {
+        const message: Message = { id: 'invalid-signature', role: 'assistant', content: 'visible', timestamp: new Date(0),
+          provider: response.provider, api: response.api, model: response.model,
+          blocks: [{ type: 'text', text: 'visible', textSignature: opaque }, { type: 'reasoning', text: '', thinkingSignature: opaque }] };
+        await f.call(false, {}, [message]);
+        expect(JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body)).contents).toEqual([{ role: 'model', parts: [{ text: 'visible' }] }]);
+        expect(message.blocks?.[0]).toMatchObject({ textSignature: opaque });
+      }
+      const excessive = Array.from({ length: 1025 }, (_, index) => ({ candidates: [{ content: { parts: [{ text: '', thought: index % 2 === 0 }] } }] }));
+      f.fetch.mockImplementationOnce(async () => new Response([...excessive, frames[3]].map(data => `data: ${JSON.stringify(data)}\n\n`).join('')));
+      const completed = f.completed.length;
+      await expect(f.call(true)).rejects.toThrow('The provider response exceeded the content-block limit.');
+      expect(f.completed).toHaveLength(completed);
+      for (const compatible of [true, false]) {
+        const adapter = fixture(scope, compatible ? 'gemini-3.8-flash' : 'gemini-3.8-flash-unverified', compatible);
+        adapter.parts(signedParts);
+        for (const stream of [false, true]) {
+          const legacy = await adapter.call(stream);
+          expect(legacy.blocks).toBeUndefined(); expect(legacy.provider).toBeUndefined();
+          expect(legacy.toolCalls).toEqual([{ id: 'gemini-2-echo', name: 'echo', input: { x: 1 } }]);
+        }
+      }
+    });
     it(`${scope}: awaits native delivery and honours withdrawal before later buffered text/tools/completion`, async () => {
       const f = fixture(scope, 'gemini-3.8-flash'), abort = new AbortController(), complete = vi.fn(), error = vi.fn();
       const data = [{ candidates: [{ content: { parts: [{ text: 'before' }] } }] },
@@ -558,6 +661,71 @@ describe('native original Google/Vertex response authority', () => {
       abort.abort(); release(); await pending;
       expect(chunks).toEqual(['before']); expect(complete).not.toHaveBeenCalled(); expect(error).toHaveBeenCalledOnce();
       expect(error.mock.calls[0]?.[0].message).toBe('Gemini request aborted.');
+    });
+  }
+});
+
+describe('native original Google/Vertex signed durability', () => {
+  for (const scope of ['google', 'google-vertex'] as const) for (const stream of [false, true]) {
+    it(`${scope}: retains tool/final history through reload, guarded export, edit and physical routing (stream=${stream})`, async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), 'aih-google-replay-'));
+      const redactor = new CredentialRedactor(['c2VjcmV0']), redactText = (value: string) => redactor.redact(value);
+      const redactJson = <T>(value: T): T => redactor.redactJson(value);
+      const f = fixture(scope, 'gemini-3.8-flash', false, 'c2VjcmV0');
+      const manager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson });
+      const session = await manager.create({ title: 'Google native replay' }), registry = new ExtensionRegistry();
+      const provider = scope === 'google' ? 'google' : 'vertex';
+      const native = signedParts.map((part, index) => index === 0 ? { ...part, thoughtSignature: 'c2VjcmV0' } : part);
+      let turn = 0, effects = 0;
+      await registry.load('echo', api => api.registerTool({ name: 'echo', description: 'Echo', execute: () => { effects++; return { content: 'result' }; } }));
+      try {
+        await manager.addMessage(session.id, { role: 'user', content: 'start' });
+        await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry, provider,
+          tools: [{ name: 'echo', description: 'Echo', parameters: { type: 'object' } }], toolContext: { sessionManager: manager, notify: () => {} },
+          redactText, streamTurn: async messages => {
+            f.parts(turn++ === 0 ? native : native.filter(part => !part.functionCall));
+            return stream ? streamProviderTurn({ provider: f.provider, providerName: provider, model: 'gemini-3.8-flash',
+              messages, tools: [], extensionRegistry: registry, sessionManager: manager, sessionId: session.id,
+              redactText, redactJson, createTextRedactor: () => redactor.createStream(), maxRetries: 0, maxTokens: 64, cacheRetention: 'none' })
+              : f.call(false, { maxTokens: 64 }, messages);
+          } });
+        expect(effects).toBe(1); expect(turn).toBe(2);
+        const file = path.join(root, session.id + '.jsonl'), bytes = await readFile(file, 'utf8');
+        expect(bytes).not.toContain('c2VjcmV0'); expect(bytes).toContain('[REDACTED]'); expect((await stat(file)).mode & 0o777).toBe(0o600);
+        const history = session.messages.filter(message => message.role === 'assistant');
+        const expected = signedBlocks.map((block, index) => index === 0 ? { ...block, textSignature: '[REDACTED]' } : block);
+        expect(history.map(message => message.blocks)).toEqual([expected, expected.filter(block => block.type !== 'tool_call')]);
+        expect(history.map(message => [message.provider, message.api, message.model])).toEqual(Array(2).fill([provider, f.provider.getModelApi(), 'gemini-3.8-flash']));
+        const restarted = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson });
+        const loaded = (await restarted.loadFromStore(session.id))!;
+        expect(loaded.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual(history.map(message => message.blocks));
+        const ordinary = serializeSessionForExport(loaded), complete = serializeSessionForExport(loaded, { includeOpaqueContinuations: true });
+        expect(ordinary.warning).toContain('Native continuation'); expect(JSON.stringify(ordinary.session)).not.toContain('Signature');
+        expect(JSON.stringify(complete.session)).toContain('dGhvdWdodA=='); expect(JSON.stringify(complete.session)).not.toContain('c2VjcmV0');
+        f.parts([{ text: 'next' }]);
+        await f.call(stream, { maxTokens: 64 }, loaded.messages);
+        const replay = JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body)).contents.filter((content: { role: string }) => content.role === 'model');
+        const retained: Array<Record<string, unknown>> = native.map((part, index) => index === 0 ? { text: 'left' } : part);
+        expect(replay.map((content: { parts: unknown }) => content.parts)).toEqual([retained, retained.filter(part => !part.functionCall)]);
+        expect(await readFile(file, 'utf8')).toBe(bytes);
+        await restarted.appendContextEdit(session.id, { targetEntryId: history[0].id, replacement: 'edited answer' });
+        const clone = await restarted.cloneSession(session.id);
+        const projected = restarted.getEffectiveContext(clone.id).flatMap((entry): Message[] => entry.type === 'message' ? [{ ...entry, timestamp: new Date(entry.timestamp) }] : []);
+        await f.call(stream, { maxTokens: 64 }, projected);
+        const edited = JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body)).contents.filter((content: { role: string }) => content.role === 'model');
+        expect(edited[0].parts).toEqual([{ functionCall: { id: 'native-call', name: 'echo', args: { x: 1 } }, thoughtSignature: 'dG9vbA==' }, { text: 'edited answer' }]);
+        expect(edited[1].parts).toEqual(retained.filter(part => !part.functionCall));
+        expect((await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message' && entry.role === 'assistant').map(entry => entry.blocks))
+          .toEqual(history.map(message => message.blocks));
+        expect(clone.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual(history.map(message => message.blocks));
+        registry.virtualModels.register({ provider: 'router', id: 'auto', maxOutputTokens: 64,
+          route: () => ({ provider, id: 'gemini-2.5-flash' }) });
+        await streamProviderTurn({ provider: registry.getVirtualProvider('router')!, providerName: 'router', model: 'auto', messages: loaded.messages,
+          tools: [], extensionRegistry: registry, resolveProvider: name => name === provider ? f.provider : undefined, maxRetries: 0 });
+        const foreign = JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body)).contents;
+        expect(JSON.stringify(foreign)).not.toContain('thoughtSignature'); expect(JSON.stringify(foreign)).toContain('visible');
+        expect(native[0].thoughtSignature).toBe('c2VjcmV0');
+      } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
     });
   }
 });

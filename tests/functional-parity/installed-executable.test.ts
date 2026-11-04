@@ -2155,7 +2155,9 @@ it('dispatches original Google/Vertex schema/generation/choice/history/tool and 
       const options: GoogleChatOptions = { maxTokens: 64, thinking: 'high', thinkingBudgets: { high: 1 }, toolChoice: 'any',
         tools: [{ name: 'echo', description: 'Echo', constrainedSampling: { type: 'json_schema', strict: 'prefer' }, parameters: { type: 'object', properties: { x: { type: 'string' } } } }] };
       const messages: Message[] = [{ id: 'a', role: 'assistant', content: '', timestamp: new Date(0), provider: 'google', api: 'google-generative-ai', model: 'gemini-3.1-pro-preview',
-        toolCalls: [{ id: 'provided-id', name: 'echo', input: { x: 'owned' } }] },
+        toolCalls: [{ id: 'provided-id', name: 'echo', input: { x: 'owned' }, thoughtSignature: 'dG9vbA==' }],
+        blocks: [{ type: 'text', text: '', textSignature: 'ZW1wdHk=' }, { type: 'reasoning', text: 'visible', thinkingSignature: 'c2lnbmVk' },
+          { type: 'tool_call', id: 'provided-id', name: 'echo', input: { x: 'owned' }, thoughtSignature: 'dG9vbA==' }] },
         { id: 't', role: 'tool', content: 'done', timestamp: new Date(0), toolCallId: 'provided-id', name: 'echo', isError: false,
           blocks: [{ type: 'text', text: 'done' }, { type: 'image', mediaType: 'image/png', url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==' }] }];
       for (const provider of providers) {
@@ -2297,6 +2299,27 @@ it('dispatches original Google/Vertex schema/generation/choice/history/tool and 
         }
       } finally { globalThis.fetch = originalFetch; }
       assert.equal(bearer.length, 13); assert.equal(regionalCalls.length, 13); assert.equal(calls.length + regionalCalls.length, 3499);
+      const signedParts = [{ text: 'left', thoughtSignature: 'bGVmdA==' }, { text: 'visible', thought: true, thoughtSignature: 'dGhvdWdodA==' },
+        { functionCall: { id: 'native-call', name: 'echo', args: {} }, thoughtSignature: 'dG9vbA==' }, { text: '', thoughtSignature: 'ZW1wdHk=' }];
+      for (const [scope, provider] of Object.entries(providers)) for (const stream of [false, true]) {
+        const options = { model: 'gemini-3.8-flash', maxTokens: 64 }, owner = scope === 'google' ? 'google' : 'vertex';
+        const api = scope === 'google' ? 'google-generative-ai' : 'google-vertex';
+        pendingParts = signedParts; let captured;
+        if (stream) await provider.streamChat([], () => {}, value => { captured = value; }, undefined, options);
+        else captured = await provider.chat([], options);
+        assert.equal(captured.provider, owner); assert.equal(captured.api, api); assert.equal(captured.model, options.model);
+        assert.deepEqual(captured.blocks, [{ type: 'text', text: 'left', textSignature: 'bGVmdA==' },
+          { type: 'reasoning', text: 'visible', thinkingSignature: 'dGhvdWdodA==' },
+          { type: 'tool_call', id: 'native-call', name: 'echo', input: {}, thoughtSignature: 'dG9vbA==' }, { type: 'text', text: '', textSignature: 'ZW1wdHk=' }]);
+        assert.equal(captured.toolCalls[0].thoughtSignature, 'dG9vbA==');
+        const history = [{ id: 'a', role: 'assistant', timestamp: new Date(0), content: captured.content,
+          blocks: captured.blocks, toolCalls: captured.toolCalls, provider: captured.provider, api: captured.api, model: captured.model }];
+        const before = JSON.stringify(history); pendingParts = undefined;
+        if (stream) await provider.streamChat(history, () => {}, undefined, undefined, options);
+        else await provider.chat(history, options);
+        assert.deepEqual(calls.at(-1).body.contents, [{ role: 'model', parts: signedParts }]); assert.equal(JSON.stringify(history), before);
+      }
+      assert.equal(calls.length + regionalCalls.length, 3507);
       console.log('installed original Google policies/tool and user images OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);

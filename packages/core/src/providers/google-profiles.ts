@@ -133,7 +133,7 @@ export function applyGoogleToolPolicy(scope: GoogleNativeScope | undefined, mode
   if (profile && mode) body.toolConfig = { functionCallingConfig: { mode } };
 }
 
-/** Patch only owned unsigned tool history; contents are the adapter's fresh, one-per-message conversion. */
+/** Correlate owned tool history without reordering the adapter's fresh rich parts. */
 export function applyGoogleToolHistory(scope: GoogleNativeScope, model: string, body: Record<string, unknown>, messages: Message[],
   toolImageParts: (message: Message) => Array<Record<string, unknown>>): void {
   const profile = profiles.get(`${scope}\0${model}`); if (!profile) return;
@@ -144,13 +144,17 @@ export function applyGoogleToolHistory(scope: GoogleNativeScope, model: string, 
   const grouped: typeof contents = [], ids = new Map<string, string>();
   for (const [index, message] of messages.filter(message => message.role !== 'system').entries()) {
     const content = contents[index];
-    if (requiresIds && message.role === 'assistant') {
+    if (message.role === 'assistant') {
       const same = message.provider === provider && message.model === model && message.api === api;
       const parts = content.parts.filter(part => part.functionCall);
-      for (const [offset, call] of (message.toolCalls ?? []).entries()) {
-        const id = same ? call.id : call.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
-        (parts[offset].functionCall as Record<string, unknown>).id = id;
-        ids.set(call.id, id);
+      for (const [offset, part] of parts.entries()) {
+        const call = part.functionCall as Record<string, unknown>;
+        const sourceId = typeof call.id === 'string' ? call.id : message.toolCalls?.[offset]?.id;
+        if (!requiresIds) { delete call.id; continue; }
+        if (sourceId === undefined) continue;
+        const id = same ? sourceId : sourceId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
+        call.id = id;
+        ids.set(sourceId, id);
       }
     }
     if (message.role === 'tool') {

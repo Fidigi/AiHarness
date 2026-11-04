@@ -2,25 +2,35 @@ import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { AnthropicProvider, SESSION_EXPORT_CONTINUATION_WARNING } from '../packages/core/dist/index.js';
+import { AnthropicProvider, GeminiProvider, VertexGeminiProvider, SESSION_EXPORT_CONTINUATION_WARNING } from '../packages/core/dist/index.js';
 import { start, stop } from '../packages/server/dist/index.js';
 import { createRuntimeServices } from '../packages/server/dist/runtime/services.js';
 import { expect, test } from './fixtures/test-budget';
 
-test('native signed Anthropic blocks survive server restart, replay and guarded export', async ({ page }) => {
+for (const dialect of ['anthropic', 'google', 'vertex'] as const) test(`native signed ${dialect} blocks survive server restart, replay and guarded export`, async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-signed-web-'));
-  const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data'), model = 'claude-sonnet-4-6';
+  const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data'), model = dialect === 'anthropic' ? 'claude-sonnet-4-6' : 'gemini-3.8-flash';
+  const opaque = dialect === 'anthropic' ? ['opaque-start-tail', 'opaque-redacted'] : ['b3BhcXVlLXJlYXNvbmluZw==', 'b3BhcXVlLXRleHQ='];
   const names = ['AI_HARNESS_AUTH_TOKEN', 'AI_HARNESS_ADMIN_TOKEN', 'AI_HARNESS_AGENT_DIR'] as const;
   const previous = names.map(name => process.env[name]);
   process.env.AI_HARNESS_AUTH_TOKEN = 'mod-user'; process.env.AI_HARNESS_ADMIN_TOKEN = 'mod-admin';
   process.env.AI_HARNESS_AGENT_DIR = path.join(root, 'agent');
-  const bodies: Array<{ messages: Array<{ role: string; content: unknown }> }> = [];
+  const bodies: Array<{ messages?: Array<{ role: string; content: unknown }>; contents?: Array<{ role: string; parts: unknown }> }> = [];
   const wire = createServer(async (request, response) => {
-    if (request.method === 'GET') { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ data: [{ id: model }] })); return; }
+    if (request.method === 'GET') {
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify(dialect === 'anthropic' ? { data: [{ id: model }] } : { models: [{ name: `models/${model}` }] })); return;
+    }
     const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
     bodies.push(JSON.parse(Buffer.concat(chunks).toString()));
     const answer = bodies.length === 1 ? 'First native answer.' : 'Continued native answer.';
     response.setHeader('Content-Type', 'text/event-stream');
+    if (dialect !== 'anthropic') {
+      response.end(`data: ${JSON.stringify({ modelVersion: 'untrusted-alias', candidates: [{ content: { role: 'model', parts: [
+        { text: 'Visible native reasoning', thought: true, thoughtSignature: opaque[0] }, { text: answer, thoughtSignature: opaque[1] },
+      ] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2, totalTokenCount: 7 } })}\n\n`);
+      return;
+    }
     response.end([
       { type: 'message_start', message: { model: 'untrusted-alias', usage: { input_tokens: 5, output_tokens: 0 } } },
       { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: 'Visible native reasoning', signature: 'opaque-start-' } },
@@ -40,7 +50,9 @@ test('native signed Anthropic blocks survive server restart, replay and guarded 
       allowedRoots: [cwd], webRoot: path.resolve('packages/web/dist'), enableMockProvider: true,
       runtimeServicesFactory: async (proxy, settings) => {
         const services = await createRuntimeServices(proxy, settings);
-        proxy.setCustomProvider('native-signed', new AnthropicProvider({ type: 'native-signed', apiKey: 'disposable-private-wire', baseUrl: upstream, model }));
+        const config = { apiKey: 'disposable-private-wire', baseUrl: upstream, model };
+        proxy.setCustomProvider('native-signed', dialect === 'anthropic' ? new AnthropicProvider({ ...config, type: 'native-signed' })
+          : dialect === 'google' ? new GeminiProvider({ ...config, type: 'google' }) : new VertexGeminiProvider({ ...config, type: 'vertex' }));
         return services;
       } };
     const server = await start(options), base = `http://127.0.0.1:${server.port}`;
@@ -65,12 +77,15 @@ test('native signed Anthropic blocks survive server restart, replay and guarded 
     const first = await send('Start native reasoning');
     await expect(page.locator('.message.assistant')).toContainText('First native answer.');
     const file = path.join(dataDir, 'sessions', first.session.id + '.jsonl'), before = await readFile(file, 'utf8');
-    expect(before).toContain('opaque-start-tail'); expect(before).toContain('opaque-redacted'); expect(before).not.toContain('disposable-private-wire');
+    for (const value of opaque) expect(before).toContain(value);
+    expect(before).not.toContain('disposable-private-wire');
     const exported = await page.request.get(`${base}/api/sessions/${first.session.id}/export?format=json`);
     expect(exported.status()).toBe(200); expect(exported.headers()['x-aiharness-export-warning']).toBe(SESSION_EXPORT_CONTINUATION_WARNING);
     const expurgated = await exported.text(); expect(expurgated).not.toContain('opaque-'); expect(expurgated).toContain('First native answer.');
+    for (const value of opaque) expect(expurgated).not.toContain(value);
     const complete = await page.request.get(`${base}/api/sessions/${first.session.id}/export?format=json&includeOpaqueContinuations=true`);
-    expect(complete.status()).toBe(200); expect(await complete.text()).toContain('opaque-start-tail');
+    expect(complete.status()).toBe(200);
+    const completeText = await complete.text(); for (const value of opaque) expect(completeText).toContain(value);
     expect(await readFile(file, 'utf8')).toBe(before);
     const url = page.url(); await page.goto('about:blank'); await stop();
     await start({ ...options, port: server.port }); await login(); await page.goto(url);
@@ -84,11 +99,15 @@ test('native signed Anthropic blocks survive server restart, replay and guarded 
     expect(second.session.id).toBe(first.session.id);
     await expect(page.locator('.message.assistant').last()).toContainText('Continued native answer.');
     expect(bodies).toHaveLength(2);
-    expect(bodies[1].messages.filter(message => message.role === 'assistant')).toEqual([{ role: 'assistant', content: [
+    if (dialect === 'anthropic') expect(bodies[1].messages!.filter(message => message.role === 'assistant')).toEqual([{ role: 'assistant', content: [
       { type: 'thinking', thinking: 'Visible native reasoning', signature: 'opaque-start-tail' },
       { type: 'redacted_thinking', data: 'opaque-redacted' }, { type: 'text', text: 'First native answer.' },
     ] }]);
+    else expect(bodies[1].contents!.filter(message => message.role === 'model')).toEqual([{ role: 'model', parts: [
+      { text: 'Visible native reasoning', thought: true, thoughtSignature: opaque[0] }, { text: 'First native answer.', thoughtSignature: opaque[1] },
+    ] }]);
     await expect(page.locator('body')).not.toContainText('opaque-');
+    for (const value of opaque) await expect(page.locator('body')).not.toContainText(value);
   } finally {
     await page.goto('about:blank').catch(() => undefined); await stop();
     wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve()));

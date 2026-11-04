@@ -76,6 +76,7 @@ import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicTh
 import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage, applyAnthropicProfileToolDeclarations, applyAnthropicToolHistory } from './anthropic-profiles.js';
 import { validateAnthropicResponse, anthropicResponseStreamValidator, assertAnthropicResponseActive } from './anthropic-response.js';
 import { projectAssistantReplay } from './message-replay.js';
+import { googleResponseBlocks, appendGoogleResponseBlocks, googleReplayParts, type GoogleResponsePart } from './google-replay.js';
 import { applyGoogleNativeGenerationConfig, applyGoogleToolPolicy, applyGoogleToolHistory, googlePublishedProfiles, hasGoogleProfile, googleProfileUsage, type GoogleNativeScope } from './google-profiles.js';
 import { captureNativeConfiguredModel, registerNativeOutputBudget } from './provider-output-budget.js';
 export type { ThinkingBudgets } from './thinking-budgets.js';
@@ -3816,15 +3817,8 @@ export class OpenAiMixedProvider extends AiProvider {
 // Google Gemini Provider
 // ===================================================================
 
-interface GeminiPart {
-  text?: string;
-  thought?: boolean;
-  thoughtSignature?: string;
-  functionCall?: { id?: string; name: string; args?: unknown };
-}
-
 interface GeminiResponse {
-  candidates?: Array<{ content?: { parts?: GeminiPart[] }; finishReason?: string }>;
+  candidates?: Array<{ content?: { parts?: GoogleResponsePart[] }; finishReason?: string }>;
   usageMetadata?: {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
@@ -3900,6 +3894,9 @@ export class GeminiProvider extends AiProvider {
     const thinkingModel = String(options?.model ?? this.config.model ?? '');
     const native = this.nativeScope && hasGoogleProfile(this.nativeScope, thinkingModel) ? this.nativeScope : undefined;
     if (!native) messages = toolImageMessages(messages);
+    else messages = messages.filter(message => message.role !== 'assistant' || !message.metadata?.outputError)
+      .map(message => projectAssistantReplay(message, native === 'google' ? 'google' : 'vertex', thinkingModel,
+        native === 'google' ? 'google-generative-ai' : 'google-vertex'));
     const systemText = [
       options?.systemPrompt,
       ...messages.filter(message => message.role === 'system').map(message => message.content),
@@ -3913,6 +3910,9 @@ export class GeminiProvider extends AiProvider {
             response: { content: message.content, isError: Boolean(message.isError) },
           } }],
         };
+      }
+      if (native && message.role === 'assistant' && message.blocks && !message.blocks.some(block => block.type === 'image')) {
+        return { role: 'model', parts: googleReplayParts(message) };
       }
       const parts: Array<Record<string, unknown>> = [];
       if (message.content) parts.push({ text: message.content });
@@ -3955,6 +3955,7 @@ export class GeminiProvider extends AiProvider {
       const data = parseDataImage(image.url);
       return data ? [{ inlineData: { mimeType: data.mediaType, data: data.data } }] : [];
     }));
+    if (native) body.contents = (body.contents as Array<{ role: string; parts: unknown[] }>).filter(content => content.role !== 'model' || content.parts.length);
     return body;
   }
 
@@ -3998,12 +3999,14 @@ export class GeminiProvider extends AiProvider {
       id: scope && typeof part.functionCall.id === 'string' && part.functionCall.id ? part.functionCall.id : `gemini-${index}-${part.functionCall.name}`,
       name: part.functionCall.name,
       input: part.functionCall.args ?? {},
+      ...(scope && part.thoughtSignature ? { thoughtSignature: part.thoughtSignature } : {}),
     }] : []);
     const usage = response.usageMetadata;
     return {
       content,
       ...(reasoning ? { reasoning } : {}),
-      ...(scope ? { api: scope === 'google' ? 'google-generative-ai' : 'google-vertex' } : {}),
+      ...(scope ? { api: scope === 'google' ? 'google-generative-ai' : 'google-vertex',
+        provider: scope === 'google' ? 'google' : 'vertex', blocks: googleResponseBlocks(parts) } : {}),
       ...lengthStop(response.candidates?.[0]?.finishReason),
       model,
       usage: scope ? googleProfileUsage(scope, model, usage) : usage ? (() => {
@@ -4072,6 +4075,7 @@ export class GeminiProvider extends AiProvider {
       let observedUsage: unknown;
       let stopReason: ChatResponse['stopReason'];
       let reasoning = '', finished = false;
+      const blocks: MessageContentBlock[] = [];
       const alive = (): void => { if (scope && options?.signal?.aborted) throw new Error('Gemini request aborted.'); };
 
       const consume = async (record: string): Promise<void> => {
@@ -4097,6 +4101,7 @@ export class GeminiProvider extends AiProvider {
           const parts = parsed.candidates?.[0]?.content?.parts ?? [];
           if (finished && parts.length) throw new Error('Invalid Google response.');
           if (parsed.candidates?.[0]?.finishReason !== undefined) finished = true;
+          appendGoogleResponseBlocks(blocks, normalized.blocks ?? []);
           for (const part of parts) if (part.text) {
             alive();
             if (part.thought === true) { reasoning += part.text; await onChunk('', { type: 'reasoning_delta', data: { content: part.text } }); }
@@ -4139,9 +4144,11 @@ export class GeminiProvider extends AiProvider {
       if (scope && !finished) throw new Error('Invalid Google response.');
       for (const call of toolCalls) { alive(); await onChunk('', { type: 'tool_call', data: call }); alive(); }
       alive();
-        onComplete?.({ content, ...(reasoning ? { reasoning } : {}), ...(stopReason ? { stopReason } : {}), model,
-          ...(scope ? { api: scope === 'google' ? 'google-generative-ai' : 'google-vertex' } : {}),
-          usage: scope ? googleProfileUsage(scope, model, observedUsage) : usage, toolCalls: toolCalls.length ? toolCalls : undefined });
+        const result: ChatResponse = { content, ...(reasoning ? { reasoning } : {}), ...(stopReason ? { stopReason } : {}), model,
+          ...(scope ? { api: scope === 'google' ? 'google-generative-ai' : 'google-vertex', provider: scope === 'google' ? 'google' : 'vertex', blocks } : {}),
+          usage: scope ? googleProfileUsage(scope, model, observedUsage) : usage, toolCalls: toolCalls.length ? toolCalls : undefined };
+        if (scope) await onComplete?.(result);
+        else onComplete?.(result);
       } finally {
         void reader.cancel('provider-stream-finished').catch(() => undefined);
         try { reader.releaseLock(); } catch { /* A hostile pending read may retain the lock. */ }
