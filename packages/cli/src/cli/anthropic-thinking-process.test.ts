@@ -10,7 +10,8 @@ import type { SessionEntry } from '@ai-harness/core';
 const cli = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 const adaptive = 'claude-sonnet-4-6'; const classic = 'claude-3-7-sonnet-latest';
 type Body = { model: string; thinking?: { type: string; budget_tokens?: number }; output_config?: { effort: string }; max_tokens: number;
-  messages: Array<{ role: string; content: unknown; output_config?: { effort: string } }> };
+  messages: Array<{ role: string; content: unknown; output_config?: { effort: string } }>;
+  contents?: Array<{ role: string; parts: unknown[] }> };
 const managed = new Set(['claude-fable-5-1', 'claude-haiku-5-5', 'claude-opus-5', 'claude-opus-5-5', 'claude-sonnet-5-5']);
 const numeric = new Set(['claude-haiku-4-5', 'claude-haiku-4-5-20251001', 'claude-opus-4-5', 'claude-opus-4-5-20251101', 'claude-sonnet-4-5', 'claude-sonnet-4-5-20250929']);
 const continuationModel = 'claude-haiku-5-5';
@@ -28,7 +29,28 @@ function continuationBlocks(turn: number) {
     { type: 'text', text: `native-${turn}-right` },
     ...(turn === 1 ? [{ type: 'tool_call', id: 'native-call', name: 'continuation_echo', input: { value: 1 } }] : [])];
 }
-async function fixture(model = adaptive, continuation = false) {
+const googleModel = 'gemini-3.8-flash', googleForeignModel = 'gemini-2.5-flash', googleKey = 'c2VjcmV0';
+function googleContent(turn: number) {
+  return [{ text: `native-${turn}-left` }, { text: `visible-${turn}`, thought: true, thoughtSignature: 'bGFzdA==' },
+    { text: `native-${turn}-right`, thoughtSignature: 'cmlnaHQ=' }, { text: '', thought: true, thoughtSignature: 'aGlkZGVu' },
+    { text: '', thoughtSignature: 'ZW1wdHk=' },
+    ...(turn === 1 ? [{ functionCall: { id: 'native-call', name: 'continuation_echo', args: { value: 1 } }, thoughtSignature: 'dG9vbA==' }] : [])];
+}
+function googleBlocks(turn: number) {
+  return [{ type: 'text', text: `native-${turn}-left`, textSignature: '[REDACTED]' },
+    { type: 'reasoning', text: `visible-${turn}`, thinkingSignature: 'bGFzdA==' },
+    { type: 'text', text: `native-${turn}-right`, textSignature: 'cmlnaHQ=' },
+    { type: 'reasoning', text: '', thinkingSignature: 'aGlkZGVu' }, { type: 'text', text: '', textSignature: 'ZW1wdHk=' },
+    ...(turn === 1 ? [{ type: 'tool_call', id: 'native-call', name: 'continuation_echo', input: { value: 1 }, thoughtSignature: 'dG9vbA==' }] : [])];
+}
+function googleForeignContent(turn: number, ids = true) {
+  return [{ text: `native-${turn}-left` }, { text: `visible-${turn}` }, { text: `native-${turn}-right` },
+    ...(turn === 1 ? [{ functionCall: { ...(ids ? { id: 'native-call' } : {}), name: 'continuation_echo', args: { value: 1 } } }] : [])];
+}
+function googlePath(provider: 'google' | 'vertex', model: string) {
+  return `${provider === 'google' ? '/v1beta' : '/v1/projects/continuation-project/locations/us-central1/publishers/google'}/models/${model}:streamGenerateContent?alt=sse`;
+}
+async function fixture(model = adaptive, continuation = false, dialect: 'anthropic' | 'google' | 'vertex' = 'anthropic') {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-adaptive-process-'));
   const cwd = path.join(root, 'project'); const agent = path.join(root, 'agent'); const preload = path.join(root, 'network.mjs');
   await Promise.all([mkdir(cwd), mkdir(agent)]);
@@ -41,14 +63,27 @@ async function fixture(model = adaptive, continuation = false) {
         parameters: { type: 'object', properties: { value: { type: 'number' } }, required: ['value'] },
         execute: input => { appendFileSync(${JSON.stringify(effects)}, JSON.stringify(input) + '\\n'); return { content: 'native-tool-result' }; } });`);
   }
-  const bodies: Body[] = [];
+  const bodies: Body[] = [], wires: Array<{ path: string; googleKey?: string; authorization?: string }> = [];
   const server = createServer(async (request, response) => {
-    if (request.url === '/v1/models') {
-      response.writeHead(200, { 'Content-Type': 'application/json' }); response.end(JSON.stringify({ data: [{ id: adaptive }, { id: classic }] })); return;
+    if (request.method === 'GET') {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify(dialect === 'anthropic' ? { data: [{ id: adaptive }, { id: classic }] }
+        : { models: [googleModel, googleForeignModel].map(id => ({ name: `models/${id}` })) })); return;
     }
+    wires.push({ path: request.url ?? '', googleKey: request.headers['x-goog-api-key'] as string | undefined, authorization: request.headers.authorization });
     const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
     bodies.push(JSON.parse(Buffer.concat(chunks).toString()) as Body);
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    if (dialect !== 'anthropic') {
+      const parts = googleContent(bodies.length);
+      response.end([
+        { candidates: [{ content: { parts: [{ ...parts[0], thoughtSignature: googleKey }, { ...parts[1], thoughtSignature: 'Zmlyc3Q=' }] } }] },
+        { candidates: [{ content: { parts: [{ text: '', thought: true, thoughtSignature: 'bGFzdA==' }, ...parts.slice(2)] } }] },
+        { modelVersion: 'untrusted-response-alias', candidates: [{ finishReason: 'STOP' }],
+          usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2, totalTokenCount: 7 } },
+      ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
+      return;
+    }
     if (continuation) {
       const turn = bodies.length;
       response.end([{ type: 'message_start', message: { model: 'untrusted-response-alias' } },
@@ -75,17 +110,23 @@ async function fixture(model = adaptive, continuation = false) {
   await writeFile(preload, `const original = globalThis.fetch;
     globalThis.fetch = async (input, init) => {
       const url = new URL(input instanceof Request ? input.url : input);
-      if (url.origin !== 'https://api.anthropic.com' || !['/v1/messages', '/v1/models'].includes(url.pathname)) throw new Error('Non-fixture transport refused');
+      const allowed = ${JSON.stringify(dialect === 'anthropic')}
+        ? url.origin === 'https://api.anthropic.com' && ['/v1/messages', '/v1/models'].includes(url.pathname)
+        : ['https://generativelanguage.googleapis.com', 'https://us-central1-aiplatform.googleapis.com'].includes(url.origin)
+          && (url.pathname.endsWith('/models') || /\\/models\\/gemini-(3\\.8|2\\.5)-flash:streamGenerateContent$/.test(url.pathname));
+      if (!allowed) throw new Error('Non-fixture transport refused');
       const target = new URL(url.pathname + url.search, ${JSON.stringify(base)});
       return original(input instanceof Request ? new Request(target, input) : target, init);
     };`);
-  const env = { ...process.env, HOME: path.join(root, 'home'), AI_HARNESS_AGENT_DIR: agent, AI_HARNESS_EXTENSIONS: '', ANTHROPIC_API_KEY: continuation ? continuationKey : 'disposable', NO_COLOR: '1' };
+  const env = { ...process.env, HOME: path.join(root, 'home'), AI_HARNESS_AGENT_DIR: agent, AI_HARNESS_EXTENSIONS: '', ANTHROPIC_API_KEY: continuation ? continuationKey : 'disposable', NO_COLOR: '1',
+    ...(dialect === 'anthropic' ? {} : { GEMINI_API_KEY: googleKey, GOOGLE_API_KEY: googleKey, GOOGLE_VERTEX_ACCESS_TOKEN: googleKey,
+      GOOGLE_CLOUD_PROJECT: 'continuation-project', GOOGLE_CLOUD_LOCATION: 'us-central1' }) };
   const start = (mode: 'print' | 'json' | 'rpc', thinking: string) => spawn(process.execPath, ['--import', preload, cli,
     '--no-approve', ...(continuation ? ['--session-dir', sessions, '--session-id', 'native-continuation'] : ['--no-session']),
-    '--model', `anthropic/${model}`, '--thinking', thinking,
+    '--model', `${dialect}/${model}`, '--thinking', thinking,
     ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['Probe native effort.'])], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
   const close = async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true }); };
-  return { bodies, start, close, journal, effects };
+  return { bodies, wires, start, close, journal, effects };
 }
 
 describe('emitted built-in Anthropic reasoning selection', () => {
@@ -273,4 +314,119 @@ describe('emitted built-in Anthropic reasoning selection', () => {
       child.stdin.end(); expect(await ended, stderr).toEqual({ code: 0, signal: null }); expect(buffer).toBe('');
     } finally { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); await test.close(); }
   }, 40_000);
+});
+
+describe('emitted built-in Google/Vertex signed continuation', () => {
+  const opaque = ['bGFzdA==', 'cmlnaHQ=', 'aGlkZGVu', 'ZW1wdHk=', 'dG9vbA=='];
+  for (const provider of ['google', 'vertex'] as const) {
+    const api = provider === 'google' ? 'google-generative-ai' : 'google-vertex';
+    for (const mode of ['print', 'json'] as const) it(`${provider}/${mode}: retains signed tool/final history across explicit same-model restart`, async () => {
+      const test = await fixture(googleModel, true, provider);
+      try {
+        for (const run of [1, 2]) {
+          const child = test.start(mode, 'low'); let stdout = '', stderr = '';
+          child.stdout.setEncoding('utf8').on('data', text => { stdout += text; });
+          child.stderr.setEncoding('utf8').on('data', text => { stderr += text; });
+          const ended = new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
+          const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
+          try {
+            child.stdin.end(); expect(await ended, stderr).toEqual({ code: 0, signal: null }); expect(stderr).toBe('');
+            expect(stdout + stderr).not.toContain(googleKey);
+            if (mode === 'print') expect(stdout).toBe(`native-${run + 1}-leftnative-${run + 1}-right\n`);
+            else {
+              const records = stdout.trim().split('\n').map(line => JSON.parse(line) as { type: string; message?: { role: string; content?: unknown } });
+              expect(records.every(record => typeof record.type === 'string')).toBe(true);
+              expect(records.filter(record => record.type === 'message_end' && record.message?.role === 'assistant').map(record => record.message?.content))
+                .toEqual((run === 1 ? [1, 2] : [3]).map(turn => [
+                  { type: 'text', text: `native-${turn}-leftnative-${turn}-right` }, { type: 'thinking', thinking: `visible-${turn}` },
+                  ...(turn === 1 ? [{ type: 'toolCall', id: 'native-call', name: 'continuation_echo', arguments: { value: 1 } }] : []),
+                ]));
+              for (const value of opaque) expect(stdout).not.toContain(value);
+              expect(records.filter(record => record.type === 'agent_settled')).toHaveLength(1);
+            }
+          } finally { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); }
+          const bytes = await readFile(test.journal, 'utf8'); expect(bytes).not.toContain(googleKey);
+          const entries = bytes.trim().split('\n').map(line => JSON.parse(line) as SessionEntry);
+          const assistants = entries.filter(entry => entry.type === 'message' && entry.role === 'assistant');
+          expect(assistants.map(entry => entry.type === 'message' ? entry.blocks : undefined)).toEqual(
+            Array.from({ length: run + 1 }, (_, index) => googleBlocks(index + 1)));
+          for (const entry of assistants) expect(entry).toMatchObject({ provider, api, model: googleModel });
+          expect((await stat(test.journal)).mode & 0o777).toBe(0o600);
+        }
+        expect(test.bodies).toHaveLength(3);
+        expect(test.wires).toEqual(Array(3).fill({ path: googlePath(provider, googleModel),
+          googleKey: provider === 'google' ? googleKey : undefined, authorization: provider === 'vertex' ? `Bearer ${googleKey}` : undefined }));
+        for (const index of [1, 2]) {
+          expect(test.bodies[index]!.contents!.filter(content => content.role === 'model').map(content => content.parts))
+            .toEqual(Array.from({ length: index }, (_, turn) => googleContent(turn + 1)));
+          expect(test.bodies[index]!.contents!.flatMap(content => content.parts).filter(part => part && typeof part === 'object' && 'functionResponse' in part))
+            .toEqual([{ functionResponse: { id: 'native-call', name: 'continuation_echo', response: { output: 'native-tool-result' } } }]);
+        }
+        expect(await readFile(test.effects, 'utf8')).toBe('{"value":1}\n');
+      } finally { await test.close(); }
+    }, 50_000);
+
+    it(`${provider}/RPC: projects physical model/API/provider switches and edits only the selected entry`, async () => {
+      const test = await fixture(googleModel, true, provider), child = test.start('rpc', 'low');
+      const other = provider === 'google' ? 'vertex' : 'google';
+      const records: Array<Record<string, unknown>> = []; let buffer = '', stderr = '';
+      child.stdout.setEncoding('utf8').on('data', text => {
+        buffer += text;
+        while (buffer.includes('\n')) {
+          const index = buffer.indexOf('\n'), line = buffer.slice(0, index); buffer = buffer.slice(index + 1);
+          if (line.trim()) records.push(JSON.parse(line) as Record<string, unknown>);
+        }
+      });
+      child.stderr.setEncoding('utf8').on('data', text => { stderr += text; });
+      const ended = new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
+      const timer = setTimeout(() => child.kill('SIGKILL'), 30_000);
+      const command = async (record: Record<string, unknown>) => {
+        child.stdin.write(JSON.stringify(record) + '\n');
+        await vi.waitFor(() => expect(records, stderr).toContainEqual(expect.objectContaining({ type: 'response', id: record.id, success: true })), { timeout: 10_000 });
+      };
+      const prompt = async (count: number) => {
+        await command({ type: 'prompt', id: `google-${count}`, message: 'Continue native history.' });
+        await vi.waitFor(() => expect(records.filter(record => record.type === 'agent_settled')).toHaveLength(count), { timeout: 10_000 });
+      };
+      const assistantWire = (index: number) => test.bodies[index]!.contents!.filter(content => content.role === 'model').map(content => content.parts);
+      try {
+        await prompt(1); await prompt(2);
+        expect(assistantWire(1)).toEqual([googleContent(1)]);
+        expect(assistantWire(2)).toEqual([googleContent(1), googleContent(2)]);
+        const original = (await readFile(test.journal, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as SessionEntry)
+          .filter(entry => entry.type === 'message' && entry.role === 'assistant');
+        await command({ type: 'set_model', id: 'foreign-model', provider, modelId: googleForeignModel }); await prompt(3);
+        expect(assistantWire(3)).toEqual([1, 2, 3].map(turn => googleForeignContent(turn, false)));
+        await command({ type: 'set_model', id: 'foreign-provider', provider: other, modelId: googleModel }); await prompt(4);
+        expect(assistantWire(4)).toEqual([1, 2, 3, 4].map(turn => googleForeignContent(turn)));
+        expect((await readFile(test.journal, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as SessionEntry)
+          .filter(entry => entry.type === 'message' && entry.role === 'assistant').slice(0, 3)).toEqual(original);
+        await command({ type: 'set_model', id: 'owner', provider, modelId: googleModel });
+        await command({ type: 'context_edit', id: 'edit', targetEntryId: original[0]!.id, replacement: 'edited answer' }); await prompt(5);
+        expect(assistantWire(5)).toEqual([
+          [{ functionCall: { id: 'native-call', name: 'continuation_echo', args: { value: 1 } }, thoughtSignature: 'dG9vbA==' }, { text: 'edited answer' }],
+          googleContent(2), googleContent(3), googleForeignContent(4), googleForeignContent(5),
+        ]);
+        child.stdin.end(); expect(await ended, stderr).toEqual({ code: 0, signal: null }); expect(buffer).toBe(''); expect(stderr).toBe('');
+        const bytes = await readFile(test.journal, 'utf8'); expect(bytes).not.toContain(googleKey);
+        const entries = bytes.trim().split('\n').map(line => JSON.parse(line) as SessionEntry);
+        const assistants = entries.filter(entry => entry.type === 'message' && entry.role === 'assistant');
+        expect(assistants.slice(0, 3)).toEqual(original);
+        expect(assistants.map(entry => entry.type === 'message' ? entry.blocks : undefined)).toEqual(Array.from({ length: 6 }, (_, index) => googleBlocks(index + 1)));
+        for (const [index, entry] of assistants.entries()) expect(entry).toMatchObject({ provider: index === 4 ? other : provider,
+          api: index === 4 ? other === 'google' ? 'google-generative-ai' : 'google-vertex' : api,
+          model: index === 3 ? googleForeignModel : googleModel });
+        expect(entries.filter(entry => entry.type === 'context_edit')).toHaveLength(1);
+        expect((await stat(test.journal)).mode & 0o777).toBe(0o600);
+        expect(test.bodies).toHaveLength(6);
+        expect(test.wires).toEqual([provider, provider, provider, provider, other, provider].map((scope, index) => ({
+          path: googlePath(scope as 'google' | 'vertex', index === 3 ? googleForeignModel : googleModel),
+          googleKey: scope === 'google' ? googleKey : undefined, authorization: scope === 'vertex' ? `Bearer ${googleKey}` : undefined,
+        })));
+        expect(await readFile(test.effects, 'utf8')).toBe('{"value":1}\n'); expect(JSON.stringify(records)).not.toContain(googleKey);
+        const live = JSON.stringify(records.filter(record => record.type === 'message_end'));
+        for (const value of opaque) expect(live).not.toContain(value);
+      } finally { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); await test.close(); }
+    }, 40_000);
+  }
 });
