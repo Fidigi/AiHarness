@@ -19,6 +19,7 @@ export { OPENAI_DECISIONS_MODEL } from './openai-decisions.js';
 import { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
 export { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
 import { applyNativeResponsesToolHistory, nativeResponsesToolId, nativeResponsesGrammarProperty, openAiMixedBase, openAiResponseProfile, prepareOpenAiResponse, openAiResponseUsage } from './openai-responses.js';
+import { applyResponsesReplay, createResponsesReplayCapture, type ResponsesReplayOwner } from './responses-replay.js';
 import { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
 export { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
 import { cloudflareAiBase, cloudflareChatEndpoint, cloudflareChatProfile, cloudflareMixedBases, prepareCloudflareChat, cloudflareChatUsage, validateCloudflareChat } from './cloudflare-completions.js';
@@ -2547,6 +2548,10 @@ type ResponsesRequest = Record<string, unknown> & {
   previous_response_id?: string;
 };
 
+const nativeResponsesOwners = new WeakMap<ResponsesRequest, ResponsesReplayOwner>();
+// The composing Azure adapter returns its physical label; the standalone R adapter retains canonical 'azure'.
+const azureResponsesOwnerNames = new WeakMap<ProviderConfig, string>();
+
 type ResponsesContinuation = {
   request: ResponsesRequest;
   responseId: string;
@@ -2574,6 +2579,7 @@ type ResponsesAccumulator = {
   events: number;
   completed: boolean;
   started: boolean;
+  replay?: ReturnType<typeof createResponsesReplayCapture>;
 };
 
 export interface OpenAiResponsesTransportStats {
@@ -2761,7 +2767,8 @@ async function applyResponsesEvent(
     throw new ResponsesProtocolError(code, 'The provider response failed.', true);
   }
   state.started = true;
-  if (type === 'response.output_text.delta' && typeof event.delta === 'string') {
+  state.replay?.accept(event);
+  if ((type === 'response.output_text.delta' || state.replay && type === 'response.refusal.delta') && typeof event.delta === 'string') {
     boundedResponseText(state, event.delta);
     state.content += event.delta;
     await onChunk(event.delta, { type: 'text_delta', data: event });
@@ -2839,8 +2846,16 @@ function finalizeResponses(state: ResponsesAccumulator): ChatResponse {
     }
     return { id: tool.id, name: tool.name, input };
   });
+  const blocks = state.replay?.finish(toolCalls);
+  if (blocks?.length) {
+    if (blocks.some(block => block.type === 'text')) state.content = blocks.filter(block => block.type === 'text').map(block => block.text).join('');
+    else if (state.content) blocks.push({ type: 'text', text: state.content });
+    if (blocks.some(block => block.type === 'reasoning')) state.reasoning = blocks.filter(block => block.type === 'reasoning').map(block => block.text).filter(Boolean).join('\n\n');
+    else if (state.reasoning) blocks.unshift({ type: 'reasoning', text: state.reasoning });
+  }
   return {
     content: state.content,
+    ...(blocks?.length ? { blocks } : {}),
     ...(state.stopReason ? { stopReason: state.stopReason } : {}),
     ...(state.reasoning ? { reasoning: state.reasoning } : {}),
     ...(state.model ? { model: state.model } : {}),
@@ -3070,7 +3085,7 @@ export class OpenAiResponsesProvider extends AiProvider {
       const body = this.requestBody(messages, options);
       serializeProviderBody(body);
       const transport = this.responseTransport();
-      const identity = this.transportIdentity(options?.sessionId);
+      const identity = this.transportIdentity(options?.sessionId, nativeResponsesOwners.get(body));
       if (options?.sessionId) rememberResponsesIdentity(options.sessionId, identity);
       const stats = options?.sessionId ? responsesTransportStats(options.sessionId) : undefined;
       let response: ChatResponse | undefined;
@@ -3099,8 +3114,11 @@ export class OpenAiResponsesProvider extends AiProvider {
         stats.fallbackActive = true;
       }
       response ??= await this.streamSse(body, onChunk, options);
+      const owner = nativeResponsesOwners.get(body);
+      if (owner) response = { ...response, ...owner };
       for (const call of response.toolCalls ?? []) await onChunk('', { type: 'tool_call', data: call });
-      onComplete?.(response);
+      if (nativeResponsesOwners.has(body)) await onComplete?.(response);
+      else onComplete?.(response);
     } catch (error) {
       onError?.(error instanceof Error ? error : new Error(String(error)));
     }
@@ -3222,6 +3240,7 @@ export class OpenAiResponsesProvider extends AiProvider {
       }
       const state: ResponsesAccumulator = {
         content: '', reasoning: '', tools: new Map(), outputBytes: 0, events: 0, completed: false, started: false,
+        ...(nativeResponsesOwners.has(fullBody) ? { replay: createResponsesReplayCapture() } : {}),
       };
       let keep = false;
       try {
@@ -3279,6 +3298,7 @@ export class OpenAiResponsesProvider extends AiProvider {
     if (!response.body) throw new Error('OpenAI Responses streaming response has no body.');
     const state: ResponsesAccumulator = {
       content: '', reasoning: '', tools: new Map(), outputBytes: 0, events: 0, completed: false, started: false,
+      ...(nativeResponsesOwners.has(body) ? { replay: createResponsesReplayCapture() } : {}),
     };
     if (this.acceptsJsonResponse() && /^application\/json\b/iu.test(response.headers.get('content-type') ?? '')) {
       const value = await this.boundedJson(response);
@@ -3395,12 +3415,12 @@ export class OpenAiResponsesProvider extends AiProvider {
     return url.toString();
   }
 
-  private transportIdentity(sessionId?: string): string {
+  private transportIdentity(sessionId?: string, owner?: ResponsesReplayOwner): string {
     const session = typeof sessionId === 'string' ? sessionId : 'ephemeral';
     return createHash('sha256')
       .update(`${session}\0${this.baseUrl}\0${String(this.config.apiKey ?? '')}\0${JSON.stringify(
         Object.entries(this.customHeaders).sort(([left], [right]) => left.localeCompare(right)),
-      )}`)
+      )}${owner ? `\0${JSON.stringify(owner)}` : ''}`)
       .digest('hex');
   }
 }
@@ -3427,11 +3447,13 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
   private readonly deployments: ReadonlyMap<string, string>;
   private readonly ownsNativeProfiles: boolean;
   private readonly requestedModels = new WeakMap<ResponsesRequest, string>();
+  private readonly replayProvider: string;
 
   constructor(config: ProviderConfig) {
     super({ ...config, baseUrl: normalizeAzureResponsesBaseUrl(config.baseUrl) });
     this.deployments = azureDeployments(config);
     this.ownsNativeProfiles = new.target === AzureResponsesProvider;
+    this.replayProvider = azureResponsesOwnerNames.get(config) ?? 'azure';
   }
 
   override validateConfig(): boolean { return Boolean(this.config.apiKey) && super.validateConfig(); }
@@ -3445,7 +3467,8 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
     const model = options?.model ?? this.getConfiguredModel() ?? 'gpt-4o';
     const native = this.ownsNativeProfiles && azureProfileApi(model) === 'azure-openai-responses';
     await super.streamChat(messages, native ? azureNativeChunk(onChunk, options?.signal) : onChunk,
-      response => onComplete?.(response ? { ...response, provider: 'azure', ...(native ? { model, api: 'azure-openai-responses' } : {}) } : response),
+      response => onComplete?.(response ? { ...response, provider: native ? response.provider ?? 'azure' : 'azure',
+        ...(native ? { model: response.model ?? model, api: 'azure-openai-responses' } : {}) } : response),
       error => onError?.(options?.signal?.aborted ? new Error('The provider request was cancelled.') : error), azureRequestOptions(options, model));
   }
 
@@ -3483,8 +3506,10 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
     const native = this.ownsNativeProfiles && azureProfileApi(model) === 'azure-openai-responses';
     const body = super.requestBody(messages, options, native);
     if (native) {
+      const owner = { provider: this.replayProvider, api: 'azure-openai-responses', model };
+      nativeResponsesOwners.set(body, owner); applyResponsesReplay(body, messages, owner);
       prepareAzureResponses(body, options); this.requestedModels.set(body, body.model);
-      applyNativeResponsesToolHistory(body, messages, 'azure', body.model, 'azure-openai-responses');
+      applyNativeResponsesToolHistory(body, messages, 'azure', body.model, owner.api, owner.provider);
     }
     body.model = typeof this.config.deployment === 'string' ? this.config.deployment
       : this.deployments.get(body.model) ?? body.model;
@@ -3553,6 +3578,7 @@ export class AzureProvider extends AiProvider {
   override getPublishedModels(): readonly PublishedModelMetadata[] | undefined { return this.ownsNativeProfiles ? azurePublishedProfiles() : undefined; }
   private conversation(model: string, provider: string): AiProvider {
     const config = { ...this.config, type: provider, model };
+    azureResponsesOwnerNames.set(config, provider);
     return azureProfileApi(model) === 'openai-completions' ? new AzureCompletionsProvider(config) : new AzureResponsesProvider(config);
   }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
@@ -3727,8 +3753,11 @@ class ReviewedOpenAiResponsesProvider extends OpenAiResponsesProvider {
       ...(profile.declaredInput.includes('image') ? { imageInput: true } : {}) }];
   }
   protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
-    const body = super.requestBody(messages, options, true); prepareOpenAiResponse(body, options);
-    applyNativeResponsesToolHistory(body, messages, 'openai', body.model, 'openai-responses'); return body;
+    const body = super.requestBody(messages, options, true);
+    const owner = { provider: this.getProviderType(), api: 'openai-responses', model: body.model };
+    nativeResponsesOwners.set(body, owner); applyResponsesReplay(body, messages, owner);
+    prepareOpenAiResponse(body, options);
+    applyNativeResponsesToolHistory(body, messages, 'openai', body.model, owner.api, owner.provider); return body;
   }
   protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return nativeResponsesToolId(item) ?? super.responseToolId(item, body); }
   protected override responseGrammarProperty(name: string, body: ResponsesRequest): string | undefined { return nativeResponsesGrammarProperty(body, name); }
@@ -3756,7 +3785,7 @@ class ReviewedOpenAiResponsesProvider extends OpenAiResponsesProvider {
     };
     if (!this.validateConfig()) { report(new Error('OpenAI API key is required.')); return; }
     await super.streamChat(messages, async (chunk, event) => { aborted(); await onChunk(chunk, event); aborted(); },
-      response => { aborted(); onComplete?.(response ? { ...response, provider, model, api: 'openai-responses' } : response); }, report, options);
+      async response => { aborted(); await onComplete?.(response ? { ...response, provider: response.provider ?? provider, model: response.model ?? model, api: 'openai-responses' } : response); }, report, options);
   }
 }
 

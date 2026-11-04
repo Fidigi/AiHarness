@@ -1,5 +1,14 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { JsonlSessionStore, SessionManager } from '../sessions/session-manager.js';
+import { serializeSessionForExport } from '../sessions/serialization.js';
+import { ExtensionRegistry } from '../extensions/extension-registry.js';
+import { CredentialRedactor } from './credentials.js';
+import { runToolLoop } from '../agent/tool-loop.js';
+import { streamProviderTurn } from '../agent/provider-turn.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OpenAiMixedProvider, OpenAiResponsesProvider, AzureProvider, AzureResponsesProvider, type AiProvider, type ChatOptions, type ChatResponse, type ResponsesChatOptions } from './index.js';
 import type { Message, ProviderConfig } from '../types/index.js';
@@ -55,8 +64,8 @@ function reply(items?: Array<Record<string, unknown>>) {
     usage: { input_tokens: 1, output_tokens: 2, total_tokens: 3 } } });
   return new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } });
 }
-function fixture(scope: Scope, model: string, legacy?: 'generic' | 'derived-azure' | 'unknown-azure') {
-  const config: ProviderConfig = { type: `operator-${scope}`, model, apiKey: 'sk-disposable-reference', baseUrl: 'http://127.0.0.1:1/owned/v1',
+function fixture(scope: Scope, model: string, legacy?: 'generic' | 'derived-azure' | 'unknown-azure', apiKey = 'sk-disposable-reference') {
+  const config: ProviderConfig = { type: `operator-${scope}`, model, apiKey, baseUrl: 'http://127.0.0.1:1/owned/v1',
     transport: 'sse', azureApi: 'native', azureDeploymentMap: { [model]: 'owned-deployment', 'gpt-5': 'owned-deployment' }, providerMaxRetries: 0 };
   class DerivedAzure extends AzureResponsesProvider {}
   const provider: AiProvider = legacy === 'generic' ? new OpenAiResponsesProvider(config)
@@ -64,15 +73,178 @@ function fixture(scope: Scope, model: string, legacy?: 'generic' | 'derived-azur
       : scope === 'openai' ? new OpenAiMixedProvider(config) : new AzureProvider(config);
   let items: Array<Record<string, unknown>> | undefined;
   const chunks: unknown[] = [];
-  const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => reply(items));
+  let response: (() => Response) | undefined;
+  const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => response ? response() : reply(items));
   const call = async (stream: boolean, messages: Message[] = user, options: ChatOptions = {}) => {
     if (!stream) return provider.chat(messages, options);
     let result: ChatResponse | undefined, failure: Error | undefined;
     await provider.streamChat(messages, (_text, event) => { if (event?.type === 'tool_call') chunks.push(event.data); }, value => { result = value; }, error => { failure = error; }, options);
     if (failure) throw failure; return result!;
   };
-  return { provider, fetch, call, chunks, items: (value?: Array<Record<string, unknown>>) => { items = value; } };
+  return { provider, fetch, call, chunks, items: (value?: Array<Record<string, unknown>>) => { items = value; },
+    respond: (value: () => Response) => { response = value; } };
 }
+const encryptedItems = (tool = true): Array<Record<string, unknown>> => [
+  { type: 'reasoning', id: 'rs_empty', summary: [], encrypted_content: 'opaque-empty' },
+  { type: 'message', id: 'msg_left', phase: 'commentary', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'left', annotations: [] }] },
+  { type: 'reasoning', id: 'rs_visible', summary: [{ type: 'summary_text', text: 'visible thought' }], encrypted_content: 'opaque-sensitive-tail' },
+  ...(tool ? [{ type: 'function_call', id: 'fc_native', call_id: 'call_native', name: 'echo', arguments: '{"x":1}', status: 'completed' }] : []),
+  { type: 'message', id: 'msg_right', phase: 'final_answer', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'right', annotations: [] }] },
+];
+function encryptedReply(items = encryptedItems(), late = false, terminal = true) {
+  const events: Array<Record<string, unknown>> = [{ type: 'response.created', response: { id: 'resp_native', output: [] } }];
+  for (const [index, item] of items.entries()) {
+    const done = late && item.type === 'reasoning' ? { ...item, encrypted_content: undefined } : item;
+    events.push({ type: 'response.output_item.added', output_index: index, item: { ...done, ...(item.type === 'function_call' ? { arguments: '' } : {}) } });
+    if (item.type === 'message') events.push({ type: 'response.output_text.delta', output_index: index, delta: index === 1 ? 'left' : 'right' });
+    if (item.id === 'rs_visible') for (const delta of ['visible ', 'thought']) events.push({ type: 'response.reasoning_summary_text.delta', output_index: index, delta });
+    if (item.type === 'function_call') events.push({ type: 'response.function_call_arguments.delta', output_index: index, delta: item.arguments });
+    events.push({ type: 'response.output_item.done', output_index: index, item: done });
+  }
+  if (terminal) events.push({ type: 'response.completed', response: { id: 'resp_native', model: 'untrusted-model-alias', status: 'completed', output: items,
+    usage: { input_tokens: 1, output_tokens: 2, total_tokens: 3 } } });
+  return new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });
+}
+const encryptedBlocks = (items = encryptedItems()): NonNullable<Message['blocks']> => items.map(item => item.type === 'reasoning'
+  ? { type: 'reasoning', text: item.id === 'rs_visible' ? 'visible thought' : '', thinkingSignature: JSON.stringify(item) }
+  : item.type === 'message' ? { type: 'text', text: item.id === 'msg_left' ? 'left' : 'right', textSignature: JSON.stringify({ v: 1, id: item.id, phase: item.phase }) }
+    : { type: 'tool_call', id: 'call_native|fc_native', name: 'echo', input: { x: 1 } });
+
+describe('original Responses encrypted continuation', () => {
+  for (const scope of ['openai', 'azure'] as const) for (const model of [...new Set(reference.rows.filter(row => row.scope === scope).map(row => row.model))]) {
+    it(`${scope}/${model}: captures ordered native items and projects exact owner/API/model without mutating history`, async () => {
+      const f = fixture(scope, model), api = scope === 'openai' ? 'openai-responses' : 'azure-openai-responses', provider = f.provider.getProviderType();
+      for (const stream of [false, true]) {
+        f.respond(() => encryptedReply(encryptedItems(), scope === 'azure'));
+        const response = await f.call(stream, user, { maxTokens: 64 });
+        expect(response).toMatchObject({ provider, api, model, content: 'leftright', reasoning: 'visible thought' });
+        expect(response.blocks).toEqual(encryptedBlocks());
+        const history: Message = { id: 'a', timestamp: new Date(0), role: 'assistant', content: response.content,
+          blocks: response.blocks, toolCalls: response.toolCalls, provider, api, model };
+        for (const change of [{}, { provider: 'foreign' }, { model: 'foreign-model' }, { api: 'foreign-api' }, { api: undefined },
+          { blocks: encryptedBlocks().map(block => block.type === 'reasoning' ? { type: 'reasoning' as const, text: block.text }
+            : block.type === 'text' ? { type: 'text' as const, text: block.text } : block) }, { metadata: { outputError: true } }]) {
+          const message = { ...structuredClone(history), ...change }, before = structuredClone(message);
+          f.respond(() => encryptedReply(encryptedItems(false), scope === 'azure'));
+          await f.call(stream, [...user, message], { maxTokens: 64 });
+          const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
+          const replay = body.input.slice(1) as Array<Record<string, unknown>>;
+          if ('metadata' in change) expect(replay).toEqual([]);
+          else if (Object.keys(change).length === 0) expect(replay).toEqual(encryptedItems().map(item => item.type === 'function_call'
+            ? { type: 'function_call', id: 'fc_native', call_id: 'call_native', name: 'echo', arguments: '{"x":1}' } : item));
+          else {
+            expect(replay.filter(item => item.type === 'reasoning')).toEqual([]);
+            expect(JSON.stringify(replay)).not.toContain('opaque-'); expect(JSON.stringify(replay)).not.toContain('msg_left');
+            expect(replay.filter(item => item.type === 'message').map(item => item.content)).toEqual(
+              ('blocks' in change ? ['left', 'right'] : ['left', 'visible thought', 'right']).map(text => [{ type: 'output_text', text, annotations: [] }]));
+          }
+          expect(message).toEqual(before); expect(body.model).toBe(scope === 'azure' ? 'owned-deployment' : model);
+        }
+      }
+    });
+  }
+});
+
+describe('original Responses encrypted durability', () => {
+  for (const scope of ['openai', 'azure'] as const) for (const stream of [false, true]) it(`${scope}: preserves tool/final signatures through reload/export/edit/clone and routing (stream=${stream})`, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-responses-replay-')), f = fixture(scope, 'gpt-5', undefined, 'sensitive');
+    const redactor = new CredentialRedactor(['sensitive']), redactText = (value: string) => redactor.redact(value), redactJson = <T>(value: T): T => redactor.redactJson(value);
+    const manager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }), session = await manager.create({ title: 'Responses replay' });
+    const registry = new ExtensionRegistry(), provider = f.provider.getProviderType(), native = encryptedItems(), original = structuredClone(native);
+    const tools = [{ name: 'echo', description: 'Echo', parameters: { type: 'object', properties: { x: { type: 'number' } } } }];
+    let effects = 0, turn = 0;
+    await registry.load('echo', api => api.registerTool({ name: 'echo', description: 'Echo', execute: () => { effects++; return { content: 'result' }; } }));
+    f.respond(() => encryptedReply(turn++ === 0 ? native : native.filter(item => item.type !== 'function_call'), scope === 'azure'));
+    try {
+      await manager.addMessage(session.id, { role: 'user', content: 'start' });
+      await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry, provider, tools,
+        toolContext: { sessionManager: manager, notify: () => {} }, redactText,
+        streamTurn: messages => stream ? streamProviderTurn({ provider: f.provider, providerName: provider, model: 'gpt-5', messages, tools,
+          extensionRegistry: registry, maxRetries: 0, maxTokens: 64, cacheRetention: 'none', redactText, redactJson,
+          createTextRedactor: () => redactor.createStream() }) : f.call(false, messages, { model: 'gpt-5', maxTokens: 64, tools }) });
+      expect(effects).toBe(1); expect(turn).toBe(2); expect(native).toEqual(original);
+      const file = path.join(root, session.id + '.jsonl'), bytes = await readFile(file, 'utf8');
+      expect(bytes).not.toContain('sensitive'); expect(bytes).toContain('opaque-[REDACTED]-tail'); expect((await stat(file)).mode & 0o777).toBe(0o600);
+      const expected = redactJson(encryptedBlocks()), history = session.messages.filter(message => message.role === 'assistant');
+      expect(history.map(message => message.blocks)).toEqual([expected, expected.filter(block => block.type !== 'tool_call')]);
+      const restarted = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }), loaded = (await restarted.loadFromStore(session.id))!;
+      expect(loaded.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual(history.map(message => message.blocks));
+      const ordinary = serializeSessionForExport(loaded), complete = serializeSessionForExport(loaded, { includeOpaqueContinuations: true });
+      expect(ordinary.warning).toContain('Native continuation'); expect(JSON.stringify(ordinary.session)).not.toContain('opaque-');
+      expect(JSON.stringify(complete.session)).toContain('opaque-[REDACTED]-tail'); expect(JSON.stringify(complete.session)).not.toContain('sensitive');
+      f.respond(() => encryptedReply(encryptedItems(false), scope === 'azure'));
+      await f.call(stream, loaded.messages, { maxTokens: 64 });
+      const body = () => JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
+      expect(body().input.filter((item: Record<string, unknown>) => item.type === 'reasoning')).toEqual(redactJson([
+        native[0], native[2], native[0], native[2],
+      ]));
+      expect(body().input.filter((item: Record<string, unknown>) => item.type === 'function_call_output')).toEqual([{ type: 'function_call_output', call_id: 'call_native', output: 'result' }]);
+      expect(await readFile(file, 'utf8')).toBe(bytes);
+      await restarted.appendContextEdit(session.id, { targetEntryId: history[0].id, replacement: 'edited answer' });
+      const clone = await restarted.cloneSession(session.id);
+      const projected = restarted.getEffectiveContext(clone.id).flatMap((entry): Message[] => entry.type === 'message' ? [{ ...entry, timestamp: new Date(entry.timestamp) }] : []);
+      await f.call(stream, projected, { maxTokens: 64 });
+      const edited = body().input.filter((item: Record<string, unknown>) => item.type === 'reasoning' || item.role === 'assistant' || item.type === 'function_call');
+      expect(edited).toEqual([{ type: 'function_call', call_id: 'call_native', id: 'fc_native', name: 'echo', arguments: '{"x":1}' },
+        { type: 'message', role: 'assistant', id: 'msg_pi_1', status: 'completed', content: [{ type: 'output_text', text: 'edited answer', annotations: [] }] },
+        ...redactJson(encryptedItems(false))]);
+      expect(clone.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual(history.map(message => message.blocks));
+      expect((await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message' && entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(message => message.blocks));
+      registry.virtualModels.register({ provider: 'router', id: 'auto', maxOutputTokens: 64, route: () => ({ provider, id: 'gpt-4o' }) });
+      await streamProviderTurn({ provider: registry.getVirtualProvider('router')!, providerName: 'router', model: 'auto', messages: loaded.messages,
+        tools, extensionRegistry: registry, resolveProvider: name => name === provider ? f.provider : undefined, maxRetries: 0 });
+      expect(JSON.stringify(body().input)).not.toContain('opaque-'); expect(JSON.stringify(body().input)).toContain('visible thought');
+    } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
+  });
+});
+
+describe('original Responses continuation admission', () => {
+  it('replays direct Azure history under its existing canonical returned provider even with an operator config label', async () => {
+    const f = fixture('azure', 'gpt-5'); f.respond(() => encryptedReply());
+    const direct = new AzureResponsesProvider({ type: 'operator-azure', model: 'gpt-5', apiKey: 'disposable', baseUrl: 'http://127.0.0.1:1/v1', providerMaxRetries: 0 });
+    const first = await direct.chat(user, { maxTokens: 64 }); expect(first.provider).toBe('azure');
+    const history: Message = { ...user[0], id: 'a', role: 'assistant', provider: first.provider, api: first.api, model: first.model,
+      content: first.content, blocks: first.blocks, toolCalls: first.toolCalls };
+    await direct.chat([history], { maxTokens: 64 });
+    expect(JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string).input.filter((item: Record<string, unknown>) => item.type === 'reasoning'))
+      .toEqual([encryptedItems()[0], encryptedItems()[2]]);
+  });
+  it('binds native signatures to the actual requested body when model option reads differ', async () => {
+    const f = fixture('openai', 'gpt-5'); f.respond(() => encryptedReply());
+    let reads = 0;
+    const response = await f.call(false, user, { get model() { return reads++ < 2 ? 'gpt-5' : 'gpt-4o'; }, maxTokens: 64 });
+    expect(JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string).model).toBe('gpt-4o');
+    expect(response.model).toBe('gpt-4o'); expect(response.blocks).toEqual(encryptedBlocks());
+  });
+  for (const scope of ['openai', 'azure'] as const) it(`${scope}: bounds opaque capture, requires terminal authority and leaves compatible transports legacy`, async () => {
+    const f = fixture(scope, 'gpt-5');
+    f.respond(() => encryptedReply(encryptedItems(), false, false));
+    await expect(f.call(true)).rejects.toThrow(); expect(f.chunks).toEqual([]);
+    for (const events of [
+      [{ type: 'response.output_item.done', output_index: 1024, item: encryptedItems()[0] }],
+      [{ type: 'response.completed', response: { output: Array(1025).fill(encryptedItems()[0]) } }],
+      [0, 0].map(output_index => ({ type: 'response.output_item.done', output_index, item: encryptedItems()[0] })),
+    ]) {
+      f.respond(() => new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')));
+      await expect(f.call(true)).rejects.toThrow(); expect(f.chunks).toEqual([]);
+    }
+    f.respond(() => {
+      let index = 0;
+      return new Response(new ReadableStream({ pull(controller) {
+        if (index === 22) { controller.close(); return; }
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'response.output_item.done', output_index: index,
+          item: { type: 'reasoning', id: `rs_${index++}`, summary: [], encrypted_content: 'x'.repeat(200_000) } })}\n\n`));
+      } }));
+    });
+    await expect(f.call(true)).rejects.toThrow(); expect(f.chunks).toEqual([]);
+    const controls = scope === 'openai' ? [['gpt-5', 'generic']] as const : [['gpt-5', 'derived-azure'], ['gpt-5-unreviewed', 'unknown-azure']] as const;
+    for (const [model, legacy] of controls) {
+      const adapter = fixture(scope, model, legacy); adapter.provider.getModelApi = () => 'openai-responses'; adapter.respond(() => encryptedReply());
+      expect((await adapter.call(true)).blocks).toBeUndefined();
+    }
+  });
+});
+
 const toolItems = (body: { input: Array<Record<string, unknown>> }) => body.input.filter(item => ['function_call', 'function_call_output'].includes(String(item.type)));
 
 describe('original OpenAI/Azure Responses unsigned call/item IDs and paired tool output projection', () => {

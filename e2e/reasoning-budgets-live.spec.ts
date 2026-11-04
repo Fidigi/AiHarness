@@ -2,20 +2,21 @@ import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { AnthropicProvider, GeminiProvider, VertexGeminiProvider, SESSION_EXPORT_CONTINUATION_WARNING } from '../packages/core/dist/index.js';
+import { AnthropicProvider, GeminiProvider, VertexGeminiProvider, OpenAiMixedProvider, AzureProvider, SESSION_EXPORT_CONTINUATION_WARNING } from '../packages/core/dist/index.js';
 import { start, stop } from '../packages/server/dist/index.js';
 import { createRuntimeServices } from '../packages/server/dist/runtime/services.js';
 import { expect, test } from './fixtures/test-budget';
 
-for (const dialect of ['anthropic', 'google', 'vertex'] as const) test(`native signed ${dialect} blocks survive server restart, replay and guarded export`, async ({ page }) => {
+for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-responses'] as const) test(`native signed ${dialect} blocks survive server restart, replay and guarded export`, async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-signed-web-'));
-  const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data'), model = dialect === 'anthropic' ? 'claude-sonnet-4-6' : 'gemini-3.8-flash';
-  const opaque = dialect === 'anthropic' ? ['opaque-start-tail', 'opaque-redacted'] : ['b3BhcXVlLXJlYXNvbmluZw==', 'b3BhcXVlLXRleHQ='];
+  const responses = dialect === 'responses' || dialect === 'azure-responses';
+  const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data'), model = dialect === 'anthropic' ? 'claude-sonnet-4-6' : responses ? 'gpt-5' : 'gemini-3.8-flash';
+  const opaque = dialect === 'anthropic' ? ['opaque-start-tail', 'opaque-redacted'] : responses ? ['opaque-reasoning', 'msg_opaque'] : ['b3BhcXVlLXJlYXNvbmluZw==', 'b3BhcXVlLXRleHQ='];
   const names = ['AI_HARNESS_AUTH_TOKEN', 'AI_HARNESS_ADMIN_TOKEN', 'AI_HARNESS_AGENT_DIR'] as const;
   const previous = names.map(name => process.env[name]);
   process.env.AI_HARNESS_AUTH_TOKEN = 'mod-user'; process.env.AI_HARNESS_ADMIN_TOKEN = 'mod-admin';
   process.env.AI_HARNESS_AGENT_DIR = path.join(root, 'agent');
-  const bodies: Array<{ messages?: Array<{ role: string; content: unknown }>; contents?: Array<{ role: string; parts: unknown }> }> = [];
+  const bodies: Array<{ messages?: Array<{ role: string; content: unknown }>; contents?: Array<{ role: string; parts: unknown }>; input?: Array<Record<string, unknown>> }> = [];
   const wire = createServer(async (request, response) => {
     if (request.method === 'GET') {
       response.setHeader('Content-Type', 'application/json');
@@ -25,6 +26,12 @@ for (const dialect of ['anthropic', 'google', 'vertex'] as const) test(`native s
     bodies.push(JSON.parse(Buffer.concat(chunks).toString()));
     const answer = bodies.length === 1 ? 'First native answer.' : 'Continued native answer.';
     response.setHeader('Content-Type', 'text/event-stream');
+    if (responses) {
+      response.end(`data: ${JSON.stringify({ type: 'response.completed', response: { id: 'resp_web', model: 'untrusted-alias', status: 'completed', output: [
+        { type: 'reasoning', id: 'rs_web', summary: [{ type: 'summary_text', text: 'Visible native reasoning' }], encrypted_content: opaque[0] },
+        { type: 'message', id: opaque[1], role: 'assistant', status: 'completed', phase: 'final_answer', content: [{ type: 'output_text', text: answer, annotations: [] }] },
+      ], usage: { input_tokens: 5, output_tokens: 2, total_tokens: 7 } } })}\n\n`); return;
+    }
     if (dialect !== 'anthropic') {
       response.end(`data: ${JSON.stringify({ modelVersion: 'untrusted-alias', candidates: [{ content: { role: 'model', parts: [
         { text: 'Visible native reasoning', thought: true, thoughtSignature: opaque[0] }, { text: answer, thoughtSignature: opaque[1] },
@@ -52,7 +59,8 @@ for (const dialect of ['anthropic', 'google', 'vertex'] as const) test(`native s
         const services = await createRuntimeServices(proxy, settings);
         const config = { apiKey: 'disposable-private-wire', baseUrl: upstream, model };
         proxy.setCustomProvider('native-signed', dialect === 'anthropic' ? new AnthropicProvider({ ...config, type: 'native-signed' })
-          : dialect === 'google' ? new GeminiProvider({ ...config, type: 'google' }) : new VertexGeminiProvider({ ...config, type: 'vertex' }));
+          : dialect === 'google' ? new GeminiProvider({ ...config, type: 'google' }) : dialect === 'vertex' ? new VertexGeminiProvider({ ...config, type: 'vertex' })
+            : dialect === 'responses' ? new OpenAiMixedProvider({ ...config, type: 'openai', transport: 'sse' }) : new AzureProvider({ ...config, type: 'azure' }));
         return services;
       } };
     const server = await start(options), base = `http://127.0.0.1:${server.port}`;
@@ -103,6 +111,10 @@ for (const dialect of ['anthropic', 'google', 'vertex'] as const) test(`native s
       { type: 'thinking', thinking: 'Visible native reasoning', signature: 'opaque-start-tail' },
       { type: 'redacted_thinking', data: 'opaque-redacted' }, { type: 'text', text: 'First native answer.' },
     ] }]);
+    else if (responses) expect(bodies[1].input!.filter(item => item.type === 'reasoning' || item.role === 'assistant')).toEqual([
+      { type: 'reasoning', id: 'rs_web', summary: [{ type: 'summary_text', text: 'Visible native reasoning' }], encrypted_content: opaque[0] },
+      { type: 'message', id: opaque[1], role: 'assistant', status: 'completed', phase: 'final_answer', content: [{ type: 'output_text', text: 'First native answer.', annotations: [] }] },
+    ]);
     else expect(bodies[1].contents!.filter(message => message.role === 'model')).toEqual([{ role: 'model', parts: [
       { text: 'Visible native reasoning', thought: true, thoughtSignature: opaque[0] }, { text: 'First native answer.', thoughtSignature: opaque[1] },
     ] }]);

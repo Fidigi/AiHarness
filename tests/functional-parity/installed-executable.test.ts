@@ -1973,7 +1973,7 @@ it('binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choi
     import { OpenAiMixedProvider, AzureProvider } from '@ai-harness/core';
     const vectors = ${JSON.stringify(vectors)}, policyVectors = ${JSON.stringify(policyVectors)}, scalarVectors = ${JSON.stringify(scalarVectors)},
       grammarVectors = ${JSON.stringify(grammarVectors)}, grammarReplays = ${JSON.stringify(grammarReplays)}, imageVectors = ${JSON.stringify(imageVectors)},
-      outputVectors = ${JSON.stringify(outputVectors)}, calls = []; let replyItems;
+      outputVectors = ${JSON.stringify(outputVectors)}, calls = []; let replyItems, lateEncryption = false;
     function events(items) {
       const output = items ?? [{ type: 'message', id: 'msg_owned', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'ok', annotations: [] }] }];
       const result = [{ type: 'response.created', response: { id: 'resp_owned', status: 'in_progress', output: [] } }];
@@ -1984,7 +1984,8 @@ it('binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choi
           result.push({ type: 'response.custom_tool_call_input.done', output_index: index, input: item.input });
         } else result.push(items ? { type: 'response.function_call_arguments.delta', output_index: index, delta: item.arguments }
           : { type: 'response.output_text.delta', output_index: index, content_index: 0, delta: 'ok' });
-        result.push({ type: 'response.output_item.done', output_index: index, item });
+        result.push({ type: 'response.output_item.done', output_index: index,
+          item: lateEncryption && item.type === 'reasoning' ? { ...item, encrypted_content: undefined } : item });
       }
       result.push({ type: 'response.completed', response: { id: 'resp_owned', model: 'untrusted-response-alias', status: 'completed', output, usage: { input_tokens: 1, output_tokens: 2, total_tokens: 3 } } });
       return result.map(event => 'data: ' + JSON.stringify(event) + '\\n\\n').join('') + 'data: [DONE]\\n\\n';
@@ -2139,6 +2140,31 @@ it('binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choi
         }
       }
       assert.equal(calls.length, 13832); assert.equal(refusals, 1928);
+      const signed = [{ type: 'reasoning', id: 'rs_installed', summary: [], encrypted_content: 'opaque-installed' },
+        { type: 'message', id: 'msg_installed', role: 'assistant', status: 'completed', phase: 'final_answer', content: [{ type: 'output_text', text: 'signed', annotations: [] }] },
+        { type: 'function_call', id: 'fc_installed', call_id: 'call_installed', name: 'echo', arguments: '{"x":1}' }];
+      for (const scope of ['openai', 'azure']) for (const stream of [false, true]) {
+        const provider = providers[scope], options = { model: 'gpt-5', maxTokens: 64 };
+        const perform = async messages => {
+          if (!stream) return provider.chat(messages, options);
+          let result, failure; await provider.streamChat(messages, () => {}, value => { result = value; }, error => { failure = error; }, options);
+          if (failure) throw failure; return result;
+        };
+        lateEncryption = scope === 'azure'; replyItems = signed;
+        const first = await perform([{ id: 'u', role: 'user', content: 'signed probe', timestamp: new Date(0) }]);
+        assert.equal(first.provider, 'operator-' + scope); assert.equal(first.model, 'gpt-5');
+        assert.equal(first.api, scope === 'openai' ? 'openai-responses' : 'azure-openai-responses');
+        assert.deepEqual(first.blocks, [{ type: 'reasoning', text: '', thinkingSignature: JSON.stringify(signed[0]) },
+          { type: 'text', text: 'signed', textSignature: JSON.stringify({ v: 1, id: 'msg_installed', phase: 'final_answer' }) },
+          { type: 'tool_call', id: 'call_installed|fc_installed', name: 'echo', input: { x: 1 } }]);
+        const history = [{ id: 'a', role: 'assistant', content: first.content, blocks: first.blocks, toolCalls: first.toolCalls,
+          provider: first.provider, api: first.api, model: first.model, timestamp: new Date(0) },
+          { id: 't', role: 'tool', content: 'result', toolCallId: 'call_installed|fc_installed', timestamp: new Date(0) }], before = JSON.stringify(history);
+        replyItems = undefined; await perform(history);
+        assert.deepEqual(calls.at(-1).body.input, [...signed, { type: 'function_call_output', call_id: 'call_installed', output: 'result' }]);
+        assert.equal(JSON.stringify(history), before);
+      }
+      assert.equal(calls.length, 13840);
       console.log('installed original Responses unsigned/schema/scalar/grammar/tool images/output boundaries OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);

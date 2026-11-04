@@ -142,13 +142,13 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
     const metadata = getProviderPublishedModel(selection.provider, selection.id, provider);
     const api = provider.getModelApi?.(selection.id);
     const project = (input: Message[]): Message[] => input.flatMap(message => {
-      if (message.role === 'assistant' && ['anthropic-messages', 'google-generative-ai', 'google-vertex'].includes(message.api ?? '')
+      if (message.role === 'assistant' && ['anthropic-messages', 'google-generative-ai', 'google-vertex', 'openai-responses', 'azure-openai-responses'].includes(message.api ?? '')
         && message.metadata?.outputError) return [];
       let projected = message;
       // Private replay belongs to the exact physical source, not the virtual alias.
       if (message.role === 'assistant' && (message.provider !== selection.provider || message.model !== selection.id
         || message.api !== undefined && message.api !== api)) {
-        const source = ['anthropic-messages', 'google-generative-ai', 'google-vertex'].includes(message.api ?? '')
+        const source = ['anthropic-messages', 'google-generative-ai', 'google-vertex', 'openai-responses', 'azure-openai-responses'].includes(message.api ?? '')
           ? projectAssistantReplay(message, selection.provider, selection.id, api) : message;
         projected = { id: source.id, timestamp: source.timestamp, role: source.role, content: source.content,
           ...(source.toolCalls ? { toolCalls: source.toolCalls.map(({ thoughtSignature: _signature, ...call }) => call) } : {}),

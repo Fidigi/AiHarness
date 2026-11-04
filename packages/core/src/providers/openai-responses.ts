@@ -36,7 +36,7 @@ export function nativeResponsesToolId(item: Record<string, unknown>): string | u
 }
 
 // Pinned Responses foreign item IDs use this deterministic, non-cryptographic hash.
-function responseItemHash(value: string): string {
+export function responseItemHash(value: string): string {
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
   for (let i = 0; i < value.length; i++) {
     const ch = value.charCodeAt(i);
@@ -49,15 +49,17 @@ function responseItemHash(value: string): string {
 
 /** Only private native owners call this on freshly converted bodies, before deployment rewriting. */
 export function applyNativeResponsesToolHistory(body: Record<string, unknown>, messages: Message[],
-  provider: 'openai' | 'azure', model: string, api: string): void {
+  provider: 'openai' | 'azure', model: string, api: string, physicalProvider = provider as string): void {
   if (!Array.isArray(body.input)) return;
   const ids = new Map<string, { callId: string; itemId?: string; customInput?: string }>();
   const results = new Map(messages.filter(message => message.role === 'tool').map(message => [message.toolCallId ?? message.id, message]));
   const normalize = (id: string) => id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64).replace(/_+$/, '');
-  for (const message of messages) if (message.role === 'assistant') for (const call of message.toolCalls ?? []) {
+  for (const message of messages) if (message.role === 'assistant') for (const call of [
+    ...(message.toolCalls ?? []), ...(message.blocks?.flatMap(block => block.type === 'tool_call' ? [block] : []) ?? []),
+  ]) {
     const parts = call.id.split('|');
     let callId = parts[0]!, itemId: string | undefined = parts[1];
-    const sameProviderApi = message.provider === provider && message.api === api;
+    const sameProviderApi = message.provider === (message.blocks ? physicalProvider : provider) && message.api === api;
     if (!sameProviderApi || message.model !== model) {
       callId = normalize(callId);
       if (itemId !== undefined) {

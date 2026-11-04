@@ -7,6 +7,7 @@ import {
   OpenAiProvider,
   type AiProvider,
   OpenAiResponsesProvider,
+  OpenAiMixedProvider,
   getOpenAiResponsesTransportStats,
   resetOpenAiResponsesTransportStats,
   AnthropicProvider,
@@ -89,6 +90,32 @@ class ScriptedProviderWebSocket implements ProviderWebSocket {
 }
 
 describe('OpenAiResponsesProvider transport', () => {
+  it('keeps native encrypted WebSocket replay full and separates physical owner/model cache identities', async () => {
+    const output = [{ type: 'reasoning', id: 'rs_ws', summary: [{ type: 'summary_text', text: 'visible' }], encrypted_content: 'opaque-ws' },
+      { type: 'message', id: 'msg_ws', content: [{ type: 'output_text', text: 'answer', annotations: [] }] }];
+    const terminal = [{ type: 'response.completed', response: { id: 'resp_ws', status: 'completed', output } }];
+    const sockets: ScriptedProviderWebSocket[] = [], factory = vi.fn(() => {
+      const socket = new ScriptedProviderWebSocket([terminal, terminal]); sockets.push(socket); return socket;
+    });
+    const config = { apiKey: 'disposable-native', model: 'gpt-5', transport: 'websocket-cached' as const,
+      baseUrl: 'https://native.example/v1', webSocketFactory: factory, requestTimeoutMs: 2000 };
+    const owner = new OpenAiMixedProvider({ ...config, type: 'owner-a' }), other = new OpenAiMixedProvider({ ...config, type: 'owner-b' });
+    const user = createMessage('user', 'start'), options = { sessionId: 'native-identity', cacheRetention: 'none' as const };
+    const response = await owner.chat([user], options);
+    const history: Message[] = [user, { ...createMessage('assistant', response.content), provider: response.provider, api: response.api,
+      model: response.model, blocks: response.blocks }, createMessage('user', 'next')];
+    await owner.chat(history, options);
+    expect(factory).toHaveBeenCalledTimes(1); expect(sockets[0].sent).toHaveLength(2);
+    expect(sockets[0].sent[1].previous_response_id).toBeUndefined(); expect(JSON.stringify(sockets[0].sent[1].input)).toContain('opaque-ws');
+    await other.chat(history, options);
+    owner.setConfiguredModel('gpt-4o'); await owner.chat(history, options);
+    expect(factory).toHaveBeenCalledTimes(3);
+    for (const socket of sockets.slice(1)) {
+      expect(socket.sent[0].previous_response_id).toBeUndefined(); expect(JSON.stringify(socket.sent[0].input)).not.toContain('opaque-ws');
+      expect(JSON.stringify(socket.sent[0].input)).toContain('visible');
+    }
+    expect(getOpenAiResponsesTransportStats('native-identity')).toMatchObject({ websocketConnectionsCreated: 3, websocketConnectionsReused: 1, deltaRequests: 0, fullContextRequests: 4 });
+  });
   it('reuses a session socket and sends a bounded previous-response delta', async () => {
     const socket = new ScriptedProviderWebSocket([
       [
