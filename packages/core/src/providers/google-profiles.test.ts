@@ -13,6 +13,8 @@ import { streamProviderTurn } from '../agent/provider-turn.js';
 import { runToolLoop } from '../agent/tool-loop.js';
 import { JsonlSessionStore, SessionManager } from '../sessions/session-manager.js';
 import { serializeSessionForExport } from '../sessions/serialization.js';
+import { getCompactionModelMessages } from '../sessions/compaction-model-messages.js';
+import { getSummaryModelMessages } from '../sessions/summary-model-messages.js';
 import { CredentialRedactor } from './credentials.js';
 
 const pin = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/provider-reference.json', import.meta.url), 'utf8'));
@@ -798,6 +800,30 @@ describe('native original Google/Vertex signed durability', () => {
         const foreign = JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body)).contents;
         expect(JSON.stringify(foreign)).not.toContain('thoughtSignature'); expect(JSON.stringify(foreign)).toContain('visible');
         expect(native[0].thoughtSignature).toBe('c2VjcmV0');
+        const canonical = getCompactionModelMessages(restarted, clone.id), beforeSummary = structuredClone(canonical);
+        expect(JSON.stringify(getSummaryModelMessages(canonical))).not.toMatch(/Signature|opaque-/);
+        expect(canonical).toEqual(beforeSummary);
+        const kept = clone.messages.filter(message => message.role === 'assistant').at(-1)!;
+        const sourceBytes = await readFile(file, 'utf8');
+        await restarted.applyCompaction(clone.id, 'PUBLIC_COMPACTED_PREFIX', kept.id);
+        const compactedManager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson });
+        const compactedSession = (await compactedManager.loadFromStore(clone.id))!;
+        const compacted = getCompactionModelMessages(compactedManager, clone.id);
+        expect(compactedSession.metadata?.compactionSummary).toBe('PUBLIC_COMPACTED_PREFIX');
+        expect(compacted.some(message => message.content.includes('PUBLIC_COMPACTED_PREFIX'))).toBe(true);
+        expect(compacted.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual([expected.filter(block => block.type !== 'tool_call')]);
+        expect(compacted.filter(message => message.role === 'tool')).toEqual([]);
+        const raw = await compactedManager.getRawEntries(clone.id);
+        expect(raw).toContainEqual(expect.objectContaining({ type: 'compaction', firstKeptEntryId: kept.id, summary: 'PUBLIC_COMPACTED_PREFIX' }));
+        expect(raw.filter(entry => entry.type === 'message' && entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(message => message.blocks));
+        const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8');
+        expect((await stat(compactedFile)).mode & 0o777).toBe(0o600);
+        await f.call(stream, { maxTokens: 64 }, compacted);
+        const compactedReplay = JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body)).contents.filter((content: { role: string }) => content.role === 'model');
+        expect(compactedReplay.map((content: { parts: unknown }) => content.parts)).toEqual([retained.filter(part => !part.functionCall)]);
+        expect(await readFile(compactedFile, 'utf8')).toBe(compactedBytes);
+        expect(await readFile(file, 'utf8')).toBe(sourceBytes);
+        expect(effects).toBe(1);
       } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
     });
   }

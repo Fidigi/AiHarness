@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SessionManager } from './session-manager.js';
+import type { Message } from '../types/index.js';
 import { compactionMessagesFromEntries, getCompactionModelMessages } from './compaction-model-messages.js';
 
 async function fixture() {
@@ -59,13 +60,29 @@ describe('shared model projection for compaction', () => {
 
   it('owns nested model input, never exposing writable aliases into Core history', async () => {
     const { manager, id } = await fixture();
-    await manager.addMessage(id, { role: 'assistant', content: 'owned declaration',
-      toolCalls: [{ id: 'owned', name: 'tool', input: { nested: { value: 'ORIGINAL' } } }] }, { skipAutoCompaction: true });
+    const blocks: NonNullable<Message['blocks']> = [
+      { type: 'text', text: 'owned declaration', textSignature: 'PRIVATE_TEXT' },
+      { type: 'reasoning', text: 'visible thought', thinkingSignature: 'PRIVATE_THINKING' },
+      { type: 'reasoning', text: '', redacted: true, thinkingSignature: 'PRIVATE_REDACTED' },
+      { type: 'tool_call', id: 'owned', name: 'tool', input: { nested: { value: 'ORIGINAL' } }, thoughtSignature: 'PRIVATE_BLOCK_TOOL' },
+    ];
+    const toolCalls = [{ id: 'owned', name: 'tool', input: { nested: { value: 'ORIGINAL' } }, thoughtSignature: 'PRIVATE_COMPAT_TOOL' }];
+    await manager.addMessage(id, { role: 'assistant', content: 'owned declaration', blocks, toolCalls,
+      provider: 'native-owner', api: 'anthropic-messages', model: 'native-model', metadata: { private: 'PRIVATE_METADATA' } }, { skipAutoCompaction: true });
     await manager.addMessage(id, { role: 'tool', toolCallId: 'owned', content: 'owned result' }, { skipAutoCompaction: true });
     const before = JSON.stringify(manager.getEffectiveContext(id));
-    const messages = getCompactionModelMessages(manager, id);
+    const messages = getCompactionModelMessages(manager, id), declaration = messages.find(message => message.toolCalls?.length)!;
+    expect(declaration).toMatchObject({ blocks, toolCalls, provider: 'native-owner', api: 'anthropic-messages',
+      model: 'native-model', metadata: { private: 'PRIVATE_METADATA' } });
+    for (const block of declaration.blocks!) {
+      if (block.type === 'text') block.textSignature = 'MUTATED_TEXT_SIGNATURE';
+      if (block.type === 'reasoning') { block.thinkingSignature = 'MUTATED_THINKING_SIGNATURE'; block.redacted = false; }
+      if (block.type === 'tool_call') block.thoughtSignature = 'MUTATED_BLOCK_TOOL_SIGNATURE';
+    }
+    declaration.toolCalls![0].thoughtSignature = 'MUTATED_COMPAT_TOOL_SIGNATURE';
+    declaration.metadata!.private = 'MUTATED_METADATA';
     messages[0].content = 'MUTATED';
-    const input = messages.find(message => message.toolCalls?.length)!.toolCalls![0].input as { nested: { value: string } };
+    const input = declaration.toolCalls![0].input as { nested: { value: string } };
     input.nested.value = 'MUTATED_NESTED';
     expect(JSON.stringify(manager.getEffectiveContext(id))).toBe(before);
     expect(JSON.stringify(getCompactionModelMessages(manager, id))).not.toContain('MUTATED');

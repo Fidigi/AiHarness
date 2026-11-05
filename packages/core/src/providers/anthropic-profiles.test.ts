@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +8,8 @@ import { AnthropicProvider, type AnthropicChatOptions, type ChatOptions, type Ch
 import type { Message } from '../types/index.js';
 import { JsonlSessionStore, SessionManager } from '../sessions/session-manager.js';
 import { deserializeSession, serializeSession, serializeSessionForExport } from '../sessions/serialization.js';
+import { getCompactionModelMessages } from '../sessions/compaction-model-messages.js';
+import { getSummaryModelMessages } from '../sessions/summary-model-messages.js';
 import { CredentialRedactor } from './credentials.js';
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
 import { runToolLoop } from '../agent/tool-loop.js';
@@ -862,6 +864,30 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       expect(JSON.stringify(switched.messages)).not.toContain('opaque-');
       expect(JSON.stringify(switched.messages)).toContain('firstsecond');
       expect(native[1].signature).toBe('opaque-disposable-profile-key');
+      const canonical = getCompactionModelMessages(restarted, clone.id), beforeSummary = structuredClone(canonical);
+      expect(JSON.stringify(getSummaryModelMessages(canonical))).not.toMatch(/Signature|opaque-/);
+      expect(canonical).toEqual(beforeSummary);
+      const kept = clone.messages.filter(message => message.role === 'assistant').at(-1)!;
+      const sourceBytes = await readFile(file, 'utf8');
+      await restarted.applyCompaction(clone.id, 'PUBLIC_COMPACTED_PREFIX', kept.id);
+      const compactedManager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson });
+      const compactedSession = (await compactedManager.loadFromStore(clone.id))!;
+      const compacted = getCompactionModelMessages(compactedManager, clone.id);
+      expect(compactedSession.metadata?.compactionSummary).toBe('PUBLIC_COMPACTED_PREFIX');
+      expect(compacted.some(message => message.content.includes('PUBLIC_COMPACTED_PREFIX'))).toBe(true);
+      expect(compacted.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual([expected.slice(0, -1)]);
+      expect(compacted.filter(message => message.role === 'tool')).toEqual([]);
+      const raw = await compactedManager.getRawEntries(clone.id);
+      expect(raw).toContainEqual(expect.objectContaining({ type: 'compaction', firstKeptEntryId: kept.id, summary: 'PUBLIC_COMPACTED_PREFIX' }));
+      expect(raw.filter(entry => entry.type === 'message' && entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(message => message.blocks));
+      const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8');
+      expect((await stat(compactedFile)).mode & 0o777).toBe(0o600);
+      await f.call(stream, 'none', { thinking: 'low' }, compacted);
+      const compactedReplay = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+      expect(compactedReplay.messages.filter((message: { role: string }) => message.role === 'assistant').map((message: { content: unknown }) => message.content))
+        .toEqual([native.filter(block => block.type !== 'tool_use').map(block => block.type === 'thinking' ? { ...block, signature: 'opaque-[REDACTED]' } : block)]);
+      expect(await readFile(compactedFile, 'utf8')).toBe(compactedBytes);
+      expect(await readFile(file, 'utf8')).toBe(sourceBytes);
     } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
   });
   it('captures the adaptive dialect independently of public metadata, later model changes and derived transports', async () => {

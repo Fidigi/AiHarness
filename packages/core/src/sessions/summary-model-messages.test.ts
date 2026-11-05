@@ -7,12 +7,19 @@ const message = (changes: Partial<Message> = {}): Message => ({ id:'m', role:'as
 
 describe('summary-provider projection, distinct from canonical context', () => {
   it('omits private replay/metadata/reasoning while preserving public tool JSON literally', () => {
-    const input=[message({ metadata:{signature:'PRIVATE_SIGNATURE',internal:'PRIVATE_STATE'},blocks:[
-      {type:'reasoning',text:'PRIVATE_THINKING'}, {type:'text',text:'PUBLIC_ANSWER'},
-      {type:'tool_call',id:'call',name:'lookup',input:{reasoning:'PUBLIC_REASONING_FIELD',signature:'PUBLIC_SIGNATURE_FIELD',toJSON:'PUBLIC_DATA'}},
-    ]})];
+    const input=[message({ provider:'native-owner',api:'anthropic-messages',model:'native-model',
+      metadata:{signature:'PRIVATE_SIGNATURE',internal:'PRIVATE_STATE'},blocks:[
+      {type:'reasoning',text:'PRIVATE_THINKING',thinkingSignature:'PRIVATE_THINKING_SIGNATURE'},
+      {type:'reasoning',text:'PRIVATE_REDACTED',redacted:true,thinkingSignature:'PRIVATE_REDACTED_SIGNATURE'},
+      {type:'text',text:'PUBLIC_ANSWER',textSignature:'PRIVATE_TEXT_SIGNATURE'},
+      {type:'tool_call',id:'call',name:'lookup',input:{reasoning:'PUBLIC_REASONING_FIELD',signature:'PUBLIC_SIGNATURE_FIELD',toJSON:'PUBLIC_DATA'},thoughtSignature:'PRIVATE_BLOCK_TOOL_SIGNATURE'},
+    ],toolCalls:[{id:'call',name:'lookup',input:{signature:'PUBLIC_COMPAT_SIGNATURE'},thoughtSignature:'PRIVATE_COMPAT_TOOL_SIGNATURE'}]})];
     const before=structuredClone(input), projected=getSummaryModelMessages(input), text=JSON.stringify(projected);
-    for(const marker of ['PRIVATE_SIGNATURE','PRIVATE_STATE','PRIVATE_THINKING'])expect(text).not.toContain(marker);
+    for(const marker of ['PRIVATE_SIGNATURE','PRIVATE_STATE','PRIVATE_THINKING','PRIVATE_REDACTED','PRIVATE_TEXT_SIGNATURE',
+      'PRIVATE_BLOCK_TOOL_SIGNATURE','PRIVATE_COMPAT_TOOL_SIGNATURE','native-owner','native-model'])expect(text).not.toContain(marker);
+    for(const field of ['textSignature','thinkingSignature','thoughtSignature','redacted','provider','api','model','metadata'])
+      expect(text).not.toContain(`"${field}":`);
+    expect(projected[0].toolCalls).toEqual([{id:'call',name:'lookup',input:{signature:'PUBLIC_COMPAT_SIGNATURE'}}]);
     for(const marker of ['PUBLIC_ANSWER','PUBLIC_REASONING_FIELD','PUBLIC_SIGNATURE_FIELD','PUBLIC_DATA'])expect(text).toContain(marker);
     expect(input).toEqual(before);expect(projected[0].blocks?.map(block=>block.type)).toEqual(['text','tool_call']);
   });
