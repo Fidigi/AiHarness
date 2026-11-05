@@ -364,6 +364,32 @@ Any later `GAP ACCEPTED` still needs an explicit dated omission, justification, 
 
 ## 6. Delivery Journal
 
+### MOD-03 — legacy chat versus trusted budget settings review
+
+**2026-11-05 — source/artifact review at clean `8eaa019ead172bd9ef2372e82939ffc1c7bc3376`; no new application, SDK, compiler or test execution.** Existing budget-composition evidence has distinct owners:
+
+- CLI `index.ts:1752–1753` and RPC `rpc-controller.ts:1367–1368` explicitly supply resolved `thinkingBudgets` to shared turns. The existing11-case `thinking-budgets-process.test.ts` covers six trusted/untrusted file-map hook journeys across print/JSON/RPC, three actual emitted Anthropic adapter HTTP requests (`claude-3-7-sonnet-latest`, `budget_tokens:3000`), one regular-PTY `/reload` hook-snapshot journey, and one outside-checkout emitted-Core consumer. The numeric legacy-model fixture is not complete original-profile defaults/clamps acceptance. The consumer uses existing `--strict --skipLibCheck`, not complete dependency typing or a genuinely installed CLI/PATH-bin probe. Trusted file-map merging is not the Server scoped whole-map override contract.
+- `configuration-defaults.test.ts` has five existing HTTP cases. Its budget scenarios target `/api/agent/runs` and `/api/subagents/runs`: scoped whole-map precedence, `{}` suppression, null inheritance, trusted-file fallback, child inheritance and no-prior-parent delegation are observed through MockProvider options; prompt-body budget/parent-policy objects do not acquire authority. These are detached run boundaries, not legacy `/api/chat` settings composition or native request-body acceptance.
+- Server `index.ts:620–626` maps both `/api/chat` and `/api/chat/stream` to `proxy.ts`'s legacy `chatHandler`. Its `sanitizedProxyChatOptions` reconstructs an allowlist, copying valid `thinking` but not `thinkingBudgets`; `createProxyRoutes` receives only an optional API-key persistence callback. The reviewed `chatHandler` → `sendChatSSE` dispatch copies/redacts those options and adds a cancellation signal, with no explicit trusted/scoped budget-map resolution. This identifies missing composition at the reviewed built-in boundary, not a freshly executed failure or proof that arbitrary custom proxies/hooks cannot supply options. The existing proxy whitelist scenario checks generic unknown-field omission but does not explicitly supply `thinkingBudgets`; the detached settings scenarios do not exercise this legacy route. Adding an untrusted budget field to the whitelist would not establish trusted settings authority.
+
+The [sealed Anthropic-reference receipt](./evidence/MOD-03-anthropic-reference.json) retains root artifact SHA-256 `38420f8a54730d032bc8ff475e620e0c2766366041846bc9a5c8187dbf378599`, freshly verified by decompression/hash/size checks. It reports11 CLI, five detached configuration and30 generic proxy cases passing (**46 historical reports across distinct boundaries**) inside the root that still **fails8,843/6/8,849**. The30 reports are not a claim of complete manual review or numeric-settings coverage of every proxy scenario. Seven selected current inputs match delivered Git `df43251`; this is not current image readback, complete build-context provenance, a rerun or qualification transfer. A stale `api/thinking-budgets-http.test.ts` lookup was navigation; the actual owning HTTP coverage is `configuration-defaults.test.ts`, not an attempted/skipped test.
+
+Only this journal section and the existing host-composition matrix row change. After explicitly authorized functional resumption, legacy trusted/scoped budget composition needs owning HTTP evidence while preserving the existing untrusted-option allowlist, caller-compatible thinking controls and physical policy authority. This does not approve a new legacy scope-selection mechanism, implementation or independent feature bypass. The native HOLD, failed/unreached gates, MOD-03 PARTIAL, MOD-01 IN PROGRESS and37-of43 totals remain unchanged; no new test credit, native execution, compiler investigation, waiver or goal completion occurs.
+
+| Selected input at the reviewed Git revision | SHA-256 |
+|---|---|
+| `packages/cli/src/index.ts` | `8e6adda4f41a14eeb156839298b7c5e9932f6e7db6d0a2ad321073a099896de2` |
+| `packages/cli/src/rpc/rpc-controller.ts` | `b42e4a8fb90fb0f647e6227113e6b45386edcc81c88d2d918a6b2d4972709367` |
+| `packages/cli/src/cli/thinking-budgets-process.test.ts` | `82f47903db6e98fcf4e03b74f9a1de6c131f57f8a7f4361799afad770c81b2d6` |
+| `packages/server/src/index.ts` | `4dd8f921caa51cfc07a36a90a7a968296c5a0ad5e3ca4319f5003cf710e49b42` |
+| `packages/server/src/api/proxy.ts` | `abe1b7dafdbd8311494d7ac5895c1a1a9429c125c3496fc6c615747bdbbc1992` |
+| `packages/server/src/api/proxy.test.ts` | `644e4dbef30432ed6688a4bca6b61b93910eda3a82092e3a8b561df61dc5992f` |
+| `packages/server/src/api/configuration-defaults.test.ts` | `2298420801884e3a1c8827ceba78f2cb822d412961cfe55a2e6e2e846c3f8e1e` |
+
+| Date | ID(s) | Old → New | Evidence | Validation | Notes/decision |
+|---|---|---|---|---|---|
+| 2026-11-05 | MOD-03 | PARTIAL → PARTIAL | Seven selected inputs above; existing host-composition matrix; sealed historical root | Read/grep; `git status --short`; `node /tmp/mod03-legacy-settings-review/prove.mjs` artifact/hash/Git verification; `make lint-docs`; `git diff --check` | CLI, detached HTTP and legacy proxy evidence remain distinct; legacy trusted-budget composition stays open; no native unblock or goal completion |
+
 ### MOD-03 — context estimate, media and usage boundary review
 
 **2026-11-05 — source/artifact review at clean `b5fed09fdcb8ff0416d3f18b97d571337a7064bf`; no new application, SDK, compiler or test execution.** `agent/provider-request-estimate.ts` implements the declared `canonical-json-utf8/4-v1` policy, not a dialect body or vendor tokenizer. It excludes historical message usage/metadata from this estimate and marks image-bearing blocks with `unknownMedia:true`. When successful measurement encounters unknown media, the optional budget comparison remeasures empty messages plus options, retaining independently known system/tool overhead; an impossible output reserve can still refuse first. This does not price image tokens at zero or certify image admission. The reserve is `max(configured reserve, independently retained requested/native output, current explicit output)`, not an added sum. Existing envelope/shape checks and owner-specific policies remain separate.
