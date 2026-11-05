@@ -364,6 +364,23 @@ Any later `GAP ACCEPTED` still needs an explicit dated omission, justification, 
 
 ## 6. Delivery Journal
 
+### MOD-03 — Bedrock private continuation source-only closure check
+
+**2026-11-05 — scoped source review at clean `f93c91cbec6bbca8a060ca0b24e1007540171afc`; no implementation or executed acceptance.** The existing closure matrix's remaining-dialects cell is made concrete, not expanded into a new criterion or backlog. In `packages/core/src/providers/bedrock-converse-stream.ts:112–196`, the streaming block state/parser retains visible reasoning but returns no ordered private signature/redacted blocks; its own contract explicitly excludes signed/encrypted replay. In `packages/core/src/providers/index.ts:4304–4342,4403–4430`, Bedrock request lowering uses text/images/tools, and JSON response extraction uses text/tools rather than a signed reasoning carrier. The reviewed binary scenario at `packages/core/src/providers/bedrock-converse-stream.test.ts:89–123` checks visible text/reasoning/tools/cache accounting, not opaque byte preservation. These direct-path source observations establish an implementation gap; they are not a new failing test, an exhaustive suite review or a service-validity claim.
+
+The [existing E13 receipt](./evidence/MOD-01.01b-bedrock-opus46-signed-reference.json) remains acquired:two synthetic same-model signed response-to-continuation bindings/four real pinned Pi/AWS SDK requests, not Core signed replay. It is not recaptured or promoted to agent/persistence/CLI/browser acceptance. Bedrock still needs ordered private capture → shared publication → durable reload → exact physical-owner replay, with the already-approved redaction/edit/export policy and applicable owning/host evidence. Merely unblocking the held Google/Vertex/Responses compiler gate cannot satisfy that functional requirement. This records the completed read-only review only:the HOLD, required explicit compiler-unblock authorization, every prior failed/unreached gate, MOD-03 PARTIAL, MOD-01 IN PROGRESS and37-of43 closure totals remain unchanged. No product/test change, native execution, diagnostic expansion, alternative feature cycle or acceptance waiver occurs.
+
+| Source at the pinned revision | SHA-256 |
+|---|---|
+| `packages/core/src/providers/bedrock-converse-stream.ts` | `6ee01dff5eb85acc6221ab41b1b00c5ef0df0ed937eaabb0f7c4c42e350d2f23` |
+| `packages/core/src/providers/index.ts` | `e7ba1d1f492354ac45731edd56109c5a57a124d6fbb0e0f21460475fc30124c6` |
+| `packages/core/src/providers/bedrock-converse-stream.test.ts` | `61993308114c67a5bc0409694dd6330ebc376a7c07e8986d462a1a6f0700a4f0` |
+| `docs/audit/pi/evidence/MOD-01.01b-bedrock-opus46-signed-reference.json` | `bfd6f3834d35afc0945a3e9eef911cf7cb8feedb1d29e51756d2f3789296de8c` |
+
+| Date | ID(s) | Old → New | Evidence | Validation | Notes/decision |
+|---|---|---|---|---|---|
+| 2026-11-05 | MOD-03 | PARTIAL → PARTIAL | Source slices and four hashes above; existing matrix's private-continuation row; E13 preserved | Read/grep, `git status --short`, `git rev-parse HEAD`, `sha256sum` on the four paths; `git diff --exit-code -- packages tests e2e`; `make lint-docs`; `git diff --check` | Documentation-only traceability of an existing functional gap; no runtime qualification or goal completion |
+
 ### MOD-03 — Google/Vertex/Responses comparison held at image construction
 
 **2026-11-05 — documentary HOLD over delivered `df43251`; MOD-03 remains PARTIAL.** The user asked to continue until MOD-03 is finalized. The [held receipt and candidate archives](./evidence/MOD-03-google-responses-reference-held.json) retain two fresh independent pinned SDK executions at `06a466935536f8c9bcacb2d5efc0fc021be1bdff`:Google/Vertex284 SSE requests (35 captures/245 replay projections plus two fragment capture/replay pairs) and original OpenAI/Azure Responses704 SSE requests (88 captures/616 replay projections). Both network-none programs verify244 declared pinned source files and11,925 declared dependency files before SDK import. Program/manifests are read back from the immutable reference image; ten owning modules match pinned Git objects. These selected/declared-input links do not prove every image/context byte, accounts or cryptographic signature validity. SDK Vertex API-key construction remains distinct from Core supplied Bearer/ADC. Existing Anthropic and Bedrock reference evidence is preserved.
