@@ -364,6 +364,31 @@ Any later `GAP ACCEPTED` still needs an explicit dated omission, justification, 
 
 ## 6. Delivery Journal
 
+### MOD-03 — context estimate, media and usage boundary review
+
+**2026-11-05 — source/artifact review at clean `b5fed09fdcb8ff0416d3f18b97d571337a7064bf`; no new application, SDK, compiler or test execution.** `agent/provider-request-estimate.ts` implements the declared `canonical-json-utf8/4-v1` policy, not a dialect body or vendor tokenizer. It excludes historical message usage/metadata from this estimate and marks image-bearing blocks with `unknownMedia:true`. When successful measurement encounters unknown media, the optional budget comparison remeasures empty messages plus options, retaining independently known system/tool overhead; an impossible output reserve can still refuse first. This does not price image tokens at zero or certify image admission. The reserve is `max(configured reserve, independently retained requested/native output, current explicit output)`, not an added sum. Existing envelope/shape checks and owner-specific policies remain separate.
+
+`providers/anthropic-thinking.ts` and `providers/bedrock-profiles.ts` instead use selected private native approximate transcript policies with character/3.5 rounding, fixed4,800-character image contributions under their respective role rules, and historical-usage prefix anchors. Those policies are not the canonical UTF-8/4 guard, image-size decoding or complete model-media equivalence. `providers/provider-output-budget.ts` preserves private registered-owner authority rather than adding a capability to unknown/structural providers. In the reviewed `agent/provider-turn.ts:418–421,538–566` path, request admission consumes the prepared output floor while completion normalizes `response.usage`; no request estimate is substituted for that response usage. This observation does not certify every provider's partial-counter normalization or vendor billing.
+
+The [sealed Anthropic-reference receipt](./evidence/MOD-03-anthropic-reference.json) retains root artifact SHA-256 `38420f8a54730d032bc8ff475e620e0c2766366041846bc9a5c8187dbf378599`, freshly checked by decompression/hash/size equality. It reports29 `provider-request-estimate.test.ts`,36 `provider-request-budget.test.ts` and27 `provider-request-options-flow.test.ts` cases passing (**92 historical generic/MockProvider cases**) inside the root that still **fails8,843/6/8,849**. Their reviewed fixtures cover inert measurement, exact boundaries, optional/stale policy, post-hook/redactor output retention, unknown-media behavior and output-alone refusal, not the complete approved native model/image-sizing/default matrix. Eight current selected Git inputs match delivered `df43251`; this is not current image readback, universal build-context provenance, a rerun or qualification transfer. A stale `agent/runtime-budget.test.ts` lookup was a navigation miss; the actual owner is `agent/provider-request-budget.test.ts`, not an unreported/skipped test.
+
+Only this journal section and the existing media/context matrix row change. Required model-specific sizing/admission/default/reserve acceptance remains open; no vendor-tokenizer obligation or new media policy is selected, and a deliberate unknown value is not reclassified as a bug. The native HOLD, all failed/unreached gates, MOD-03 PARTIAL, MOD-01 IN PROGRESS and37-of43 closure totals remain unchanged. No runtime/test adoption, new native execution cycle, diagnostic investigation or waiver occurs.
+
+| Selected input at the reviewed Git revision | SHA-256 |
+|---|---|
+| `packages/core/src/agent/provider-request-estimate.ts` | `cd4695f8d401a3e031e9e41975d1b5331fa7b7dfcd4dcba2978187be87d369aa` |
+| `packages/core/src/agent/provider-request-estimate.test.ts` | `290a5cd439e7cbd0cb22a187a52b0bb1bb2e1e7156cd556a5c9f1696a3c97d4c` |
+| `packages/core/src/agent/provider-request-budget.test.ts` | `668f217bb103b8a31d5061946ef38eb92a4e64c636ac38505e1f78f415f03751` |
+| `packages/core/src/agent/provider-request-options-flow.test.ts` | `322862e98625a7998fbb16cedab554cb03f95ee69488b7a936f47e3e5feec14f` |
+| `packages/core/src/agent/provider-turn.ts` | `26cbc43c7a3cd2bebf2e740afacea478ad827ce4c45605a57eb97d1ea84b02e0` |
+| `packages/core/src/providers/provider-output-budget.ts` | `8bc02700f8cc2a6f8eb85437fcabe9385c7eab3398623aa8ac51da4f8433ecd1` |
+| `packages/core/src/providers/anthropic-thinking.ts` | `fd3da2d99aaaa27bc9b609f5cd94699477af319a70b63879127a1b641e7782fe` |
+| `packages/core/src/providers/bedrock-profiles.ts` | `91e15959d448c632f362536bd63932cb2a6622236d6b4ab49da0ce4034e20c55` |
+
+| Date | ID(s) | Old → New | Evidence | Validation | Notes/decision |
+|---|---|---|---|---|---|
+| 2026-11-05 | MOD-03 | PARTIAL → PARTIAL | Eight selected inputs above; existing media/context matrix; sealed historical root | Read/grep; `git status --short`; `node /tmp/mod03-context-closure-review/prove.mjs` artifact/hash/Git verification; `make lint-docs`; `git diff --check` | Canonical/native/reporting boundaries clarified without new test credit or complete media admission; no native unblock or goal completion |
+
 ### MOD-03 — compaction and summary projection coverage review
 
 **2026-11-05 — source/artifact review at clean `ffe582a3f287c3b5a6a9e91a47fa363d2cf06100`; no new application, SDK, compiler or test execution.** `sessions/compaction-model-messages.ts` independently copies canonical blocks, tool calls and metadata; it is not a private-field eraser. `sessions/summary-model-messages.ts` instead reconstructs public fields:reasoning blocks are omitted, text/tool blocks lose typed continuation fields, compatibility tool calls omit `thoughtSignature`, and message metadata/provenance is absent. Literal public tool JSON keys named `signature` or `reasoning` remain data. These are separate contracts:public summary omission is not ordinary foreign-owner replay, where visible thought becomes text, and neither conversion securely erases raw history. Source call sites in CLI automatic compaction (`packages/cli/src/index.ts:1221–1244`), RPC automatic compaction (`packages/cli/src/rpc/rpc-controller.ts:447–469`) and manual Server compaction (`packages/server/src/api/agent-routes.ts:647–662`) explicitly use the public summary projection before provider dispatch; this review grants no new host execution credit.
