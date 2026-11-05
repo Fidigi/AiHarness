@@ -34,6 +34,15 @@ const policyFixtures = ['anthropic-tool-policy-reference.json', 'anthropic-tool-
     requests: number; refusals: number; capturedDeferredDeclarations: number; rows: ToolPolicyVector[] } };
 });
 const policyVectors = policyFixtures.flatMap(fixture => fixture.data.rows);
+const continuationBytes = readFileSync(new URL('../../../../tests/fixtures/anthropic-continuation-reference.json', import.meta.url));
+const continuationFixture = JSON.parse(continuationBytes.toString()) as {
+  pinnedCommit: string; catalogueSha256: string; modelProjections: number; replayCases: number; requests: number;
+  tools: NonNullable<ChatOptions['tools']>; provided: Array<Record<string, unknown>>; suppliedEvents: Array<Record<string, unknown>>;
+  rows: Array<{ model: string; api: string; firstObserved: { content: Array<
+    { type: 'text'; text: string } | { type: 'thinking'; thinking: string; thinkingSignature: string; redacted?: boolean }
+    | { type: 'toolCall'; id: string; name: string; arguments: Record<string, unknown> }> };
+    projections: Array<{ case: 'same' | 'provider' | 'api' | 'model' | 'missing-api' | 'failed'; expectedReplayMessages: Array<Record<string, unknown>> }> }>;
+};
 const resultBytes = readFileSync(new URL('../../../../tests/fixtures/anthropic-tool-results-reference.json', import.meta.url));
 interface ToolResultVector { model: string; api: string; case: string; tools: NonNullable<ChatOptions['tools']>;
   provided: Array<{ type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }>;
@@ -233,7 +242,42 @@ describe('owned Anthropic response authority', () => {
     expect(f.fetch.mock.calls.length - imageStart).toBe(8);
   });
   for (const profile of profiles) it(`${profile.id}: replays ordered opaque blocks only for the exact provider/API/model`, async () => {
-    const f = fixture(profile.id);
+    const f = fixture(profile.id), vector = continuationFixture.rows.find(row => row.model === profile.id)!;
+    const start = f.fetch.mock.calls.length;
+    for (const stream of [false, true]) {
+      const options = { tools: continuationFixture.tools };
+      f.reply({ model: 'untrusted-response-alias', content: continuationFixture.provided, stop_reason: 'tool_use', usage: observed },
+        continuationFixture.suppliedEvents);
+      const received = await f.call(stream, 'none', options);
+      expect(received).toMatchObject({ provider: 'operator-alias', api: vector.api, model: vector.model });
+      expect(received.blocks).toEqual(vector.firstObserved.content.map(block => block.type === 'text' ? block
+        : block.type === 'thinking' ? { type: 'reasoning', text: block.thinking, thinkingSignature: block.thinkingSignature,
+          ...(block.redacted ? { redacted: true } : {}) }
+          : { type: 'tool_call', id: block.id, name: block.name, input: block.arguments }));
+      f.reply({ content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn' }, signedEvents([{ type: 'text', text: 'ok' }]));
+      for (const projection of vector.projections) {
+        const source: Message = { id: 'reference', role: 'assistant', content: received.content, timestamp: new Date(0),
+          provider: received.provider, api: received.api, model: received.model, blocks: structuredClone(received.blocks),
+          toolCalls: structuredClone(received.toolCalls), metadata: { providerThinkingLevel: received.providerThinkingLevel } };
+        if (projection.case === 'provider') source.provider = 'other';
+        if (projection.case === 'api') source.api = 'other-api';
+        if (projection.case === 'model') source.model = 'other-model';
+        if (projection.case === 'missing-api') delete source.api;
+        if (projection.case === 'failed') source.metadata!.outputError = 'failed publication';
+        const history: Message[] = [...input, source,
+          ...(projection.case === 'failed' ? [] : [{ id: 'result', role: 'tool' as const, toolCallId: 'call', name: 'echo',
+            content: 'result', isError: false, timestamp: new Date(0) }]),
+          { id: 'continue', role: 'user', content: 'continue', timestamp: new Date(1) }];
+        const before = structuredClone({ history, options });
+        expect(await f.call(stream, 'none', options, history)).toMatchObject({ content: 'ok', model: vector.model, api: vector.api });
+        const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+        expect(body.messages, `${stream}/${projection.case}`).toEqual(projection.expectedReplayMessages);
+        expect(body.model).toBe(vector.model); expect(body.stream).toBe(stream);
+        expect({ history, options }).toEqual(before);
+        if (projection.case !== 'same') expect(JSON.stringify(body.messages)).not.toContain('opaque-');
+      }
+    }
+    expect(f.fetch.mock.calls.length - start).toBe(14);
     for (const stream of [false, true]) {
       f.reply({ content: signedContent, stop_reason: 'tool_use', usage: observed }, signedEvents(signedContent, 'tool_use'));
       const received = await f.call(stream, 'none');
@@ -439,6 +483,13 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
   it('binds the independent seventeen-profile fixture to the approved catalogue hash', () => {
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(pin.files.anthropic.catalogue);
     expect(profiles).toHaveLength(17);
+    expect(createHash('sha256').update(continuationBytes).digest('hex')).toBe('4315d892fe5a1bbd3e40425b6e8f37ea9530220664dfe6a4dd108a8406d8cc18');
+    expect(continuationFixture.pinnedCommit).toBe(pin.sourceCommit);
+    expect(continuationFixture.catalogueSha256).toBe(pin.files.anthropic.catalogue);
+    expect([continuationFixture.modelProjections, continuationFixture.replayCases, continuationFixture.requests]).toEqual([17, 102, 119]);
+    expect(continuationFixture.rows.map(row => row.model)).toEqual(profiles.map(profile => profile.id));
+    for (const row of continuationFixture.rows) expect(row.projections.map(projection => projection.case))
+      .toEqual(['same', 'provider', 'api', 'model', 'missing-api', 'failed']);
     expect(createHash('sha256').update(imageBytes).digest('hex')).toBe('aeaf539973d6a9c0de9046045c8def52182ec515d4dcea3d85589e2c99cbb6f2');
     expect(imageFixture.catalogueSha256).toBe(createHash('sha256').update(bytes).digest('hex'));
     expect([imageFixture.modelProjections, imageFixture.vectors, imageFixture.freshSdkRequests]).toEqual([17, 68, 68]);
