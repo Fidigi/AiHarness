@@ -364,6 +364,29 @@ Any later `GAP ACCEPTED` still needs an explicit dated omission, justification, 
 
 ## 6. Delivery Journal
 
+### MOD-03 — compaction and summary projection coverage review
+
+**2026-11-05 — source/artifact review at clean `ffe582a3f287c3b5a6a9e91a47fa363d2cf06100`; no new application, SDK, compiler or test execution.** `sessions/compaction-model-messages.ts` independently copies canonical blocks, tool calls and metadata; it is not a private-field eraser. `sessions/summary-model-messages.ts` instead reconstructs public fields:reasoning blocks are omitted, text/tool blocks lose typed continuation fields, compatibility tool calls omit `thoughtSignature`, and message metadata/provenance is absent. Literal public tool JSON keys named `signature` or `reasoning` remain data. These are separate contracts:public summary omission is not ordinary foreign-owner replay, where visible thought becomes text, and neither conversion securely erases raw history. Source call sites in CLI automatic compaction (`packages/cli/src/index.ts:1221–1244`), RPC automatic compaction (`packages/cli/src/rpc/rpc-controller.ts:447–469`) and manual Server compaction (`packages/server/src/api/agent-routes.ts:647–662`) explicitly use the public summary projection before provider dispatch; this review grants no new host execution credit.
+
+The existing owning scenarios cover generic private metadata/reasoning omission, literal public tool input, independent arrays/dates, canonical limits, inert getters, raw-history preservation and parent-owned prefix selection. The reviewed fixtures do **not** explicitly exercise typed `textSignature`, `thinkingSignature`, `redacted` and `thoughtSignature` payloads or a native capture → actual compaction → durable reload → exact-owner replay journey. Reuse those scenarios after authorized resumption rather than adding a test framework. The [sealed Anthropic-reference receipt](./evidence/MOD-03-anthropic-reference.json), SHA-256 `aa42d052a59c433502d8df12c8f42dd00b31734842b60ca2438f7c6e60d6d6bc`, retains the earlier root log, SHA-256 `38420f8a54730d032bc8ff475e620e0c2766366041846bc9a5c8187dbf378599`:it reports13 `summary-model-messages.test.ts` and11 `compaction-model-messages.test.ts` cases passing inside a root that still **fails8,843/6/8,849**. Hash/size/decompression equality and those historical reported counts are checked, not rerun. Eight selected current Git inputs match delivered `df43251`; this adds no current image readback, universal context proof, qualification transfer or new native-signature coverage.
+
+An initial lookup of nonexistent `packages/core/src/agent/anthropic-thinking.test.ts` was a navigation miss, not an attempted/skipped/failed test; the review uses the actual session and provider owners. Only the existing retention matrix row and this journal section change. The compiler HOLD, every previous failed/unreached gate, MOD-03 PARTIAL, MOD-01 IN PROGRESS and37-of43 closure totals remain unchanged; no carrier implementation, new execution cycle, diagnostic investigation or waiver is admitted.
+
+| Selected input at the reviewed Git revision | SHA-256 |
+|---|---|
+| `packages/core/src/sessions/compaction-model-messages.ts` | `c8cd4cd9b8b36a8acd1633fe8316aa3ebad175c54b12b32d6c64dcd59ab7d50d` |
+| `packages/core/src/sessions/compaction-model-messages.test.ts` | `99b5e85c0874f7f15fef0f42a88188b425f82ebbafd495e7526b760dd977b54c` |
+| `packages/core/src/sessions/summary-model-messages.ts` | `b8bd9e7f834af75ce777a4902aa8eca361cba1e845d9a21c2c38ade64e98dabd` |
+| `packages/core/src/sessions/summary-model-messages.test.ts` | `c9c7f2c09bbc35cabcbfbd31ce78729c7bf5023ab8505f07c32e27127483f3b3` |
+| `packages/cli/src/index.ts` | `8e6adda4f41a14eeb156839298b7c5e9932f6e7db6d0a2ad321073a099896de2` |
+| `packages/cli/src/rpc/rpc-controller.ts` | `b42e4a8fb90fb0f647e6227113e6b45386edcc81c88d2d918a6b2d4972709367` |
+| `packages/server/src/api/agent-routes.ts` | `ec90e00fe99e9be12632ed477a4f02e60d783338a62435b5bf7bea58e0ecc985` |
+| `packages/core/src/types/index.ts` | `a7d58c4dbb64c30095c2a793f2bb6d3f4349552bd5da6cb51301a4efc2c7efe2` |
+
+| Date | ID(s) | Old → New | Evidence | Validation | Notes/decision |
+|---|---|---|---|---|---|
+| 2026-11-05 | MOD-03 | PARTIAL → PARTIAL | Eight selected inputs above; historical sealed root artifact; existing retention matrix | Read/grep; `git status --short`; selected `sha256sum`/Git byte equality; `node /tmp/mod03-summary-closure-review/prove.mjs` metadata/artifact verification; `make lint-docs`; `git diff --check` | Generic summary/canonical coverage distinguished from missing explicit typed/native lifecycle coverage; no new test credit, runtime qualification or goal completion |
+
 ### MOD-03 — Bedrock private continuation source-only closure check
 
 **2026-11-05 — scoped source review at clean `f93c91cbec6bbca8a060ca0b24e1007540171afc`; no implementation or executed acceptance.** The existing closure matrix's remaining-dialects cell is made concrete, not expanded into a new criterion or backlog. In `packages/core/src/providers/bedrock-converse-stream.ts:112–196`, the streaming block state/parser retains visible reasoning but returns no ordered private signature/redacted blocks; its own contract explicitly excludes signed/encrypted replay. In `packages/core/src/providers/index.ts:4304–4342,4403–4430`, Bedrock request lowering uses text/images/tools, and JSON response extraction uses text/tools rather than a signed reasoning carrier. The reviewed binary scenario at `packages/core/src/providers/bedrock-converse-stream.test.ts:89–123` checks visible text/reasoning/tools/cache accounting, not opaque byte preservation. These direct-path source observations establish an implementation gap; they are not a new failing test, an exhaustive suite review or a service-validity claim.
