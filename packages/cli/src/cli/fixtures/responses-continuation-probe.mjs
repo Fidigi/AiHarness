@@ -143,8 +143,8 @@ try {
       AZURE_OPENAI_MODEL: model, AZURE_OPENAI_DEPLOYMENT_NAME_MAP: 'gpt-5=owned-deployment,gpt-4o=foreign-deployment' }
       : anthropic ? { ANTHROPIC_API_KEY: key } : { GEMINI_API_KEY: key, GOOGLE_API_KEY: key, GOOGLE_VERTEX_ACCESS_TOKEN: key,
         GOOGLE_CLOUD_PROJECT: 'continuation-project', GOOGLE_CLOUD_LOCATION: 'us-central1' }), NODE_OPTIONS: '--import=' + JSON.stringify(preload) };
-  const start = () => {
-    const child = spawn('ai-harness', ['--no-approve', '--offline', '--api-key', key, '--session-dir', sessions, '--session-id', 'native-continuation',
+  const start = (sessionId = 'native-continuation') => {
+    const child = spawn('ai-harness', ['--no-approve', '--offline', '--api-key', key, '--session-dir', sessions, '--session-id', sessionId,
       '--model', `${provider}/${model}`, '--thinking', 'low', ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['Continue native history.'])], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     active = child;
     let stdout = '', stderr = '', buffer = ''; const records = [];
@@ -170,8 +170,9 @@ try {
     };
     return { prompt, command, finish };
   };
-  const readJournal = async () => {
-    const bytes = await readFile(journal, 'utf8'); assert(!bytes.includes(key)); assert.equal((await stat(journal)).mode & 0o777, 0o600);
+  const readJournal = async (sessionId = 'native-continuation') => {
+    const file = path.join(sessions, sessionId + '.jsonl');
+    const bytes = await readFile(file, 'utf8'); assert(!bytes.includes(key)); assert.equal((await stat(file)).mode & 0o777, 0o600);
     return bytes.trim().split('\n').map(line => JSON.parse(line));
   };
   const sourceAssistants = entries => entries.filter(entry => entry.type === 'message' && entry.role === 'assistant');
@@ -315,6 +316,30 @@ try {
     assert.equal(metadata.activeLeafId, sourceAssistants(after).at(-1).id);
     assert.equal(metadata.metadata.compactionSummary, summary); assert.equal(metadata.metadata.compactionEntryId, entry.id);
     for (const entry of before.filter(entry => entry.type !== 'metadata')) assert.deepEqual(after.find(value => value.id === entry.id), entry);
+    const forkManager = new Core.SessionManager({ store: new Core.JsonlSessionStore(sessions) });
+    const source = await forkManager.loadFromStore('native-continuation'); assert(source);
+    const sourceContext = Core.getCompactionModelMessages(forkManager, source.id), sourceBytes = await readFile(journal, 'utf8');
+    const fork = await forkManager.forkSession(source.id); assert(fork);
+    assert.notEqual(fork.id, source.id); assert.equal(fork.parentId, source.id); assert.equal(fork.branchId, source.branchId ?? source.id);
+    assert.equal(await readFile(journal, 'utf8'), sourceBytes);
+    const restartedFork = new Core.SessionManager({ store: new Core.JsonlSessionStore(sessions) });
+    const loadedFork = await restartedFork.loadFromStore(fork.id); assert(loadedFork);
+    assert.equal(loadedFork.parentId, source.id); assert.equal(loadedFork.metadata.compactionSummary, summary);
+    assert.deepEqual(Core.getCompactionModelMessages(restartedFork, fork.id), sourceContext);
+    const forkEntries = await readJournal(fork.id), forkCompaction = forkEntries.find(value => value.type === 'compaction');
+    assert.equal(forkCompaction.id, loadedFork.metadata.compactionEntryId); assert.equal(forkCompaction.summary, summary);
+    const child = start(fork.id); await child.prompt(1); const childResult = await child.finish(), forkReplay = bodies.at(-1);
+    assert.equal(bodies.length, turn + 4); assert.deepEqual(wires.at(-1), expectedWire);
+    assert.equal(forkReplay.model, provider === 'azure' ? 'owned-deployment' : responses || anthropic ? model : undefined);
+    assert.deepEqual(assistants(forkReplay), responses ? [turn, turn + 2, turn + 3].flatMap(replay) : [turn, turn + 2, turn + 3].map(value => signedContent(value)));
+    assert(JSON.stringify(forkReplay).includes(summary));
+    for (const value of opaque) assert(!JSON.stringify(childResult.records).includes(value), value);
+    const childEntries = await readJournal(fork.id), childAssistants = sourceAssistants(childEntries);
+    assert.deepEqual(childAssistants.map(value => value.blocks), [...sourceAssistants(forkEntries).map(value => value.blocks), blocks(turn + 4)]);
+    assert.equal(childAssistants.at(-1).provider, provider); assert.equal(childAssistants.at(-1).api, api(provider)); assert.equal(childAssistants.at(-1).model, model);
+    for (const entry of forkEntries.filter(entry => entry.type !== 'metadata')) assert.deepEqual(childEntries.find(value => value.id === entry.id), entry);
+    assert.equal(childEntries.find(value => value.type === 'metadata').parentId, source.id);
+    assert.equal(await readFile(journal, 'utf8'), sourceBytes);
   }
   assert.equal(await readFile(effects, 'utf8'), '{"value":1}\n'); assert.equal(fixtureError, undefined);
   console.log(responses ? 'INSTALLED_RESPONSES_CONTINUATION_OK' : 'INSTALLED_SIGNED_CONTINUATION_OK');
