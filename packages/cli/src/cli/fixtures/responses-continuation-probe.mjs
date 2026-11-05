@@ -59,7 +59,7 @@ function signedBlocks(turn) {
 const assistants = body => responses ? body.input.filter(item => item.role === 'assistant' || ['reasoning', 'function_call'].includes(item.type))
   : anthropic ? body.messages.filter(item => item.role === 'assistant').map(item => item.content) : body.contents.filter(item => item.role === 'model').map(item => item.parts);
 const opaque = responses ? ['opaque-', 'msg_left_', 'msg_right_', 'rs_empty_', 'rs_visible_'] : anthropic ? ['opaque-'] : ['bGFzdA==', 'cmlnaHQ=', 'aGlkZGVu', 'ZW1wdHk=', 'dG9vbA==', 'Zmlyc3Q='];
-let fixtureError;
+let fixtureError, summaryExpected = false;
 const server = createServer(async (request, response) => {
   try {
     assert.equal(request.method, 'POST');
@@ -67,9 +67,18 @@ const server = createServer(async (request, response) => {
       ...(!responses ? { googleKey: request.headers['x-goog-api-key'], anthropicKey: request.headers['x-api-key'] } : {}) });
     const chunks = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
     bodies.push(JSON.parse(Buffer.concat(chunks).toString()));
-    const turn = bodies.length;
+    const turn = bodies.length, summary = summaryExpected;
+    summaryExpected = false;
     if (!responses) {
       const content = signedContent(turn);
+      if (summary) {
+        response.writeHead(200, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify(anthropic
+          ? { model: 'untrusted-response-alias', content: content.map(block => block.type === 'thinking' ? { ...block, signature: `opaque-${key}-tail` } : block),
+            stop_reason: 'end_turn', usage: { input_tokens: 5, output_tokens: 2 } }
+          : { modelVersion: 'untrusted-response-alias', candidates: [{ content: { parts: [{ ...content[0], thoughtSignature: key }, ...content.slice(1)] }, finishReason: 'STOP' }],
+            usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2, totalTokenCount: 7 } })); return;
+      }
       const events = anthropic ? [{ type: 'message_start', message: { model: 'untrusted-response-alias' } },
         ...content.flatMap((block, index) => [
           { type: 'content_block_start', index, content_block: block.type === 'thinking' ? { ...block, signature: 'opaque-' } : block },
@@ -124,7 +133,7 @@ try {
           || (url.origin === 'https://continuation.openai.azure.com' && url.pathname === '/openai/v1/responses')
         : ${JSON.stringify(anthropic)} ? url.origin === 'https://api.anthropic.com' && url.pathname === '/v1/messages'
         : ['https://generativelanguage.googleapis.com', 'https://us-central1-aiplatform.googleapis.com'].includes(url.origin)
-          && /\\/models\\/gemini-(3\\.8|2\\.5)-flash:streamGenerateContent$/.test(url.pathname);
+          && /\\/models\\/gemini-(3\\.8|2\\.5)-flash:(streamGenerateContent|generateContent)$/.test(url.pathname);
       if (!allowed) throw new Error('Non-fixture transport refused');
       const target = new URL(url.pathname + url.search, ${JSON.stringify(base)});
       return original(input instanceof Request ? new Request(target, input) : target, init);
@@ -152,7 +161,8 @@ try {
       const closed = (code, signal) => { cleanup(); reject(new Error(JSON.stringify({ code, signal, stderr, records }))); };
       child.stdout.on('data', check); child.once('close', closed); check();
     });
-    const command = async record => { child.stdin.write(JSON.stringify(record) + '\n'); await wait(() => records.some(value => value.type === 'response' && value.id === record.id && value.success === true)); };
+    const command = async record => { child.stdin.write(JSON.stringify(record) + '\n'); await wait(() => records.some(value => value.type === 'response' && value.id === record.id && value.success === true));
+      return records.find(value => value.type === 'response' && value.id === record.id); };
     const prompt = async count => { await command({ type: 'prompt', id: `prompt-${count}`, message: 'Continue native history.' }); await wait(() => records.filter(value => value.type === 'agent_settled').length === count); };
     const finish = async () => {
       child.stdin.end(); assert.deepEqual(await ended, { code: 0, signal: null }, stderr); assert.equal(stderr, ''); assert.equal(buffer, '');
@@ -259,6 +269,52 @@ try {
       : body.contents.flatMap(item => item.parts).filter(item => item.functionResponse), anthropic
       ? [{ type: 'tool_result', tool_use_id: 'native-call', content: 'native-tool-result', is_error: false, ...(body === bodies[1] ? { cache_control: { type: 'ephemeral' } } : {}) }]
       : [{ functionResponse: { ...(body === bodies[3] ? {} : { id: 'native-call' }), name: 'continuation_echo', response: { output: 'native-tool-result' } } }]);
+  }
+  if (mode === 'rpc') {
+    const Core = await import('@ai-harness/core'), before = await readJournal(), original = sourceAssistants(before), turn = bodies.length;
+    const work = start(); summaryExpected = true;
+    const compacted = await work.command({ type: 'compact', id: 'native-compact' });
+    const summary = `native-${turn + 1}-leftnative-${turn + 1}-right`, summaryBody = bodies[turn];
+    assert.equal(bodies.length, turn + 1); assert.equal(summaryExpected, false);
+    assert.equal(compacted.data.summary, summary); assert.equal(summaryBody.max_output_tokens ?? summaryBody.max_tokens ?? summaryBody.generationConfig?.maxOutputTokens, 4096);
+    assert.deepEqual(summaryBody.tools ?? summaryBody.toolConfig?.tools ?? [], []);
+    const summaryHistory = JSON.stringify(assistants(summaryBody));
+    assert(summaryHistory.includes('edited answer')); assert(!summaryHistory.includes('visible-'));
+    for (const value of [...opaque, 'Signature', 'encrypted_content']) assert(!summaryHistory.includes(value), value);
+    const manager = new Core.SessionManager({ store: new Core.JsonlSessionStore(sessions) });
+    const loaded = await manager.loadFromStore('native-continuation'); assert(loaded);
+    const canonical = Core.getCompactionModelMessages(manager, loaded.id), entries = await readJournal();
+    assert.deepEqual(sourceAssistants(entries), original);
+    assert.deepEqual(canonical.filter(message => message.role === 'assistant').map(message => message.blocks), [blocks(turn)]);
+    assert.deepEqual(canonical.filter(message => message.role === 'tool'), []);
+    assert(canonical.some(message => message.content.includes(summary)));
+    const entry = entries.find(entry => entry.type === 'compaction'); assert(entry);
+    assert.equal(entry.summary, summary); assert.equal(entry.firstKeptEntryId, compacted.data.firstKeptEntryId);
+    assert.equal(entry.provider, provider); assert.equal(entry.model, model);
+    assert.equal(entry.usage.inputTokens, 5); assert.equal(entry.usage.outputTokens, 2);
+    for (const value of [...opaque, 'Signature', 'encrypted_content']) assert(!JSON.stringify(entry).includes(value), value);
+    await work.prompt(1); const firstReplay = bodies[turn + 1];
+    assert.deepEqual(assistants(firstReplay), responses ? replay(turn) : [signedContent(turn)]);
+    assert(JSON.stringify(firstReplay).includes(summary));
+    assert.deepEqual(responses ? firstReplay.input.filter(item => item.type === 'function_call_output')
+      : anthropic ? firstReplay.messages.flatMap(item => Array.isArray(item.content) ? item.content : []).filter(item => item.type === 'tool_result')
+      : firstReplay.contents.flatMap(item => item.parts).filter(item => item.functionResponse), []);
+    const result = await work.finish();
+    assert.deepEqual(result.records.filter(record => record.type === 'compaction_start'), [{ type: 'compaction_start', reason: 'manual' }]);
+    assert.equal(result.records.filter(record => record.type === 'compaction_end' && record.aborted === false && record.result?.summary === summary).length, 1);
+    for (const value of opaque) assert(!JSON.stringify(result.records).includes(value), value);
+    const resumed = start(); await resumed.prompt(1); const resumedResult = await resumed.finish();
+    assert.deepEqual(assistants(bodies[turn + 2]), responses ? [turn, turn + 2].flatMap(replay) : [turn, turn + 2].map(value => signedContent(value)));
+    for (const value of opaque) assert(!JSON.stringify(resumedResult.records).includes(value), value);
+    assert.equal(bodies.length, turn + 3);
+    const expectedWire = { path: endpoint(provider), authorization: provider === 'native-r' || provider === 'vertex' ? `Bearer ${key}` : undefined,
+      apiKey: provider === 'azure' ? key : undefined, ...(!responses ? { googleKey: provider === 'google' ? key : undefined, anthropicKey: anthropic ? key : undefined } : {}) };
+    assert.deepEqual(wires.slice(turn), [{ ...expectedWire, path: expectedWire.path.replace('streamGenerateContent?alt=sse', 'generateContent') }, expectedWire, expectedWire]);
+    const after = await readJournal(); assert.deepEqual(sourceAssistants(after).map(entry => entry.blocks), [...original.map(entry => entry.blocks), blocks(turn + 2), blocks(turn + 3)]);
+    const metadata = after.find(entry => entry.type === 'metadata');
+    assert.equal(metadata.activeLeafId, sourceAssistants(after).at(-1).id);
+    assert.equal(metadata.metadata.compactionSummary, summary); assert.equal(metadata.metadata.compactionEntryId, entry.id);
+    for (const entry of before.filter(entry => entry.type !== 'metadata')) assert.deepEqual(after.find(value => value.id === entry.id), entry);
   }
   assert.equal(await readFile(effects, 'utf8'), '{"value":1}\n'); assert.equal(fixtureError, undefined);
   console.log(responses ? 'INSTALLED_RESPONSES_CONTINUATION_OK' : 'INSTALLED_SIGNED_CONTINUATION_OK');

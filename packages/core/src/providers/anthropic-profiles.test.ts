@@ -882,8 +882,9 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       expect(raw.filter(entry => entry.type === 'message' && entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(message => message.blocks));
       const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8');
       expect((await stat(compactedFile)).mode & 0o777).toBe(0o600);
-      await f.call(stream, 'none', { thinking: 'low' }, compacted);
+      await f.call(stream, 'none', { thinking: 'low', systemPrompt: 'TRUSTED_SYSTEM_PREFIX' }, compacted);
       const compactedReplay = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+      expect(compactedReplay.system).toBe('TRUSTED_SYSTEM_PREFIX\n\n[Context Summary] PUBLIC_COMPACTED_PREFIX');
       expect(compactedReplay.messages.filter((message: { role: string }) => message.role === 'assistant').map((message: { content: unknown }) => message.content))
         .toEqual([native.filter(block => block.type !== 'tool_use').map(block => block.type === 'thinking' ? { ...block, signature: 'opaque-[REDACTED]' } : block)]);
       expect(await readFile(compactedFile, 'utf8')).toBe(compactedBytes);

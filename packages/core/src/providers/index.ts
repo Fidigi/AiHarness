@@ -4662,7 +4662,9 @@ export class AnthropicProvider extends AiProvider {
     const native = this.ownsNativeProfiles && hasAnthropicProfile(model), owner = this.config.type;
     const history = native ? this.nativeMessageHistory(messages, model) : messages;
 
-    const systemPrompt = options?.systemPrompt || '';
+    const systemPrompt = native
+      ? [options?.systemPrompt, ...history.filter(message => message.role === 'system').map(message => message.content)].filter(Boolean).join('\n\n')
+      : options?.systemPrompt || '';
     const anthropicMessages = this.buildAnthropicMessages(history, native, model);
 
     // Handle the case where first user message should be preceded by system prompt in messages
@@ -4751,7 +4753,9 @@ export class AnthropicProvider extends AiProvider {
     const url = this.getMessagesUrl();
     const history = native ? this.nativeMessageHistory(messages, model) : messages;
 
-    const systemPrompt = options?.systemPrompt || '';
+    const systemPrompt = native
+      ? [options?.systemPrompt, ...history.filter(message => message.role === 'system').map(message => message.content)].filter(Boolean).join('\n\n')
+      : options?.systemPrompt || '';
     const anthropicMessages = this.buildAnthropicMessages(history, native, model);
 
     let bodyMessages: Array<{ role: 'user' | 'assistant'; content: unknown }> = [...anthropicMessages];
