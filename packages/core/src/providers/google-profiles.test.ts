@@ -67,6 +67,20 @@ const userImageReference = JSON.parse(userImageBytes.toString()) as {
   pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; vectors: number; freshSdkRequests: number; orderedOpaqueImageProjections: number;
   rows: Array<{ scope: Scope; model: string; api: string; case: string; provided: { text: string; images: Array<{ mimeType: string; data: string }> }; expectedContents: unknown[] }>;
 };
+type ContinuationBlock = { type: 'text'; text: string; textSignature?: string }
+  | { type: 'thinking'; thinking: string; thinkingSignature?: string }
+  | { type: 'toolCall'; id: string; name: string; arguments: Record<string, unknown>; thoughtSignature?: string };
+const continuationBytes = readFileSync(new URL('../../../../tests/fixtures/google-continuation-reference.json', import.meta.url));
+const continuationReference = JSON.parse(continuationBytes.toString()) as {
+  pinnedCommit: string; catalogueSha256: Record<Scope, string>; modelProjections: number; replayCases: number; requests: number;
+  tools: NonNullable<ChatOptions['tools']>; parts: Array<Record<string, unknown>>; fragmentParts: Array<Record<string, unknown>>;
+  rows: Array<{ scope: Scope; model: string; api: string; firstObserved: { content: ContinuationBlock[] };
+    projections: Array<{ case: 'same' | 'provider' | 'api' | 'model' | 'missing-api' | 'expurgated' | 'failed'; expected: unknown[] }> }>;
+  fragments: Array<{ scope: Scope; model: string; api: string; firstObserved: { content: ContinuationBlock[] }; expectedContents: unknown[] }>;
+};
+const continuationBlocks = (blocks: ContinuationBlock[]) => blocks.map(block => block.type === 'text' ? block
+  : block.type === 'thinking' ? { type: 'reasoning', text: block.thinking, thinkingSignature: block.thinkingSignature }
+    : { type: 'tool_call', id: block.id, name: block.name, input: block.arguments, thoughtSignature: block.thoughtSignature });
 const input = [{ id: 'user', role: 'user' as const, content: 'probe', timestamp: new Date(0) }];
 const observed = { promptTokenCount: 12, candidatesTokenCount: 2, thoughtsTokenCount: 3, cachedContentTokenCount: 4, totalTokenCount: 17 };
 const known = (price: Price) => price.input > 0 || price.output > 0 || price.cacheRead > 0 || price.cacheWrite > 0;
@@ -114,6 +128,13 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
     const { bytes, profiles } = reference(scope);
     it(`${scope}: binds independent package catalogue bytes without online discovery`, () => {
       expect(createHash('sha256').update(bytes).digest('hex')).toBe(pin.files[scope].catalogue);
+      expect(createHash('sha256').update(continuationBytes).digest('hex')).toBe('d9210d534291e1f74d0a56dd7c54362fac33c35c8664c378429cd3807cb7a399');
+      expect(continuationReference.pinnedCommit).toBe(pin.sourceCommit);
+      expect(continuationReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
+      expect([continuationReference.modelProjections, continuationReference.replayCases, continuationReference.requests]).toEqual([35, 245, 284]);
+      expect(continuationReference.rows.filter(row => row.scope === scope).map(row => row.model)).toEqual(profiles.map(row => row.id));
+      for (const row of continuationReference.rows) expect(row.projections.map(projection => projection.case))
+        .toEqual(['same', 'provider', 'api', 'model', 'missing-api', 'expurgated', 'failed']);
       expect(profiles).toHaveLength(scope === 'google' ? 22 : 13);
       expect(toolReference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
       expect(toolReference.captureSha256).toBe('d134d8ae6bfac529580aaaf778e2568b72a0f22c44c1c702a4e3e36588faa384');
@@ -528,7 +549,44 @@ describe('native original Google/Vertex response authority', () => {
     { headers: { 'Content-Type': stream ? 'text/event-stream' : 'application/json' } });
   for (const scope of ['google', 'google-vertex'] as const) {
     for (const profile of reference(scope).profiles) it(`${scope}/${profile.id}: separates visible thoughts and preserves native part order and length`, async () => {
-      const f = fixture(scope, profile.id);
+      const f = fixture(scope, profile.id), vector = continuationReference.rows.find(row => row.scope === scope && row.model === profile.id)!;
+      const start = f.fetch.mock.calls.length;
+      f.parts(continuationReference.parts);
+      for (const stream of [false, true]) {
+        const options = { maxTokens: 64, tools: continuationReference.tools };
+        const response = await f.call(stream, options);
+        expect(response).toMatchObject({ provider: scope === 'google' ? 'google' : 'vertex', model: vector.model, api: vector.api });
+        expect(response.blocks).toEqual(continuationBlocks(vector.firstObserved.content));
+        f.parts([{ text: 'ok' }]);
+        for (const projection of vector.projections) {
+          const source: Message = { id: 'reference', role: 'assistant', content: response.content, blocks: structuredClone(response.blocks),
+            toolCalls: structuredClone(response.toolCalls), provider: response.provider, api: response.api, model: response.model, timestamp: new Date(0) };
+          if (projection.case === 'provider') source.provider = 'foreign-provider';
+          if (projection.case === 'api') source.api = 'foreign-api';
+          if (projection.case === 'model') source.model = 'foreign-model';
+          if (projection.case === 'missing-api') delete source.api;
+          if (projection.case === 'failed') source.metadata = { outputError: 'failed publication' };
+          if (projection.case === 'expurgated') {
+            source.blocks = source.blocks!.map(block => { const copy = { ...block };
+              if (copy.type === 'text') delete copy.textSignature;
+              if (copy.type === 'reasoning') delete copy.thinkingSignature;
+              if (copy.type === 'tool_call') delete copy.thoughtSignature;
+              return copy; });
+            source.toolCalls = source.toolCalls!.map(({ thoughtSignature: _signature, ...call }) => call);
+          }
+          const messages: Message[] = [...input, source, ...(projection.case === 'failed' ? [] : [{ id: 'result', role: 'tool' as const,
+            toolCallId: 'native-call', name: 'echo', content: 'result', isError: false, timestamp: new Date(0) }]),
+            { id: 'continue', role: 'user', content: 'continue', timestamp: new Date(1) }];
+          const before = structuredClone({ messages, options });
+          expect(await f.call(stream, options, messages)).toMatchObject({ content: 'ok', model: vector.model, api: vector.api });
+          const body = JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body));
+          expect(body.contents, `${stream}/${projection.case}`).toEqual(projection.expected);
+          expect({ messages, options }).toEqual(before);
+        }
+        f.parts(continuationReference.parts);
+      }
+      expect(f.fetch.mock.calls.length - start).toBe(16);
+      f.chunks.length = 0;
       const parts = [{ text: 'first', thought: true }, { text: 'A' }, { text: 'second', thought: true },
         { text: 'B', thoughtSignature: 'opaque-on-text-not-a-thinking-marker' }];
       for (const stream of [false, true]) {
@@ -608,7 +666,22 @@ describe('native original Google/Vertex response authority', () => {
       expect(f.completed).toHaveLength(count); expect(f.chunks.some(([, type]) => type === 'tool_call')).toBe(false);
     });
     it(`${scope}: retains signatures across streamed fragments and bounds completed rich history`, async () => {
-      const f = fixture(scope, 'gemini-3.8-flash');
+      const f = fixture(scope, 'gemini-3.8-flash'), vector = continuationReference.fragments.find(row => row.scope === scope)!;
+      const framesFromReference = continuationReference.fragmentParts.map((part, index, parts) => ({
+        modelVersion: 'untrusted-response-alias', candidates: [{ content: { role: 'model', parts: [part] },
+          ...(index === parts.length - 1 ? { finishReason: 'STOP' } : {}) }],
+      }));
+      f.fetch.mockImplementationOnce(async () => new Response(framesFromReference.map(frame => `data: ${JSON.stringify(frame)}\n\n`).join(''),
+        { headers: { 'Content-Type': 'text/event-stream' } }));
+      const captured = await f.call(true, { maxTokens: 64, tools: continuationReference.tools });
+      expect(captured.blocks).toEqual(continuationBlocks(vector.firstObserved.content));
+      const messages: Message[] = [...input, { id: 'fragment', role: 'assistant', content: captured.content, blocks: captured.blocks,
+        toolCalls: captured.toolCalls, provider: captured.provider, model: captured.model, api: captured.api, timestamp: new Date(0) },
+      { id: 'result', role: 'tool', toolCallId: 'native-call', name: 'echo', content: 'result', isError: false, timestamp: new Date(0) }];
+      const before = structuredClone(messages);
+      await f.call(true, { maxTokens: 64, tools: continuationReference.tools }, messages);
+      expect(JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body)).contents).toEqual(vector.expectedContents);
+      expect(messages).toEqual(before);
       const frames = [
         { candidates: [{ content: { parts: [{ text: 'left', thoughtSignature: 'bGVmdA==' }, { text: 'visible', thought: true, thoughtSignature: 'Zmlyc3Q=' }] } }] },
         { candidates: [{ content: { parts: [{ text: ' thought', thought: true }, { text: '', thought: true, thoughtSignature: 'bGFzdA==' }] } }] },

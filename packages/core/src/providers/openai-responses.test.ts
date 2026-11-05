@@ -20,6 +20,15 @@ const reference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/re
   rows: Array<{ scope: Scope; model: string; api: string; case: string; responseItems: Array<Record<string, unknown>>;
     calls: NonNullable<ChatResponse['toolCalls']>; messages: Array<Omit<Message, 'timestamp'>>; tools: NonNullable<ChatOptions['tools']>; items: unknown[] }>;
 };
+const continuationBytes = readFileSync(new URL('../../../../tests/fixtures/responses-continuation-reference.json', import.meta.url));
+const continuationReference = JSON.parse(continuationBytes.toString()) as {
+  pinnedCommit: string; catalogueSha256: Record<Scope, string>; modelProjections: number; replayCases: number; requests: number;
+  tools: NonNullable<ChatOptions['tools']>; suppliedEvents: Record<Scope, Array<Record<string, unknown>>>;
+  rows: Array<{ scope: Scope; model: string; api: string; firstObserved: { content: Array<
+    { type: 'text'; text: string; textSignature: string } | { type: 'thinking'; thinking: string; thinkingSignature: string }
+    | { type: 'toolCall'; id: string; name: string; arguments: Record<string, unknown> }> };
+    projections: Array<{ case: 'same' | 'provider' | 'api' | 'model' | 'missing-api' | 'expurgated' | 'failed'; expected: Array<Record<string, unknown>> }> }>;
+};
 type PolicyVector = { scope: Scope; model: string; api: string; case: string; options: ResponsesChatOptions; refusal?: true; fields?: Record<string, unknown> };
 type PolicyReference = { pinnedCommit: string; captureSha256: string; catalogueSha256: Record<Scope, string>; modelProjections: number; cases: number; requests: number; refusals: number; rows: PolicyVector[] };
 const policy = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/responses-tool-policy-reference.json', import.meta.url), 'utf8')) as PolicyReference;
@@ -114,6 +123,48 @@ describe('original Responses encrypted continuation', () => {
   for (const scope of ['openai', 'azure'] as const) for (const model of [...new Set(reference.rows.filter(row => row.scope === scope).map(row => row.model))]) {
     it(`${scope}/${model}: captures ordered native items and projects exact owner/API/model without mutating history`, async () => {
       const f = fixture(scope, model), api = scope === 'openai' ? 'openai-responses' : 'azure-openai-responses', provider = f.provider.getProviderType();
+      const vector = continuationReference.rows.find(row => row.scope === scope && row.model === model)!, start = f.fetch.mock.calls.length;
+      for (const stream of [false, true]) {
+        const options = { maxTokens: 64, tools: continuationReference.tools };
+        f.respond(() => new Response(continuationReference.suppliedEvents[scope].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''),
+          { headers: { 'Content-Type': 'text/event-stream' } }));
+        const response = await f.call(stream, user, options);
+        expect(response).toMatchObject({ provider, model: vector.model, api: vector.api });
+        expect(response.blocks).toEqual(vector.firstObserved.content.map(block => block.type === 'thinking'
+          ? { type: 'reasoning', text: block.thinking, thinkingSignature: block.thinkingSignature }
+          : block.type === 'text' ? block : { type: 'tool_call', id: block.id, name: block.name, input: block.arguments }));
+        f.respond(() => reply());
+        for (const projection of vector.projections) {
+          const source: Message = { id: 'reference', role: 'assistant', content: response.content, timestamp: new Date(0),
+            blocks: structuredClone(response.blocks), toolCalls: structuredClone(response.toolCalls), provider, api, model };
+          if (projection.case === 'provider') source.provider = 'foreign';
+          if (projection.case === 'api') source.api = 'foreign-api';
+          if (projection.case === 'model') source.model = 'foreign-model';
+          if (projection.case === 'missing-api') delete source.api;
+          if (projection.case === 'failed') source.metadata = { outputError: true };
+          if (projection.case === 'expurgated') source.blocks = source.blocks!.map(block => {
+            const copy = { ...block };
+            if (copy.type === 'text') delete copy.textSignature;
+            if (copy.type === 'reasoning') delete copy.thinkingSignature;
+            return copy;
+          });
+          const messages: Message[] = [...user, source, ...(projection.case === 'failed' ? [] : [{ id: 'result', role: 'tool' as const,
+            toolCallId: 'call_native|fc_native', name: 'echo', content: 'result', isError: false, timestamp: new Date(0) }]),
+            { id: 'continue', role: 'user', content: 'continue', timestamp: new Date(1) }];
+          const before = structuredClone({ messages, options });
+          expect(await f.call(stream, messages, options)).toMatchObject({ content: 'ok', model: vector.model, api: vector.api });
+          const body = JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body));
+          // Core's existing plain-user representation differs from Pi; native continuation items are not normalized.
+          expect(projection.expected.filter(item => item.role === 'user').map(item => item.content))
+            .toEqual(['probe', 'continue'].map(text => [{ type: 'input_text', text }]));
+          const expected = projection.expected.map(item => item.role === 'user'
+            ? { ...item, content: (item.content as Array<{ text: string }>)[0]!.text } : item);
+          expect(body.input, `${stream}/${projection.case}`).toEqual(expected);
+          expect(body.model).toBe(scope === 'azure' ? 'owned-deployment' : vector.model);
+          expect({ messages, options }).toEqual(before);
+        }
+      }
+      expect(f.fetch.mock.calls.length - start).toBe(16);
       for (const stream of [false, true]) {
         f.respond(() => encryptedReply(encryptedItems(), scope === 'azure'));
         const response = await f.call(stream, user, { maxTokens: 64 });
@@ -254,6 +305,13 @@ describe('original OpenAI/Azure Responses unsigned call/item IDs and paired tool
       expect(reference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
       expect(reference.captureSha256).toBe('bd2ecd7d1f31612c828ce3a486352f4e501fa46a42e52a24012ab4498412e4bd');
       expect(reference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
+      expect(createHash('sha256').update(continuationBytes).digest('hex')).toBe('a8c7e448eb286ab48f147610598ac0abd8a2141578ac06f27b8046926cbc6ea6');
+      expect(continuationReference.pinnedCommit).toBe(reference.pinnedCommit);
+      expect(continuationReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
+      expect([continuationReference.modelProjections, continuationReference.replayCases, continuationReference.requests]).toEqual([88, 616, 704]);
+      expect(continuationReference.rows.filter(row => row.scope === scope).map(row => row.model)).toEqual(models);
+      for (const row of continuationReference.rows) expect(row.projections.map(projection => projection.case))
+        .toEqual(['same', 'provider', 'api', 'model', 'missing-api', 'expurgated', 'failed']);
       for (const fixture of [policy, boundaries, generation, imageReference, outputReference]) {
         expect(fixture.pinnedCommit).toBe(reference.pinnedCommit); expect(fixture.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
       }
