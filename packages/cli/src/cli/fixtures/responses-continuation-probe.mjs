@@ -59,8 +59,8 @@ function signedBlocks(turn) {
 const assistants = body => responses ? body.input.filter(item => item.role === 'assistant' || ['reasoning', 'function_call'].includes(item.type))
   : anthropic ? body.messages.filter(item => item.role === 'assistant').map(item => item.content) : body.contents.filter(item => item.role === 'model').map(item => item.parts);
 const opaque = responses ? ['opaque-', 'msg_left_', 'msg_right_', 'rs_empty_', 'rs_visible_'] : anthropic ? ['opaque-'] : ['bGFzdA==', 'cmlnaHQ=', 'aGlkZGVu', 'ZW1wdHk=', 'dG9vbA==', 'Zmlyc3Q='];
-let fixtureError, summaryExpected = false, overflowRemaining = 0;
-const overflowPrivate = 'PRIVATE_OVERFLOW_DIAGNOSTIC';
+let fixtureError, summaryExpected = false, overflowRemaining = 0, partialFailure = false;
+const overflowPrivate = 'PRIVATE_OVERFLOW_DIAGNOSTIC', streamPrivate = 'PRIVATE_NATIVE_STREAM_DIAGNOSTIC';
 const server = createServer(async (request, response) => {
   try {
     assert.equal(request.method, 'POST');
@@ -73,9 +73,11 @@ const server = createServer(async (request, response) => {
       overflowRemaining--; response.writeHead(400, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify({ error: { code: 'context_length_exceeded', message: `${overflowPrivate} ${key}` } })); return;
     }
-    const summary = summaryExpected; summaryExpected = false;
+    const summary = summaryExpected, failing = partialFailure; summaryExpected = false; partialFailure = false;
     if (!responses) {
       const content = signedContent(turn);
+      if (failing) content.push(anthropic ? { type: 'tool_use', id: 'unpublished-call', name: 'continuation_echo', input: { value: 999 } }
+        : { functionCall: { id: 'unpublished-call', name: 'continuation_echo', args: { value: 999 } }, thoughtSignature: 'dG9vbA==' });
       if (summary) {
         response.writeHead(200, { 'Content-Type': 'application/json' });
         response.end(JSON.stringify(anthropic
@@ -93,13 +95,16 @@ const server = createServer(async (request, response) => {
         : [{ candidates: [{ content: { parts: [{ ...content[0], thoughtSignature: key }, { ...content[1], thoughtSignature: 'Zmlyc3Q=' }] } }] },
           { candidates: [{ content: { parts: [{ text: '', thought: true, thoughtSignature: 'bGFzdA==' }, ...content.slice(2)] } }] },
           { modelVersion: 'untrusted-response-alias', candidates: [{ finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2, totalTokenCount: 7 } }];
+      if (failing) events.splice(anthropic ? -2 : -1, anthropic ? 2 : 1,
+        { ...(anthropic ? { type: 'error' } : {}), error: { type: 'server_error', message: `${streamPrivate} ${key}` } });
       response.writeHead(200, { 'Content-Type': 'text/event-stream' });
       response.end(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')); return;
     }
-    const output = items(turn, false), azure = request.url.startsWith('/openai/');
+    const output = [...items(turn, false), ...(failing ? [{ type: 'function_call', id: 'fc_unpublished', call_id: 'unpublished-call',
+      name: 'continuation_echo', arguments: '{"value":1}', status: 'completed' }] : [])], azure = request.url.startsWith('/openai/');
     const events = [{ type: 'response.created', response: { id: `resp_${turn}`, output: [] } }];
     for (const [index, item] of output.entries()) {
-      const done = azure && item.type === 'reasoning' ? { ...item, encrypted_content: undefined } : item;
+      const done = azure && item.type === 'reasoning' && !failing ? { ...item, encrypted_content: undefined } : item;
       events.push({ type: 'response.output_item.added', output_index: index, item: { ...done, ...(item.type === 'function_call' ? { arguments: '' } : {}) } });
       if (item.type === 'message') events.push({ type: 'response.output_text.delta', output_index: index, delta: item.id === `msg_left_${turn}` ? `native-${turn}-left` : `native-${turn}-right` });
       if (item.id === `rs_visible_${turn}`) for (const delta of ['visible-', String(turn)]) events.push({ type: 'response.reasoning_summary_text.delta', output_index: index, delta });
@@ -108,6 +113,7 @@ const server = createServer(async (request, response) => {
     }
     events.push({ type: 'response.completed', response: { id: `resp_${turn}`, model: 'untrusted-response-alias', status: 'completed', output,
       usage: { input_tokens: 5, output_tokens: 2, total_tokens: 7 } } });
+    if (failing) events.splice(-1, 1, { type: 'error', error: { message: `${streamPrivate} ${key}` } });
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
     response.end(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
   } catch (error) { fixtureError = error; response.statusCode = 500; response.end('Invalid installed continuation fixture'); }
@@ -513,6 +519,34 @@ try {
     assert.deepEqual(wires.slice(overflowTurn), [expectedWire, { ...expectedWire, path: expectedWire.path.replace('streamGenerateContent?alt=sse', 'generateContent') }, expectedWire, expectedWire,
       expectedWire, { ...expectedWire, path: expectedWire.path.replace('streamGenerateContent?alt=sse', 'generateContent') }, expectedWire, expectedWire]);
     assert.equal(await readFile(journal, 'utf8'), sourceBytes);
+    const partialTurn = bodies.length, broken = start(fork.id); partialFailure = true;
+    await broken.prompt(1); const brokenResult = await broken.finish(); assert.equal(partialFailure, false); assert.equal(bodies.length, partialTurn + 1);
+    const failure = provider === 'native-r' ? 'OpenAI response request failed.' : provider === 'azure' ? 'The provider response failed.'
+      : anthropic ? 'Invalid Anthropic response.' : 'Invalid Google response.';
+    const partialEntries = await readJournal(fork.id), failed = sourceAssistants(partialEntries).at(-1);
+    assert.equal(sourceAssistants(partialEntries).length, sourceAssistants(finalRecovery).length + 1);
+    assert.equal(failed.content, `native-${partialTurn + 1}-leftnative-${partialTurn + 1}-right`); assert.equal(failed.metadata.outputError, failure);
+    assert.equal(failed.provider, provider); assert.equal(failed.model, model); assert.equal(failed.api, undefined); assert.equal(failed.usage, undefined); assert.deepEqual(failed.toolCalls ?? [], []);
+    assert.deepEqual(failed.blocks, [{ type: 'reasoning', text: `visible-${partialTurn + 1}` }, { type: 'text', text: failed.content }]);
+    assert.deepEqual(assistants(bodies[partialTurn]), responses ? [exhaustedTurn, exhaustedTurn + 4].flatMap(replay)
+      : [exhaustedTurn, exhaustedTurn + 4].map(value => signedContent(value)));
+    const ended = brokenResult.records.filter(record => record.type === 'message_end' && record.message?.role === 'assistant'); assert.equal(ended.length, 1);
+    assert.equal(ended[0].message.stopReason, 'error'); assert.equal(ended[0].message.errorMessage, failure);
+    assert.deepEqual(ended[0].message.content, [{ type: 'text', text: failed.content }, { type: 'thinking', thinking: `visible-${partialTurn + 1}` }]);
+    assert.deepEqual(brokenResult.records.filter(record => ['tool_execution_start', 'auto_retry_start', 'compaction_start', 'compaction_end'].includes(record.type)), []);
+    const failedReload = new Core.SessionManager({ store: new Core.JsonlSessionStore(sessions) }); assert(await failedReload.loadFromStore(fork.id));
+    assert.deepEqual((await failedReload.getRawEntries(fork.id)).find(value => value.id === failed.id), failed);
+    const following = start(fork.id); await following.prompt(1); const followingResult = await following.finish(); assert.equal(bodies.length, partialTurn + 2);
+    assert.deepEqual(assistants(bodies.at(-1)), responses ? [exhaustedTurn, exhaustedTurn + 4].flatMap(replay)
+      : [exhaustedTurn, exhaustedTurn + 4].map(value => signedContent(value)));
+    assert(JSON.stringify(bodies.at(-1)).includes(exhaustedSummary)); assert(!JSON.stringify(bodies.at(-1)).includes(`native-${partialTurn + 1}-`));
+    const afterPartial = await readJournal(fork.id);
+    assert.deepEqual(sourceAssistants(afterPartial).slice(0, -1), sourceAssistants(partialEntries)); assert.deepEqual(sourceAssistants(afterPartial).at(-1).blocks, blocks(partialTurn + 2));
+    for (const value of finalRecovery.filter(value => value.type !== 'metadata')) assert.deepEqual(afterPartial.find(item => item.id === value.id), value);
+    assert.equal(afterPartial.filter(value => value.type === 'compaction').length, 4); assert.deepEqual(recoveryNotes(afterPartial), recoveryNotes(finalRecovery));
+    for (const result of [brokenResult, followingResult]) for (const value of [...opaque, streamPrivate, 'unpublished-call', 'fc_unpublished']) assert(!JSON.stringify(result.records).includes(value), value);
+    assert(!(await readFile(path.join(sessions, fork.id + '.jsonl'), 'utf8')).includes(streamPrivate)); assert.deepEqual(wires.slice(partialTurn), [expectedWire, expectedWire]);
+    assert.equal(await readFile(effects, 'utf8'), '{"value":1}\n'); assert.equal(await readFile(journal, 'utf8'), sourceBytes);
   }
   assert.equal(await readFile(effects, 'utf8'), '{"value":1}\n'); assert.equal(fixtureError, undefined);
   console.log(responses ? 'INSTALLED_RESPONSES_CONTINUATION_OK' : 'INSTALLED_SIGNED_CONTINUATION_OK');
