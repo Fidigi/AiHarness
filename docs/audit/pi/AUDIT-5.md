@@ -1,6 +1,6 @@
 # Audit Report — Pi 1.2.0 and Pi Web 0.12.2 / AiHarness
 
-> **Status: IN PROGRESS** (2026-11-05)
+> **Status: IN PROGRESS** (2026-11-06)
 >
 > 37 of 43 criteria are closed under their scoped native contracts. Installation/update, provider/model delivery and integrated/platform/distribution qualification remain open; source-local green tests do not certify complete Pi parity.
 
@@ -414,6 +414,28 @@ Only this journal section and the existing media/context matrix row change. Requ
 | Date | ID(s) | Old → New | Evidence | Validation | Notes/decision |
 |---|---|---|---|---|---|
 | 2026-11-05 | MOD-03 | PARTIAL → PARTIAL | Eight selected inputs above; existing media/context matrix; sealed historical root | Read/grep; `git status --short`; `node /tmp/mod03-context-closure-review/prove.mjs` artifact/hash/Git verification; `make lint-docs`; `git diff --check` | Canonical/native/reporting boundaries clarified without new test credit or complete media admission; no native unblock or goal completion |
+
+### MOD-03 — automatic native threshold compaction
+
+**2026-11-06 — bounded tests-only delivery over `a4aeacf0b2bb77508214f84df238e84cd148bee5`; MOD-03 remains PARTIAL.** The [source-bound receipt](./evidence/MOD-03-native-auto-compaction.json) extends the same five installed RPC journeys: Anthropic `claude-haiku-5-5`, Google/Vertex `gemini-3.8-flash`, original Responses under `native-r` and native Azure Responses `gpt-5`. Existing generic automatic-compaction tests do not establish this private native lifecycle. Only `packages/cli/src/cli/fixtures/responses-continuation-probe.mjs` changes: no product, public API/schema, dependency/compiler/build/runner, case-count or deadline change.
+
+| Existing requirement / scenario | Concrete source/assertion | Evidence boundary |
+|---|---|---|
+| Automatic estimated-threshold admission; five existing `{provider}/rpc` continuation cases | Actual-adapter published context window supplies trusted file reserve `window - 10000`, keep512. Explicitly enabled policy makes no summary below threshold. A public-user-only context edit adds60,000 characters; the manager estimate crosses the threshold, and its prepared cut includes earlier private assistants while retaining the latest signed reply | Installed public Core preparation plus genuine installed RPC prompt; no manual `compact` command triggers this new summary |
+| Native summary privacy and publication | Real automatic callback uses JSON for Anthropic/Google/Vertex and SSE for Responses/Azure. Earlier native public text/filler reaches the summary request, but visible reasoning, typed signatures/redacted/encrypted carriers do not. Only public summary text, physical provider/model and reported5-input/2-output usage enter the record | Private-bearing synthetic native responses, not vendor-valid signatures or a new pinned SDK oracle; usage differs from the local context heuristic |
+| Durable private replay | Fresh installed Core reload keeps the retained signed reply plus new foreground reply. A further PATH-bin process replays their whole native assistant arrays with the public summary, without filler or another compaction. Original source bytes and copied child immutable entries remain exact; metadata may advance, journals remain `0600`, credentials and live opaque fields remain protected | Explicit same-provider/model selection, not automatic restoration, erasure or every fork/withdrawal/error variant |
+
+The initial image successfully builds Core/CLI/Server/Web and8 smoke/19 runner controls, then actual workspace Web typecheck fails with `[TypeScript] compiler failed (code=null, signal=SIGSEGV, spawnFailed=false).` Make2 is retained; trailing parity typecheck is unreached. The produced image is used for the distinct functional selection, which reports **14 PASS/one FAIL/333 unselected/348**: the new Azure metadata-only SDK constructor omitted its required base URL and throws `Invalid Azure Responses configuration.` before the new automatic assertions. Four other native RPC paths pass; later Azure assertions receive no initial credit. Only that new constructor receives the existing CLI environment's native-v1 base URL. Corrected-source ordinary qualification has its own frozen image; Web/product/compiler/runner inputs remain unchanged. Its success does not retroactively pass the initial typecheck or establish compiler stability/cause. No unchanged-image native-exit rerun, investigation, mitigation or weakened deadline occurs.
+
+Both images have36 selected read-back inputs and unchanged1,804-file reconstructed manifests; delivery matches1,565 tracked non-documentation files. Final image `sha256:6fb72a4096235ff07f87087b0a06abd7a070a0220d217efa6c14f8013cb3fcbd` binds the corrected probe. Named readbacks/archive equality are not every environment/context byte. The previous fork receipt remains byte-identical; zero pinned SDK executions are repeated. Per complete15-scenario run, source/assertion-derived totals are99 requests (93 SSE/six JSON),55 processes and15 effects:20 additional requests/15 processes, not separately printed counters.
+
+**Corrected typecheck, selected15/333 unselected/348,271 complementary cases/six files and seven unchanged browser cases/zero retries PASS.** Complementary reports are95 session-manager,36 automatic-generation,15 model-boundary,22 generation-response,79 RPC lifecycle and24 generic summary-host cases. Required parity **FAIL382/1/383/four files**, Make2,546.40s: trailing strict `prestart-public.ts` compiler returns null with its scenario-labelled SIGABRT. Existing Core/SDK runtime assertions precede that declaration failure; do not label them unreached. Separate root **FAIL8,848/1/8,849/526 files**, Make2,1844.38s: CODE limits/classifier-images case times out at5,000ms, with a separate CODE-labelled null/SIGSEGV child record under the passing installed `print-auto/ordinary` summary stderr heading. The timeout, heading, source schedule and labelled child are distinct observations; no child argv/PID, actual compiler-versus-runtime phase or cause is established. All15 continuations pass selected/parity/root. Both canonical scopes report zero unreported cases or worker errors; no retry or waiver occurs.
+
+Only these five native RPC estimated-threshold paths are acquired. Upstream overflow recovery, automatic non-RPC hosts, other models/dialects, broader lifecycle/default/budget/reserve/media/settings requirements and required integrated acceptance remain open. Bedrock signed-carrier HOLD still requires the outstanding explicit contract answer. Historical failures retain their own sources; the earlier specifically resolved Docker construction incident is not reopened. MOD-01 stays IN PROGRESS, MOD-03 PARTIAL and closure37-of43.
+
+| Date | ID(s) | Old → New | Evidence | Validation | Notes/decision |
+|---|---|---|---|---|---|
+| 2026-11-06 | MOD-03 | PARTIAL → PARTIAL | Existing installed probe/five native RPC threshold journeys; [receipt and frozen inputs](./evidence/MOD-03-native-auto-compaction.json) | Corrected typecheck/selected15/focused271/browser7 PASS; parity FAIL382/1; root FAIL8,848/1 | Retain initial Web SIGSEGV and Azure fixture failure; bounded automatic native replay, not upstream overflow, all-host/lifecycle or whole-criterion acceptance |
 
 ### MOD-03 — durable native fork and installed child replay
 
