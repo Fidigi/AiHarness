@@ -59,8 +59,9 @@ function signedBlocks(turn) {
 const assistants = body => responses ? body.input.filter(item => item.role === 'assistant' || ['reasoning', 'function_call'].includes(item.type))
   : anthropic ? body.messages.filter(item => item.role === 'assistant').map(item => item.content) : body.contents.filter(item => item.role === 'model').map(item => item.parts);
 const opaque = responses ? ['opaque-', 'msg_left_', 'msg_right_', 'rs_empty_', 'rs_visible_'] : anthropic ? ['opaque-'] : ['bGFzdA==', 'cmlnaHQ=', 'aGlkZGVu', 'ZW1wdHk=', 'dG9vbA==', 'Zmlyc3Q='];
-let fixtureError, summaryExpected = false, overflowRemaining = 0, partialFailure = false, holdNative = false, endNative = false, heldClosed;
+let fixtureError, summaryExpected = false, overflowRemaining = 0, partialFailure = false, holdNative = false, endNative = false, heldClosed, resetPeer;
 const overflowPrivate = 'PRIVATE_OVERFLOW_DIAGNOSTIC', streamPrivate = 'PRIVATE_NATIVE_STREAM_DIAGNOSTIC', cancelMarker = 'PUBLIC_WITHDRAW_BOUNDARY.';
+const resetMarker = 'PUBLIC_TRANSPORT_RESET_BOUNDARY.'; let holdMarker = cancelMarker;
 const server = createServer(async (request, response) => {
   try {
     assert.equal(request.method, 'POST');
@@ -99,10 +100,11 @@ const server = createServer(async (request, response) => {
       if (failing) events.splice(anthropic ? -2 : -1, anthropic ? 2 : 1,
         { ...(anthropic ? { type: 'error' } : {}), error: { type: 'server_error', message: `${streamPrivate} ${key}` } });
       if (withdrawing) events.splice(anthropic ? -2 : -1, anthropic ? 2 : 1, ...(anthropic ? [
-        { type: 'content_block_start', index: content.length, content_block: { type: 'text', text: cancelMarker } }, { type: 'content_block_stop', index: content.length },
-      ] : [{ candidates: [{ content: { parts: [{ text: cancelMarker }] } }] }]));
+        { type: 'content_block_start', index: content.length, content_block: { type: 'text', text: holdMarker } }, { type: 'content_block_stop', index: content.length },
+      ] : [{ candidates: [{ content: { parts: [{ text: holdMarker }] } }] }]));
       response.writeHead(200, { 'Content-Type': 'text/event-stream' });
       if (withdrawing) {
+        resetPeer = () => response.socket.resetAndDestroy();
         heldClosed = new Promise(resolve => response.once('close', resolve)); response.write(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')); return;
       }
       response.end(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')); return;
@@ -124,9 +126,10 @@ const server = createServer(async (request, response) => {
     if (failing) events.splice(-1, 1, { type: 'error', error: { message: `${streamPrivate} ${key}` } });
     if (withdrawing) events.splice(-1, 1,
       { type: 'response.output_item.added', output_index: output.length, item: { type: 'message', id: 'msg_cancel_boundary', role: 'assistant', status: 'in_progress', content: [] } },
-      { type: 'response.output_text.delta', output_index: output.length, delta: cancelMarker });
+      { type: 'response.output_text.delta', output_index: output.length, delta: holdMarker });
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
     if (withdrawing) {
+      resetPeer = () => response.socket.resetAndDestroy();
       heldClosed = new Promise(resolve => response.once('close', resolve)); response.write(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')); return;
     }
     response.end(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
@@ -617,6 +620,38 @@ try {
     assert.deepEqual(wires.slice(eofTurn), [expectedWire, expectedWire]); assert.equal(await readFile(journal, 'utf8'), sourceBytes);
     assert.equal((await stat(path.join(sessions, fork.id + '.jsonl'))).mode & 0o777, 0o600);
     assert(!(await readFile(path.join(sessions, fork.id + '.jsonl'), 'utf8')).includes(key));
+    const resetTurn = bodies.length, interrupted = start(fork.id); holdMarker = resetMarker; holdNative = true;
+    const interruptedPrompt = interrupted.prompt(1); await interrupted.text(resetMarker); assert.equal(holdNative, false); assert(heldClosed); assert.equal(typeof resetPeer, 'function');
+    resetPeer(); await interruptedPrompt; await heldClosed;
+    const interruptedResult = await interrupted.finish(); assert.equal(bodies.length, resetTurn + 1);
+    const resetFailure = provider === 'native-r' ? 'OpenAI response request failed.' : 'terminated';
+    const resetThinking = interruptedResult.records.filter(record => record.type === 'message_update' && record.assistantMessageEvent?.type === 'thinking_delta')
+      .map(record => record.assistantMessageEvent.delta).join('');
+    assert.equal(resetThinking, new Core.CredentialRedactor([key]).createStream().push(`visible-${resetTurn + 1}`));
+    const resetEntries = await readJournal(fork.id), resetAssistant = sourceAssistants(resetEntries).at(-1);
+    assert.deepEqual(sourceAssistants(resetEntries).slice(0, -1), sourceAssistants(finalEof));
+    assert.equal(resetAssistant.content, `native-${resetTurn + 1}-leftnative-${resetTurn + 1}-right${resetMarker}`); assert.equal(resetAssistant.metadata.outputError, resetFailure);
+    assert.equal(resetAssistant.provider, provider); assert.equal(resetAssistant.model, model); assert.equal(resetAssistant.api, undefined); assert.equal(resetAssistant.usage, undefined); assert.deepEqual(resetAssistant.toolCalls ?? [], []);
+    assert.deepEqual(resetAssistant.blocks, [{ type: 'reasoning', text: resetThinking }, { type: 'text', text: resetAssistant.content }]);
+    const resetEnded = interruptedResult.records.filter(record => record.type === 'message_end' && record.message?.role === 'assistant'); assert.equal(resetEnded.length, 1);
+    assert.equal(resetEnded[0].message.stopReason, 'error'); assert.equal(resetEnded[0].message.errorMessage, resetFailure);
+    assert.deepEqual(resetEnded[0].message.content, [{ type: 'text', text: resetAssistant.content }, { type: 'thinking', thinking: resetThinking }]);
+    const resetReload = new Core.SessionManager({ store: new Core.JsonlSessionStore(sessions) }); assert(await resetReload.loadFromStore(fork.id));
+    assert.deepEqual((await resetReload.getRawEntries(fork.id)).find(value => value.id === resetAssistant.id), resetAssistant);
+    const afterReset = start(fork.id); await afterReset.prompt(1); const afterResetResult = await afterReset.finish(); assert.equal(bodies.length, resetTurn + 2);
+    for (const body of bodies.slice(resetTurn)) assert.deepEqual(assistants(body), responses ? [exhaustedTurn, exhaustedTurn + 4, partialTurn + 2, withdrawnTurn + 2, eofTurn + 2].flatMap(replay)
+      : [exhaustedTurn, exhaustedTurn + 4, partialTurn + 2, withdrawnTurn + 2, eofTurn + 2].map(value => signedContent(value)));
+    assert(JSON.stringify(bodies.at(-1)).includes(exhaustedSummary)); assert(!JSON.stringify(bodies.at(-1)).includes(resetMarker)); assert(!JSON.stringify(bodies.at(-1)).includes(`native-${resetTurn + 1}-`));
+    const finalReset = await readJournal(fork.id);
+    assert.deepEqual(sourceAssistants(finalReset).slice(0, -1), sourceAssistants(resetEntries)); assert.deepEqual(sourceAssistants(finalReset).at(-1).blocks, blocks(resetTurn + 2));
+    for (const value of finalEof.filter(value => value.type !== 'metadata')) assert.deepEqual(finalReset.find(item => item.id === value.id), value);
+    assert.equal(finalReset.filter(value => value.type === 'compaction').length, 4); assert.deepEqual(recoveryNotes(finalReset), recoveryNotes(finalEof));
+    for (const result of [interruptedResult, afterResetResult]) {
+      assert.deepEqual(result.records.filter(record => ['tool_execution_start', 'auto_retry_start', 'compaction_start', 'compaction_end'].includes(record.type)), []);
+      for (const value of [...opaque, streamPrivate, 'unpublished-call', 'fc_unpublished', 'msg_cancel_boundary']) assert(!JSON.stringify(result.records).includes(value), value);
+    }
+    assert.deepEqual(wires.slice(resetTurn), [expectedWire, expectedWire]); assert.equal(await readFile(journal, 'utf8'), sourceBytes);
+    assert.equal((await stat(path.join(sessions, fork.id + '.jsonl'))).mode & 0o777, 0o600); assert(!(await readFile(path.join(sessions, fork.id + '.jsonl'), 'utf8')).includes(key));
   }
   assert.equal(await readFile(effects, 'utf8'), '{"value":1}\n'); assert.equal(fixtureError, undefined);
   console.log(responses ? 'INSTALLED_RESPONSES_CONTINUATION_OK' : 'INSTALLED_SIGNED_CONTINUATION_OK');
