@@ -276,6 +276,65 @@ try {
       ? [{ type: 'tool_result', tool_use_id: 'native-call', content: 'native-tool-result', is_error: false, ...(body === bodies[1] ? { cache_control: { type: 'ephemeral' } } : {}) }]
       : [{ functionResponse: { ...(body === bodies[3] ? {} : { id: 'native-call' }), name: 'continuation_echo', response: { output: 'native-tool-result' } } }]);
   }
+  if (mode !== 'rpc') {
+    const Core = await import('@ai-harness/core'), config = { type: provider, model, apiKey: key,
+      ...(provider === 'azure' ? { azureApi: 'native', baseUrl: env.AZURE_OPENAI_BASE_URL } : {}) };
+    const owner = provider === 'native-r' ? new Core.OpenAiMixedProvider(config) : Core.ProviderFactory.create(config);
+    const contextWindow = Core.resolveAgentCompactionContextWindow(provider, model, owner); assert(contextWindow > 10_000);
+    const settings = { enabled: true, reserveTokens: contextWindow - 10_000, keepRecentTokens: 512 };
+    await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ transport: 'sse', cacheWarming: 'off', compaction: settings }));
+    const below = await start().finish(); assert.equal(bodies.length, 4);
+    assert.deepEqual(assistants(bodies.at(-1)), responses ? [1, 2, 3].flatMap(replay) : [1, 2, 3].map(value => signedContent(value)));
+    assert.deepEqual(below.records.filter(record => ['compaction_start', 'compaction_end'].includes(record.type)), []);
+    const manager = new Core.SessionManager({ store: new Core.JsonlSessionStore(sessions) }); assert(await manager.loadFromStore('native-continuation'));
+    manager.setCompactionSettings(settings); manager.setCompactionContextWindow(contextWindow, 'native-continuation');
+    assert(manager.estimateContextTokens('native-continuation') < contextWindow - settings.reserveTokens);
+    const target = Core.getCompactionModelMessages(manager, 'native-continuation').filter(message => message.role === 'user').at(-1);
+    assert(await manager.appendContextEdit('native-continuation', { targetEntryId: target.id, replacement: 'PUBLIC_HEADLESS_FILLER ' + 'x'.repeat(60_000) }));
+    assert(manager.estimateContextTokens('native-continuation') > contextWindow - settings.reserveTokens);
+    const prepared = Core.prepareCompactionContext(manager, 'native-continuation', 'threshold'); assert(prepared);
+    assert.deepEqual(prepared.keptMessages.filter(message => message.role === 'assistant').map(message => message.blocks), [blocks(4)]);
+    assert(prepared.toCompact.some(message => message.blocks?.some(block => block.type === 'reasoning')));
+    const before = await readJournal(); summaryExpected = true;
+    const automatic = await start().finish(), summary = 'native-5-leftnative-5-right', body = bodies[4];
+    assert.equal(bodies.length, 6); assert.equal(summaryExpected, false);
+    assert.equal(body.max_output_tokens ?? body.max_tokens ?? body.generationConfig?.maxOutputTokens, 4096); assert.deepEqual(body.tools ?? body.toolConfig?.tools ?? [], []);
+    const history = JSON.stringify(assistants(body)); assert(history.includes('native-1-left')); assert(!history.includes('visible-'));
+    assert(JSON.stringify(body).includes('PUBLIC_HEADLESS_FILLER')); assert(JSON.stringify(body).includes('native-tool-result'));
+    for (const value of [...opaque, 'Signature', 'encrypted_content']) assert(!history.includes(value), value);
+    assert.deepEqual(assistants(bodies[5]), responses ? replay(4) : [signedContent(4)]);
+    assert(JSON.stringify(bodies[5]).includes(summary)); assert(!JSON.stringify(bodies[5]).includes('PUBLIC_HEADLESS_FILLER'));
+    const after = await readJournal(), entry = after.find(value => value.type === 'compaction'); assert(entry);
+    assert.equal(entry.summary, summary); assert.equal(entry.firstKeptEntryId, prepared.firstKeptEntryId);
+    assert.equal(entry.provider, provider); assert.equal(entry.model, model); assert.equal(entry.usage.inputTokens, 5); assert.equal(entry.usage.outputTokens, 2);
+    for (const value of [...opaque, 'Signature', 'encrypted_content']) assert(!JSON.stringify(entry).includes(value), value);
+    for (const value of before.filter(value => value.type !== 'metadata')) assert.deepEqual(after.find(item => item.id === value.id), value);
+    const reloaded = new Core.SessionManager({ store: new Core.JsonlSessionStore(sessions) }), loaded = await reloaded.loadFromStore('native-continuation'); assert(loaded);
+    assert.equal(loaded.metadata.compactionEntryId, entry.id); assert.equal(loaded.metadata.compactionSummary, summary);
+    assert.deepEqual(Core.getCompactionModelMessages(reloaded, loaded.id).filter(message => message.role === 'assistant').map(message => message.blocks), [blocks(4), blocks(6)]);
+    const restarted = await start().finish(); assert.equal(bodies.length, 7);
+    assert.deepEqual(assistants(bodies.at(-1)), responses ? [4, 6].flatMap(replay) : [4, 6].map(value => signedContent(value)));
+    assert(JSON.stringify(bodies.at(-1)).includes(summary)); assert(!JSON.stringify(bodies.at(-1)).includes('PUBLIC_HEADLESS_FILLER'));
+    assert.deepEqual(restarted.records.filter(record => ['compaction_start', 'compaction_end'].includes(record.type)), []);
+    for (const [result, turn] of [[below, 4], [automatic, 6], [restarted, 7]]) {
+      if (mode === 'print') assert.equal(result.stdout, `native-${turn}-leftnative-${turn}-right\n`);
+      else {
+        assert.equal(result.records.filter(record => record.type === 'agent_settled').length, 1);
+        assert.deepEqual(result.records.filter(record => record.type === 'message_end' && record.message?.role === 'assistant').map(record => record.message.content),
+          [[{ type: 'text', text: `native-${turn}-leftnative-${turn}-right` }, { type: 'thinking', thinking: `visible-${turn}` }]]);
+      }
+      for (const value of opaque) assert(!result.stdout.includes(value), value);
+    }
+    if (mode === 'json') {
+      assert.deepEqual(automatic.records.filter(record => record.type === 'compaction_start'), [{ type: 'compaction_start', reason: 'threshold' }]);
+      assert.equal(automatic.records.filter(record => record.type === 'compaction_end' && record.aborted === false && record.result?.summary === summary).length, 1);
+    }
+    const final = await readJournal(); assert.equal(final.filter(value => value.type === 'compaction').length, 1);
+    assert.deepEqual(sourceAssistants(final).map(value => value.blocks), [1, 2, 3, 4, 6, 7].map(blocks));
+    for (const value of sourceAssistants(final)) { assert.equal(value.provider, provider); assert.equal(value.api, api(provider)); assert.equal(value.model, model); }
+    for (const value of after.filter(value => value.type !== 'metadata')) assert.deepEqual(final.find(item => item.id === value.id), value);
+    assert.deepEqual(wires.slice(3), [wires[0], { ...wires[0], path: wires[0].path.replace('streamGenerateContent?alt=sse', 'generateContent') }, wires[0], wires[0]]);
+  }
   if (mode === 'rpc') {
     const Core = await import('@ai-harness/core'), before = await readJournal(), original = sourceAssistants(before), turn = bodies.length;
     const work = start(); summaryExpected = true;
