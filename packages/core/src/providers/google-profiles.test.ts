@@ -736,6 +736,24 @@ describe('native original Google/Vertex response authority', () => {
       abort.abort(); release(); await pending;
       expect(chunks).toEqual(['before']); expect(complete).not.toHaveBeenCalled(); expect(error).toHaveBeenCalledOnce();
       expect(error.mock.calls[0]?.[0].message).toBe('Gemini request aborted.');
+      // Also withdraw while the next read is pending, with a fetch body that ignores its signal.
+      const Native = scope === 'google' ? GeminiProvider : VertexGeminiProvider;
+      const waitingProvider = new Native({ type: 'operator-alias', model: 'gemini-3.8-flash', apiKey: 'disposable', httpIdleTimeoutMs: 0 });
+      const waitingAbort = new AbortController(), cancel = vi.fn(), waitingComplete = vi.fn(), waitingError = vi.fn();
+      let bodyController!: ReadableStreamDefaultController<Uint8Array>, reading!: () => void;
+      const pendingRead = new Promise<void>(resolve => { reading = resolve; });
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) { bodyController = controller; controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ candidates: [{ content: { parts: signedParts } }] })}\n\n`)); },
+        pull() { reading(); return new Promise<void>(() => {}); }, cancel,
+      }, { highWaterMark: 0 });
+      f.fetch.mockImplementationOnce(async () => new Response(body));
+      const waiting = waitingProvider.streamChat(input, vi.fn(), waitingComplete, waitingError, { signal: waitingAbort.signal });
+      await pendingRead;
+      try {
+        waitingAbort.abort(); expect(cancel).toHaveBeenCalledOnce(); await waiting;
+        expect(waitingComplete).not.toHaveBeenCalled(); expect(waitingError).toHaveBeenCalledOnce();
+        expect(waitingError.mock.calls[0]?.[0].message).toBe('Gemini request aborted.');
+      } finally { try { bodyController.close(); } catch { /* Already cancelled. */ } await waiting; }
     });
   }
 });

@@ -59,8 +59,8 @@ function signedBlocks(turn) {
 const assistants = body => responses ? body.input.filter(item => item.role === 'assistant' || ['reasoning', 'function_call'].includes(item.type))
   : anthropic ? body.messages.filter(item => item.role === 'assistant').map(item => item.content) : body.contents.filter(item => item.role === 'model').map(item => item.parts);
 const opaque = responses ? ['opaque-', 'msg_left_', 'msg_right_', 'rs_empty_', 'rs_visible_'] : anthropic ? ['opaque-'] : ['bGFzdA==', 'cmlnaHQ=', 'aGlkZGVu', 'ZW1wdHk=', 'dG9vbA==', 'Zmlyc3Q='];
-let fixtureError, summaryExpected = false, overflowRemaining = 0, partialFailure = false;
-const overflowPrivate = 'PRIVATE_OVERFLOW_DIAGNOSTIC', streamPrivate = 'PRIVATE_NATIVE_STREAM_DIAGNOSTIC';
+let fixtureError, summaryExpected = false, overflowRemaining = 0, partialFailure = false, holdNative = false, heldClosed;
+const overflowPrivate = 'PRIVATE_OVERFLOW_DIAGNOSTIC', streamPrivate = 'PRIVATE_NATIVE_STREAM_DIAGNOSTIC', cancelMarker = 'PUBLIC_WITHDRAW_BOUNDARY.';
 const server = createServer(async (request, response) => {
   try {
     assert.equal(request.method, 'POST');
@@ -73,10 +73,10 @@ const server = createServer(async (request, response) => {
       overflowRemaining--; response.writeHead(400, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify({ error: { code: 'context_length_exceeded', message: `${overflowPrivate} ${key}` } })); return;
     }
-    const summary = summaryExpected, failing = partialFailure; summaryExpected = false; partialFailure = false;
+    const summary = summaryExpected, failing = partialFailure, withdrawing = holdNative; summaryExpected = false; partialFailure = false; holdNative = false;
     if (!responses) {
       const content = signedContent(turn);
-      if (failing) content.push(anthropic ? { type: 'tool_use', id: 'unpublished-call', name: 'continuation_echo', input: { value: 999 } }
+      if (failing || withdrawing) content.push(anthropic ? { type: 'tool_use', id: 'unpublished-call', name: 'continuation_echo', input: { value: 999 } }
         : { functionCall: { id: 'unpublished-call', name: 'continuation_echo', args: { value: 999 } }, thoughtSignature: 'dG9vbA==' });
       if (summary) {
         response.writeHead(200, { 'Content-Type': 'application/json' });
@@ -97,14 +97,20 @@ const server = createServer(async (request, response) => {
           { modelVersion: 'untrusted-response-alias', candidates: [{ finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2, totalTokenCount: 7 } }];
       if (failing) events.splice(anthropic ? -2 : -1, anthropic ? 2 : 1,
         { ...(anthropic ? { type: 'error' } : {}), error: { type: 'server_error', message: `${streamPrivate} ${key}` } });
+      if (withdrawing) events.splice(anthropic ? -2 : -1, anthropic ? 2 : 1, ...(anthropic ? [
+        { type: 'content_block_start', index: content.length, content_block: { type: 'text', text: cancelMarker } }, { type: 'content_block_stop', index: content.length },
+      ] : [{ candidates: [{ content: { parts: [{ text: cancelMarker }] } }] }]));
       response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      if (withdrawing) {
+        heldClosed = new Promise(resolve => response.once('close', resolve)); response.write(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')); return;
+      }
       response.end(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')); return;
     }
-    const output = [...items(turn, false), ...(failing ? [{ type: 'function_call', id: 'fc_unpublished', call_id: 'unpublished-call',
+    const output = [...items(turn, false), ...(failing || withdrawing ? [{ type: 'function_call', id: 'fc_unpublished', call_id: 'unpublished-call',
       name: 'continuation_echo', arguments: '{"value":1}', status: 'completed' }] : [])], azure = request.url.startsWith('/openai/');
     const events = [{ type: 'response.created', response: { id: `resp_${turn}`, output: [] } }];
     for (const [index, item] of output.entries()) {
-      const done = azure && item.type === 'reasoning' && !failing ? { ...item, encrypted_content: undefined } : item;
+      const done = azure && item.type === 'reasoning' && !failing && !withdrawing ? { ...item, encrypted_content: undefined } : item;
       events.push({ type: 'response.output_item.added', output_index: index, item: { ...done, ...(item.type === 'function_call' ? { arguments: '' } : {}) } });
       if (item.type === 'message') events.push({ type: 'response.output_text.delta', output_index: index, delta: item.id === `msg_left_${turn}` ? `native-${turn}-left` : `native-${turn}-right` });
       if (item.id === `rs_visible_${turn}`) for (const delta of ['visible-', String(turn)]) events.push({ type: 'response.reasoning_summary_text.delta', output_index: index, delta });
@@ -114,7 +120,13 @@ const server = createServer(async (request, response) => {
     events.push({ type: 'response.completed', response: { id: `resp_${turn}`, model: 'untrusted-response-alias', status: 'completed', output,
       usage: { input_tokens: 5, output_tokens: 2, total_tokens: 7 } } });
     if (failing) events.splice(-1, 1, { type: 'error', error: { message: `${streamPrivate} ${key}` } });
+    if (withdrawing) events.splice(-1, 1,
+      { type: 'response.output_item.added', output_index: output.length, item: { type: 'message', id: 'msg_cancel_boundary', role: 'assistant', status: 'in_progress', content: [] } },
+      { type: 'response.output_text.delta', output_index: output.length, delta: cancelMarker });
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    if (withdrawing) {
+      heldClosed = new Promise(resolve => response.once('close', resolve)); response.write(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')); return;
+    }
     response.end(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
   } catch (error) { fixtureError = error; response.statusCode = 500; response.end('Invalid installed continuation fixture'); }
 });
@@ -179,7 +191,8 @@ try {
       child.stdin.end(); assert.deepEqual(await ended, { code: 0, signal: null }, stderr); assert.equal(stderr, ''); assert.equal(buffer, '');
       assert(!stdout.includes(key)); active = undefined; return { stdout, records };
     };
-    return { prompt, command, finish };
+    return { prompt, command, finish, text: value => wait(() => records.filter(record => record.type === 'message_update'
+      && record.assistantMessageEvent?.type === 'text_delta').map(record => record.assistantMessageEvent.delta).join('').includes(value)) };
   };
   const readJournal = async (sessionId = 'native-continuation') => {
     const file = path.join(sessions, sessionId + '.jsonl');
@@ -547,6 +560,30 @@ try {
     for (const result of [brokenResult, followingResult]) for (const value of [...opaque, streamPrivate, 'unpublished-call', 'fc_unpublished']) assert(!JSON.stringify(result.records).includes(value), value);
     assert(!(await readFile(path.join(sessions, fork.id + '.jsonl'), 'utf8')).includes(streamPrivate)); assert.deepEqual(wires.slice(partialTurn), [expectedWire, expectedWire]);
     assert.equal(await readFile(effects, 'utf8'), '{"value":1}\n'); assert.equal(await readFile(journal, 'utf8'), sourceBytes);
+    const withdrawnTurn = bodies.length, withdrawal = start(fork.id); holdNative = true;
+    const withdrawingPrompt = withdrawal.prompt(1); await withdrawal.text(cancelMarker); assert.equal(holdNative, false); assert(heldClosed);
+    await withdrawal.command({ type: 'abort', id: 'withdraw-native' }); await withdrawingPrompt; await heldClosed;
+    const withdrawnResult = await withdrawal.finish(); assert.equal(bodies.length, withdrawnTurn + 1);
+    const withdrawnEntries = await readJournal(fork.id); assert.deepEqual(sourceAssistants(withdrawnEntries), sourceAssistants(afterPartial));
+    const aborted = withdrawnResult.records.filter(record => record.type === 'message_end' && record.message?.role === 'assistant'); assert.equal(aborted.length, 1);
+    assert.equal(aborted[0].message.stopReason, 'aborted'); assert.deepEqual(aborted[0].message.content, [
+      { type: 'text', text: `native-${withdrawnTurn + 1}-leftnative-${withdrawnTurn + 1}-right${cancelMarker}` }, { type: 'thinking', thinking: `visible-${withdrawnTurn + 1}` },
+    ]);
+    assert.deepEqual(withdrawnResult.records.filter(record => ['tool_execution_start', 'auto_retry_start', 'compaction_start', 'compaction_end'].includes(record.type)), []);
+    const withdrawnReload = new Core.SessionManager({ store: new Core.JsonlSessionStore(sessions) }); assert(await withdrawnReload.loadFromStore(fork.id));
+    assert.deepEqual((await withdrawnReload.getRawEntries(fork.id)).filter(value => value.type === 'message' && value.role === 'assistant'), sourceAssistants(afterPartial));
+    const afterWithdrawal = start(fork.id); await afterWithdrawal.prompt(1); const afterWithdrawalResult = await afterWithdrawal.finish(); assert.equal(bodies.length, withdrawnTurn + 2);
+    for (const body of bodies.slice(withdrawnTurn)) assert.deepEqual(assistants(body), responses ? [exhaustedTurn, exhaustedTurn + 4, partialTurn + 2].flatMap(replay)
+      : [exhaustedTurn, exhaustedTurn + 4, partialTurn + 2].map(value => signedContent(value)));
+    assert(JSON.stringify(bodies.at(-1)).includes(exhaustedSummary)); assert(!JSON.stringify(bodies.at(-1)).includes(cancelMarker));
+    assert(!JSON.stringify(bodies.at(-1)).includes(`native-${withdrawnTurn + 1}-`));
+    const finalWithdrawal = await readJournal(fork.id);
+    assert.deepEqual(sourceAssistants(finalWithdrawal).map(value => value.blocks), [...sourceAssistants(afterPartial).map(value => value.blocks), blocks(withdrawnTurn + 2)]);
+    for (const value of afterPartial.filter(value => value.type !== 'metadata')) assert.deepEqual(finalWithdrawal.find(item => item.id === value.id), value);
+    assert.equal(finalWithdrawal.filter(value => value.type === 'compaction').length, 4); assert.deepEqual(recoveryNotes(finalWithdrawal), recoveryNotes(afterPartial));
+    assert(!JSON.stringify(finalWithdrawal).includes(cancelMarker));
+    for (const result of [withdrawnResult, afterWithdrawalResult]) for (const value of [...opaque, 'unpublished-call', 'fc_unpublished', 'msg_cancel_boundary']) assert(!JSON.stringify(result.records).includes(value), value);
+    assert.deepEqual(wires.slice(withdrawnTurn), [expectedWire, expectedWire]); assert.equal(await readFile(journal, 'utf8'), sourceBytes);
   }
   assert.equal(await readFile(effects, 'utf8'), '{"value":1}\n'); assert.equal(fixtureError, undefined);
   console.log(responses ? 'INSTALLED_RESPONSES_CONTINUATION_OK' : 'INSTALLED_SIGNED_CONTINUATION_OK');

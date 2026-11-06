@@ -4106,6 +4106,11 @@ export class GeminiProvider extends AiProvider {
       let reasoning = '', finished = false;
       const blocks: MessageContentBlock[] = [];
       const alive = (): void => { if (scope && options?.signal?.aborted) throw new Error('Gemini request aborted.'); };
+      const cancelOnAbort = (): void => { void reader.cancel('provider-stream-aborted').catch(() => undefined); };
+      if (scope) {
+        options?.signal?.addEventListener('abort', cancelOnAbort, { once: true });
+        if (options?.signal?.aborted) cancelOnAbort();
+      }
 
       const consume = async (record: string): Promise<void> => {
         alive();
@@ -4179,6 +4184,7 @@ export class GeminiProvider extends AiProvider {
         if (scope) await onComplete?.(result);
         else onComplete?.(result);
       } finally {
+        if (scope) options?.signal?.removeEventListener('abort', cancelOnAbort);
         void reader.cancel('provider-stream-finished').catch(() => undefined);
         try { reader.releaseLock(); } catch { /* A hostile pending read may retain the lock. */ }
       }
