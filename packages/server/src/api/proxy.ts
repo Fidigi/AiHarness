@@ -15,6 +15,7 @@ import {
   getSummaryModelMessages,
   readCompactionSummary,
   copyCompactionResponse,
+  copyThinkingBudgets,
   BedrockProvider,
   closeProviderNetworkDispatchers,
   createProviderNetworkScope,
@@ -1202,8 +1203,11 @@ export function createProxyRoutes(
   proxy: AiProxyServer,
   options: {
     persistApiKey?: (provider: string, apiKey: string) => Promise<void>;
+    /** Host-owned policy only: HTTP bodies and provider cache IDs select no scope. */
+    resolveThinkingBudgets?: () => Promise<ChatOptions['thinkingBudgets']>;
   } = {},
 ) {
+  const resolveThinkingBudgets = options.resolveThinkingBudgets;
   /** POST /api/chat - Chat with streaming (SSE) */
   const chatHandler = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -1219,13 +1223,15 @@ export function createProxyRoutes(
         return;
       }
 
-      // Check CORS headers are already set by middleware
+      const ownedMessages = sanitizedProxyMessages(messages, 'http');
+      let chatOptions = safeOptions ?? undefined;
+      if (resolveThinkingBudgets) {
+        const thinkingBudgets = copyThinkingBudgets(await resolveThinkingBudgets());
+        if (thinkingBudgets !== undefined) chatOptions = { ...chatOptions, thinkingBudgets };
+      }
+      if (req.aborted || res.destroyed) return;
 
-      const result = await proxy.sendChatSSE(
-        provider,
-        sanitizedProxyMessages(messages, 'http'),
-        safeOptions ?? undefined,
-      );
+      const result = await proxy.sendChatSSE(provider, ownedMessages, chatOptions);
 
       if (result.error) {
         res.status(400).json({ error: 'Provider request failed.' });

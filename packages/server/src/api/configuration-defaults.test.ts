@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { MockProvider } from '@ai-harness/core';
-import { start, stop } from '../index.js';
+import { MockProvider, WorkspacePathError } from '@ai-harness/core';
+import { getProxy, start, stop } from '../index.js';
 import { createRuntimeServices, type RuntimeServices } from '../runtime/services.js';
 
 describe('independent new-session defaults', () => {
@@ -133,6 +133,81 @@ describe('independent new-session defaults', () => {
       await rm(file, { force: true });
       await services.configurationStore.patch('global', { thinkingBudgets: null });
       await services.configurationStore.patch('session', { thinkingBudgets: null }, parent.id);
+    }
+  });
+
+  it('owns legacy HTTP numeric budgets in the default workspace, never in caller selectors or maps', async () => {
+    const globalFile = path.join(root, '.data', 'settings.json');
+    const projectFile = path.join(root, '.ai-harness', 'settings.json');
+    const model = 'claude-haiku-4-5-20251001', cacheId = 'legacy-provider-cache';
+    const calls: Array<Record<string, unknown>> = [];
+    const actualFetch = globalThis.fetch.bind(globalThis);
+    const transport = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.startsWith(base + '/')) return actualFetch(input, init);
+      if (url !== 'https://api.anthropic.com/v1/messages') throw new Error('Unexpected legacy-budget outbound request');
+      calls.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response([
+        ['message_start', { message: { id: 'legacy-budget', type: 'message', role: 'assistant', model, content: [], usage: { input_tokens: 3 } } }],
+        ['content_block_start', { index: 0, content_block: { type: 'text', text: 'LEGACY_BUDGET_OK' } }],
+        ['content_block_stop', { index: 0 }],
+        ['message_delta', { delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 2 } }],
+        ['message_stop', {}],
+      ].map(([type, data]) => `event: ${type}\ndata: ${JSON.stringify({ type, ...data as object })}\n\n`).join(''),
+      { headers: { 'Content-Type': 'text/event-stream' } });
+    });
+    const chat = async (budget: number | 'off', thinking = 'low') => {
+      for (const route of ['/api/chat', '/api/chat/stream']) {
+        const before = calls.length;
+        const response = await request(route, 'POST', { provider: 'anthropic', messages: [{ role: 'user', content: 'Trusted numeric policy' }],
+          cwd: '/caller-cannot-select', projectId: 'caller-project', sessionId: cacheId, thinkingBudgets: { low: 999999 },
+          options: { model, maxTokens: 64000, thinking, sessionId: cacheId, thinkingBudgets: { low: 999999, high: 999999 } } });
+        expect(response.status).toBe(200);
+        expect(await response.text()).toContain('LEGACY_BUDGET_OK');
+        expect(calls).toHaveLength(before + 1);
+        expect(calls.at(-1)).toMatchObject({ model, max_tokens: 64000, stream: true,
+          thinking: budget === 'off' ? { type: 'disabled' } : { type: 'enabled', budget_tokens: budget, display: 'summarized' } });
+      }
+    };
+    try {
+      getProxy().setApiKey('anthropic', 'disposable-legacy-budget-key', undefined, model);
+      await mkdir(path.dirname(projectFile), { recursive: true });
+      await writeFile(globalFile, JSON.stringify({ thinkingBudgets: { low: 1600 } }));
+      await writeFile(projectFile, JSON.stringify({ thinkingBudgets: { low: 3000 } }));
+      await services.configurationStore.patch('session', { thinkingBudgets: { low: 9000 } }, cacheId);
+      await chat(3000);
+      await services.configurationStore.patch('global', { thinkingBudgets: { low: 2200 } });
+      await services.configurationStore.patch('project', { thinkingBudgets: { high: 3500 } }, projectId);
+      await chat(2048); // A scoped whole map does not inherit the missing low key.
+      await chat(3500, 'high');
+      await services.configurationStore.patch('project', { thinkingBudgets: {} }, projectId);
+      await chat(2048);
+      await services.configurationStore.patch('project', { thinkingBudgets: null }, projectId);
+      await chat(2200);
+      await services.configurationStore.patch('global', { thinkingBudgets: null });
+      await chat(3000);
+      await writeFile(projectFile, JSON.stringify({ thinkingBudgets: { low: 4000 } }));
+      await chat(4000);
+      await services.trustManager.refuse(root);
+      await chat(1600);
+      await services.configurationStore.patch('project', { thinkingBudgets: { low: 4500 } }, projectId);
+      await chat(4500); // An administrator-owned map is not a project file.
+      await services.configurationStore.patch('project', { thinkingBudgets: null }, projectId);
+      await services.trustManager.trust(root);
+      await chat(4000);
+      const unavailable = vi.spyOn(services.workspaceManager, 'getDefaultCwd')
+        .mockRejectedValue(new WorkspacePathError('OUTSIDE_ALLOWED_ROOTS', 'Unavailable default'));
+      try { await chat(1600); } finally { unavailable.mockRestore(); }
+      await chat('off', 'off');
+      expect(calls).toHaveLength(24);
+    } finally {
+      transport.mockRestore();
+      await services.trustManager.trust(root);
+      await rm(globalFile, { force: true });
+      await rm(projectFile, { force: true });
+      await services.configurationStore.patch('global', { thinkingBudgets: null });
+      await services.configurationStore.patch('project', { thinkingBudgets: null }, projectId);
+      await services.configurationStore.patch('session', { thinkingBudgets: null }, cacheId);
     }
   });
 

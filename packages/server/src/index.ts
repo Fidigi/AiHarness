@@ -19,12 +19,14 @@ import {
   CredentialRedactor,
   EncryptedCredentialStore,
   isValidSessionId,
+  loadAgentSettings,
   McpOAuthCredentialManager,
   McpOAuthFlowService,
   ProviderCredentialService,
   serializeSession,
   serializeSessionForExport,
   SessionBranchCancelledError,
+  WorkspacePathError,
 } from '@ai-harness/core';
 import type { AgentSettings, Session, SessionManager } from '@ai-harness/core';
 import { closeServerWebSockets, handleWebSocketUpgrade } from './api/websocket.js';
@@ -34,6 +36,7 @@ import { createWorkspaceRouter } from './api/workspace-routes.js';
 import type { WorkspaceFileManagerOptions } from './api/workspace-file-manager.js';
 import { createFileRouter } from './api/file-routes.js';
 import { createConfigurationRouter } from './api/config-routes.js';
+import { resolveEffectiveConfiguration } from './config/effective-configuration.js';
 import { createMcpRouter } from './api/mcp-routes.js';
 import { createModelRouter } from './api/model-routes.js';
 import { createPluginRouter } from './api/plugin-routes.js';
@@ -489,6 +492,22 @@ export function createApp(config?: ServerConfig): express.Application {
 
   // Routes
   const routes = createProxyRoutes(applicationProxy, {
+    resolveThinkingBudgets: async () => {
+      const services = await servicesPromise;
+      await services.configurationStore.load();
+      let cwd: string | undefined;
+      try { cwd = await services.workspaceManager.getDefaultCwd(); }
+      catch (error) { if (!(error instanceof WorkspacePathError)) throw error; }
+      // An unavailable default grants no project scope, and never selects another root.
+      const projectId = cwd ? (await services.workspaceManager.describe(cwd, false)).id : undefined;
+      const settings = await loadAgentSettings({
+        cwd: cwd ?? dataDir, agentDir: services.agentSettings.agentDir, agentDirTrusted: true,
+        projectTrusted: cwd !== undefined && await services.trustManager.isTrusted(cwd),
+      });
+      if (generation !== applicationGeneration) throw new Error('Application runtime is no longer active.');
+      return resolveEffectiveConfiguration(services, { projectId }).values.thinkingBudgets
+        ?? settings.settings.thinkingBudgets;
+    },
     persistApiKey: async (provider, apiKey) => {
       const credentials = credentialRuntime.service;
       if (!(credentials as (ProviderCredentialService & { hasPersistentStore?: () => boolean }) | undefined)
