@@ -59,7 +59,8 @@ function signedBlocks(turn) {
 const assistants = body => responses ? body.input.filter(item => item.role === 'assistant' || ['reasoning', 'function_call'].includes(item.type))
   : anthropic ? body.messages.filter(item => item.role === 'assistant').map(item => item.content) : body.contents.filter(item => item.role === 'model').map(item => item.parts);
 const opaque = responses ? ['opaque-', 'msg_left_', 'msg_right_', 'rs_empty_', 'rs_visible_'] : anthropic ? ['opaque-'] : ['bGFzdA==', 'cmlnaHQ=', 'aGlkZGVu', 'ZW1wdHk=', 'dG9vbA==', 'Zmlyc3Q='];
-let fixtureError, summaryExpected = false;
+let fixtureError, summaryExpected = false, overflowRemaining = 0;
+const overflowPrivate = 'PRIVATE_OVERFLOW_DIAGNOSTIC';
 const server = createServer(async (request, response) => {
   try {
     assert.equal(request.method, 'POST');
@@ -67,8 +68,12 @@ const server = createServer(async (request, response) => {
       ...(!responses ? { googleKey: request.headers['x-goog-api-key'], anthropicKey: request.headers['x-api-key'] } : {}) });
     const chunks = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
     bodies.push(JSON.parse(Buffer.concat(chunks).toString()));
-    const turn = bodies.length, summary = summaryExpected;
-    summaryExpected = false;
+    const turn = bodies.length;
+    if (overflowRemaining > 0 && !JSON.stringify(bodies.at(-1)).includes('Produce a concise context summary for future assistant turns.')) {
+      overflowRemaining--; response.writeHead(400, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ error: { code: 'context_length_exceeded', message: `${overflowPrivate} ${key}` } })); return;
+    }
+    const summary = summaryExpected; summaryExpected = false;
     if (!responses) {
       const content = signedContent(turn);
       if (summary) {
@@ -392,6 +397,63 @@ try {
     assert.deepEqual(sourceAssistants(finalAuto).map(value => value.blocks), [...sourceAssistants(beforeAuto).map(value => value.blocks), blocks(autoTurn + 2), blocks(autoTurn + 3)]);
     for (const entry of beforeAuto.filter(entry => entry.type !== 'metadata')) assert.deepEqual(finalAuto.find(value => value.id === entry.id), entry);
     assert.equal(finalAuto.filter(value => value.type === 'compaction').length, 2); assert.equal(await readFile(journal, 'utf8'), sourceBytes);
+    const recoveryManager = new Core.SessionManager({ store: new Core.JsonlSessionStore(sessions) }); assert(await recoveryManager.loadFromStore(fork.id));
+    assert(recoveryManager.estimateContextTokens(fork.id) < contextWindow - settings.reserveTokens);
+    const recoveryNotes = entries => entries.filter(value => value.type === 'custom' && value.customType === 'run.context_recovery').map(value => value.data);
+    const overflowTurn = bodies.length, recovering = start(fork.id); overflowRemaining = 1; summaryExpected = true;
+    await recovering.prompt(1); const recoveredResult = await recovering.finish(), overflowSummary = `native-${overflowTurn + 2}-leftnative-${overflowTurn + 2}-right`;
+    assert.equal(overflowRemaining, 0); assert.equal(summaryExpected, false); assert.equal(bodies.length, overflowTurn + 3);
+    assert.deepEqual(assistants(bodies[overflowTurn]), responses ? [autoTurn, autoTurn + 2, autoTurn + 3].flatMap(replay)
+      : [autoTurn, autoTurn + 2, autoTurn + 3].map(value => signedContent(value)));
+    assert.deepEqual(assistants(bodies[overflowTurn + 2]), responses ? replay(overflowTurn) : [signedContent(overflowTurn)]);
+    assert(JSON.stringify(bodies[overflowTurn + 2]).includes(overflowSummary));
+    const afterRecovery = await readJournal(fork.id), notes = recoveryNotes(afterRecovery).slice(recoveryNotes(finalAuto).length);
+    assert.equal(notes.length, 2); assert.deepEqual(notes[0], { reason: 'overflow', exhausted: false });
+    const { before: recoveryBefore, after: recoveryAfter, ...recoveryState } = notes[1];
+    assert.deepEqual(recoveryState, { reason: 'overflow', applied: true, useful: true }); assert(recoveryAfter < recoveryBefore);
+    assert.deepEqual(sourceAssistants(afterRecovery).map(value => value.blocks), [...sourceAssistants(finalAuto).map(value => value.blocks), blocks(overflowTurn + 3)]);
+    const recoveryRestart = start(fork.id); await recoveryRestart.prompt(1); const recoveryRestartResult = await recoveryRestart.finish();
+    assert.equal(bodies.length, overflowTurn + 4);
+    assert.deepEqual(assistants(bodies.at(-1)), responses ? [overflowTurn, overflowTurn + 3].flatMap(replay) : [overflowTurn, overflowTurn + 3].map(value => signedContent(value)));
+    assert(JSON.stringify(bodies.at(-1)).includes(overflowSummary));
+    const beforeExhaustion = await readJournal(fork.id), exhaustedTurn = bodies.length, exhausted = start(fork.id); overflowRemaining = 2; summaryExpected = true;
+    await exhausted.prompt(1); const exhaustedResult = await exhausted.finish(), exhaustedSummary = `native-${exhaustedTurn + 2}-leftnative-${exhaustedTurn + 2}-right`;
+    assert.equal(overflowRemaining, 0); assert.equal(summaryExpected, false); assert.equal(bodies.length, exhaustedTurn + 3);
+    assert.deepEqual(assistants(bodies[exhaustedTurn]), responses ? [overflowTurn, overflowTurn + 3, overflowTurn + 4].flatMap(replay)
+      : [overflowTurn, overflowTurn + 3, overflowTurn + 4].map(value => signedContent(value)));
+    assert.deepEqual(assistants(bodies[exhaustedTurn + 2]), responses ? replay(exhaustedTurn) : [signedContent(exhaustedTurn)]);
+    const afterExhaustion = await readJournal(fork.id), exhaustedNotes = recoveryNotes(afterExhaustion).slice(recoveryNotes(beforeExhaustion).length);
+    assert.equal(exhaustedNotes.length, 3); assert.deepEqual(exhaustedNotes[0], { reason: 'overflow', exhausted: false });
+    const { before: exhaustedBefore, after: exhaustedAfter, ...exhaustedState } = exhaustedNotes[1];
+    assert.deepEqual(exhaustedState, { reason: 'overflow', applied: true, useful: true }); assert(exhaustedAfter < exhaustedBefore);
+    assert.deepEqual(exhaustedNotes[2], { reason: 'overflow', exhausted: true });
+    assert.deepEqual(sourceAssistants(afterExhaustion), sourceAssistants(beforeExhaustion));
+    assert(exhaustedResult.records.some(record => record.type === 'message_end' && record.message?.stopReason === 'error'));
+    const exhaustedReload = new Core.SessionManager({ store: new Core.JsonlSessionStore(sessions) }); assert(await exhaustedReload.loadFromStore(fork.id));
+    assert.deepEqual(Core.getCompactionModelMessages(exhaustedReload, fork.id).filter(message => message.role === 'assistant').map(message => message.blocks), [blocks(exhaustedTurn)]);
+    const afterFailure = start(fork.id); await afterFailure.prompt(1); const afterFailureResult = await afterFailure.finish(); assert.equal(bodies.length, exhaustedTurn + 4);
+    assert.deepEqual(assistants(bodies.at(-1)), responses ? replay(exhaustedTurn) : [signedContent(exhaustedTurn)]); assert(JSON.stringify(bodies.at(-1)).includes(exhaustedSummary));
+    for (const [result, summary] of [[recoveredResult, overflowSummary], [exhaustedResult, exhaustedSummary]]) {
+      assert.equal(result.records.filter(record => record.type === 'compaction_start').length, 1);
+      assert.equal(result.records.filter(record => record.type === 'compaction_end' && record.aborted === false && record.result?.summary === summary).length, 1);
+    }
+    for (const [offset, summary] of [[overflowTurn, overflowSummary], [exhaustedTurn, exhaustedSummary]]) {
+      const body = bodies[offset + 1], history = JSON.stringify(assistants(body));
+      assert.equal(body.max_output_tokens ?? body.max_tokens ?? body.generationConfig?.maxOutputTokens, 4096); assert.deepEqual(body.tools ?? body.toolConfig?.tools ?? [], []);
+      assert(history.includes('native-')); assert(!history.includes('visible-')); for (const value of [...opaque, 'Signature', 'encrypted_content', overflowPrivate]) assert(!history.includes(value), value);
+      const entry = (await readJournal(fork.id)).find(value => value.type === 'compaction' && value.summary === summary); assert(entry);
+      assert.equal(entry.provider, provider); assert.equal(entry.model, model); assert.equal(entry.usage.inputTokens, 5); assert.equal(entry.usage.outputTokens, 2);
+      for (const value of [...opaque, 'Signature', 'encrypted_content', overflowPrivate]) assert(!JSON.stringify(entry).includes(value), value);
+    }
+    for (const result of [recoveredResult, recoveryRestartResult, exhaustedResult, afterFailureResult]) for (const value of [...opaque, overflowPrivate]) assert(!JSON.stringify(result.records).includes(value), value);
+    for (const result of [recoveryRestartResult, afterFailureResult]) assert.deepEqual(result.records.filter(record => ['compaction_start', 'compaction_end'].includes(record.type)), []);
+    const finalRecovery = await readJournal(fork.id);
+    assert.deepEqual(sourceAssistants(finalRecovery).map(value => value.blocks), [...sourceAssistants(finalAuto).map(value => value.blocks), blocks(overflowTurn + 3), blocks(overflowTurn + 4), blocks(exhaustedTurn + 4)]);
+    for (const entry of finalAuto.filter(entry => entry.type !== 'metadata')) assert.deepEqual(finalRecovery.find(value => value.id === entry.id), entry);
+    assert.equal(finalRecovery.filter(value => value.type === 'compaction').length, 4); assert(!(await readFile(path.join(sessions, fork.id + '.jsonl'), 'utf8')).includes(overflowPrivate));
+    assert.deepEqual(wires.slice(overflowTurn), [expectedWire, { ...expectedWire, path: expectedWire.path.replace('streamGenerateContent?alt=sse', 'generateContent') }, expectedWire, expectedWire,
+      expectedWire, { ...expectedWire, path: expectedWire.path.replace('streamGenerateContent?alt=sse', 'generateContent') }, expectedWire, expectedWire]);
+    assert.equal(await readFile(journal, 'utf8'), sourceBytes);
   }
   assert.equal(await readFile(effects, 'utf8'), '{"value":1}\n'); assert.equal(fixtureError, undefined);
   console.log(responses ? 'INSTALLED_RESPONSES_CONTINUATION_OK' : 'INSTALLED_SIGNED_CONTINUATION_OK');
