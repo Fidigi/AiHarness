@@ -72,12 +72,17 @@ export default api=>{
 };`);
 const records = async () => completeTraceRecords(await readFile(trace, 'utf8').catch(() => ''));
 let terminal, exited, output = '', generation = 0, passed = false;
+const startedAt = performance.now(), stages = [];
 const visible = () => stripVTControlCharacters(output);
 const waitFor = async (predicate, label) => {
-  const end = Date.now() + 5_000;
-  while (!await predicate()) {
-    if (Date.now() >= end || exited) throw new Error(`${scenario}/${label}: ${visible()}`);
-    await new Promise(resolve => setTimeout(resolve, 10));
+  const start = performance.now(), end = Date.now() + 5_000;
+  try {
+    while (!await predicate()) {
+      if (Date.now() >= end || exited) throw new Error(`${scenario}/${label}: ${visible()}`);
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+  } finally {
+    stages.push({ label, startMs: Math.round(start - startedAt), durationMs: Math.round(performance.now() - start), pid: terminal?.pid, exited });
   }
 };
 const readyAfter = async marker => waitFor(() => { const text = visible(), start = text.lastIndexOf(marker);
@@ -165,10 +170,18 @@ try {
     assert.equal(startupHooks.length, 0);
     await open(); const blank = await observe(); assert.deepEqual(source(blank).raw, []); await close();
   }
-  passed = true; await rm(root, { recursive: true, force: true });
-  console.log(JSON.stringify({ result: 'TERMINAL_BRANCH_LIFETIME_OK', scenario, cancellationPhases: 6, summaryOverride: true,
-    actualCopies: 2, restart: true, startupVeto: durable, noSessionParserRefusal: !durable }));
+  passed = true;
 } finally {
-  if (!passed) await writeFile(path.join(root, 'terminal-output.txt'), output);
-  if (terminal && !exited) terminal.kill();
+  try {
+    if (process.env.AIH_INSTALLED_EVIDENCE_DIR) {
+      await mkdir(process.env.AIH_INSTALLED_EVIDENCE_DIR, { recursive: true });
+      await writeFile(path.join(process.env.AIH_INSTALLED_EVIDENCE_DIR, `branch-terminal-${scenario}.json`), JSON.stringify({
+        scenario, passed, probePid: process.pid, elapsedMs: Math.round(performance.now() - startedAt), stages, trace: await records(), output,
+      }, null, 2));
+    }
+    if (passed) await rm(root, { recursive: true, force: true });
+    else await writeFile(path.join(root, 'terminal-output.txt'), output);
+  } finally { if (terminal && !exited) terminal.kill(); }
 }
+console.log(JSON.stringify({ result: 'TERMINAL_BRANCH_LIFETIME_OK', scenario, cancellationPhases: 6, summaryOverride: true,
+  actualCopies: 2, restart: true, startupVeto: durable, noSessionParserRefusal: !durable }));

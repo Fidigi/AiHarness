@@ -864,7 +864,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     const worker = path.join(consumer, `branch-terminal-${scenario}.mjs`);
     await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', 'session-branch-terminal.mjs'), worker);
     const result = await run(process.execPath, [worker, scenario], consumer, { ...environment,
-      AIH_STATE_COMMAND: 'ai-harness', AIH_TEST_PTY_MODULE: require.resolve('node-pty') });
+      AIH_STATE_COMMAND: 'ai-harness', AIH_TEST_PTY_MODULE: require.resolve('node-pty'), AIH_INSTALLED_EVIDENCE_DIR: process.env.AIH_INSTALLED_EVIDENCE_DIR });
     expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe(''); expect(result.stdout).toContain('TERMINAL_BRANCH_LIFETIME_OK');
   });
 

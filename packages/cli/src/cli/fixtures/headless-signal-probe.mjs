@@ -107,7 +107,7 @@ try {
   }).finally(() => clearTimeout(timer));
   assert.equal(fixtureError, undefined);
   assert.equal(protocolError, undefined);
-  assert.equal(signalled, true);
+  assert.equal(signalled, true, JSON.stringify({ exit, stdout, stderr }));
   const expectedCode = signal === 'SIGINT' ? 130 : 143;
   assert.deepEqual(exit, { code: expectedCode, signal: null }, JSON.stringify({ exit, stdout, stderr }));
   assert.equal(stderr, 'Error: Request interrupted.\n');

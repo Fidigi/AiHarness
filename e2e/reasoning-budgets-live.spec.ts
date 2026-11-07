@@ -2,16 +2,19 @@ import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { AnthropicProvider, GeminiProvider, VertexGeminiProvider, OpenAiMixedProvider, AzureProvider, SessionManager, JsonlSessionStore, resolveAgentCompactionContextWindow, prepareCompactionContext, getCompactionModelMessages, type AiProvider, SESSION_EXPORT_CONTINUATION_WARNING } from '../packages/core/dist/index.js';
+import { AnthropicProvider, GeminiProvider, VertexGeminiProvider, OpenAiMixedProvider, AzureProvider, BedrockProvider, SessionManager, JsonlSessionStore, resolveAgentCompactionContextWindow, prepareCompactionContext, getCompactionModelMessages, type AiProvider, SESSION_EXPORT_CONTINUATION_WARNING } from '../packages/core/dist/index.js';
+import { bedrockFrame as frame } from '../tests/fixtures/bedrock-event-stream.js';
 import { start, stop } from '../packages/server/dist/index.js';
 import { createRuntimeServices } from '../packages/server/dist/runtime/services.js';
 import { expect, test } from './fixtures/test-budget';
 
-for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-responses'] as const) test(`native signed ${dialect} blocks survive server restart, replay and guarded export`, async ({ page }) => {
+for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-responses', 'bedrock'] as const) test(`native signed ${dialect} blocks survive server restart, replay and guarded export`, async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-signed-web-'));
-  const responses = dialect === 'responses' || dialect === 'azure-responses';
-  const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data'), model = dialect === 'anthropic' ? 'claude-sonnet-4-6' : responses ? 'gpt-5' : 'gemini-3.8-flash';
-  const opaque = dialect === 'anthropic' ? ['opaque-start-tail', 'opaque-redacted'] : responses ? ['opaque-reasoning', 'msg_opaque'] : ['b3BhcXVlLXJlYXNvbmluZw==', 'b3BhcXVlLXRleHQ='];
+  const responses = dialect === 'responses' || dialect === 'azure-responses', bedrock = dialect === 'bedrock';
+  const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data'), model = dialect === 'anthropic' ? 'claude-sonnet-4-6' : bedrock ? 'anthropic.claude-opus-4-6-v1' : responses ? 'gpt-5' : 'gemini-3.8-flash';
+  const opaque = bedrock ? ['opaque-[REDACTED]-tail', 'AP8BgAI='] : dialect === 'anthropic' ? ['opaque-start-tail', 'opaque-redacted'] : responses ? ['opaque-reasoning', 'msg_opaque'] : ['b3BhcXVlLXJlYXNvbmluZw==', 'b3BhcXVlLXRleHQ='];
+  const bedrockContent = (answer: string) => [{ reasoningContent: { reasoningText: { text: 'Visible native reasoning', signature: opaque[0] } } },
+    { reasoningContent: { redactedContent: opaque[1] } }, { text: answer }];
   const names = ['AI_HARNESS_AUTH_TOKEN', 'AI_HARNESS_ADMIN_TOKEN', 'AI_HARNESS_AGENT_DIR'] as const;
   const previous = names.map(name => process.env[name]);
   process.env.AI_HARNESS_AUTH_TOKEN = 'mod-user'; process.env.AI_HARNESS_ADMIN_TOKEN = 'mod-admin';
@@ -19,16 +22,35 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
   let runtime!: Awaited<ReturnType<typeof createRuntimeServices>>, owner!: AiProvider;
   let policy: { window: number; settings: { enabled: boolean; reserveTokens: number; keepRecentTokens: number } } | undefined;
   const bodies: Array<{ messages?: Array<{ role: string; content: unknown }>; contents?: Array<{ role: string; parts: unknown }>; input?: Array<Record<string, unknown>>; [key: string]: unknown }> = [];
+  const wires: Array<{ path?: string; authorization?: string }> = [];
   const wire = createServer(async (request, response) => {
     if (request.method === 'GET') {
       response.setHeader('Content-Type', 'application/json');
       response.end(JSON.stringify(dialect === 'anthropic' ? { data: [{ id: model }] } : { models: [{ name: `models/${model}` }] })); return;
     }
     const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
-    bodies.push(JSON.parse(Buffer.concat(chunks).toString()));
+    bodies.push(JSON.parse(Buffer.concat(chunks).toString())); wires.push({ path: request.url, authorization: request.headers.authorization });
     const summary = JSON.stringify(bodies.at(-1)).includes('Summarize this conversation while preserving decisions and unresolved tasks.');
     const answer = summary ? 'PUBLIC_NATIVE_AUTO_SUMMARY' : bodies.length === 1 ? 'First native answer.' : 'Continued native answer.';
     const suffix = bodies.length === 1 ? '' : `_${bodies.length}`;
+    if (bedrock) {
+      response.setHeader('Content-Type', summary ? 'application/json' : 'application/vnd.amazon.eventstream');
+      if (summary) response.end(JSON.stringify({ output: { message: { role: 'assistant', content: [
+        { reasoningContent: { reasoningText: { text: 'Visible native reasoning', signature: 'opaque-disposable-private-wire-tail' } } }, ...bedrockContent(answer).slice(1),
+      ] } }, stopReason: 'end_turn', usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } }));
+      else response.end(Buffer.concat([
+        frame('messageStart', { role: 'assistant' }),
+        frame('contentBlockDelta', { contentBlockIndex: 0, delta: { reasoningContent: { text: 'Visible native reasoning' } } }),
+        frame('contentBlockDelta', { contentBlockIndex: 0, delta: { reasoningContent: { signature: 'opaque-' } } }),
+        frame('contentBlockDelta', { contentBlockIndex: 0, delta: { reasoningContent: { signature: 'disposable-private-wire-tail' } } }),
+        frame('contentBlockStop', { contentBlockIndex: 0 }),
+        ...['AP8=', 'AYAC'].map(redactedContent => frame('contentBlockDelta', { contentBlockIndex: 1, delta: { reasoningContent: { redactedContent } } })),
+        frame('contentBlockStop', { contentBlockIndex: 1 }),
+        frame('contentBlockDelta', { contentBlockIndex: 2, delta: { text: answer } }), frame('contentBlockStop', { contentBlockIndex: 2 }),
+        frame('messageStop', { stopReason: 'end_turn' }), frame('metadata', { usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } }),
+      ]));
+      return;
+    }
     response.setHeader('Content-Type', summary && !responses ? 'application/json' : 'text/event-stream');
     if (responses) {
       response.end(`data: ${JSON.stringify({ type: 'response.completed', response: { id: `resp_web${suffix}`, model: 'untrusted-alias', status: 'completed', output: [
@@ -70,7 +92,7 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
         const services = await createRuntimeServices(proxy, settings);
         const config = { apiKey: 'disposable-private-wire', baseUrl: upstream, model };
         owner = dialect === 'anthropic' ? new AnthropicProvider({ ...config, type: 'native-signed' })
-          : dialect === 'google' ? new GeminiProvider({ ...config, type: 'google' }) : dialect === 'vertex' ? new VertexGeminiProvider({ ...config, type: 'vertex' })
+          : bedrock ? new BedrockProvider({ ...config, type: 'bedrock' }) : dialect === 'google' ? new GeminiProvider({ ...config, type: 'google' }) : dialect === 'vertex' ? new VertexGeminiProvider({ ...config, type: 'vertex' })
             : dialect === 'responses' ? new OpenAiMixedProvider({ ...config, type: 'openai', transport: 'sse' }) : new AzureProvider({ ...config, type: 'azure' });
         proxy.setCustomProvider('native-signed', owner); runtime = services;
         if (policy) { services.sessionManager.setCompactionSettings(policy.settings); services.sessionManager.setCompactionContextWindow(policy.window); }
@@ -92,7 +114,12 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
       const accepted = page.waitForResponse(response => response.url().endsWith('/api/agent/runs') && response.request().method() === 'POST');
       await page.getByRole('button', { name: 'Send', exact: true }).click();
       const result = await (await accepted).json();
-      await expect.poll(async () => (await page.request.get(`${base}/api/agent/runs/${result.run.id}`).then(response => response.json())).phase).toBe('completed');
+      let lastRun: { phase?: string } | undefined;
+      await expect.poll(async () => {
+        lastRun = await page.request.get(`${base}/api/agent/runs/${result.run.id}`).then(response => response.json()); return lastRun?.phase;
+      }).toBe('completed').catch(error => {
+        console.error('Native signed run failed.', JSON.stringify({ dialect, lastRun, bodies, wires })); throw error;
+      });
       return result;
     };
     const first = await send('Start native reasoning');
@@ -107,6 +134,7 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
     const complete = await page.request.get(`${base}/api/sessions/${first.session.id}/export?format=json&includeOpaqueContinuations=true`);
     expect(complete.status()).toBe(200);
     const completeText = await complete.text(); for (const value of opaque) expect(completeText).toContain(value);
+    expect(completeText).not.toContain('disposable-private-wire');
     expect(await readFile(file, 'utf8')).toBe(before);
     const url = page.url(); await page.goto('about:blank'); await stop();
     await start({ ...options, port: server.port }); await login(); await page.goto(url);
@@ -124,6 +152,8 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
       { type: 'thinking', thinking: 'Visible native reasoning', signature: 'opaque-start-tail' },
       { type: 'redacted_thinking', data: 'opaque-redacted' }, { type: 'text', text: 'First native answer.' },
     ] }]);
+    else if (bedrock) expect(bodies[1].messages!.filter(message => message.role === 'assistant'))
+      .toEqual([{ role: 'assistant', content: bedrockContent('First native answer.') }]);
     else if (responses) expect(bodies[1].input!.filter(item => item.type === 'reasoning' || item.role === 'assistant')).toEqual([
       { type: 'reasoning', id: 'rs_web', summary: [{ type: 'summary_text', text: 'Visible native reasoning' }], encrypted_content: opaque[0] },
       { type: 'message', id: opaque[1], role: 'assistant', status: 'completed', phase: 'final_answer', content: [{ type: 'output_text', text: 'First native answer.', annotations: [] }] },
@@ -145,6 +175,8 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
     expect(manager.estimateContextTokens(id)).toBeLessThan(10_000);
     const sourceMessages = getCompactionModelMessages(manager, id), assistants = sourceMessages.filter(message => message.role === 'assistant');
     expect(assistants).toHaveLength(3);
+    if (bedrock) expect(assistants.map(message => ({ provider: message.provider, api: message.api, model: message.model })))
+      .toEqual(Array(3).fill({ provider: 'bedrock', api: 'bedrock-converse-stream', model }));
     const target = sourceMessages.filter(message => message.role === 'user')[1];
     expect(await manager.appendContextEdit(id, { targetEntryId: target.id, replacement: 'PUBLIC_SERVER_AUTO_FILLER ' + 'x'.repeat(60_000) })).toBeTruthy();
     expect(manager.estimateContextTokens(id)).toBeGreaterThan(10_000);
@@ -153,11 +185,11 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
     const retainedTurns = prepared!.keptMessages.filter(message => message.role === 'assistant').map(message => assistants.findIndex(value => value.id === message.id) + 1);
     expect(retainedTurns).not.toContain(1); expect(retainedTurns.at(-1)).toBe(3);
     const native = (body: typeof bodies[number]) => responses ? body.input!.filter(item => item.type === 'reasoning' || item.role === 'assistant')
-      : dialect === 'anthropic' ? body.messages!.filter(item => item.role === 'assistant').map(item => item.content) : body.contents!.filter(item => item.role === 'model').map(item => item.parts);
+      : dialect === 'anthropic' || bedrock ? body.messages!.filter(item => item.role === 'assistant').map(item => item.content) : body.contents!.filter(item => item.role === 'model').map(item => item.parts);
     const expectedNative = (turns: number[]) => responses ? turns.flatMap(turn => [
       { type: 'reasoning', id: `rs_web_${turn}`, summary: [{ type: 'summary_text', text: 'Visible native reasoning' }], encrypted_content: opaque[0] },
       { type: 'message', id: `${opaque[1]}_${turn}`, role: 'assistant', status: 'completed', phase: 'final_answer', content: [{ type: 'output_text', text: 'Continued native answer.', annotations: [] }] },
-    ]) : turns.map(() => dialect === 'anthropic' ? [
+    ]) : turns.map(() => bedrock ? bedrockContent('Continued native answer.') : dialect === 'anthropic' ? [
       { type: 'thinking', thinking: 'Visible native reasoning', signature: opaque[0] }, { type: 'redacted_thinking', data: opaque[1] }, { type: 'text', text: 'Continued native answer.' },
     ] : [{ text: 'Visible native reasoning', thought: true, thoughtSignature: opaque[0] }, { text: 'Continued native answer.', thoughtSignature: opaque[1] }]);
     expect(native(bodies[2])).toEqual([...native(bodies[1]), ...expectedNative([2])]);
@@ -166,8 +198,8 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
     const summaryBody = bodies[3], summaryWire = JSON.stringify(summaryBody);
     expect(summaryWire).toContain('First native answer.'); expect(summaryWire).toContain('PUBLIC_SERVER_AUTO_FILLER');
     for (const value of [...opaque, 'Visible native reasoning', 'thinkingSignature', 'textSignature']) expect(summaryWire).not.toContain(value);
-    expect(summaryBody.tools ?? []).toEqual([]);
-    expect(responses ? summaryBody.max_output_tokens : dialect === 'anthropic' ? summaryBody.max_tokens : (summaryBody.generationConfig as { maxOutputTokens: number }).maxOutputTokens).toBe(4096);
+    expect(summaryBody.tools ?? []).toEqual([]); if (bedrock) expect(summaryBody.toolConfig).toBeUndefined();
+    expect(responses ? summaryBody.max_output_tokens : dialect === 'anthropic' ? summaryBody.max_tokens : bedrock ? (summaryBody.inferenceConfig as { maxTokens: number }).maxTokens : (summaryBody.generationConfig as { maxOutputTokens: number }).maxOutputTokens).toBe(4096);
     expect(native(bodies[4])).toEqual(expectedNative(retainedTurns));
     expect(JSON.stringify(bodies[4])).toContain('PUBLIC_NATIVE_AUTO_SUMMARY'); expect(JSON.stringify(bodies[4])).not.toContain('PUBLIC_SERVER_AUTO_FILLER');
     const rawAfter = await manager.getRawEntries(id), compactions = rawAfter.filter(entry => entry.type === 'compaction'); expect(compactions).toHaveLength(1);
@@ -184,6 +216,9 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
     await page.getByRole('combobox', { name: 'Select the AI Provider', exact: true }).selectOption('native-signed');
     await page.locator(`a.session-main[href*="${id}"]`).click(); await send('Replay compacted native context after restart');
     expect(bodies).toHaveLength(6); expect(native(bodies[5])).toEqual(expectedNative([...retainedTurns, 5]));
+    if (bedrock) expect(wires).toEqual(Array.from({ length: 6 }, (_, index) => ({
+      path: `/model/${encodeURIComponent(model)}/${index === 3 ? 'converse' : 'converse-stream'}`, authorization: 'Bearer disposable-private-wire',
+    })));
     expect(JSON.stringify(bodies[5])).toContain('PUBLIC_NATIVE_AUTO_SUMMARY'); expect(JSON.stringify(bodies[5])).not.toContain('PUBLIC_SERVER_AUTO_FILLER');
     const finalEntries = await runtime.sessionManager.getRawEntries(id);
     expect(finalEntries.filter(entry => entry.type === 'compaction')).toEqual(compactions);

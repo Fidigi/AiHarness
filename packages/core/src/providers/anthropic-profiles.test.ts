@@ -804,11 +804,11 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
     const native = signedContent.map(block => block.type === 'thinking' ? { ...block, signature: 'opaque-disposable-profile-key' } : block);
     let turn = 0;
     try {
-      const clock = vi.spyOn(Date, 'now');
+      const clockBase = Date.now() + 86_400_000, clock = vi.spyOn(Date, 'now');
       await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry, provider: 'operator-alias', tools,
         redactText, toolContext: { sessionManager: manager, notify: () => {} }, streamTurn: async messages => {
           const first = turn++ === 0, thinking = first ? 'max' : 'low';
-          clock.mockReturnValue(Date.parse(first ? '2030-01-02T00:00:00Z' : '2030-01-01T00:00:00Z'));
+          clock.mockReturnValue(clockBase + (first ? 1_000 : 0));
           const content = first ? native : native.filter(block => block.type !== 'tool_use');
           f.reply({ content, stop_reason: first ? 'tool_use' : 'end_turn', usage: observed }, signedEvents(content, first ? 'tool_use' : 'end_turn'));
           return stream ? streamProviderTurn({ provider: f.provider, providerName: 'operator-alias', model: 'claude-haiku-5-5',
@@ -883,7 +883,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       expect(compacted.filter(message => message.role === 'tool')).toEqual([]);
       const raw = await compactedManager.getRawEntries(clone.id);
       expect(raw).toContainEqual(expect.objectContaining({ type: 'compaction', firstKeptEntryId: kept.id, summary: 'PUBLIC_COMPACTED_PREFIX' }));
-      // Copies may timestamp-sort raw entries; parent order owns replay, while compaction preserves the copied journal verbatim.
+      // Copies may timestamp-sort raw entries; parent order owns replay, while compaction preserves every copied entry.
       const durable = raw.filter(entry => entry.type !== 'metadata');
       expect(durable.slice(0, -1)).toEqual(cloneRaw.filter(entry => entry.type !== 'metadata'));
       expect(durable.at(-1)).toMatchObject({ type: 'compaction', firstKeptEntryId: kept.id });
