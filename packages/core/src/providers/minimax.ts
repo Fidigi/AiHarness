@@ -122,13 +122,14 @@ export function miniMaxUsage(value: unknown, model: string): ChatResponse['usage
       + (write - long) * pricing.cacheWritePerMillion + long * pricing.inputPerMillion * 2) / 1000000 };
 }
 const validFinish = (value: unknown): boolean => ['end_turn', 'stop_sequence', 'tool_use', 'max_tokens'].includes(String(value));
-export function validateMiniMaxMessage(value: unknown): void {
+export function validateMiniMaxMessage(value: unknown, nativeReplay = false): void {
   if (!record(value) || value.error || value.type === 'error' || !Array.isArray(value.content) || !validFinish(value.stop_reason)
     || (value.model !== undefined && (typeof value.model !== 'string' || Buffer.byteLength(value.model) > 500 || /[\u0000-\u001f\u007f-\u009f]/u.test(value.model)))) throw new Error('Invalid MiniMax chat response.');
   for (const block of value.content) {
     if (!record(block)) throw new Error('Invalid MiniMax chat response.');
     if (block.type === 'text') { if (typeof block.text !== 'string') throw new Error('Invalid MiniMax chat response.'); }
-    else if (block.type === 'thinking') { if (typeof block.thinking !== 'string' || (block.signature !== undefined && block.signature !== '')) throw new Error('Unsupported MiniMax reasoning replay.'); }
+    else if (block.type === 'thinking') { if (typeof block.thinking !== 'string' || (block.signature !== undefined && (typeof block.signature !== 'string' || !nativeReplay && block.signature !== ''))) throw new Error('Unsupported MiniMax reasoning replay.'); }
+    else if (block.type === 'redacted_thinking' && nativeReplay) { if (typeof block.data !== 'string') throw new Error('Invalid MiniMax chat response.'); }
     else if (block.type === 'tool_use') { if (typeof block.id !== 'string' || !block.id || typeof block.name !== 'string' || !block.name || !record(block.input)) throw new Error('Invalid MiniMax chat response.'); }
     else throw new Error('Unsupported MiniMax message content.');
   }
@@ -136,7 +137,7 @@ export function validateMiniMaxMessage(value: unknown): void {
 export function miniMaxMessageText(content: unknown): string {
   return Array.isArray(content) ? content.flatMap(block => record(block) && block.type === 'text' && typeof block.text === 'string' ? [block.text] : []).join('') : '';
 }
-export function miniMaxStreamValidator(): (value?: unknown) => void {
+export function miniMaxStreamValidator(nativeReplay = false): (value?: unknown) => void {
   let started = false, stopped = false, finish = false;
   return value => {
     if (value === undefined) { if (!started || !stopped || !finish) throw new Error('Invalid MiniMax chat response.'); return; }
@@ -151,12 +152,12 @@ export function miniMaxStreamValidator(): (value?: unknown) => void {
     else if (value.type === 'message_stop') { if (!started || !finish) throw new Error('Invalid MiniMax chat response.'); stopped = true; }
     else if (value.type === 'content_block_start') {
       const block = value.content_block;
-      if (!started || !record(block) || !['text', 'thinking', 'tool_use'].includes(String(block.type))) throw new Error('Invalid MiniMax chat response.');
-      if (block.type === 'thinking' && block.signature !== undefined && block.signature !== '') throw new Error('Unsupported MiniMax reasoning replay.');
+      if (!started || !record(block) || !['text', 'thinking', 'tool_use'].includes(String(block.type)) && !(nativeReplay && block.type === 'redacted_thinking')) throw new Error('Invalid MiniMax chat response.');
+      if (block.type === 'thinking' && block.signature !== undefined && (typeof block.signature !== 'string' || !nativeReplay && block.signature !== '')) throw new Error('Unsupported MiniMax reasoning replay.');
     } else if (value.type === 'content_block_delta') {
       const delta = value.delta;
-      if (!started || !record(delta) || !['text_delta', 'thinking_delta', 'input_json_delta'].includes(String(delta.type))) throw new Error('Unsupported MiniMax message content.');
-      const key = delta.type === 'text_delta' ? 'text' : delta.type === 'thinking_delta' ? 'thinking' : 'partial_json';
+      if (!started || !record(delta) || !['text_delta', 'thinking_delta', 'input_json_delta'].includes(String(delta.type)) && !(nativeReplay && delta.type === 'signature_delta')) throw new Error('Unsupported MiniMax message content.');
+      const key = delta.type === 'text_delta' ? 'text' : delta.type === 'thinking_delta' ? 'thinking' : delta.type === 'signature_delta' ? 'signature' : 'partial_json';
       if (typeof delta[key] !== 'string') throw new Error('Invalid MiniMax chat response.');
     } else if (!['ping', 'content_block_stop'].includes(value.type)) throw new Error('Invalid MiniMax chat response.');
   };

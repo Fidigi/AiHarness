@@ -245,6 +245,10 @@ describe('owned Anthropic response authority', () => {
   });
   for (const profile of profiles) it(`${profile.id}: replays ordered opaque blocks only for the exact provider/API/model`, async () => {
     const f = fixture(profile.id), vector = continuationFixture.rows.find(row => row.model === profile.id)!;
+    const expectedBlocks = vector.firstObserved.content.map(block => block.type === 'text' ? block
+      : block.type === 'thinking' ? { type: 'reasoning', text: block.thinking, thinkingSignature: block.thinkingSignature,
+        ...(block.redacted ? { redacted: true } : {}) }
+        : { type: 'tool_call', id: block.id, name: block.name, input: block.arguments });
     const start = f.fetch.mock.calls.length;
     for (const stream of [false, true]) {
       const options = { tools: continuationFixture.tools };
@@ -252,10 +256,7 @@ describe('owned Anthropic response authority', () => {
         continuationFixture.suppliedEvents);
       const received = await f.call(stream, 'none', options);
       expect(received).toMatchObject({ provider: 'operator-alias', api: vector.api, model: vector.model });
-      expect(received.blocks).toEqual(vector.firstObserved.content.map(block => block.type === 'text' ? block
-        : block.type === 'thinking' ? { type: 'reasoning', text: block.thinking, thinkingSignature: block.thinkingSignature,
-          ...(block.redacted ? { redacted: true } : {}) }
-          : { type: 'tool_call', id: block.id, name: block.name, input: block.arguments }));
+      expect(received.blocks).toEqual(expectedBlocks);
       f.reply({ content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn' }, signedEvents([{ type: 'text', text: 'ok' }]));
       for (const projection of vector.projections) {
         const source: Message = { id: 'reference', role: 'assistant', content: received.content, timestamp: new Date(0),
@@ -325,6 +326,14 @@ describe('owned Anthropic response authority', () => {
       ] }]);
       expect(images).toEqual(before);
     }
+    const headerEvents = structuredClone(continuationFixture.suppliedEvents), headerStart = f.fetch.mock.calls.length;
+    (headerEvents[0].message as Record<string, unknown>).content = structuredClone(continuationFixture.provided);
+    f.reply(undefined, headerEvents);
+    const chunks: unknown[] = [], complete = vi.fn();
+    await f.provider.streamChat(input, (text, event) => { chunks.push({ text, event }); }, complete,
+      error => { throw error; }, { maxTokens: 64, cacheRetention: 'none', tools: continuationFixture.tools });
+    expect(complete).toHaveBeenCalledOnce(); expect(complete.mock.calls[0][0].blocks).toEqual(expectedBlocks);
+    expect(JSON.stringify(chunks)).not.toContain('opaque-'); expect(f.fetch.mock.calls.length - headerStart).toBe(1);
   });
   for (const profile of profiles) it(`${profile.id}: rejects malformed/error/incomplete native responses before tools or completion`, async () => {
     const f = fixture(profile.id), content = [{ type: 'text', text: 'untrusted' }];

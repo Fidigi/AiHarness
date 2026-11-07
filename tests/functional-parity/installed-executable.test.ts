@@ -4286,21 +4286,32 @@ it('dispatches native MiniMax through installed public declarations and captured
     const tier = MINIMAX_MODELS[2].declaredPricing.tiers![0];
     // @ts-expect-error native tier thresholds are immutable
     tier.inputTokensAbove = 1;
-    void provider; void version;
+    async function compile() {
+      const result = await provider.chat([]);
+      for (const block of result.blocks ?? []) if (block.type === 'reasoning') {
+        const signature: string | undefined = block.thinkingSignature;
+        const redacted: boolean | undefined = block.redacted; void [signature, redacted];
+      }
+    }
+    void provider; void version; void compile;
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'minimax-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await cp(path.join(checkout, 'tests/fixtures/minimax-continuation-reference.json'), path.join(consumer, 'minimax-continuation-reference.json'));
+  await cp(path.join(checkout, 'tests/functional-parity/fixtures/sdk/minimax-continuation.mjs'), path.join(consumer, 'minimax-continuation.mjs'));
   await writeFile(path.join(consumer, 'minimax-public.mjs'), `
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
     import { MiniMaxProvider, MINIMAX_MODELS, SpecializedModels, getProviderPublishedModel, getSupportedThinkingLevels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    import { sendMiniMaxContinuation, checkMiniMaxContinuation } from './minimax-continuation.mjs';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
     const calls = [], model = 'MiniMax-M2.7';
     const usage = { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 1 };
     const server = createServer(async (request, response) => {
       let text = ''; for await (const chunk of request) text += chunk;
       const body = JSON.parse(text); calls.push({ url: request.url, headers: request.headers, body });
+      if (sendMiniMaxContinuation(response, body.stream)) return;
       if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end([
         { type:'message_start', message:{ type:'message', model:body.model, usage:{ ...usage, output_tokens:0 } } },
         { type:'content_block_start', index:0, content_block:{ type:'text', text:'' } },
@@ -4334,6 +4345,8 @@ it('dispatches native MiniMax through installed public declarations and captured
       assert.equal(calls[0].headers['anthropic-beta'], 'interleaved-thinking-2025-05-14');
       assert.equal(calls[0].body.tools[0].eager_input_streaming, true); assert.equal(calls[0].body.tools[0].strict, undefined); assert.ok(Array.isArray(calls[0].body.system));
       for (const call of calls) { assert.equal(call.url, '/owned%2Fminimax/anthropic/v1/messages'); assert.equal(call.headers['x-api-key'], 'disposable-installed-minimax'); assert.equal(call.headers['anthropic-version'], '2023-06-01'); assert.equal(call.headers.authorization, undefined); assert.equal(call.headers['nvcf-poll-seconds'], undefined); assert.equal(call.body.output_config, undefined); }
+      await checkMiniMaxContinuation(provider, calls, 'minimax', 'azure', '/owned%2Fminimax/anthropic/v1/messages', 'disposable-installed-minimax');
+      assert.equal(calls.length, 83);
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed MiniMax OK');
   `);
@@ -4785,16 +4798,28 @@ it('dispatches native MiniMax CN through installed public declarations and captu
     profile.pricing.inputPerMillion = 1;
     // @ts-expect-error native model lists are readonly
     MINIMAX_CN_MODELS.push(profile);
+    async function compile() {
+      const result = await provider.chat([]);
+      for (const block of result.blocks ?? []) if (block.type === 'reasoning') {
+        const signature: string | undefined = block.thinkingSignature;
+        const redacted: boolean | undefined = block.redacted; void [signature, redacted];
+      }
+    }
+    void compile;
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'minimax-cn-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await cp(path.join(checkout, 'tests/fixtures/minimax-continuation-reference.json'), path.join(consumer, 'minimax-continuation-reference.json'));
+  await cp(path.join(checkout, 'tests/functional-parity/fixtures/sdk/minimax-continuation.mjs'), path.join(consumer, 'minimax-continuation.mjs'));
   await writeFile(path.join(consumer, 'minimax-cn-public.mjs'), String.raw`
     import assert from 'node:assert/strict'; import { createServer } from 'node:http'; import { fileURLToPath } from 'node:url';
     import { MiniMaxCnProvider, MINIMAX_CN_MODELS, MINIMAX_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    import { sendMiniMaxContinuation, checkMiniMaxContinuation } from './minimax-continuation.mjs';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).includes('/node_modules/@ai-harness/core/'));
     assert.equal(MINIMAX_CN_MODELS, MINIMAX_MODELS); assert.equal(MINIMAX_CN_MODELS.length, 3); assert(Object.isFrozen(MINIMAX_CN_MODELS)); assert.equal(ProviderFactory.has('minimax-cn'), false);
     const calls=[],usage={input_tokens:5,output_tokens:2,cache_read_input_tokens:4,cache_creation_input_tokens:1},input={id:'u',role:'user',content:'Hello',timestamp:new Date(0)};
     const server=createServer(async(req,res)=>{let text='';for await(const value of req)text+=value;const body=JSON.parse(text);calls.push({url:req.url,headers:req.headers,body});const answer=body.max_tokens===512?' {"label":"safe"} ':'CN ready';
+      if(sendMiniMaxContinuation(res,body.stream))return;
       if(body.stream){res.setHeader('content-type','text/event-stream');res.end([{type:'message_start',message:{id:'answer',model:body.model,usage:{...usage,output_tokens:0}}},{type:'content_block_start',index:0,content_block:{type:'text',text:''}},{type:'content_block_delta',index:0,delta:{type:'text_delta',text:answer}},{type:'content_block_stop',index:0},{type:'message_delta',delta:{stop_reason:'end_turn'},usage:{output_tokens:2}},{type:'message_stop'}].map(v=>'data: '+JSON.stringify(v)+'\n\n').join(''));}
       else res.end(JSON.stringify({model:body.model,stop_reason:'end_turn',content:[{type:'text',text:answer}],usage}));});
     await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -4806,6 +4831,8 @@ it('dispatches native MiniMax CN through installed public declarations and captu
         const sdk=new SpecializedModels(provider);assert.deepEqual(sdk.getModelsOfType('image'),[]);const answer=await sdk.classify({model:profile.id+':classifier',input:'Approve',labels:['safe','review']});assert.equal(answer.label,'safe');assert.equal(answer.usage.totalTokens,12);assert.equal(calls.at(-1).body.max_tokens,512);
       }
       assert.equal(calls.length,9);for(const call of calls){assert.equal(call.url,'/owned%2Fcn/anthropic/v1/messages');assert.equal(call.headers['x-api-key'],'disposable-installed-cn');assert.equal(call.headers.authorization,undefined);assert.equal(call.headers['anthropic-version'],'2023-06-01');}
+      await checkMiniMaxContinuation(provider,calls,'minimax-cn','google','/owned%2Fcn/anthropic/v1/messages','disposable-installed-cn');
+      assert.equal(calls.length,90);
     }finally{await closeProviderNetworkDispatchers();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
     console.log('installed MiniMax CN OK');
   `);

@@ -1,4 +1,17 @@
 import { createServer, type Server, type ServerResponse } from 'node:http';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { JsonlSessionStore, SessionManager } from '../sessions/session-manager.js';
+import { deserializeSession, serializeSession, serializeSessionForExport } from '../sessions/serialization.js';
+import { getCompactionModelMessages } from '../sessions/compaction-model-messages.js';
+import { getSummaryModelMessages } from '../sessions/summary-model-messages.js';
+import { CredentialRedactor } from './credentials.js';
+import { ExtensionRegistry } from '../extensions/extension-registry.js';
+import { runToolLoop } from '../agent/tool-loop.js';
+import { streamProviderTurn } from '../agent/provider-turn.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as providers from './index.js';
 import { getProviderPublishedModel } from './provider-model-metadata.js';
@@ -6,6 +19,13 @@ import { getSupportedThinkingLevels } from './model-metadata.js';
 import { captureNativeOutputBudget } from './provider-output-budget.js';
 import type { Message } from '../types/index.js';
 
+const continuationBytes = readFileSync(new URL('../../../../tests/fixtures/minimax-continuation-reference.json', import.meta.url));
+const continuation = JSON.parse(continuationBytes.toString()) as {
+  pinnedCommit: string; captureSha256: string; profiles: number; replayProjections: number; freshSdkRequests: number;
+  tools: NonNullable<providers.ChatOptions['tools']>; syntheticJsonContent: unknown[]; seedEvents: unknown[];
+  expectedBlocks: NonNullable<Message['blocks']>;
+  rows: Array<{ scope: 'minimax' | 'minimax-cn'; model: string; api: string; cases: Array<{ case: string; expectedMessages: unknown[] }> }>;
+};
 const first = 'MiniMax-M2.7', latest = 'MiniMax-M3';
 const input: Message = { id: 'input', role: 'user', content: 'Continue', timestamp: new Date(0) };
 const usage = { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 1 };
@@ -38,6 +58,166 @@ async function fixture(reply?: (body: Record<string, unknown>, response: ServerR
   servers.push(server); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   return { calls, baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/owned%2Fminimax/anthropic` };
 }
+
+describe('native MiniMax private continuation', () => {
+  it('binds the six physical profiles and complete replay arrays to fresh pinned SDK execution', () => {
+    expect(createHash('sha256').update(continuationBytes).digest('hex')).toBe('6671155239d400520bb007617f1e014a244e5aa6331fe8d080081d70c747ad9b');
+    expect(continuation).toMatchObject({ pinnedCommit: '06a466935536f8c9bcacb2d5efc0fc021be1bdff',
+      captureSha256: '8e9fd562ef800e77ec18aee132198b53cbb44543c3a8894080966a264b3830d2', profiles: 6, replayProjections: 72, freshSdkRequests: 78 });
+    expect(continuation.rows.map(row => [row.scope, row.model])).toEqual(['minimax', 'minimax-cn'].flatMap(scope => providers.MINIMAX_MODELS.map(row => [scope, row.id])));
+  });
+
+  it.each(continuation.rows)('$scope/$model captures and replays full owned JSON/SSE arrays without getter or response-label authority', async row => {
+    let values = continuation.seedEvents;
+    const { calls, baseUrl } = await fixture((body, response) => body.stream ? stream(response, values)
+      : response.end(JSON.stringify({ type: 'message', role: 'assistant', model: 'untrusted-response-alias', stop_reason: 'tool_use', content: continuation.syntheticJsonContent, usage })));
+    const owner = `owned-${row.scope}`, Constructor = row.scope === 'minimax' ? providers.MiniMaxProvider : providers.MiniMaxCnProvider;
+    const provider = new Constructor({ type: owner, apiKey: 'disposable', baseUrl, model: row.model });
+    vi.spyOn(provider, 'getProviderType').mockReturnValue('foreign-getter');
+    expect(row.cases.map(vector => vector.case)).toEqual(['same', 'foreign-provider', 'foreign-api', 'foreign-model', 'missing-api',
+      'failed-error', 'failed-aborted', 'unsigned', 'empty-thinking', 'blank-thinking', 'empty-signature', 'blank-signature']);
+    for (const binary of [false, true]) {
+      const initial: Message[] = [{ ...input, content: 'probe' }], options: providers.ChatOptions = { model: row.model, maxTokens: 64, cacheRetention: 'none', tools: structuredClone(continuation.tools) };
+      let result: providers.ChatResponse | undefined; const callbacks: unknown[] = [];
+      if (binary) await provider.streamChat(initial, (text, event) => { callbacks.push({ text, event }); }, value => { result = value; }, error => { throw error; }, options);
+      else result = await provider.chat(initial, options);
+      expect(result).toMatchObject({ content: 'left!right?', reasoning: 'firstsecond', provider: owner, model: row.model, api: row.api,
+        toolCalls: [{ id: 'call', name: 'echo', input: { x: 1 } }] });
+      expect(result?.blocks).toEqual(continuation.expectedBlocks); expect(JSON.stringify(callbacks)).not.toContain('opaque-');
+      for (const vector of row.cases) {
+        const assistant: Message = { id: 'a', role: 'assistant', content: result!.content, timestamp: new Date(1), provider: result!.provider,
+          model: result!.model, api: result!.api, blocks: structuredClone(result!.blocks), toolCalls: structuredClone(result!.toolCalls) };
+        if (vector.case === 'foreign-provider') assistant.provider = row.scope === 'minimax' ? 'owned-minimax-cn' : 'owned-minimax';
+        if (vector.case === 'foreign-api') assistant.api = 'foreign-api';
+        if (vector.case === 'foreign-model') assistant.model = row.model === first ? latest : first;
+        if (vector.case === 'missing-api') delete assistant.api;
+        if (vector.case.startsWith('failed-')) assistant.metadata = { outputError: true };
+        const thought = assistant.blocks![1]; if (thought.type !== 'reasoning') throw new Error('Expected reference thinking block.');
+        if (vector.case === 'unsigned') delete thought.thinkingSignature;
+        if (vector.case === 'empty-thinking') thought.text = '';
+        if (vector.case === 'blank-thinking') thought.text = ' \t';
+        if (vector.case === 'empty-signature') thought.thinkingSignature = '';
+        if (vector.case === 'blank-signature') thought.thinkingSignature = ' \t';
+        const history: Message[] = [...initial, assistant, ...(vector.case.startsWith('failed-') ? [] : [
+          { id: 't', role: 'tool' as const, content: 'result', toolCallId: 'call', timestamp: new Date(2) }]),
+          { id: 'u2', role: 'user', content: 'continue', timestamp: new Date(3) }];
+        const before = structuredClone({ history, options });
+        if (binary) await provider.streamChat(history, () => {}, () => {}, error => { throw error; }, options);
+        else await provider.chat(history, options);
+        expect(calls.at(-1)!.body.messages, vector.case).toEqual(vector.expectedMessages);
+        expect({ history, options }).toEqual(before);
+      }
+    }
+    expect(calls).toHaveLength(26);
+    values = structuredClone(continuation.seedEvents);
+    (values[0] as { message: { content: unknown[] } }).message.content = structuredClone(continuation.syntheticJsonContent);
+    const headerCallbacks: unknown[] = [], complete = vi.fn();
+    await provider.streamChat([{ ...input, content: 'probe' }], (text, event) => { headerCallbacks.push({ text, event }); }, complete,
+      error => { throw error; }, { model: row.model, maxTokens: 64, cacheRetention: 'none', tools: structuredClone(continuation.tools) });
+    expect(complete).toHaveBeenCalledOnce(); expect(complete.mock.calls[0][0].blocks).toEqual(continuation.expectedBlocks);
+    expect(JSON.stringify(headerCallbacks)).not.toContain('opaque-'); expect(calls).toHaveLength(27);
+    for (const call of calls) {
+      expect(call.url).toBe('/owned%2Fminimax/anthropic/v1/messages'); expect(call.headers['x-api-key']).toBe('disposable');
+      expect(call.headers.authorization).toBeUndefined(); expect(call.body.model).toBe(row.model); expect(call.body.max_tokens).toBe(64);
+    }
+  });
+
+  it.each(continuation.rows.flatMap(row => [false, true].map(useStream => ({ ...row, useStream }))))(
+    '$scope/$model persists both append paths, private reload/edit/clone/compaction and physical replay (stream=$useStream)', async row => {
+      const root = await mkdtemp(path.join(os.tmpdir(), 'aih-minimax-replay-')), secret = 'disposable-session-key';
+      const redactor = new CredentialRedactor([secret]), redactText = (value: string) => redactor.redact(value), redactJson = <T>(value: T): T => redactor.redactJson(value);
+      const native = (structuredClone(continuation.syntheticJsonContent) as Array<Record<string, unknown>>).map(block => block.type === 'thinking'
+        ? { ...block, signature: `${block.signature}-${secret}` } : block.type === 'redacted_thinking' ? { ...block, data: `${block.data}-${secret}` } : block);
+      const seed = structuredClone(continuation.seedEvents) as Array<{ type: string; index?: number; content_block?: Record<string, unknown>; delta?: Record<string, unknown> }>;
+      for (let index = 0; index < seed.length; index++) {
+        const event = seed[index];
+        if (event.content_block?.type === 'redacted_thinking') event.content_block.data = `${event.content_block.data}-${secret}`;
+        if (event.delta?.type === 'signature_delta' && seed[index + 1]?.type === 'content_block_stop') event.delta.signature = `${event.delta.signature}-${secret}`;
+      }
+      let turn = 0, effects = 0;
+      const { calls, baseUrl } = await fixture((body, response) => {
+        const firstTurn = turn++ === 0, content = firstTurn ? native : native.filter(block => block.type !== 'tool_use');
+        const values = seed.filter(event => firstTurn || event.index !== 5).map(event => event.type === 'message_delta'
+          ? { ...event, delta: { stop_reason: firstTurn ? 'tool_use' : 'end_turn' } } : event);
+        if (body.stream) stream(response, values);
+        else response.end(JSON.stringify({ type: 'message', role: 'assistant', model: 'untrusted-response-alias', content,
+          stop_reason: firstTurn ? 'tool_use' : 'end_turn', usage }));
+      });
+      const owner = `owned-${row.scope}`, Constructor = row.scope === 'minimax' ? providers.MiniMaxProvider : providers.MiniMaxCnProvider;
+      const provider = new Constructor({ type: owner, model: row.model, apiKey: secret, baseUrl }), registry = new ExtensionRegistry();
+      const manager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }), options: providers.ChatOptions = {
+        model: row.model, maxTokens: 64, cacheRetention: 'none', tools: structuredClone(continuation.tools) };
+      const call = async (messages: Message[], target: providers.AiProvider = provider, extra: providers.ChatOptions = {}): Promise<providers.ChatResponse> => {
+        if (!row.useStream) return target.chat(messages, { ...options, ...extra });
+        let result: providers.ChatResponse | undefined;
+        await target.streamChat(messages, () => {}, response => { result = response; }, error => { throw error; }, { ...options, ...extra });
+        if (!result) throw new Error('Missing MiniMax completion.'); return result;
+      };
+      try {
+        const session = await manager.create({ title: 'Private MiniMax continuation' });
+        await manager.addMessage(session.id, { role: 'user', content: 'probe' });
+        await registry.load('echo', api => api.registerTool({ name: 'echo', description: 'Echo', execute: async () => { effects++; return { content: 'result' }; } }));
+        await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry, provider: owner,
+          tools: options.tools!, redactText, toolContext: { sessionManager: manager, notify: () => {} }, streamTurn: messages => row.useStream
+            ? streamProviderTurn({ provider, providerName: owner, ...options, messages, tools: options.tools!, extensionRegistry: registry,
+              sessionManager: manager, sessionId: session.id, cacheWarming: 'off', maxRetries: 0, redactText, redactJson,
+              createTextRedactor: () => redactor.createStream() }) : call(messages) });
+        const history = session.messages.filter(message => message.role === 'assistant'), expected = continuation.expectedBlocks.map(block => block.type === 'reasoning'
+          ? { ...block, thinkingSignature: `${block.thinkingSignature}-[REDACTED]` } : block);
+        expect(effects).toBe(1); expect(history.map(message => message.blocks)).toEqual([expected, expected.slice(0, -1)]);
+        expect(history.map(message => [message.provider, message.model, message.api])).toEqual(Array.from({ length: 2 }, () => [owner, row.model, row.api]));
+        const file = path.join(root, session.id + '.jsonl'), bytes = await readFile(file, 'utf8');
+        expect((await stat(file)).mode & 0o777).toBe(0o600); expect(bytes).not.toContain(secret); expect(bytes).toContain('opaque-redacted-[REDACTED]');
+        const restarted = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }), loaded = (await restarted.loadFromStore(session.id))!;
+        const imported = deserializeSession(JSON.parse(JSON.stringify(serializeSession(loaded))));
+        expect(imported.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual([expected, expected.slice(0, -1)]);
+        const publicExport = serializeSessionForExport(loaded), completeExport = serializeSessionForExport(loaded, { includeOpaqueContinuations: true });
+        expect(publicExport.warning).toContain('Native continuation'); expect(JSON.stringify(publicExport.session)).not.toContain('opaque-');
+        expect(completeExport.warning).toBeUndefined(); expect(JSON.stringify(completeExport.session)).not.toContain(secret);
+        expect(JSON.stringify(completeExport.session)).toContain('opaque-redacted-[REDACTED]');
+        const nativeRedacted = native.map(block => block.type === 'thinking' ? { ...block, signature: redactText(String(block.signature)) }
+          : block.type === 'redacted_thinking' ? { ...block, data: redactText(String(block.data)) } : block);
+        const assistantArrays = () => (calls.at(-1)!.body.messages as Array<{ role: string; content: unknown }>).filter(message => message.role === 'assistant').map(message => message.content);
+        imported.messages.push({ ...input, id: 'continue', content: 'continue' });
+        await call(imported.messages); expect(assistantArrays()).toEqual([nativeRedacted, nativeRedacted.slice(0, -1)]);
+        expect(await readFile(file, 'utf8')).toBe(bytes);
+        const foreign = [{ type: 'text', text: 'left!' }, { type: 'text', text: 'firstsecond' }, { type: 'text', text: 'right?' }, native.at(-1)!];
+        await call(imported.messages, new Constructor({ type: 'foreign-target', model: row.model, apiKey: secret, baseUrl }));
+        expect(assistantArrays()).toEqual([foreign, foreign.slice(0, -1)]);
+        const nextModel = row.model === first ? latest : first;
+        registry.virtualModels.register({ provider: 'router', id: 'auto', maxOutputTokens: 64, route: () => ({ provider: owner, id: nextModel }) });
+        const routed = await streamProviderTurn({ provider: registry.getVirtualProvider('router')!, providerName: 'router', model: 'auto', messages: imported.messages,
+          tools: [], extensionRegistry: registry, resolveProvider: name => name === owner ? provider : undefined, maxRetries: 0, cacheRetention: 'none' });
+        expect(routed.model).toBe(nextModel); expect(routed.selection).toMatchObject({ provider: 'router', id: 'auto' });
+        expect(assistantArrays()).toEqual([foreign, foreign.slice(0, -1)]);
+        await restarted.appendContextEdit(session.id, { targetEntryId: history[0].id, replacement: 'edited answer' });
+        const clone = await restarted.cloneSession(session.id), canonical = getCompactionModelMessages(restarted, clone.id), beforeSummary = structuredClone(canonical);
+        expect(JSON.stringify(getSummaryModelMessages(canonical))).not.toMatch(/Signature|opaque-|firstsecond/); expect(canonical).toEqual(beforeSummary);
+        await call(canonical); expect(assistantArrays()).toEqual([[native.at(-1)!, { type: 'text', text: 'edited answer' }], nativeRedacted.slice(0, -1)]);
+        const sourceBytes = await readFile(file, 'utf8'), cloneRaw = await restarted.getRawEntries(clone.id);
+        const cloneAssistants = clone.messages.filter(message => message.role === 'assistant'), kept = cloneAssistants.at(-1)!;
+        expect(cloneAssistants.map(message => message.blocks)).toEqual([expected, expected.slice(0, -1)]);
+        await restarted.applyCompaction(clone.id, 'PUBLIC_COMPACTED_PREFIX', kept.id);
+        const compactedManager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson });
+        await compactedManager.loadFromStore(clone.id);
+        const compacted = getCompactionModelMessages(compactedManager, clone.id), raw = await compactedManager.getRawEntries(clone.id);
+        expect(compacted.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual([expected.slice(0, -1)]);
+        expect(compacted.filter(message => message.role === 'tool')).toEqual([]);
+        const entries = raw.filter(entry => entry.type !== 'metadata');
+        expect(entries.slice(0, -1)).toEqual(cloneRaw.filter(entry => entry.type !== 'metadata'));
+        expect(entries.at(-1)).toMatchObject({ type: 'compaction', firstKeptEntryId: kept.id });
+        const rawMessages = raw.filter(entry => entry.type === 'message');
+        expect(cloneAssistants.map(message => rawMessages.find(entry => entry.id === message.id)?.blocks)).toEqual([expected, expected.slice(0, -1)]);
+        const cloneFile = path.join(root, clone.id + '.jsonl'), cloneBytes = await readFile(cloneFile, 'utf8');
+        expect((await stat(cloneFile)).mode & 0o777).toBe(0o600);
+        await call(compacted, provider, { systemPrompt: 'TRUSTED_SYSTEM_PREFIX' });
+        expect(calls.at(-1)!.body.system).toEqual([{ type: 'text', text: 'TRUSTED_SYSTEM_PREFIX\n\n[Context Summary] PUBLIC_COMPACTED_PREFIX' }]);
+        expect(assistantArrays()).toEqual([nativeRedacted.slice(0, -1)]);
+        expect(await readFile(cloneFile, 'utf8')).toBe(cloneBytes); expect(await readFile(file, 'utf8')).toBe(sourceBytes);
+        expect(calls).toHaveLength(7); expect(effects).toBe(1);
+      } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
+    });
+});
 
 describe('explicit native MiniMax A SDK', () => {
   it('keeps generic Anthropic defaults distinct from a MiniMax-looking alias and URL', async () => {
@@ -145,7 +325,7 @@ describe('explicit native MiniMax A SDK', () => {
     }
   });
 
-  it('gates missing finishes, trailing output and opaque signatures before tools or success and keeps remote failures private', async () => {
+  it('gates missing finishes, trailing output and unowned opaque signatures before tools or success and keeps remote failures private', async () => {
     let values: unknown[] = [], json: unknown;
     const { baseUrl } = await fixture((body, response) => body.stream ? stream(response, values) : response.end(JSON.stringify(json)));
     const provider = new providers.MiniMaxProvider({ type: 'operator', apiKey: 'disposable', baseUrl });
@@ -157,8 +337,20 @@ describe('explicit native MiniMax A SDK', () => {
       expect(complete).not.toHaveBeenCalled(); expect(chunks).not.toContainEqual(expect.objectContaining({ type: 'tool_call' })); expect(JSON.stringify(chunks)).not.toContain('LATE');
     }
     json = { error: { message: 'secret-remote-value' } }; await expect(provider.chat([input])).rejects.toThrow('Invalid MiniMax chat response.');
-    json = { model: first, stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: 'Plan', signature: 'secret-remote-value' }] };
+    json = { model: first, stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: 'Plan', signature: 17 }] };
     await expect(provider.chat([input])).rejects.toThrow('Unsupported MiniMax reasoning replay.');
+    json = { model: first, stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: 'Plan', signature: 'secret-remote-value' }] };
+    class DerivedGlobal extends providers.MiniMaxProvider {}
+    class DerivedCn extends providers.MiniMaxCnProvider {}
+    values = continuation.seedEvents;
+    for (const Constructor of [DerivedGlobal, DerivedCn]) {
+      const derived = new Constructor({ type: 'minimax', apiKey: 'disposable', baseUrl, model: first });
+      await expect(derived.chat([input])).rejects.toThrow('Unsupported MiniMax reasoning replay.');
+      const complete = vi.fn(), chunks: unknown[] = [];
+      await expect(derived.streamChat([input], (text, event) => { chunks.push({ text, event }); }, complete)).rejects.toThrow(/MiniMax/);
+      expect(complete).not.toHaveBeenCalled(); expect(JSON.stringify(chunks)).not.toContain('opaque-');
+      expect(chunks).not.toContainEqual(expect.objectContaining({ event: expect.objectContaining({ type: 'tool_call' }) }));
+    }
   });
 
   it('awaits withdrawal and suppresses buffered text, tools and completion', async () => {

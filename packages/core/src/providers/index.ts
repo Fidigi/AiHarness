@@ -4538,6 +4538,7 @@ export class AnthropicProvider extends AiProvider {
   }
 
   private readonly ownsNativeProfiles: boolean;
+  private readonly ownsMiniMaxReplay: boolean;
   private readonly baseUrl: string;
   static readonly DEFAULT_BASE_URL = 'https://api.anthropic.com';
   static readonly API_VERSION = '2023-06-01';
@@ -4545,6 +4546,7 @@ export class AnthropicProvider extends AiProvider {
   constructor(config: ProviderConfig) {
     super(config);
     this.ownsNativeProfiles = new.target === AnthropicProvider;
+    this.ownsMiniMaxReplay = new.target === MiniMaxProvider || new.target === MiniMaxCnProvider;
     this.baseUrl = config.baseUrl || AnthropicProvider.DEFAULT_BASE_URL;
     if (this.ownsNativeProfiles) registerNativeOutputBudget(this, () => {
       const model = captureNativeConfiguredModel(this.config, ANTHROPIC_DEFAULT_MODEL);
@@ -4593,8 +4595,8 @@ export class AnthropicProvider extends AiProvider {
     if (this.ownsNativeProfiles) applyNativeAnthropicOutputPolicy(body, options, messages);
     else applyAnthropicThinking(body, options);
   }
-  protected validateMessageResponse(_value: unknown): void {}
-  protected createMessageStreamValidator(): (value?: unknown) => void { return () => {}; }
+  protected validateMessageResponse(_value: unknown, _nativeReplay = false): void {}
+  protected createMessageStreamValidator(_nativeReplay = false): (value?: unknown) => void { return () => {}; }
   protected messageText(content: AnthropicResponse['content']): string {
     return (content?.find(block => block.type === 'text') as AnthropicTextContent | undefined)?.text || '';
   }
@@ -4623,6 +4625,11 @@ export class AnthropicProvider extends AiProvider {
     return { promptTokens: prompt, completionTokens: completion, cacheReadTokens: cacheRead, cacheWriteTokens: cacheWrite,
       totalTokens: Math.min(Number.MAX_SAFE_INTEGER, prompt + completion + cacheRead + cacheWrite),
       ...(costUsd !== undefined ? { costUsd } : {}) };
+  }
+
+  private hasNativeMessageReplay(model: string): boolean {
+    return this.ownsNativeProfiles && hasAnthropicProfile(model)
+      || this.ownsMiniMaxReplay && MINIMAX_MODELS.some(profile => profile.id === model);
   }
 
   private nativeMessageHistory(messages: Message[], model: string): Message[] {
@@ -4702,7 +4709,7 @@ export class AnthropicProvider extends AiProvider {
     }
 
     const model = options?.model || (this.config.model as string) || ANTHROPIC_DEFAULT_MODEL;
-    const native = this.ownsNativeProfiles && hasAnthropicProfile(model), owner = this.config.type;
+    const native = this.hasNativeMessageReplay(model), owner = this.config.type;
     const history = native ? this.nativeMessageHistory(messages, model) : messages;
 
     const systemPrompt = native
@@ -4752,8 +4759,8 @@ export class AnthropicProvider extends AiProvider {
       throw new Error('The provider response exceeded the content-block limit.');
     }
     if (native) assertAnthropicResponseActive(options?.signal);
+    this.validateMessageResponse(data, native);
     const blocks = native ? validateAnthropicResponse(data) : undefined;
-    if (!native) this.validateMessageResponse(data);
     const contentBlock = data.content?.find(c => c.type === 'text') as AnthropicTextContent | undefined;
     const reasoning = data.content
       ?.filter((block): block is AnthropicThinkingContent => block.type === 'thinking')
@@ -4772,7 +4779,7 @@ export class AnthropicProvider extends AiProvider {
       ...(native ? { api: 'anthropic-messages', provider: owner, blocks } : {}),
       ...lengthStop(data.stop_reason),
       ...(reasoning ? { reasoning } : {}),
-      model: this.ownsNativeProfiles && hasAnthropicProfile(model) ? model : data.model,
+      model: native ? model : data.model,
       ...(providerThinkingLevel !== undefined ? { providerThinkingLevel } : {}),
       usage: data.usage ? this.messageUsage(data.usage, model, false, options?.cacheRetention) : undefined,
       toolCalls,
@@ -4791,7 +4798,7 @@ export class AnthropicProvider extends AiProvider {
     }
 
     const model = options?.model || (this.config.model as string) || ANTHROPIC_DEFAULT_MODEL;
-    const native = this.ownsNativeProfiles && hasAnthropicProfile(model), owner = this.config.type;
+    const native = this.hasNativeMessageReplay(model), owner = this.config.type;
     const checkCancellation = () => { if (native) assertAnthropicResponseActive(options?.signal); };
     const url = this.getMessagesUrl();
     const history = native ? this.nativeMessageHistory(messages, model) : messages;
@@ -4847,7 +4854,7 @@ export class AnthropicProvider extends AiProvider {
 
       if (!response.body) throw new Error('Anthropic streaming response has no body');
       const nativeStream = native ? anthropicResponseStreamValidator() : undefined;
-      const validateStream = nativeStream?.validate ?? this.createMessageStreamValidator();
+      const validateStream = this.createMessageStreamValidator(native);
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8', { fatal: true });
       let buffer = '';
@@ -4890,6 +4897,7 @@ export class AnthropicProvider extends AiProvider {
           try { eventData = JSON.parse(dataStr) as AnthropicStreamEvent; }
           catch { throw new Error('The provider streaming response was invalid.'); }
           validateStream(eventData);
+          nativeStream?.validate(eventData);
 
           switch (eventData.type) {
             case 'content_block_start': {
@@ -4939,7 +4947,9 @@ export class AnthropicProvider extends AiProvider {
               if (msgStart?.usage) {
                 reportedUsage = this.updateMessageUsage(reportedUsage, msgStart.usage, true, model);
               }
-              await onChunk('', { type: 'message_start', data: eventData });
+              // Header content is not completed native output or a public continuation carrier.
+              await onChunk('', { type: 'message_start', data: native && msgStart?.content !== undefined
+                ? { ...eventData, message: { ...msgStart, content: [] } } : eventData });
               break;
             }
             case 'message_delta': {
@@ -4957,7 +4967,7 @@ export class AnthropicProvider extends AiProvider {
 
       checkCancellation();
       const blocks = nativeStream?.finish();
-      if (!native) validateStream();
+      validateStream();
       const toolCalls = blocks ? blocks.flatMap(block => block.type === 'tool_call'
         ? [{ id: block.id, name: block.name, input: block.input }] : [])
         : [...toolCallFragments.values()].map(fragment => ({ id: fragment.id, name: fragment.name,
@@ -5463,10 +5473,17 @@ export class MiniMaxProvider extends AnthropicProvider {
   }
   protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
   protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareMiniMaxMessage(body, options); }
-  protected override buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+  protected override buildAnthropicMessages(messages: Message[], native = false, model?: string): Array<{ role: 'user' | 'assistant'; content: unknown }> {
     const converted = super.buildAnthropicMessages(messages), original = toolImageMessages(messages).filter(message => message.role !== 'system');
     for (let index = 0; index < original.length; index++) {
       const message = original[index];
+      if (native && message.role === 'tool') {
+        const content = converted[index].content as Array<Record<string, unknown>>;
+        content[0].is_error = message.isError === true;
+      }
+      if (native && model && message.role === 'assistant' && !messageImages(message).length) {
+        converted[index] = super.buildAnthropicMessages([message], true, model)[0]; continue;
+      }
       const reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
       if (!reasoning) continue;
       const content = converted[index].content;
@@ -5474,8 +5491,8 @@ export class MiniMaxProvider extends AnthropicProvider {
     }
     return converted;
   }
-  protected override validateMessageResponse(value: unknown): void { validateMiniMaxMessage(value); }
-  protected override createMessageStreamValidator(): (value?: unknown) => void { return miniMaxStreamValidator(); }
+  protected override validateMessageResponse(value: unknown, nativeReplay = false): void { validateMiniMaxMessage(value, nativeReplay); }
+  protected override createMessageStreamValidator(nativeReplay = false): (value?: unknown) => void { return miniMaxStreamValidator(nativeReplay); }
   protected override messageText(content: unknown): string { return miniMaxMessageText(content); }
   protected override updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown { return mergeMiniMaxUsage(previous, value, start); }
   protected override messageUsage(value: unknown, model: string): ChatResponse['usage'] { return miniMaxUsage(value, model); }
@@ -5501,7 +5518,7 @@ export class MiniMaxProvider extends AnthropicProvider {
       this.checkInput(messages, options);
       const result = await super.chat(messages, options);
       if (options?.signal?.aborted) throw new Error('MiniMax request aborted.');
-      return { ...result, provider, api: 'anthropic-messages' };
+      return { ...result, provider: result.provider ?? provider, api: 'anthropic-messages' };
     } catch (error) { throw this.failure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
@@ -5511,7 +5528,7 @@ export class MiniMaxProvider extends AnthropicProvider {
       if (!this.validateConfig()) throw new Error('MiniMax API key is required.');
       this.checkInput(messages, options); active();
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); onComplete?.(response ? { ...response, provider, api: 'anthropic-messages' } : response); },
+        response => { active(); return onComplete?.(response ? { ...response, provider: response.provider ?? provider, api: 'anthropic-messages' } : response); },
         error => { throw error; }, options);
     } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
