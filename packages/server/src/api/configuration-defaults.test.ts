@@ -136,10 +136,13 @@ describe('independent new-session defaults', () => {
     }
   });
 
-  it('owns legacy HTTP numeric budgets in the default workspace, never in caller selectors or maps', async () => {
+  it.each(['claude-haiku-4-5', 'claude-haiku-4-5-20251001', 'claude-opus-4-5',
+    'claude-opus-4-5-20251101', 'claude-sonnet-4-5', 'claude-sonnet-4-5-20250929'])(
+    'owns legacy HTTP numeric budgets for %s in the default workspace, never in caller selectors or maps', async model => {
     const globalFile = path.join(root, '.data', 'settings.json');
     const projectFile = path.join(root, '.ai-harness', 'settings.json');
-    const model = 'claude-haiku-4-5-20251001', cacheId = 'legacy-provider-cache';
+    const cacheId = 'legacy-provider-cache';
+    const previousThinking = services.configurationStore.get('global').thinking;
     const calls: Array<Record<string, unknown>> = [];
     const actualFetch = globalThis.fetch.bind(globalThis);
     const transport = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -156,21 +159,34 @@ describe('independent new-session defaults', () => {
       ].map(([type, data]) => `event: ${type}\ndata: ${JSON.stringify({ type, ...data as object })}\n\n`).join(''),
       { headers: { 'Content-Type': 'text/event-stream' } });
     });
-    const chat = async (budget: number | 'off', thinking = 'low') => {
+    const chat = async (budget: number | 'off' | 'omitted' | 'refused', thinking = 'low') => {
       for (const route of ['/api/chat', '/api/chat/stream']) {
         const before = calls.length;
         const response = await request(route, 'POST', { provider: 'anthropic', messages: [{ role: 'user', content: 'Trusted numeric policy' }],
           cwd: '/caller-cannot-select', projectId: 'caller-project', sessionId: cacheId, thinkingBudgets: { low: 999999 },
-          options: { model, maxTokens: 64000, thinking, sessionId: cacheId, thinkingBudgets: { low: 999999, high: 999999 } } });
+          options: { model, maxTokens: 64000, ...(budget === 'omitted' ? {} : { thinking }), sessionId: cacheId,
+            thinkingBudgets: { low: 999999, high: 999999 } } });
         expect(response.status).toBe(200);
-        expect(await response.text()).toContain('LEGACY_BUDGET_OK');
+        const body = await response.text();
+        if (budget === 'refused') {
+          expect(body.match(/^event: error$/gm)).toHaveLength(1);
+          expect(body).toContain('Provider request failed.');
+          for (const forbidden of ['LEGACY_BUDGET_OK', 'event: message_end', 'Invalid Anthropic thinking allocation.']) expect(body).not.toContain(forbidden);
+          expect(calls).toHaveLength(before);
+          continue;
+        }
+        expect(body).toContain('LEGACY_BUDGET_OK');
         expect(calls).toHaveLength(before + 1);
-        expect(calls.at(-1)).toMatchObject({ model, max_tokens: 64000, stream: true,
+        if (budget === 'omitted') {
+          expect(calls.at(-1)).toMatchObject({ model, max_tokens: 64000, stream: true });
+          expect(calls.at(-1)).not.toHaveProperty('thinking');
+        } else expect(calls.at(-1)).toMatchObject({ model, max_tokens: 64000, stream: true,
           thinking: budget === 'off' ? { type: 'disabled' } : { type: 'enabled', budget_tokens: budget, display: 'summarized' } });
       }
     };
     try {
       getProxy().setApiKey('anthropic', 'disposable-legacy-budget-key', undefined, model);
+      await services.configurationStore.patch('global', { thinking: 'high' });
       await mkdir(path.dirname(projectFile), { recursive: true });
       await writeFile(globalFile, JSON.stringify({ thinkingBudgets: { low: 1600 } }));
       await writeFile(projectFile, JSON.stringify({ thinkingBudgets: { low: 3000 } }));
@@ -180,6 +196,15 @@ describe('independent new-session defaults', () => {
       await services.configurationStore.patch('project', { thinkingBudgets: { high: 3500 } }, projectId);
       await chat(2048); // A scoped whole map does not inherit the missing low key.
       await chat(3500, 'high');
+      await chat(3500, 'xhigh');
+      await chat(3500, 'max');
+      await chat('omitted');
+      await services.configurationStore.patch('project', { thinkingBudgets: { high: 999999 } }, projectId);
+      await chat(62976, 'high'); // Published 64,000 ceiling retains 1,024 answer tokens.
+      await services.configurationStore.patch('project', { thinkingBudgets: { high: 0 } }, projectId);
+      await chat(1024, 'high'); // Zero retains the native fallback; it is not logical off.
+      await services.configurationStore.patch('project', { thinkingBudgets: { low: 1 } }, projectId);
+      await chat('refused');
       await services.configurationStore.patch('project', { thinkingBudgets: {} }, projectId);
       await chat(2048);
       await services.configurationStore.patch('project', { thinkingBudgets: null }, projectId);
@@ -199,13 +224,13 @@ describe('independent new-session defaults', () => {
         .mockRejectedValue(new WorkspacePathError('OUTSIDE_ALLOWED_ROOTS', 'Unavailable default'));
       try { await chat(1600); } finally { unavailable.mockRestore(); }
       await chat('off', 'off');
-      expect(calls).toHaveLength(24);
+      expect(calls).toHaveLength(34);
     } finally {
       transport.mockRestore();
       await services.trustManager.trust(root);
       await rm(globalFile, { force: true });
       await rm(projectFile, { force: true });
-      await services.configurationStore.patch('global', { thinkingBudgets: null });
+      await services.configurationStore.patch('global', { thinkingBudgets: null, thinking: previousThinking ?? null });
       await services.configurationStore.patch('project', { thinkingBudgets: null }, projectId);
       await services.configurationStore.patch('session', { thinkingBudgets: null }, cacheId);
     }
