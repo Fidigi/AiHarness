@@ -12,9 +12,10 @@ describe('independent new-session defaults', () => {
   let projectId: string;
   let services: RuntimeServices;
   const request = (route: string, method = 'GET', body?: unknown) => fetch(`${base}${route}`, {
-    method, headers: { 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer defaults-admin' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   beforeAll(async () => {
+    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'defaults-user'); vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'defaults-admin');
     for (const key of ['AI_HARNESS_DEFAULT_PROVIDER', 'AI_HARNESS_DEFAULT_MODEL', 'AI_HARNESS_DEFAULT_THINKING']) vi.stubEnv(key, '');
     root = await mkdtemp(path.join(os.tmpdir(), 'aih-defaults-'));
     const server = await start({ port: 0, host: '127.0.0.1', dataDir: path.join(root, '.data'),
@@ -138,7 +139,7 @@ describe('independent new-session defaults', () => {
 
   it.each(['claude-haiku-4-5', 'claude-haiku-4-5-20251001', 'claude-opus-4-5',
     'claude-opus-4-5-20251101', 'claude-sonnet-4-5', 'claude-sonnet-4-5-20250929'])(
-    'owns legacy HTTP numeric budgets for %s in the default workspace, never in caller selectors or maps', async model => {
+    'owns legacy HTTP/WebSocket numeric budgets for %s in the default workspace, never in caller selectors or maps', async model => {
     const globalFile = path.join(root, '.data', 'settings.json');
     const projectFile = path.join(root, '.ai-harness', 'settings.json');
     const cacheId = 'legacy-provider-cache';
@@ -160,14 +161,30 @@ describe('independent new-session defaults', () => {
       { headers: { 'Content-Type': 'text/event-stream' } });
     });
     const chat = async (budget: number | 'off' | 'omitted' | 'refused', thinking = 'low') => {
-      for (const route of ['/api/chat', '/api/chat/stream']) {
+      for (const route of ['/api/chat', '/api/chat/stream', '/api/chat/ws']) {
         const before = calls.length;
-        const response = await request(route, 'POST', { provider: 'anthropic', messages: [{ role: 'user', content: 'Trusted numeric policy' }],
+        const input = { provider: 'anthropic', messages: [{ role: 'user', content: 'Trusted numeric policy' }],
           cwd: '/caller-cannot-select', projectId: 'caller-project', sessionId: cacheId, thinkingBudgets: { low: 999999 },
           options: { model, maxTokens: 64000, ...(budget === 'omitted' ? {} : { thinking }), sessionId: cacheId,
-            thinkingBudgets: { low: 999999, high: 999999 } } });
-        expect(response.status).toBe(200);
-        const body = await response.text();
+            thinkingBudgets: { low: 999999, high: 999999 } } };
+        let body: string;
+        if (route === '/api/chat/ws') {
+          const socket = new WebSocket(base.replace('http:', 'ws:') + route,
+            ['aih.v1', `aih.bearer.${Buffer.from('defaults-user').toString('base64url')}`]);
+          try {
+            const received = await new Promise<{ body: string; code: number; protocol: string }>((resolve, reject) => {
+              let text = '';
+              socket.addEventListener('open', () => socket.send(JSON.stringify(input)), { once: true });
+              socket.addEventListener('message', event => { text += String(event.data); });
+              socket.addEventListener('error', () => reject(new Error('Legacy numeric WebSocket failed')), { once: true });
+              socket.addEventListener('close', event => resolve({ body: text, code: event.code, protocol: socket.protocol }), { once: true });
+            });
+            expect(received.code).toBe(1000); expect(received.protocol).toBe('aih.v1'); body = received.body;
+          } finally { socket.close(); }
+        } else {
+          const response = await request(route, 'POST', input);
+          expect(response.status).toBe(200); body = await response.text();
+        }
         if (budget === 'refused') {
           expect(body.match(/^event: error$/gm)).toHaveLength(1);
           expect(body).toContain('Provider request failed.');
@@ -224,7 +241,7 @@ describe('independent new-session defaults', () => {
         .mockRejectedValue(new WorkspacePathError('OUTSIDE_ALLOWED_ROOTS', 'Unavailable default'));
       try { await chat(1600); } finally { unavailable.mockRestore(); }
       await chat('off', 'off');
-      expect(calls).toHaveLength(34);
+      expect(calls).toHaveLength(51);
     } finally {
       transport.mockRestore();
       await services.trustManager.trust(root);

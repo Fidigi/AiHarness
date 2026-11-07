@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CredentialRedactor } from '@ai-harness/core';
+import { CredentialRedactor, type ChatOptions } from '@ai-harness/core';
 import type { IncomingMessage } from 'node:http';
 import { Duplex } from 'node:stream';
 import {
@@ -139,6 +139,38 @@ describe('transport WebSocket', () => {
       expect.objectContaining({ role: 'user', content: 'from-head', id: 'websocket-0' }),
     ]);
     socket.destroy();
+  });
+
+  it.each(['dispatch', 'disconnect'] as const)('owns asynchronous host reasoning policy before WebSocket %s', async action => {
+    const { socket } = captureSocket(), hostBudgets = { low: 3000 };
+    let resolve!: (value: typeof hostBudgets) => void;
+    const pending = new Promise<typeof hostBudgets>(done => { resolve = done; });
+    const resolveThinkingBudgets = vi.fn(() => pending);
+    const sendChatSSE = vi.fn(async (_provider: string, _messages: unknown[], _options: ChatOptions) => ({
+      stream: new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } }),
+    }));
+    const proxy = { getCredentialRedactor: () => new CredentialRedactor(), sendChatSSE };
+    const request = { method: 'GET', url: '/api/chat/ws', headers: upgradeHeaders() } as IncomingMessage;
+    const input = maskedFrame(JSON.stringify({ provider: 'mock', messages: [{ role: 'user', content: 'owned before policy' }],
+      cwd: '/untrusted', projectId: 'untrusted', thinkingBudgets: { low: 999999 },
+      options: { thinking: 'low', thinkingBudgets: { low: 999999 } } }));
+    handleWebSocketUpgrade(request, socket, proxy as never, input, resolveThinkingBudgets);
+    expect(resolveThinkingBudgets.mock.calls).toEqual([[]]); expect(sendChatSSE).not.toHaveBeenCalled();
+    if (action === 'disconnect') {
+      const closed = new Promise<void>(done => socket.once('close', done)); socket.destroy(); await closed;
+    }
+    resolve(hostBudgets);
+    await new Promise<void>(done => setImmediate(done));
+    if (action === 'disconnect') expect(sendChatSSE).not.toHaveBeenCalled();
+    else {
+      expect(sendChatSSE).toHaveBeenCalledTimes(1);
+      expect(sendChatSSE.mock.calls[0]?.[1]).toEqual([expect.objectContaining({ role: 'user', content: 'owned before policy' })]);
+      const options = sendChatSSE.mock.calls[0]![2];
+      expect(options).toMatchObject({ thinking: 'low', thinkingBudgets: { low: 3000 } });
+      expect(options.thinkingBudgets).not.toBe(hostBudgets);
+      hostBudgets.low = 4000; expect(options.thinkingBudgets).toEqual({ low: 3000 });
+      socket.destroy();
+    }
   });
 
   it('borne le nombre de connexions upgradées actives', () => {

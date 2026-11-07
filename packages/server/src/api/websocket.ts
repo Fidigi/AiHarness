@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import type { Request } from 'express';
+import { copyThinkingBudgets, type ChatOptions } from '@ai-harness/core';
 import { sanitizedProxyChatOptions, type AiProxyServer } from './proxy.js';
 import { authenticateUpgrade, isAllowedOrigin } from '../security/request-security.js';
 
@@ -162,6 +163,7 @@ export function handleWebSocketUpgrade(
   socket: Duplex,
   proxy: AiProxyServer,
   initialData: Uint8Array = new Uint8Array(),
+  resolveThinkingBudgets?: () => Promise<ChatOptions['thinkingBudgets']>,
 ): void {
   socket.once('error', () => socket.destroy());
   let url: URL;
@@ -323,8 +325,11 @@ export function handleWebSocketUpgrade(
             id: `websocket-${index}`,
             timestamp: new Date(),
           }));
+          const thinkingBudgets = copyThinkingBudgets(await resolveThinkingBudgets?.());
+          if (controller.signal.aborted || socket.destroyed || ended) return;
           const result = await proxy.sendChatSSE(parsed.provider, messages, {
             ...(safeOptions ?? {}),
+            ...(thinkingBudgets !== undefined ? { thinkingBudgets } : {}),
             signal: controller.signal,
           });
           const reader = result.stream.getReader();

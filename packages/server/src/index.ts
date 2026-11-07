@@ -28,7 +28,7 @@ import {
   SessionBranchCancelledError,
   WorkspacePathError,
 } from '@ai-harness/core';
-import type { AgentSettings, Session, SessionManager } from '@ai-harness/core';
+import type { AgentSettings, ChatOptions, Session, SessionManager } from '@ai-harness/core';
 import { closeServerWebSockets, handleWebSocketUpgrade } from './api/websocket.js';
 import { createAgentRouter, userBlocks } from './api/agent-routes.js';
 import { sessionCopyRequest } from './api/session-copy-request.js';
@@ -133,6 +133,7 @@ let activeCredentialRuntime: CredentialRuntime | undefined;
 let activeProviderOAuth: ProviderOAuthService | undefined;
 let applicationGeneration = 0;
 let applicationExclusiveHost = false;
+let applicationThinkingBudgets: (() => Promise<ChatOptions['thinkingBudgets']>) | undefined;
 const sharedSessions = new Map<string, { sessionId: string; expiresAt: number }>();
 
 async function settleWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
@@ -491,23 +492,25 @@ export function createApp(config?: ServerConfig): express.Application {
   app.use('/api', credentialRedactionMiddleware(redactor));
 
   // Routes
+  const resolveThinkingBudgets = async (): Promise<ChatOptions['thinkingBudgets']> => {
+    const services = await servicesPromise;
+    await services.configurationStore.load();
+    let cwd: string | undefined;
+    try { cwd = await services.workspaceManager.getDefaultCwd(); }
+    catch (error) { if (!(error instanceof WorkspacePathError)) throw error; }
+    // An unavailable default grants no project scope, and never selects another root.
+    const projectId = cwd ? (await services.workspaceManager.describe(cwd, false)).id : undefined;
+    const settings = await loadAgentSettings({
+      cwd: cwd ?? dataDir, agentDir: services.agentSettings.agentDir, agentDirTrusted: true,
+      projectTrusted: cwd !== undefined && await services.trustManager.isTrusted(cwd),
+    });
+    if (generation !== applicationGeneration) throw new Error('Application runtime is no longer active.');
+    return resolveEffectiveConfiguration(services, { projectId }).values.thinkingBudgets
+      ?? settings.settings.thinkingBudgets;
+  };
+  applicationThinkingBudgets = resolveThinkingBudgets;
   const routes = createProxyRoutes(applicationProxy, {
-    resolveThinkingBudgets: async () => {
-      const services = await servicesPromise;
-      await services.configurationStore.load();
-      let cwd: string | undefined;
-      try { cwd = await services.workspaceManager.getDefaultCwd(); }
-      catch (error) { if (!(error instanceof WorkspacePathError)) throw error; }
-      // An unavailable default grants no project scope, and never selects another root.
-      const projectId = cwd ? (await services.workspaceManager.describe(cwd, false)).id : undefined;
-      const settings = await loadAgentSettings({
-        cwd: cwd ?? dataDir, agentDir: services.agentSettings.agentDir, agentDirTrusted: true,
-        projectTrusted: cwd !== undefined && await services.trustManager.isTrusted(cwd),
-      });
-      if (generation !== applicationGeneration) throw new Error('Application runtime is no longer active.');
-      return resolveEffectiveConfiguration(services, { projectId }).values.thinkingBudgets
-        ?? settings.settings.thinkingBudgets;
-    },
+    resolveThinkingBudgets,
     persistApiKey: async (provider, apiKey) => {
       const credentials = credentialRuntime.service;
       if (!(credentials as (ProviderCredentialService & { hasPersistentStore?: () => boolean }) | undefined)
@@ -1591,6 +1594,7 @@ export async function start(config?: ServerConfig): Promise<{ port: number; host
   const startingApp = appInstance;
   const startingGeneration = applicationGeneration;
   const exclusiveHost = applicationExclusiveHost;
+  const resolveThinkingBudgets = applicationThinkingBudgets;
   if (!initializingServices || !startingApp) throw new Error('Runtime initialization is unavailable.');
   // start() publishes a usable composition, not merely a bound socket.
   await initializingServices;
@@ -1617,7 +1621,7 @@ export async function start(config?: ServerConfig): Promise<{ port: number; host
         socket.end(() => socket.destroy());
         return;
       }
-      handleWebSocketUpgrade(request, socket, serverProxy, head);
+      handleWebSocketUpgrade(request, socket, serverProxy, head, resolveThinkingBudgets);
     });
     server.listen(port, host, () => {
       if (serverGeneration !== applicationGeneration || startingApp !== appInstance) {
@@ -1637,6 +1641,7 @@ export async function start(config?: ServerConfig): Promise<{ port: number; host
 export async function stop(): Promise<void> {
   applicationGeneration++;
   appInstance = null;
+  applicationThinkingBudgets = undefined;
   closeServerWebSockets();
   activeProviderOAuth?.close();
   activeProviderOAuth = undefined;

@@ -223,7 +223,7 @@ Project extensions are executable code. User extensions are loaded from `~/.ai-h
 | Request security | `src/security/request-security.ts` | Cookie/Bearer roles and capabilities, Origin checks, rate limits, safe errors, WebSocket auth context |
 | Provider proxy/usage | `src/api/proxy.ts` | Built-in/custom provider setup, credentials, persistent cache-aware usage/cost and shared direct virtual routing for legacy chat/compaction/SSE without branch-state authority |
 | Detached SSE reconstruction | `src/api/{sse-channel,agent-event-policy}.ts` | Opt-in bounded draining, exact session/run/message/tool queued replacement and lifecycle preservation; legacy channels remain fail-closed |
-| WebSocket transport | `src/api/websocket.ts` | Upgrade authentication without bearer reflection/query tokens, strict bounded RFC 6455 framing, cancellation/backpressure and legacy chat event payloads |
+| WebSocket transport | `src/api/websocket.ts` | Upgrade authentication without bearer reflection/query tokens, strict bounded RFC 6455 framing, cancellation/backpressure and legacy chat event payloads; shares the generation-owned HTTP numeric-budget resolver,with copied maps and withdrawal recheck before dispatch,never caller scope/map authority |
 | Credential storage | `src/security/credential-store.ts` | Adapter over Core encrypted stable persistence; credential/OAuth mutation paths fail closed when the master-key-backed store is unavailable |
 | Production launcher | `src/web-cli.ts`, `src/web-cli-options.ts` | `ai-harness-web` flags, environment precedence, static bundle location, browser opening |
 
