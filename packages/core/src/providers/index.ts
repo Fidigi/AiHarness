@@ -13,6 +13,7 @@ import { azureDeployments, normalizeAzureResponsesBaseUrl, usesAzureResponses } 
 import { azureProfileApi, azureProfileUsage, azurePublishedProfiles, prepareAzureCompletion, prepareAzureResponses } from './azure-profiles.js';
 import { parseProviderToolArguments } from './tool-arguments.js';
 import { consumeBedrockStream } from './bedrock-converse-stream.js';
+import { BEDROCK_SIGNED_MODEL, bedrockRedactedBytes, bedrockReplayBlocks } from './bedrock-replay.js';
 import { applyBedrockProfileSimplePolicy, prepareBedrockOutputBudget, bedrockProfileUsage, bedrockPublishedProfiles, hasBedrockProfile } from './bedrock-profiles.js';
 import { OPENAI_DECISIONS_MODEL, decisionsBody, decisionsAnswers, type NativeWireQuestion } from './openai-decisions.js';
 export { OPENAI_DECISIONS_MODEL } from './openai-decisions.js';
@@ -4225,7 +4226,7 @@ export class VertexGeminiProvider extends GeminiProvider {
 
 interface BedrockResponse {
   stopReason?: string;
-  output?: { message?: { content?: Array<{
+  output?: { message?: { role?: unknown; content?: Array<{
     text?: string;
     toolUse?: { toolUseId: string; name: string; input: unknown };
   }> } };
@@ -4307,7 +4308,14 @@ export class BedrockProvider extends AiProvider {
     return url;
   }
 
-  private requestBody(messages: Message[], options?: ChatOptions): Record<string, unknown> {
+  private requestBody(messages: Message[], options?: ChatOptions, replayModel?: string): Record<string, unknown> {
+    if (replayModel) messages = messages.flatMap(message => {
+      if (message.role !== 'assistant' || replayModel !== BEDROCK_SIGNED_MODEL
+        && !(message.api === 'bedrock-converse-stream' && message.model === BEDROCK_SIGNED_MODEL)) return [message];
+      if (message.metadata?.outputError) return [];
+      const projected = projectAssistantReplay(message, this.config.type, replayModel, 'bedrock-converse-stream');
+      return projected.content || projected.toolCalls?.length || projected.blocks?.length ? [projected] : [];
+    });
     messages = toolImageMessages(messages);
     const system = [options?.systemPrompt, ...messages.filter(message => message.role === 'system').map(message => message.content)]
       .filter(Boolean).map(text => ({ text }));
@@ -4318,6 +4326,25 @@ export class BedrockProvider extends AiProvider {
           content: [{ text: message.content }],
           status: message.isError ? 'error' : 'success',
         } }] };
+      }
+      const replay = replayModel === BEDROCK_SIGNED_MODEL || replayModel && message.api === 'bedrock-converse-stream' && message.model === BEDROCK_SIGNED_MODEL;
+      if (replay && message.role === 'assistant' && message.blocks?.length) {
+        const content = message.blocks.flatMap((block): Array<Record<string, unknown>> => {
+          if (block.type === 'text') return block.text ? [{ text: block.text }] : [];
+          if (block.type === 'tool_call') return [{ toolUse: { toolUseId: block.id, name: block.name, input: block.input } }];
+          if (block.type === 'image') {
+            const data = parseDataImage(block.url);
+            return data ? [{ image: { format: data.mediaType.split('/')[1], source: { bytes: data.data } } }] : [];
+          }
+          if (block.type !== 'reasoning') return [];
+          if (block.redacted) return block.thinkingSignature ? [{ reasoningContent: { redactedContent: bedrockRedactedBytes(block.thinkingSignature).toString('base64') } }] : [];
+          if (block.thinkingSignature) return [{ reasoningContent: { reasoningText: { text: block.text, signature: block.thinkingSignature } } }];
+          return block.text ? [{ text: block.text }] : [];
+        });
+        if (!message.blocks.some(block => block.type === 'text') && message.content) content.push({ text: message.content });
+        const capturedCalls = new Set(message.blocks.flatMap(block => block.type === 'tool_call' ? [block.id] : []));
+        content.push(...(message.toolCalls ?? []).filter(call => !capturedCalls.has(call.id)).map(call => ({ toolUse: { toolUseId: call.id, name: call.name, input: call.input } })));
+        return { role: 'assistant', content };
       }
       return {
         role: message.role === 'assistant' ? 'assistant' : 'user',
@@ -4393,7 +4420,7 @@ export class BedrockProvider extends AiProvider {
     if (this.config.apiKey !== undefined && (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)) {
       throw new Error('Invalid Bedrock endpoint.');
     }
-    const prepared = this.requestBody(messages, options);
+    const prepared = this.requestBody(messages, options, this.ownsNativeProfiles ? requestedModel : undefined);
     if (native) applyBedrockProfileSimplePolicy(requestedModel, prepared, options, messages, this.region);
     const body = serializeProviderBody(prepared);
     const response = await this.request(url, {
@@ -4414,8 +4441,12 @@ export class BedrockProvider extends AiProvider {
     const toolCalls = blocks.flatMap(block => block.toolUse ? [{
       id: block.toolUse.toolUseId, name: block.toolUse.name, input: block.toolUse.input,
     }] : []);
+    const replay = native && requestedModel === BEDROCK_SIGNED_MODEL
+      ? bedrockReplayBlocks(blocks, data.output?.message?.role, data.stopReason) : undefined;
+    const reasoning = replay?.filter(block => block.type === 'reasoning' && !block.redacted).map(block => block.type === 'reasoning' ? block.text : '').join('');
     return {
       content,
+      ...(replay?.length ? { blocks: replay } : {}), ...(reasoning ? { reasoning } : {}),
       ...lengthStop(data.stopReason),
       ...(native ? { api: 'bedrock-converse-stream' } : {}),
       model: this.ownsNativeProfiles ? requestedModel : String(this.config.model),
@@ -4448,7 +4479,7 @@ export class BedrockProvider extends AiProvider {
       const model = options?.model || String(this.config.model);
       const native = this.ownsNativeProfiles && hasBedrockProfile(model);
       const url = this.streamEndpoint(model);
-      const prepared = this.requestBody(messages, options);
+      const prepared = this.requestBody(messages, options, this.ownsNativeProfiles ? model : undefined);
       if (native) applyBedrockProfileSimplePolicy(model, prepared, options, messages, this.region);
       const body = serializeProviderBody(prepared);
       const response = await this.request(url, {
@@ -4457,7 +4488,7 @@ export class BedrockProvider extends AiProvider {
       });
       if (!response.ok) await rejectProviderHttpResponse(response, `Bedrock API error (${response.status}).`);
       const result = await consumeBedrockStream(response, model, onChunk, options?.signal,
-        native ? value => bedrockProfileUsage(value, model) : undefined);
+        native ? value => bedrockProfileUsage(value, model) : undefined, native && model === BEDROCK_SIGNED_MODEL);
       if (options?.signal?.aborted) throw new Error('Bedrock request aborted.');
       onComplete?.(result);
     } catch (error) {

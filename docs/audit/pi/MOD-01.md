@@ -364,6 +364,8 @@ The register below preserves all 23 requirements and their acceptance boundaries
 
 **Carrier approved by the user — 2026-11-07:** “pour Bedrock : j'autorise l’utilisation de ChatResponse.blocks comme transport signé SDK”. Use the existing public `ChatResponse.blocks` carrier for the Bedrock signed SDK path, starting with Opus4.6, and preserve its agent/durable reload/exact-physical-owner replay protections. This explicit decision lifts the carrier-choice HOLD; it is not implementation, test acceptance, signature authentication, expanded model admission or permission to bypass redaction/publication guards. The next implementation must retain the existing bounds and independently verify the SDK → agent → storage/reload → replay boundaries.
 
+**Later bounded implementation — 2026-11-07:** the [initial Opus4.6 receipt](./evidence/MOD-03-bedrock-opus46-replay.json) supplies original-owner JSON/binary capture,shared tool/final append,durable reload and exact native replay using the approved public blocks carrier. Its two historical E13 bindings remain synthetic;zero fresh SDK executions. Other models,installed/emitted/native host continuation and remaining lifecycle qualification stay open,and its required canonical gates retain native failures. This is not parent MOD-01/MOD-03 closure.
+
 **Historical proposal only, 2026-10-31:** the design below predates the now-selected public blocks carrier. Its metadata-envelope recommendation and pending-carrier wording are historical, not current execution authority. The user approval above, not generic goal continuation, authorizes the carrier choice.
 
 <details>

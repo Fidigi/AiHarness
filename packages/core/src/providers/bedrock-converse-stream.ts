@@ -1,5 +1,6 @@
 import { crc32 } from 'node:zlib';
 import { parseProviderToolArguments } from './tool-arguments.js';
+import { bedrockRedactedBytes, bedrockReplayBlocks } from './bedrock-replay.js';
 import type { ChatResponse, StreamChunkCallback } from './index.js';
 type BedrockUsage = NonNullable<ChatResponse['usage']>;
 
@@ -109,19 +110,24 @@ function usage(value: unknown): BedrockUsage | undefined {
     ...(counter(value.cacheWriteInputTokens) ? { cacheWriteTokens: value.cacheWriteInputTokens } : {}) };
 }
 
-type Block = { kind?: 'text' | 'reasoning' | 'tool'; stopped: boolean; id?: string; name?: string; json: string; bytes: number };
+type Block = { kind?: 'text' | 'reasoning' | 'tool'; stopped: boolean; id?: string; name?: string; json: string; bytes: number;
+  text?: string; signature?: string; redacted?: Buffer[] };
 
-/** ConverseStream text/reasoning and deferred tool calls; no signed/encrypted thought replay claim. */
+/** ConverseStream text/reasoning and deferred tools, with opt-in exact-owner signed capture. */
 export async function consumeBedrockStream(response: Response, model: string, onChunk: StreamChunkCallback, signal?: AbortSignal,
-  normalizeUsage: (value: unknown) => BedrockUsage | undefined = usage): Promise<ChatResponse> {
+  normalizeUsage: (value: unknown) => BedrockUsage | undefined = usage, captureReplay = false): Promise<ChatResponse> {
   let started = false, stopped = false, metadata = false, content = '', reasoning = '';
+  let nativeStop: string | undefined;
   let stopReason: ChatResponse['stopReason'], tokens: BedrockUsage | undefined;
   const blocks = new Map<number, Block>();
   const blockAt = (data: Record<string, unknown>, create = false): Block => {
     const index = data.contentBlockIndex;
     if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0 || index >= MAX_BLOCKS) invalid();
     let block = blocks.get(index);
-    if (!block && create) { block = { stopped: false, json: '', bytes: 0 }; blocks.set(index, block); }
+    if (!block && create) {
+      if (captureReplay && index !== blocks.size) invalid();
+      block = { stopped: false, json: '', bytes: 0 }; blocks.set(index, block);
+    }
     if (!block || block.stopped) invalid();
     return block;
   };
@@ -161,10 +167,24 @@ export async function consumeBedrockStream(response: Response, model: string, on
           if (block.bytes > MAX_FRAME) throw new Error('The Bedrock tool input exceeded its output limit.');
           block.json += delta.toolUse.input;
         } else if (kind === 'text') {
+          if (captureReplay) block.text = (block.text ?? '') + (delta.text as string);
           content += delta.text as string;
           if (delta.text) await onChunk(delta.text as string, { type: 'text_delta' });
         } else {
           const thought = delta.reasoningContent as Record<string, unknown>;
+          if (captureReplay) {
+            if (Object.keys(thought).length !== 1 || !['text', 'signature', 'redactedContent'].some(key => typeof thought[key] === 'string')) invalid();
+            block.bytes += Buffer.byteLength(JSON.stringify(thought));
+            if (block.bytes > MAX_OUTPUT) invalid();
+            if (thought.redactedContent !== undefined) {
+              if (block.text !== undefined || block.signature !== undefined) invalid();
+              (block.redacted ??= []).push(bedrockRedactedBytes(thought.redactedContent));
+            } else {
+              if (block.redacted) invalid();
+              if (typeof thought.text === 'string') block.text = (block.text ?? '') + thought.text;
+              if (typeof thought.signature === 'string') block.signature = (block.signature ?? '') + thought.signature;
+            }
+          }
           if (thought.text !== undefined && typeof thought.text !== 'string') invalid();
           if (typeof thought.text === 'string' && thought.text) {
             reasoning += thought.text;
@@ -180,6 +200,7 @@ export async function consumeBedrockStream(response: Response, model: string, on
           throw new Error('Bedrock streaming error.');
         }
         if (data.stopReason === 'max_tokens' || data.stopReason === 'model_context_window_exceeded') stopReason = 'length';
+        nativeStop = String(data.stopReason);
         stopped = true; break;
       default: invalid();
     }
@@ -190,8 +211,15 @@ export async function consumeBedrockStream(response: Response, model: string, on
     id: block.id!, name: block.name!, input: parseProviderToolArguments(block.json),
   }));
   if (new Set(calls.map(call => call.id)).size !== calls.length) invalid();
-  for (const call of calls) { active(signal); await onChunk('', { type: 'tool_call', data: call }); }
+  const replay = captureReplay ? bedrockReplayBlocks([...blocks.values()].map(block => {
+    if (block.kind === 'text') return { text: block.text ?? '' };
+    if (block.kind === 'tool') return { toolUse: { toolUseId: block.id, name: block.name, input: calls.find(call => call.id === block.id)!.input } };
+    if (block.kind !== 'reasoning') invalid();
+    return { reasoningContent: block.redacted ? { redactedContent: Buffer.concat(block.redacted).toString('base64') }
+      : { reasoningText: { text: block.text ?? '', ...(block.signature ? { signature: block.signature } : {}) } } };
+  }), 'assistant', nativeStop) : undefined;
+  for (const call of calls) { active(signal); await onChunk('', { type: 'tool_call', data: captureReplay ? structuredClone(call) : call }); }
   active(signal);
-  return { content, api: 'bedrock-converse-stream', model, ...(reasoning ? { reasoning } : {}),
+  return { content, api: 'bedrock-converse-stream', model, ...(reasoning ? { reasoning } : {}), ...(replay?.length ? { blocks: replay } : {}),
     ...(stopReason ? { stopReason } : {}), ...(tokens ? { usage: tokens } : {}), ...(calls.length ? { toolCalls: calls } : {}) };
 }

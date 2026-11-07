@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { BedrockProvider, bedrockCredentialConfig, type ChatOptions, type ChatResponse, type ThinkingLevel } from './index.js';
 import { applyBedrockProfileOutputPolicy } from './bedrock-profiles.js';
@@ -8,6 +11,14 @@ import { getSupportedThinkingLevels, clampPublishedThinkingLevel } from './model
 import { closeProviderNetworkDispatchers } from './provider-network.js';
 import { bedrockFrame as frame, bedrockText } from '../../../../tests/fixtures/bedrock-event-stream.js';
 import type { Message } from '../types/index.js';
+import { JsonlSessionStore, SessionManager } from '../sessions/session-manager.js';
+import { deserializeSession, serializeSession, serializeSessionForExport } from '../sessions/serialization.js';
+import { getCompactionModelMessages } from '../sessions/compaction-model-messages.js';
+import { getSummaryModelMessages } from '../sessions/summary-model-messages.js';
+import { CredentialRedactor } from './credentials.js';
+import { ExtensionRegistry } from '../extensions/extension-registry.js';
+import { runToolLoop } from '../agent/tool-loop.js';
+import { streamProviderTurn } from '../agent/provider-turn.js';
 
 const messages: Message[] = [{ id: 'u', role: 'user', content: 'hello', timestamp: new Date(0) }];
 const create = (extra = {}) => new BedrockProvider({ type: 'bedrock', accessKeyId: 'DISPOSABLE', secretAccessKey: 'disposable-secret', region: 'us-east-1', model: 'model:0', ...extra });
@@ -25,7 +36,216 @@ async function stream(bytes: Uint8Array) {
   return { chunks, tools, complete, error };
 }
 
+const signedReferenceBytes = readFileSync(new URL('../../../../tests/fixtures/bedrock-opus46-continuation-reference.json', import.meta.url));
+const signedReference = JSON.parse(signedReferenceBytes.toString()) as {
+  pinnedCommit: string; rows: Array<{ case: string; model: string; turns: Array<{
+    wire: { response: { bytesBase64: string }; request: { body: { messages: Array<{ role: string; content: unknown[] }> } } };
+    result: { content: Array<{ type: string; text?: string; thinking?: string; thinkingSignature?: string; redacted?: boolean }> };
+  }> }>;
+};
+
 describe('native Bedrock ConverseStream', () => {
+  it.each(signedReference.rows)('captures and replays the E13 Opus4.6 signed carrier ($case)', async row => {
+    expect(createHash('sha256').update(signedReferenceBytes).digest('hex')).toBe('a138fd394df5928e9f8e633852f7818002d9e4814ac2a154b7d30f68c252150d');
+    expect(signedReference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
+    const expected = row.turns[0].result.content.map(block => block.type === 'text'
+      ? { type: 'text', text: block.text } : { type: 'reasoning', text: block.redacted ? '' : block.thinking,
+        thinkingSignature: block.thinkingSignature, ...(block.redacted ? { redacted: true } : {}) });
+    const captured: Array<{ messages: unknown[] }> = [], deltas: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: unknown, init?: RequestInit) => {
+      captured.push(JSON.parse(String(init?.body)) as { messages: unknown[] });
+      if (String(input).endsWith('/converse-stream')) return response(Buffer.from(row.turns[0].wire.response.bytesBase64, 'base64'));
+      return Response.json({ output: { message: { role: 'assistant', content: row.turns[1].wire.request.body.messages[1].content } },
+        stopReason: 'end_turn', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } });
+    }));
+    const provider = create({ model: 'anthropic.claude-sonnet-4-5-20250929-v1:0' });
+    const input: Message[] = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
+    const options: ChatOptions = { model: row.model, thinking: 'high', maxTokens: 64, cacheRetention: 'none' };
+    for (const operation of ['chat', 'stream'] as const) {
+      let result: ChatResponse | undefined;
+      if (operation === 'chat') result = await provider.chat(input, options);
+      else await provider.streamChat(input, (text, event) => { deltas.push(text, JSON.stringify(event ?? {})); }, value => { result = value; }, undefined, options);
+      expect(result).toMatchObject({ model: row.model, api: 'bedrock-converse-stream', content: 'first answer', blocks: expected });
+      const assistant: Message = { id: 'a', role: 'assistant', timestamp: new Date(1), content: result!.content,
+        provider: 'bedrock', model: row.model, api: result!.api, blocks: result!.blocks };
+      const history = [...input, assistant, { id: 'u2', role: 'user' as const, content: 'followup', timestamp: new Date(2) }];
+      const original = structuredClone(history);
+      await provider.chat(history, options);
+      expect(captured.at(-1)?.messages).toEqual(row.turns[1].wire.request.body.messages);
+      expect(history).toEqual(original);
+      for (const changed of [{ provider: 'operator-bedrock' }, { model: 'other-model' }, { api: 'anthropic-messages' }, { metadata: { outputError: true } }]) {
+        await provider.chat([input[0], { ...assistant, ...changed }, history[2]], options);
+        const wire = JSON.stringify(captured.at(-1)?.messages);
+        expect(wire).not.toContain('reasoningContent');
+        expect(wire).not.toContain(row.turns[0].result.content[0].thinkingSignature!);
+        if (!row.turns[0].result.content[0].redacted && !('metadata' in changed)) expect(wire).toContain('consider');
+        if ('metadata' in changed) expect(wire).not.toContain('first answer');
+      }
+    }
+    for (const block of row.turns[0].result.content) if (block.thinkingSignature) expect(deltas.join('')).not.toContain(block.thinkingSignature);
+  });
+  it('withholds signed carriers on malformed JSON, incomplete binary turns and length stops, without widening profile ownership', async () => {
+    const model = signedReference.rows[0].model, provider = create({ model });
+    const signed = { reasoningContent: { reasoningText: { text: 'consider', signature: 'opaque-signature' } } };
+    for (const data of [
+      { output: { message: { role: 'assistant', content: [signed] } } },
+      { output: { message: { role: 'user', content: [signed] } }, stopReason: 'end_turn' },
+      { output: { message: { role: 'assistant', content: [{ ...signed, text: 'mixed' }] } }, stopReason: 'end_turn' },
+      { output: { message: { role: 'assistant', content: [{ reasoningContent: { redactedContent: 'bad-base64' } }] } }, stopReason: 'end_turn' },
+      { output: { message: { role: 'assistant', content: [{ reasoningContent: { reasoningText: { text: 'consider', signature: 42 } } }] } }, stopReason: 'end_turn' },
+    ]) {
+      vi.stubGlobal('fetch', vi.fn(async () => Response.json(data)));
+      await expect(provider.chat(messages)).rejects.toThrow('Invalid Bedrock signed response.');
+    }
+    const events = (delta: unknown, index = 0, end = true) => Buffer.concat([
+      frame('messageStart', { role: 'assistant' }), frame('contentBlockDelta', { contentBlockIndex: index, delta: { reasoningContent: delta } }),
+      frame('contentBlockStop', { contentBlockIndex: index }), ...(end ? [frame('messageStop', { stopReason: 'end_turn' })] : []),
+    ]);
+    const binaryCases = [events({ signature: 'opaque' }, 1), events({ text: 'consider' }, 0, false), events({ signature: 42 }),
+      events({ redactedContent: 'bad-base64' }), events({ text: 'mixed', redactedContent: 'AP8=' }),
+      Buffer.concat([frame('messageStart', { role: 'assistant' }),
+        frame('contentBlockDelta', { contentBlockIndex: 0, delta: { reasoningContent: { text: 'consider' } } }),
+        frame('contentBlockDelta', { contentBlockIndex: 0, delta: { reasoningContent: { redactedContent: 'AP8=' } } }),
+        frame('contentBlockStop', { contentBlockIndex: 0 }), frame('messageStop', { stopReason: 'end_turn' })])];
+    for (const bytes of binaryCases) {
+      vi.stubGlobal('fetch', vi.fn(async () => response(bytes)));
+      const complete = vi.fn(), failed = vi.fn(), tools: unknown[] = [];
+      await provider.streamChat(messages, (_text, event) => { if (event?.type === 'tool_call') tools.push(event.data); }, complete, failed);
+      expect(complete).not.toHaveBeenCalled(); expect(failed).toHaveBeenCalledOnce(); expect(tools).toEqual([]);
+    }
+    for (const reason of ['max_tokens', 'model_context_window_exceeded']) {
+      vi.stubGlobal('fetch', vi.fn(async () => Response.json({ output: { message: { role: 'assistant', content: [signed, { text: 'partial' }] } }, stopReason: reason })));
+      const partial = await provider.chat(messages);
+      expect(partial).toMatchObject({ content: 'partial', stopReason: 'length' }); expect(partial).not.toHaveProperty('blocks');
+      vi.stubGlobal('fetch', vi.fn(async () => response(Buffer.concat([
+        frame('messageStart', { role: 'assistant' }), frame('contentBlockDelta', { contentBlockIndex: 0, delta: { reasoningContent: { signature: 'opaque' } } }),
+        frame('contentBlockStop', { contentBlockIndex: 0 }), frame('messageStop', { stopReason: reason }),
+      ]))));
+      let completed: ChatResponse | undefined;
+      await provider.streamChat(messages, () => {}, value => { completed = value; });
+      expect(completed).toMatchObject({ stopReason: 'length' }); expect(completed).not.toHaveProperty('blocks');
+    }
+    const controller = new AbortController(), cancelledComplete = vi.fn(), cancelledError = vi.fn();
+    vi.stubGlobal('fetch', vi.fn(async () => response(Buffer.from(signedReference.rows[0].turns[0].wire.response.bytesBase64, 'base64'))));
+    await provider.streamChat(messages, text => { if (text) controller.abort(); }, cancelledComplete, cancelledError, { signal: controller.signal });
+    expect(cancelledComplete).not.toHaveBeenCalled(); expect(cancelledError).toHaveBeenCalledOnce();
+    vi.stubGlobal('fetch', vi.fn(async () => response(Buffer.concat([
+      frame('messageStart', { role: 'assistant' }),
+      frame('contentBlockDelta', { contentBlockIndex: 0, delta: { reasoningContent: { signature: 'opaque' } } }),
+      frame('contentBlockStop', { contentBlockIndex: 0 }),
+      frame('contentBlockStart', { contentBlockIndex: 1, start: { toolUse: { toolUseId: 'owned', name: 'echo' } } }),
+      frame('contentBlockDelta', { contentBlockIndex: 1, delta: { toolUse: { input: '{"x":1}' } } }),
+      frame('contentBlockStop', { contentBlockIndex: 1 }), frame('messageStop', { stopReason: 'tool_use' }),
+    ]))));
+    let owned: ChatResponse | undefined;
+    await provider.streamChat(messages, (_text, event) => {
+      if (event?.type === 'tool_call') Object.assign(event.data as object, { id: 'changed', input: { x: 2 } });
+    }, value => { owned = value; });
+    expect(owned?.toolCalls).toEqual([{ id: 'owned', name: 'echo', input: { x: 1 } }]);
+    expect(owned?.blocks?.at(-1)).toEqual({ type: 'tool_call', id: 'owned', name: 'echo', input: { x: 1 } });
+    class DerivedBedrock extends BedrockProvider {}
+    for (const other of [create({ model: 'us.' + model }), new DerivedBedrock({ type: 'bedrock', model, apiKey: 'disposable' })]) {
+      vi.stubGlobal('fetch', vi.fn(async () => response(Buffer.from(signedReference.rows[0].turns[0].wire.response.bytesBase64, 'base64'))));
+      let completed: ChatResponse | undefined;
+      await other.streamChat(messages, () => {}, value => { completed = value; });
+      expect(completed?.content).toBe('first answer'); expect(completed).not.toHaveProperty('blocks');
+    }
+  });
+
+  it.each([false, true])('retains Opus4.6 signed blocks through both append paths, durable reload and safe projections (stream=%s)', async useStream => {
+    const model = signedReference.rows[0].model, root = await mkdtemp(path.join(os.tmpdir(), 'aih-bedrock-signed-'));
+    const redactor = new CredentialRedactor(['disposable-signed-secret']);
+    const redactText = (value: string) => redactor.redact(value), redactJson = <T>(value: T): T => redactor.redactJson(value);
+    const manager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson });
+    const session = await manager.create({ title: 'Bedrock signed' }), registry = new ExtensionRegistry();
+    const provider = create({ model }), tools = [{ name: 'echo', description: 'Echo', parameters: { type: 'object' } }];
+    let effects = 0, turn = 0, withTool = false;
+    const captured: Array<{ messages: Array<{ role: string; content: unknown[] }> }> = [];
+    const native = (signature: string) => [
+      { reasoningContent: { reasoningText: { text: 'consider', signature } } },
+      { reasoningContent: { redactedContent: 'AP8BgAI=' } }, { text: 'answer' },
+    ];
+    const tool = { toolUse: { toolUseId: 'call', name: 'echo', input: { x: 1 } } };
+    vi.stubGlobal('fetch', vi.fn(async (input: unknown, init?: RequestInit) => {
+      captured.push(JSON.parse(String(init?.body)) as { messages: Array<{ role: string; content: unknown[] }> });
+      const stopReason = withTool ? 'tool_use' : 'end_turn';
+      if (!String(input).endsWith('/converse-stream')) return Response.json({ output: { message: { role: 'assistant',
+        content: [...native('opaque-disposable-signed-secret'), ...(withTool ? [tool] : [])] } }, stopReason,
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } });
+      return response(Buffer.concat([
+        frame('messageStart', { role: 'assistant' }),
+        frame('contentBlockDelta', { contentBlockIndex: 0, delta: { reasoningContent: { text: 'consider' } } }),
+        frame('contentBlockDelta', { contentBlockIndex: 0, delta: { reasoningContent: { signature: 'opaque-disposable-signed-secret' } } }),
+        frame('contentBlockStop', { contentBlockIndex: 0 }),
+        frame('contentBlockDelta', { contentBlockIndex: 1, delta: { reasoningContent: { redactedContent: 'AP8=' } } }),
+        frame('contentBlockDelta', { contentBlockIndex: 1, delta: { reasoningContent: { redactedContent: 'AYAC' } } }),
+        frame('contentBlockStop', { contentBlockIndex: 1 }),
+        frame('contentBlockDelta', { contentBlockIndex: 2, delta: { text: 'answer' } }), frame('contentBlockStop', { contentBlockIndex: 2 }),
+        ...(withTool ? [frame('contentBlockStart', { contentBlockIndex: 3, start: { toolUse: { toolUseId: 'call', name: 'echo' } } }),
+          frame('contentBlockDelta', { contentBlockIndex: 3, delta: { toolUse: { input: '{"x":1}' } } }), frame('contentBlockStop', { contentBlockIndex: 3 })] : []),
+        frame('messageStop', { stopReason }), frame('metadata', { usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } }),
+      ]));
+    }));
+    try {
+      await registry.load('echo', api => api.registerTool({ name: 'echo', description: 'Echo', execute: async () => { effects++; return { content: 'result' }; } }));
+      await manager.addMessage(session.id, { role: 'user', content: 'probe' });
+      await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry, provider: 'bedrock', tools,
+        redactText, toolContext: { sessionManager: manager, notify: () => {} }, streamTurn: async history => {
+          withTool = turn++ === 0;
+          return useStream ? streamProviderTurn({ provider, providerName: 'bedrock', model, messages: history, tools,
+            thinking: 'high', maxTokens: 64, cacheWarming: 'off', maxRetries: 0, extensionRegistry: registry,
+            sessionManager: manager, sessionId: session.id, redactText, redactJson, createTextRedactor: () => redactor.createStream() })
+            : provider.chat(history, { model, tools, thinking: 'high', maxTokens: 64 });
+        } });
+      expect(effects).toBe(1); expect(turn).toBe(2);
+      const history = session.messages.filter(message => message.role === 'assistant');
+      const expected = [{ type: 'reasoning', text: 'consider', thinkingSignature: 'opaque-[REDACTED]' },
+        { type: 'reasoning', text: '', redacted: true, thinkingSignature: 'AP8BgAI=' }, { type: 'text', text: 'answer' }];
+      expect(history.map(message => message.blocks)).toEqual([[...expected, { type: 'tool_call', id: 'call', name: 'echo', input: { x: 1 } }], expected]);
+      expect(history.map(message => [message.provider, message.model, message.api])).toEqual(Array(2).fill(['bedrock', model, 'bedrock-converse-stream']));
+      const file = path.join(root, session.id + '.jsonl'), bytes = await readFile(file, 'utf8');
+      expect(bytes).not.toContain('disposable-signed-secret'); expect((await stat(file)).mode & 0o777).toBe(0o600);
+      const restarted = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson });
+      const loaded = (await restarted.loadFromStore(session.id))!;
+      const imported = deserializeSession(JSON.parse(JSON.stringify(serializeSession(loaded))));
+      expect(imported.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual(history.map(message => message.blocks));
+      expect(serializeSessionForExport(loaded).warning).toContain('Native continuation');
+      expect(JSON.stringify(serializeSessionForExport(loaded).session)).not.toMatch(/opaque-|AP8BgAI=/);
+      await provider.chat(imported.messages, { model, maxTokens: 64 });
+      expect(captured.at(-1)!.messages.filter(message => message.role === 'assistant').map(message => message.content))
+        .toEqual([[...native('opaque-[REDACTED]'), tool], native('opaque-[REDACTED]')]);
+      expect(await readFile(file, 'utf8')).toBe(bytes);
+      await streamProviderTurn({ provider, providerName: 'bedrock', model: 'anthropic.claude-sonnet-4-5-20250929-v1:0', messages: imported.messages,
+        tools: [], extensionRegistry: registry, maxTokens: 64, cacheWarming: 'off', maxRetries: 0 });
+      const foreign = JSON.stringify(captured.at(-1)!.messages);
+      expect(foreign).toContain('consider'); expect(foreign).not.toMatch(/opaque-|AP8BgAI=|reasoningContent/);
+      registry.virtualModels.register({ provider: 'router', id: 'signed-auto', maxOutputTokens: 64,
+        route: () => ({ provider: 'bedrock', id: 'anthropic.claude-sonnet-4-5-20250929-v1:0' }) });
+      await streamProviderTurn({ provider: registry.getVirtualProvider('router')!, providerName: 'router', model: 'signed-auto', messages: imported.messages,
+        tools: [], extensionRegistry: registry, resolveProvider: name => name === 'bedrock' ? provider : undefined, maxRetries: 0 });
+      const routed = JSON.stringify(captured.at(-1)!.messages);
+      expect(routed).toContain('consider'); expect(routed).not.toMatch(/opaque-|AP8BgAI=|reasoningContent/);
+      await restarted.appendContextEdit(session.id, { targetEntryId: history[0].id, replacement: 'edited answer' });
+      const clone = await restarted.cloneSession(session.id), canonical = getCompactionModelMessages(restarted, clone.id);
+      const beforeSummary = structuredClone(canonical);
+      expect(JSON.stringify(getSummaryModelMessages(canonical))).not.toMatch(/opaque-|AP8BgAI=|thinkingSignature/); expect(canonical).toEqual(beforeSummary);
+      await provider.chat(canonical, { model, maxTokens: 64 });
+      const edited = captured.at(-1)!.messages.filter(message => message.role === 'assistant');
+      expect(JSON.stringify(edited[0])).not.toMatch(/opaque-|AP8BgAI=/); expect(edited.at(-1)?.content).toEqual(native('opaque-[REDACTED]'));
+      expect((await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message' && entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(message => message.blocks));
+      const kept = clone.messages.filter(message => message.role === 'assistant').at(-1)!;
+      await restarted.applyCompaction(clone.id, 'PUBLIC_BEDROCK_SUMMARY', kept.id);
+      const compactedManager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson });
+      await compactedManager.loadFromStore(clone.id);
+      const compacted = getCompactionModelMessages(compactedManager, clone.id);
+      expect(compacted.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual([expected]);
+      const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8');
+      await provider.chat(compacted, { model, maxTokens: 64 });
+      expect(captured.at(-1)!.messages.filter(message => message.role === 'assistant').map(message => message.content)).toEqual([native('opaque-[REDACTED]')]);
+      expect(await readFile(compactedFile, 'utf8')).toBe(compactedBytes);
+    } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
+  });
+
   it('uses an explicit opaque Bearer for JSON Converse and binary streaming without SigV4 or ambient key headers', async () => {
     const captured: Array<{ path: string; headers: Record<string, string | string[] | undefined> }> = [];
     const server = createServer(async (request, reply) => {

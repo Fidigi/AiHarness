@@ -27,6 +27,7 @@ import { getProviderPublishedModel } from '../providers/provider-model-metadata.
 import { clampPublishedThinkingLevel, getSupportedThinkingLevels } from '../providers/model-metadata.js';
 import { getSessionCacheWarmer, type CacheWarmingMode } from '../providers/cache-warmer.js';
 import { projectAssistantReplay } from '../providers/message-replay.js';
+import { BEDROCK_SIGNED_MODEL } from '../providers/bedrock-replay.js';
 
 export interface StreamProviderTurnOptions {
   provider: AiProvider;
@@ -142,14 +143,14 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
     const metadata = getProviderPublishedModel(selection.provider, selection.id, provider);
     const api = provider.getModelApi?.(selection.id);
     const project = (input: Message[]): Message[] => input.flatMap(message => {
-      if (message.role === 'assistant' && ['anthropic-messages', 'google-generative-ai', 'google-vertex', 'openai-responses', 'azure-openai-responses'].includes(message.api ?? '')
-        && message.metadata?.outputError) return [];
+      const privateReplay = ['anthropic-messages', 'google-generative-ai', 'google-vertex', 'openai-responses', 'azure-openai-responses'].includes(message.api ?? '')
+        || message.api === 'bedrock-converse-stream' && message.model === BEDROCK_SIGNED_MODEL;
+      if (message.role === 'assistant' && privateReplay && message.metadata?.outputError) return [];
       let projected = message;
       // Private replay belongs to the exact physical source, not the virtual alias.
       if (message.role === 'assistant' && (message.provider !== selection.provider || message.model !== selection.id
         || message.api !== undefined && message.api !== api)) {
-        const source = ['anthropic-messages', 'google-generative-ai', 'google-vertex', 'openai-responses', 'azure-openai-responses'].includes(message.api ?? '')
-          ? projectAssistantReplay(message, selection.provider, selection.id, api) : message;
+        const source = privateReplay ? projectAssistantReplay(message, selection.provider, selection.id, api) : message;
         projected = { id: source.id, timestamp: source.timestamp, role: source.role, content: source.content,
           ...(source.toolCalls ? { toolCalls: source.toolCalls.map(({ thoughtSignature: _signature, ...call }) => call) } : {}),
           ...(source.blocks ? { blocks: source.blocks.flatMap((block): MessageContentBlock[] => {

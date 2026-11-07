@@ -1337,7 +1337,8 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     expect(Object.keys(themeSchema.properties.export.properties).sort()).toEqual(['cardBg', 'infoBg', 'pageBg']);
     expect(await realpath(path.join(consumer, 'node_modules', '.bin', 'ai-harness'))).toBe(path.join(installed, 'dist/index.js'));
     const root = await mkdtemp(path.join(consumer, `installed-keybindings-${mode}-`));
-    const cwd = path.join(root, 'workspace'), data = path.join(root, 'agent');
+    // A footer path containing the old key must not count as an active binding.
+    const cwd = path.join(root, 'workspace-F2'), data = path.join(root, 'agent');
     await mkdir(cwd); await mkdir(data);
     const target = path.join(data, 'keybindings.json'), capture = path.join(root, 'capture.jsonl');
     const ends = path.join(root, 'ends.txt'), editorMarker = path.join(root, 'editor-executed');
@@ -1373,7 +1374,10 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       // Passive view queries never become native editor history either.
       output = ''; terminal.write('\u001b[A'); await wait('draXft'); terminal.write('\u0015');
       await configure('f3', 'INSTALLED_KEYS_V2'); output = ''; terminal.write('/reload\r'); await wait('Reloaded ');
-      output = ''; terminal.write('\u001bOR'); await wait('INSTALLED_KEYS_V2'); expect(visible()).not.toContain('F2');
+      output = ''; terminal.write('\u001bOR'); await wait('INSTALLED_KEYS_V2');
+      const actionRows = visible().split(/\r?\n/u).filter(line => /^\s*[\w.-]+ \[(?:reserved|conditional)\] · /u.test(line)).join('\n');
+      expect(actionRows).toContain('app.hotkeys [conditional] · F1 / Alt+K / F3 · INSTALLED_KEYS_V2');
+      expect(actionRows).not.toContain('F2');
       output = ''; terminal.write('\u001b'); await wait('installed-keys: ');
       output = ''; terminal.write('\u001bOQhello\r'); await wait('[Mock AI Response]'); await idle(2);
       const pasted = '界 e\u0301👩🏽‍💻\ninstalled';
