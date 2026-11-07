@@ -40,7 +40,6 @@ const replay = turn => items(turn).map(item => item.type === 'function_call'
   ? { type: 'function_call', id: 'fc_native', call_id: 'native-call', name: 'continuation_echo', arguments: '{"value":1}' } : item);
 function signedContent(turn, foreign = false, ids = true) {
   if (bedrock) {
-    if (foreign && mode === 'rpc' && turn === 4) return [{ text: `visible-${turn}` }, { text: `native-${turn}-leftnative-${turn}-right` }];
     return [{ text: `native-${turn}-left` }, foreign ? { text: `visible-${turn}` }
       : { reasoningContent: { reasoningText: { text: `visible-${turn}`, signature: 'opaque-[REDACTED]-tail' } } },
     ...(foreign ? [] : [{ reasoningContent: { redactedContent: 'AP8BgAI=' } }]), { text: `native-${turn}-right` },
@@ -57,7 +56,6 @@ function signedContent(turn, foreign = false, ids = true) {
 }
 function signedBlocks(turn) {
   if (bedrock) {
-    if (mode === 'rpc' && turn === 4) return [{ type: 'reasoning', text: `visible-${turn}` }, { type: 'text', text: `native-${turn}-leftnative-${turn}-right` }];
     return [{ type: 'text', text: `native-${turn}-left` }, { type: 'reasoning', text: `visible-${turn}`, thinkingSignature: 'opaque-[REDACTED]-tail' },
       { type: 'reasoning', text: '', redacted: true, thinkingSignature: 'AP8BgAI=' }, { type: 'text', text: `native-${turn}-right` },
       ...(turn === 1 ? [{ type: 'tool_call', id: 'native-call', name: 'continuation_echo', input: { value: 1 } }] : [])];

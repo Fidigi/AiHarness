@@ -13,7 +13,7 @@ import { azureDeployments, normalizeAzureResponsesBaseUrl, usesAzureResponses } 
 import { azureProfileApi, azureProfileUsage, azurePublishedProfiles, prepareAzureCompletion, prepareAzureResponses } from './azure-profiles.js';
 import { parseProviderToolArguments } from './tool-arguments.js';
 import { consumeBedrockStream } from './bedrock-converse-stream.js';
-import { BEDROCK_SIGNED_MODEL, bedrockRedactedBytes, bedrockReplayBlocks } from './bedrock-replay.js';
+import { bedrockRedactedBytes, bedrockReplayBlocks } from './bedrock-replay.js';
 import { applyBedrockProfileSimplePolicy, prepareBedrockOutputBudget, bedrockProfileUsage, bedrockPublishedProfiles, hasBedrockProfile } from './bedrock-profiles.js';
 import { OPENAI_DECISIONS_MODEL, decisionsBody, decisionsAnswers, type NativeWireQuestion } from './openai-decisions.js';
 export { OPENAI_DECISIONS_MODEL } from './openai-decisions.js';
@@ -4309,9 +4309,10 @@ export class BedrockProvider extends AiProvider {
   }
 
   private requestBody(messages: Message[], options?: ChatOptions, replayModel?: string): Record<string, unknown> {
+    const nativeReplay = replayModel !== undefined && hasBedrockProfile(replayModel);
     if (replayModel) messages = messages.flatMap(message => {
-      if (message.role !== 'assistant' || replayModel !== BEDROCK_SIGNED_MODEL
-        && !(message.api === 'bedrock-converse-stream' && message.model === BEDROCK_SIGNED_MODEL)) return [message];
+      if (message.role !== 'assistant' || !nativeReplay
+        && !(message.api === 'bedrock-converse-stream' && hasBedrockProfile(message.model ?? ''))) return [message];
       if (message.metadata?.outputError) return [];
       const projected = projectAssistantReplay(message, this.config.type, replayModel, 'bedrock-converse-stream');
       return projected.content || projected.toolCalls?.length || projected.blocks?.length ? [projected] : [];
@@ -4327,7 +4328,7 @@ export class BedrockProvider extends AiProvider {
           status: message.isError ? 'error' : 'success',
         } }] };
       }
-      const replay = replayModel === BEDROCK_SIGNED_MODEL || replayModel && message.api === 'bedrock-converse-stream' && message.model === BEDROCK_SIGNED_MODEL;
+      const replay = nativeReplay || replayModel && message.api === 'bedrock-converse-stream' && hasBedrockProfile(message.model ?? '');
       if (replay && message.role === 'assistant' && message.blocks?.length) {
         const content = message.blocks.flatMap((block): Array<Record<string, unknown>> => {
           if (block.type === 'text') return block.text ? [{ text: block.text }] : [];
@@ -4338,8 +4339,11 @@ export class BedrockProvider extends AiProvider {
           }
           if (block.type !== 'reasoning') return [];
           if (block.redacted) return block.thinkingSignature ? [{ reasoningContent: { redactedContent: bedrockRedactedBytes(block.thinkingSignature).toString('base64') } }] : [];
-          if (block.thinkingSignature) return [{ reasoningContent: { reasoningText: { text: block.text, signature: block.thinkingSignature } } }];
-          return block.text ? [{ text: block.text }] : [];
+          if (!block.text.trim()) return [];
+          // Exact profile admission precedes this private vendor policy; labels grant no support.
+          if (nativeReplay && !replayModel?.includes('anthropic.claude')) return [{ reasoningContent: { reasoningText: { text: block.text } } }];
+          if (block.thinkingSignature?.trim()) return [{ reasoningContent: { reasoningText: { text: block.text, signature: block.thinkingSignature } } }];
+          return [{ text: block.text }];
         });
         if (!message.blocks.some(block => block.type === 'text') && message.content) content.push({ text: message.content });
         const capturedCalls = new Set(message.blocks.flatMap(block => block.type === 'tool_call' ? [block.id] : []));
@@ -4410,7 +4414,7 @@ export class BedrockProvider extends AiProvider {
     if (!this.validateConfig()) throw new Error('AWS Bedrock credentials are required');
     const requestedModel = this.ownsNativeProfiles ? options?.model || String(this.config.model) : String(this.config.model);
     const native = this.ownsNativeProfiles && hasBedrockProfile(requestedModel);
-    const signed = native && requestedModel === BEDROCK_SIGNED_MODEL, owner = this.config.type;
+    const signed = native, owner = this.config.type;
     const model = encodeURIComponent(requestedModel);
     let url: URL;
     try {
@@ -4479,7 +4483,7 @@ export class BedrockProvider extends AiProvider {
       if (options?.signal?.aborted) throw new Error('Bedrock request aborted.');
       const model = options?.model || String(this.config.model);
       const native = this.ownsNativeProfiles && hasBedrockProfile(model);
-      const signed = native && model === BEDROCK_SIGNED_MODEL, owner = this.config.type;
+      const signed = native, owner = this.config.type;
       const url = this.streamEndpoint(model);
       const prepared = this.requestBody(messages, options, this.ownsNativeProfiles ? model : undefined);
       if (native) applyBedrockProfileSimplePolicy(model, prepared, options, messages, this.region);

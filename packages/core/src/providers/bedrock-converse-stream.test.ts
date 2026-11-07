@@ -10,7 +10,7 @@ import { applyBedrockProfileOutputPolicy } from './bedrock-profiles.js';
 import { getSupportedThinkingLevels, clampPublishedThinkingLevel } from './model-metadata.js';
 import { closeProviderNetworkDispatchers } from './provider-network.js';
 import { bedrockFrame as frame, bedrockText } from '../../../../tests/fixtures/bedrock-event-stream.js';
-import type { Message } from '../types/index.js';
+import type { Message, MessageContentBlock } from '../types/index.js';
 import { JsonlSessionStore, SessionManager } from '../sessions/session-manager.js';
 import { deserializeSession, serializeSession, serializeSessionForExport } from '../sessions/serialization.js';
 import { getCompactionModelMessages } from '../sessions/compaction-model-messages.js';
@@ -36,6 +36,12 @@ async function stream(bytes: Uint8Array) {
   return { chunks, tools, complete, error };
 }
 
+const profileReplayBytes = readFileSync(new URL('../../../../tests/fixtures/bedrock-profile-continuation-reference.json', import.meta.url));
+const profileReplay = JSON.parse(profileReplayBytes.toString()) as {
+  pinnedCommit: string; captureSha256: string; modelProjections: number; replayProjections: number; freshSdkRequests: number;
+  tools: NonNullable<ChatOptions['tools']>; seedResponseBase64: string; syntheticJsonContent: unknown[]; expectedBlocks: MessageContentBlock[];
+  rows: Array<{ model: string; api: string; cases: Array<{ case: string; expectedMessages: unknown[] }> }>;
+};
 const signedReferenceBytes = readFileSync(new URL('../../../../tests/fixtures/bedrock-opus46-continuation-reference.json', import.meta.url));
 const signedReference = JSON.parse(signedReferenceBytes.toString()) as {
   pinnedCommit: string; rows: Array<{ case: string; model: string; turns: Array<{
@@ -144,7 +150,8 @@ describe('native Bedrock ConverseStream', () => {
     expect(owned?.toolCalls).toEqual([{ id: 'owned', name: 'echo', input: { x: 1 } }]);
     expect(owned?.blocks?.at(-1)).toEqual({ type: 'tool_call', id: 'owned', name: 'echo', input: { x: 1 } });
     class DerivedBedrock extends BedrockProvider {}
-    for (const other of [create({ model: 'us.' + model }), new DerivedBedrock({ type: 'bedrock', model, apiKey: 'disposable' })]) {
+    // The exact us. profile now has positive full-array coverage below; resemblance alone remains insufficient.
+    for (const other of [create({ model: 'unreviewed-region.' + model }), new DerivedBedrock({ type: 'bedrock', model, apiKey: 'disposable' })]) {
       vi.stubGlobal('fetch', vi.fn(async () => response(Buffer.from(signedReference.rows[0].turns[0].wire.response.bytesBase64, 'base64'))));
       let completed: ChatResponse | undefined;
       await other.streamChat(messages, () => {}, value => { completed = value; });
@@ -167,8 +174,12 @@ describe('native Bedrock ConverseStream', () => {
     }
   });
 
-  it.each([false, true])('retains Opus4.6 signed blocks through both append paths, durable reload and safe projections (stream=%s)', async useStream => {
-    const model = signedReference.rows[0].model, root = await mkdtemp(path.join(os.tmpdir(), 'aih-bedrock-signed-'));
+  it.each(profileReplay.rows.flatMap(({ model }) => [false, true].map(useStream => ({ model, useStream }))))(
+    'retains $model signed blocks through both append paths, durable reload and safe projections (stream=$useStream)', async ({ model, useStream }) => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'aih-bedrock-signed-'));
+    const foreignModel = model === 'anthropic.claude-sonnet-4-5-20250929-v1:0' ? signedReference.rows[0].model : 'anthropic.claude-sonnet-4-5-20250929-v1:0';
+    const replaysSignature = JSON.stringify(profileReplay.rows.find(row => row.model === model)!.cases[0].expectedMessages)
+      .includes('"signature":"owned-synthetic-signature"');
     const redactor = new CredentialRedactor(['disposable-signed-secret']);
     const redactText = (value: string) => redactor.redact(value), redactJson = <T>(value: T): T => redactor.redactJson(value);
     const manager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson });
@@ -176,8 +187,8 @@ describe('native Bedrock ConverseStream', () => {
     const provider = create({ model }), tools = [{ name: 'echo', description: 'Echo', parameters: { type: 'object' } }];
     let effects = 0, turn = 0, withTool = false;
     const captured: Array<{ messages: Array<{ role: string; content: unknown[] }> }> = [];
-    const native = (signature: string) => [
-      { reasoningContent: { reasoningText: { text: 'consider', signature } } },
+    const native = (signature: string, replay = false) => [
+      { reasoningContent: { reasoningText: { text: 'consider', ...(!replay || replaysSignature ? { signature } : {}) } } },
       { reasoningContent: { redactedContent: 'AP8BgAI=' } }, { text: 'answer' },
     ];
     const tool = { toolUse: { toolUseId: 'call', name: 'echo', input: { x: 1 } } };
@@ -228,14 +239,14 @@ describe('native Bedrock ConverseStream', () => {
       expect(JSON.stringify(serializeSessionForExport(loaded).session)).not.toMatch(/opaque-|AP8BgAI=/);
       await provider.chat(imported.messages, { model, maxTokens: 64 });
       expect(captured.at(-1)!.messages.filter(message => message.role === 'assistant').map(message => message.content))
-        .toEqual([[...native('opaque-[REDACTED]'), tool], native('opaque-[REDACTED]')]);
+        .toEqual([[...native('opaque-[REDACTED]', true), tool], native('opaque-[REDACTED]', true)]);
       expect(await readFile(file, 'utf8')).toBe(bytes);
-      await streamProviderTurn({ provider, providerName: 'bedrock', model: 'anthropic.claude-sonnet-4-5-20250929-v1:0', messages: imported.messages,
+      await streamProviderTurn({ provider, providerName: 'bedrock', model: foreignModel, messages: imported.messages,
         tools: [], extensionRegistry: registry, maxTokens: 64, cacheWarming: 'off', maxRetries: 0 });
       const foreign = JSON.stringify(captured.at(-1)!.messages);
       expect(foreign).toContain('consider'); expect(foreign).not.toMatch(/opaque-|AP8BgAI=|reasoningContent/);
       registry.virtualModels.register({ provider: 'router', id: 'signed-auto', maxOutputTokens: 64,
-        route: () => ({ provider: 'bedrock', id: 'anthropic.claude-sonnet-4-5-20250929-v1:0' }) });
+        route: () => ({ provider: 'bedrock', id: foreignModel }) });
       await streamProviderTurn({ provider: registry.getVirtualProvider('router')!, providerName: 'router', model: 'signed-auto', messages: imported.messages,
         tools: [], extensionRegistry: registry, resolveProvider: name => name === 'bedrock' ? provider : undefined, maxRetries: 0 });
       const routed = JSON.stringify(captured.at(-1)!.messages);
@@ -246,7 +257,7 @@ describe('native Bedrock ConverseStream', () => {
       expect(JSON.stringify(getSummaryModelMessages(canonical))).not.toMatch(/opaque-|AP8BgAI=|thinkingSignature/); expect(canonical).toEqual(beforeSummary);
       await provider.chat(canonical, { model, maxTokens: 64 });
       const edited = captured.at(-1)!.messages.filter(message => message.role === 'assistant');
-      expect(JSON.stringify(edited[0])).not.toMatch(/opaque-|AP8BgAI=/); expect(edited.at(-1)?.content).toEqual(native('opaque-[REDACTED]'));
+      expect(JSON.stringify(edited[0])).not.toMatch(/opaque-|AP8BgAI=/); expect(edited.at(-1)?.content).toEqual(native('opaque-[REDACTED]', true));
       expect((await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message' && entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(message => message.blocks));
       const kept = clone.messages.filter(message => message.role === 'assistant').at(-1)!;
       await restarted.applyCompaction(clone.id, 'PUBLIC_BEDROCK_SUMMARY', kept.id);
@@ -256,8 +267,9 @@ describe('native Bedrock ConverseStream', () => {
       expect(compacted.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual([expected]);
       const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8');
       await provider.chat(compacted, { model, maxTokens: 64 });
-      expect(captured.at(-1)!.messages.filter(message => message.role === 'assistant').map(message => message.content)).toEqual([native('opaque-[REDACTED]')]);
+      expect(captured.at(-1)!.messages.filter(message => message.role === 'assistant').map(message => message.content)).toEqual([native('opaque-[REDACTED]', true)]);
       expect(await readFile(compactedFile, 'utf8')).toBe(compactedBytes);
+      expect(captured).toHaveLength(7);
     } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
   });
 
@@ -569,6 +581,11 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
     expect(reference.catalogueSha256).toBe('df227d426b678e44cd82deae1cf433855d6b27f36fedcff3ef4fb812fe882868');
     expect(reference.captureSha256).toBe('6b27c0226ae372bde56def095c5ee06873385ff3ab52909add2f3db3f026b2bd');
     expect(reference.models).toHaveLength(193); expect(reference.cases).toHaveLength(666);
+    expect(createHash('sha256').update(profileReplayBytes).digest('hex')).toBe('971fad1858e688d73ea6f128754eae078651d857e0d188801faf6c160004668c');
+    expect(profileReplay.pinnedCommit).toBe(reference.pinnedCommit);
+    expect(profileReplay.captureSha256).toBe('a43efdcbb8b17731daf660b5d1037c4f8e364220dfe95a4f5f50677449a306c5');
+    expect(profileReplay).toMatchObject({ modelProjections: 193, replayProjections: 1930, freshSdkRequests: 2123 });
+    expect(profileReplay.rows.map(row => row.model)).toEqual(reference.models.map(model => model.id));
     expect(createHash('sha256').update(simpleDefaultBytes).digest('hex')).toBe('296d476e8a249cc4763935b1380e7b330ba04550b456883167c5db9a106717a2');
     expect(createHash('sha256').update(simpleNumericBytes).digest('hex')).toBe('1c13c5dafcd2364c7fdde4ba54f42c34bb5b08c9612c5da36bcbdafc233c682a');
     expect(createHash('sha256').update(simpleContextBytes).digest('hex')).toBe('c000978f0aab15c2b9e85655f6360818b9b529cf67c454f84332e7bf1806cb9b');
@@ -788,6 +805,82 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
         selectedSimpleOptions(model.id, { ...numericHigh.observed.callerOptions, reasoning: thinking }),
         numericHigh.observed.requests[0].body, numericHigh.observed.result, numericHigh.expectedCoreRefusal);
     }
+    const replay = profileReplay.rows.find(row => row.model === model.id)!;
+    expect(replay.cases.map(row => row.case)).toEqual(['same', 'foreign-provider', 'foreign-api', 'foreign-model',
+      'failed-error', 'failed-aborted', 'unsigned', 'empty-thinking', 'blank-thinking', 'blank-signature']);
+    const captured: Array<{ messages: unknown[] }> = [];
+    let lastResult: ChatResponse | undefined;
+    for (const binary of [false, true]) {
+      vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+        expect(String(url)).toBe(`https://bedrock-runtime.us-east-1.amazonaws.com/model/${encodeURIComponent(model.id)}/converse${binary ? '-stream' : ''}`);
+        expect(new Headers(init?.headers).get('authorization')).toBe('Bearer disposable-bedrock-reference');
+        captured.push(JSON.parse(String(init?.body)) as { messages: unknown[] });
+        return binary ? response(Buffer.from(profileReplay.seedResponseBase64, 'base64'))
+          : Response.json({ output: { message: { role: 'assistant', content: profileReplay.syntheticJsonContent } },
+            stopReason: 'tool_use', usage: { inputTokens: 5, outputTokens: 7, totalTokens: 12 } });
+      }));
+      const input: Message[] = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
+      const options: ChatOptions = { model: model.id, tools: structuredClone(profileReplay.tools), maxTokens: 64, cacheRetention: 'none' };
+      let result: ChatResponse | undefined;
+      const events: string[] = [], error = vi.fn();
+      if (binary) await provider.streamChat(input, (text, event) => { events.push(text, JSON.stringify(event ?? {})); }, value => { result = value; }, error, options);
+      else result = await provider.chat(input, options);
+      expect(error).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ provider: 'bedrock', model: model.id, api: replay.api, content: 'beforeanswer', reasoning: 'consider' });
+      expect(result?.blocks).toEqual(profileReplay.expectedBlocks);
+      expect(result?.toolCalls).toEqual([{ id: 'call_1', name: 'fixture_tool', input: { value: 'seed' } }]);
+      expect(events.join('')).not.toContain('owned-synthetic-signature'); expect(events.join('')).not.toContain('AP8BgAI=');
+      lastResult = result;
+      for (const vector of replay.cases) {
+        const assistant: Message = { id: 'a', role: 'assistant', timestamp: new Date(1), content: result!.content,
+          provider: result!.provider, model: result!.model, api: result!.api, blocks: structuredClone(result!.blocks), toolCalls: structuredClone(result!.toolCalls) };
+        if (vector.case === 'foreign-provider') assistant.provider = 'foreign-owner';
+        if (vector.case === 'foreign-api') assistant.api = 'anthropic-messages';
+        if (vector.case === 'foreign-model') assistant.model = 'foreign-model';
+        if (vector.case.startsWith('failed-')) assistant.metadata = { outputError: true };
+        const thought = assistant.blocks![1];
+        if (thought.type === 'reasoning') {
+          if (vector.case === 'unsigned') delete thought.thinkingSignature;
+          if (vector.case === 'empty-thinking') thought.text = '';
+          if (vector.case === 'blank-thinking') thought.text = ' \t';
+          if (vector.case === 'blank-signature') thought.thinkingSignature = ' \t';
+        }
+        const history: Message[] = [...input, assistant,
+          ...(vector.case.startsWith('failed-') ? [] : [{ id: 't', role: 'tool' as const, content: 'tool result', toolCallId: 'call_1', timestamp: new Date(2) }]),
+          { id: 'u2', role: 'user', content: 'followup', timestamp: new Date(3) }];
+        const before = structuredClone({ history, options });
+        if (binary) await provider.streamChat(history, () => {}, () => {}, error, options);
+        else await provider.chat(history, options);
+        expect(error).not.toHaveBeenCalled();
+        expect(captured.at(-1)?.messages, vector.case).toEqual(vector.expectedMessages);
+        expect({ history, options }).toEqual(before);
+      }
+    }
+    const registry = new ExtensionRegistry();
+    let physical = model.id;
+    registry.virtualModels.register({ provider: 'router', id: 'profile-replay', maxOutputTokens: 64,
+      route: () => ({ provider: 'bedrock', id: physical }) });
+    const history: Message[] = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) },
+      { id: 'a', role: 'assistant', timestamp: new Date(1), content: lastResult!.content, provider: lastResult!.provider,
+        model: lastResult!.model, api: lastResult!.api, blocks: structuredClone(lastResult!.blocks), toolCalls: structuredClone(lastResult!.toolCalls) },
+      { id: 't', role: 'tool', content: 'tool result', toolCallId: 'call_1', timestamp: new Date(2) },
+      { id: 'u2', role: 'user', content: 'followup', timestamp: new Date(3) }];
+    const original = structuredClone(history);
+    for (const foreign of [false, true]) {
+      if (foreign) physical = reference.models[(reference.models.findIndex(row => row.id === model.id) + 1) % reference.models.length].id;
+      vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+        expect(String(url)).toBe(`https://bedrock-runtime.us-east-1.amazonaws.com/model/${encodeURIComponent(physical)}/converse-stream`);
+        captured.push(JSON.parse(String(init?.body)) as { messages: unknown[] });
+        return response(Buffer.from(profileReplay.seedResponseBase64, 'base64'));
+      }));
+      await streamProviderTurn({ provider: registry.getVirtualProvider('router')!, providerName: 'router', model: 'profile-replay',
+        messages: history, tools: structuredClone(profileReplay.tools), extensionRegistry: registry,
+        resolveProvider: name => name === 'bedrock' ? provider : undefined, cacheWarming: 'off', maxRetries: 0 });
+      const target = profileReplay.rows.find(row => row.model === physical)!;
+      expect(captured.at(-1)?.messages).toEqual(target.cases.find(row => row.case === (foreign ? 'foreign-model' : 'same'))!.expectedMessages);
+      expect(history).toEqual(original);
+    }
+    expect(captured).toHaveLength(24);
   });
 
   for (const model of simpleNumeric.models) {

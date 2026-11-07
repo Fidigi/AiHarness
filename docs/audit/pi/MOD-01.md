@@ -1,8 +1,10 @@
 # MOD-01 — Delivery Tasks and Local Acceptance
 
-> **Status: IN PROGRESS** (2026-11-04)
+> **Status: IN PROGRESS** (2026-11-07)
 
 > **Authority:** [AUDIT-5](./AUDIT-5.md), MOD-01; [pinned provider/API/auth inventory](../../ai/topics/provider-matrix.md). Target Pi 1.2.0 commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, not the installed agent's moving release.
+
+**Bedrock exact-profile continuation follow-up — 2026-11-07:** the [source-bound receipt](./evidence/MOD-03-bedrock-profile-replay.json) extends the approved private carrier to193 existing exact profiles. Fresh pinned Pi/AWS execution contributes2,123 requests/1,930 whole replay arrays;Core JSON remains a synthetic projection of the observed binary content. Existing owning scenarios cover both facades/virtual routing and386 durable tool/final/reload/export/edit/clone/supplied-summary journeys. The separate installed SDK consumer retains its6,775 previous requests and refusal policies while adding4,246 capture/replay calls,total11,021. Only obsolete emitted/installed RPC Sonnet fallback expectations change;full ordered private blocks and foreign projection are required. The [canonical matrix](./MOD-01-tracking.md#mod-03-closure-matrix--2026-11-04) retains initial/final gates,native incidents and the separate Amaro code1/signalnull runtime error. Exact membership is not family/region-name admission;no all-model host/generated-compaction,service/account/cryptographic or whole-criterion acceptance follows.
 
 **Legacy WebSocket budget follow-up — 2026-11-07:** the [source-bound receipt](./evidence/MOD-03-legacy-websocket-budgets.json) extends the existing six-model/eighteen-stage HTTP matrix with actual authenticated `/api/chat/ws`,sharing the unchanged generation-owned host resolver. New WebSocket assertions cover102 synthetic native requests/six pretransport refusals without client map/scope authority;separate async controls cover copied maps and disconnect before dispatch. Browser legacy-WebSocket,other models and complete budget/reserve acceptance remain distinct. The [canonical MOD-03 matrix](./MOD-01-tracking.md#mod-03-closure-matrix--2026-11-04) retains all source-specific gates and historical failures;no parent promotion follows.
 

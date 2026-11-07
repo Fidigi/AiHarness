@@ -27,7 +27,7 @@ import { getProviderPublishedModel } from '../providers/provider-model-metadata.
 import { clampPublishedThinkingLevel, getSupportedThinkingLevels } from '../providers/model-metadata.js';
 import { getSessionCacheWarmer, type CacheWarmingMode } from '../providers/cache-warmer.js';
 import { projectAssistantReplay } from '../providers/message-replay.js';
-import { BEDROCK_SIGNED_MODEL } from '../providers/bedrock-replay.js';
+import { hasBedrockProfile } from '../providers/bedrock-profiles.js';
 
 export interface StreamProviderTurnOptions {
   provider: AiProvider;
@@ -144,7 +144,7 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
     const api = provider.getModelApi?.(selection.id);
     const project = (input: Message[]): Message[] => input.flatMap(message => {
       const privateReplay = ['anthropic-messages', 'google-generative-ai', 'google-vertex', 'openai-responses', 'azure-openai-responses'].includes(message.api ?? '')
-        || message.api === 'bedrock-converse-stream' && message.model === BEDROCK_SIGNED_MODEL;
+        || message.api === 'bedrock-converse-stream' && hasBedrockProfile(message.model ?? '');
       if (message.role === 'assistant' && privateReplay && message.metadata?.outputError) return [];
       let projected = message;
       // Private replay belongs to the exact physical source, not the virtual alias.

@@ -2389,6 +2389,11 @@ it('dispatches native Bedrock binary streams through installed public declaratio
       const options: ChatOptions = { thinking: 'high', maxTokens: 64, tools: [{ name: 'echo', description: 'Echo', parameters: { type: 'object', properties: { x: { type: 'string' } }, required: ['x'], additionalProperties: false } }] };
       await native.streamChat([], async (text, event) => { void [text, event]; }, value => { complete = value; }, undefined, { ...options, model: 'override:1' });
       const api: string | undefined = complete?.api; void api;
+      const block = complete?.blocks?.[0];
+      if (block?.type === 'reasoning') {
+        const signature: string | undefined = block.thinkingSignature;
+        const redacted: boolean | undefined = block.redacted; void [signature, redacted];
+      }
     }
     void compile;
   `);
@@ -2416,11 +2421,24 @@ it('dispatches native Bedrock binary streams through installed public declaratio
     const simpleDefaults = ${JSON.stringify(simpleDefaults)}, simpleNumeric = ${JSON.stringify(simpleNumeric)}, simpleContext = ${JSON.stringify(simpleContext)}, adaptive = ${JSON.stringify(adaptive)};
     const reasoning = ${JSON.stringify(JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-reasoning-reference.json'), 'utf8')))};
     const baselineHost = ${JSON.stringify(JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-baseline-host-levels-reference.json'), 'utf8')))};
-    const calls = []; let selectedSimple = false;
+    const privateReplay = ${JSON.stringify(JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/bedrock-profile-continuation-reference.json'), 'utf8')))};
+    const calls = []; let selectedSimple = false, selectedReplay = false;
     const server = createServer(async (request, reply) => {
       let body = ''; for await (const chunk of request) body += chunk;
       calls.push({ path: request.url, headers: request.headers, body: JSON.parse(body) });
       const native = originals.some(model => request.url.startsWith('/proxy/model/' + encodeURIComponent(model.id) + '/'));
+      if (selectedReplay) {
+        assert.equal(native, true);
+        if (request.url.endsWith('/converse')) {
+          reply.writeHead(200, { 'content-type': 'application/json' });
+          reply.end(JSON.stringify({ output: { message: { role: 'assistant', content: privateReplay.syntheticJsonContent } },
+            stopReason: 'tool_use', usage: { inputTokens: 5, outputTokens: 7, totalTokens: 12 } }));
+        } else {
+          reply.writeHead(200, { 'content-type': 'application/vnd.amazon.eventstream' });
+          reply.end(Buffer.from(privateReplay.seedResponseBase64, 'base64'));
+        }
+        return;
+      }
       if (request.url.endsWith('/converse')) {
         reply.writeHead(200, { 'content-type': 'application/json' });
         reply.end(JSON.stringify({ output: { message: { content: [{ text: selectedSimple ? 'ok' : 'installed-bedrock-json-ok' }] } },
@@ -2687,6 +2705,52 @@ it('dispatches native Bedrock binary streams through installed public declaratio
           optionsFor(model, { ...row.observed.callerOptions, reasoning: thinking }), row.observed.requests[0].body, row.observed.result, row.expectedCoreRefusal);
       }
       assert.equal(numericSelections, 46); assert.equal(calls.length, 6775);
+      assert.equal(privateReplay.pinnedCommit, '06a466935536f8c9bcacb2d5efc0fc021be1bdff');
+      assert.equal(privateReplay.captureSha256, 'a43efdcbb8b17731daf660b5d1037c4f8e364220dfe95a4f5f50677449a306c5');
+      assert.deepEqual(privateReplay.rows.map(row => row.model), originals.map(row => row.id));
+      assert.equal(privateReplay.replayProjections, 1930); assert.equal(privateReplay.freshSdkRequests, 2123);
+      selectedReplay = true;
+      for (const row of privateReplay.rows) for (const binary of [false, true]) {
+        assert.deepEqual(row.cases.map(row => row.case), ['same', 'foreign-provider', 'foreign-api', 'foreign-model',
+          'failed-error', 'failed-aborted', 'unsigned', 'empty-thinking', 'blank-thinking', 'blank-signature']);
+        const before = calls.length, input = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
+        const options = { model: row.model, maxTokens: 64, cacheRetention: 'none', tools: structuredClone(privateReplay.tools) };
+        let result; const events = [];
+        if (binary) await native.streamChat(input, (text, event) => { events.push(text, JSON.stringify(event ?? {})); }, value => { result = value; }, error => { throw error; }, options);
+        else result = await native.chat(input, options);
+        assert.equal(result.provider, 'bedrock'); assert.equal(result.model, row.model); assert.equal(result.api, row.api);
+        assert.equal(result.content, 'beforeanswer'); assert.equal(result.reasoning, 'consider');
+        assert.deepEqual(result.blocks, privateReplay.expectedBlocks);
+        assert.deepEqual(result.toolCalls, [{ id: 'call_1', name: 'fixture_tool', input: { value: 'seed' } }]);
+        assert.equal(events.join('').includes('owned-synthetic-signature'), false); assert.equal(events.join('').includes('AP8BgAI='), false);
+        for (const vector of row.cases) {
+          const assistant = { id: 'a', role: 'assistant', content: result.content, timestamp: new Date(1),
+            provider: result.provider, model: result.model, api: result.api, blocks: structuredClone(result.blocks), toolCalls: structuredClone(result.toolCalls) };
+          if (vector.case === 'foreign-provider') assistant.provider = 'foreign-owner';
+          if (vector.case === 'foreign-api') assistant.api = 'anthropic-messages';
+          if (vector.case === 'foreign-model') assistant.model = 'foreign-model';
+          if (vector.case.startsWith('failed-')) assistant.metadata = { outputError: true };
+          if (vector.case === 'unsigned') delete assistant.blocks[1].thinkingSignature;
+          if (vector.case === 'empty-thinking') assistant.blocks[1].text = '';
+          if (vector.case === 'blank-thinking') assistant.blocks[1].text = ' \\t';
+          if (vector.case === 'blank-signature') assistant.blocks[1].thinkingSignature = ' \\t';
+          const history = [...input, assistant, ...(vector.case.startsWith('failed-') ? [] : [
+            { id: 't', role: 'tool', content: 'tool result', toolCallId: 'call_1', timestamp: new Date(2) }]),
+            { id: 'u2', role: 'user', content: 'followup', timestamp: new Date(3) }];
+          const original = structuredClone({ history, options });
+          if (binary) await native.streamChat(history, () => {}, () => {}, error => { throw error; }, options);
+          else await native.chat(history, options);
+          assert.deepEqual(calls.at(-1).body.messages, vector.expectedMessages, row.model + ':' + vector.case);
+          assert.deepEqual({ history, options }, original);
+        }
+        assert.equal(calls.length, before + 11);
+        for (const call of calls.slice(before)) {
+          assert.equal(call.path, '/proxy/model/' + encodeURIComponent(row.model) + '/converse' + (binary ? '-stream' : ''));
+          assert.equal(call.headers.authorization, 'Bearer installed-native-bearer');
+          assert.deepEqual(Object.keys(call.headers).filter(name => name.startsWith('x-amz-')), []);
+        }
+      }
+      assert.equal(calls.length, 11021);
       console.log('installed Bedrock ConverseStream OK');
     } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `);

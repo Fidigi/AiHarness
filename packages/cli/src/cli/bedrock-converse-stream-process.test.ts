@@ -88,9 +88,7 @@ describe('emitted CLI native Bedrock stream', () => {
       ...(foreign ? [] : [{ reasoningContent: { redactedContent: 'AP8BgAI=' } }]), { text: `native-${turn}-right` },
       ...(turn === 1 ? [{ toolUse: { toolUseId: 'native-call', name: 'continuation_echo', input: { value: 1 } } }] : []),
     ];
-    const blocks = (turn: number): MessageBlock[] => mode === 'rpc' && turn === 4
-      ? [{ type: 'reasoning', text: 'visible-4' }, { type: 'text', text: 'native-4-leftnative-4-right' }]
-      : [{ type: 'text', text: `native-${turn}-left` }, { type: 'reasoning', text: `visible-${turn}`, thinkingSignature: 'opaque-[REDACTED]-tail' },
+    const blocks = (turn: number): MessageBlock[] => [{ type: 'text', text: `native-${turn}-left` }, { type: 'reasoning', text: `visible-${turn}`, thinkingSignature: 'opaque-[REDACTED]-tail' },
         { type: 'reasoning', text: '', redacted: true, thinkingSignature: 'AP8BgAI=' }, { type: 'text', text: `native-${turn}-right` },
         ...(turn === 1 ? [{ type: 'tool_call' as const, id: 'native-call', name: 'continuation_echo', input: { value: 1 } }] : [])];
     const calls: Array<{ url?: string; authorization?: string; body: { messages: Array<{ role: string; content: Array<Record<string, unknown>> }> } }> = [];
@@ -178,7 +176,7 @@ describe('emitted CLI native Bedrock stream', () => {
             await command({ type: 'context_edit', id: 'edit', targetEntryId: original[0]!.id, replacement: 'edited answer' }); await prompt(4);
             expect(assistants(4)).toEqual([
               [{ toolUse: { toolUseId: 'native-call', name: 'continuation_echo', input: { value: 1 } } }, { text: 'edited answer' }],
-              content(2), content(3), [{ text: 'visible-4' }, { text: 'native-4-leftnative-4-right' }],
+              content(2), content(3), content(4, true),
             ]);
             const retained = await entries();
             expect(retained.filter(entry => entry.type === 'message' && entry.role === 'assistant').slice(0, 3)).toEqual(original);

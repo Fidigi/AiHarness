@@ -1,7 +1,5 @@
 import type { MessageContentBlock } from '../types/index.js';
 
-/** Initial signed-carrier admission is exact, not a family/region/derived-provider match. */
-export const BEDROCK_SIGNED_MODEL = 'anthropic.claude-opus-4-6-v1';
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 function invalid(): never { throw new Error('Invalid Bedrock signed response.'); }
 const text = (value: unknown): value is string => typeof value === 'string' && Buffer.byteLength(value) <= 16 * 1024 * 1024;
