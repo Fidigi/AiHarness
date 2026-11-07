@@ -1,23 +1,26 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
+import { crc32 } from 'node:zlib';
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Copied to the genuine installed consumer by installed-executable.test.ts.
 // Resolve the executable through its installed PATH bin, never checkout dist.
 const [provider, mode] = process.argv.slice(2);
-assert(['native-r', 'azure', 'anthropic', 'google', 'vertex'].includes(provider)); assert(['print', 'json', 'rpc'].includes(mode));
-const responses = ['native-r', 'azure'].includes(provider), anthropic = provider === 'anthropic';
+assert(['native-r', 'azure', 'anthropic', 'google', 'vertex', 'bedrock'].includes(provider)); assert(['print', 'json', 'rpc'].includes(mode));
+const responses = ['native-r', 'azure'].includes(provider), anthropic = provider === 'anthropic', bedrock = provider === 'bedrock';
 const root = await mkdtemp(path.join(process.cwd(), 'responses-continuation-'));
 const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
 const journal = path.join(sessions, 'native-continuation.jsonl'), effects = path.join(root, 'effects'), preload = path.join(root, 'network.mjs');
-const key = responses || anthropic ? 'installed-continuation-disposable-key' : 'c2VjcmV0';
-const model = responses ? 'gpt-5' : anthropic ? 'claude-haiku-5-5' : 'gemini-3.8-flash';
-const foreignModel = responses ? 'gpt-4o' : anthropic ? 'claude-sonnet-4-6' : 'gemini-2.5-flash';
-const api = scope => ({ 'native-r': 'openai-responses', azure: 'azure-openai-responses', anthropic: 'anthropic-messages', google: 'google-generative-ai', vertex: 'google-vertex' })[scope];
+const key = responses || anthropic || bedrock ? 'installed-continuation-disposable-key' : 'c2VjcmV0';
+const model = responses ? 'gpt-5' : anthropic ? 'claude-haiku-5-5' : bedrock ? 'anthropic.claude-opus-4-6-v1' : 'gemini-3.8-flash';
+const foreignModel = responses ? 'gpt-4o' : anthropic ? 'claude-sonnet-4-6' : bedrock ? 'anthropic.claude-sonnet-4-6' : 'gemini-2.5-flash';
+const api = scope => ({ 'native-r': 'openai-responses', azure: 'azure-openai-responses', anthropic: 'anthropic-messages', google: 'google-generative-ai', vertex: 'google-vertex', bedrock: 'bedrock-converse-stream' })[scope];
 const endpoint = (scope, selected = model) => scope === 'native-r' ? '/v1/responses' : scope === 'azure' ? '/openai/v1/responses?api-version=v1'
-  : scope === 'anthropic' ? '/v1/messages' : `${scope === 'google' ? '/v1beta' : '/v1/projects/continuation-project/locations/us-central1/publishers/google'}/models/${selected}:streamGenerateContent?alt=sse`;
+  : scope === 'anthropic' ? '/v1/messages' : scope === 'bedrock' ? `/model/${encodeURIComponent(selected)}/converse-stream`
+    : `${scope === 'google' ? '/v1beta' : '/v1/projects/continuation-project/locations/us-central1/publishers/google'}/models/${selected}:streamGenerateContent?alt=sse`;
+const summaryEndpoint = value => value.replace('streamGenerateContent?alt=sse', 'generateContent').replace('/converse-stream', '/converse');
 const bodies = [], wires = [];
 function items(turn, redacted = true) {
   return [{ type: 'reasoning', id: `rs_empty_${turn}`, summary: [], encrypted_content: `opaque-empty-${turn}` },
@@ -36,6 +39,13 @@ function blocks(turn) {
 const replay = turn => items(turn).map(item => item.type === 'function_call'
   ? { type: 'function_call', id: 'fc_native', call_id: 'native-call', name: 'continuation_echo', arguments: '{"value":1}' } : item);
 function signedContent(turn, foreign = false, ids = true) {
+  if (bedrock) {
+    if (foreign && mode === 'rpc' && turn === 4) return [{ text: `visible-${turn}` }, { text: `native-${turn}-leftnative-${turn}-right` }];
+    return [{ text: `native-${turn}-left` }, foreign ? { text: `visible-${turn}` }
+      : { reasoningContent: { reasoningText: { text: `visible-${turn}`, signature: 'opaque-[REDACTED]-tail' } } },
+    ...(foreign ? [] : [{ reasoningContent: { redactedContent: 'AP8BgAI=' } }]), { text: `native-${turn}-right` },
+    ...(turn === 1 ? [{ toolUse: { toolUseId: 'native-call', name: 'continuation_echo', input: { value: 1 } } }] : [])];
+  }
   if (anthropic) return [{ type: 'text', text: `native-${turn}-left` },
     foreign ? { type: 'text', text: `visible-${turn}` } : { type: 'thinking', thinking: `visible-${turn}`, signature: 'opaque-[REDACTED]-tail' },
     ...(foreign ? [] : [{ type: 'redacted_thinking', data: `opaque-redacted-${turn}` }]), { type: 'text', text: `native-${turn}-right` },
@@ -46,6 +56,12 @@ function signedContent(turn, foreign = false, ids = true) {
     ...(turn === 1 ? [{ functionCall: { ...(ids ? { id: 'native-call' } : {}), name: 'continuation_echo', args: { value: 1 } }, ...(foreign ? {} : { thoughtSignature: 'dG9vbA==' }) }] : [])];
 }
 function signedBlocks(turn) {
+  if (bedrock) {
+    if (mode === 'rpc' && turn === 4) return [{ type: 'reasoning', text: `visible-${turn}` }, { type: 'text', text: `native-${turn}-leftnative-${turn}-right` }];
+    return [{ type: 'text', text: `native-${turn}-left` }, { type: 'reasoning', text: `visible-${turn}`, thinkingSignature: 'opaque-[REDACTED]-tail' },
+      { type: 'reasoning', text: '', redacted: true, thinkingSignature: 'AP8BgAI=' }, { type: 'text', text: `native-${turn}-right` },
+      ...(turn === 1 ? [{ type: 'tool_call', id: 'native-call', name: 'continuation_echo', input: { value: 1 } }] : [])];
+  }
   if (anthropic) return [{ type: 'text', text: `native-${turn}-left` },
     { type: 'reasoning', text: `visible-${turn}`, thinkingSignature: 'opaque-[REDACTED]-tail' },
     { type: 'reasoning', text: '[Reasoning redacted]', redacted: true, thinkingSignature: `opaque-redacted-${turn}` }, { type: 'text', text: `native-${turn}-right` },
@@ -57,8 +73,19 @@ function signedBlocks(turn) {
     ...(turn === 1 ? [{ type: 'tool_call', id: 'native-call', name: 'continuation_echo', input: { value: 1 }, thoughtSignature: 'dG9vbA==' }] : [])];
 }
 const assistants = body => responses ? body.input.filter(item => item.role === 'assistant' || ['reasoning', 'function_call'].includes(item.type))
-  : anthropic ? body.messages.filter(item => item.role === 'assistant').map(item => item.content) : body.contents.filter(item => item.role === 'model').map(item => item.parts);
-const opaque = responses ? ['opaque-', 'msg_left_', 'msg_right_', 'rs_empty_', 'rs_visible_'] : anthropic ? ['opaque-'] : ['bGFzdA==', 'cmlnaHQ=', 'aGlkZGVu', 'ZW1wdHk=', 'dG9vbA==', 'Zmlyc3Q='];
+  : anthropic || bedrock ? body.messages.filter(item => item.role === 'assistant').map(item => item.content) : body.contents.filter(item => item.role === 'model').map(item => item.parts);
+const opaque = responses ? ['opaque-', 'msg_left_', 'msg_right_', 'rs_empty_', 'rs_visible_'] : anthropic ? ['opaque-'] : bedrock ? ['opaque-', 'AP8BgAI='] : ['bGFzdA==', 'cmlnaHQ=', 'aGlkZGVu', 'ZW1wdHk=', 'dG9vbA==', 'Zmlyc3Q='];
+// Independently frame the copied installed probe's AWS transport; never import checkout/provider internals.
+function bedrockFrame(type, body, messageType = 'event') {
+  const headers = Buffer.concat(Object.entries({ ':message-type': messageType, ':event-type': type, ':content-type': 'application/json' }).map(([name, value]) => {
+    const key = Buffer.from(name), text = Buffer.from(value), length = Buffer.alloc(2); length.writeUInt16BE(text.length);
+    return Buffer.concat([Buffer.from([key.length]), key, Buffer.from([7]), length, text]);
+  }));
+  const payload = Buffer.from(JSON.stringify(body)), frame = Buffer.alloc(16 + headers.length + payload.length);
+  frame.writeUInt32BE(frame.length); frame.writeUInt32BE(headers.length, 4); frame.writeUInt32BE(crc32(frame.subarray(0, 8)), 8);
+  headers.copy(frame, 12); payload.copy(frame, 12 + headers.length); frame.writeUInt32BE(crc32(frame.subarray(0, -4)), frame.length - 4);
+  return frame;
+}
 let fixtureError, summaryExpected = false, overflowRemaining = 0, partialFailure = false, holdNative = false, endNative = false, heldClosed, resetPeer;
 const overflowPrivate = 'PRIVATE_OVERFLOW_DIAGNOSTIC', streamPrivate = 'PRIVATE_NATIVE_STREAM_DIAGNOSTIC', cancelMarker = 'PUBLIC_WITHDRAW_BOUNDARY.';
 const resetMarker = 'PUBLIC_TRANSPORT_RESET_BOUNDARY.'; let holdMarker = cancelMarker;
@@ -75,6 +102,37 @@ const server = createServer(async (request, response) => {
       response.end(JSON.stringify({ error: { code: 'context_length_exceeded', message: `${overflowPrivate} ${key}` } })); return;
     }
     const summary = summaryExpected, failing = partialFailure, withdrawing = holdNative, ending = endNative; summaryExpected = false; partialFailure = false; holdNative = false; endNative = false;
+    if (bedrock) {
+      const content = signedContent(turn).map(block => block.reasoningContent?.reasoningText
+        ? { reasoningContent: { reasoningText: { ...block.reasoningContent.reasoningText, signature: `opaque-${key}-tail` } } } : block);
+      if (summary) {
+        response.writeHead(200, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ output: { message: { role: 'assistant', content } }, stopReason: 'end_turn', usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } })); return;
+      }
+      if (failing || withdrawing || ending) content.push({ toolUse: { toolUseId: 'unpublished-call', name: 'continuation_echo', input: { value: 999 } } });
+      if (withdrawing) content.push({ text: holdMarker });
+      const frames = [bedrockFrame('messageStart', { role: 'assistant' })];
+      for (const [contentBlockIndex, block] of content.entries()) {
+        const delta = value => frames.push(bedrockFrame('contentBlockDelta', { contentBlockIndex, delta: value }));
+        if (block.text !== undefined) delta({ text: block.text });
+        else if (block.toolUse) {
+          frames.push(bedrockFrame('contentBlockStart', { contentBlockIndex, start: { toolUse: { toolUseId: block.toolUse.toolUseId, name: block.toolUse.name } } }));
+          delta({ toolUse: { input: JSON.stringify(block.toolUse.input) } });
+        } else if (block.reasoningContent.reasoningText) {
+          delta({ reasoningContent: { text: block.reasoningContent.reasoningText.text } });
+          for (const signature of ['opaque-', `${key}-tail`]) delta({ reasoningContent: { signature } });
+        } else for (const redactedContent of ['AP8=', 'AYAC']) delta({ reasoningContent: { redactedContent } });
+        frames.push(bedrockFrame('contentBlockStop', { contentBlockIndex }));
+      }
+      if (failing) frames.push(bedrockFrame('internalServerException', { message: `${streamPrivate} ${key}` }, 'exception'));
+      else if (!withdrawing && !ending) frames.push(bedrockFrame('messageStop', { stopReason: turn === 1 ? 'tool_use' : 'end_turn' }),
+        bedrockFrame('metadata', { usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } }));
+      response.writeHead(200, { 'Content-Type': 'application/vnd.amazon.eventstream' });
+      if (withdrawing) {
+        resetPeer = () => response.socket.resetAndDestroy(); heldClosed = new Promise(resolve => response.once('close', resolve)); response.write(Buffer.concat(frames)); return;
+      }
+      response.end(Buffer.concat(frames)); return;
+    }
     if (!responses) {
       const content = signedContent(turn);
       if (failing || withdrawing || ending) content.push(anthropic ? { type: 'tool_use', id: 'unpublished-call', name: 'continuation_echo', input: { value: 999 } }
@@ -160,6 +218,8 @@ try {
         ? (url.origin === 'https://api.openai.com' && url.pathname === '/v1/responses')
           || (url.origin === 'https://continuation.openai.azure.com' && url.pathname === '/openai/v1/responses')
         : ${JSON.stringify(anthropic)} ? url.origin === 'https://api.anthropic.com' && url.pathname === '/v1/messages'
+        : ${JSON.stringify(bedrock)} ? url.origin === 'https://bedrock-runtime.us-east-1.amazonaws.com'
+          && ${JSON.stringify([model, foreignModel])}.some(model => ['/converse', '/converse-stream'].some(operation => url.pathname === '/model/' + encodeURIComponent(model) + operation))
         : ['https://generativelanguage.googleapis.com', 'https://us-central1-aiplatform.googleapis.com'].includes(url.origin)
           && /\\/models\\/gemini-(3\\.8|2\\.5)-flash:(streamGenerateContent|generateContent)$/.test(url.pathname);
       if (!allowed) throw new Error('Non-fixture transport refused');
@@ -169,7 +229,8 @@ try {
   const env = { ...process.env, AI_HARNESS_AGENT_DIR: agent, AI_HARNESS_EXTENSIONS: '',
     ...(responses ? { OPENAI_API_KEY: key, AZURE_OPENAI_API_KEY: key, AZURE_OPENAI_BASE_URL: 'https://continuation.openai.azure.com/openai/v1',
       AZURE_OPENAI_MODEL: model, AZURE_OPENAI_DEPLOYMENT_NAME_MAP: 'gpt-5=owned-deployment,gpt-4o=foreign-deployment' }
-      : anthropic ? { ANTHROPIC_API_KEY: key } : { GEMINI_API_KEY: key, GOOGLE_API_KEY: key, GOOGLE_VERTEX_ACCESS_TOKEN: key,
+      : anthropic ? { ANTHROPIC_API_KEY: key } : bedrock ? { AWS_BEARER_TOKEN_BEDROCK: key, AWS_REGION: 'us-east-1', BEDROCK_MODEL: model }
+        : { GEMINI_API_KEY: key, GOOGLE_API_KEY: key, GOOGLE_VERTEX_ACCESS_TOKEN: key,
         GOOGLE_CLOUD_PROJECT: 'continuation-project', GOOGLE_CLOUD_LOCATION: 'us-central1' }), NODE_OPTIONS: '--import=' + JSON.stringify(preload) };
   const start = (sessionId = 'native-continuation') => {
     const child = spawn('ai-harness', ['--no-approve', '--offline', '--api-key', key, '--session-dir', sessions, '--session-id', sessionId,
@@ -262,28 +323,29 @@ try {
     const original = sourceAssistants(await readJournal());
     await process.command({ type: 'set_model', id: 'foreign-model', provider, modelId: foreignModel }); await process.prompt(3);
     assert.deepEqual(assistants(bodies[3]), [1, 2, 3].map(turn => signedContent(turn, true, false)));
-    if (!anthropic) {
+    if (!anthropic && !bedrock) {
       await process.command({ type: 'set_model', id: 'foreign-provider', provider: other, modelId: model }); await process.prompt(4);
       assert.deepEqual(assistants(bodies[4]), [1, 2, 3, 4].map(turn => signedContent(turn, true)));
     }
     assert.deepEqual(sourceAssistants(await readJournal()).slice(0, 3), original);
     await process.command({ type: 'set_model', id: 'owner', provider, modelId: model });
-    await process.command({ type: 'context_edit', id: 'edit', targetEntryId: original[0].id, replacement: 'edited answer' }); await process.prompt(anthropic ? 4 : 5);
+    await process.command({ type: 'context_edit', id: 'edit', targetEntryId: original[0].id, replacement: 'edited answer' }); await process.prompt(anthropic || bedrock ? 4 : 5);
     assert.deepEqual(assistants(bodies.at(-1)), [
       anthropic ? [{ type: 'tool_use', id: 'native-call', name: 'continuation_echo', input: { value: 1 } }, { type: 'text', text: 'edited answer' }]
-        : [{ functionCall: { id: 'native-call', name: 'continuation_echo', args: { value: 1 } }, thoughtSignature: 'dG9vbA==' }, { text: 'edited answer' }],
-      signedContent(2), signedContent(3), ...Array.from({ length: anthropic ? 1 : 2 }, (_, index) => signedContent(index + 4, true)),
+        : bedrock ? [{ toolUse: { toolUseId: 'native-call', name: 'continuation_echo', input: { value: 1 } } }, { text: 'edited answer' }]
+          : [{ functionCall: { id: 'native-call', name: 'continuation_echo', args: { value: 1 } }, thoughtSignature: 'dG9vbA==' }, { text: 'edited answer' }],
+      signedContent(2), signedContent(3), ...Array.from({ length: anthropic || bedrock ? 1 : 2 }, (_, index) => signedContent(index + 4, true)),
     ]);
     const result = await process.finish(), entries = await readJournal(), history = sourceAssistants(entries);
     assert.deepEqual(history.slice(0, 3), original);
-    assert.deepEqual(history.map(entry => entry.blocks), Array.from({ length: anthropic ? 5 : 6 }, (_, index) => signedBlocks(index + 1)));
-    for (const [index, entry] of history.entries()) { const scope = !anthropic && index === 4 ? other : provider;
+    assert.deepEqual(history.map(entry => entry.blocks), Array.from({ length: anthropic || bedrock ? 5 : 6 }, (_, index) => signedBlocks(index + 1)));
+    for (const [index, entry] of history.entries()) { const scope = !anthropic && !bedrock && index === 4 ? other : provider;
       assert.equal(entry.provider, scope); assert.equal(entry.api, api(scope)); assert.equal(entry.model, index === 3 ? foreignModel : model); }
-    assert.equal(entries.filter(entry => entry.type === 'context_edit').length, 1); assert.equal(bodies.length, anthropic ? 5 : 6);
+    assert.equal(entries.filter(entry => entry.type === 'context_edit').length, 1); assert.equal(bodies.length, anthropic || bedrock ? 5 : 6);
     assert(!JSON.stringify(result.records).includes(key));
     for (const value of opaque) assert(!JSON.stringify(result.records.filter(record => record.type === 'message_end')).includes(value));
   }
-  const scopes = mode === 'rpc' ? anthropic ? Array(5).fill(provider) : [provider, provider, provider, provider,
+  const scopes = mode === 'rpc' ? anthropic || bedrock ? Array(5).fill(provider) : [provider, provider, provider, provider,
     responses ? provider === 'native-r' ? 'azure' : 'native-r' : provider === 'google' ? 'vertex' : 'google', provider] : Array(3).fill(provider);
   if (responses) {
     assert.deepEqual(wires, scopes.map(scope => ({ path: endpoint(scope), authorization: scope === 'native-r' ? `Bearer ${key}` : undefined, apiKey: scope === 'azure' ? key : undefined })));
@@ -292,13 +354,15 @@ try {
     for (const body of bodies.slice(1)) assert.deepEqual(body.input.filter(item => item.type === 'function_call_output'), [{ type: 'function_call_output', call_id: 'native-call', output: 'native-tool-result' }]);
   } else {
     assert.deepEqual(wires, scopes.map((scope, index) => ({ path: endpoint(scope, index === 3 ? foreignModel : model), apiKey: undefined,
-      authorization: scope === 'vertex' ? `Bearer ${key}` : undefined, googleKey: scope === 'google' ? key : undefined, anthropicKey: scope === 'anthropic' ? key : undefined })));
+      authorization: scope === 'vertex' || scope === 'bedrock' ? `Bearer ${key}` : undefined, googleKey: scope === 'google' ? key : undefined, anthropicKey: scope === 'anthropic' ? key : undefined })));
     if (anthropic) assert.deepEqual(bodies.map(body => body.model), scopes.map((_, index) => index === 3 ? foreignModel : model));
     for (const body of bodies.slice(1)) assert.deepEqual(anthropic
       ? body.messages.flatMap(item => Array.isArray(item.content) ? item.content : []).filter(item => item.type === 'tool_result')
-      : body.contents.flatMap(item => item.parts).filter(item => item.functionResponse), anthropic
+      : bedrock ? body.messages.flatMap(item => item.content).filter(item => item.toolResult)
+        : body.contents.flatMap(item => item.parts).filter(item => item.functionResponse), anthropic
       ? [{ type: 'tool_result', tool_use_id: 'native-call', content: 'native-tool-result', is_error: false, ...(body === bodies[1] ? { cache_control: { type: 'ephemeral' } } : {}) }]
-      : [{ functionResponse: { ...(body === bodies[3] ? {} : { id: 'native-call' }), name: 'continuation_echo', response: { output: 'native-tool-result' } } }]);
+      : bedrock ? [{ toolResult: { toolUseId: 'native-call', content: [{ text: 'native-tool-result' }], status: 'success' } }]
+        : [{ functionResponse: { ...(body === bodies[3] ? {} : { id: 'native-call' }), name: 'continuation_echo', response: { output: 'native-tool-result' } } }]);
   }
   if (mode !== 'rpc') {
     const Core = await import('@ai-harness/core'), config = { type: provider, model, apiKey: key,
@@ -322,7 +386,7 @@ try {
     const before = await readJournal(); summaryExpected = true;
     const automatic = await start().finish(), summary = 'native-5-leftnative-5-right', body = bodies[4];
     assert.equal(bodies.length, 6); assert.equal(summaryExpected, false);
-    assert.equal(body.max_output_tokens ?? body.max_tokens ?? body.generationConfig?.maxOutputTokens, 4096); assert.deepEqual(body.tools ?? body.toolConfig?.tools ?? [], []);
+    assert.equal(body.max_output_tokens ?? body.max_tokens ?? body.generationConfig?.maxOutputTokens ?? body.inferenceConfig?.maxTokens, 4096); assert.deepEqual(body.tools ?? body.toolConfig?.tools ?? [], []);
     const history = JSON.stringify(assistants(body)); assert(history.includes('native-1-left')); assert(!history.includes('visible-'));
     assert(JSON.stringify(body).includes('PUBLIC_HEADLESS_FILLER')); assert(JSON.stringify(body).includes('native-tool-result'));
     for (const value of [...opaque, 'Signature', 'encrypted_content']) assert(!history.includes(value), value);
@@ -357,7 +421,7 @@ try {
     assert.deepEqual(sourceAssistants(final).map(value => value.blocks), [1, 2, 3, 4, 6, 7].map(blocks));
     for (const value of sourceAssistants(final)) { assert.equal(value.provider, provider); assert.equal(value.api, api(provider)); assert.equal(value.model, model); }
     for (const value of after.filter(value => value.type !== 'metadata')) assert.deepEqual(final.find(item => item.id === value.id), value);
-    assert.deepEqual(wires.slice(3), [wires[0], { ...wires[0], path: wires[0].path.replace('streamGenerateContent?alt=sse', 'generateContent') }, wires[0], wires[0]]);
+    assert.deepEqual(wires.slice(3), [wires[0], { ...wires[0], path: summaryEndpoint(wires[0].path) }, wires[0], wires[0]]);
   }
   if (mode === 'rpc') {
     const Core = await import('@ai-harness/core'), before = await readJournal(), original = sourceAssistants(before), turn = bodies.length;
@@ -365,7 +429,7 @@ try {
     const compacted = await work.command({ type: 'compact', id: 'native-compact' });
     const summary = `native-${turn + 1}-leftnative-${turn + 1}-right`, summaryBody = bodies[turn];
     assert.equal(bodies.length, turn + 1); assert.equal(summaryExpected, false);
-    assert.equal(compacted.data.summary, summary); assert.equal(summaryBody.max_output_tokens ?? summaryBody.max_tokens ?? summaryBody.generationConfig?.maxOutputTokens, 4096);
+    assert.equal(compacted.data.summary, summary); assert.equal(summaryBody.max_output_tokens ?? summaryBody.max_tokens ?? summaryBody.generationConfig?.maxOutputTokens ?? summaryBody.inferenceConfig?.maxTokens, 4096);
     assert.deepEqual(summaryBody.tools ?? summaryBody.toolConfig?.tools ?? [], []);
     const summaryHistory = JSON.stringify(assistants(summaryBody));
     assert(summaryHistory.includes('edited answer')); assert(!summaryHistory.includes('visible-'));
@@ -387,7 +451,8 @@ try {
     assert(JSON.stringify(firstReplay).includes(summary));
     assert.deepEqual(responses ? firstReplay.input.filter(item => item.type === 'function_call_output')
       : anthropic ? firstReplay.messages.flatMap(item => Array.isArray(item.content) ? item.content : []).filter(item => item.type === 'tool_result')
-      : firstReplay.contents.flatMap(item => item.parts).filter(item => item.functionResponse), []);
+      : bedrock ? firstReplay.messages.flatMap(item => item.content).filter(item => item.toolResult)
+        : firstReplay.contents.flatMap(item => item.parts).filter(item => item.functionResponse), []);
     const result = await work.finish();
     assert.deepEqual(result.records.filter(record => record.type === 'compaction_start'), [{ type: 'compaction_start', reason: 'manual' }]);
     assert.equal(result.records.filter(record => record.type === 'compaction_end' && record.aborted === false && record.result?.summary === summary).length, 1);
@@ -396,9 +461,9 @@ try {
     assert.deepEqual(assistants(bodies[turn + 2]), responses ? [turn, turn + 2].flatMap(replay) : [turn, turn + 2].map(value => signedContent(value)));
     for (const value of opaque) assert(!JSON.stringify(resumedResult.records).includes(value), value);
     assert.equal(bodies.length, turn + 3);
-    const expectedWire = { path: endpoint(provider), authorization: provider === 'native-r' || provider === 'vertex' ? `Bearer ${key}` : undefined,
+    const expectedWire = { path: endpoint(provider), authorization: provider === 'native-r' || provider === 'vertex' || bedrock ? `Bearer ${key}` : undefined,
       apiKey: provider === 'azure' ? key : undefined, ...(!responses ? { googleKey: provider === 'google' ? key : undefined, anthropicKey: anthropic ? key : undefined } : {}) };
-    assert.deepEqual(wires.slice(turn), [{ ...expectedWire, path: expectedWire.path.replace('streamGenerateContent?alt=sse', 'generateContent') }, expectedWire, expectedWire]);
+    assert.deepEqual(wires.slice(turn), [{ ...expectedWire, path: summaryEndpoint(expectedWire.path) }, expectedWire, expectedWire]);
     const after = await readJournal(); assert.deepEqual(sourceAssistants(after).map(entry => entry.blocks), [...original.map(entry => entry.blocks), blocks(turn + 2), blocks(turn + 3)]);
     const metadata = after.find(entry => entry.type === 'metadata');
     assert.equal(metadata.activeLeafId, sourceAssistants(after).at(-1).id);
@@ -450,7 +515,7 @@ try {
     const beforeAuto = await readJournal(fork.id), automatic = start(fork.id); summaryExpected = true; await automatic.prompt(1);
     const autoResult = await automatic.finish(), autoSummary = `native-${autoTurn + 1}-leftnative-${autoTurn + 1}-right`, autoBody = bodies[autoTurn];
     assert.equal(bodies.length, autoTurn + 2); assert.equal(summaryExpected, false);
-    assert.equal(autoBody.max_output_tokens ?? autoBody.max_tokens ?? autoBody.generationConfig?.maxOutputTokens, 4096);
+    assert.equal(autoBody.max_output_tokens ?? autoBody.max_tokens ?? autoBody.generationConfig?.maxOutputTokens ?? autoBody.inferenceConfig?.maxTokens, 4096);
     assert.deepEqual(autoBody.tools ?? autoBody.toolConfig?.tools ?? [], []);
     const autoHistory = JSON.stringify(assistants(autoBody)); assert(autoHistory.includes(`native-${turn}-left`)); assert(!autoHistory.includes('visible-'));
     assert(JSON.stringify(autoBody).includes('PUBLIC_AUTO_FILLER'));
@@ -474,7 +539,7 @@ try {
     assert.deepEqual(assistants(bodies.at(-1)), responses ? [autoTurn, autoTurn + 2].flatMap(replay) : [autoTurn, autoTurn + 2].map(value => signedContent(value)));
     assert(JSON.stringify(bodies.at(-1)).includes(autoSummary)); assert(!JSON.stringify(bodies.at(-1)).includes('PUBLIC_AUTO_FILLER'));
     assert.deepEqual(autoResumedResult.records.filter(record => ['compaction_start', 'compaction_end'].includes(record.type)), []);
-    assert.deepEqual(wires.slice(turn + 4), [expectedWire, { ...expectedWire, path: expectedWire.path.replace('streamGenerateContent?alt=sse', 'generateContent') }, expectedWire, expectedWire]);
+    assert.deepEqual(wires.slice(turn + 4), [expectedWire, { ...expectedWire, path: summaryEndpoint(expectedWire.path) }, expectedWire, expectedWire]);
     for (const result of [belowResult, autoResult, autoResumedResult]) for (const value of opaque) assert(!JSON.stringify(result.records).includes(value), value);
     const finalAuto = await readJournal(fork.id);
     assert.deepEqual(sourceAssistants(finalAuto).map(value => value.blocks), [...sourceAssistants(beforeAuto).map(value => value.blocks), blocks(autoTurn + 2), blocks(autoTurn + 3)]);
@@ -522,7 +587,7 @@ try {
     }
     for (const [offset, summary] of [[overflowTurn, overflowSummary], [exhaustedTurn, exhaustedSummary]]) {
       const body = bodies[offset + 1], history = JSON.stringify(assistants(body));
-      assert.equal(body.max_output_tokens ?? body.max_tokens ?? body.generationConfig?.maxOutputTokens, 4096); assert.deepEqual(body.tools ?? body.toolConfig?.tools ?? [], []);
+      assert.equal(body.max_output_tokens ?? body.max_tokens ?? body.generationConfig?.maxOutputTokens ?? body.inferenceConfig?.maxTokens, 4096); assert.deepEqual(body.tools ?? body.toolConfig?.tools ?? [], []);
       assert(history.includes('native-')); assert(!history.includes('visible-')); for (const value of [...opaque, 'Signature', 'encrypted_content', overflowPrivate]) assert(!history.includes(value), value);
       const entry = (await readJournal(fork.id)).find(value => value.type === 'compaction' && value.summary === summary); assert(entry);
       assert.equal(entry.provider, provider); assert.equal(entry.model, model); assert.equal(entry.usage.inputTokens, 5); assert.equal(entry.usage.outputTokens, 2);
@@ -534,13 +599,13 @@ try {
     assert.deepEqual(sourceAssistants(finalRecovery).map(value => value.blocks), [...sourceAssistants(finalAuto).map(value => value.blocks), blocks(overflowTurn + 3), blocks(overflowTurn + 4), blocks(exhaustedTurn + 4)]);
     for (const entry of finalAuto.filter(entry => entry.type !== 'metadata')) assert.deepEqual(finalRecovery.find(value => value.id === entry.id), entry);
     assert.equal(finalRecovery.filter(value => value.type === 'compaction').length, 4); assert(!(await readFile(path.join(sessions, fork.id + '.jsonl'), 'utf8')).includes(overflowPrivate));
-    assert.deepEqual(wires.slice(overflowTurn), [expectedWire, { ...expectedWire, path: expectedWire.path.replace('streamGenerateContent?alt=sse', 'generateContent') }, expectedWire, expectedWire,
-      expectedWire, { ...expectedWire, path: expectedWire.path.replace('streamGenerateContent?alt=sse', 'generateContent') }, expectedWire, expectedWire]);
+    assert.deepEqual(wires.slice(overflowTurn), [expectedWire, { ...expectedWire, path: summaryEndpoint(expectedWire.path) }, expectedWire, expectedWire,
+      expectedWire, { ...expectedWire, path: summaryEndpoint(expectedWire.path) }, expectedWire, expectedWire]);
     assert.equal(await readFile(journal, 'utf8'), sourceBytes);
     const partialTurn = bodies.length, broken = start(fork.id); partialFailure = true;
     await broken.prompt(1); const brokenResult = await broken.finish(); assert.equal(partialFailure, false); assert.equal(bodies.length, partialTurn + 1);
     const failure = provider === 'native-r' ? 'OpenAI response request failed.' : provider === 'azure' ? 'The provider response failed.'
-      : anthropic ? 'Invalid Anthropic response.' : 'Invalid Google response.';
+      : anthropic ? 'Invalid Anthropic response.' : bedrock ? 'Bedrock streaming error.' : 'Invalid Google response.';
     const partialEntries = await readJournal(fork.id), failed = sourceAssistants(partialEntries).at(-1);
     assert.equal(sourceAssistants(partialEntries).length, sourceAssistants(finalRecovery).length + 1);
     assert.equal(failed.content, `native-${partialTurn + 1}-leftnative-${partialTurn + 1}-right`); assert.equal(failed.metadata.outputError, failure);
@@ -591,7 +656,7 @@ try {
     assert.deepEqual(wires.slice(withdrawnTurn), [expectedWire, expectedWire]); assert.equal(await readFile(journal, 'utf8'), sourceBytes);
     const eofTurn = bodies.length, unfinished = start(fork.id); endNative = true;
     await unfinished.prompt(1); const unfinishedResult = await unfinished.finish(); assert.equal(endNative, false); assert.equal(bodies.length, eofTurn + 1);
-    const eofFailure = provider === 'azure' ? 'The provider response was invalid.' : failure;
+    const eofFailure = provider === 'azure' ? 'The provider response was invalid.' : bedrock ? 'Invalid Bedrock event stream.' : failure;
     const eofThinking = unfinishedResult.records.filter(record => record.type === 'message_update' && record.assistantMessageEvent?.type === 'thinking_delta')
       .map(record => record.assistantMessageEvent.delta).join('');
     assert.equal(eofThinking, new Core.CredentialRedactor([key]).createStream().push(`visible-${eofTurn + 1}`));

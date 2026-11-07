@@ -4410,6 +4410,7 @@ export class BedrockProvider extends AiProvider {
     if (!this.validateConfig()) throw new Error('AWS Bedrock credentials are required');
     const requestedModel = this.ownsNativeProfiles ? options?.model || String(this.config.model) : String(this.config.model);
     const native = this.ownsNativeProfiles && hasBedrockProfile(requestedModel);
+    const signed = native && requestedModel === BEDROCK_SIGNED_MODEL, owner = this.config.type;
     const model = encodeURIComponent(requestedModel);
     let url: URL;
     try {
@@ -4441,12 +4442,12 @@ export class BedrockProvider extends AiProvider {
     const toolCalls = blocks.flatMap(block => block.toolUse ? [{
       id: block.toolUse.toolUseId, name: block.toolUse.name, input: block.toolUse.input,
     }] : []);
-    const replay = native && requestedModel === BEDROCK_SIGNED_MODEL
-      ? bedrockReplayBlocks(blocks, data.output?.message?.role, data.stopReason) : undefined;
+    const replay = signed ? bedrockReplayBlocks(blocks, data.output?.message?.role, data.stopReason) : undefined;
     const reasoning = replay?.filter(block => block.type === 'reasoning' && !block.redacted).map(block => block.type === 'reasoning' ? block.text : '').join('');
     return {
       content,
       ...(replay?.length ? { blocks: replay } : {}), ...(reasoning ? { reasoning } : {}),
+      ...(signed ? { provider: owner } : {}),
       ...lengthStop(data.stopReason),
       ...(native ? { api: 'bedrock-converse-stream' } : {}),
       model: this.ownsNativeProfiles ? requestedModel : String(this.config.model),
@@ -4478,6 +4479,7 @@ export class BedrockProvider extends AiProvider {
       if (options?.signal?.aborted) throw new Error('Bedrock request aborted.');
       const model = options?.model || String(this.config.model);
       const native = this.ownsNativeProfiles && hasBedrockProfile(model);
+      const signed = native && model === BEDROCK_SIGNED_MODEL, owner = this.config.type;
       const url = this.streamEndpoint(model);
       const prepared = this.requestBody(messages, options, this.ownsNativeProfiles ? model : undefined);
       if (native) applyBedrockProfileSimplePolicy(model, prepared, options, messages, this.region);
@@ -4488,9 +4490,9 @@ export class BedrockProvider extends AiProvider {
       });
       if (!response.ok) await rejectProviderHttpResponse(response, `Bedrock API error (${response.status}).`);
       const result = await consumeBedrockStream(response, model, onChunk, options?.signal,
-        native ? value => bedrockProfileUsage(value, model) : undefined, native && model === BEDROCK_SIGNED_MODEL);
+        native ? value => bedrockProfileUsage(value, model) : undefined, signed);
       if (options?.signal?.aborted) throw new Error('Bedrock request aborted.');
-      onComplete?.(result);
+      onComplete?.(signed ? { ...result, provider: owner } : result);
     } catch (error) {
       const normalized = error instanceof Error ? error : new Error(String(error));
       onError?.(normalized);

@@ -804,9 +804,11 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
     const native = signedContent.map(block => block.type === 'thinking' ? { ...block, signature: 'opaque-disposable-profile-key' } : block);
     let turn = 0;
     try {
+      const clock = vi.spyOn(Date, 'now');
       await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry, provider: 'operator-alias', tools,
         redactText, toolContext: { sessionManager: manager, notify: () => {} }, streamTurn: async messages => {
           const first = turn++ === 0, thinking = first ? 'max' : 'low';
+          clock.mockReturnValue(Date.parse(first ? '2030-01-02T00:00:00Z' : '2030-01-01T00:00:00Z'));
           const content = first ? native : native.filter(block => block.type !== 'tool_use');
           f.reply({ content, stop_reason: first ? 'tool_use' : 'end_turn', usage: observed }, signedEvents(content, first ? 'tool_use' : 'end_turn'));
           return stream ? streamProviderTurn({ provider: f.provider, providerName: 'operator-alias', model: 'claude-haiku-5-5',
@@ -816,6 +818,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
             : f.call(false, 'none', { thinking, tools }, messages);
         } });
       const history = session.messages.filter(message => message.role === 'assistant');
+      expect(history[0].timestamp.getTime()).toBeGreaterThan(history[1].timestamp.getTime());
       expect(history.map(message => message.metadata?.providerThinkingLevel)).toEqual(['max', 'low']);
       expect(history.map(message => message.metadata?.thinkingLevel)).toEqual([undefined, undefined]);
       expect(history.map(message => message.api)).toEqual(['anthropic-messages', 'anthropic-messages']);
@@ -869,6 +872,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       expect(canonical).toEqual(beforeSummary);
       const kept = clone.messages.filter(message => message.role === 'assistant').at(-1)!;
       const sourceBytes = await readFile(file, 'utf8');
+      const cloneRaw = await restarted.getRawEntries(clone.id), cloneAssistantIds = clone.messages.filter(message => message.role === 'assistant').map(message => message.id);
       await restarted.applyCompaction(clone.id, 'PUBLIC_COMPACTED_PREFIX', kept.id);
       const compactedManager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson });
       const compactedSession = (await compactedManager.loadFromStore(clone.id))!;
@@ -879,7 +883,12 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       expect(compacted.filter(message => message.role === 'tool')).toEqual([]);
       const raw = await compactedManager.getRawEntries(clone.id);
       expect(raw).toContainEqual(expect.objectContaining({ type: 'compaction', firstKeptEntryId: kept.id, summary: 'PUBLIC_COMPACTED_PREFIX' }));
-      expect(raw.filter(entry => entry.type === 'message' && entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(message => message.blocks));
+      // Copies may timestamp-sort raw entries; parent order owns replay, while compaction preserves the copied journal verbatim.
+      const durable = raw.filter(entry => entry.type !== 'metadata');
+      expect(durable.slice(0, -1)).toEqual(cloneRaw.filter(entry => entry.type !== 'metadata'));
+      expect(durable.at(-1)).toMatchObject({ type: 'compaction', firstKeptEntryId: kept.id });
+      const rawMessages = raw.filter(entry => entry.type === 'message');
+      expect(cloneAssistantIds.map(id => rawMessages.find(entry => entry.id === id)?.blocks)).toEqual(history.map(message => message.blocks));
       const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8');
       expect((await stat(compactedFile)).mode & 0o777).toBe(0o600);
       await f.call(stream, 'none', { thinking: 'low', systemPrompt: 'TRUSTED_SYSTEM_PREFIX' }, compacted);

@@ -65,7 +65,7 @@ describe('native Bedrock ConverseStream', () => {
       let result: ChatResponse | undefined;
       if (operation === 'chat') result = await provider.chat(input, options);
       else await provider.streamChat(input, (text, event) => { deltas.push(text, JSON.stringify(event ?? {})); }, value => { result = value; }, undefined, options);
-      expect(result).toMatchObject({ model: row.model, api: 'bedrock-converse-stream', content: 'first answer', blocks: expected });
+      expect(result).toMatchObject({ provider: 'bedrock', model: row.model, api: 'bedrock-converse-stream', content: 'first answer', blocks: expected });
       const assistant: Message = { id: 'a', role: 'assistant', timestamp: new Date(1), content: result!.content,
         provider: 'bedrock', model: row.model, api: result!.api, blocks: result!.blocks };
       const history = [...input, assistant, { id: 'u2', role: 'user' as const, content: 'followup', timestamp: new Date(2) }];
@@ -148,7 +148,22 @@ describe('native Bedrock ConverseStream', () => {
       vi.stubGlobal('fetch', vi.fn(async () => response(Buffer.from(signedReference.rows[0].turns[0].wire.response.bytesBase64, 'base64'))));
       let completed: ChatResponse | undefined;
       await other.streamChat(messages, () => {}, value => { completed = value; });
-      expect(completed?.content).toBe('first answer'); expect(completed).not.toHaveProperty('blocks');
+      expect(completed?.content).toBe('first answer'); expect(completed).not.toHaveProperty('blocks'); expect(completed).not.toHaveProperty('provider');
+    }
+    for (const binary of [false, true]) {
+      const labelled = create({ type: 'operator-bedrock', model });
+      labelled.getProviderType = () => 'getter-label';
+      vi.stubGlobal('fetch', vi.fn(async () => {
+        await Promise.resolve();
+        (labelled as unknown as { config: { type: string } }).config.type = 'late-label';
+        return binary ? response(Buffer.from(signedReference.rows[0].turns[0].wire.response.bytesBase64, 'base64'))
+          : Response.json({ output: { message: { role: 'assistant', content: [signed] } }, stopReason: 'end_turn' });
+      }));
+      let result: ChatResponse | undefined;
+      if (binary) await labelled.streamChat(messages, () => {}, value => { result = value; });
+      else result = await labelled.chat(messages);
+      // The existing Bedrock constructor owns canonical identity, not the supplied/getter/late label.
+      expect(result).toMatchObject({ provider: 'bedrock', model, api: 'bedrock-converse-stream' });
     }
   });
 
