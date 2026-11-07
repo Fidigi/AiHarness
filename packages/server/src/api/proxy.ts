@@ -1285,11 +1285,16 @@ export function createProxyRoutes(
 
       const ownedMessages = sanitizedProxySummaryMessages(messages);
       assertCompactionTranscript(ownedMessages);
+      let chatOptions = safeOptions ?? undefined;
+      if (resolveThinkingBudgets) {
+        const thinkingBudgets = copyThinkingBudgets(await resolveThinkingBudgets());
+        if (thinkingBudgets !== undefined) chatOptions = { ...chatOptions, thinkingBudgets };
+      }
       if (aborted()) return;
       const result = await sendChat(
         proxyType,
         ownedMessages,
-        { ...(safeOptions ?? {}), stream: false, systemPrompt: `You are a conversation summarizer. ${instructions}`, tools: [], maxTokens: Math.min(4096, safeOptions?.maxTokens ?? 4096), signal: lifetime.signal },
+        { ...chatOptions, stream: false, systemPrompt: `You are a conversation summarizer. ${instructions}`, tools: [], maxTokens: Math.min(4096, safeOptions?.maxTokens ?? 4096), signal: lifetime.signal },
         undefined, true,
       );
 
