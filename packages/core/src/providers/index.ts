@@ -5477,16 +5477,21 @@ export class MiniMaxProvider extends AnthropicProvider {
     const converted = super.buildAnthropicMessages(messages, native, model), original = (native ? messages : toolImageMessages(messages)).filter(message => message.role !== 'system');
     for (let index = 0; index < original.length; index++) {
       const message = original[index];
-      if (native && message.role === 'tool') {
-        const content = converted[index].content as Array<Record<string, unknown>>, images = messageImages(message);
-        content[0].is_error = message.isError === true;
-        if (images.length) content[0].content = [
-          { type: 'text', text: message.content || '(see attached image)' },
-          ...images.map(image => {
-            const data = parseDataImage(image.url); if (!data) throw new Error('Invalid MiniMax image input.');
-            return { type: 'image', source: { type: 'base64', media_type: data.mediaType, data: data.data } };
-          }),
-        ];
+      if (native && (message.role === 'tool' || message.role === 'user')) {
+        const blocks: Array<Record<string, unknown>> = (message.blocks ?? []).flatMap((block): Array<Record<string, unknown>> => {
+          if (block.type === 'text') return [{ type: 'text', text: block.text }];
+          if (block.type !== 'image') return [];
+          const data = parseDataImage(block.url); if (!data) throw new Error('Invalid MiniMax image input.');
+          return [{ type: 'image', source: { type: 'base64', media_type: data.mediaType, data: data.data } }];
+        });
+        const hasText = blocks.some(block => block.type === 'text'), hasImages = blocks.some(block => block.type === 'image');
+        if (!hasText && message.content) blocks.unshift({ type: 'text', text: message.content });
+        if (message.role === 'tool') {
+          const content = converted[index].content as Array<Record<string, unknown>>;
+          content[0].is_error = message.isError === true;
+          if (hasImages && !hasText && !message.content) blocks.unshift({ type: 'text', text: '(see attached image)' });
+          content[0].content = hasImages ? blocks : hasText ? blocks.map(block => block.text).join('\n') : message.content;
+        } else if (hasImages) converted[index].content = blocks.filter(block => block.type !== 'text' || String(block.text).trim());
       }
       if (native && model && message.role === 'assistant' && !messageImages(message).length) continue;
       const reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
@@ -5494,7 +5499,13 @@ export class MiniMaxProvider extends AnthropicProvider {
       const content = converted[index].content;
       converted[index].content = [{ type: 'text', text: reasoning }, ...(typeof content === 'string' ? content ? [{ type: 'text', text: content }] : [] : Array.isArray(content) ? content : [])];
     }
-    return converted;
+    if (!native) return converted;
+    return converted.reduce<typeof converted>((result, message, index) => {
+      if (original[index].role === 'tool' && original[index - 1]?.role === 'tool') {
+        (result.at(-1)!.content as unknown[]).push(...message.content as unknown[]);
+      } else result.push(message);
+      return result;
+    }, []);
   }
   protected override validateMessageResponse(value: unknown, nativeReplay = false): void { validateMiniMaxMessage(value, nativeReplay); }
   protected override createMessageStreamValidator(nativeReplay = false): (value?: unknown) => void { return miniMaxStreamValidator(nativeReplay); }

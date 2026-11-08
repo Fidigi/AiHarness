@@ -303,10 +303,10 @@ describe('native MiniMax simple allocation', () => {
 
 describe('native MiniMax context allocation', () => {
   it('binds system/tool/history/media/usage vectors to independent pinned HTTPS requests', () => {
-    expect(createHash('sha256').update(contextBytes).digest('hex')).toBe('408efc39ad328ac123d32f5e59f1a0e030ddc4fad1ba886c87ec9a5e13efed95');
+    expect(createHash('sha256').update(contextBytes).digest('hex')).toBe('cfe6343ad9e458242ae7b0133923de1bd2e931efd5ca1d0816a4b24f6ea0d3f9');
     expect(contextReference).toMatchObject({ pinnedCommit: '06a466935536f8c9bcacb2d5efc0fc021be1bdff', profiles: 6,
-      scenariosPerProfile: 20, selectedVectors: 120, freshSdkRequests: 138 });
-    expect(contextReference.rows).toHaveLength(120);
+      scenariosPerProfile: 34, selectedVectors: 204, freshSdkRequests: 222 });
+    expect(contextReference.rows).toHaveLength(204);
   });
 
   it.each(['minimax', 'minimax-cn'].flatMap(scope => providers.MINIMAX_MODELS.map(profile => ({ scope, profile }))))(
@@ -314,7 +314,7 @@ describe('native MiniMax context allocation', () => {
       const { calls, baseUrl } = await fixture(), Provider = scope === 'minimax' ? providers.MiniMaxProvider : providers.MiniMaxCnProvider;
       const provider = new Provider({ type: scope, model: profile.id, apiKey: 'disposable', baseUrl }), prepare = captureNativeOutputBudget(provider)!;
       const rows = contextReference.rows.filter(row => row.scope === scope && row.model === profile.id);
-      expect(rows).toHaveLength(20); let requests = 0, refusals = 0;
+      expect(rows).toHaveLength(34); let requests = 0, refusals = 0;
       for (const row of rows) {
         const messages = contextMessages(row), options: providers.ChatOptions = { thinking: row.input.logicalOptions.reasoning,
           systemPrompt: row.input.systemPrompt, tools: structuredClone(row.input.tools), cacheRetention: 'none' };
@@ -342,7 +342,7 @@ describe('native MiniMax context allocation', () => {
         }
         expect(JSON.stringify({ messages, options }), row.input.id).toBe(before);
       }
-      expect({ requests, refusals }).toEqual(profile.id === latest ? { requests: 38, refusals: 2 } : { requests: 34, refusals: 6 });
+      expect({ requests, refusals }).toEqual(profile.id === latest ? { requests: 66, refusals: 2 } : { requests: 46, refusals: 22 });
     });
 });
 
