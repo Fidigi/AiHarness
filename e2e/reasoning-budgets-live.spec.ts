@@ -29,7 +29,9 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
   const cancelMarker = 'PUBLIC_SERVER_WITHDRAWAL_ACK', resetMarker = 'PUBLIC_SERVER_TRANSPORT_RESET_BOUNDARY';
   const failedText = 'PUBLIC_SERVER_FAILED_PREFIX ' + 'x'.repeat(256), failedReasoning = 'PUBLIC_SERVER_FAILED_REASONING ' + 'y'.repeat(256);
   let nativeFailure: 'error' | 'withdraw' | 'eof' | 'reset' | undefined, heldClosed: Promise<void> | undefined, peerClosed = false, resetPeer: (() => void) | undefined;
-  let publishTool = false, effects = 0;
+  let publishTool = false, effects = 0, overflowRemaining = 0;
+  let overflowSession: string | undefined, overflowCut: ReturnType<SessionManager['requestCompaction']> | undefined, recoverySummary: string | undefined;
+  const overflowPrivate = 'PRIVATE_SERVER_OVERFLOW_DIAGNOSTIC';
   const effectFile = path.join(root, 'native-effects.jsonl'), effectTool = 'server_native_effect', toolCallId = 'server-native-tool';
   const wire = createServer(async (request, response) => {
     if (request.method === 'GET') {
@@ -41,6 +43,11 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
     if (minimax) {
       expect(request.headers['x-api-key']).toBe('disposable-private-wire'); expect(request.headers['anthropic-version']).toBe('2023-06-01');
       expect(request.headers.authorization).toBeUndefined(); expect(bodies.at(-1)!.model).toBe(model);
+      if (overflowRemaining > 0 && !JSON.stringify(bodies.at(-1)).includes('Summarize this conversation while preserving decisions and unresolved tasks.')) {
+        overflowRemaining--; if (overflowCut === undefined) overflowCut = runtime.sessionManager.requestCompaction(overflowSession!, 'overflow');
+        response.writeHead(400, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ error: { code: 'context_length_exceeded', message: `${overflowPrivate} disposable-private-wire` } })); return;
+      }
       if (nativeFailure) {
         const failure = nativeFailure; nativeFailure = undefined;
         const events = [
@@ -67,7 +74,7 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
     }
     const manualSummary = minimax && JSON.stringify(bodies.at(-1)).includes('PUBLIC_SERVER_MANUAL_SUMMARY_INSTRUCTION');
     const summary = manualSummary || JSON.stringify(bodies.at(-1)).includes('Summarize this conversation while preserving decisions and unresolved tasks.');
-    const answer = manualSummary ? 'PUBLIC_NATIVE_MANUAL_SUMMARY' : summary ? 'PUBLIC_NATIVE_AUTO_SUMMARY' : bodies.length === 1 ? 'First native answer.' : 'Continued native answer.';
+    const answer = manualSummary ? 'PUBLIC_NATIVE_MANUAL_SUMMARY' : summary ? recoverySummary ?? 'PUBLIC_NATIVE_AUTO_SUMMARY' : bodies.length === 1 ? 'First native answer.' : 'Continued native answer.';
     const suffix = bodies.length === 1 ? '' : `_${bodies.length}`;
     if (bedrock) {
       response.setHeader('Content-Type', summary ? 'application/json' : 'application/vnd.amazon.eventstream');
@@ -482,6 +489,58 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
       for (const value of [...opaque, 'WITHHELD_SIGNATURE', 'WITHHELD_REDACTED_DATA', 'unpublished-server-call', 'disposable-private-wire']) await expect(page.locator('body')).not.toContainText(value);
       expect(await readFile(forkFile, 'utf8')).not.toContain('disposable-private-wire'); expect((await stat(forkFile)).mode & 0o777).toBe(0o600);
       expect(wires).toEqual(Array(21).fill({ path: '/v1/messages', authorization: undefined }));
+      let currentTurns = [...keptTurns, 16, 17, 18, 19, 20, 21];
+      const replay = (turns: number[]) => turns.map(turn => turn === 19 ? toolContent : expectedNative([turn])[0]);
+      const recoveryNotes = (entries: typeof afterTool) => entries.filter(entry => entry.type === 'custom').filter(entry => entry.customType === 'run.context_recovery').map(entry => entry.data);
+      for (const failures of [1, 2]) {
+        const target = runtime.sessionManager.get(fork.id)!.messages.find(message => message.role === 'user')!, filler = `PUBLIC_SERVER_OVERFLOW_FILLER_${failures}`;
+        expect(await runtime.sessionManager.appendContextEdit(fork.id, { targetEntryId: target.id, replacement: filler + 'x'.repeat(6000) })).toBeTruthy();
+        expect(runtime.sessionManager.estimateContextTokens(fork.id)).toBeGreaterThan(512); expect(runtime.sessionManager.estimateContextTokens(fork.id)).toBeLessThan(10_000);
+        const preparedRecovery = runtime.sessionManager.requestCompaction(fork.id, 'overflow'); expect(preparedRecovery).toBeTruthy();
+        expect(JSON.stringify(preparedRecovery!.toCompact)).toContain(filler); expect(JSON.stringify(preparedRecovery!.keptEntries)).not.toContain(filler);
+        const beforeRecovery = await runtime.sessionManager.getRawEntries(fork.id), previousNotes = recoveryNotes(beforeRecovery), previousCompactions = beforeRecovery.filter(entry => entry.type === 'compaction');
+        const nativeMessages = getCompactionModelMessages(runtime.sessionManager, fork.id).filter(message => message.role === 'assistant' && message.api === 'anthropic-messages');
+        expect(nativeMessages).toHaveLength(currentTurns.length); const turnsById = new Map(nativeMessages.map((message, index) => [message.id, currentTurns[index]]));
+        const turn = bodies.length; overflowRemaining = failures; overflowSession = fork.id; overflowCut = undefined;
+        recoverySummary = `PUBLIC_SERVER_OVERFLOW_SUMMARY_${failures}`;
+        const recoveredRun = await send(`Exercise native HTTP overflow ${failures}`, failures === 1 ? 'completed' : 'failed');
+        expect(recoveredRun.session.id).toBe(fork.id); expect(overflowRemaining).toBe(0); expect(bodies).toHaveLength(turn + 3); expect(overflowCut).toBeTruthy();
+        const cut = (overflowCut as ReturnType<SessionManager['requestCompaction']> | undefined)!, retained = cut.keptEntries.filter(entry => entry.type === 'message').flatMap(entry => { const value = turnsById.get(entry.id); return value === undefined ? [] : [value]; });
+        expect(retained.at(-1)).toBe(currentTurns.at(-1)); expect(native(bodies[turn])).toEqual(replay(currentTurns)); expect(native(bodies[turn + 2])).toEqual(replay(retained));
+        expect(bodies[turn + 1]).toMatchObject({ model, max_tokens: 4096, thinking: { type: 'disabled' } }); expect(bodies[turn + 1].tools ?? []).toEqual([]);
+        const summaryInput = JSON.stringify(bodies[turn + 1]); expect(summaryInput).toContain(filler);
+        for (const value of [...opaque, 'Visible native reasoning', 'thinkingSignature', 'PRIVATE_SERVER_PROVIDER_ERROR', overflowPrivate, 'disposable-private-wire']) {
+          expect(summaryInput).not.toContain(value); expect(JSON.stringify(recoveredRun.settled)).not.toContain(value);
+        }
+        expect(JSON.stringify(bodies[turn + 2])).toContain(recoverySummary); expect(JSON.stringify(bodies[turn + 2])).not.toContain(filler);
+        const afterRecovery = await runtime.sessionManager.getRawEntries(fork.id), notes = recoveryNotes(afterRecovery).slice(previousNotes.length), compactionsAfterRecovery = afterRecovery.filter(entry => entry.type === 'compaction');
+        expect(notes).toHaveLength(failures === 1 ? 2 : 3); expect(notes[0]).toEqual({ reason: 'overflow', exhausted: false });
+        const { before: recoveryBefore, after: recoveryAfter, ...state } = notes[1] as { before: number; after: number; reason: string; applied: boolean; useful: boolean };
+        expect(state).toEqual({ reason: 'overflow', applied: true, useful: true }); expect(recoveryAfter).toBeLessThan(recoveryBefore);
+        if (failures === 2) { expect(notes[2]).toEqual({ reason: 'overflow', exhausted: true }); expect(recoveredRun.settled).toMatchObject({ error: 'The provider context window was exceeded.' }); }
+        expect(compactionsAfterRecovery).toHaveLength(previousCompactions.length + 1); expect(compactionsAfterRecovery.slice(0, -1)).toEqual(previousCompactions);
+        expect(compactionsAfterRecovery.at(-1)).toMatchObject({ summary: recoverySummary, firstKeptEntryId: cut.keptEntries.find(entry => entry.type === 'message')!.id,
+          provider: dialect, model, usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } });
+        for (const value of [...opaque, 'Visible native reasoning', overflowPrivate, 'disposable-private-wire']) expect(JSON.stringify(compactionsAfterRecovery.at(-1))).not.toContain(value);
+        if (failures === 2) expect(assistants(afterRecovery)).toEqual(assistants(beforeRecovery));
+        else { expect(assistants(afterRecovery).slice(0, -1)).toEqual(assistants(beforeRecovery)); expect(assistants(afterRecovery).at(-1)!.blocks).toEqual(assistants(beforeRecovery).at(-1)!.blocks); }
+        for (const entry of beforeRecovery.filter(entry => entry.type !== 'metadata')) expect(afterRecovery.find(value => value.id === entry.id)).toEqual(entry);
+        const recoveredDisk = new SessionManager({ store: new JsonlSessionStore(path.join(dataDir, 'sessions')) }); expect(await recoveredDisk.loadFromStore(fork.id)).toBeTruthy();
+        expect(getCompactionModelMessages(recoveredDisk, fork.id)).toEqual(getCompactionModelMessages(runtime.sessionManager, fork.id));
+        currentTurns = [...retained, ...(failures === 1 ? [turn + 3] : [])];
+        await restart(fork.id); expect(bodies).toHaveLength(turn + 3); await send(`Reload native HTTP overflow ${failures}`); expect(bodies).toHaveLength(turn + 4);
+        expect(native(bodies[turn + 3])).toEqual(replay(currentTurns)); expect(JSON.stringify(bodies[turn + 3])).toContain(recoverySummary);
+        expect(JSON.stringify(bodies[turn + 3])).not.toContain(filler); currentTurns.push(turn + 4);
+        const finalRecovery = await runtime.sessionManager.getRawEntries(fork.id);
+        for (const entry of afterRecovery.filter(entry => entry.type !== 'metadata')) expect(finalRecovery.find(value => value.id === entry.id)).toEqual(entry);
+        expect(finalRecovery.filter(entry => entry.type === 'compaction')).toEqual(compactionsAfterRecovery); expect(recoveryNotes(finalRecovery)).toEqual(recoveryNotes(afterRecovery));
+        expect(effects).toBe(1); expect(await readFile(effectFile, 'utf8')).toBe(effectBytes); expect(await readFile(file, 'utf8')).toBe(sourceBytes);
+        expect((await stat(forkFile)).mode & 0o777).toBe(0o600); expect(await readFile(forkFile, 'utf8')).not.toContain(overflowPrivate);
+        expect(await readFile(forkFile, 'utf8')).not.toContain('disposable-private-wire');
+        for (const value of [...opaque, overflowPrivate, 'disposable-private-wire']) await expect(page.locator('body')).not.toContainText(value);
+      }
+      overflowSession = undefined; recoverySummary = undefined;
+      expect(bodies).toHaveLength(29); expect(wires).toEqual(Array(29).fill({ path: '/v1/messages', authorization: undefined }));
     }
   } finally {
     await page.goto('about:blank').catch(() => undefined); await stop();
