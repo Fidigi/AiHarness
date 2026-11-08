@@ -17,7 +17,7 @@ let requests: string[];
 let issuerForms: { url: string; method?: string; contentType?: string; authorization?: string; apiKey?: string; body: string }[];
 let transportErrors: { name: string; code?: string }[];
 let endpoint: string;
-let mode: 'success' | 'device-stall' | 'token-stall' | 'pending' | 'publication-failure';
+let mode: 'success' | 'device-stall' | 'token-stall' | 'pending' | 'publication-failure' | 'transport-reset';
 let activeResponses = 0;
 let deviceUserCode = 'VISIBLE-123';
 const token = 'disposable-fixture-access-741';
@@ -108,6 +108,7 @@ beforeEach(async () => {
       expires_in: 30, interval: 0.01,
     } : mode === 'pending' ? { error: 'authorization_pending' } : { access_token: token, refresh_token: refresh, expires_in: 3600, token_type: 'Bearer' }));
   });
+  server.on('connection', socket => { if (mode === 'transport-reset') socket.destroy(); });
   server.on('tlsClientError', (error: NodeJS.ErrnoException) => {
     caseTransportErrors.push({ name: error.name, code: error.code });
   });
@@ -286,6 +287,17 @@ process.stdout.write('Kimi issuer SDK fixture passed.\\n');`;
     expect(Date.now() - start).toBeLessThan(4000);
     expect(activeResponses).toBe(0);
     await expect(readFile(path.join(agent, 'credentials.enc'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('reports a pre-HTTP transport reset as an operation failure, not a deadline or successful login', async () => {
+    mode = 'transport-reset';
+    const start = performance.now();
+    const result = await invoke(['auth', 'login', 'openai', '--timeout=10']);
+    expect(result).toEqual({ code: 1, signal: null, stdout: '', stderr: 'Auth operation failed.\n' });
+    expect(performance.now() - start).toBeLessThan(4000);
+    expect(requests).toEqual([]); expect(activeResponses).toBe(0);
+    await expect(readFile(path.join(agent, 'credentials.enc'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readdir(agent)).toEqual([]); expect(await readdir(cwd)).toEqual([]);
   });
 
   it('refuses encrypted publication failure after a real token exchange without success or residue', async () => {

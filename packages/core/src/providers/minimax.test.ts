@@ -26,6 +26,13 @@ const continuation = JSON.parse(continuationBytes.toString()) as {
   expectedBlocks: NonNullable<Message['blocks']>;
   rows: Array<{ scope: 'minimax' | 'minimax-cn'; model: string; api: string; cases: Array<{ case: string; expectedMessages: unknown[] }> }>;
 };
+const numericBytes = readFileSync(new URL('../../../../tests/fixtures/minimax-numeric-reference.json', import.meta.url));
+const numeric = JSON.parse(numericBytes.toString()) as {
+  pinnedCommit: string; captureSha256: string; originalSdkRequests: number; newSdkRequests: number;
+  vectors: Array<{ scope: 'minimax' | 'minimax-cn'; model: string; id: string; context: string; characters: number;
+    logicalOptions: { reasoning?: providers.ChatOptions['thinking']; maxTokens?: number; thinkingBudgets?: providers.ChatOptions['thinkingBudgets'] };
+    expected: { maxTokens: number; thinking: { type: string; budget_tokens?: number; display?: string } } }>;
+};
 const first = 'MiniMax-M2.7', latest = 'MiniMax-M3';
 const input: Message = { id: 'input', role: 'user', content: 'Continue', timestamp: new Date(0) };
 const usage = { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 1 };
@@ -219,6 +226,53 @@ describe('native MiniMax private continuation', () => {
     });
 });
 
+describe('native MiniMax simple allocation', () => {
+  it('binds all scalar vectors to the retained independent SDK capture without rewriting unsafe allocations', () => {
+    expect(createHash('sha256').update(numericBytes).digest('hex')).toBe('53f3b8ad65cadd59b084b14da965f9e73ea40676240579d8f8ccff067f63fbb2');
+    expect(numeric).toMatchObject({ pinnedCommit: '06a466935536f8c9bcacb2d5efc0fc021be1bdff', originalSdkRequests: 102, newSdkRequests: 0,
+      captureSha256: '7f195456c402f7d528fe862fbee603eda354564baa50a3e266f6fcc0a8076136' });
+    expect(numeric.vectors).toHaveLength(102);
+  });
+
+  it.each(['minimax', 'minimax-cn'].flatMap(scope => providers.MINIMAX_MODELS.map(profile => ({ scope, model: profile.id }))))(
+    '$scope/$model matches safe SDK allocations on both facades and preflight without double expansion', async ({ scope, model }) => {
+      const { calls, baseUrl } = await fixture();
+      const Provider = scope === 'minimax' ? providers.MiniMaxProvider : providers.MiniMaxCnProvider;
+      const provider = new Provider({ type: scope, apiKey: 'disposable', model, baseUrl });
+      const prepare = captureNativeOutputBudget(provider)!, vectors = numeric.vectors.filter(row => row.scope === scope && row.model === model);
+      expect(vectors).toHaveLength(17);
+      for (const vector of vectors) {
+        const { reasoning, ...logical } = vector.logicalOptions;
+        const options: providers.ChatOptions = { ...logical, ...(reasoning === undefined ? {} : { thinking: reasoning }), cacheRetention: 'none' };
+        const messages: Message[] = [{ ...input, content: vector.context === 'small' ? 'probe' : 'x'.repeat(vector.characters) }];
+        const before = JSON.stringify({ messages, options }), count = calls.length, budget = vector.expected.thinking.budget_tokens;
+        const unsafe = budget !== undefined && (budget < 1024 || vector.expected.maxTokens - budget < 1024);
+        if (unsafe) {
+          expect(['low-map1', 'exhausted-context-high']).toContain(vector.id);
+          expect(() => prepare(options, messages)).toThrow('Provider native output policy is invalid.');
+          await expect(provider.chat(messages, options)).rejects.toThrow('Invalid MiniMax thinking allocation.');
+          await expect(provider.streamChat(messages, () => {}, undefined, error => { throw error; }, options)).rejects.toThrow('Invalid MiniMax thinking allocation.');
+          expect(calls).toHaveLength(count);
+        } else {
+          const prepared = prepare(options, messages);
+          await provider.chat(messages, prepared.options);
+          await provider.streamChat(messages, () => {}, undefined, error => { throw error; }, prepared.options);
+          for (const call of calls.slice(count)) {
+            expect({ maxTokens: call.body.max_tokens, thinking: call.body.thinking }, vector.id).toEqual(vector.expected);
+            expect(call.body.model).toBe(model); expect(call.body.messages).toEqual([{ role: 'user', content: messages[0].content }]);
+            expect(call.headers['x-api-key']).toBe('disposable'); expect(call.headers.authorization).toBeUndefined();
+            expect(call.headers['anthropic-version']).toBe('2023-06-01');
+            expect(call.headers['anthropic-beta']).toBe(budget === undefined ? undefined : 'interleaved-thinking-2025-05-14');
+          }
+          expect(calls).toHaveLength(count + 2); expect(prepared.maxTokens).toBe(vector.expected.maxTokens);
+          if (options.maxTokens !== undefined) expect(prepared.options.maxTokens).toBe(options.maxTokens);
+        }
+        expect(JSON.stringify({ messages, options })).toBe(before);
+      }
+      expect(calls).toHaveLength(30);
+    });
+});
+
 describe('explicit native MiniMax A SDK', () => {
   it('keeps generic Anthropic defaults distinct from a MiniMax-looking alias and URL', async () => {
     const { calls, baseUrl } = await fixture();
@@ -294,14 +348,15 @@ describe('explicit native MiniMax A SDK', () => {
     await expect(provider.chat([image], { model: first })).rejects.toThrow('MiniMax chat model does not support images.');
   });
 
-  it('uses pinned numeric level defaults, inert configured overrides and exact AiHarness output caps', async () => {
+  it('uses pinned numeric level defaults, inert overrides and expanded simple output allocations', async () => {
     const { calls, baseUrl } = await fixture(); const provider = new providers.MiniMaxProvider({ type: 'operator', apiKey: 'disposable', baseUrl });
     for (const [thinking, budget] of [['minimal', 1024], ['low', 2048], ['medium', 8192], ['high', 16384], ['xhigh', 16384], ['max', 16384]] as const) {
       await provider.chat([input], { thinking }); expect(calls.at(-1)!.body.thinking).toMatchObject({ budget_tokens: budget });
     }
     await provider.chat([input], { thinking: 'high', thinkingBudgets: { high: 4096 }, maxTokens: 10000 });
-    expect(calls.at(-1)!.body).toMatchObject({ max_tokens: 10000, thinking: { budget_tokens: 4096 } });
-    await provider.chat([input], { thinking: 'high', maxTokens: 4096 }); expect(calls.at(-1)!.body.thinking).toMatchObject({ budget_tokens: 3072 });
+    expect(calls.at(-1)!.body).toMatchObject({ max_tokens: 14096, thinking: { budget_tokens: 4096 } });
+    await provider.chat([input], { thinking: 'high', maxTokens: 4096 }); expect(calls.at(-1)!.body).toMatchObject({ max_tokens: 20480, thinking: { budget_tokens: 16384 } });
+    await provider.chat([input], { thinking: 'high', maxTokens: 1024 }); expect(calls.at(-1)!.body).toMatchObject({ max_tokens: 17408, thinking: { budget_tokens: 16384 } });
     const getter = vi.fn(() => 9999), opaque = Object.defineProperty({}, 'high', { get: getter });
     await provider.chat([input], { thinking: 'off', thinkingBudgets: opaque }); expect(getter).not.toHaveBeenCalled();
     await expect(provider.chat([input], { thinking: 'high', thinkingBudgets: opaque })).rejects.toThrow('MiniMax chat request failed.'); expect(getter).not.toHaveBeenCalled();
@@ -372,7 +427,7 @@ describe('explicit native MiniMax A SDK', () => {
     for (const model of ['future/private', 'claude-sonnet-4-6']) await expect(provider.chat([input], { model })).rejects.toThrow('MiniMax chat model is not supported.');
     expect(() => provider.setConfiguredModel('future/private')).toThrow('MiniMax chat model is not supported.'); expect(provider.getConfiguredModel()).toBe(first);
     for (const maxTokens of [0, -1, 0.5, 131073]) await expect(provider.chat([input], { maxTokens })).rejects.toThrow('Invalid MiniMax output limit.');
-    await expect(provider.chat([input], { thinking: 'high', maxTokens: 1024 })).rejects.toThrow('Invalid MiniMax output limit.');
+    await expect(provider.chat([input], { thinking: 'high', thinkingBudgets: { high: 0 }, maxTokens: 1024 })).rejects.toThrow('Invalid MiniMax thinking allocation.');
     await expect(new providers.MiniMaxProvider({ type: 'operator', apiKey: 'disposable', baseUrl, customHeaders: { 'X-Test': 'secret\nvalue' } }).chat([input])).rejects.toThrow('Invalid MiniMax request headers.');
     for (const endpoint of ['ftp://example.test', 'https://key:secret@example.test', 'https://example.test?secret=1', 'https://example.test#secret']) expect(() => new providers.MiniMaxProvider({ type: 'operator', apiKey: 'disposable', baseUrl: endpoint })).toThrow('Invalid MiniMax endpoint.');
     expect(calls).toHaveLength(0);
@@ -417,7 +472,7 @@ describe('explicit native MiniMax CN A SDK', () => {
       for (const call of calls.slice(-2)) {
         expect(call.url).toBe('/owned%2Fminimax/anthropic/v1/messages'); expect(call.headers['x-api-key']).toBe('disposable-cn');
         expect(call.headers.authorization).toBeUndefined(); expect(call.headers['anthropic-version']).toBe('2023-06-01');
-        expect(call.body).toMatchObject({ model: profile.id, max_tokens: 32768,
+        expect(call.body).toMatchObject({ model: profile.id, max_tokens: thinking === 'off' ? 32768 : 49152,
           thinking: thinking === 'off' ? { type: 'disabled' } : { type: 'enabled', budget_tokens: 16384, display: 'summarized' },
           system: [{ type: 'text', text: 'CN system', cache_control: { type: 'ephemeral', ttl: '1h' } }],
           tools: [{ eager_input_streaming: true, input_schema: { type: 'object' }, cache_control: { type: 'ephemeral', ttl: '1h' } }] });

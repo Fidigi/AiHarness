@@ -355,11 +355,11 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
         .toEqual({ code: 0, stdout: 'INSTALLED_SIGNED_CONTINUATION_OK\n', stderr: '' });
     }, 25_000);
 
-  it.each(['minimax', 'minimax-cn'].flatMap(provider => ['print', 'json', 'rpc'].map(mode => ({ provider, mode }))))(
-    'retains private continuation with an extension-default-only key through the installed PATH-bin ($provider/$mode)', async ({ provider, mode }) => {
-      const probe = `default-key-continuation-${provider}-${mode}.mjs`;
+  for (const model of [undefined, 'MiniMax-M2.7-highspeed', 'MiniMax-M3']) it.each(['minimax', 'minimax-cn'].flatMap(provider => ['print', 'json', 'rpc'].map(mode => ({ provider, mode }))))(
+    `retains private continuation with an extension-default-only key through the installed PATH-bin ($provider/$mode${model ? `/${model}` : ''})`, async ({ provider, mode }) => {
+      const probe = `default-key-continuation-${provider}-${mode}${model ? `-${model}` : ''}.mjs`;
       await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/responses-continuation-probe.mjs'), path.join(consumer, probe));
-      expect(await run(process.execPath, [probe, provider, mode, 'extension-default'], consumer, environment, '', 20_000))
+      expect(await run(process.execPath, [probe, provider, mode, 'extension-default', ...(model ? [model] : [])], consumer, environment, '', 20_000))
         .toEqual({ code: 0, stdout: 'INSTALLED_SIGNED_CONTINUATION_OK\n', stderr: '' });
     }, 25_000);
 
@@ -4348,7 +4348,7 @@ it('dispatches native MiniMax through installed public declarations and captured
       assert.equal(provider.getSpecializedModels().length, 1); assert.equal(provider.getSpecializedModels()[0].model, 'MiniMax-M3');
       const sdk = new SpecializedModels(provider); assert.deepEqual(sdk.getModelsOfType('image'), []);
       const result = await sdk.classify({ model:'MiniMax-M3:classifier', input:'Approve', labels:['safe','review'] }); assert.equal(result.label, 'safe'); assert.equal(result.usage.totalTokens, 12);
-      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_tokens, 32768);
+      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_tokens, 49152);
       assert.deepEqual(calls[0].body.thinking, { type:'enabled', budget_tokens:16384, display:'summarized' });
       assert.equal(calls[0].headers['anthropic-beta'], 'interleaved-thinking-2025-05-14');
       assert.equal(calls[0].body.tools[0].eager_input_streaming, true); assert.equal(calls[0].body.tools[0].strict, undefined); assert.ok(Array.isArray(calls[0].body.system));
@@ -4835,7 +4835,7 @@ it('dispatches native MiniMax CN through installed public declarations and captu
       for(const profile of MINIMAX_CN_MODELS){provider.setConfiguredModel(profile.id);assert.equal(getProviderPublishedModel('google',profile.id,provider).contextWindow,profile.contextWindow);assert.equal(provider.canDiscoverModels(),false);assert.equal(getProviderPublishedModel('google','gemini-2.5-pro',provider),undefined);
         const result=await provider.chat([input],{thinking:'off',cacheRetention:'long',systemPrompt:'System'});let complete;await provider.streamChat([input],()=>{},value=>{complete=value;},undefined,{thinking:'high',maxTokens:32768});
         for(const response of[result,complete]){assert.equal(response.content,'CN ready');assert.equal(response.api,'anthropic-messages');assert.equal(response.provider,'google');assert.equal(response.model,profile.id);assert.equal(response.usage.totalTokens,12);assert.equal(response.usage.costUsd,(5*profile.pricing.inputPerMillion+2*profile.pricing.outputPerMillion+4*profile.pricing.cacheReadPerMillion+profile.pricing.cacheWritePerMillion)/1e6);}
-        assert.equal(calls.at(-2).body.max_tokens,profile.maxOutputTokens);assert.equal(calls.at(-1).body.max_tokens,32768);assert.deepEqual(calls.at(-2).body.thinking,{type:'disabled'});assert.deepEqual(calls.at(-1).body.thinking,{type:'enabled',budget_tokens:16384,display:'summarized'});
+        assert.equal(calls.at(-2).body.max_tokens,profile.maxOutputTokens);assert.equal(calls.at(-1).body.max_tokens,49152);assert.deepEqual(calls.at(-2).body.thinking,{type:'disabled'});assert.deepEqual(calls.at(-1).body.thinking,{type:'enabled',budget_tokens:16384,display:'summarized'});
         const sdk=new SpecializedModels(provider);assert.deepEqual(sdk.getModelsOfType('image'),[]);const answer=await sdk.classify({model:profile.id+':classifier',input:'Approve',labels:['safe','review']});assert.equal(answer.label,'safe');assert.equal(answer.usage.totalTokens,12);assert.equal(calls.at(-1).body.max_tokens,512);
       }
       assert.equal(calls.length,9);for(const call of calls){assert.equal(call.url,'/owned%2Fcn/anthropic/v1/messages');assert.equal(call.headers['x-api-key'],'disposable-installed-cn');assert.equal(call.headers.authorization,undefined);assert.equal(call.headers['anthropic-version'],'2023-06-01');}

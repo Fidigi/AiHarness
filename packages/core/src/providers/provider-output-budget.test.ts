@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AnthropicProvider, BedrockProvider, MockProvider, type ChatOptions } from './index.js';
+import { AnthropicProvider, BedrockProvider, MiniMaxProvider, MiniMaxCnProvider, MINIMAX_MODELS, MockProvider, type ChatOptions } from './index.js';
 import { applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget } from './anthropic-thinking.js';
 import { captureNativeConfiguredModel, captureNativeOutputBudget, ProviderOutputBudgetError, registerNativeOutputBudget } from './provider-output-budget.js';
 import { ExtensionRegistry, type BeforeProviderData } from '../extensions/extension-registry.js';
@@ -89,6 +89,38 @@ describe('Anthropic native output projection uses the actual thinking/default po
     const get = vi.fn(() => 2048), map = Object.defineProperty({}, 'low', { enumerable: true, get });
     expect(() => prepareAnthropicOutputBudget({ thinking: 'low', thinkingBudgets: map }, numeric)).toThrow('Thinking budgets must contain only safe nonnegative integer minimal/low/medium/high values.'); expect(get).not.toHaveBeenCalled();
   });
+});
+
+describe('MiniMax selected simple output preparation', () => {
+  for (const Provider of [MiniMaxProvider, MiniMaxCnProvider]) for (const profile of MINIMAX_MODELS) {
+    const owner = () => new Provider({ type: 'operator', model: profile.id, apiKey: 'DISPOSABLE', baseUrl: 'http://127.0.0.1:1/owned-unused' });
+    it(`${Provider.name}/${profile.id} captures fallback, copies used budgets and refuses an insufficient final answer reserve`, () => {
+      const instance = owner(), policy = captureNativeOutputBudget(instance)!;
+      instance.setConfiguredModel(profile.id === 'MiniMax-M3' ? 'MiniMax-M2.7' : 'MiniMax-M3');
+      const map = { high: 16384 }, options: ChatOptions = { thinking: 'high', maxTokens: 64, thinkingBudgets: map };
+      const input: Message[] = [{ ...message(), role: 'assistant', timestamp: new Date(1), usage: { totalTokens: profile.contextWindow - 6146 } },
+        { ...message(), content: 'probe', timestamp: new Date(3) }];
+      const prepared = policy(options, input);
+      expect(prepared.maxTokens).toBe(2048); expect(prepared.options.model).toBe(profile.id); expect(prepared.options.maxTokens).toBe(64);
+      expect(prepared.options.thinkingBudgets).not.toBe(map); map.high = 8192;
+      expect(prepared.options.thinkingBudgets?.high).toBe(16384); expect(Object.isFrozen(map)).toBe(false);
+      input[0].usage!.totalTokens = profile.contextWindow - 6145;
+      expect(() => policy(options, input)).toThrow('Provider native output policy is invalid.');
+    });
+    it(`${Provider.name}/${profile.id} reserves expanded output after awaited observers without dispatch or retry`, async () => {
+      const registry = new ExtensionRegistry(), instance = owner(), onError = vi.fn(), onRetryStart = vi.fn();
+      const dispatch = vi.spyOn(instance, 'streamChat').mockImplementation(async () => { throw new Error('Unexpected native provider dispatch.'); });
+      let raw: BeforeProviderData | undefined;
+      await registry.load('minimax-selected-output', api => api.before('before:provider', data => { raw = data; }));
+      try {
+        await expect(streamProviderTurn({ provider: instance, providerName: 'operator', model: profile.id, messages: [message()], tools: [], extensionRegistry: registry,
+          contextBudget: { contextWindow: 12000, reserveTokens: 100 }, onError, onRetryStart, maxRetries: 3,
+          onStart: async () => { await Promise.resolve(); raw!.options.thinking = 'high'; raw!.options.maxTokens = 4096; raw!.options.thinkingBudgets = { high: 16384 }; },
+        })).rejects.toThrow('Provider request exceeds the owned context budget.');
+        expect(dispatch).not.toHaveBeenCalled(); expect(onError).toHaveBeenCalledTimes(1); expect(onRetryStart).not.toHaveBeenCalled();
+      } finally { await registry.shutdown(); }
+    });
+  }
 });
 
 describe('Bedrock selected simple output preparation', () => {

@@ -1,7 +1,8 @@
-import type { ModelPricing } from '../types/index.js';
+import type { Message, ModelPricing } from '../types/index.js';
 import type { ChatOptions, ChatResponse } from './index.js';
 import { clampPublishedThinkingLevel, type PublishedThinkingLevel } from './model-metadata.js';
-import { copyThinkingBudgets, resolveThinkingBudget } from './thinking-budgets.js';
+import { copyThinkingBudgets } from './thinking-budgets.js';
+import { simpleContextTokens } from './simple-context-estimate.js';
 import { ProviderOutputBudgetError, type PreparedNativeOutputBudget } from './provider-output-budget.js';
 
 interface MiniMaxTier extends Readonly<Required<ModelPricing>> { readonly inputTokensAbove: number }
@@ -54,18 +55,23 @@ export function miniMaxThinking(options?: ChatOptions): PublishedThinkingLevel {
   if (!['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(requested)) throw new Error('Invalid MiniMax thinking level.');
   return clampPublishedThinkingLevel(requested, levels);
 }
-export function prepareMiniMaxMessage(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> {
+export function prepareMiniMaxMessage(body: Record<string, unknown>, options?: ChatOptions, messages: readonly Message[] = []): Record<string, unknown> {
   const profile = miniMaxProfile(String(body.model)), selected = miniMaxThinking(options);
-  const maximum = options?.maxTokens ?? profile.maxOutputTokens;
-  if (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > profile.maxOutputTokens) throw new Error('Invalid MiniMax output limit.');
-  body.max_tokens = maximum; delete body.output_config;
+  const requestedMax = options?.maxTokens ?? profile.maxOutputTokens;
+  if (!Number.isSafeInteger(requestedMax) || requestedMax < 1 || requestedMax > profile.maxOutputTokens) throw new Error('Invalid MiniMax output limit.');
+  const available = Math.max(1, profile.contextWindow - simpleContextTokens(messages, options) - 4096);
+  let maximum = Math.min(requestedMax, available);
+  delete body.output_config;
   if (selected === 'off') body.thinking = { type: 'disabled' };
   else {
     const level = selected as keyof typeof defaults;
-    const budget = Math.min(resolveThinkingBudget(level, options?.thinkingBudgets, defaults[level], 1024, profile.maxOutputTokens), maximum - 1024);
-    if (budget < 1024) throw new Error('Invalid MiniMax output limit.');
+    const requested = copyThinkingBudgets(options?.thinkingBudgets)?.[level] ?? defaults[level];
+    maximum = Math.min(requested >= profile.maxOutputTokens - maximum ? profile.maxOutputTokens : maximum + requested, available);
+    const budget = Math.min(requested, Math.max(0, maximum - 1024)) || 1024;
+    if (budget < 1024 || maximum - budget < 1024) throw new Error('Invalid MiniMax thinking allocation.');
     body.thinking = { type: 'enabled', budget_tokens: budget, display: 'summarized' }; delete body.temperature;
   }
+  body.max_tokens = maximum;
   const control = options?.cacheRetention === 'none' ? undefined : { type: 'ephemeral', ...(options?.cacheRetention === 'long' ? { ttl: '1h' } : {}) };
   if (typeof body.system === 'string') body.system = [{ type: 'text', text: body.system, ...(control ? { cache_control: control } : {}) }];
   if (Array.isArray(body.tools)) body.tools = body.tools.map((tool: Record<string, unknown>, index: number) => {
@@ -76,17 +82,16 @@ export function prepareMiniMaxMessage(body: Record<string, unknown>, options?: C
     && Array.isArray(message.content) && message.content.some(block => record(block) && block.type === 'image'))) throw new Error('MiniMax chat model does not support images.');
   return body;
 }
-/** Native cap semantics: explicit AiHarness output caps stay exact; full Pi context estimation remains separate. */
-export function prepareMiniMaxOutputBudget(owned: ChatOptions, configuredModel: string): Readonly<PreparedNativeOutputBudget> {
+/** Preflight the selected simple allocation without replacing the caller cap and expanding it twice. */
+export function prepareMiniMaxOutputBudget(owned: ChatOptions, configuredModel: string, messages: readonly Message[] = []): Readonly<PreparedNativeOutputBudget> {
   const options: ChatOptions = { ...owned, model: owned.model || configuredModel };
   if (miniMaxThinking(options) !== 'off') {
     try { options.thinkingBudgets = copyThinkingBudgets(options.thinkingBudgets); }
     catch { throw new ProviderOutputBudgetError('thinking'); }
   }
   try {
-    const body = prepareMiniMaxMessage({ model: options.model }, options);
-    options.maxTokens = body.max_tokens as number;
-    return Object.freeze({ options, maxTokens: options.maxTokens });
+    const body = prepareMiniMaxMessage({ model: options.model }, options, messages);
+    return Object.freeze({ options, maxTokens: body.max_tokens as number });
   } catch { throw new ProviderOutputBudgetError(); }
 }
 export function mergeMiniMaxUsage(previous: unknown, value: unknown, start: boolean): unknown {

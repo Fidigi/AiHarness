@@ -231,10 +231,10 @@ describe('emitted built-in Anthropic reasoning selection', () => {
     }, 30_000);
   }
 
-  for (const provider of ['anthropic', 'minimax', 'minimax-cn'] as const) {
-  const signedModel = provider === 'anthropic' ? continuationModel : 'MiniMax-M2.7';
-  const foreignModel = provider === 'anthropic' ? adaptive : 'MiniMax-M3';
-  const title = provider === 'anthropic' ? '' : `${provider}/`;
+  for (const provider of ['anthropic', 'minimax', 'minimax-cn'] as const)
+  for (const signedModel of provider === 'anthropic' ? [continuationModel] : ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3']) {
+  const foreignModel = provider === 'anthropic' ? adaptive : signedModel === 'MiniMax-M3' ? 'MiniMax-M2.7' : 'MiniMax-M3';
+  const title = provider === 'anthropic' ? '' : `${provider}/${signedModel === 'MiniMax-M2.7' ? '' : `${signedModel}/`}`;
   const assertMiniMaxWires = (wires: Awaited<ReturnType<typeof fixture>>['wires'], count: number) => {
     if (provider !== 'anthropic') expect(wires).toEqual(Array(count).fill({ path: '/anthropic/v1/messages', googleKey: undefined,
       authorization: undefined, apiKey: continuationKey, version: '2023-06-01' }));

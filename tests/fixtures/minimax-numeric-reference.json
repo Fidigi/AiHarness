@@ -1,0 +1,2256 @@
+{
+  "schema": "minimax-simple-allocation-reference-v1",
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "sourceReceipt": "docs/audit/pi/evidence/MOD-03-minimax-numeric-review.json",
+  "sourceReceiptSha256": "4c377b64f8f83e9948e43216e1e49751afd6b532fd577eadf09ab888096c4ded",
+  "captureSha256": "7f195456c402f7d528fe862fbee603eda354564baa50a3e266f6fcc0a8076136",
+  "originalSdkRequests": 102,
+  "newSdkRequests": 0,
+  "limits": "Reused independently executed streamSimple ASCII scalar vectors;synthetic replies are not vendor acceptance. Low1 and exhausted-high reference allocations remain raw evidence,not safe Core admission.",
+  "vectors": [
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "omitted",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "c965a6d757c28e5840e5a71d94c2325bffe724ae981f2b998f9da3258f48b32e"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "minimal",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "minimal"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "fa9bef664e4dac4fc97c3a7bea3adfe6e5420aa49d4e83108d6b3b07aa152dcb"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "low",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "low"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 2048,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "c1524cfaa8754877b94a60764e4b0576c39ae18718456279a7085ccccde762b7"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "medium",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "medium"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 8192,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "b44c58a66fa8272edef56955f65ac80b1379c5856d01713969bfcfcbd1752c90"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "7d9e1669d6951890c805f88487c0326f8d1055e341c88e0bef87a63a2c48f1f2"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "xhigh",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "xhigh"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "7d9e1669d6951890c805f88487c0326f8d1055e341c88e0bef87a63a2c48f1f2"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "max",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "max"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "7d9e1669d6951890c805f88487c0326f8d1055e341c88e0bef87a63a2c48f1f2"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "plain-cap64",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "maxTokens": 64
+      },
+      "expected": {
+        "maxTokens": 64,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "89017e5b09905930efeef7dd59a315202ea24aa47dd315c9ea202d97ccc4af49"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-cap4096",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "maxTokens": 4096
+      },
+      "expected": {
+        "maxTokens": 20480,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "4cd0c2c003cda68190d8b54ef09265f2768121190efa9868cbb64195b5532a35"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-map4096-cap10000",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 4096
+        },
+        "maxTokens": 10000
+      },
+      "expected": {
+        "maxTokens": 14096,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 4096,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "2e90e183bd266cf92642f60475e17307da1c06ff132f723cc5c18ae4b4296659"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-map0",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "fa9bef664e4dac4fc97c3a7bea3adfe6e5420aa49d4e83108d6b3b07aa152dcb"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "low-map1",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "low",
+        "thinkingBudgets": {
+          "low": 1
+        }
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "767a38ad91b509f4dbf82241be29de317dd65af80d9733355be2397722005c7d"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-map999999",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 999999
+        }
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 130048,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "6624f5559b632e5a7313b0aa670eb9ea700c65cb014e07226653c44b12066c9e"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "near-context-omitted",
+      "context": "near",
+      "characters": 688128,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 4096,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "fd6f4829b8078bf946b2befff1e22174ab0f54e070856a505a74d5f1600270a8"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "near-context-high",
+      "context": "near",
+      "characters": 688128,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 4096,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 3072,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "6052d787821b2202ad786a4ab0a6c4820080a769a1a48b0a1ca60094c302dd59"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "exhausted-context-omitted",
+      "context": "exhausted",
+      "characters": 716800,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 1,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "1ea6c022194d5017f3d76dc0720920ecc26f504d9e07b46cc9eb3570d42900c5"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "exhausted-context-high",
+      "context": "exhausted",
+      "characters": 716800,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 1,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "3adc69e766ed4b28ad468c5f1cb2c8d560c9ab1da2f0df0c8f5524a94dbc7f9d"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "omitted",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "3874f6bc21656ec3c38723d2fdc50a2bfe6fe619e01566229db78ad5604744f7"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "minimal",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "minimal"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "3f723ac37e67ee7961fe287929b3f8be1a27907277e8fbb7a5c462c79c751874"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "low",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "low"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 2048,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "956fd8522514b0324263c9dbda415d2a02452385825e39ef6c8b468d4ab3f52c"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "medium",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "medium"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 8192,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "93f98771e1388783e607eaac11bd6f87bee3348c0a049aa7b5e425a8ea0cd73d"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "191fe413ec10dd71fe13766d7bd0d5f6092b3b93177453eb7537ee3c35b6b371"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "xhigh",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "xhigh"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "191fe413ec10dd71fe13766d7bd0d5f6092b3b93177453eb7537ee3c35b6b371"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "max",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "max"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "191fe413ec10dd71fe13766d7bd0d5f6092b3b93177453eb7537ee3c35b6b371"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "plain-cap64",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "maxTokens": 64
+      },
+      "expected": {
+        "maxTokens": 64,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "06e4e5ab3ded3f3401053cb93cb2469fd34b7022f2a37d1a7b847fa99793d21f"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-cap4096",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "maxTokens": 4096
+      },
+      "expected": {
+        "maxTokens": 20480,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "351c618d7abdb70daa5fa4dbc337d0411688ce2c39d105c0d0d0cb2d550c6d10"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-map4096-cap10000",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 4096
+        },
+        "maxTokens": 10000
+      },
+      "expected": {
+        "maxTokens": 14096,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 4096,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "554ba6a72ad48a5647058fb82f7b67e5027f4492a0416718cc1bfb0591370790"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-map0",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "3f723ac37e67ee7961fe287929b3f8be1a27907277e8fbb7a5c462c79c751874"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "low-map1",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "low",
+        "thinkingBudgets": {
+          "low": 1
+        }
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "7a31f65b08601e078b90e9971ef6d3b290acb43f987b5f28dd7f00d0f89db78c"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-map999999",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 999999
+        }
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 130048,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "2d0f12bd114a39c2c2e88998de5a4960ac4e1a4dfa82fb62f9293931bbb7f5f9"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "near-context-omitted",
+      "context": "near",
+      "characters": 688128,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 4096,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "fe6bc1bfb4d58aeb6d6bf1f28fc9c41979b47a5f784282750fed30d8c58af0f1"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "near-context-high",
+      "context": "near",
+      "characters": 688128,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 4096,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 3072,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "1ee635d69ab641d3271ac3998d57c5ad30d74ca249ee73dcf442fab84342a4a8"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "exhausted-context-omitted",
+      "context": "exhausted",
+      "characters": 716800,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 1,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "a8b622d429edb12ea3c5181e27865bc8577bdd834d598538518b390749c36f5a"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "exhausted-context-high",
+      "context": "exhausted",
+      "characters": 716800,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 1,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "a86b79b93bacbcd2df528bb6609ee8fa1256352d02291ec484f23b1ab6579681"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "omitted",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "7ad4217a37bffa536b7f7b87c662adc04a57437e5924be804160008fe4212901"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "minimal",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "minimal"
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "f9a0a72c611a266f100e6ddc52659ff75a6b0674f9644474945a85aef4c96d90"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "low",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "low"
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 2048,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "fed7bae1c1b4a443319f66a5b4494fd4332bda172ac623a71ae7de61b9ae9fb3"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "medium",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "medium"
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 8192,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "a1e6321fb17f116386e2cabc415d0f498cc7ac89459a2efc9757f3004c43a21a"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "high",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "8e40ae31e80a8f4d8d6adcc126ec8129ae0ba75d0ea6c6bf8e5eec0e44c3377c"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "xhigh",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "xhigh"
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "8e40ae31e80a8f4d8d6adcc126ec8129ae0ba75d0ea6c6bf8e5eec0e44c3377c"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "max",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "max"
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "8e40ae31e80a8f4d8d6adcc126ec8129ae0ba75d0ea6c6bf8e5eec0e44c3377c"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "plain-cap64",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "maxTokens": 64
+      },
+      "expected": {
+        "maxTokens": 64,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "026c34f7dff025e17b3934fc39db27334b56cb7cd55fffb9caa248d01ca2f623"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "high-cap4096",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "maxTokens": 4096
+      },
+      "expected": {
+        "maxTokens": 20480,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "ca1c20837e7efa4d51e2cb3824ce9cec37b361b69295e8e8efe99f9f56633a43"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "high-map4096-cap10000",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 4096
+        },
+        "maxTokens": 10000
+      },
+      "expected": {
+        "maxTokens": 14096,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 4096,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "946c224dc4cbef21d44298672ea8c3217ed60c7112710e8db79195dcd47ff22e"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "high-map0",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "f9a0a72c611a266f100e6ddc52659ff75a6b0674f9644474945a85aef4c96d90"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "low-map1",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "low",
+        "thinkingBudgets": {
+          "low": 1
+        }
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "990aa51bbf5813b8296a7f67521281949a50fc5b33be17f880ddb58f7823a893"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "high-map999999",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 999999
+        }
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 510976,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "1423f80c72e6e2c30b7ad4cd8cbfe4799d9f77d761c3e14c3d5b579e81079a2c"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "near-context-omitted",
+      "context": "near",
+      "characters": 3471328,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 4096,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "dfd0143d864a33393780b09062a972d58bd1ec5d673ea84d77958edcd03275e8"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "near-context-high",
+      "context": "near",
+      "characters": 3471328,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 4096,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 3072,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "fa9fcf1f49b3cb738af530dd62a5e43f12731d88c819ac7f0f886a320133ef4d"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "exhausted-context-omitted",
+      "context": "exhausted",
+      "characters": 3500000,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 1,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "e4bd33a68d16db60af275e16fba07ffb3965b77b7f76a719f167422f40a5de3e"
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "exhausted-context-high",
+      "context": "exhausted",
+      "characters": 3500000,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 1,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "6914132af274939b90a99d1805649ff3c4571f9fbcdfa56562742a19421fefb9"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "omitted",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "c965a6d757c28e5840e5a71d94c2325bffe724ae981f2b998f9da3258f48b32e"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "minimal",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "minimal"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "fa9bef664e4dac4fc97c3a7bea3adfe6e5420aa49d4e83108d6b3b07aa152dcb"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "low",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "low"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 2048,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "c1524cfaa8754877b94a60764e4b0576c39ae18718456279a7085ccccde762b7"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "medium",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "medium"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 8192,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "b44c58a66fa8272edef56955f65ac80b1379c5856d01713969bfcfcbd1752c90"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "7d9e1669d6951890c805f88487c0326f8d1055e341c88e0bef87a63a2c48f1f2"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "xhigh",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "xhigh"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "7d9e1669d6951890c805f88487c0326f8d1055e341c88e0bef87a63a2c48f1f2"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "max",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "max"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "7d9e1669d6951890c805f88487c0326f8d1055e341c88e0bef87a63a2c48f1f2"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "plain-cap64",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "maxTokens": 64
+      },
+      "expected": {
+        "maxTokens": 64,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "89017e5b09905930efeef7dd59a315202ea24aa47dd315c9ea202d97ccc4af49"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-cap4096",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "maxTokens": 4096
+      },
+      "expected": {
+        "maxTokens": 20480,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "4cd0c2c003cda68190d8b54ef09265f2768121190efa9868cbb64195b5532a35"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-map4096-cap10000",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 4096
+        },
+        "maxTokens": 10000
+      },
+      "expected": {
+        "maxTokens": 14096,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 4096,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "2e90e183bd266cf92642f60475e17307da1c06ff132f723cc5c18ae4b4296659"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-map0",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "fa9bef664e4dac4fc97c3a7bea3adfe6e5420aa49d4e83108d6b3b07aa152dcb"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "low-map1",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "low",
+        "thinkingBudgets": {
+          "low": 1
+        }
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "767a38ad91b509f4dbf82241be29de317dd65af80d9733355be2397722005c7d"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-map999999",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 999999
+        }
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 130048,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "6624f5559b632e5a7313b0aa670eb9ea700c65cb014e07226653c44b12066c9e"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "near-context-omitted",
+      "context": "near",
+      "characters": 688128,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 4096,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "fd6f4829b8078bf946b2befff1e22174ab0f54e070856a505a74d5f1600270a8"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "near-context-high",
+      "context": "near",
+      "characters": 688128,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 4096,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 3072,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "6052d787821b2202ad786a4ab0a6c4820080a769a1a48b0a1ca60094c302dd59"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "exhausted-context-omitted",
+      "context": "exhausted",
+      "characters": 716800,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 1,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "1ea6c022194d5017f3d76dc0720920ecc26f504d9e07b46cc9eb3570d42900c5"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "exhausted-context-high",
+      "context": "exhausted",
+      "characters": 716800,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 1,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "3adc69e766ed4b28ad468c5f1cb2c8d560c9ab1da2f0df0c8f5524a94dbc7f9d"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "omitted",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "3874f6bc21656ec3c38723d2fdc50a2bfe6fe619e01566229db78ad5604744f7"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "minimal",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "minimal"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "3f723ac37e67ee7961fe287929b3f8be1a27907277e8fbb7a5c462c79c751874"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "low",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "low"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 2048,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "956fd8522514b0324263c9dbda415d2a02452385825e39ef6c8b468d4ab3f52c"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "medium",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "medium"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 8192,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "93f98771e1388783e607eaac11bd6f87bee3348c0a049aa7b5e425a8ea0cd73d"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "191fe413ec10dd71fe13766d7bd0d5f6092b3b93177453eb7537ee3c35b6b371"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "xhigh",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "xhigh"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "191fe413ec10dd71fe13766d7bd0d5f6092b3b93177453eb7537ee3c35b6b371"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "max",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "max"
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "191fe413ec10dd71fe13766d7bd0d5f6092b3b93177453eb7537ee3c35b6b371"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "plain-cap64",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "maxTokens": 64
+      },
+      "expected": {
+        "maxTokens": 64,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "06e4e5ab3ded3f3401053cb93cb2469fd34b7022f2a37d1a7b847fa99793d21f"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-cap4096",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "maxTokens": 4096
+      },
+      "expected": {
+        "maxTokens": 20480,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "351c618d7abdb70daa5fa4dbc337d0411688ce2c39d105c0d0d0cb2d550c6d10"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-map4096-cap10000",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 4096
+        },
+        "maxTokens": 10000
+      },
+      "expected": {
+        "maxTokens": 14096,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 4096,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "554ba6a72ad48a5647058fb82f7b67e5027f4492a0416718cc1bfb0591370790"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-map0",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "3f723ac37e67ee7961fe287929b3f8be1a27907277e8fbb7a5c462c79c751874"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "low-map1",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "low",
+        "thinkingBudgets": {
+          "low": 1
+        }
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "7a31f65b08601e078b90e9971ef6d3b290acb43f987b5f28dd7f00d0f89db78c"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "high-map999999",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 999999
+        }
+      },
+      "expected": {
+        "maxTokens": 131072,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 130048,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "2d0f12bd114a39c2c2e88998de5a4960ac4e1a4dfa82fb62f9293931bbb7f5f9"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "near-context-omitted",
+      "context": "near",
+      "characters": 688128,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 4096,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "fe6bc1bfb4d58aeb6d6bf1f28fc9c41979b47a5f784282750fed30d8c58af0f1"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "near-context-high",
+      "context": "near",
+      "characters": 688128,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 4096,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 3072,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "1ee635d69ab641d3271ac3998d57c5ad30d74ca249ee73dcf442fab84342a4a8"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "exhausted-context-omitted",
+      "context": "exhausted",
+      "characters": 716800,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 1,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "a8b622d429edb12ea3c5181e27865bc8577bdd834d598538518b390749c36f5a"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "contextWindow": 204800,
+      "modelMaxTokens": 131072,
+      "id": "exhausted-context-high",
+      "context": "exhausted",
+      "characters": 716800,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 1,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "a86b79b93bacbcd2df528bb6609ee8fa1256352d02291ec484f23b1ab6579681"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "omitted",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "7ad4217a37bffa536b7f7b87c662adc04a57437e5924be804160008fe4212901"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "minimal",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "minimal"
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "f9a0a72c611a266f100e6ddc52659ff75a6b0674f9644474945a85aef4c96d90"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "low",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "low"
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 2048,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "fed7bae1c1b4a443319f66a5b4494fd4332bda172ac623a71ae7de61b9ae9fb3"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "medium",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "medium"
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 8192,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "a1e6321fb17f116386e2cabc415d0f498cc7ac89459a2efc9757f3004c43a21a"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "high",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "8e40ae31e80a8f4d8d6adcc126ec8129ae0ba75d0ea6c6bf8e5eec0e44c3377c"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "xhigh",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "xhigh"
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "8e40ae31e80a8f4d8d6adcc126ec8129ae0ba75d0ea6c6bf8e5eec0e44c3377c"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "max",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "max"
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "8e40ae31e80a8f4d8d6adcc126ec8129ae0ba75d0ea6c6bf8e5eec0e44c3377c"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "plain-cap64",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "maxTokens": 64
+      },
+      "expected": {
+        "maxTokens": 64,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "026c34f7dff025e17b3934fc39db27334b56cb7cd55fffb9caa248d01ca2f623"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "high-cap4096",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "maxTokens": 4096
+      },
+      "expected": {
+        "maxTokens": 20480,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 16384,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "ca1c20837e7efa4d51e2cb3824ce9cec37b361b69295e8e8efe99f9f56633a43"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "high-map4096-cap10000",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 4096
+        },
+        "maxTokens": 10000
+      },
+      "expected": {
+        "maxTokens": 14096,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 4096,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "946c224dc4cbef21d44298672ea8c3217ed60c7112710e8db79195dcd47ff22e"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "high-map0",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "f9a0a72c611a266f100e6ddc52659ff75a6b0674f9644474945a85aef4c96d90"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "low-map1",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "low",
+        "thinkingBudgets": {
+          "low": 1
+        }
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "990aa51bbf5813b8296a7f67521281949a50fc5b33be17f880ddb58f7823a893"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "high-map999999",
+      "context": "small",
+      "characters": 5,
+      "logicalOptions": {
+        "reasoning": "high",
+        "thinkingBudgets": {
+          "high": 999999
+        }
+      },
+      "expected": {
+        "maxTokens": 512000,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 510976,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "1423f80c72e6e2c30b7ad4cd8cbfe4799d9f77d761c3e14c3d5b579e81079a2c"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "near-context-omitted",
+      "context": "near",
+      "characters": 3471328,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 4096,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "dfd0143d864a33393780b09062a972d58bd1ec5d673ea84d77958edcd03275e8"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "near-context-high",
+      "context": "near",
+      "characters": 3471328,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 4096,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 3072,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "fa9fcf1f49b3cb738af530dd62a5e43f12731d88c819ac7f0f886a320133ef4d"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "exhausted-context-omitted",
+      "context": "exhausted",
+      "characters": 3500000,
+      "logicalOptions": {},
+      "expected": {
+        "maxTokens": 1,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "requestSha256": "e4bd33a68d16db60af275e16fba07ffb3965b77b7f76a719f167422f40a5de3e"
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "contextWindow": 1000000,
+      "modelMaxTokens": 512000,
+      "id": "exhausted-context-high",
+      "context": "exhausted",
+      "characters": 3500000,
+      "logicalOptions": {
+        "reasoning": "high"
+      },
+      "expected": {
+        "maxTokens": 1,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 1024,
+          "display": "summarized"
+        }
+      },
+      "requestSha256": "6914132af274939b90a99d1805649ff3c4571f9fbcdfa56562742a19421fefb9"
+    }
+  ]
+}

@@ -5425,7 +5425,7 @@ export class MiniMaxProvider extends AnthropicProvider {
     super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
     registerNativeOutputBudget(this, () => {
       const selected = captureNativeConfiguredModel(this.config, MINIMAX_MODELS[0].id);
-      return options => prepareMiniMaxOutputBudget(options, selected);
+      return (options, messages) => prepareMiniMaxOutputBudget(options, selected, messages);
     });
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -5472,7 +5472,7 @@ export class MiniMaxProvider extends AnthropicProvider {
     } catch { throw new Error('Invalid MiniMax request headers.'); }
   }
   protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
-  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareMiniMaxMessage(body, options); }
+  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> { return prepareMiniMaxMessage(body, options, messages); }
   protected override buildAnthropicMessages(messages: Message[], native = false, model?: string): Array<{ role: 'user' | 'assistant'; content: unknown }> {
     const converted = super.buildAnthropicMessages(messages), original = toolImageMessages(messages).filter(message => message.role !== 'system');
     for (let index = 0; index < original.length; index++) {
@@ -5507,7 +5507,7 @@ export class MiniMaxProvider extends AnthropicProvider {
     if (signal?.aborted) return new Error('MiniMax request aborted.');
     if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
     const fixed = ['MiniMax API key is required.', 'MiniMax chat model is not supported.', 'Invalid MiniMax thinking level.',
-      'Invalid MiniMax output limit.', 'MiniMax chat model does not support images.', 'Invalid MiniMax image input.', 'Invalid MiniMax request headers.',
+      'Invalid MiniMax output limit.', 'Invalid MiniMax thinking allocation.', 'MiniMax chat model does not support images.', 'Invalid MiniMax image input.', 'Invalid MiniMax request headers.',
       'Invalid MiniMax chat response.', 'Unsupported MiniMax reasoning replay.', 'Unsupported MiniMax message content.'];
     return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'MiniMax chat request failed.');
   }

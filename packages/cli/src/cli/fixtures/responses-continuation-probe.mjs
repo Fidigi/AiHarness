@@ -7,17 +7,18 @@ import path from 'node:path';
 
 // Copied to the genuine installed consumer by installed-executable.test.ts.
 // Resolve the executable through its installed PATH bin, never checkout dist.
-const [provider, mode, credentialSource = 'cli'] = process.argv.slice(2);
+const [provider, mode, credentialSource = 'cli', selectedModel] = process.argv.slice(2);
 assert(['native-r', 'azure', 'anthropic', 'google', 'vertex', 'bedrock', 'minimax', 'minimax-cn'].includes(provider)); assert(['print', 'json', 'rpc'].includes(mode));
 const minimax = provider === 'minimax' || provider === 'minimax-cn';
 assert(credentialSource === 'cli' || credentialSource === 'extension-default' && minimax);
+assert(selectedModel === undefined || minimax && ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3'].includes(selectedModel));
 const responses = ['native-r', 'azure'].includes(provider), anthropic = provider === 'anthropic' || minimax, bedrock = provider === 'bedrock';
 const root = await mkdtemp(path.join(process.cwd(), 'responses-continuation-'));
 const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
 const journal = path.join(sessions, 'native-continuation.jsonl'), effects = path.join(root, 'effects'), preload = path.join(root, 'network.mjs');
 const key = responses || anthropic || bedrock ? 'installed-continuation-disposable-key' : 'c2VjcmV0';
-const model = minimax ? 'MiniMax-M2.7' : responses ? 'gpt-5' : anthropic ? 'claude-haiku-5-5' : bedrock ? 'anthropic.claude-opus-4-6-v1' : 'gemini-3.8-flash';
-const foreignModel = minimax ? 'MiniMax-M3' : responses ? 'gpt-4o' : anthropic ? 'claude-sonnet-4-6' : bedrock ? 'anthropic.claude-sonnet-4-6' : 'gemini-2.5-flash';
+const model = minimax ? selectedModel ?? 'MiniMax-M2.7' : responses ? 'gpt-5' : anthropic ? 'claude-haiku-5-5' : bedrock ? 'anthropic.claude-opus-4-6-v1' : 'gemini-3.8-flash';
+const foreignModel = minimax ? model === 'MiniMax-M3' ? 'MiniMax-M2.7' : 'MiniMax-M3' : responses ? 'gpt-4o' : anthropic ? 'claude-sonnet-4-6' : bedrock ? 'anthropic.claude-sonnet-4-6' : 'gemini-2.5-flash';
 const api = scope => ({ 'native-r': 'openai-responses', azure: 'azure-openai-responses', anthropic: 'anthropic-messages', minimax: 'anthropic-messages', 'minimax-cn': 'anthropic-messages', google: 'google-generative-ai', vertex: 'google-vertex', bedrock: 'bedrock-converse-stream' })[scope];
 const endpoint = (scope, selected = model) => scope === 'native-r' ? '/v1/responses' : scope === 'azure' ? '/openai/v1/responses?api-version=v1'
   : scope === 'minimax' || scope === 'minimax-cn' ? '/anthropic/v1/messages'

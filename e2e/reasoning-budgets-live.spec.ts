@@ -8,11 +8,13 @@ import { start, stop } from '../packages/server/dist/index.js';
 import { createRuntimeServices } from '../packages/server/dist/runtime/services.js';
 import { expect, test } from './fixtures/test-budget';
 
-for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-responses', 'bedrock', 'minimax', 'minimax-cn'] as const) test(`native signed ${dialect} blocks survive server restart, replay and guarded export`, async ({ page }) => {
+for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-responses', 'bedrock', 'minimax', 'minimax-cn'] as const)
+for (const selectedModel of dialect === 'minimax' || dialect === 'minimax-cn' ? [undefined, 'MiniMax-M2.7-highspeed', 'MiniMax-M3'] : [undefined])
+test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks survive server restart, replay and guarded export`, async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-signed-web-'));
   const responses = dialect === 'responses' || dialect === 'azure-responses', bedrock = dialect === 'bedrock';
   const minimax = dialect === 'minimax' || dialect === 'minimax-cn', anthropic = dialect === 'anthropic' || minimax;
-  const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data'), model = minimax ? 'MiniMax-M2.7' : anthropic ? 'claude-sonnet-4-6' : bedrock ? 'anthropic.claude-opus-4-6-v1' : responses ? 'gpt-5' : 'gemini-3.8-flash';
+  const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data'), model = minimax ? selectedModel ?? 'MiniMax-M2.7' : anthropic ? 'claude-sonnet-4-6' : bedrock ? 'anthropic.claude-opus-4-6-v1' : responses ? 'gpt-5' : 'gemini-3.8-flash';
   const opaque = bedrock ? ['opaque-[REDACTED]-tail', 'AP8BgAI='] : anthropic ? ['opaque-start-tail', 'opaque-redacted'] : responses ? ['opaque-reasoning', 'msg_opaque'] : ['b3BhcXVlLXJlYXNvbmluZw==', 'b3BhcXVlLXRleHQ='];
   const bedrockContent = (answer: string) => [{ reasoningContent: { reasoningText: { text: 'Visible native reasoning', signature: opaque[0] } } },
     { reasoningContent: { redactedContent: opaque[1] } }, { text: answer }];
