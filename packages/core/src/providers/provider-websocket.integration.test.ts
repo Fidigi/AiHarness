@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { createConnection, type Socket } from 'node:net';
+import { createConnection } from 'node:net';
+import type { Duplex } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   acquireProviderWebSocket,
@@ -8,6 +9,7 @@ import {
 } from './provider-network.js';
 import {
   OpenAiResponsesProvider,
+  OpenAiMixedProvider,
   getOpenAiResponsesTransportStats,
   resetOpenAiResponsesTransportStats,
 } from './index.js';
@@ -66,11 +68,16 @@ afterEach(async () => {
 describe('OpenAI Responses real WebSocket transport', () => {
   it('handshakes with an RFC 6455 server, reuses the session socket, and sends a continuation delta', async () => {
     const requests: Array<Record<string, unknown>> = [];
-    const sockets = new Set<Socket>();
+    const upgrades: Array<{ path: string | undefined; authorization: string | undefined }> = [];
+    const nativeOutput = [{ type: 'reasoning', id: 'rs_ws', summary: [{ type: 'summary_text', text: 'visible' }], encrypted_content: 'opaque-ws' },
+      { type: 'message', id: 'msg_ws', phase: 'final_answer', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'answer', annotations: [] }] }];
+    let httpRequests = 0;
+    const sockets = new Set<Duplex>();
     const server = createServer((_request, response) => {
-      response.writeHead(500).end();
+      httpRequests++; response.writeHead(500).end();
     });
     server.on('upgrade', (request, socket) => {
+      upgrades.push({ path: request.url, authorization: request.headers.authorization });
       sockets.add(socket);
       socket.once('close', () => sockets.delete(socket));
       const key = String(request.headers['sec-websocket-key']);
@@ -101,6 +108,10 @@ describe('OpenAI Responses real WebSocket transport', () => {
           const sequence = requests.length;
           socket.write(serverFrame({ type: 'response.created', response: { id: `response-${sequence}` } }));
           if (sequence === 3) continue; // Exercise a started response that becomes idle.
+          if (body.model === 'gpt-5' || body.model === 'gpt-4o') {
+            socket.write(serverFrame({ type: 'response.completed', response: { id: `response-${sequence}`, status: 'completed', model: 'untrusted-alias', output: nativeOutput } }));
+            continue;
+          }
           socket.write(serverFrame({ type: 'response.output_text.delta', delta: `answer-${sequence}` }));
           socket.write(serverFrame({
             type: 'response.completed',
@@ -153,6 +164,36 @@ describe('OpenAI Responses real WebSocket transport', () => {
       ], { sessionId: 'real-session' })).rejects.toThrow(
         'The provider WebSocket response was idle for too long.',
       );
+      await waitForCondition(() => sockets.size === 0);
+
+      // Rich native replay stays full on the reused real socket; generic plaintext deltas grant no private authority.
+      const config = { apiKey: 'disposable-native', model: 'gpt-5', baseUrl: `http://127.0.0.1:${address.port}/v1`,
+        transport: 'websocket-cached' as const, websocketConnectTimeoutMs: 2_000, requestTimeoutMs: 5_000, httpIdleTimeoutMs: 50 };
+      const owner = new OpenAiMixedProvider({ ...config, type: 'owner-a' }), foreign = new OpenAiMixedProvider({ ...config, type: 'owner-b' });
+      const user = message('native-user', 'user', 'start'), options = { sessionId: 'real-native-session', cacheRetention: 'none' as const };
+      const result = await owner.chat([user], options);
+      expect(result).toMatchObject({ provider: 'owner-a', api: 'openai-responses', model: 'gpt-5', content: 'answer' });
+      expect(result.blocks).toEqual([{ type: 'reasoning', text: 'visible', thinkingSignature: JSON.stringify(nativeOutput[0]) },
+        { type: 'text', text: 'answer', textSignature: JSON.stringify({ v: 1, id: 'msg_ws', phase: 'final_answer' }) }]);
+      const history: Message[] = [user, { ...message('native-assistant', 'assistant', result.content), provider: result.provider,
+        api: result.api, model: result.model, blocks: result.blocks }, message('native-next', 'user', 'next')];
+      const originalHistory = structuredClone(history);
+      await owner.chat(history, options); expect(requests).toHaveLength(5); expect(upgrades).toHaveLength(2); expect(sockets.size).toBe(1);
+      expect(requests[3].input).toEqual([{ role: 'user', content: 'start' }]);
+      expect(requests[4].input).toEqual([{ role: 'user', content: 'start' }, ...nativeOutput, { role: 'user', content: 'next' }]);
+      await foreign.chat(history, options); owner.setConfiguredModel('gpt-4o'); await owner.chat(history, options);
+      const visibleInput = [{ role: 'user', content: 'start' },
+        { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'visible', annotations: [] }], status: 'completed', id: 'msg_pi_1' },
+        { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'answer', annotations: [] }], status: 'completed', id: 'msg_pi_1_1' },
+        { role: 'user', content: 'next' }];
+      expect(requests).toHaveLength(7); expect(requests[5].input).toEqual(visibleInput); expect(requests[6].input).toEqual(visibleInput);
+      expect(requests.slice(3).map(body => body.model)).toEqual(['gpt-5', 'gpt-5', 'gpt-5', 'gpt-4o']);
+      for (const body of requests.slice(3)) expect(body.previous_response_id).toBeUndefined();
+      expect(upgrades).toEqual([{ path: '/v1/responses', authorization: 'Bearer test-key' },
+        ...Array(3).fill({ path: '/v1/responses', authorization: 'Bearer disposable-native' })]);
+      expect(httpRequests).toBe(0); expect(history).toEqual(originalHistory);
+      expect(getOpenAiResponsesTransportStats('real-native-session')).toMatchObject({ websocketConnectionsCreated: 3,
+        websocketConnectionsReused: 1, fullContextRequests: 4, deltaRequests: 0, sseFallbacks: 0 });
     } finally {
       await closeProviderNetworkDispatchers();
       await waitForCondition(() => sockets.size === 0);
@@ -162,7 +203,7 @@ describe('OpenAI Responses real WebSocket transport', () => {
   });
 
   it('performs a real WebSocket upgrade through the configured CONNECT proxy', async () => {
-    const targetSockets = new Set<Socket>();
+    const targetSockets = new Set<Duplex>();
     const target = createServer();
     target.on('upgrade', (request, socket) => {
       targetSockets.add(socket);
@@ -193,7 +234,7 @@ describe('OpenAI Responses real WebSocket transport', () => {
     if (!targetAddress || typeof targetAddress === 'string') throw new Error('Target did not bind.');
 
     let connectRequests = 0;
-    const proxySockets = new Set<Socket>();
+    const proxySockets = new Set<Duplex>();
     const proxy = createServer();
     proxy.on('connect', (request, client, head) => {
       connectRequests += 1;
@@ -243,7 +284,7 @@ describe('OpenAI Responses real WebSocket transport', () => {
   for (const transport of ['websocket-cached', 'auto'] as const) for (const text of ['', 'Visible prefix']) {
     it(`${transport} rejects malformed final arguments without SSE replay and retires the connection (text=${!!text})`, async () => {
       let httpRequests = 0, websocketRequests = 0, connections = 0;
-      const sockets = new Set<Socket>();
+      const sockets = new Set<Duplex>();
       const server = createServer((_request, response) => { httpRequests++; response.writeHead(500).end(); });
       server.on('upgrade', (request, socket) => {
         connections++; sockets.add(socket); socket.once('close', () => sockets.delete(socket));
