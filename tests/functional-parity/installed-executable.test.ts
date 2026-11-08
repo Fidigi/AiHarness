@@ -4166,10 +4166,12 @@ it('dispatches native Meta through installed public declarations and captured R 
     import { MetaProvider, META_MODELS, SpecializedModels, getProviderPublishedModel, getSupportedThinkingLevels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
     const calls = [], model = 'muse-spark-1.1', usage = { input_tokens:10, output_tokens:2, input_tokens_details:{ cached_tokens:4, cache_write_tokens:1 } };
+    const replay = ${await readFile(path.join(checkout, 'tests/fixtures/meta-continuation-reference.json'), 'utf8')}; let replayEvents;
     const server = createServer(async (request, response) => {
       let text = ''; for await (const chunk of request) text += chunk;
       const body = JSON.parse(text); calls.push({ url:request.url, headers:request.headers, body });
       const system = body.input.filter(item => item.role === 'developer').map(item => item.content).join(' ');
+      if (replayEvents) { response.setHeader('content-type', 'text/event-stream'); response.end(replayEvents.map(value => 'event: ' + value.type + '\\ndata: ' + JSON.stringify(value) + '\\n\\n').join('')); return; }
       const content = system.includes('Classify the user input') ? '{"label":"safe"}' : 'Installed Meta';
       response.setHeader('content-type', 'text/event-stream'); response.end([
         { type:'response.reasoning_summary_text.delta', delta:'Thought' }, { type:'response.output_text.delta', delta:content },
@@ -4199,6 +4201,43 @@ it('dispatches native Meta through installed public declarations and captured R 
       assert.equal(calls.length, 2); assert.equal(calls[0].body.max_output_tokens, 64); assert.equal(calls[0].body.input[0].role, 'developer');
       assert.deepEqual(calls[0].body.reasoning, { effort:'high', summary:'auto' }); assert.deepEqual(calls[1].body.reasoning, { effort:'minimal', summary:'auto' });
       assert.equal(calls[0].body.tools[0].strict, false);
+      const expectedBody = body => ({ ...structuredClone(body), input:body.input.map(item => item.role === 'user' && Array.isArray(item.content) && item.content.length === 1 && item.content[0].type === 'input_text' ? { ...item, content:item.content[0].text } : item),
+        tools:body.tools.map(tool => ({ ...tool, strict:false })), tool_choice:'auto' });
+      assert.equal(replay.sdkRequests, 48); assert.equal(replay.replayProjections, 42);
+      for (const row of replay.rows) for (const facade of ['chat','stream']) {
+        const owner = new MetaProvider({ type:'meta', apiKey:'disposable-installed-meta', model:row.model, baseUrl:'http://127.0.0.1:' + server.address().port + '/owned%2Fmeta/v1' });
+        const options = { maxTokens:64, thinking:'low', cacheRetention:'none', systemPrompt:'Public Meta system', tools:replay.tools };
+        const invoke = async messages => { if (facade === 'chat') return owner.chat(messages, options); let result;
+          await owner.streamChat(messages, () => {}, value => { result = value; }, error => { throw error; }, options); assert.ok(result); return result; };
+        const user = { id:'u', role:'user', content:'probe', timestamp:new Date(0) }; replayEvents = row.initialEvents;
+        const first = await invoke([user]); assert.equal(first.provider, 'meta'); assert.equal(first.api, 'openai-responses'); assert.equal(first.model, row.model);
+        assert.deepEqual(first.blocks, row.first.content.map(block => block.type === 'thinking' ? { type:'reasoning', text:block.thinking, thinkingSignature:block.thinkingSignature }
+          : block.type === 'toolCall' ? { type:'tool_call', id:block.id, name:block.name, input:block.arguments } : block));
+        assert.deepEqual(first.toolCalls, [{ id:'call_native|fc_native', name:'echo', input:{x:1} }]); assert.deepEqual(calls.at(-1).body, expectedBody(row.expectedInitialBody));
+        for (const projection of row.projections) {
+          const source = { id:'a', role:'assistant', content:first.content, timestamp:new Date(0), provider:projection.source.provider, api:projection.source.api, model:projection.source.model,
+            blocks:structuredClone(first.blocks), toolCalls:structuredClone(first.toolCalls) };
+          if (projection.case === 'failed') source.metadata = { outputError:'Failed Meta producer' };
+          if (projection.case === 'expurgated') for (const block of source.blocks) { delete block.thinkingSignature; delete block.textSignature; }
+          const results = projection.case === 'failed' ? [] : [{ id:'r', role:'tool', name:'echo', toolCallId:'call_native|fc_native', content:'result', timestamp:new Date(0) }];
+          const history = [user,source,...results,{...user,id:'next',content:'continue'}], before = structuredClone(history); replayEvents = projection.responseEvents;
+          const second = await invoke(history); assert.equal(second.content, 'ok'); assert.equal(second.model, row.model); assert.deepEqual(history, before);
+          assert.deepEqual(calls.at(-1).body, expectedBody(projection.expectedBody));
+        }
+      }
+      replayEvents = replay.rows[0].initialEvents; let modelReads = 0, snapshot;
+      const shifting = new MetaProvider({ type:'meta', apiKey:'disposable-installed-meta', model:replay.rows[0].model, baseUrl:'http://127.0.0.1:' + server.address().port + '/owned%2Fmeta/v1' });
+      const user = { id:'getter-user', role:'user', content:'probe', timestamp:new Date(0) };
+      await shifting.streamChat([user], () => {}, value => { snapshot = value; }, error => { throw error; }, {
+        get model() { return ++modelReads <= 2 ? replay.rows[0].model : replay.rows[2].model; }, maxTokens:64, thinking:'low' });
+      assert.equal(calls.at(-1).body.model, replay.rows[2].model); assert.equal(snapshot.model, calls.at(-1).body.model); assert.equal(snapshot.api, 'openai-responses'); assert.equal(snapshot.provider, 'meta');
+      assert.ok(Math.abs(snapshot.usage.costUsd - (0.1 + 2 * 0.2) / 1e6) < 1e-12);
+      const history = [user,{ id:'getter-a', role:'assistant', content:snapshot.content, timestamp:new Date(0), provider:snapshot.provider, api:snapshot.api, model:snapshot.model, blocks:snapshot.blocks, toolCalls:snapshot.toolCalls },
+        { id:'getter-r', role:'tool', name:'echo', toolCallId:'call_native|fc_native', content:'result', timestamp:new Date(0) },{...user,id:'getter-next',content:'continue'}], before = structuredClone(history);
+      const native = input => input.filter(item => ['reasoning','message','function_call'].includes(item.type));
+      await shifting.chat(history, { model:replay.rows[2].model, maxTokens:64 }); assert.deepEqual(native(calls.at(-1).body.input), native(replay.rows[2].projections[0].expectedBody.input));
+      await shifting.chat(history, { model:replay.rows[0].model, maxTokens:64 }); assert.deepEqual(native(calls.at(-1).body.input), native(replay.rows[0].projections.find(p => p.case === 'model').expectedBody.input));
+      assert.deepEqual(history,before); assert.equal(calls.length, 101);
       for (const call of calls) { assert.equal(call.url, '/owned%2Fmeta/v1/responses'); assert.equal(call.headers.authorization, 'Bearer disposable-installed-meta'); assert.equal(call.headers['api-key'], undefined); assert.equal(call.headers['x-api-key'], undefined); assert.equal(call.headers['nvcf-poll-seconds'], undefined); assert.equal(call.body.prompt_cache_retention, undefined); assert.equal(call.body.prompt_cache_options, undefined); assert.deepEqual(call.body.include, ['reasoning.encrypted_content']); }
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed Meta OK');

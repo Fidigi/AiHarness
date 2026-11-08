@@ -1,4 +1,4 @@
-import type { ModelPricing } from '../types/index.js';
+import type { Message, ModelPricing } from '../types/index.js';
 import type { ChatOptions, ChatResponse } from './index.js';
 import { PUBLISHED_THINKING_LEVELS, clampPublishedThinkingLevel, type PublishedThinkingLevel } from './model-metadata.js';
 
@@ -60,6 +60,25 @@ export function prepareMetaResponse(body: Record<string, unknown>, options?: Cha
   if (options?.cacheRetention !== 'none' && options?.sessionId) body.prompt_cache_key = Array.from(options.sessionId).slice(0, 64).join('');
   if (options?.cacheRetention === 'long') body.prompt_cache_retention = '24h'; else delete body.prompt_cache_retention;
   delete body.prompt_cache_options;
+}
+/** Meta preserves exact-owner composite IDs but normalizes the whole foreign ID, unlike original OpenAI. */
+export function applyMetaToolHistory(body: Record<string, unknown>, messages: Message[], provider: string, model: string): void {
+  if (!Array.isArray(body.input)) return;
+  const ids = new Map<string, { callId: string; itemId?: string }>();
+  for (const message of messages) if (message.role === 'assistant') for (const call of [
+    ...(message.toolCalls ?? []), ...(message.blocks?.flatMap(block => block.type === 'tool_call' ? [block] : []) ?? []),
+  ]) {
+    const same = message.provider === provider && message.api === 'openai-responses' && message.model === model;
+    const [callId, itemId] = same ? call.id.split('|') : [call.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64).replace(/_+$/, '')];
+    ids.set(call.id, { callId, ...(itemId?.startsWith('fc_') ? { itemId } : {}) });
+  }
+  for (const item of body.input) {
+    if (!record(item) || typeof item.call_id !== 'string' || !['function_call', 'function_call_output'].includes(String(item.type))) continue;
+    const id = ids.get(item.call_id); if (!id) continue;
+    item.call_id = id.callId;
+    if (item.type === 'function_call') { if (id.itemId) item.id = id.itemId; else delete item.id; }
+    else if (item.output === '') item.output = '(no tool output)';
+  }
 }
 /** Native primary input includes its cache counters; zero-only price declarations do not establish free requests. */
 export function metaUsage(value: unknown, model: string): ChatResponse['usage'] {
