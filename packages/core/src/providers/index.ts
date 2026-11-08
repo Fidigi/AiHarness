@@ -4747,7 +4747,7 @@ export class AnthropicProvider extends AiProvider {
     const response = await this.request(this.getMessagesUrl(), {
       method: 'POST',
       headers: this.messageHeaders(options, model),
-      body: serializeProviderBody(this.prepareMessageBody(body, options, history)),
+      body: serializeProviderBody(this.prepareMessageBody(body, options, this.ownsMiniMaxReplay ? messages : history)),
       signal: options?.signal,
     });
 
@@ -4837,7 +4837,7 @@ export class AnthropicProvider extends AiProvider {
       const response = await this.request(url, {
         method: 'POST',
         headers: this.messageHeaders(options, model),
-        body: serializeProviderBody(this.prepareMessageBody(body, options, history)),
+        body: serializeProviderBody(this.prepareMessageBody(body, options, this.ownsMiniMaxReplay ? messages : history)),
         signal: options?.signal,
       });
 
@@ -5474,16 +5474,21 @@ export class MiniMaxProvider extends AnthropicProvider {
   protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
   protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> { return prepareMiniMaxMessage(body, options, messages); }
   protected override buildAnthropicMessages(messages: Message[], native = false, model?: string): Array<{ role: 'user' | 'assistant'; content: unknown }> {
-    const converted = super.buildAnthropicMessages(messages), original = toolImageMessages(messages).filter(message => message.role !== 'system');
+    const converted = super.buildAnthropicMessages(messages, native, model), original = (native ? messages : toolImageMessages(messages)).filter(message => message.role !== 'system');
     for (let index = 0; index < original.length; index++) {
       const message = original[index];
       if (native && message.role === 'tool') {
-        const content = converted[index].content as Array<Record<string, unknown>>;
+        const content = converted[index].content as Array<Record<string, unknown>>, images = messageImages(message);
         content[0].is_error = message.isError === true;
+        if (images.length) content[0].content = [
+          { type: 'text', text: message.content || '(see attached image)' },
+          ...images.map(image => {
+            const data = parseDataImage(image.url); if (!data) throw new Error('Invalid MiniMax image input.');
+            return { type: 'image', source: { type: 'base64', media_type: data.mediaType, data: data.data } };
+          }),
+        ];
       }
-      if (native && model && message.role === 'assistant' && !messageImages(message).length) {
-        converted[index] = super.buildAnthropicMessages([message], true, model)[0]; continue;
-      }
+      if (native && model && message.role === 'assistant' && !messageImages(message).length) continue;
       const reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
       if (!reasoning) continue;
       const content = converted[index].content;

@@ -26,6 +26,11 @@ const endpoint = (scope, selected = model) => scope === 'native-r' ? '/v1/respon
     : `${scope === 'google' ? '/v1beta' : '/v1/projects/continuation-project/locations/us-central1/publishers/google'}/models/${selected}:streamGenerateContent?alt=sse`;
 const summaryEndpoint = value => value.replace('streamGenerateContent?alt=sse', 'generateContent').replace('/converse-stream', '/converse');
 const bodies = [], wires = [];
+function assertSummaryAllocation(body) {
+  // MiniMax's selected simple policy adds the CLI's low budget (2048) to the 4096 answer cap.
+  assert.equal(body.max_output_tokens ?? body.max_tokens ?? body.generationConfig?.maxOutputTokens ?? body.inferenceConfig?.maxTokens, minimax ? 6144 : 4096);
+  if (minimax) assert.deepEqual(body.thinking, { type: 'enabled', budget_tokens: 2048, display: 'summarized' });
+}
 function items(turn, redacted = true) {
   return [{ type: 'reasoning', id: `rs_empty_${turn}`, summary: [], encrypted_content: `opaque-empty-${turn}` },
     { type: 'message', id: `msg_left_${turn}`, phase: 'commentary', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: `native-${turn}-left`, annotations: [] }] },
@@ -394,7 +399,7 @@ try {
     const before = await readJournal(); summaryExpected = true;
     const automatic = await start().finish(), summary = 'native-5-leftnative-5-right', body = bodies[4];
     assert.equal(bodies.length, 6); assert.equal(summaryExpected, false);
-    assert.equal(body.max_output_tokens ?? body.max_tokens ?? body.generationConfig?.maxOutputTokens ?? body.inferenceConfig?.maxTokens, 4096); assert.deepEqual(body.tools ?? body.toolConfig?.tools ?? [], []);
+    assertSummaryAllocation(body); assert.deepEqual(body.tools ?? body.toolConfig?.tools ?? [], []);
     const history = JSON.stringify(assistants(body)); assert(history.includes('native-1-left')); assert(!history.includes('visible-'));
     assert(JSON.stringify(body).includes('PUBLIC_HEADLESS_FILLER')); assert(JSON.stringify(body).includes('native-tool-result'));
     for (const value of [...opaque, 'Signature', 'encrypted_content']) assert(!history.includes(value), value);
@@ -437,7 +442,7 @@ try {
     const compacted = await work.command({ type: 'compact', id: 'native-compact' });
     const summary = `native-${turn + 1}-leftnative-${turn + 1}-right`, summaryBody = bodies[turn];
     assert.equal(bodies.length, turn + 1); assert.equal(summaryExpected, false);
-    assert.equal(compacted.data.summary, summary); assert.equal(summaryBody.max_output_tokens ?? summaryBody.max_tokens ?? summaryBody.generationConfig?.maxOutputTokens ?? summaryBody.inferenceConfig?.maxTokens, 4096);
+    assert.equal(compacted.data.summary, summary); assertSummaryAllocation(summaryBody);
     assert.deepEqual(summaryBody.tools ?? summaryBody.toolConfig?.tools ?? [], []);
     const summaryHistory = JSON.stringify(assistants(summaryBody));
     assert(summaryHistory.includes('edited answer')); assert(!summaryHistory.includes('visible-'));
@@ -524,7 +529,7 @@ try {
     const beforeAuto = await readJournal(fork.id), automatic = start(fork.id); summaryExpected = true; await automatic.prompt(1);
     const autoResult = await automatic.finish(), autoSummary = `native-${autoTurn + 1}-leftnative-${autoTurn + 1}-right`, autoBody = bodies[autoTurn];
     assert.equal(bodies.length, autoTurn + 2); assert.equal(summaryExpected, false);
-    assert.equal(autoBody.max_output_tokens ?? autoBody.max_tokens ?? autoBody.generationConfig?.maxOutputTokens ?? autoBody.inferenceConfig?.maxTokens, 4096);
+    assertSummaryAllocation(autoBody);
     assert.deepEqual(autoBody.tools ?? autoBody.toolConfig?.tools ?? [], []);
     const autoHistory = JSON.stringify(assistants(autoBody)); assert(autoHistory.includes(`native-${turn}-left`)); assert(!autoHistory.includes('visible-'));
     assert(JSON.stringify(autoBody).includes('PUBLIC_AUTO_FILLER'));
@@ -596,7 +601,7 @@ try {
     }
     for (const [offset, summary] of [[overflowTurn, overflowSummary], [exhaustedTurn, exhaustedSummary]]) {
       const body = bodies[offset + 1], history = JSON.stringify(assistants(body));
-      assert.equal(body.max_output_tokens ?? body.max_tokens ?? body.generationConfig?.maxOutputTokens ?? body.inferenceConfig?.maxTokens, 4096); assert.deepEqual(body.tools ?? body.toolConfig?.tools ?? [], []);
+      assertSummaryAllocation(body); assert.deepEqual(body.tools ?? body.toolConfig?.tools ?? [], []);
       assert(history.includes('native-')); assert(!history.includes('visible-')); for (const value of [...opaque, 'Signature', 'encrypted_content', overflowPrivate]) assert(!history.includes(value), value);
       const entry = (await readJournal(fork.id)).find(value => value.type === 'compaction' && value.summary === summary); assert(entry);
       assert.equal(entry.provider, provider); assert.equal(entry.model, model); assert.equal(entry.usage.inputTokens, 5); assert.equal(entry.usage.outputTokens, 2);

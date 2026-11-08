@@ -75,7 +75,10 @@ export function prepareMiniMaxMessage(body: Record<string, unknown>, options?: C
   const control = options?.cacheRetention === 'none' ? undefined : { type: 'ephemeral', ...(options?.cacheRetention === 'long' ? { ttl: '1h' } : {}) };
   if (typeof body.system === 'string') body.system = [{ type: 'text', text: body.system, ...(control ? { cache_control: control } : {}) }];
   if (Array.isArray(body.tools)) body.tools = body.tools.map((tool: Record<string, unknown>, index: number) => {
-    const result = { ...tool, eager_input_streaming: true }; delete (result as Record<string, unknown>).strict;
+    const schema = record(tool.input_schema) ? tool.input_schema : {};
+    const result = { ...tool, eager_input_streaming: true,
+      input_schema: { type: 'object', properties: schema.properties ?? {}, required: schema.required ?? [] } };
+    delete (result as Record<string, unknown>).strict;
     return { ...result, ...(control && index === (body.tools as unknown[]).length - 1 ? { cache_control: control } : {}) };
   });
   if (!profile.declaredInput.includes('image') && Array.isArray(body.messages) && body.messages.some(message => record(message)

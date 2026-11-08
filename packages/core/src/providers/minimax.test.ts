@@ -33,6 +33,34 @@ const numeric = JSON.parse(numericBytes.toString()) as {
     logicalOptions: { reasoning?: providers.ChatOptions['thinking']; maxTokens?: number; thinkingBudgets?: providers.ChatOptions['thinkingBudgets'] };
     expected: { maxTokens: number; thinking: { type: string; budget_tokens?: number; display?: string } } }>;
 };
+type ContextBlock = { type: 'text' | 'thinking' | 'toolCall' | 'image'; text?: string; thinking?: string; id?: string; name?: string; arguments?: Record<string, unknown>; data?: string; mimeType?: string };
+type ContextMessage = { role: 'user' | 'system' | 'assistant' | 'toolResult'; content: string | ContextBlock[]; timestamp: number;
+  provider?: string; model?: string; api?: string; stopReason?: string; toolCallId?: string; isError?: boolean;
+  usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; totalTokens?: number } };
+const contextBytes = readFileSync(new URL('../../../../tests/fixtures/minimax-context-reference.json', import.meta.url));
+const contextReference = JSON.parse(contextBytes.toString()) as {
+  pinnedCommit: string; profiles: number; scenariosPerProfile: number; selectedVectors: number; freshSdkRequests: number;
+  rows: Array<{ scope: string; model: string; input: { id: string; initialUserCharacters: number; initialUserTimestamp: number;
+    systemPrompt?: string; tools?: providers.ChatOptions['tools']; messages: ContextMessage[]; logicalOptions: { reasoning: providers.ChatOptions['thinking'] } };
+    estimate: { tokens: number }; expectedBody: Record<string, unknown> & { max_tokens: number; thinking: { budget_tokens: number } } }>;
+};
+function contextMessages(row: (typeof contextReference.rows)[number]): Message[] {
+  const source: ContextMessage[] = [{ role: 'user', content: 'x'.repeat(row.input.initialUserCharacters), timestamp: row.input.initialUserTimestamp }, ...row.input.messages];
+  return source.map((message, index) => {
+    const blocks = typeof message.content === 'string' ? undefined : message.content.map(block => block.type === 'text' ? { type: 'text' as const, text: block.text! }
+      : block.type === 'thinking' ? { type: 'reasoning' as const, text: block.thinking! }
+      : block.type === 'toolCall' ? { type: 'tool_call' as const, id: block.id!, name: block.name!, input: block.arguments! }
+      : { type: 'image' as const, mediaType: block.mimeType!, url: `data:${block.mimeType};base64,${block.data}` });
+    return { id: `context-${index}`, role: message.role === 'toolResult' ? 'tool' as const : message.role,
+      content: typeof message.content === 'string' ? message.content : message.content.filter(block => block.type === 'text').map(block => block.text).join(''),
+      timestamp: new Date(message.timestamp), blocks, provider: message.provider, model: message.model, api: message.api,
+      toolCallId: message.toolCallId, isError: message.isError,
+      toolCalls: blocks?.flatMap(block => block.type === 'tool_call' ? [{ id: block.id, name: block.name, input: block.input }] : []),
+      metadata: { stopReason: message.stopReason, ...(['error', 'aborted'].includes(message.stopReason ?? '') ? { outputError: true } : {}) },
+      ...(message.usage ? { usage: { inputTokens: message.usage.input, outputTokens: message.usage.output, cacheReadTokens: message.usage.cacheRead,
+        cacheWriteTokens: message.usage.cacheWrite, totalTokens: message.usage.totalTokens } } : {}) };
+  });
+}
 const first = 'MiniMax-M2.7', latest = 'MiniMax-M3';
 const input: Message = { id: 'input', role: 'user', content: 'Continue', timestamp: new Date(0) };
 const usage = { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 1 };
@@ -270,6 +298,51 @@ describe('native MiniMax simple allocation', () => {
         expect(JSON.stringify({ messages, options })).toBe(before);
       }
       expect(calls).toHaveLength(30);
+    });
+});
+
+describe('native MiniMax context allocation', () => {
+  it('binds system/tool/history/media/usage vectors to independent pinned HTTPS requests', () => {
+    expect(createHash('sha256').update(contextBytes).digest('hex')).toBe('408efc39ad328ac123d32f5e59f1a0e030ddc4fad1ba886c87ec9a5e13efed95');
+    expect(contextReference).toMatchObject({ pinnedCommit: '06a466935536f8c9bcacb2d5efc0fc021be1bdff', profiles: 6,
+      scenariosPerProfile: 20, selectedVectors: 120, freshSdkRequests: 138 });
+    expect(contextReference.rows).toHaveLength(120);
+  });
+
+  it.each(['minimax', 'minimax-cn'].flatMap(scope => providers.MINIMAX_MODELS.map(profile => ({ scope, profile }))))(
+    '$scope/$profile.id preserves raw context allocation and complete request projection on both facades', async ({ scope, profile }) => {
+      const { calls, baseUrl } = await fixture(), Provider = scope === 'minimax' ? providers.MiniMaxProvider : providers.MiniMaxCnProvider;
+      const provider = new Provider({ type: scope, model: profile.id, apiKey: 'disposable', baseUrl }), prepare = captureNativeOutputBudget(provider)!;
+      const rows = contextReference.rows.filter(row => row.scope === scope && row.model === profile.id);
+      expect(rows).toHaveLength(20); let requests = 0, refusals = 0;
+      for (const row of rows) {
+        const messages = contextMessages(row), options: providers.ChatOptions = { thinking: row.input.logicalOptions.reasoning,
+          systemPrompt: row.input.systemPrompt, tools: structuredClone(row.input.tools), cacheRetention: 'none' };
+        const before = JSON.stringify({ messages, options }), budget = row.expectedBody.thinking.budget_tokens;
+        const unsafe = row.expectedBody.max_tokens - budget < 1024, unsupportedImage = row.input.id.includes('image') && !profile.declaredInput.includes('image');
+        if (unsafe) expect(() => prepare(options, messages)).toThrow('Provider native output policy is invalid.');
+        else expect(prepare(options, messages).maxTokens, row.input.id).toBe(row.expectedBody.max_tokens);
+        if (unsafe || unsupportedImage) {
+          const error = unsupportedImage ? 'MiniMax chat model does not support images.' : 'Invalid MiniMax thinking allocation.';
+          await expect(provider.chat(messages, options)).rejects.toThrow(error);
+          await expect(provider.streamChat(messages, () => {}, undefined, error => { throw error; }, options)).rejects.toThrow(error);
+          expect(calls).toHaveLength(0); refusals += 2;
+        } else {
+          const reply = await provider.chat(messages, options), complete = vi.fn();
+          await provider.streamChat(messages, () => {}, complete, error => { throw error; }, options);
+          expect(calls).toHaveLength(2); expect(complete).toHaveBeenCalledOnce();
+          for (const [index, call] of calls.entries()) {
+            const compact = JSON.parse(JSON.stringify(call.body).replaceAll(messages[0].content, '__INITIAL_USER_PADDING__'));
+            expect.soft(compact, `${row.input.id}/${index}`).toEqual({ ...row.expectedBody, stream: index === 1 });
+            expect(call.headers['x-api-key']).toBe('disposable'); expect(call.headers.authorization).toBeUndefined();
+            expect(call.headers['anthropic-version']).toBe('2023-06-01'); expect(call.headers['anthropic-beta']).toBe('interleaved-thinking-2025-05-14');
+          }
+          for (const result of [reply, complete.mock.calls[0][0]]) expect(result.usage).toMatchObject({ promptTokens: 5, completionTokens: 2, totalTokens: 12 });
+          requests += 2; calls.splice(0);
+        }
+        expect(JSON.stringify({ messages, options }), row.input.id).toBe(before);
+      }
+      expect({ requests, refusals }).toEqual(profile.id === latest ? { requests: 38, refusals: 2 } : { requests: 34, refusals: 6 });
     });
 });
 
