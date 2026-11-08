@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { AnthropicProvider, GeminiProvider, VertexGeminiProvider, OpenAiMixedProvider, AzureProvider, BedrockProvider, MiniMaxProvider, MiniMaxCnProvider, SessionManager, JsonlSessionStore, resolveAgentCompactionContextWindow, prepareCompactionContext, getCompactionModelMessages, type AiProvider, SESSION_EXPORT_CONTINUATION_WARNING } from '../packages/core/dist/index.js';
@@ -29,6 +29,8 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
   const cancelMarker = 'PUBLIC_SERVER_WITHDRAWAL_ACK', resetMarker = 'PUBLIC_SERVER_TRANSPORT_RESET_BOUNDARY';
   const failedText = 'PUBLIC_SERVER_FAILED_PREFIX ' + 'x'.repeat(256), failedReasoning = 'PUBLIC_SERVER_FAILED_REASONING ' + 'y'.repeat(256);
   let nativeFailure: 'error' | 'withdraw' | 'eof' | 'reset' | undefined, heldClosed: Promise<void> | undefined, peerClosed = false, resetPeer: (() => void) | undefined;
+  let publishTool = false, effects = 0;
+  const effectFile = path.join(root, 'native-effects.jsonl'), effectTool = 'server_native_effect', toolCallId = 'server-native-tool';
   const wire = createServer(async (request, response) => {
     if (request.method === 'GET') {
       response.setHeader('Content-Type', 'application/json');
@@ -50,6 +52,8 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
           { type: 'content_block_start', index: 2, content_block: { type: 'text', text: failure === 'withdraw' ? cancelMarker + '!'.repeat(1024)
             : failure === 'reset' ? resetMarker + ' ' + failedText : failedText } },
           { type: 'content_block_stop', index: 2 },
+          { type: 'content_block_start', index: 3, content_block: { type: 'tool_use', id: 'unpublished-server-call', name: effectTool, input: { value: 42 } } },
+          { type: 'content_block_stop', index: 3 },
         ];
         response.setHeader('Content-Type', 'text/event-stream');
         if (failure === 'withdraw' || failure === 'reset') {
@@ -103,6 +107,7 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
         { type: 'redacted_thinking', data: opaque[1] }, { type: 'text', text: answer },
       ], stop_reason: 'end_turn', usage: { input_tokens: 5, output_tokens: 2 } })); return;
     }
+    const tool = minimax && publishTool; publishTool = false;
     response.end([
       { type: 'message_start', message: { model: 'untrusted-alias', usage: { input_tokens: 5, output_tokens: 0 } } },
       { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: 'Visible native reasoning', signature: 'opaque-start-' } },
@@ -112,7 +117,9 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
       { type: 'content_block_stop', index: 1 },
       { type: 'content_block_start', index: 2, content_block: { type: 'text', text: answer } },
       { type: 'content_block_stop', index: 2 },
-      { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 2 } }, { type: 'message_stop' },
+      ...(tool ? [{ type: 'content_block_start', index: 3, content_block: { type: 'tool_use', id: toolCallId, name: effectTool, input: { value: 42 } } },
+        { type: 'content_block_stop', index: 3 }] : []),
+      { type: 'message_delta', delta: { stop_reason: tool ? 'tool_use' : 'end_turn' }, usage: { output_tokens: 2 } }, { type: 'message_stop' },
     ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
   });
   await mkdir(cwd); await new Promise<void>(resolve => wire.listen(0, '127.0.0.1', resolve));
@@ -128,6 +135,14 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
           : bedrock ? new BedrockProvider({ ...config, type: 'bedrock' }) : dialect === 'google' ? new GeminiProvider({ ...config, type: 'google' }) : dialect === 'vertex' ? new VertexGeminiProvider({ ...config, type: 'vertex' })
             : dialect === 'responses' ? new OpenAiMixedProvider({ ...config, type: 'openai', transport: 'sse' }) : new AzureProvider({ ...config, type: 'azure' });
         proxy.setCustomProvider('native-signed', owner); runtime = services;
+        if (minimax) await services.extensionRegistry.load('server-native-effect', api => api.registerTool({ name: effectTool, description: 'Record one native effect',
+          parameters: { type: 'object', properties: { value: { type: 'number' } }, required: ['value'] },
+          execute: async (input, context) => {
+            // Record every invocation before validating it, including a wrongly admitted pending call.
+            effects++; await appendFile(effectFile, JSON.stringify({ sessionId: context.currentSessionId, input }) + '\n', { mode: 0o600 });
+            expect(input).toEqual({ value: 42 }); expect(context.currentSessionId).toBeTruthy(); expect(context.toolCallId).toBe(toolCallId);
+            return { content: 'PUBLIC_SERVER_TOOL_RESULT' };
+          } }));
         if (policy) { services.sessionManager.setCompactionSettings(policy.settings); services.sessionManager.setCompactionContextWindow(policy.window); }
         return services;
       } };
@@ -270,6 +285,10 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
     await expect(page.locator('.message.assistant').last()).toContainText('Continued native answer.');
     for (const value of opaque) await expect(page.locator('body')).not.toContainText(value);
     if (minimax) {
+      expect((await page.request.patch(`${base}/api/configuration/scope`, { data: { scope: 'global', values: { enabledTools: [effectTool] } } })).status()).toBe(200);
+      const configured = page.waitForResponse(response => response.url().endsWith(`/api/sessions/${id}`) && response.request().method() === 'PATCH');
+      await page.getByRole('combobox', { name: 'Tool preset', exact: true }).selectOption('configured'); expect((await configured).status()).toBe(200);
+      await expect(page.getByRole('combobox', { name: 'Tool preset', exact: true })).toHaveValue('configured');
       const assistants = (entries: Awaited<ReturnType<typeof manager.getRawEntries>>) => entries.filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant');
       const validTurns = [...retainedTurns, 5, 6];
       nativeFailure = 'error'; const failedRun = await send('Publish only the failed public prefix', 'failed');
@@ -429,6 +448,40 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
       for (const value of [...opaque, 'disposable-private-wire']) await expect(page.locator('body')).not.toContainText(value);
       for (const journal of [file, forkFile]) { expect((await stat(journal)).mode & 0o777).toBe(0o600); expect(await readFile(journal, 'utf8')).not.toContain('disposable-private-wire'); }
       expect(wires).toEqual(Array(18).fill({ path: '/v1/messages', authorization: undefined }));
+      expect(effects).toBe(0); await expect(readFile(effectFile, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+      for (const turn of [7, 9, 11, 13]) expect(bodies[turn - 1].tools).toEqual([{ name: effectTool, description: 'Record one native effect',
+        input_schema: { type: 'object', properties: { value: { type: 'number' } }, required: ['value'] }, eager_input_streaming: true,
+        cache_control: { type: 'ephemeral' } }]);
+      publishTool = true; const toolRun = await send('Execute one native effect'); expect(toolRun.session.id).toBe(fork.id);
+      expect(publishTool).toBe(false); expect(effects).toBe(1); expect(bodies).toHaveLength(20);
+      expect(native(bodies[18])).toEqual(expectedNative([...keptTurns, 16, 17, 18]));
+      const toolContent = [...expectedNative([19])[0] as unknown[], { type: 'tool_use', id: toolCallId, name: effectTool, input: { value: 42 } }];
+      const result = { type: 'tool_result', tool_use_id: toolCallId, content: 'PUBLIC_SERVER_TOOL_RESULT', is_error: false };
+      // Each independently lowered request puts its cache breakpoint on the last message only.
+      expect(bodies[18].messages!.at(-1)).toEqual({ role: 'user', content: [{ type: 'text', text: 'Execute one native effect', cache_control: { type: 'ephemeral' } }] });
+      expect(bodies[19].messages).toEqual([...bodies[18].messages!.slice(0, -1), { role: 'user', content: 'Execute one native effect' },
+        { role: 'assistant', content: toolContent }, { role: 'user', content: [{ ...result, cache_control: { type: 'ephemeral' } }] }]);
+      const effectBytes = await readFile(effectFile, 'utf8'); expect(JSON.parse(effectBytes)).toEqual({ sessionId: fork.id, input: { value: 42 } });
+      const afterTool = await runtime.sessionManager.getRawEntries(fork.id), toolAssistant = assistants(afterTool).at(-2)!;
+      expect(toolAssistant).toMatchObject({ provider: dialect, api: 'anthropic-messages', model, toolCalls: [{ id: toolCallId, name: effectTool, input: { value: 42 } }] });
+      expect(toolAssistant.blocks).toEqual([...assistants(forkAfterRestart).at(-1)!.blocks!, { type: 'tool_call', id: toolCallId, name: effectTool, input: { value: 42 } }]);
+      expect(assistants(afterTool).at(-1)!.blocks).toEqual(assistants(forkAfterRestart).at(-1)!.blocks);
+      expect(afterTool.filter(entry => entry.type === 'message').filter(entry => entry.role === 'tool')).toHaveLength(1);
+      for (const entry of forkAfterRestart.filter(entry => entry.type !== 'metadata')) expect(afterTool.find(value => value.id === entry.id)).toEqual(entry);
+      const toolDisk = new SessionManager({ store: new JsonlSessionStore(path.join(dataDir, 'sessions')) }); expect(await toolDisk.loadFromStore(fork.id)).toBeTruthy();
+      expect(getCompactionModelMessages(toolDisk, fork.id)).toEqual(getCompactionModelMessages(runtime.sessionManager, fork.id));
+      await restart(fork.id); expect(bodies).toHaveLength(20); await send('Replay native tool and final blocks after restart'); expect(bodies).toHaveLength(21);
+      expect(bodies[20].messages).toEqual([...bodies[19].messages!.slice(0, -1), { role: 'user', content: [result] },
+        { role: 'assistant', content: expectedNative([20])[0] },
+        { role: 'user', content: [{ type: 'text', text: 'Replay native tool and final blocks after restart', cache_control: { type: 'ephemeral' } }] }]);
+      expect(effects).toBe(1); expect(await readFile(effectFile, 'utf8')).toBe(effectBytes); expect((await stat(effectFile)).mode & 0o777).toBe(0o600);
+      expect(await readFile(file, 'utf8')).toBe(sourceBytes);
+      const afterToolRestart = await runtime.sessionManager.getRawEntries(fork.id);
+      for (const entry of afterTool.filter(entry => entry.type !== 'metadata')) expect(afterToolRestart.find(value => value.id === entry.id)).toEqual(entry);
+      expect(afterToolRestart.filter(entry => entry.type === 'compaction')).toEqual(copiedCompactions);
+      for (const value of [...opaque, 'WITHHELD_SIGNATURE', 'WITHHELD_REDACTED_DATA', 'unpublished-server-call', 'disposable-private-wire']) await expect(page.locator('body')).not.toContainText(value);
+      expect(await readFile(forkFile, 'utf8')).not.toContain('disposable-private-wire'); expect((await stat(forkFile)).mode & 0o777).toBe(0o600);
+      expect(wires).toEqual(Array(21).fill({ path: '/v1/messages', authorization: undefined }));
     }
   } finally {
     await page.goto('about:blank').catch(() => undefined); await stop();
