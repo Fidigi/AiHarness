@@ -61,8 +61,9 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
         return;
       }
     }
-    const summary = JSON.stringify(bodies.at(-1)).includes('Summarize this conversation while preserving decisions and unresolved tasks.');
-    const answer = summary ? 'PUBLIC_NATIVE_AUTO_SUMMARY' : bodies.length === 1 ? 'First native answer.' : 'Continued native answer.';
+    const manualSummary = minimax && JSON.stringify(bodies.at(-1)).includes('PUBLIC_SERVER_MANUAL_SUMMARY_INSTRUCTION');
+    const summary = manualSummary || JSON.stringify(bodies.at(-1)).includes('Summarize this conversation while preserving decisions and unresolved tasks.');
+    const answer = manualSummary ? 'PUBLIC_NATIVE_MANUAL_SUMMARY' : summary ? 'PUBLIC_NATIVE_AUTO_SUMMARY' : bodies.length === 1 ? 'First native answer.' : 'Continued native answer.';
     const suffix = bodies.length === 1 ? '' : `_${bodies.length}`;
     if (bedrock) {
       response.setHeader('Content-Type', summary ? 'application/json' : 'application/vnd.amazon.eventstream');
@@ -287,12 +288,12 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
       expect(reasoning?.text.length).toBeGreaterThan(30); expect(failedReasoning.startsWith(reasoning!.text)).toBe(true);
       expect(failed.blocks).toEqual([{ type: 'reasoning', text: reasoning!.text }, { type: 'text', text: failed.content }]);
       for (const entry of finalEntries.filter(entry => entry.type !== 'metadata')) expect(afterFailure.find(value => value.id === entry.id)).toEqual(entry);
-      const restart = async () => {
-        const canonical = getCompactionModelMessages(runtime.sessionManager, id);
+      const restart = async (sessionId = id) => {
+        const canonical = getCompactionModelMessages(runtime.sessionManager, sessionId);
         await page.goto('about:blank'); await stop(); await start({ ...options, port: server.port }); await login(); await page.goto(settingsUrl);
-        expect(getCompactionModelMessages(runtime.sessionManager, id)).toEqual(canonical);
+        expect(getCompactionModelMessages(runtime.sessionManager, sessionId)).toEqual(canonical);
         await page.getByRole('combobox', { name: 'Select the AI Provider', exact: true }).selectOption('native-signed');
-        await page.locator(`a.session-main[href*="${id}"]`).click();
+        await page.locator(`a.session-main[href*="${sessionId}"]`).click();
       };
       await restart(); expect(bodies).toHaveLength(7);
       await send('Recover after failed native publication'); expect(bodies).toHaveLength(8);
@@ -358,6 +359,76 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
         expect((await stat(file)).mode & 0o777).toBe(0o600); successfulTurns.push(turn + 2);
       }
       expect(bodies).toHaveLength(14); expect(wires).toEqual(Array(14).fill({ path: '/v1/messages', authorization: undefined }));
+      const beforeManual = await runtime.sessionManager.getRawEntries(id), beforeManualContext = getCompactionModelMessages(runtime.sessionManager, id);
+      const successfulMessages = beforeManualContext.filter(message => message.role === 'assistant' && message.api === 'anthropic-messages');
+      expect(successfulMessages).toHaveLength(successfulTurns.length);
+      const turnById = new Map(successfulMessages.map((message, index) => [message.id, successfulTurns[index]]));
+      const manualPrepared = prepareCompactionContext(runtime.sessionManager, id); expect(manualPrepared).toBeTruthy();
+      const keptTurns = manualPrepared!.keptMessages.flatMap(message => { const turn = turnById.get(message.id); return turn === undefined ? [] : [turn]; });
+      expect(keptTurns.at(-1)).toBe(14);
+      const compactResponse = await page.request.post(`${base}/api/agent/sessions/${id}/compact`, {
+        data: { provider: 'native-signed', model, instruction: 'PUBLIC_SERVER_MANUAL_SUMMARY_INSTRUCTION' },
+      });
+      expect(compactResponse.status()).toBe(200); const compactResult = await compactResponse.json();
+      expect(compactResult.summary).toBe('PUBLIC_NATIVE_MANUAL_SUMMARY'); expect(bodies).toHaveLength(15);
+      expect(bodies[14]).toMatchObject({ model, max_tokens: 4096, thinking: { type: 'disabled' } }); expect(bodies[14].tools ?? []).toEqual([]);
+      expect(JSON.stringify(bodies[14])).toContain('Continued native answer.'); expect(JSON.stringify(bodies[14])).toContain('PUBLIC_SERVER_MANUAL_SUMMARY_INSTRUCTION');
+      expect(JSON.stringify(bodies[14])).not.toContain('Visible native reasoning');
+      for (const value of [...opaque, 'WITHHELD_SIGNATURE', 'WITHHELD_REDACTED_DATA', 'PRIVATE_SERVER_PROVIDER_ERROR', 'disposable-private-wire']) {
+        expect(JSON.stringify(bodies[14])).not.toContain(value); expect(JSON.stringify({ summary: compactResult.summary, metadata: compactResult.session.metadata })).not.toContain(value);
+      }
+      // Authenticated session snapshots retain native blocks; summary projection and default export do not.
+      expect(JSON.stringify(compactResult)).not.toContain('disposable-private-wire');
+      expect(compactResult.session.messages.map((message: { blocks?: unknown }) => message.blocks))
+        .toEqual(runtime.sessionManager.get(id)!.messages.map(message => message.blocks));
+      const afterManual = await runtime.sessionManager.getRawEntries(id), manualCompactions = afterManual.filter(entry => entry.type === 'compaction');
+      expect(manualCompactions).toHaveLength(2); expect(manualCompactions.slice(0, -1)).toEqual(compactions);
+      expect(manualCompactions.at(-1)).toMatchObject({ summary: 'PUBLIC_NATIVE_MANUAL_SUMMARY', provider: dialect, model,
+        firstKeptEntryId: manualPrepared!.firstKeptEntryId, usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } });
+      for (const value of [...opaque, 'Visible native reasoning', 'disposable-private-wire']) expect(JSON.stringify(manualCompactions.at(-1))).not.toContain(value);
+      expect(assistants(afterManual)).toEqual(assistants(beforeManual));
+      for (const entry of beforeManual.filter(entry => entry.type !== 'metadata')) expect(afterManual.find(value => value.id === entry.id)).toEqual(entry);
+      const manualDisk = new SessionManager({ store: new JsonlSessionStore(path.join(dataDir, 'sessions')) });
+      expect(await manualDisk.loadFromStore(id)).toBeTruthy(); expect(getCompactionModelMessages(manualDisk, id)).toEqual(getCompactionModelMessages(runtime.sessionManager, id));
+      await restart(); expect(bodies).toHaveLength(15); await send('Replay the manually compacted native context'); expect(bodies).toHaveLength(16);
+      expect(native(bodies[15])).toEqual(expectedNative(keptTurns)); expect(JSON.stringify(bodies[15])).toContain('PUBLIC_NATIVE_MANUAL_SUMMARY');
+      expect(JSON.stringify(bodies[15])).not.toContain('PUBLIC_SERVER_FAILED_'); expect(JSON.stringify(bodies[15])).not.toContain(resetMarker);
+      const sourceBeforeFork = await runtime.sessionManager.getRawEntries(id), sourceContext = getCompactionModelMessages(runtime.sessionManager, id), sourceBytes = await readFile(file, 'utf8');
+      const sourceMessages = runtime.sessionManager.get(id)!.messages;
+      // Forks copy the current model projection and rich structural ancestors, not discarded messages.
+      const copiedIds = new Set([...sourceMessages.map(message => message.id), ...sourceBeforeFork.filter(entry => entry.type !== 'metadata' && entry.type !== 'message').map(entry => entry.id)]);
+      const sourceParents = new Map(sourceBeforeFork.filter(entry => entry.type !== 'metadata').map(entry => [entry.id, entry.type === 'message' ? entry.parentMessageId : entry.parentEntryId]));
+      const copiedParent = (parent: string | undefined) => { while (parent && !copiedIds.has(parent)) parent = sourceParents.get(parent); return parent; };
+      const copiedCompactions = manualCompactions.map(entry => ({ ...entry, parentEntryId: copiedParent(entry.parentEntryId),
+        firstKeptEntryId: copiedIds.has(entry.firstKeptEntryId) ? entry.firstKeptEntryId : sourceMessages[0].id }));
+      const forkResponse = await page.request.post(`${base}/api/sessions/${id}/fork`, { data: { title: 'Private native fork' } });
+      expect(forkResponse.status()).toBe(201); const fork = await forkResponse.json();
+      expect(fork.id).not.toBe(id); expect(fork).toMatchObject({ parentId: id, branchId: runtime.sessionManager.get(id)!.branchId ?? id });
+      expect(bodies).toHaveLength(16); expect(await readFile(file, 'utf8')).toBe(sourceBytes);
+      for (const value of [...opaque, 'disposable-private-wire']) expect(JSON.stringify(fork.metadata)).not.toContain(value);
+      expect(JSON.stringify(fork)).not.toContain('disposable-private-wire');
+      expect(fork.messages.map((message: { blocks?: unknown }) => message.blocks)).toEqual(runtime.sessionManager.get(id)!.messages.map(message => message.blocks));
+      const forkFile = path.join(dataDir, 'sessions', fork.id + '.jsonl'), forkDisk = new SessionManager({ store: new JsonlSessionStore(path.join(dataDir, 'sessions')) });
+      expect(await forkDisk.loadFromStore(fork.id)).toBeTruthy();
+      expect(getCompactionModelMessages(forkDisk, fork.id)).toEqual(sourceContext.map(message => ({ ...message, parentMessageId: copiedParent(message.parentMessageId) })));
+      const forkEntries = await forkDisk.getRawEntries(fork.id); expect(assistants(forkEntries).map(entry => entry.blocks)).toEqual(sourceMessages.filter(message => message.role === 'assistant').map(message => message.blocks));
+      expect(forkEntries.filter(entry => entry.type === 'compaction')).toEqual(copiedCompactions);
+      for (const value of opaque) expect(await readFile(forkFile, 'utf8')).toContain(value);
+      await page.goto(settingsUrl); await page.getByRole('combobox', { name: 'Select the AI Provider', exact: true }).selectOption('native-signed');
+      await page.locator(`a.session-main[href*="${fork.id}"]`).click(); const forkRun = await send('Continue the private native fork');
+      expect(forkRun.session.id).toBe(fork.id); expect(bodies).toHaveLength(17); expect(native(bodies[16])).toEqual(expectedNative([...keptTurns, 16]));
+      const beforeForkRestart = await runtime.sessionManager.getRawEntries(fork.id);
+      for (const entry of forkEntries.filter(entry => entry.type !== 'metadata')) expect(beforeForkRestart.find(value => value.id === entry.id)).toEqual(entry);
+      expect(beforeForkRestart.filter(entry => entry.type === 'compaction')).toEqual(copiedCompactions);
+      await restart(fork.id); expect(bodies).toHaveLength(17); const forkRestart = await send('Reload and continue the private native fork');
+      expect(forkRestart.session.id).toBe(fork.id); expect(bodies).toHaveLength(18); expect(native(bodies[17])).toEqual(expectedNative([...keptTurns, 16, 17]));
+      expect(JSON.stringify(bodies[17])).toContain('PUBLIC_NATIVE_MANUAL_SUMMARY'); expect(await readFile(file, 'utf8')).toBe(sourceBytes);
+      const forkAfterRestart = await runtime.sessionManager.getRawEntries(fork.id);
+      for (const entry of beforeForkRestart.filter(entry => entry.type !== 'metadata')) expect(forkAfterRestart.find(value => value.id === entry.id)).toEqual(entry);
+      expect(forkAfterRestart.filter(entry => entry.type === 'compaction')).toEqual(copiedCompactions);
+      for (const value of [...opaque, 'disposable-private-wire']) await expect(page.locator('body')).not.toContainText(value);
+      for (const journal of [file, forkFile]) { expect((await stat(journal)).mode & 0o777).toBe(0o600); expect(await readFile(journal, 'utf8')).not.toContain('disposable-private-wire'); }
+      expect(wires).toEqual(Array(18).fill({ path: '/v1/messages', authorization: undefined }));
     }
   } finally {
     await page.goto('about:blank').catch(() => undefined); await stop();
