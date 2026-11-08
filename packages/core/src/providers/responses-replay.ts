@@ -76,6 +76,26 @@ export function createResponsesReplayCapture() {
   };
 }
 
+/** Independently bound Meta/xAI policy: exact IDs split,foreign IDs normalize as one string. This grants no replay authority. */
+export function applyResponsesWholeIdHistory(body: Record<string, unknown>, messages: Message[], owner: ResponsesReplayOwner): void {
+  if (!Array.isArray(body.input)) return;
+  const ids = new Map<string, { callId: string; itemId?: string }>();
+  for (const message of messages) if (message.role === 'assistant') for (const call of [
+    ...(message.toolCalls ?? []), ...(message.blocks?.flatMap(block => block.type === 'tool_call' ? [block] : []) ?? []),
+  ]) {
+    const same = message.provider === owner.provider && message.api === owner.api && message.model === owner.model;
+    const [callId, itemId] = same ? call.id.split('|') : [call.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64).replace(/_+$/, '')];
+    ids.set(call.id, { callId, ...(itemId?.startsWith('fc_') ? { itemId } : {}) });
+  }
+  for (const item of body.input) {
+    if (!record(item) || typeof item.call_id !== 'string' || !['function_call', 'function_call_output'].includes(String(item.type))) continue;
+    const id = ids.get(item.call_id); if (!id) continue;
+    item.call_id = id.callId;
+    if (item.type === 'function_call') { if (id.itemId) item.id = id.itemId; else delete item.id; }
+    else if (item.output === '') item.output = '(no tool output)';
+  }
+}
+
 /** Replace only native rich assistant slots; all existing user/tool/image preparation remains owning code. */
 export function applyResponsesReplay(body: { input: Item[] }, messages: Message[], owner: ResponsesReplayOwner): void {
   const input: Item[] = [];
