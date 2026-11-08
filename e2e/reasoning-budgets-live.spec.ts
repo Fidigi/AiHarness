@@ -26,9 +26,9 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
   let policy: { window: number; settings: { enabled: boolean; reserveTokens: number; keepRecentTokens: number } } | undefined;
   const bodies: Array<{ messages?: Array<{ role: string; content: unknown }>; contents?: Array<{ role: string; parts: unknown }>; input?: Array<Record<string, unknown>>; [key: string]: unknown }> = [];
   const wires: Array<{ path?: string; authorization?: string }> = [];
-  const cancelMarker = 'PUBLIC_SERVER_WITHDRAWAL_ACK', failedText = 'PUBLIC_SERVER_FAILED_PREFIX ' + 'x'.repeat(256);
-  const failedReasoning = 'PUBLIC_SERVER_FAILED_REASONING ' + 'y'.repeat(256);
-  let nativeFailure: 'error' | 'withdraw' | undefined, heldClosed: Promise<void> | undefined, peerClosed = false;
+  const cancelMarker = 'PUBLIC_SERVER_WITHDRAWAL_ACK', resetMarker = 'PUBLIC_SERVER_TRANSPORT_RESET_BOUNDARY';
+  const failedText = 'PUBLIC_SERVER_FAILED_PREFIX ' + 'x'.repeat(256), failedReasoning = 'PUBLIC_SERVER_FAILED_REASONING ' + 'y'.repeat(256);
+  let nativeFailure: 'error' | 'withdraw' | 'eof' | 'reset' | undefined, heldClosed: Promise<void> | undefined, peerClosed = false, resetPeer: (() => void) | undefined;
   const wire = createServer(async (request, response) => {
     if (request.method === 'GET') {
       response.setHeader('Content-Type', 'application/json');
@@ -47,14 +47,16 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
           { type: 'content_block_stop', index: 0 },
           { type: 'content_block_start', index: 1, content_block: { type: 'redacted_thinking', data: 'WITHHELD_REDACTED_DATA' } },
           { type: 'content_block_stop', index: 1 },
-          { type: 'content_block_start', index: 2, content_block: { type: 'text', text: failure === 'error' ? failedText : cancelMarker + '!'.repeat(1024) } },
+          { type: 'content_block_start', index: 2, content_block: { type: 'text', text: failure === 'withdraw' ? cancelMarker + '!'.repeat(1024)
+            : failure === 'reset' ? resetMarker + ' ' + failedText : failedText } },
           { type: 'content_block_stop', index: 2 },
         ];
         response.setHeader('Content-Type', 'text/event-stream');
-        if (failure === 'withdraw') {
+        if (failure === 'withdraw' || failure === 'reset') {
           heldClosed = new Promise<void>(resolve => response.once('close', () => { peerClosed = true; resolve(); }));
+          if (failure === 'reset') { const socket = response.socket; expect(socket).not.toBeNull(); resetPeer = () => socket!.resetAndDestroy(); }
           response.write(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
-        } else response.end([...events, { type: 'error', error: { type: 'api_error', message: 'PRIVATE_SERVER_PROVIDER_ERROR' } }]
+        } else response.end((failure === 'error' ? [...events, { type: 'error', error: { type: 'api_error', message: 'PRIVATE_SERVER_PROVIDER_ERROR' } }] : events)
           .map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
         return;
       }
@@ -139,7 +141,7 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
     await page.goto(settingsUrl);
     await page.getByRole('combobox', { name: 'Select the AI Provider', exact: true }).selectOption('native-signed');
     await page.getByRole('button', { name: 'New chat', exact: true }).click();
-    const send = async (text: string, expectedPhase: 'completed' | 'failed' | 'stopped' = 'completed') => {
+    const send = async (text: string, expectedPhase: 'completed' | 'failed' | 'stopped' = 'completed', reset = false) => {
       await page.getByRole('textbox', { name: 'Message composer' }).fill(text);
       const accepted = page.waitForResponse(response => response.url().endsWith('/api/agent/runs') && response.request().method() === 'POST');
       await page.getByRole('button', { name: 'Send', exact: true }).click();
@@ -150,6 +152,9 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
         await page.getByRole('button', { name: 'Stop model', exact: true }).click();
         const response = await acknowledged; expect(response.status()).toBe(202);
         expect(await response.json()).toMatchObject({ id: result.run.id });
+      }
+      if (reset) {
+        await expect(page.locator('body')).toContainText(resetMarker); expect(resetPeer).toBeDefined(); resetPeer!(); resetPeer = undefined;
       }
       let lastRun: { phase?: string } | undefined;
       await expect.poll(async () => {
@@ -317,6 +322,42 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
         await expect(page.locator('body')).not.toContainText(value);
       }
       expect((await stat(file)).mode & 0o777).toBe(0o600);
+      const successfulTurns = [...validTurns, 8, 10];
+      for (const failure of ['eof', 'reset'] as const) {
+        const turn = bodies.length, beforeInterrupted = await runtime.sessionManager.getRawEntries(id);
+        nativeFailure = failure; peerClosed = false; heldClosed = undefined;
+        const interrupted = await send(`Fail native output by ${failure}`, 'failed', failure === 'reset');
+        expect(nativeFailure).toBeUndefined(); expect(bodies).toHaveLength(turn + 1);
+        expect(native(bodies[turn])).toEqual(expectedNative(successfulTurns));
+        if (failure === 'reset') { expect(heldClosed).toBeDefined(); await expect.poll(() => peerClosed).toBe(true); await heldClosed; }
+        const afterInterrupted = await runtime.sessionManager.getRawEntries(id), prefix = assistants(afterInterrupted).at(-1)!;
+        expect(assistants(afterInterrupted).slice(0, -1)).toEqual(assistants(beforeInterrupted));
+        expect(prefix).toMatchObject({ provider: 'native-signed', model,
+          metadata: { outputError: 'MiniMax chat request failed.' } });
+        expect(prefix.api).toBeUndefined(); expect(prefix.usage).toBeUndefined(); expect(prefix.toolCalls ?? []).toEqual([]);
+        expect(prefix.content.length).toBeGreaterThan(30); expect((failure === 'reset' ? resetMarker + ' ' + failedText : failedText).startsWith(prefix.content)).toBe(true);
+        const thought = prefix.blocks?.find(block => block.type === 'reasoning');
+        expect(thought?.text.length).toBeGreaterThan(30); expect(failedReasoning.startsWith(thought!.text)).toBe(true);
+        expect(prefix.blocks).toEqual([{ type: 'reasoning', text: thought!.text }, { type: 'text', text: prefix.content }]);
+        for (const entry of beforeInterrupted.filter(entry => entry.type !== 'metadata')) expect(afterInterrupted.find(value => value.id === entry.id)).toEqual(entry);
+        const disk = new SessionManager({ store: new JsonlSessionStore(path.join(dataDir, 'sessions')) });
+        expect(await disk.loadFromStore(id)).toBeTruthy();
+        expect((await disk.getRawEntries(id)).filter(entry => entry.type !== 'metadata')).toEqual(afterInterrupted.filter(entry => entry.type !== 'metadata'));
+        expect(getCompactionModelMessages(disk, id)).toEqual(getCompactionModelMessages(runtime.sessionManager, id));
+        for (const value of ['WITHHELD_SIGNATURE', 'WITHHELD_REDACTED_DATA', 'PRIVATE_SERVER_PROVIDER_ERROR', 'disposable-private-wire']) {
+          expect(JSON.stringify(interrupted.settled)).not.toContain(value); expect(await readFile(file, 'utf8')).not.toContain(value);
+          await expect(page.locator('body')).not.toContainText(value);
+        }
+        await restart(); expect(bodies).toHaveLength(turn + 1);
+        await send(`Recover native output after ${failure}`); expect(bodies).toHaveLength(turn + 2);
+        expect(native(bodies[turn + 1])).toEqual(expectedNative(successfulTurns));
+        expect(JSON.stringify(bodies[turn + 1])).not.toContain('PUBLIC_SERVER_FAILED_'); expect(JSON.stringify(bodies[turn + 1])).not.toContain(resetMarker);
+        const recovered = await runtime.sessionManager.getRawEntries(id);
+        expect(assistants(recovered).slice(0, -1)).toEqual(assistants(afterInterrupted)); expect(recovered.filter(entry => entry.type === 'compaction')).toEqual(compactions);
+        for (const entry of afterInterrupted.filter(entry => entry.type !== 'metadata')) expect(recovered.find(value => value.id === entry.id)).toEqual(entry);
+        expect((await stat(file)).mode & 0o777).toBe(0o600); successfulTurns.push(turn + 2);
+      }
+      expect(bodies).toHaveLength(14); expect(wires).toEqual(Array(14).fill({ path: '/v1/messages', authorization: undefined }));
     }
   } finally {
     await page.goto('about:blank').catch(() => undefined); await stop();
