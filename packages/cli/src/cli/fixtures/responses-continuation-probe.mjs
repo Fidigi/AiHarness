@@ -8,16 +8,18 @@ import path from 'node:path';
 // Copied to the genuine installed consumer by installed-executable.test.ts.
 // Resolve the executable through its installed PATH bin, never checkout dist.
 const [provider, mode] = process.argv.slice(2);
-assert(['native-r', 'azure', 'anthropic', 'google', 'vertex', 'bedrock'].includes(provider)); assert(['print', 'json', 'rpc'].includes(mode));
-const responses = ['native-r', 'azure'].includes(provider), anthropic = provider === 'anthropic', bedrock = provider === 'bedrock';
+assert(['native-r', 'azure', 'anthropic', 'google', 'vertex', 'bedrock', 'minimax', 'minimax-cn'].includes(provider)); assert(['print', 'json', 'rpc'].includes(mode));
+const minimax = provider === 'minimax' || provider === 'minimax-cn';
+const responses = ['native-r', 'azure'].includes(provider), anthropic = provider === 'anthropic' || minimax, bedrock = provider === 'bedrock';
 const root = await mkdtemp(path.join(process.cwd(), 'responses-continuation-'));
 const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
 const journal = path.join(sessions, 'native-continuation.jsonl'), effects = path.join(root, 'effects'), preload = path.join(root, 'network.mjs');
 const key = responses || anthropic || bedrock ? 'installed-continuation-disposable-key' : 'c2VjcmV0';
-const model = responses ? 'gpt-5' : anthropic ? 'claude-haiku-5-5' : bedrock ? 'anthropic.claude-opus-4-6-v1' : 'gemini-3.8-flash';
-const foreignModel = responses ? 'gpt-4o' : anthropic ? 'claude-sonnet-4-6' : bedrock ? 'anthropic.claude-sonnet-4-6' : 'gemini-2.5-flash';
-const api = scope => ({ 'native-r': 'openai-responses', azure: 'azure-openai-responses', anthropic: 'anthropic-messages', google: 'google-generative-ai', vertex: 'google-vertex', bedrock: 'bedrock-converse-stream' })[scope];
+const model = minimax ? 'MiniMax-M2.7' : responses ? 'gpt-5' : anthropic ? 'claude-haiku-5-5' : bedrock ? 'anthropic.claude-opus-4-6-v1' : 'gemini-3.8-flash';
+const foreignModel = minimax ? 'MiniMax-M3' : responses ? 'gpt-4o' : anthropic ? 'claude-sonnet-4-6' : bedrock ? 'anthropic.claude-sonnet-4-6' : 'gemini-2.5-flash';
+const api = scope => ({ 'native-r': 'openai-responses', azure: 'azure-openai-responses', anthropic: 'anthropic-messages', minimax: 'anthropic-messages', 'minimax-cn': 'anthropic-messages', google: 'google-generative-ai', vertex: 'google-vertex', bedrock: 'bedrock-converse-stream' })[scope];
 const endpoint = (scope, selected = model) => scope === 'native-r' ? '/v1/responses' : scope === 'azure' ? '/openai/v1/responses?api-version=v1'
+  : scope === 'minimax' || scope === 'minimax-cn' ? '/anthropic/v1/messages'
   : scope === 'anthropic' ? '/v1/messages' : scope === 'bedrock' ? `/model/${encodeURIComponent(selected)}/converse-stream`
     : `${scope === 'google' ? '/v1beta' : '/v1/projects/continuation-project/locations/us-central1/publishers/google'}/models/${selected}:streamGenerateContent?alt=sse`;
 const summaryEndpoint = value => value.replace('streamGenerateContent?alt=sse', 'generateContent').replace('/converse-stream', '/converse');
@@ -90,6 +92,7 @@ const resetMarker = 'PUBLIC_TRANSPORT_RESET_BOUNDARY.'; let holdMarker = cancelM
 const server = createServer(async (request, response) => {
   try {
     assert.equal(request.method, 'POST');
+    if (minimax) assert.equal(request.headers['anthropic-version'], '2023-06-01');
     wires.push({ path: request.url, authorization: request.headers.authorization, apiKey: request.headers['api-key'],
       ...(!responses ? { googleKey: request.headers['x-goog-api-key'], anthropicKey: request.headers['x-api-key'] } : {}) });
     const chunks = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
@@ -191,7 +194,7 @@ const server = createServer(async (request, response) => {
     response.end(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
   } catch (error) { fixtureError = error; response.statusCode = 500; response.end('Invalid installed continuation fixture'); }
 });
-let active;
+let active, processes = 0;
 try {
   // This public import and the extension below resolve the unpacked consumer package.
   const entry = await realpath(new URL(import.meta.resolve('@ai-harness/core')));
@@ -200,10 +203,11 @@ try {
   assert(bin.startsWith(path.join(process.cwd(), 'node_modules', '@ai-harness', 'cli') + path.sep));
   await mkdir(cwd); await mkdir(path.join(agent, 'extensions'), { recursive: true });
   await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ transport: 'sse', cacheWarming: 'off' }));
-  await writeFile(path.join(agent, 'extensions/continuation.mjs'), `import { OpenAiMixedProvider } from '@ai-harness/core';
+  await writeFile(path.join(agent, 'extensions/continuation.mjs'), `import { OpenAiMixedProvider, MiniMaxProvider, MiniMaxCnProvider } from '@ai-harness/core';
     import { appendFileSync } from 'node:fs';
     export default api => {
       if (${JSON.stringify(responses)}) api.registerProvider('native-r', { defaultConfig: { apiKey: ${JSON.stringify(key)}, model: 'gpt-5' }, create: config => new OpenAiMixedProvider(config) });
+      if (${JSON.stringify(minimax)}) api.registerProvider(${JSON.stringify(provider)}, { defaultConfig: { apiKey: ${JSON.stringify(key)}, model: ${JSON.stringify(model)} }, create: config => new ${provider === 'minimax-cn' ? 'MiniMaxCnProvider' : 'MiniMaxProvider'}(config) });
       api.registerTool({ name: 'continuation_echo', description: 'Echo', parameters: { type: 'object', properties: { value: { type: 'number' } }, required: ['value'] },
         execute: input => { appendFileSync(${JSON.stringify(effects)}, JSON.stringify(input) + '\\n'); return { content: 'native-tool-result' }; } });
     };`);
@@ -215,6 +219,7 @@ try {
       const allowed = ${JSON.stringify(responses)}
         ? (url.origin === 'https://api.openai.com' && url.pathname === '/v1/responses')
           || (url.origin === 'https://continuation.openai.azure.com' && url.pathname === '/openai/v1/responses')
+        : ${JSON.stringify(minimax)} ? url.origin === ${JSON.stringify(provider === 'minimax-cn' ? 'https://api.minimaxi.com' : 'https://api.minimax.io')} && url.pathname === '/anthropic/v1/messages'
         : ${JSON.stringify(anthropic)} ? url.origin === 'https://api.anthropic.com' && url.pathname === '/v1/messages'
         : ${JSON.stringify(bedrock)} ? url.origin === 'https://bedrock-runtime.us-east-1.amazonaws.com'
           && ${JSON.stringify([model, foreignModel])}.some(model => ['/converse', '/converse-stream'].some(operation => url.pathname === '/model/' + encodeURIComponent(model) + operation))
@@ -227,10 +232,11 @@ try {
   const env = { ...process.env, AI_HARNESS_AGENT_DIR: agent, AI_HARNESS_EXTENSIONS: '',
     ...(responses ? { OPENAI_API_KEY: key, AZURE_OPENAI_API_KEY: key, AZURE_OPENAI_BASE_URL: 'https://continuation.openai.azure.com/openai/v1',
       AZURE_OPENAI_MODEL: model, AZURE_OPENAI_DEPLOYMENT_NAME_MAP: 'gpt-5=owned-deployment,gpt-4o=foreign-deployment' }
-      : anthropic ? { ANTHROPIC_API_KEY: key } : bedrock ? { AWS_BEARER_TOKEN_BEDROCK: key, AWS_REGION: 'us-east-1', BEDROCK_MODEL: model }
+      : minimax ? {} : anthropic ? { ANTHROPIC_API_KEY: key } : bedrock ? { AWS_BEARER_TOKEN_BEDROCK: key, AWS_REGION: 'us-east-1', BEDROCK_MODEL: model }
         : { GEMINI_API_KEY: key, GOOGLE_API_KEY: key, GOOGLE_VERTEX_ACCESS_TOKEN: key,
         GOOGLE_CLOUD_PROJECT: 'continuation-project', GOOGLE_CLOUD_LOCATION: 'us-central1' }), NODE_OPTIONS: '--import=' + JSON.stringify(preload) };
   const start = (sessionId = 'native-continuation') => {
+    processes++;
     const child = spawn('ai-harness', ['--no-approve', '--offline', '--api-key', key, '--session-dir', sessions, '--session-id', sessionId,
       '--model', `${provider}/${model}`, '--thinking', 'low', ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['Continue native history.'])], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     active = child;
@@ -352,7 +358,7 @@ try {
     for (const body of bodies.slice(1)) assert.deepEqual(body.input.filter(item => item.type === 'function_call_output'), [{ type: 'function_call_output', call_id: 'native-call', output: 'native-tool-result' }]);
   } else {
     assert.deepEqual(wires, scopes.map((scope, index) => ({ path: endpoint(scope, index === 3 ? foreignModel : model), apiKey: undefined,
-      authorization: scope === 'vertex' || scope === 'bedrock' ? `Bearer ${key}` : undefined, googleKey: scope === 'google' ? key : undefined, anthropicKey: scope === 'anthropic' ? key : undefined })));
+      authorization: scope === 'vertex' || scope === 'bedrock' ? `Bearer ${key}` : undefined, googleKey: scope === 'google' ? key : undefined, anthropicKey: ['anthropic', 'minimax', 'minimax-cn'].includes(scope) ? key : undefined })));
     if (anthropic) assert.deepEqual(bodies.map(body => body.model), scopes.map((_, index) => index === 3 ? foreignModel : model));
     for (const body of bodies.slice(1)) assert.deepEqual(anthropic
       ? body.messages.flatMap(item => Array.isArray(item.content) ? item.content : []).filter(item => item.type === 'tool_result')
@@ -365,7 +371,8 @@ try {
   if (mode !== 'rpc') {
     const Core = await import('@ai-harness/core'), config = { type: provider, model, apiKey: key,
       ...(provider === 'azure' ? { azureApi: 'native', baseUrl: env.AZURE_OPENAI_BASE_URL } : {}) };
-    const owner = provider === 'native-r' ? new Core.OpenAiMixedProvider(config) : Core.ProviderFactory.create(config);
+    const owner = minimax ? new Core[provider === 'minimax-cn' ? 'MiniMaxCnProvider' : 'MiniMaxProvider'](config)
+      : provider === 'native-r' ? new Core.OpenAiMixedProvider(config) : Core.ProviderFactory.create(config);
     const contextWindow = Core.resolveAgentCompactionContextWindow(provider, model, owner); assert(contextWindow > 10_000);
     const settings = { enabled: true, reserveTokens: contextWindow - 10_000, keepRecentTokens: 512 };
     await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ transport: 'sse', cacheWarming: 'off', compaction: settings }));
@@ -492,7 +499,8 @@ try {
     assert.equal(childEntries.find(value => value.type === 'metadata').parentId, source.id);
     assert.equal(await readFile(journal, 'utf8'), sourceBytes);
     const config = { type: provider, model, apiKey: key, ...(provider === 'azure' ? { azureApi: 'native', baseUrl: env.AZURE_OPENAI_BASE_URL } : {}) };
-    const owner = provider === 'native-r' ? new Core.OpenAiMixedProvider(config) : Core.ProviderFactory.create(config);
+    const owner = minimax ? new Core[provider === 'minimax-cn' ? 'MiniMaxCnProvider' : 'MiniMaxProvider'](config)
+      : provider === 'native-r' ? new Core.OpenAiMixedProvider(config) : Core.ProviderFactory.create(config);
     const contextWindow = Core.resolveAgentCompactionContextWindow(provider, model, owner); assert(contextWindow > 10_000);
     const settings = { enabled: true, reserveTokens: contextWindow - 10_000, keepRecentTokens: 512 };
     await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ transport: 'sse', cacheWarming: 'off', compaction: settings }));
@@ -603,7 +611,7 @@ try {
     const partialTurn = bodies.length, broken = start(fork.id); partialFailure = true;
     await broken.prompt(1); const brokenResult = await broken.finish(); assert.equal(partialFailure, false); assert.equal(bodies.length, partialTurn + 1);
     const failure = provider === 'native-r' ? 'OpenAI response request failed.' : provider === 'azure' ? 'The provider response failed.'
-      : anthropic ? 'Invalid Anthropic response.' : bedrock ? 'Bedrock streaming error.' : 'Invalid Google response.';
+      : minimax ? 'Invalid MiniMax chat response.' : anthropic ? 'Invalid Anthropic response.' : bedrock ? 'Bedrock streaming error.' : 'Invalid Google response.';
     const partialEntries = await readJournal(fork.id), failed = sourceAssistants(partialEntries).at(-1);
     assert.equal(sourceAssistants(partialEntries).length, sourceAssistants(finalRecovery).length + 1);
     assert.equal(failed.content, `native-${partialTurn + 1}-leftnative-${partialTurn + 1}-right`); assert.equal(failed.metadata.outputError, failure);
@@ -654,7 +662,7 @@ try {
     assert.deepEqual(wires.slice(withdrawnTurn), [expectedWire, expectedWire]); assert.equal(await readFile(journal, 'utf8'), sourceBytes);
     const eofTurn = bodies.length, unfinished = start(fork.id); endNative = true;
     await unfinished.prompt(1); const unfinishedResult = await unfinished.finish(); assert.equal(endNative, false); assert.equal(bodies.length, eofTurn + 1);
-    const eofFailure = provider === 'azure' ? 'The provider response was invalid.' : bedrock ? 'Invalid Bedrock event stream.' : failure;
+    const eofFailure = minimax ? 'MiniMax chat request failed.' : provider === 'azure' ? 'The provider response was invalid.' : bedrock ? 'Invalid Bedrock event stream.' : failure;
     const eofThinking = unfinishedResult.records.filter(record => record.type === 'message_update' && record.assistantMessageEvent?.type === 'thinking_delta')
       .map(record => record.assistantMessageEvent.delta).join('');
     assert.equal(eofThinking, new Core.CredentialRedactor([key]).createStream().push(`visible-${eofTurn + 1}`));
@@ -687,7 +695,7 @@ try {
     const interruptedPrompt = interrupted.prompt(1); await interrupted.text(resetMarker); assert.equal(holdNative, false); assert(heldClosed); assert.equal(typeof resetPeer, 'function');
     resetPeer(); await interruptedPrompt; await heldClosed;
     const interruptedResult = await interrupted.finish(); assert.equal(bodies.length, resetTurn + 1);
-    const resetFailure = provider === 'native-r' ? 'OpenAI response request failed.' : 'terminated';
+    const resetFailure = minimax ? 'MiniMax chat request failed.' : provider === 'native-r' ? 'OpenAI response request failed.' : 'terminated';
     const resetThinking = interruptedResult.records.filter(record => record.type === 'message_update' && record.assistantMessageEvent?.type === 'thinking_delta')
       .map(record => record.assistantMessageEvent.delta).join('');
     assert.equal(resetThinking, new Core.CredentialRedactor([key]).createStream().push(`visible-${resetTurn + 1}`));
@@ -717,6 +725,7 @@ try {
     assert.equal((await stat(path.join(sessions, fork.id + '.jsonl'))).mode & 0o777, 0o600); assert(!(await readFile(path.join(sessions, fork.id + '.jsonl'), 'utf8')).includes(key));
   }
   assert.equal(await readFile(effects, 'utf8'), '{"value":1}\n'); assert.equal(fixtureError, undefined);
+  if (minimax) { assert.equal(bodies.length, mode === 'rpc' ? 29 : 7); assert.equal(processes, mode === 'rpc' ? 19 : 5); }
   console.log(responses ? 'INSTALLED_RESPONSES_CONTINUATION_OK' : 'INSTALLED_SIGNED_CONTINUATION_OK');
 } finally {
   if (active && active.exitCode === null && active.signalCode === null) active.kill('SIGKILL');
