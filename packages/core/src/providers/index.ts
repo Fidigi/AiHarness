@@ -4552,6 +4552,7 @@ export class AnthropicProvider extends AiProvider {
 
   private readonly ownsNativeProfiles: boolean;
   private readonly ownsMiniMaxReplay: boolean;
+  private readonly ownsKimiCodingReplay: boolean;
   private readonly baseUrl: string;
   static readonly DEFAULT_BASE_URL = 'https://api.anthropic.com';
   static readonly API_VERSION = '2023-06-01';
@@ -4560,6 +4561,7 @@ export class AnthropicProvider extends AiProvider {
     super(config);
     this.ownsNativeProfiles = new.target === AnthropicProvider;
     this.ownsMiniMaxReplay = new.target === MiniMaxProvider || new.target === MiniMaxCnProvider;
+    this.ownsKimiCodingReplay = new.target === KimiCodingProvider;
     this.baseUrl = config.baseUrl || AnthropicProvider.DEFAULT_BASE_URL;
     if (this.ownsNativeProfiles) registerNativeOutputBudget(this, () => {
       const model = captureNativeConfiguredModel(this.config, ANTHROPIC_DEFAULT_MODEL);
@@ -4642,7 +4644,8 @@ export class AnthropicProvider extends AiProvider {
 
   private hasNativeMessageReplay(model: string): boolean {
     return this.ownsNativeProfiles && hasAnthropicProfile(model)
-      || this.ownsMiniMaxReplay && MINIMAX_MODELS.some(profile => profile.id === model);
+      || this.ownsMiniMaxReplay && MINIMAX_MODELS.some(profile => profile.id === model)
+      || this.ownsKimiCodingReplay && KIMI_CODING_MODELS.some(profile => profile.id === model);
   }
 
   private nativeMessageHistory(messages: Message[], model: string): Message[] {
@@ -4655,6 +4658,8 @@ export class AnthropicProvider extends AiProvider {
         || block.type === 'reasoning' && (block.redacted ? block.thinkingSignature : block.text.trim() || block.thinkingSignature?.trim())));
     });
   }
+
+  protected permitsEmptyMessageSignature(_model: string): boolean { return false; }
 
   protected buildAnthropicMessages(messages: Message[], native = false, model?: string): Array<{ role: 'user' | 'assistant'; content: unknown }> {
     messages = native ? messages : toolImageMessages(messages);
@@ -4679,7 +4684,8 @@ export class AnthropicProvider extends AiProvider {
           if (block.type !== 'reasoning') return [];
           if (block.redacted) return block.thinkingSignature ? [{ type: 'redacted_thinking', data: block.thinkingSignature }] : [];
           if (block.thinkingSignature?.trim()) return [{ type: 'thinking', thinking: block.text, signature: block.thinkingSignature }];
-          return block.text.trim() ? [{ type: 'text', text: block.text }] : [];
+          return block.text.trim() ? [this.permitsEmptyMessageSignature(model)
+            ? { type: 'thinking', thinking: block.text, signature: '' } : { type: 'text', text: block.text }] : [];
         });
         if (!projected.blocks!.some(block => block.type === 'text') && message.content) content.push({ type: 'text', text: message.content });
         const calls = new Set(projected.blocks!.flatMap(block => block.type === 'tool_call' ? [block.id] : []));
@@ -5325,13 +5331,14 @@ export class OpenCodeProvider extends AiProvider {
   }
 }
 
-/** Explicit MiniMax A policy; no alias/URL inference or automatic credentials. */
+/** Explicit Kimi Coding A policy; only exact construction admits private replay. */
 export class KimiCodingProvider extends AnthropicProvider {
   private readonly endpoint: string;
+  private readonly ownsReplay: boolean;
   constructor(config: ProviderConfig) {
     const model = config.model ?? KIMI_CODING_MODELS[0].id; kimiCodingProfile(model);
     const endpoint = kimiCodingEndpoint(config.baseUrl ?? 'https://api.kimi.com/coding');
-    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint; this.ownsReplay = new.target === KimiCodingProvider;
     registerNativeOutputBudget(this, () => { const selected = captureNativeConfiguredModel(this.config, KIMI_CODING_MODELS[0].id); return options => prepareKimiCodingOutputBudget(options, selected); });
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -5381,11 +5388,18 @@ export class KimiCodingProvider extends AnthropicProvider {
     } catch { throw new Error('Invalid Kimi Coding request headers.'); }
   }
   protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
-  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareKimiCodingMessage(body, options); }
-  protected override buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
-    const converted = super.buildAnthropicMessages(messages), original = toolImageMessages(messages).filter(message => message.role !== 'system');
+  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareKimiCodingMessage(body, options, this.ownsReplay); }
+  protected override permitsEmptyMessageSignature(model: string): boolean { return kimiCodingProfile(model).allowEmptySignature; }
+  protected override buildAnthropicMessages(messages: Message[], native = false, model?: string): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    const prepared = native ? toolImageMessages(messages) : messages;
+    const converted = super.buildAnthropicMessages(prepared, native, model), original = (native ? prepared : toolImageMessages(messages)).filter(message => message.role !== 'system');
     for (let index = 0; index < original.length; index++) {
-      const message = original[index], reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
+      const message = original[index];
+      if (native) {
+        if (message.role === 'tool') (converted[index].content as Array<Record<string, unknown>>)[0].is_error = message.isError === true;
+        continue;
+      }
+      const reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
       if (!reasoning) continue;
       const content = converted[index].content;
       // Select empty-signature versus plain replay later,from the request body's physical model.
@@ -5393,8 +5407,8 @@ export class KimiCodingProvider extends AnthropicProvider {
     }
     return converted;
   }
-  protected override validateMessageResponse(value: unknown): void { validateKimiCodingMessage(value); }
-  protected override createMessageStreamValidator(): (value?: unknown) => void { return kimiCodingStreamValidator(); }
+  protected override validateMessageResponse(value: unknown, native = false): void { validateKimiCodingMessage(value, native); }
+  protected override createMessageStreamValidator(native = false): (value?: unknown) => void { return kimiCodingStreamValidator(native); }
   protected override messageText(content: unknown): string { return kimiCodingMessageText(content); }
   protected override updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown { return mergeKimiCodingUsage(previous, value, start); }
   protected override messageUsage(value: unknown, model: string): ChatResponse['usage'] { return kimiCodingUsage(value, model); }
@@ -5417,7 +5431,7 @@ export class KimiCodingProvider extends AnthropicProvider {
     try {
       if (!this.validateConfig()) throw new Error('Kimi Coding API key is required.'); this.checkInput(messages, options);
       const result = await super.chat(messages, options); if (options?.signal?.aborted) throw new Error('Kimi Coding request aborted.');
-      return { ...result, model, provider, api: 'anthropic-messages' };
+      return this.ownsReplay ? result : { ...result, model, provider, api: 'anthropic-messages' };
     } catch (error) { throw this.failure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
@@ -5425,7 +5439,7 @@ export class KimiCodingProvider extends AnthropicProvider {
     try {
       if (!this.validateConfig()) throw new Error('Kimi Coding API key is required.'); this.checkInput(messages, options); active();
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); onComplete?.(response ? { ...response, model, provider, api: 'anthropic-messages' } : response); }, error => { throw error; }, options);
+        response => { active(); return onComplete?.(response && !this.ownsReplay ? { ...response, model, provider, api: 'anthropic-messages' } : response); }, error => { throw error; }, options);
     } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
 }

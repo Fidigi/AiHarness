@@ -57,7 +57,7 @@ export function prepareKimiCodingOutputBudget(owned: ChatOptions, configuredMode
   try { const maxTokens = outputLimit(options.model!, options); kimiCodingThinking(options.model!, options); options.maxTokens = maxTokens; return Object.freeze({ options, maxTokens }); }
   catch { throw new ProviderOutputBudgetError(); }
 }
-export function prepareKimiCodingMessage(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> {
+export function prepareKimiCodingMessage(body: Record<string, unknown>, options?: ChatOptions, nativeReplay = false): Record<string, unknown> {
   const model = String(body.model), profile = kimiCodingProfile(model), selected = kimiCodingThinking(model, options);
   body.max_tokens = outputLimit(model, options); delete body.output_config;
   for (const key of ['reasoning_effort', 'reasoning', 'store', 'max_completion_tokens', 'prompt_cache_key', 'prompt_cache_retention', 'tool_stream']) delete body[key];
@@ -66,7 +66,8 @@ export function prepareKimiCodingMessage(body: Record<string, unknown>, options?
   const control = options?.cacheRetention === 'none' ? undefined : { type: 'ephemeral', ...(options?.cacheRetention === 'long' ? { ttl: '1h' } : {}) };
   if (typeof body.system === 'string') body.system = [{ type: 'text', text: body.system, ...(control ? { cache_control: control } : {}) }];
   if (Array.isArray(body.tools)) body.tools = body.tools.map((tool: Record<string, unknown>, index: number) => {
-    const result = { ...tool, eager_input_streaming: true }; delete (result as Record<string, unknown>).strict; delete (result as Record<string, unknown>).cache_control;
+    const schema = record(tool.input_schema) ? tool.input_schema : {};
+    const result = { ...tool, eager_input_streaming: true, ...(nativeReplay ? { input_schema: { type: 'object', properties: schema.properties ?? {}, required: schema.required ?? [] } } : {}) }; delete (result as Record<string, unknown>).strict; delete (result as Record<string, unknown>).cache_control;
     return { ...result, ...(control && index === (body.tools as unknown[]).length - 1 ? { cache_control: control } : {}) };
   });
   if (Array.isArray(body.messages)) {
@@ -106,19 +107,20 @@ export function kimiCodingUsage(value: unknown, model: string): ChatResponse['us
     ...(pricing ? { costUsd: (input * pricing.inputPerMillion + output * pricing.outputPerMillion + read * pricing.cacheReadPerMillion + (write - long) * pricing.cacheWritePerMillion + long * pricing.inputPerMillion * 2) / 1e6 } : {}) };
 }
 const validFinish = (value: unknown): boolean => ['end_turn', 'stop_sequence', 'tool_use', 'max_tokens', 'pause_turn'].includes(String(value));
-export function validateKimiCodingMessage(value: unknown): void {
+export function validateKimiCodingMessage(value: unknown, nativeReplay = false): void {
   if (!record(value) || value.error || value.type === 'error' || !Array.isArray(value.content) || !validFinish(value.stop_reason)
     || (value.model !== undefined && (typeof value.model !== 'string' || Buffer.byteLength(value.model) > 500 || /[\u0000-\u001f\u007f-\u009f]/u.test(value.model)))) throw new Error('Invalid Kimi Coding chat response.');
   for (const block of value.content) {
     if (!record(block)) throw new Error('Invalid Kimi Coding chat response.');
     if (block.type === 'text') { if (typeof block.text !== 'string') throw new Error('Invalid Kimi Coding chat response.'); }
-    else if (block.type === 'thinking') { if (typeof block.thinking !== 'string' || (block.signature !== undefined && block.signature !== '')) throw new Error('Unsupported Kimi Coding reasoning replay.'); }
+    else if (block.type === 'thinking') { if (typeof block.thinking !== 'string' || (block.signature !== undefined && (typeof block.signature !== 'string' || !nativeReplay && block.signature !== ''))) throw new Error('Unsupported Kimi Coding reasoning replay.'); }
+    else if (block.type === 'redacted_thinking' && nativeReplay) { if (typeof block.data !== 'string') throw new Error('Invalid Kimi Coding chat response.'); }
     else if (block.type === 'tool_use') { if (typeof block.id !== 'string' || !block.id || typeof block.name !== 'string' || !block.name || !record(block.input)) throw new Error('Invalid Kimi Coding chat response.'); }
     else throw new Error('Unsupported Kimi Coding message content.');
   }
 }
 export function kimiCodingMessageText(content: unknown): string { return Array.isArray(content) ? content.flatMap(block => record(block) && block.type === 'text' && typeof block.text === 'string' ? [block.text] : []).join('') : ''; }
-export function kimiCodingStreamValidator(): (value?: unknown) => void {
+export function kimiCodingStreamValidator(nativeReplay = false): (value?: unknown) => void {
   let started = false, stopped = false, finish = false;
   return value => {
     if (value === undefined) { if (!started || !stopped || !finish) throw new Error('Invalid Kimi Coding chat response.'); return; }
@@ -126,8 +128,8 @@ export function kimiCodingStreamValidator(): (value?: unknown) => void {
     if (value.type === 'message_start') { if (started || !record(value.message)) throw new Error('Invalid Kimi Coding chat response.'); started = true; }
     else if (value.type === 'message_delta') { if (!started || !record(value.delta)) throw new Error('Invalid Kimi Coding chat response.'); if (value.delta.stop_reason !== undefined && value.delta.stop_reason !== null) { if (!validFinish(value.delta.stop_reason)) throw new Error('Invalid Kimi Coding chat response.'); finish = true; } }
     else if (value.type === 'message_stop') { if (!started || !finish) throw new Error('Invalid Kimi Coding chat response.'); stopped = true; }
-    else if (value.type === 'content_block_start') { const block = value.content_block; if (!started || !record(block) || !['text', 'thinking', 'tool_use'].includes(String(block.type))) throw new Error('Invalid Kimi Coding chat response.'); if (block.type === 'thinking' && block.signature !== undefined && block.signature !== '') throw new Error('Unsupported Kimi Coding reasoning replay.'); }
-    else if (value.type === 'content_block_delta') { const delta = value.delta; if (!started || !record(delta) || !['text_delta', 'thinking_delta', 'input_json_delta'].includes(String(delta.type))) throw new Error('Unsupported Kimi Coding message content.'); const key = delta.type === 'text_delta' ? 'text' : delta.type === 'thinking_delta' ? 'thinking' : 'partial_json'; if (typeof delta[key] !== 'string') throw new Error('Invalid Kimi Coding chat response.'); }
+    else if (value.type === 'content_block_start') { const block = value.content_block; if (!started || !record(block) || !['text', 'thinking', 'tool_use'].includes(String(block.type)) && !(nativeReplay && block.type === 'redacted_thinking')) throw new Error('Invalid Kimi Coding chat response.'); if (block.type === 'thinking' && block.signature !== undefined && (typeof block.signature !== 'string' || !nativeReplay && block.signature !== '')) throw new Error('Unsupported Kimi Coding reasoning replay.'); }
+    else if (value.type === 'content_block_delta') { const delta = value.delta; if (!started || !record(delta) || !['text_delta', 'thinking_delta', 'input_json_delta'].includes(String(delta.type)) && !(nativeReplay && delta.type === 'signature_delta')) throw new Error('Unsupported Kimi Coding message content.'); const key = delta.type === 'text_delta' ? 'text' : delta.type === 'thinking_delta' ? 'thinking' : delta.type === 'signature_delta' ? 'signature' : 'partial_json'; if (typeof delta[key] !== 'string') throw new Error('Invalid Kimi Coding chat response.'); }
     else if (!['ping', 'content_block_stop'].includes(value.type)) throw new Error('Invalid Kimi Coding chat response.');
   };
 }

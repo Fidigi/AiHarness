@@ -3917,10 +3917,15 @@ it('dispatches native Kimi Coding through installed declarations and owned A pol
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
   await writeFile(path.join(consumer, 'kimi-coding-public.mjs'), String.raw`
     import assert from 'node:assert/strict'; import { createServer } from 'node:http';
-    import { KimiCodingProvider, KIMI_CODING_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, getSupportedThinkingLevels, getKimiCodingOAuthConfig } from '@ai-harness/core';
+    import { fileURLToPath } from 'node:url';
+    import { KimiCodingProvider, KIMI_CODING_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, getSupportedThinkingLevels, getKimiCodingOAuthConfig, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const replay=${await readFile(path.join(checkout, 'tests/fixtures/kimi-coding-continuation-reference.json'), 'utf8')};let replayEvents,replayContent,replayStop;
     const issuer=getKimiCodingOAuthConfig('https://issuer.test/prefix/');assert.equal(Object.isFrozen(issuer),true);assert.deepEqual(issuer,{deviceAuthorizationUrl:'https://issuer.test/prefix/api/oauth/device_authorization',tokenUrl:'https://issuer.test/prefix/api/oauth/token',clientId:'17e5f671-d194-4dfb-9706-5516cb48c098',responseProfile:'kimi-coding'});
-    const calls=[],key='disposable-installed-kimi-coding',model='k3',unknown='k3-256k',input={id:'u',role:'user',content:'Hello',timestamp:new Date(0)},prior={...input,id:'prior',role:'assistant',content:'Before',blocks:[{type:'reasoning',text:'Earlier plan'}]},cost=(5*3+2*15+4*.3)/1e6;
+    const calls=[],key='disposable-installed-kimi-coding',model='k3',unknown='k3-256k',input={id:'u',role:'user',content:'Hello',timestamp:new Date(0)},prior={...input,id:'prior',role:'assistant',provider:'openai',api:'anthropic-messages',model,content:'Before',blocks:[{type:'reasoning',text:'Earlier plan'}]},cost=(5*3+2*15+4*.3)/1e6;
     const server=createServer(async(req,res)=>{let text='';for await(const b of req)text+=b;const body=JSON.parse(text);calls.push({url:req.url,headers:req.headers,body});const usage={input_tokens:5,output_tokens:2,cache_read_input_tokens:4,cache_creation_input_tokens:1};
+      if(replayEvents){if(body.stream){res.setHeader('content-type','text/event-stream');res.end(replayEvents.map(value=>'event: '+value.type+'\ndata: '+JSON.stringify(value)+'\n\n').join(''));}
+        else res.end(JSON.stringify({model:'untrusted-response-alias',stop_reason:replayStop,content:replayContent,usage:{input_tokens:5,output_tokens:2,cache_read_input_tokens:4,cache_creation_input_tokens:3}}));return;}
       if(body.stream){res.setHeader('content-type','text/event-stream');res.end([{type:'message_start',message:{id:'message',type:'message',model:'remote-alias',usage:{...usage,output_tokens:0}}},{type:'content_block_start',index:0,content_block:{type:'text',text:''}},{type:'content_block_delta',index:0,delta:{type:'text_delta',text:'Ready'}},{type:'content_block_stop',index:0},{type:'message_delta',delta:{stop_reason:'end_turn'},usage:{output_tokens:2}},{type:'message_stop'}].map(v=>'data: '+JSON.stringify(v)+'\n\n').join(''));}
       else res.end(JSON.stringify({model:'remote-alias',stop_reason:'end_turn',content:[{type:'text',text:body.max_tokens===512?'{"label":"safe"}':'Ready'}],usage}));
     });await new Promise(r=>server.listen(0,'127.0.0.1',r));
@@ -3935,8 +3940,41 @@ it('dispatches native Kimi Coding through installed declarations and owned A pol
       const oauth=new KimiCodingProvider({type:'operator',apiKey:key,kimiAuthMode:'oauth',baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fkimi/coding',customHeaders:{'X-Api-Key':'unselected-key',Authorization:'unselected-auth'}});
       assert.equal((await oauth.chat([input])).content,'Ready');let oauthFinal;await oauth.streamChat([input],()=>{},value=>{oauthFinal=value;});assert.equal(oauthFinal.content,'Ready');
       assert.equal(calls.length,7);for(const c of calls.slice(5)){assert.equal(c.url,'/owned%2Fkimi/coding/v1/messages');assert.equal(c.headers.authorization,'Bearer '+key);assert.equal(c.headers['x-api-key'],undefined);assert.equal(c.headers['anthropic-version'],'2023-06-01');}
+      assert.equal(replay.freshSdkRequests,52);assert.equal(replay.replayProjections,48);
+      for(const row of replay.rows)for(const facade of ['chat','stream']){
+        const owner=new KimiCodingProvider({type:'kimi-coding',apiKey:key,model:row.model,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fkimi/coding'});
+        const options={maxTokens:64,thinking:'low',cacheRetention:'none',systemPrompt:'owned Kimi Coding reference system',tools:replay.tools};
+        const expectedBody=body=>({...structuredClone(body),stream:facade==='stream'});
+        const invoke=async messages=>{if(facade==='chat')return owner.chat(messages,options);let result;await owner.streamChat(messages,(text,event)=>{assert(!text.includes('PRIVATE_KIMI_HEADER'));assert(!JSON.stringify(event??{}).includes('PRIVATE_KIMI_HEADER'));},value=>{result=value;},error=>{throw error;},options);assert.ok(result);return result;};
+        const user={id:'probe',role:'user',content:'probe',timestamp:new Date(0)};replayEvents=replay.seedEvents.map(event=>event.type==='message_start'?{...event,message:{...event.message,content:[{type:'text',text:'PRIVATE_KIMI_HEADER'}]}}:event);replayContent=replay.syntheticJsonContent;replayStop='tool_use';
+        const first=await invoke([user]);assert.equal(first.provider,'kimi-coding');assert.equal(first.api,'anthropic-messages');assert.equal(first.model,row.model);assert.equal(first.content,'left!right?');assert.deepEqual(first.blocks,replay.expectedBlocks);assert.deepEqual(first.toolCalls,[{id:'call',name:'echo',input:{x:1}}]);assert.deepEqual(calls.at(-1).body,expectedBody(row.expectedInitialBody));
+        for(const projection of row.cases){const source={id:'a',role:'assistant',content:first.content,timestamp:new Date(0),provider:projection.source.provider,api:projection.source.api,model:projection.source.model,blocks:structuredClone(first.blocks),toolCalls:structuredClone(first.toolCalls)};
+          const thought=source.blocks.find(block=>block.type==='reasoning'&&!block.redacted);assert.ok(thought);
+          if(projection.case==='unsigned')delete thought.thinkingSignature;if(projection.case==='empty-thinking')thought.text='';if(projection.case==='blank-thinking')thought.text=' \t';if(projection.case==='empty-signature')thought.thinkingSignature='';if(projection.case==='blank-signature')thought.thinkingSignature=' \t';if(projection.case.startsWith('failed-'))source.metadata={outputError:'Failed Kimi Coding producer'};
+          const results=projection.case.startsWith('failed-')?[]:[{id:'r',role:'tool',name:'echo',toolCallId:'call',content:'result',timestamp:new Date(0)}],history=[user,source,...results,{...user,id:'next',content:'continue'}],before=structuredClone(history);
+          replayEvents=projection.responseEvents;replayContent=[{type:'text',text:'ok'}];replayStop='end_turn';const second=await invoke(history);assert.equal(second.content,'ok');assert.equal(second.model,row.model);assert.deepEqual(calls.at(-1).body,expectedBody(projection.expectedBody));assert.deepEqual(history,before);
+        }
+      }
+      for(const facade of ['chat','stream']){
+        replayEvents=replay.seedEvents;replayContent=replay.syntheticJsonContent;replayStop='tool_use';let reads=0,snapshot;
+        const selectedModel='kimi-for-coding-highspeed',owner=new KimiCodingProvider({type:'kimi-coding',apiKey:key,model,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fkimi/coding'}),user={id:'getter-u',role:'user',content:'probe',timestamp:new Date(0)},options={get model(){return ++reads<=2?model:selectedModel;},maxTokens:64,thinking:'low',cacheRetention:'none'};
+        if(facade==='chat')snapshot=await owner.chat([user],options);else await owner.streamChat([user],()=>{},value=>{snapshot=value;},error=>{throw error;},options);
+        assert.equal(calls.at(-1).body.model,selectedModel);assert.equal(snapshot.model,calls.at(-1).body.model);assert.equal(snapshot.provider,'kimi-coding');assert.equal(snapshot.api,'anthropic-messages');assert.ok(Math.abs(snapshot.usage.costUsd-(5*1.9+2*8+4*.38)/1e6)<1e-12);
+        const history=[user,{id:'getter-a',role:'assistant',timestamp:new Date(0),content:snapshot.content,provider:snapshot.provider,api:snapshot.api,model:snapshot.model,blocks:snapshot.blocks,toolCalls:snapshot.toolCalls},{id:'getter-r',role:'tool',name:'echo',toolCallId:'call',content:'result',timestamp:new Date(0)},{...user,id:'getter-next',content:'continue'}],before=structuredClone(history);
+        await owner.chat(history,{model:selectedModel,maxTokens:64,thinking:'low',cacheRetention:'none'});assert.deepEqual(calls.at(-1).body.messages,replay.rows.find(row=>row.model===selectedModel).cases[0].expectedBody.messages);
+        await owner.chat(history,{model,maxTokens:64,thinking:'low',cacheRetention:'none'});assert.deepEqual(calls.at(-1).body.messages,replay.rows.find(row=>row.model===model).cases.find(p=>p.case==='foreign-model').expectedBody.messages);assert.deepEqual(history,before);
+      }
+      for(const profile of KIMI_CODING_MODELS)for(const facade of ['chat','stream']){
+        const owner=new KimiCodingProvider({type:'kimi-coding',apiKey:key,model:profile.id,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fkimi/coding'}),user={id:'media-u',role:'user',content:'before',timestamp:new Date(0)};
+        const history=[user,{id:'media-a',role:'assistant',content:'called',timestamp:new Date(0),provider:'kimi-coding',api:'anthropic-messages',model:profile.id,toolCalls:[{id:'image-call',name:'read',input:{}}]},
+          {id:'media-r',role:'tool',name:'read',toolCallId:'image-call',content:'result',timestamp:new Date(0),blocks:[{type:'image',mediaType:'image/png',url:'data:image/png;base64,aGVsbG8='}]},{...user,id:'media-next',content:'after'}],before=structuredClone(history),options={maxTokens:64,thinking:'low',cacheRetention:'none'};
+        if(facade==='chat')await owner.chat(history,options);else await owner.streamChat(history,()=>{},undefined,error=>{throw error;},options);
+        assert.deepEqual(calls.at(-1).body.messages,[{role:'user',content:'before'},{role:'assistant',content:[{type:'text',text:'called'},{type:'tool_use',id:'image-call',name:'read',input:{}}]},
+          {role:'user',content:[{type:'tool_result',tool_use_id:'image-call',content:'result',is_error:false}]},{role:'user',content:[{type:'text',text:'Tool images for image-call'},{type:'image',source:{type:'base64',media_type:'image/png',data:'aGVsbG8='}}]},{role:'user',content:'after'}]);assert.deepEqual(history,before);
+      }
+      assert.equal(calls.length,125);for(const call of calls.slice(7)){assert.equal(call.url,'/owned%2Fkimi/coding/v1/messages');assert.equal(call.headers['x-api-key'],key);assert.equal(call.headers.authorization,undefined);assert.equal(call.headers['anthropic-version'],'2023-06-01');}
       console.log('native kimi coding installed OK');
-    }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
+    }finally{await closeProviderNetworkDispatchers();server.closeAllConnections();await new Promise(r=>server.close(r));}
   `);
   expect(await run(process.execPath, ['kimi-coding-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'native kimi coding installed OK\n', stderr: '' });
 }, 60_000);
