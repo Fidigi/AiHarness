@@ -2,17 +2,18 @@ import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { AnthropicProvider, GeminiProvider, VertexGeminiProvider, OpenAiMixedProvider, AzureProvider, BedrockProvider, SessionManager, JsonlSessionStore, resolveAgentCompactionContextWindow, prepareCompactionContext, getCompactionModelMessages, type AiProvider, SESSION_EXPORT_CONTINUATION_WARNING } from '../packages/core/dist/index.js';
+import { AnthropicProvider, GeminiProvider, VertexGeminiProvider, OpenAiMixedProvider, AzureProvider, BedrockProvider, MiniMaxProvider, MiniMaxCnProvider, SessionManager, JsonlSessionStore, resolveAgentCompactionContextWindow, prepareCompactionContext, getCompactionModelMessages, type AiProvider, SESSION_EXPORT_CONTINUATION_WARNING } from '../packages/core/dist/index.js';
 import { bedrockFrame as frame } from '../tests/fixtures/bedrock-event-stream.js';
 import { start, stop } from '../packages/server/dist/index.js';
 import { createRuntimeServices } from '../packages/server/dist/runtime/services.js';
 import { expect, test } from './fixtures/test-budget';
 
-for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-responses', 'bedrock'] as const) test(`native signed ${dialect} blocks survive server restart, replay and guarded export`, async ({ page }) => {
+for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-responses', 'bedrock', 'minimax', 'minimax-cn'] as const) test(`native signed ${dialect} blocks survive server restart, replay and guarded export`, async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-signed-web-'));
   const responses = dialect === 'responses' || dialect === 'azure-responses', bedrock = dialect === 'bedrock';
-  const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data'), model = dialect === 'anthropic' ? 'claude-sonnet-4-6' : bedrock ? 'anthropic.claude-opus-4-6-v1' : responses ? 'gpt-5' : 'gemini-3.8-flash';
-  const opaque = bedrock ? ['opaque-[REDACTED]-tail', 'AP8BgAI='] : dialect === 'anthropic' ? ['opaque-start-tail', 'opaque-redacted'] : responses ? ['opaque-reasoning', 'msg_opaque'] : ['b3BhcXVlLXJlYXNvbmluZw==', 'b3BhcXVlLXRleHQ='];
+  const minimax = dialect === 'minimax' || dialect === 'minimax-cn', anthropic = dialect === 'anthropic' || minimax;
+  const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data'), model = minimax ? 'MiniMax-M2.7' : anthropic ? 'claude-sonnet-4-6' : bedrock ? 'anthropic.claude-opus-4-6-v1' : responses ? 'gpt-5' : 'gemini-3.8-flash';
+  const opaque = bedrock ? ['opaque-[REDACTED]-tail', 'AP8BgAI='] : anthropic ? ['opaque-start-tail', 'opaque-redacted'] : responses ? ['opaque-reasoning', 'msg_opaque'] : ['b3BhcXVlLXJlYXNvbmluZw==', 'b3BhcXVlLXRleHQ='];
   const bedrockContent = (answer: string) => [{ reasoningContent: { reasoningText: { text: 'Visible native reasoning', signature: opaque[0] } } },
     { reasoningContent: { redactedContent: opaque[1] } }, { text: answer }];
   const names = ['AI_HARNESS_AUTH_TOKEN', 'AI_HARNESS_ADMIN_TOKEN', 'AI_HARNESS_AGENT_DIR'] as const;
@@ -26,10 +27,14 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
   const wire = createServer(async (request, response) => {
     if (request.method === 'GET') {
       response.setHeader('Content-Type', 'application/json');
-      response.end(JSON.stringify(dialect === 'anthropic' ? { data: [{ id: model }] } : { models: [{ name: `models/${model}` }] })); return;
+      response.end(JSON.stringify(anthropic ? { data: [{ id: model }] } : { models: [{ name: `models/${model}` }] })); return;
     }
     const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
     bodies.push(JSON.parse(Buffer.concat(chunks).toString())); wires.push({ path: request.url, authorization: request.headers.authorization });
+    if (minimax) {
+      expect(request.headers['x-api-key']).toBe('disposable-private-wire'); expect(request.headers['anthropic-version']).toBe('2023-06-01');
+      expect(request.headers.authorization).toBeUndefined(); expect(bodies.at(-1)!.model).toBe(model);
+    }
     const summary = JSON.stringify(bodies.at(-1)).includes('Summarize this conversation while preserving decisions and unresolved tasks.');
     const answer = summary ? 'PUBLIC_NATIVE_AUTO_SUMMARY' : bodies.length === 1 ? 'First native answer.' : 'Continued native answer.';
     const suffix = bodies.length === 1 ? '' : `_${bodies.length}`;
@@ -58,7 +63,7 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
         { type: 'message', id: opaque[1] + suffix, role: 'assistant', status: 'completed', phase: 'final_answer', content: [{ type: 'output_text', text: answer, annotations: [] }] },
       ], usage: { input_tokens: 5, output_tokens: 2, total_tokens: 7 } } })}\n\n`); return;
     }
-    if (dialect !== 'anthropic') {
+    if (!anthropic) {
       const payload = { modelVersion: 'untrusted-alias', candidates: [{ content: { role: 'model', parts: [
         { text: 'Visible native reasoning', thought: true, thoughtSignature: opaque[0] }, { text: answer, thoughtSignature: opaque[1] },
       ] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2, totalTokenCount: 7 } };
@@ -91,7 +96,8 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
       runtimeServicesFactory: async (proxy, settings) => {
         const services = await createRuntimeServices(proxy, settings);
         const config = { apiKey: 'disposable-private-wire', baseUrl: upstream, model };
-        owner = dialect === 'anthropic' ? new AnthropicProvider({ ...config, type: 'native-signed' })
+        owner = minimax ? new (dialect === 'minimax-cn' ? MiniMaxCnProvider : MiniMaxProvider)({ ...config, type: dialect })
+          : anthropic ? new AnthropicProvider({ ...config, type: 'native-signed' })
           : bedrock ? new BedrockProvider({ ...config, type: 'bedrock' }) : dialect === 'google' ? new GeminiProvider({ ...config, type: 'google' }) : dialect === 'vertex' ? new VertexGeminiProvider({ ...config, type: 'vertex' })
             : dialect === 'responses' ? new OpenAiMixedProvider({ ...config, type: 'openai', transport: 'sse' }) : new AzureProvider({ ...config, type: 'azure' });
         proxy.setCustomProvider('native-signed', owner); runtime = services;
@@ -148,7 +154,7 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
     expect(second.session.id).toBe(first.session.id);
     await expect(page.locator('.message.assistant').last()).toContainText('Continued native answer.');
     expect(bodies).toHaveLength(2);
-    if (dialect === 'anthropic') expect(bodies[1].messages!.filter(message => message.role === 'assistant')).toEqual([{ role: 'assistant', content: [
+    if (anthropic) expect(bodies[1].messages!.filter(message => message.role === 'assistant')).toEqual([{ role: 'assistant', content: [
       { type: 'thinking', thinking: 'Visible native reasoning', signature: 'opaque-start-tail' },
       { type: 'redacted_thinking', data: 'opaque-redacted' }, { type: 'text', text: 'First native answer.' },
     ] }]);
@@ -175,8 +181,8 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
     expect(manager.estimateContextTokens(id)).toBeLessThan(10_000);
     const sourceMessages = getCompactionModelMessages(manager, id), assistants = sourceMessages.filter(message => message.role === 'assistant');
     expect(assistants).toHaveLength(3);
-    if (bedrock) expect(assistants.map(message => ({ provider: message.provider, api: message.api, model: message.model })))
-      .toEqual(Array(3).fill({ provider: 'bedrock', api: 'bedrock-converse-stream', model }));
+    if (bedrock || minimax) expect(assistants.map(message => ({ provider: message.provider, api: message.api, model: message.model })))
+      .toEqual(Array(3).fill({ provider: dialect, api: minimax ? 'anthropic-messages' : 'bedrock-converse-stream', model }));
     const target = sourceMessages.filter(message => message.role === 'user')[1];
     expect(await manager.appendContextEdit(id, { targetEntryId: target.id, replacement: 'PUBLIC_SERVER_AUTO_FILLER ' + 'x'.repeat(60_000) })).toBeTruthy();
     expect(manager.estimateContextTokens(id)).toBeGreaterThan(10_000);
@@ -185,11 +191,11 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
     const retainedTurns = prepared!.keptMessages.filter(message => message.role === 'assistant').map(message => assistants.findIndex(value => value.id === message.id) + 1);
     expect(retainedTurns).not.toContain(1); expect(retainedTurns.at(-1)).toBe(3);
     const native = (body: typeof bodies[number]) => responses ? body.input!.filter(item => item.type === 'reasoning' || item.role === 'assistant')
-      : dialect === 'anthropic' || bedrock ? body.messages!.filter(item => item.role === 'assistant').map(item => item.content) : body.contents!.filter(item => item.role === 'model').map(item => item.parts);
+      : anthropic || bedrock ? body.messages!.filter(item => item.role === 'assistant').map(item => item.content) : body.contents!.filter(item => item.role === 'model').map(item => item.parts);
     const expectedNative = (turns: number[]) => responses ? turns.flatMap(turn => [
       { type: 'reasoning', id: `rs_web_${turn}`, summary: [{ type: 'summary_text', text: 'Visible native reasoning' }], encrypted_content: opaque[0] },
       { type: 'message', id: `${opaque[1]}_${turn}`, role: 'assistant', status: 'completed', phase: 'final_answer', content: [{ type: 'output_text', text: 'Continued native answer.', annotations: [] }] },
-    ]) : turns.map(() => bedrock ? bedrockContent('Continued native answer.') : dialect === 'anthropic' ? [
+    ]) : turns.map(() => bedrock ? bedrockContent('Continued native answer.') : anthropic ? [
       { type: 'thinking', thinking: 'Visible native reasoning', signature: opaque[0] }, { type: 'redacted_thinking', data: opaque[1] }, { type: 'text', text: 'Continued native answer.' },
     ] : [{ text: 'Visible native reasoning', thought: true, thoughtSignature: opaque[0] }, { text: 'Continued native answer.', thoughtSignature: opaque[1] }]);
     expect(native(bodies[2])).toEqual([...native(bodies[1]), ...expectedNative([2])]);
@@ -199,7 +205,7 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
     expect(summaryWire).toContain('First native answer.'); expect(summaryWire).toContain('PUBLIC_SERVER_AUTO_FILLER');
     for (const value of [...opaque, 'Visible native reasoning', 'thinkingSignature', 'textSignature']) expect(summaryWire).not.toContain(value);
     expect(summaryBody.tools ?? []).toEqual([]); if (bedrock) expect(summaryBody.toolConfig).toBeUndefined();
-    expect(responses ? summaryBody.max_output_tokens : dialect === 'anthropic' ? summaryBody.max_tokens : bedrock ? (summaryBody.inferenceConfig as { maxTokens: number }).maxTokens : (summaryBody.generationConfig as { maxOutputTokens: number }).maxOutputTokens).toBe(4096);
+    expect(responses ? summaryBody.max_output_tokens : anthropic ? summaryBody.max_tokens : bedrock ? (summaryBody.inferenceConfig as { maxTokens: number }).maxTokens : (summaryBody.generationConfig as { maxOutputTokens: number }).maxOutputTokens).toBe(4096);
     expect(native(bodies[4])).toEqual(expectedNative(retainedTurns));
     expect(JSON.stringify(bodies[4])).toContain('PUBLIC_NATIVE_AUTO_SUMMARY'); expect(JSON.stringify(bodies[4])).not.toContain('PUBLIC_SERVER_AUTO_FILLER');
     const rawAfter = await manager.getRawEntries(id), compactions = rawAfter.filter(entry => entry.type === 'compaction'); expect(compactions).toHaveLength(1);
@@ -219,6 +225,7 @@ for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-resp
     if (bedrock) expect(wires).toEqual(Array.from({ length: 6 }, (_, index) => ({
       path: `/model/${encodeURIComponent(model)}/${index === 3 ? 'converse' : 'converse-stream'}`, authorization: 'Bearer disposable-private-wire',
     })));
+    if (minimax) expect(wires).toEqual(Array(6).fill({ path: '/v1/messages', authorization: undefined }));
     expect(JSON.stringify(bodies[5])).toContain('PUBLIC_NATIVE_AUTO_SUMMARY'); expect(JSON.stringify(bodies[5])).not.toContain('PUBLIC_SERVER_AUTO_FILLER');
     const finalEntries = await runtime.sessionManager.getRawEntries(id);
     expect(finalEntries.filter(entry => entry.type === 'compaction')).toEqual(compactions);
