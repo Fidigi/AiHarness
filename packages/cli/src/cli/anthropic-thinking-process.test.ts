@@ -231,6 +231,26 @@ describe('emitted built-in Anthropic reasoning selection', () => {
     }, 30_000);
   }
 
+  for (const provider of ['minimax', 'minimax-cn'] as const) for (const model of ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3']) {
+    it.each(['print', 'json', 'rpc'] as const)(`${provider}/${model}/%s: emitted default-key-only full native lifecycle`, async mode => {
+      const probe = fileURLToPath(new URL('./fixtures/responses-continuation-probe.mjs', import.meta.url));
+      const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {
+        const child = spawn(process.execPath, [probe, provider, mode, 'extension-default', model, 'emitted'], {
+          cwd: path.resolve(fileURLToPath(new URL('../../../..', import.meta.url))),
+          env: { PATH: process.env.PATH, NO_COLOR: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        let stdout = '', stderr = '';
+        const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
+        child.stdout.setEncoding('utf8').on('data', text => { stdout += text; }); child.stderr.setEncoding('utf8').on('data', text => { stderr += text; });
+        child.once('error', error => { clearTimeout(timer); reject(error); });
+        child.once('close', (code, signal) => { clearTimeout(timer); resolve({ code, signal, stdout, stderr }); });
+      });
+      expect(result, result.stderr).toMatchObject({ code: 0, signal: null, stderr: '' });
+      expect(JSON.parse(result.stdout)).toEqual({ result: 'EMITTED_NATIVE_CONTINUATION_OK', provider, model, mode,
+        credentialSource: 'extension-default', requests: mode === 'rpc' ? 29 : 7, processes: mode === 'rpc' ? 19 : 5, effects: 1, core, cli });
+    }, 25_000);
+  }
+
   for (const provider of ['anthropic', 'minimax', 'minimax-cn'] as const)
   for (const signedModel of provider === 'anthropic' ? [continuationModel] : ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3']) {
   const foreignModel = provider === 'anthropic' ? adaptive : signedModel === 'MiniMax-M3' ? 'MiniMax-M2.7' : 'MiniMax-M3';

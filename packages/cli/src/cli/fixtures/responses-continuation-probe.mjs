@@ -5,9 +5,11 @@ import { crc32 } from 'node:zlib';
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-// Copied to the genuine installed consumer by installed-executable.test.ts.
-// Resolve the executable through its installed PATH bin, never checkout dist.
-const [provider, mode, credentialSource = 'cli', selectedModel] = process.argv.slice(2);
+// Installed execution remains the default and proves the consumer package/PATH bin.
+// The explicit emitted target reuses lifecycle assertions, not installed provenance.
+const [provider, mode, credentialSource = 'cli', selectedModel, target = 'installed'] = process.argv.slice(2);
+assert(target === 'installed' || target === 'emitted');
+const emitted = target === 'emitted';
 assert(['native-r', 'azure', 'anthropic', 'google', 'vertex', 'bedrock', 'minimax', 'minimax-cn'].includes(provider)); assert(['print', 'json', 'rpc'].includes(mode));
 const minimax = provider === 'minimax' || provider === 'minimax-cn';
 assert(credentialSource === 'cli' || credentialSource === 'extension-default' && minimax);
@@ -203,14 +205,19 @@ const server = createServer(async (request, response) => {
 });
 let active, processes = 0;
 try {
-  // This public import and the extension below resolve the unpacked consumer package.
-  const entry = await realpath(new URL(import.meta.resolve('@ai-harness/core')));
-  assert(entry.startsWith(path.join(process.cwd(), 'node_modules', '@ai-harness', 'core') + path.sep));
-  const bin = await realpath(path.join(process.cwd(), 'node_modules/.bin/ai-harness'));
-  assert(bin.startsWith(path.join(process.cwd(), 'node_modules', '@ai-harness', 'cli') + path.sep));
+  const coreSpecifier = emitted ? new URL('../../../../core/dist/index.js', import.meta.url).href : '@ai-harness/core';
+  const entry = await realpath(new URL(import.meta.resolve(coreSpecifier)));
+  const bin = await realpath(emitted ? new URL('../../../dist/index.js', import.meta.url) : path.join(process.cwd(), 'node_modules/.bin/ai-harness'));
+  if (emitted) {
+    assert.equal(entry, await realpath(new URL('../../../../core/dist/index.js', import.meta.url)));
+    assert.equal(bin, await realpath(new URL('../../../dist/index.js', import.meta.url)));
+  } else {
+    assert(entry.startsWith(path.join(process.cwd(), 'node_modules', '@ai-harness', 'core') + path.sep));
+    assert(bin.startsWith(path.join(process.cwd(), 'node_modules', '@ai-harness', 'cli') + path.sep));
+  }
   await mkdir(cwd); await mkdir(path.join(agent, 'extensions'), { recursive: true });
   await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ transport: 'sse', cacheWarming: 'off' }));
-  await writeFile(path.join(agent, 'extensions/continuation.mjs'), `import { OpenAiMixedProvider, MiniMaxProvider, MiniMaxCnProvider } from '@ai-harness/core';
+  await writeFile(path.join(agent, 'extensions/continuation.mjs'), `import { OpenAiMixedProvider, MiniMaxProvider, MiniMaxCnProvider } from ${JSON.stringify(coreSpecifier)};
     import { appendFileSync } from 'node:fs';
     export default api => {
       if (${JSON.stringify(responses)}) api.registerProvider('native-r', { defaultConfig: { apiKey: ${JSON.stringify(key)}, model: 'gpt-5' }, create: config => new OpenAiMixedProvider(config) });
@@ -245,7 +252,7 @@ try {
   if (credentialSource === 'extension-default') assert(!Object.values(env).some(value => typeof value === 'string' && value.includes(key)), 'Default key must not be registered from the environment');
   const start = (sessionId = 'native-continuation') => {
     processes++;
-    const child = spawn('ai-harness', ['--no-approve', '--offline', ...(credentialSource === 'cli' ? ['--api-key', key] : []), '--session-dir', sessions, '--session-id', sessionId,
+    const child = spawn(emitted ? process.execPath : 'ai-harness', [...(emitted ? [bin] : []), '--no-approve', '--offline', ...(credentialSource === 'cli' ? ['--api-key', key] : []), '--session-dir', sessions, '--session-id', sessionId,
       '--model', `${provider}/${model}`, '--thinking', 'low', ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['Continue native history.'])], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     active = child;
     let stdout = '', stderr = '', buffer = ''; const records = [];
@@ -734,7 +741,9 @@ try {
   }
   assert.equal(await readFile(effects, 'utf8'), '{"value":1}\n'); assert.equal(fixtureError, undefined);
   if (minimax) { assert.equal(bodies.length, mode === 'rpc' ? 29 : 7); assert.equal(processes, mode === 'rpc' ? 19 : 5); }
-  console.log(responses ? 'INSTALLED_RESPONSES_CONTINUATION_OK' : 'INSTALLED_SIGNED_CONTINUATION_OK');
+  console.log(emitted ? JSON.stringify({ result: 'EMITTED_NATIVE_CONTINUATION_OK', provider, model, mode, credentialSource,
+    requests: bodies.length, processes, effects: 1, core: entry, cli: bin })
+    : responses ? 'INSTALLED_RESPONSES_CONTINUATION_OK' : 'INSTALLED_SIGNED_CONTINUATION_OK');
 } finally {
   if (active && active.exitCode === null && active.signalCode === null) active.kill('SIGKILL');
   server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await rm(root, { recursive: true, force: true });
