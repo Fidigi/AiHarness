@@ -44,6 +44,13 @@ const contextReference = JSON.parse(contextBytes.toString()) as {
     systemPrompt?: string; tools?: providers.ChatOptions['tools']; messages: ContextMessage[]; logicalOptions: { reasoning: providers.ChatOptions['thinking'] } };
     estimate: { tokens: number }; expectedBody: Record<string, unknown> & { max_tokens: number; thinking: { budget_tokens: number } } }>;
 };
+const usageBytes = readFileSync(new URL('../../../../tests/fixtures/minimax-usage-reference.json', import.meta.url));
+const usageReference = JSON.parse(usageBytes.toString()) as {
+  pinnedCommit: string; captureSha256: string; profiles: number; sdkRequests: number; supersededSdkRequests: number; totalSdkExecutions: number; commonCasesPerProfile: number; m3AdditionalCasesPerProfile: number;
+  rows: Array<{ scope: 'minimax' | 'minimax-cn'; model: string; id: string; sdkBeta: string | null; expectedBody: Record<string, unknown>;
+    responseModel: string; responseEvents: unknown[]; reported: { cacheRead: boolean; cacheWrite: boolean }; jsonUsage: Record<string, unknown>;
+    usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; cost: { total: number } } }>;
+};
 function contextMessages(row: (typeof contextReference.rows)[number]): Message[] {
   const source: ContextMessage[] = [{ role: 'user', content: 'x'.repeat(row.input.initialUserCharacters), timestamp: row.input.initialUserTimestamp }, ...row.input.messages];
   return source.map((message, index) => {
@@ -436,9 +443,22 @@ describe('explicit native MiniMax A SDK', () => {
   });
 
   it('accounts gross-input M3 thresholds, observed 1h writes and nullable partial SSE without forged usage', async () => {
-    let current: unknown = usage, delta: unknown = { output_tokens: 2 };
-    const { baseUrl } = await fixture((body, response) => body.stream ? stream(response, events(body.model, current, delta))
-      : response.end(JSON.stringify({ model: body.model, stop_reason: 'end_turn', content: [{ type: 'text', text: 'Ready' }], usage: current })));
+    expect(createHash('sha256').update(usageBytes).digest('hex')).toBe('ca13846f70220e79afebd3f484564e545b36607a0a1c3c48a2c9735eb2acc91c');
+    expect(usageReference).toMatchObject({ pinnedCommit: '06a466935536f8c9bcacb2d5efc0fc021be1bdff',
+      captureSha256: 'e54ab2787a1e11d19264ee9123c402a3c55374cc545c385159145227d6cefed6', profiles: 6, sdkRequests: 66, supersededSdkRequests: 66, totalSdkExecutions: 132, commonCasesPerProfile: 10, m3AdditionalCasesPerProfile: 3 });
+    const cases = ['plain', 'cache-disjoint', 'one-hour-write', 'delta-revision', 'delta-nulls', 'delta-zero-reset', 'delta-one-hour-preserved', 'multi-delta', 'reasoning-details', 'different-response-model'];
+    expect(usageReference.rows.map(row => [row.scope, row.model, row.id])).toEqual(['minimax', 'minimax-cn'].flatMap(scope => providers.MINIMAX_MODELS.flatMap(profile =>
+      [...cases, ...(profile.id === latest ? ['m3-gross-511999', 'm3-gross-512000', 'm3-gross-512001'] : [])].map(id => [scope, profile.id, id]))));
+    let current: unknown = usage, delta: unknown = { output_tokens: 2 }, selected: (typeof usageReference.rows)[number] | undefined;
+    const { calls, baseUrl } = await fixture((body, response) => {
+      if (selected) {
+        if (body.stream) stream(response, selected.responseEvents);
+        else response.end(JSON.stringify({ model: selected.responseModel, stop_reason: 'end_turn', content: [{ type: 'text', text: 'ok' }], usage: selected.jsonUsage }));
+        return;
+      }
+      if (body.stream) stream(response, events(body.model, current, delta));
+      else response.end(JSON.stringify({ model: body.model, stop_reason: 'end_turn', content: [{ type: 'text', text: 'Ready' }], usage: current }));
+    });
     const provider = new providers.MiniMaxProvider({ type: 'anthropic', apiKey: 'disposable', baseUrl, model: latest });
     const profile = providers.MINIMAX_MODELS.find(p => p.id === latest)!;
     for (const above of [false, true]) {
@@ -451,6 +471,29 @@ describe('explicit native MiniMax A SDK', () => {
     for (const invalid of [{ input_tokens: 5 }, { output_tokens: 2 }, { input_tokens: -1, output_tokens: 2 }, { ...usage, cache_read_input_tokens: null }, { ...usage, cache_creation: { ephemeral_1h_input_tokens: 2 } }]) {
       current = invalid; expect((await provider.chat([input])).usage).toBeUndefined();
     }
+    const initialCalls = calls.length, messages: Message[] = [{ ...input, content: 'probe', timestamp: new Date(1) }];
+    const options: providers.ChatOptions = { thinking: 'off', maxTokens: 4096, cacheRetention: 'none' }, before = JSON.stringify({ messages, options });
+    for (const row of usageReference.rows) {
+      selected = row; const Constructor = row.scope === 'minimax' ? providers.MiniMaxProvider : providers.MiniMaxCnProvider;
+      const owner = new Constructor({ type: row.scope, apiKey: 'disposable', baseUrl, model: row.model });
+      const json = await owner.chat(messages, options), completed = vi.fn();
+      await owner.streamChat(messages, () => {}, completed, error => { throw error; }, options); expect(completed).toHaveBeenCalledTimes(1);
+      for (const [result, sse] of [[json, false], [completed.mock.calls[0][0], true]] as const) {
+        expect(result).toMatchObject({ provider: row.scope, model: row.model, api: 'anthropic-messages', content: 'ok' });
+        expect(result.usage).toMatchObject({ promptTokens: row.usage.input, completionTokens: row.usage.output, totalTokens: row.usage.totalTokens });
+        expect(result.usage.cacheReadTokens).toBe(!sse || row.reported.cacheRead ? row.usage.cacheRead : undefined);
+        expect(result.usage.cacheWriteTokens).toBe(!sse || row.reported.cacheWrite ? row.usage.cacheWrite : undefined);
+        // Independent SDK component summation may differ by floating-point order; exact controls above remain exact.
+        expect(result.usage.costUsd).toBeCloseTo(row.usage.cost.total, 12);
+      }
+      expect(calls.at(-2)!.body).toEqual({ ...row.expectedBody, stream: false }); expect(calls.at(-1)!.body).toEqual(row.expectedBody);
+      for (const call of calls.slice(-2)) {
+        expect(call.url).toBe('/owned%2Fminimax/anthropic/v1/messages'); expect(call.headers['x-api-key']).toBe('disposable'); expect(call.headers.authorization).toBeUndefined();
+        expect(call.headers['anthropic-version']).toBe('2023-06-01'); expect(call.headers['anthropic-beta'] ?? null).toBe(row.sdkBeta);
+      }
+      expect(JSON.stringify({ messages, options })).toBe(before);
+    }
+    expect(calls).toHaveLength(initialCalls + 132);
   });
 
   it('gates missing finishes, trailing output and unowned opaque signatures before tools or success and keeps remote failures private', async () => {
