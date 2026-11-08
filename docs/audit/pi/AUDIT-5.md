@@ -415,6 +415,32 @@ Only this journal section and the existing media/context matrix row change. Requ
 |---|---|---|---|---|---|
 | 2026-11-05 | MOD-03 | PARTIAL → PARTIAL | Eight selected inputs above; existing media/context matrix; sealed historical root | Read/grep; `git status --short`; `node /tmp/mod03-context-closure-review/prove.mjs` artifact/hash/Git verification; `make lint-docs`; `git diff --check` | Canonical/native/reporting boundaries clarified without new test credit or complete media admission; no native unblock or goal completion |
 
+### MOD-03 — MiniMax numeric allocation decision boundary
+
+**2026-11-08; observed divergence,not implementation acceptance.** The [numeric comparison receipt](./evidence/MOD-03-minimax-numeric-review.json) binds fresh pinned reference execution to unchanged Core at `ac3661431adb4fdabc57d6175c0b196ac494ef51`. MOD-03 remains **PARTIAL**,MOD-01 **IN PROGRESS**,closure **37/43**. A compatibility decision is required before changing the existing exact-cap contract;no gap is accepted implicitly.
+
+| Date | ID(s) | Old → New | Evidence | Validation | Notes/decision |
+|---|---|---|---|---|---|
+| 2026-11-08 | MOD-03 | PARTIAL → PARTIAL | [Numeric receipt](./evidence/MOD-03-minimax-numeric-review.json);six physical profiles/seventeen vectors each;unchanged `providers/minimax.ts` and its owning exact-cap tests | Final reference capture102 SDK requests/612 independently parsed SSE events;204 emitted-Core JSON/SSE requests and102 internal preflight preparations complete. **120 scalar comparisons match,84 differ** | Observation completion is not passing parity. No product/test source change,new full Docker gate,retry of native failures or historical gate resolution.132 previous receipts/eight axes/IDs/denominator conserved |
+
+The independent reference runs before Core,using pin `06a466935536f8c9bcacb2d5efc0fc021be1bdff`,244 authenticated source files/11,925 dependency files,Node24.15.0 and Anthropic SDK0.129.0. Owned CA/normal key/version/HTTPS loopback and negative SAN/before-validity controls remain mandatory;network is disabled outside loopback. It invokes actual public `streamSimple`,not raw `stream` or a copied allocator. Initial execution performs one real SDK request then fails a new collector oracle expecting a block-array user value where the SDK emitted a string. That failed attempt/partial capture stays retained;only the new exact assertion is corrected. Final102 plus initial one means103 actual SDK requests,not103 qualified vectors. Whole request bytes,user array,model/path and unchanged caller inputs are checked;successful synthetic replies do not prove vendor acceptance of unsafe allocations.
+
+The unchanged emitted Core image `sha256:216c3421901d5800c9b0629a1708ee16638eebf0a0f9d506d65344ace8e05d9d` uses Node24.15.0/npm12.1.0/TypeScript5.9.3. Readback binds1,831 tracked inputs,1,564 image byte/mode matches,267 absent paths and1,570 live non-documentation matches. Each vector is observed through JSON and SSE,plus the internal captured output policy;whole one-user arrays,owned loopback path/key/version,physical result identity and caller immutability are checked. Its native preflight cap matches its actual wire cap. This does not execute a shared host's independent context guard or qualify CLI/RPC/HTTP/Web behavior.
+
+| Vector on every global/CN model | Pinned `streamSimple` max/thinking tokens | Current Core max/thinking tokens |
+|---|---|---|
+| `high`,explicit cap4096 | 20480 /16384 | 4096 /3072 |
+| `high`,map4096,explicit cap10000 | 14096 /4096 | 10000 /4096 |
+| `low`,map1 | model maximum /1 | model maximum /1024 |
+| Near-context,thinking omitted | 4096 /disabled | model maximum /disabled |
+| Near-context,`high` | 4096 /3072 | model maximum /16384 |
+| Exhausted-context,thinking omitted | 1 /disabled | model maximum /disabled |
+| Exhausted-context,`high` | 1 /1024 | model maximum /16384 |
+
+Model maximum is131072 for M2.7/M2.7-highspeed and512000 for M3. The other ten vectors match on every profile:omitted,all six logical levels,plain cap64,high-map0 and high-map999999. Measurements use a single ASCII user message,with no media/tools/system prompt or billed-token inference. Numeric equality is not complete request/profile equivalence.
+
+**Decision requested,not granted:** may the six MiniMax profiles adopt Pi-style simple allocation,including adding thinking to an explicit requested cap and clamping against the estimated context minus4096,while refusing subminimum/whole-output thinking allocations rather than reproducing the unsafe reference requests? Existing code/tests explicitly preserve exact AiHarness caps,so this would change caller-visible behavior. Keeping that contract instead would require an explicit compatibility disposition,not a silent DONE promotion. No choice,implementation or waiver is made by this review. Remaining axes and the prior ordinary/unknown/native gate failures remain open in the [canonical matrix](./MOD-01-tracking.md#mod-03-closure-matrix--2026-11-04).
+
 ### MOD-03 — emitted MiniMax continuation and default-key privacy
 
 **2026-11-08.** Over `0d3d147895a3b1cfb470157699d19d09cd310e73`,the [source-bound receipt](./evidence/MOD-03-minimax-emitted-continuation.json) binds five changed CLI files,six new emitted journeys and a real credential-redaction correction. MOD-03 remains **PARTIAL**,MOD-01 **IN PROGRESS**,closure **37/43**;the [canonical matrix](./MOD-01-tracking.md#mod-03-closure-matrix--2026-11-04) retains all eight axes.
