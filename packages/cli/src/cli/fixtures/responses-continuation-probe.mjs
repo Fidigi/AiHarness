@@ -7,9 +7,10 @@ import path from 'node:path';
 
 // Copied to the genuine installed consumer by installed-executable.test.ts.
 // Resolve the executable through its installed PATH bin, never checkout dist.
-const [provider, mode] = process.argv.slice(2);
+const [provider, mode, credentialSource = 'cli'] = process.argv.slice(2);
 assert(['native-r', 'azure', 'anthropic', 'google', 'vertex', 'bedrock', 'minimax', 'minimax-cn'].includes(provider)); assert(['print', 'json', 'rpc'].includes(mode));
 const minimax = provider === 'minimax' || provider === 'minimax-cn';
+assert(credentialSource === 'cli' || credentialSource === 'extension-default' && minimax);
 const responses = ['native-r', 'azure'].includes(provider), anthropic = provider === 'anthropic' || minimax, bedrock = provider === 'bedrock';
 const root = await mkdtemp(path.join(process.cwd(), 'responses-continuation-'));
 const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
@@ -235,9 +236,10 @@ try {
       : minimax ? {} : anthropic ? { ANTHROPIC_API_KEY: key } : bedrock ? { AWS_BEARER_TOKEN_BEDROCK: key, AWS_REGION: 'us-east-1', BEDROCK_MODEL: model }
         : { GEMINI_API_KEY: key, GOOGLE_API_KEY: key, GOOGLE_VERTEX_ACCESS_TOKEN: key,
         GOOGLE_CLOUD_PROJECT: 'continuation-project', GOOGLE_CLOUD_LOCATION: 'us-central1' }), NODE_OPTIONS: '--import=' + JSON.stringify(preload) };
+  if (credentialSource === 'extension-default') assert(!Object.values(env).some(value => typeof value === 'string' && value.includes(key)), 'Default key must not be registered from the environment');
   const start = (sessionId = 'native-continuation') => {
     processes++;
-    const child = spawn('ai-harness', ['--no-approve', '--offline', '--api-key', key, '--session-dir', sessions, '--session-id', sessionId,
+    const child = spawn('ai-harness', ['--no-approve', '--offline', ...(credentialSource === 'cli' ? ['--api-key', key] : []), '--session-dir', sessions, '--session-id', sessionId,
       '--model', `${provider}/${model}`, '--thinking', 'low', ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['Continue native history.'])], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     active = child;
     let stdout = '', stderr = '', buffer = ''; const records = [];
