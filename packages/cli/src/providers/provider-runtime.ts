@@ -7,6 +7,7 @@ import {
   resolveAgentProviderNetworkSettings,
   type AgentProviderNetworkSettings,
   type AgentSettings,
+  type ExtensionProvider,
   type ProviderOAuthRefreshConfig,
 } from '@ai-harness/core';
 
@@ -49,13 +50,19 @@ export async function createCliProviderRuntime(
   env: NodeJS.ProcessEnv = process.env,
   existingCredentials?: ProviderCredentialService,
   persistCredentials = true,
-  additionalProviders: readonly string[] = [],
+  extensionProviders: ReadonlyArray<{ type: string; definition: ExtensionProvider }> = [],
   runtimeRedactor?: CredentialRedactor,
   offline = false,
 ): Promise<CliProviderRuntime> {
   const masterKey = env.AI_HARNESS_MASTER_KEY;
   const redactor = existingCredentials?.redactor ?? runtimeRedactor ?? new CredentialRedactor();
   redactor.addEnvironment(env);
+  // Explicit extension defaults are not resolved credential-store values, but can
+  // still be echoed inside text or opaque continuation fields before persistence.
+  for (const { definition } of extensionProviders) {
+    const apiKey = definition.defaultConfig?.apiKey;
+    if (typeof apiKey === 'string') redactor.add(apiKey);
+  }
   if (settings.httpProxy) redactor.add(settings.httpProxy);
   const store = masterKey && persistCredentials
     ? new EncryptedCredentialStore(path.join(agentDir, 'credentials.enc'), masterKey)
@@ -71,7 +78,7 @@ export async function createCliProviderRuntime(
     ...CLI_CREDENTIAL_PROVIDERS,
     ...Object.keys(settings.providerApiKeyCommands ?? {}),
     ...credentials.list().map(item => item.provider),
-    ...additionalProviders,
+    ...extensionProviders.map(item => item.type),
   ]);
   for (const provider of providers) {
     const resolved = await credentials.resolve(provider, {

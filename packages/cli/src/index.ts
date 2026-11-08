@@ -825,7 +825,7 @@ async function main(): Promise<void> {
       process.env,
       providerRuntime.credentialStoreId === refreshedStoreId ? providerRuntime.credentials : undefined,
       settingsResolution.agentDirTrusted,
-      extensionRegistry.getProviderDefinitions().map(item => item.type),
+      extensionRegistry.getProviderDefinitions(),
       outputCredentialRedactor,
       offline,
     );
@@ -963,7 +963,7 @@ async function main(): Promise<void> {
       process.env,
       undefined,
       settingsResolution.agentDirTrusted,
-      extensionRegistry.getProviderDefinitions().map(item => item.type),
+      extensionRegistry.getProviderDefinitions(),
       outputCredentialRedactor,
       offline,
     );

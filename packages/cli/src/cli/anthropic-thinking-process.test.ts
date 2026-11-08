@@ -71,8 +71,9 @@ function responsesReplay(turn: number) {
 }
 const responsesAssistant = (body: Body) => body.input!.filter(item => item.role === 'assistant' || ['reasoning', 'function_call'].includes(String(item.type)));
 const responsesPath = (provider: string) => provider === 'azure' ? '/openai/v1/responses?api-version=v1' : '/v1/responses';
-async function fixture(model = adaptive, continuation = false, dialect: 'anthropic' | 'google' | 'vertex' | 'responses' | 'azure-responses' = 'anthropic') {
+async function fixture(model = adaptive, continuation = false, dialect: 'anthropic' | 'google' | 'vertex' | 'responses' | 'azure-responses' | 'minimax' | 'minimax-cn' = 'anthropic') {
   const responses = dialect === 'responses' || dialect === 'azure-responses';
+  const minimax = dialect === 'minimax' || dialect === 'minimax-cn', anthropic = dialect === 'anthropic' || minimax;
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-adaptive-process-'));
   const cwd = path.join(root, 'project'); const agent = path.join(root, 'agent'); const preload = path.join(root, 'network.mjs');
   await Promise.all([mkdir(cwd), mkdir(agent)]);
@@ -87,15 +88,19 @@ async function fixture(model = adaptive, continuation = false, dialect: 'anthrop
   }
   if (responses) await writeFile(path.join(agent, 'extensions/responses.mjs'), `import { OpenAiMixedProvider } from ${JSON.stringify(core)};
     export default api => api.registerProvider('native-r', { defaultConfig: { apiKey: ${JSON.stringify(continuationKey)}, model: 'gpt-5' }, create: config => new OpenAiMixedProvider(config) });`);
-  const bodies: Body[] = [], wires: Array<{ path: string; googleKey?: string; authorization?: string; apiKey?: string }> = [];
+  if (minimax) await writeFile(path.join(agent, 'extensions/minimax.mjs'), `import { MiniMaxProvider, MiniMaxCnProvider } from ${JSON.stringify(core)};
+    export default api => api.registerProvider(${JSON.stringify(dialect)}, { defaultConfig: { apiKey: ${JSON.stringify(continuationKey)}, model: ${JSON.stringify(model)} },
+      create: config => new ${dialect === 'minimax-cn' ? 'MiniMaxCnProvider' : 'MiniMaxProvider'}(config) });`);
+  const bodies: Body[] = [], wires: Array<{ path: string; googleKey?: string; authorization?: string; apiKey?: string; version?: string }> = [];
   const server = createServer(async (request, response) => {
     if (request.method === 'GET') {
       response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify(dialect === 'anthropic' ? { data: [{ id: adaptive }, { id: classic }] }
+      response.end(JSON.stringify(anthropic ? { data: [{ id: adaptive }, { id: classic }] }
         : { models: [googleModel, googleForeignModel].map(id => ({ name: `models/${id}` })) })); return;
     }
     wires.push({ path: request.url ?? '', googleKey: request.headers['x-goog-api-key'] as string | undefined, authorization: request.headers.authorization,
-      ...(responses ? { apiKey: request.headers['api-key'] as string | undefined } : {}) });
+      ...(responses ? { apiKey: request.headers['api-key'] as string | undefined } : minimax ? {
+        apiKey: request.headers['x-api-key'] as string | undefined, version: request.headers['anthropic-version'] as string | undefined } : {}) });
     const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
     bodies.push(JSON.parse(Buffer.concat(chunks).toString()) as Body);
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
@@ -114,7 +119,7 @@ async function fixture(model = adaptive, continuation = false, dialect: 'anthrop
         usage: { input_tokens: 5, output_tokens: 2, total_tokens: 7 } } });
       response.end(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')); return;
     }
-    if (dialect !== 'anthropic') {
+    if (!anthropic) {
       const parts = googleContent(bodies.length);
       response.end([
         { candidates: [{ content: { parts: [{ ...parts[0], thoughtSignature: googleKey }, { ...parts[1], thoughtSignature: 'Zmlyc3Q=' }] } }] },
@@ -150,7 +155,9 @@ async function fixture(model = adaptive, continuation = false, dialect: 'anthrop
   await writeFile(preload, `const original = globalThis.fetch;
     globalThis.fetch = async (input, init) => {
       const url = new URL(input instanceof Request ? input.url : input);
-      const allowed = ${JSON.stringify(responses)}
+      const allowed = ${JSON.stringify(minimax)}
+        ? url.origin === ${JSON.stringify(dialect === 'minimax-cn' ? 'https://api.minimaxi.com' : 'https://api.minimax.io')} && url.pathname === '/anthropic/v1/messages'
+        : ${JSON.stringify(responses)}
         ? (url.origin === 'https://api.openai.com' && url.pathname === '/v1/responses')
           || (url.origin === 'https://continuation.openai.azure.com' && url.pathname === '/openai/v1/responses')
         : ${JSON.stringify(dialect === 'anthropic')}
@@ -161,13 +168,13 @@ async function fixture(model = adaptive, continuation = false, dialect: 'anthrop
       const target = new URL(url.pathname + url.search, ${JSON.stringify(base)});
       return original(input instanceof Request ? new Request(target, input) : target, init);
     };`);
-  const env = { ...process.env, HOME: path.join(root, 'home'), AI_HARNESS_AGENT_DIR: agent, AI_HARNESS_EXTENSIONS: '', ANTHROPIC_API_KEY: continuation ? continuationKey : 'disposable', NO_COLOR: '1',
+  const env = { ...process.env, HOME: path.join(root, 'home'), AI_HARNESS_AGENT_DIR: agent, AI_HARNESS_EXTENSIONS: '', ...(minimax ? {} : { ANTHROPIC_API_KEY: continuation ? continuationKey : 'disposable' }), NO_COLOR: '1',
     ...(responses ? { OPENAI_API_KEY: continuationKey, AZURE_OPENAI_API_KEY: continuationKey, AZURE_OPENAI_BASE_URL: 'https://continuation.openai.azure.com/openai/v1',
-      AZURE_OPENAI_MODEL: responsesModel, AZURE_OPENAI_DEPLOYMENT_NAME_MAP: 'gpt-5=owned-deployment,gpt-4o=foreign-deployment' } : dialect === 'anthropic' ? {} : { GEMINI_API_KEY: googleKey, GOOGLE_API_KEY: googleKey, GOOGLE_VERTEX_ACCESS_TOKEN: googleKey,
+      AZURE_OPENAI_MODEL: responsesModel, AZURE_OPENAI_DEPLOYMENT_NAME_MAP: 'gpt-5=owned-deployment,gpt-4o=foreign-deployment' } : anthropic ? {} : { GEMINI_API_KEY: googleKey, GOOGLE_API_KEY: googleKey, GOOGLE_VERTEX_ACCESS_TOKEN: googleKey,
       GOOGLE_CLOUD_PROJECT: 'continuation-project', GOOGLE_CLOUD_LOCATION: 'us-central1' }) };
   const start = (mode: 'print' | 'json' | 'rpc', thinking: string) => spawn(process.execPath, ['--import', preload, cli,
     '--no-approve', ...(continuation ? ['--session-dir', sessions, '--session-id', 'native-continuation'] : ['--no-session']),
-    ...(responses ? ['--offline', '--api-key', continuationKey] : []),
+    ...(responses ? ['--offline', '--api-key', continuationKey] : minimax ? ['--offline'] : []),
     '--model', `${dialect === 'responses' ? 'native-r' : dialect === 'azure-responses' ? 'azure' : dialect}/${model}`, '--thinking', thinking,
     ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['Probe native effort.'])], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
   const close = async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true }); };
@@ -224,8 +231,16 @@ describe('emitted built-in Anthropic reasoning selection', () => {
     }, 30_000);
   }
 
-  for (const mode of ['print', 'json'] as const) it(`${mode}: retains native signed tool/final blocks across process restart`, async () => {
-    const test = await fixture(continuationModel, true);
+  for (const provider of ['anthropic', 'minimax', 'minimax-cn'] as const) {
+  const signedModel = provider === 'anthropic' ? continuationModel : 'MiniMax-M2.7';
+  const foreignModel = provider === 'anthropic' ? adaptive : 'MiniMax-M3';
+  const title = provider === 'anthropic' ? '' : `${provider}/`;
+  const assertMiniMaxWires = (wires: Awaited<ReturnType<typeof fixture>>['wires'], count: number) => {
+    if (provider !== 'anthropic') expect(wires).toEqual(Array(count).fill({ path: '/anthropic/v1/messages', googleKey: undefined,
+      authorization: undefined, apiKey: continuationKey, version: '2023-06-01' }));
+  };
+  for (const mode of ['print', 'json'] as const) it(`${title}${mode}: retains native signed tool/final blocks across process restart`, async () => {
+    const test = await fixture(signedModel, true, provider);
     try {
       for (const run of [1, 2]) {
         const child = test.start(mode, 'low'); let stdout = '', stderr = '';
@@ -254,10 +269,11 @@ describe('emitted built-in Anthropic reasoning selection', () => {
         const assistants = entries.filter(entry => entry.type === 'message' && entry.role === 'assistant');
         expect(assistants.map(entry => entry.type === 'message' ? entry.blocks : undefined)).toEqual(
           Array.from({ length: run + 1 }, (_, index) => continuationBlocks(index + 1)));
-        for (const entry of assistants) expect(entry).toMatchObject({ provider: 'anthropic', api: 'anthropic-messages', model: continuationModel });
+        for (const entry of assistants) expect(entry).toMatchObject({ provider, api: 'anthropic-messages', model: signedModel });
         expect((await stat(test.journal)).mode & 0o777).toBe(0o600);
       }
-      expect(test.bodies).toHaveLength(3);
+      expect(test.bodies).toHaveLength(3); assertMiniMaxWires(test.wires, 3);
+      expect(test.bodies.map(body => body.model)).toEqual(Array(3).fill(signedModel));
       expect(test.bodies[1]?.messages.filter(message => message.role === 'assistant').map(message => message.content)).toEqual([continuationContent(1)]);
       expect(test.bodies[2]?.messages.filter(message => message.role === 'assistant').map(message => message.content)).toEqual([continuationContent(1), continuationContent(2)]);
       expect(JSON.stringify(test.bodies[1])).toContain('native-tool-result');
@@ -265,8 +281,8 @@ describe('emitted built-in Anthropic reasoning selection', () => {
     } finally { await test.close(); }
   }, 50_000);
 
-  it('RPC projects signed continuation by physical model and edits only the selected entry', async () => {
-    const test = await fixture(continuationModel, true), child = test.start('rpc', 'low');
+  it(`${title}RPC projects signed continuation by physical model and edits only the selected entry`, async () => {
+    const test = await fixture(signedModel, true, provider), child = test.start('rpc', 'low');
     const records: Array<Record<string, unknown>> = []; let buffer = '', stderr = '';
     child.stdout.setEncoding('utf8').on('data', text => {
       buffer += text;
@@ -294,17 +310,17 @@ describe('emitted built-in Anthropic reasoning selection', () => {
       const before = await readFile(test.journal, 'utf8');
       const original = before.trim().split('\n').map(line => JSON.parse(line) as SessionEntry)
         .filter(entry => entry.type === 'message' && entry.role === 'assistant');
-      await command({ type: 'set_model', id: 'foreign', provider: 'anthropic', modelId: adaptive });
+      await command({ type: 'set_model', id: 'foreign', provider, modelId: foreignModel });
       expect((await readFile(test.journal, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as SessionEntry)
         .filter(entry => entry.type === 'message' && entry.role === 'assistant')).toEqual(original);
       await prompt(3);
-      expect(test.bodies[3]?.model).toBe(adaptive);
+      expect(test.bodies[3]?.model).toBe(foreignModel);
       expect(assistantWire(3)).toEqual([1, 2, 3].map(turn => [
         { type: 'text', text: `native-${turn}-left` }, { type: 'text', text: `visible-${turn}` },
         { type: 'text', text: `native-${turn}-right` },
         ...(turn === 1 ? [{ type: 'tool_use', id: 'native-call', name: 'continuation_echo', input: { value: 1 } }] : []),
       ]));
-      await command({ type: 'set_model', id: 'owner', provider: 'anthropic', modelId: continuationModel });
+      await command({ type: 'set_model', id: 'owner', provider, modelId: signedModel });
       await command({ type: 'context_edit', id: 'edit', targetEntryId: original[0]!.id, replacement: 'edited answer' });
       await prompt(4);
       const replay = assistantWire(4);
@@ -317,10 +333,14 @@ describe('emitted built-in Anthropic reasoning selection', () => {
       const retained = after.trim().split('\n').map(line => JSON.parse(line) as SessionEntry);
       expect(retained.filter(entry => entry.type === 'message' && entry.role === 'assistant').slice(0, 3)).toEqual(original);
       expect(retained.filter(entry => entry.type === 'context_edit')).toHaveLength(1);
-      expect(test.bodies).toHaveLength(5); expect(await readFile(test.effects, 'utf8')).toBe('{"value":1}\n');
+      expect(test.bodies).toHaveLength(5); assertMiniMaxWires(test.wires, 5);
+      expect(test.bodies.map(body => body.model)).toEqual([signedModel, signedModel, signedModel, foreignModel, signedModel]);
+      expect(await readFile(test.effects, 'utf8')).toBe('{"value":1}\n');
       expect(JSON.stringify(records)).not.toContain(continuationKey);
     } finally { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); await test.close(); }
   }, 40_000);
+
+  }
 
   it('RPC changes native effort and switches numeric/adaptive dialects between prompts', async () => {
     const test = await fixture(); const child = test.start('rpc', 'low');

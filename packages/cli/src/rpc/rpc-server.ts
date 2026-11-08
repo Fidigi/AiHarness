@@ -475,7 +475,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       process.env,
       undefined,
       settingsResolution.agentDirTrusted,
-      extensionRegistry.getProviderDefinitions().map(item => item.type),
+      extensionRegistry.getProviderDefinitions(),
       redactor,
       offline,
     );

@@ -36,6 +36,26 @@ describe('CLI provider runtime', () => {
     for (const secret of [key, 'synthetic-cerebras-stored', 'synthetic-cerebras-command', 'synthetic-cerebras-first']) expect(bytes).not.toContain(secret);
   });
 
+  it('redacts extension default API keys before use and on reload without changing credential precedence', async () => {
+    const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-extension-credentials-'));
+    roots.push(agentDir);
+    const definition = (apiKey: string) => ({ type: 'extension', definition: {
+      defaultConfig: { apiKey, model: 'public-model' }, create: () => { throw new Error('Must not construct providers while collecting secrets'); },
+    } });
+    const first = await createCliProviderRuntime(agentDir, {}, {}, undefined, false, [definition('extension-default-private-key')]);
+    expect(first.values.has('extension')).toBe(false);
+    expect(first.credentials.list()).toEqual([]);
+    expect(first.redactor.redactJson({ thinkingSignature: 'opaque-extension-default-private-key-tail', model: 'public-model' }))
+      .toEqual({ thinkingSignature: 'opaque-[REDACTED]-tail', model: 'public-model' });
+    const reloaded = await createCliProviderRuntime(agentDir, {}, { AI_HARNESS_EXTENSION_API_KEY: 'extension-resolved-private-key' },
+      first.credentials, false, [definition('extension-reloaded-private-key')]);
+    expect(reloaded.values.get('extension')).toBe('extension-resolved-private-key');
+    expect(reloaded.redactor).toBe(first.redactor);
+    for (const secret of ['extension-default-private-key', 'extension-reloaded-private-key', 'extension-resolved-private-key'])
+      expect(reloaded.redactor.redact(`opaque-${secret}-tail`)).toBe('opaque-[REDACTED]-tail');
+    expect(reloaded.credentials.list()).toEqual([]);
+  });
+
   it('persists credentials encrypted and resolves only their process-local value', async () => {
     const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-credentials-'));
     roots.push(agentDir);
